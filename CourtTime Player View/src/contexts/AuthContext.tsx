@@ -1,6 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth, User, supabase, healthCheck } from '../utils/supabase/client';
 import { toast } from 'sonner@2.0.3';
+
+export interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  userType: 'player' | 'admin';
+  preferences?: {
+    notifications: boolean;
+    timezone: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -30,74 +42,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state
   useEffect(() => {
     initializeAuth();
-    
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
-        
-        if (event === 'SIGNED_IN' && session) {
-          setAccessToken(session.access_token);
-          await loadUserProfile(session.access_token);
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          setAccessToken(null);
-        }
-        
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, []);
 
   const initializeAuth = async () => {
     try {
-      // First check if the server is responding
-      console.log('Checking server health...');
-      const serverHealthy = await healthCheck();
-      
-      if (!serverHealthy) {
-        console.warn('Server health check failed, but continuing with client-side auth');
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        setAccessToken(session.access_token);
-        await loadUserProfile(session.access_token);
-      }
+      // Initialize auth state - Supabase removed
+      // TODO: Implement your authentication initialization logic here
+      setLoading(false);
     } catch (error) {
       console.error('Failed to initialize auth:', error);
-    } finally {
       setLoading(false);
-    }
-  };
-
-  const loadUserProfile = async (token: string) => {
-    try {
-      const { user: userProfile } = await auth.getProfile(token);
-      setUser(userProfile);
-    } catch (error) {
-      console.error('Failed to load user profile:', error);
-      toast.error('Failed to load user profile');
     }
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setLoading(true);
-      const response = await auth.login(email, password);
-      
-      if (response.session) {
-        setAccessToken(response.session.access_token);
-        setUser(response.user);
-        toast.success('Login successful!');
-        return true;
-      }
-      
+      // TODO: Implement your login logic here
+      toast.error('Login functionality requires authentication backend');
       return false;
     } catch (error: any) {
       console.error('Login failed:', error);
@@ -115,9 +77,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ): Promise<boolean> => {
     try {
       setLoading(true);
-      await auth.register(email, password, fullName, 'player');
-      toast.success('Registration successful! Please log in.');
-      return true;
+      // TODO: Implement your registration logic here
+      toast.error('Registration functionality requires authentication backend');
+      return false;
     } catch (error: any) {
       console.error('Registration failed:', error);
       toast.error(error.message || 'Registration failed');
@@ -129,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async (): Promise<void> => {
     try {
-      await auth.logout();
+      // TODO: Implement your logout logic here
       setUser(null);
       setAccessToken(null);
       toast.success('Logged out successfully');
@@ -143,10 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!accessToken) return false;
     
     try {
-      const { user: updatedUser } = await auth.updateProfile(accessToken, updates);
-      setUser(updatedUser);
-      toast.success('Profile updated successfully');
-      return true;
+      // TODO: Implement your profile update logic here
+      if (user) {
+        setUser({ ...user, ...updates });
+        toast.success('Profile updated successfully');
+        return true;
+      }
+      return false;
     } catch (error: any) {
       console.error('Profile update failed:', error);
       toast.error(error.message || 'Profile update failed');

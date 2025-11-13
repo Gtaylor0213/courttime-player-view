@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { User, Settings, LogOut, ChevronDown, ChevronLeft, ChevronRight, Calendar, Building2, LayoutDashboard } from 'lucide-react';
+import { User, LogOut, ChevronDown, ChevronLeft, ChevronRight, Calendar, Building2, LayoutDashboard, UserSearch, Settings, Users, BarChart3, BookOpen, UserCog } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 interface Facility {
@@ -13,12 +13,19 @@ interface Facility {
 }
 
 interface UnifiedSidebarProps {
-  userType: 'player' | null;
+  userType: 'player' | 'admin' | null;
   onNavigateToProfile: () => void;
   onNavigateToPlayerDashboard: () => void;
   onNavigateToCalendar: () => void;
   onNavigateToClub?: (clubId: string) => void;
-  onNavigateToSettings?: () => void;
+  onNavigateToHittingPartner?: () => void;
+  onNavigateToAdminDashboard?: () => void;
+  onNavigateToFacilityManagement?: () => void;
+  onNavigateToCourtManagement?: () => void;
+  onNavigateToBookingManagement?: () => void;
+  onNavigateToAdminBooking?: () => void;
+  onNavigateToMemberManagement?: () => void;
+  onNavigateToAnalytics?: () => void;
   onLogout: () => void;
   facilities?: Facility[];
   selectedFacilityId?: string;
@@ -29,13 +36,20 @@ interface UnifiedSidebarProps {
   currentPage?: string;
 }
 
-export function UnifiedSidebar({ 
-  userType, 
-  onNavigateToProfile, 
-  onNavigateToPlayerDashboard, 
+export function UnifiedSidebar({
+  userType,
+  onNavigateToProfile,
+  onNavigateToPlayerDashboard,
   onNavigateToCalendar,
   onNavigateToClub,
-  onNavigateToSettings = () => {},
+  onNavigateToHittingPartner = () => {},
+  onNavigateToAdminDashboard = () => {},
+  onNavigateToFacilityManagement = () => {},
+  onNavigateToCourtManagement = () => {},
+  onNavigateToBookingManagement = () => {},
+  onNavigateToAdminBooking = () => {},
+  onNavigateToMemberManagement = () => {},
+  onNavigateToAnalytics = () => {},
   onLogout,
   facilities = [],
   selectedFacilityId,
@@ -120,9 +134,60 @@ export function UnifiedSidebar({
 
         {/* Navigation */}
         <nav className={`flex-1 ${isCollapsed ? 'p-2' : 'p-4'} space-y-6 overflow-y-auto`}>
+          {/* Admin Navigation Section */}
+          {userType === 'admin' && (
+            <div>
+              {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">Admin</h3>}
+              <div className="space-y-1">
+                <SidebarButton
+                  onClick={onNavigateToAdminDashboard}
+                  icon={LayoutDashboard}
+                  label="Admin Dashboard"
+                  isActive={currentPage === 'admin-dashboard'}
+                />
+                <SidebarButton
+                  onClick={onNavigateToFacilityManagement}
+                  icon={Building2}
+                  label="Facility Management"
+                  isActive={currentPage === 'facility-management'}
+                />
+                <SidebarButton
+                  onClick={onNavigateToCourtManagement}
+                  icon={Settings}
+                  label="Court Details"
+                  isActive={currentPage === 'court-management'}
+                />
+                <SidebarButton
+                  onClick={onNavigateToBookingManagement}
+                  icon={BookOpen}
+                  label="Booking Management"
+                  isActive={currentPage === 'booking-management'}
+                />
+                <SidebarButton
+                  onClick={onNavigateToAdminBooking}
+                  icon={Calendar}
+                  label="Admin Booking"
+                  isActive={currentPage === 'admin-booking'}
+                />
+                <SidebarButton
+                  onClick={onNavigateToMemberManagement}
+                  icon={UserCog}
+                  label="Member Management"
+                  isActive={currentPage === 'member-management'}
+                />
+                <SidebarButton
+                  onClick={onNavigateToAnalytics}
+                  icon={BarChart3}
+                  label="Analytics & Reports"
+                  isActive={currentPage === 'analytics'}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Main Navigation Section */}
           <div>
-            {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">Navigation</h3>}
+            {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">{userType === 'admin' ? 'Player Features' : 'Navigation'}</h3>}
             <div className="space-y-1">
               <SidebarButton
                 onClick={onNavigateToCalendar}
@@ -135,6 +200,12 @@ export function UnifiedSidebar({
                 icon={LayoutDashboard}
                 label="Dashboard"
                 isActive={currentPage === 'player-dashboard'}
+              />
+              <SidebarButton
+                onClick={onNavigateToHittingPartner}
+                icon={UserSearch}
+                label="Find Hitting Partner"
+                isActive={currentPage === 'hitting-partner'}
               />
             </div>
           </div>
@@ -210,15 +281,11 @@ export function UnifiedSidebar({
                     <DropdownMenuContent align="end" className="w-48">
                       <div className="px-3 py-2 border-b">
                         <p className="text-sm font-medium">John Doe</p>
-                        <p className="text-xs text-gray-600">Player</p>
+                        <p className="text-xs text-gray-600 capitalize">{userType || 'Player'}</p>
                       </div>
                       <DropdownMenuItem onClick={onNavigateToProfile}>
                         <User className="h-4 w-4 mr-2" />
                         View Profile
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={onNavigateToSettings}>
-                        <Settings className="h-4 w-4 mr-2" />
-                        Settings
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={onLogout} className="text-red-600">
@@ -241,7 +308,7 @@ export function UnifiedSidebar({
                 </Avatar>
                 <div className="text-left flex-1">
                   <p className="text-sm font-medium">John Doe</p>
-                  <p className="text-xs text-gray-600">Player</p>
+                  <p className="text-xs text-gray-600 capitalize">{userType || 'Player'}</p>
                 </div>
                 <ChevronDown className="h-4 w-4 text-gray-400" />
               </DropdownMenuTrigger>
@@ -249,10 +316,6 @@ export function UnifiedSidebar({
                 <DropdownMenuItem onClick={onNavigateToProfile}>
                   <User className="h-4 w-4 mr-2" />
                   View Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onNavigateToSettings}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="text-red-600">

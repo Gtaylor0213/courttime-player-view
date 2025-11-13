@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from './ui/switch';
 import { Separator } from './ui/separator';
 import { Alert, AlertDescription } from './ui/alert';
-import { ArrowLeft, User, Mail, Phone, Heart, Bell, Building, Check, AlertCircle, Camera, Search, MapPin, Users, Clock } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, Bell, Building, Check, AlertCircle, Camera, Search, MapPin, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
@@ -19,19 +19,16 @@ interface UserRegistrationProps {
 
 export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistrationProps) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [facilityCodeStatus, setFacilityCodeStatus] = useState<'none' | 'checking' | 'valid' | 'invalid'>('none');
-  const [facilityInfo, setFacilityInfo] = useState<{ name: string; type: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register } = useAuth();
-  
+
   // Facility search states
   const [facilitySearchQuery, setFacilitySearchQuery] = useState('');
   const [facilitySearchResults, setFacilitySearchResults] = useState<any[]>([]);
   const [isSearchingFacilities, setIsSearchingFacilities] = useState(false);
-  const [selectedFacility, setSelectedFacility] = useState<any>(null);
-  const [membershipRequestStatus, setMembershipRequestStatus] = useState<'none' | 'requesting' | 'sent' | 'error'>('none');
-  const [joinMethod, setJoinMethod] = useState<'code' | 'search'>('code');
-  
+  const [selectedFacilities, setSelectedFacilities] = useState<any[]>([]);
+  const [membershipRequestStatus, setMembershipRequestStatus] = useState<{ [key: string]: 'none' | 'requesting' | 'sent' }>({});
+
   const [formData, setFormData] = useState({
     // Personal Information
     firstName: '',
@@ -48,15 +45,8 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
     state: '',
     zipCode: '',
 
-    // Sports Preferences
-    role: 'player',
+    // Skill Level (Optional)
     skillLevel: '',
-
-    // Facility Code (Optional)
-    facilityCode: '',
-
-    // Facility Search & Membership
-    selectedFacilityForMembership: null,
 
     // Notification Preferences
     notificationPreferences: {
@@ -75,7 +65,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
       ...prev,
       [field]: value
     }));
-    
+
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({
@@ -95,49 +85,17 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
     }));
   };
 
-  const handleFacilityCodeChange = (value: string) => {
-    setFormData(prev => ({ ...prev, facilityCode: value }));
-    
-    if (value.length === 0) {
-      setFacilityCodeStatus('none');
-      setFacilityInfo(null);
-      return;
-    }
-    
-    if (value.length >= 4) {
-      setFacilityCodeStatus('checking');
-      
-      // Simulate API call to validate facility code
-      setTimeout(() => {
-        // Mock validation - replace with real API call
-        const mockFacilities: Record<string, { name: string; type: string }> = {
-          'SVH2024': { name: 'Sunrise Valley HOA', type: 'Tennis & Pickleball Courts' },
-          'DTC2024': { name: 'Downtown Tennis Center', type: 'Tennis Facility' },
-          'RTC2024': { name: 'Riverside Tennis Club', type: 'Private Tennis Club' }
-        };
-        
-        if (mockFacilities[value.toUpperCase()]) {
-          setFacilityCodeStatus('valid');
-          setFacilityInfo(mockFacilities[value.toUpperCase()]);
-        } else {
-          setFacilityCodeStatus('invalid');
-          setFacilityInfo(null);
-        }
-      }, 1000);
-    }
-  };
-
   const handleFacilitySearch = (query: string) => {
     setFacilitySearchQuery(query);
-    
+
     if (query.length === 0) {
       setFacilitySearchResults([]);
       return;
     }
-    
+
     if (query.length >= 2) {
       setIsSearchingFacilities(true);
-      
+
       // Simulate API call to search facilities
       setTimeout(() => {
         // Mock search results - replace with real API call
@@ -154,7 +112,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
           },
           {
             id: 'downtown-tennis',
-            name: 'Downtown Tennis Center', 
+            name: 'Downtown Tennis Center',
             type: 'Public Facility',
             location: 'Downtown Metro Area',
             description: 'Public tennis facility with professional instruction',
@@ -183,32 +141,26 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
             requiresApproval: false
           }
         ];
-        
-        const filtered = mockFacilities.filter(facility => 
+
+        const filtered = mockFacilities.filter(facility =>
           facility.name.toLowerCase().includes(query.toLowerCase()) ||
           facility.location.toLowerCase().includes(query.toLowerCase()) ||
           facility.type.toLowerCase().includes(query.toLowerCase())
         );
-        
+
         setFacilitySearchResults(filtered);
         setIsSearchingFacilities(false);
       }, 800);
     }
   };
 
-  const handleFacilitySelect = (facility: any) => {
-    setSelectedFacility(facility);
-    setFormData(prev => ({ ...prev, selectedFacilityForMembership: facility }));
-  };
+  const handleMembershipRequest = (facility: any) => {
+    setMembershipRequestStatus(prev => ({ ...prev, [facility.id]: 'requesting' }));
 
-  const handleMembershipRequest = () => {
-    if (!selectedFacility) return;
-    
-    setMembershipRequestStatus('requesting');
-    
     // Simulate membership request API call
     setTimeout(() => {
-      setMembershipRequestStatus('sent');
+      setMembershipRequestStatus(prev => ({ ...prev, [facility.id]: 'sent' }));
+      setSelectedFacilities(prev => [...prev, facility]);
     }, 1500);
   };
 
@@ -235,12 +187,12 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
       if (!formData.email.trim()) newErrors.email = 'Email is required';
       if (!formData.email.includes('@')) newErrors.email = 'Please enter a valid email';
       if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
+      if (!formData.streetAddress.trim()) newErrors.streetAddress = 'Street address is required';
+      if (!formData.city.trim()) newErrors.city = 'City is required';
+      if (!formData.state.trim()) newErrors.state = 'State is required';
+      if (!formData.zipCode.trim()) newErrors.zipCode = 'ZIP code is required';
       if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters';
       if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-    }
-
-    if (step === 2) {
-      if (!formData.skillLevel) newErrors.skillLevel = 'Please select your skill level';
     }
 
     setErrors(newErrors);
@@ -258,19 +210,19 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(currentStep)) return;
-    
+    if (!validateStep(1)) return;
+
     setIsSubmitting(true);
-    
+
     try {
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       const success = await register(
-        formData.email, 
-        formData.password, 
-        fullName, 
+        formData.email,
+        formData.password,
+        fullName,
         'player'
       );
-      
+
       if (success) {
         onRegistrationComplete();
       }
@@ -373,7 +325,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
               </h3>
 
               <div>
-                <Label htmlFor="streetAddress">Street Address</Label>
+                <Label htmlFor="streetAddress">Street Address *</Label>
                 <Input
                   id="streetAddress"
                   value={formData.streetAddress}
@@ -386,7 +338,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1">
-                  <Label htmlFor="city">City</Label>
+                  <Label htmlFor="city">City *</Label>
                   <Input
                     id="city"
                     value={formData.city}
@@ -398,7 +350,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
                 </div>
 
                 <div>
-                  <Label htmlFor="state">State</Label>
+                  <Label htmlFor="state">State *</Label>
                   <Input
                     id="state"
                     value={formData.state}
@@ -410,7 +362,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
                 </div>
 
                 <div>
-                  <Label htmlFor="zipCode">ZIP Code</Label>
+                  <Label htmlFor="zipCode">ZIP Code *</Label>
                   <Input
                     id="zipCode"
                     value={formData.zipCode}
@@ -423,8 +375,29 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
               </div>
             </div>
 
+            {/* Skill Level (Optional) */}
+            <div className="pt-4 border-t">
+              <div>
+                <Label htmlFor="skillLevel">Skill Level (Optional)</Label>
+                <Select
+                  value={formData.skillLevel}
+                  onValueChange={(value) => handleInputChange('skillLevel', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your skill level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="beginner">Beginner</SelectItem>
+                    <SelectItem value="intermediate">Intermediate</SelectItem>
+                    <SelectItem value="advanced">Advanced</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             {/* Password Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
               <div>
                 <Label htmlFor="password">Password *</Label>
                 <Input
@@ -455,183 +428,74 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
       case 2:
         return (
           <div className="space-y-6">
-            {/* Role and Skill Level */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="role">Role</Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(value) => handleInputChange('role', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="player">Player</SelectItem>
-                    <SelectItem value="coach">Coach</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="skillLevel">Skill Level *</Label>
-                <Select
-                  value={formData.skillLevel}
-                  onValueChange={(value) => handleInputChange('skillLevel', value)}
-                >
-                  <SelectTrigger className={errors.skillLevel ? 'border-red-500' : ''}>
-                    <SelectValue placeholder="Select your skill level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="beginner">Beginner</SelectItem>
-                    <SelectItem value="intermediate">Intermediate</SelectItem>
-                    <SelectItem value="advanced">Advanced</SelectItem>
-                    <SelectItem value="professional">Professional</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.skillLevel && <p className="text-sm text-red-500 mt-1">{errors.skillLevel}</p>}
-              </div>
-            </div>
-          </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-6">
-            {/* Join Facility Section */}
+            {/* Facility Search & Membership Request */}
             <div>
               <h3 className="flex items-center gap-2 mb-4">
                 <Building className="h-5 w-5" />
-                Join a Facility (Optional)
+                Request Facility Membership (Optional)
               </h3>
               <p className="text-sm text-gray-600 mb-6">
-                Connect with a tennis or pickleball facility to book courts and join their community.
+                Search for facilities in your area and request membership to start booking courts.
               </p>
 
-              {/* Method Selection */}
-              <div className="flex gap-2 mb-6">
-                <Button
-                  variant={joinMethod === 'code' ? 'default' : 'outline'}
-                  onClick={() => setJoinMethod('code')}
-                  className="flex-1"
-                >
-                  Use Facility Code
-                </Button>
-                <Button
-                  variant={joinMethod === 'search' ? 'default' : 'outline'}
-                  onClick={() => setJoinMethod('search')}
-                  className="flex-1"
-                >
+              <div>
+                <Label htmlFor="facilitySearch" className="flex items-center gap-2">
+                  <Search className="h-4 w-4" />
                   Search Facilities
-                </Button>
+                </Label>
+                <Input
+                  id="facilitySearch"
+                  value={facilitySearchQuery}
+                  onChange={(e) => handleFacilitySearch(e.target.value)}
+                  placeholder="Search by facility name, location, or type..."
+                  className="mb-2"
+                />
+                <p className="text-sm text-gray-500">
+                  You can request membership to multiple facilities at once.
+                </p>
               </div>
 
-              {/* Facility Code Option */}
-              {joinMethod === 'code' && (
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="facilityCode">Facility Code</Label>
-                    <Input
-                      id="facilityCode"
-                      value={formData.facilityCode}
-                      onChange={(e) => handleFacilityCodeChange(e.target.value)}
-                      placeholder="Enter facility code to join automatically"
-                      className="mb-2"
-                    />
-                    <p className="text-sm text-gray-500">
-                      If you have a facility code from your club or organization, enter it here to automatically join.
-                    </p>
-                  </div>
-                  
-                  {/* Facility Code Status */}
-                  {facilityCodeStatus === 'checking' && (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>Checking facility code...</AlertDescription>
-                    </Alert>
-                  )}
-                  
-                  {facilityCodeStatus === 'valid' && facilityInfo && (
-                    <Alert className="border-green-200 bg-green-50">
-                      <Check className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-green-800">
-                        <strong>Facility found:</strong> {facilityInfo.name} ({facilityInfo.type})
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  
-                  {facilityCodeStatus === 'invalid' && (
-                    <Alert className="border-red-200 bg-red-50">
-                      <AlertCircle className="h-4 w-4 text-red-600" />
-                      <AlertDescription className="text-red-800">
-                        Invalid facility code. Please check and try again.
-                      </AlertDescription>
-                    </Alert>
-                  )}
+              {/* Search Results */}
+              {isSearchingFacilities && (
+                <div className="text-center py-4">
+                  <AlertCircle className="h-6 w-6 animate-spin mx-auto mb-2 text-blue-600" />
+                  <p className="text-sm text-gray-600">Searching facilities...</p>
                 </div>
               )}
 
-              {/* Facility Search Option */}
-              {joinMethod === 'search' && (
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="facilitySearch" className="flex items-center gap-2">
-                      <Search className="h-4 w-4" />
-                      Search Facilities
-                    </Label>
-                    <Input
-                      id="facilitySearch"
-                      value={facilitySearchQuery}
-                      onChange={(e) => handleFacilitySearch(e.target.value)}
-                      placeholder="Search by facility name, location, or type..."
-                      className="mb-2"
-                    />
-                    <p className="text-sm text-gray-500">
-                      Search for facilities in your area and request membership.
-                    </p>
-                  </div>
+              {facilitySearchResults.length > 0 && !isSearchingFacilities && (
+                <div className="space-y-3 max-h-96 overflow-y-auto mt-4">
+                  {facilitySearchResults.map((facility) => {
+                    const status = membershipRequestStatus[facility.id] || 'none';
+                    const isSelected = selectedFacilities.some(f => f.id === facility.id);
 
-                  {/* Search Results */}
-                  {isSearchingFacilities && (
-                    <div className="text-center py-4">
-                      <AlertCircle className="h-6 w-6 animate-spin mx-auto mb-2 text-blue-600" />
-                      <p className="text-sm text-gray-600">Searching facilities...</p>
-                    </div>
-                  )}
-
-                  {facilitySearchResults.length > 0 && !isSearchingFacilities && (
-                    <div className="space-y-3 max-h-80 overflow-y-auto">
-                      {facilitySearchResults.map((facility) => (
-                        <Card 
-                          key={facility.id} 
-                          className={`cursor-pointer transition-all hover:shadow-md ${
-                            selectedFacility?.id === facility.id ? 'ring-2 ring-blue-600 bg-blue-50' : ''
-                          }`}
-                          onClick={() => handleFacilitySelect(facility)}
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <h4 className="font-medium text-gray-900">{facility.name}</h4>
-                                <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
-                                  <MapPin className="h-3 w-3" />
-                                  {facility.location}
-                                </p>
-                                <p className="text-sm text-gray-500 mt-1">{facility.description}</p>
-                                <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                                  <span className="flex items-center gap-1">
-                                    <Building className="h-3 w-3" />
-                                    {facility.courts} courts
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <Users className="h-3 w-3" />
-                                    {facility.members} members
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <span className={`text-xs px-2 py-1 rounded-full ${
-                                  facility.type === 'Private Club' 
+                    return (
+                      <Card
+                        key={facility.id}
+                        className={`transition-all ${
+                          isSelected ? 'ring-2 ring-green-500 bg-green-50' : ''
+                        }`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-gray-900">{facility.name}</h4>
+                              <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                                <MapPin className="h-3 w-3" />
+                                {facility.location}
+                              </p>
+                              <p className="text-sm text-gray-500 mt-1">{facility.description}</p>
+                              <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                                <span className="flex items-center gap-1">
+                                  <Building className="h-3 w-3" />
+                                  {facility.courts} courts
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Users className="h-3 w-3" />
+                                  {facility.members} members
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full ${
+                                  facility.type === 'Private Club'
                                     ? 'bg-purple-100 text-purple-700'
                                     : facility.type === 'Public Facility'
                                     ? 'bg-green-100 text-green-700'
@@ -639,67 +503,49 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
                                 }`}>
                                   {facility.type}
                                 </span>
-                                {facility.requiresApproval && (
-                                  <div className="flex items-center gap-1 mt-2 text-xs text-amber-600">
-                                    <Clock className="h-3 w-3" />
-                                    Requires Approval
-                                  </div>
-                                )}
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
 
-                  {facilitySearchQuery.length >= 2 && facilitySearchResults.length === 0 && !isSearchingFacilities && (
-                    <div className="text-center py-8 text-gray-500">
-                      <Building className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                      <p>No facilities found matching "{facilitySearchQuery}"</p>
-                      <p className="text-sm">Try searching with different keywords.</p>
-                    </div>
-                  )}
+                            <div className="flex flex-col items-end gap-2">
+                              {status === 'none' && (
+                                <Button
+                                  onClick={() => handleMembershipRequest(facility)}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  {facility.requiresApproval ? 'Request' : 'Join'}
+                                </Button>
+                              )}
 
-                  {/* Selected Facility & Membership Request */}
-                  {selectedFacility && (
-                    <div className="border-t pt-4">
-                      <div className="bg-blue-50 p-4 rounded-lg">
-                        <h4 className="font-medium text-blue-900 mb-2">Selected Facility</h4>
-                        <p className="text-blue-800">{selectedFacility.name}</p>
-                        <p className="text-sm text-blue-600">{selectedFacility.location}</p>
-                        
-                        {membershipRequestStatus === 'none' && (
-                          <Button 
-                            onClick={handleMembershipRequest}
-                            className="mt-3 bg-blue-600 hover:bg-blue-700"
-                            size="sm"
-                          >
-                            {selectedFacility.requiresApproval ? 'Request Membership' : 'Join Facility'}
-                          </Button>
-                        )}
-                        
-                        {membershipRequestStatus === 'requesting' && (
-                          <div className="mt-3 flex items-center gap-2 text-blue-600">
-                            <AlertCircle className="h-4 w-4 animate-pulse" />
-                            <span className="text-sm">Sending request...</span>
+                              {status === 'requesting' && (
+                                <div className="flex items-center gap-2 text-blue-600">
+                                  <AlertCircle className="h-4 w-4 animate-pulse" />
+                                  <span className="text-xs">Sending...</span>
+                                </div>
+                              )}
+
+                              {status === 'sent' && (
+                                <div className="flex items-center gap-2 text-green-600">
+                                  <Check className="h-4 w-4" />
+                                  <span className="text-xs font-medium">
+                                    {facility.requiresApproval ? 'Requested' : 'Joined'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                        
-                        {membershipRequestStatus === 'sent' && (
-                          <Alert className="mt-3 border-green-200 bg-green-50">
-                            <Check className="h-4 w-4 text-green-600" />
-                            <AlertDescription className="text-green-800">
-                              {selectedFacility.requiresApproval 
-                                ? 'Membership request sent! They\'ll review your application and get back to you.'
-                                : 'Successfully joined facility! You can now book courts and access their amenities.'
-                              }
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+
+              {facilitySearchQuery.length >= 2 && facilitySearchResults.length === 0 && !isSearchingFacilities && (
+                <div className="text-center py-8 text-gray-500">
+                  <Building className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                  <p>No facilities found matching "{facilitySearchQuery}"</p>
+                  <p className="text-sm">Try searching with different keywords.</p>
                 </div>
               )}
             </div>
@@ -715,7 +561,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
               <p className="text-sm text-gray-600 mb-4">
                 Choose how you'd like to receive updates and notifications
               </p>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -786,19 +632,6 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
     }
   };
 
-  const getStepTitle = () => {
-    switch (currentStep) {
-      case 1:
-        return 'Personal Information';
-      case 2:
-        return 'Role & Skill Level';
-      case 3:
-        return 'Facility & Notifications';
-      default:
-        return 'Registration';
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -826,7 +659,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
         <div className="mb-12">
           <div className="relative">
             <div className="flex items-center justify-between">
-              {[1, 2, 3].map((step) => (
+              {[1, 2].map((step) => (
                 <div key={step} className="flex flex-col items-center relative z-10">
                   <div
                     className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium border-2 transition-all duration-200 ${
@@ -840,30 +673,25 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
                 </div>
               ))}
             </div>
-            
+
             {/* Progress Line */}
             <div className="absolute top-6 left-0 right-0 h-0.5 bg-gray-200 -z-10">
-              <div 
+              <div
                 className="h-full bg-blue-600 transition-all duration-300"
-                style={{ width: `${((currentStep - 1) / 2) * 100}%` }}
+                style={{ width: `${((currentStep - 1) / 1) * 100}%` }}
               />
             </div>
           </div>
-          
+
           <div className="flex justify-between mt-4">
             <div className="text-center flex-1">
               <p className={`text-sm font-medium ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-500'}`}>
-                Personal Info
+                Personal Information
               </p>
             </div>
             <div className="text-center flex-1">
               <p className={`text-sm font-medium ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-500'}`}>
-                Role & Skill Level
-              </p>
-            </div>
-            <div className="text-center flex-1">
-              <p className={`text-sm font-medium ${currentStep >= 3 ? 'text-blue-600' : 'text-gray-500'}`}>
-                Facility & Notifications
+                Facilities & Notifications
               </p>
             </div>
           </div>
@@ -874,12 +702,11 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
-              {getStepTitle()}
+              {currentStep === 1 ? 'Personal Information' : 'Facilities & Notifications'}
             </CardTitle>
             <CardDescription>
               {currentStep === 1 && 'Enter your personal information and address to create your account'}
-              {currentStep === 2 && 'Tell us about your role and skill level'}
-              {currentStep === 3 && 'Optional facility code and notification preferences'}
+              {currentStep === 2 && 'Optional facility membership requests and notification preferences'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -895,13 +722,13 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
                 )}
               </div>
               <div>
-                {currentStep < 3 ? (
+                {currentStep < 2 ? (
                   <Button onClick={handleNext} className="bg-blue-600 hover:bg-blue-700">
                     Next Step
                   </Button>
                 ) : (
-                  <Button 
-                    onClick={handleSubmit} 
+                  <Button
+                    onClick={handleSubmit}
                     className="bg-blue-600 hover:bg-blue-700"
                     disabled={isSubmitting}
                   >

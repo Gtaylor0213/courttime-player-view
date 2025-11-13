@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import { NotificationDropdown } from './NotificationDropdown';
 import { useNotifications } from '../contexts/NotificationContext';
-import { Bell, Calendar, Clock, MapPin, Plus, Star, CreditCard, Users } from 'lucide-react';
+import { Bell, Calendar, Clock, MapPin, Plus, Star, Users } from 'lucide-react';
 
 interface PlayerDashboardProps {
   onLogout: () => void;
@@ -13,17 +13,19 @@ interface PlayerDashboardProps {
   onNavigateToProfile: () => void;
   onNavigateToCalendar: () => void;
   onNavigateToClub: (clubId: string) => void;
+  onNavigateToHittingPartner?: () => void;
   onNavigateToSettings?: () => void;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }
 
-export function PlayerDashboard({ 
-  onLogout, 
-  onQuickBook, 
-  onNavigateToProfile, 
+export function PlayerDashboard({
+  onLogout,
+  onQuickBook,
+  onNavigateToProfile,
   onNavigateToCalendar,
   onNavigateToClub,
+  onNavigateToHittingPartner = () => {},
   onNavigateToSettings = () => {},
   sidebarCollapsed = false,
   onToggleSidebar
@@ -117,7 +119,7 @@ export function PlayerDashboard({
         onNavigateToPlayerDashboard={() => {}} // No-op since we're already on the dashboard
         onNavigateToCalendar={onNavigateToCalendar}
         onNavigateToClub={onNavigateToClub}
-        onNavigateToSettings={onNavigateToSettings}
+        onNavigateToHittingPartner={onNavigateToHittingPartner}
         onLogout={onLogout}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={onToggleSidebar}
@@ -235,26 +237,7 @@ export function PlayerDashboard({
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Account Balance */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Account Balance
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center">
-                  <p className="text-3xl font-medium mb-2">$45.50</p>
-                  <p className="text-sm text-gray-600 mb-4">Available credits</p>
-                  <Button variant="outline" size="sm" className="w-full">
-                    Add Funds
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Favorite Facilities */}
+            {/* Member Facilities */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { UnifiedSidebar } from './UnifiedSidebar';
-import { ArrowLeft, MapPin, Phone, Mail, Globe, Clock, Users, Star, Calendar } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Mail, Globe, Clock, Users, Star, Calendar, Clipboard } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -13,7 +13,8 @@ interface ClubInfoProps {
   onNavigateToPlayerDashboard: () => void;
   onNavigateToCalendar: () => void;
   onNavigateToClub?: (clubId: string) => void;
-  onNavigateToSettings?: () => void;
+  onNavigateToHittingPartner?: () => void;
+  onNavigateToBulletinBoard?: (clubId: string, clubName: string) => void;
   selectedFacilityId?: string;
   onFacilityChange?: (facilityId: string) => void;
   sidebarCollapsed: boolean;
@@ -86,7 +87,8 @@ export function ClubInfo({
   onNavigateToPlayerDashboard,
   onNavigateToCalendar,
   onNavigateToClub = () => {},
-  onNavigateToSettings = () => {},
+  onNavigateToHittingPartner = () => {},
+  onNavigateToBulletinBoard = () => {},
   selectedFacilityId,
   onFacilityChange,
   sidebarCollapsed,
@@ -104,13 +106,13 @@ export function ClubInfo({
           onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
           onNavigateToCalendar={onNavigateToCalendar}
           onNavigateToClub={onNavigateToClub}
-          onNavigateToSettings={onNavigateToSettings}
+          onNavigateToHittingPartner={onNavigateToHittingPartner}
           onLogout={onLogout}
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={onToggleSidebar}
           currentPage="club-info"
         />
-        
+
         <div className={`flex-1 ${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
           <div className="p-8 flex items-center justify-center min-h-screen">
             <Card className="max-w-md">
@@ -137,7 +139,7 @@ export function ClubInfo({
         onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
         onNavigateToCalendar={onNavigateToCalendar}
         onNavigateToClub={onNavigateToClub}
-        onNavigateToSettings={onNavigateToSettings}
+        onNavigateToHittingPartner={onNavigateToHittingPartner}
         onLogout={onLogout}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={onToggleSidebar}
@@ -190,10 +192,14 @@ export function ClubInfo({
                   <p className="text-gray-600 mb-4">{club.description}</p>
                   
                   {/* Quick Actions */}
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
                     <Button onClick={onNavigateToCalendar}>
                       <Calendar className="h-4 w-4 mr-2" />
                       Book Court
+                    </Button>
+                    <Button variant="outline" onClick={() => onNavigateToBulletinBoard(club.id, club.name)}>
+                      <Clipboard className="h-4 w-4 mr-2" />
+                      Bulletin Board
                     </Button>
                     <Button variant="outline">
                       <Phone className="h-4 w-4 mr-2" />

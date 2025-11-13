@@ -11,9 +11,10 @@ interface LoginPageProps {
   onLogin: () => void;
   onNavigateToUserRegistration: () => void;
   onNavigateToFacilityRegistration?: () => void;
+  onNavigateToForgotPassword: () => void;
 }
 
-export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToFacilityRegistration }: LoginPageProps) {
+export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToFacilityRegistration, onNavigateToForgotPassword }: LoginPageProps) {
   const [email, setEmail] = useState('player@courttime.com');
   const [password, setPassword] = useState('player123');
   const [isLoading, setIsLoading] = useState(false);
@@ -106,7 +107,16 @@ export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToF
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <button
+                      type="button"
+                      onClick={onNavigateToForgotPassword}
+                      className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                   <Input
                     id="password"
                     type="password"
@@ -116,8 +126,8 @@ export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToF
                     required
                   />
                 </div>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full bg-blue-600 hover:bg-blue-700"
                   disabled={isLoading}
                 >
@@ -152,12 +162,6 @@ export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToF
                     Register a Facility
                   </Button>
                 </div>
-              </div>
-              
-              <div className="mt-6 text-center">
-                <a href="#" className="text-sm text-blue-600 hover:underline">
-                  Forgot your password?
-                </a>
               </div>
             </CardContent>
           </Card>

@@ -14,6 +14,7 @@ interface CourtCalendarViewProps {
   onNavigateToPlayerDashboard: () => void;
   onNavigateToProfile: () => void;
   onNavigateToClub: (clubId: string) => void;
+  onNavigateToHittingPartner?: () => void;
   onNavigateToSettings?: () => void;
   onLogout: () => void;
   selectedFacilityId?: string;
@@ -22,10 +23,11 @@ interface CourtCalendarViewProps {
   onToggleSidebar?: () => void;
 }
 
-export function CourtCalendarView({ 
-  onNavigateToPlayerDashboard, 
-  onNavigateToProfile, 
+export function CourtCalendarView({
+  onNavigateToPlayerDashboard,
+  onNavigateToProfile,
   onNavigateToClub,
+  onNavigateToHittingPartner = () => {},
   onNavigateToSettings = () => {},
   onLogout,
   selectedFacilityId = 'sunrise-valley',
@@ -461,7 +463,7 @@ export function CourtCalendarView({
         onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
         onNavigateToCalendar={() => {}} // Already on calendar view
         onNavigateToClub={onNavigateToClub}
-        onNavigateToSettings={onNavigateToSettings}
+        onNavigateToHittingPartner={onNavigateToHittingPartner}
         onLogout={onLogout}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={onToggleSidebar}

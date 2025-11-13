@@ -9,23 +9,36 @@ import { QuickReservation } from './components/QuickReservation';
 import { PlayerProfile } from './components/PlayerProfile';
 import { UserRegistration } from './components/UserRegistration';
 import { ClubInfo } from './components/ClubInfo';
-import { Settings } from './components/Settings';
+import { BulletinBoard } from './components/BulletinBoard';
+import { FindHittingPartner } from './components/FindHittingPartner';
+import { ForgotPassword } from './components/ForgotPassword';
+import { ResetPassword } from './components/ResetPassword';
+import { ViewSwitcher } from './components/ViewSwitcher';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { FacilityManagement } from './components/admin/FacilityManagement';
+import { CourtManagement } from './components/admin/CourtManagement';
+import { BookingManagement } from './components/admin/BookingManagement';
+import { AdminBooking } from './components/admin/AdminBooking';
+import { MemberManagement } from './components/admin/MemberManagement';
+import { Analytics } from './components/admin/Analytics';
 
-type Screen = 'login' | 'court-calendar' | 'player-dashboard' | 'quick-reservation' | 'profile' | 'user-registration' | 'club-info' | 'settings';
+type Screen = 'login' | 'court-calendar' | 'player-dashboard' | 'quick-reservation' | 'profile' | 'user-registration' | 'club-info' | 'bulletin-board' | 'hitting-partner' | 'forgot-password' | 'reset-password' | 'admin-dashboard' | 'facility-management' | 'court-management' | 'booking-management' | 'admin-booking' | 'member-management' | 'analytics';
 
 function AppContent() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [selectedFacilityId, setSelectedFacilityId] = useState<string>('sunrise-valley');
   const [selectedClubId, setSelectedClubId] = useState<string>('');
+  const [selectedClubName, setSelectedClubName] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  
+  const [viewMode, setViewMode] = useState<'player' | 'admin'>('player');
+
   const { user, loading, logout: authLogout } = useAuth();
 
   // Update screen based on authentication state
   useEffect(() => {
     if (user && currentScreen === 'login') {
       setCurrentScreen('court-calendar');
-    } else if (!user && currentScreen !== 'login' && currentScreen !== 'user-registration') {
+    } else if (!user && currentScreen !== 'login' && currentScreen !== 'user-registration' && currentScreen !== 'forgot-password' && currentScreen !== 'reset-password') {
       setCurrentScreen('login');
       setSidebarCollapsed(false);
     }
@@ -79,8 +92,18 @@ function AppContent() {
     setCurrentScreen('club-info');
   };
 
-  const navigateToSettings = () => {
-    setCurrentScreen('settings');
+  const navigateToHittingPartner = () => {
+    setCurrentScreen('hitting-partner');
+  };
+
+  const navigateToBulletinBoard = (clubId: string, clubName: string) => {
+    setSelectedClubId(clubId);
+    setSelectedClubName(clubName);
+    setCurrentScreen('bulletin-board');
+  };
+
+  const navigateBackToClub = () => {
+    setCurrentScreen('club-info');
   };
 
   const navigateBack = () => {
@@ -105,12 +128,81 @@ function AppContent() {
     setCurrentScreen('login');
   };
 
+  const navigateToForgotPassword = () => {
+    setCurrentScreen('forgot-password');
+  };
+
+  const navigateToResetPassword = () => {
+    setCurrentScreen('reset-password');
+  };
+
+  const handlePasswordResetComplete = () => {
+    setCurrentScreen('login');
+  };
+
+  // Admin Navigation handlers
+  const navigateToAdminDashboard = () => {
+    setCurrentScreen('admin-dashboard');
+  };
+
+  const navigateToFacilityManagement = () => {
+    setCurrentScreen('facility-management');
+  };
+
+  const navigateToCourtManagement = () => {
+    setCurrentScreen('court-management');
+  };
+
+  const navigateToBookingManagement = () => {
+    setCurrentScreen('booking-management');
+  };
+
+  const navigateToAdminBooking = () => {
+    setCurrentScreen('admin-booking');
+  };
+
+  const navigateToMemberManagement = () => {
+    setCurrentScreen('member-management');
+  };
+
+  const navigateToAnalytics = () => {
+    setCurrentScreen('analytics');
+  };
+
+  const handleViewModeChange = (mode: 'player' | 'admin') => {
+    setViewMode(mode);
+    // Navigate to appropriate dashboard when switching modes
+    if (mode === 'admin') {
+      setCurrentScreen('admin-dashboard');
+    } else {
+      setCurrentScreen('court-calendar');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      {/* View Switcher - Only show when logged in */}
+      {user && <ViewSwitcher viewMode={viewMode} onViewModeChange={handleViewModeChange} />}
+
       {currentScreen === 'login' && (
-        <LoginPage 
-          onLogin={handleLogin} 
+        <LoginPage
+          onLogin={handleLogin}
           onNavigateToUserRegistration={navigateToUserRegistration}
+          onNavigateToForgotPassword={navigateToForgotPassword}
+        />
+      )}
+
+      {currentScreen === 'forgot-password' && (
+        <ForgotPassword
+          onBack={navigateBackToLogin}
+        />
+      )}
+
+      {currentScreen === 'reset-password' && (
+        <ResetPassword
+          onBack={navigateBackToLogin}
+          onResetComplete={handlePasswordResetComplete}
+          resetToken="mock-reset-token-123"
         />
       )}
       
@@ -122,11 +214,11 @@ function AppContent() {
       )}
       
       {currentScreen === 'court-calendar' && (
-        <CourtCalendarView 
+        <CourtCalendarView
           onNavigateToPlayerDashboard={navigateToPlayerDashboard}
           onNavigateToProfile={navigateToProfile}
           onNavigateToClub={navigateToClub}
-          onNavigateToSettings={navigateToSettings}
+          onNavigateToHittingPartner={navigateToHittingPartner}
           onLogout={handleLogout}
           selectedFacilityId={selectedFacilityId}
           onFacilityChange={handleFacilityChange}
@@ -134,43 +226,43 @@ function AppContent() {
           onToggleSidebar={toggleSidebar}
         />
       )}
-      
+
       {currentScreen === 'player-dashboard' && (
-        <PlayerDashboard 
+        <PlayerDashboard
           onLogout={handleLogout}
           onQuickBook={navigateToQuickReservation}
           onNavigateToProfile={navigateToProfile}
           onNavigateToCalendar={navigateToCourtCalendar}
           onNavigateToClub={navigateToClub}
-          onNavigateToSettings={navigateToSettings}
+          onNavigateToHittingPartner={navigateToHittingPartner}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
         />
       )}
-      
+
       {currentScreen === 'profile' && (
-        <PlayerProfile 
+        <PlayerProfile
           onBack={navigateToCourtCalendar}
           onLogout={handleLogout}
           onNavigateToProfile={navigateToProfile}
           onNavigateToPlayerDashboard={navigateToPlayerDashboard}
           onNavigateToClub={navigateToClub}
-          onNavigateToSettings={navigateToSettings}
+          onNavigateToHittingPartner={navigateToHittingPartner}
           selectedFacilityId={selectedFacilityId}
           onFacilityChange={handleFacilityChange}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
         />
       )}
-      
+
       {currentScreen === 'quick-reservation' && (
-        <QuickReservation 
+        <QuickReservation
           onBack={navigateBack}
           onLogout={handleLogout}
           onNavigateToProfile={navigateToProfile}
           onNavigateToPlayerDashboard={navigateToPlayerDashboard}
           onNavigateToClub={navigateToClub}
-          onNavigateToSettings={navigateToSettings}
+          onNavigateToHittingPartner={navigateToHittingPartner}
           selectedFacilityId={selectedFacilityId}
           onFacilityChange={handleFacilityChange}
           sidebarCollapsed={sidebarCollapsed}
@@ -179,14 +271,15 @@ function AppContent() {
       )}
 
       {currentScreen === 'club-info' && (
-        <ClubInfo 
+        <ClubInfo
           onBack={navigateBack}
           onLogout={handleLogout}
           onNavigateToProfile={navigateToProfile}
           onNavigateToPlayerDashboard={navigateToPlayerDashboard}
           onNavigateToCalendar={navigateToCourtCalendar}
           onNavigateToClub={navigateToClub}
-          onNavigateToSettings={navigateToSettings}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          onNavigateToBulletinBoard={navigateToBulletinBoard}
           selectedFacilityId={selectedFacilityId}
           onFacilityChange={handleFacilityChange}
           sidebarCollapsed={sidebarCollapsed}
@@ -195,8 +288,26 @@ function AppContent() {
         />
       )}
 
-      {currentScreen === 'settings' && (
-        <Settings 
+      {currentScreen === 'bulletin-board' && (
+        <BulletinBoard
+          onBack={navigateBackToClub}
+          onLogout={handleLogout}
+          onNavigateToProfile={navigateToProfile}
+          onNavigateToPlayerDashboard={navigateToPlayerDashboard}
+          onNavigateToCalendar={navigateToCourtCalendar}
+          onNavigateToClub={navigateToClub}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          selectedFacilityId={selectedFacilityId}
+          onFacilityChange={handleFacilityChange}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+          clubId={selectedClubId}
+          clubName={selectedClubName}
+        />
+      )}
+
+      {currentScreen === 'hitting-partner' && (
+        <FindHittingPartner
           onBack={navigateBack}
           onLogout={handleLogout}
           onNavigateToProfile={navigateToProfile}
@@ -205,6 +316,154 @@ function AppContent() {
           onNavigateToClub={navigateToClub}
           selectedFacilityId={selectedFacilityId}
           onFacilityChange={handleFacilityChange}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
+      )}
+
+      {/* Admin Pages */}
+      {currentScreen === 'admin-dashboard' && (
+        <AdminDashboard
+          onBack={navigateBack}
+          onLogout={handleLogout}
+          onNavigateToProfile={navigateToProfile}
+          onNavigateToPlayerDashboard={navigateToPlayerDashboard}
+          onNavigateToCalendar={navigateToCourtCalendar}
+          onNavigateToClub={navigateToClub}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          onNavigateToAdminDashboard={navigateToAdminDashboard}
+          onNavigateToFacilityManagement={navigateToFacilityManagement}
+          onNavigateToCourtManagement={navigateToCourtManagement}
+          onNavigateToBookingManagement={navigateToBookingManagement}
+          onNavigateToAdminBooking={navigateToAdminBooking}
+          onNavigateToMemberManagement={navigateToMemberManagement}
+          onNavigateToAnalytics={navigateToAnalytics}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
+      )}
+
+      {currentScreen === 'facility-management' && (
+        <FacilityManagement
+          onBack={navigateBack}
+          onLogout={handleLogout}
+          onNavigateToProfile={navigateToProfile}
+          onNavigateToPlayerDashboard={navigateToPlayerDashboard}
+          onNavigateToCalendar={navigateToCourtCalendar}
+          onNavigateToClub={navigateToClub}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          onNavigateToAdminDashboard={navigateToAdminDashboard}
+          onNavigateToFacilityManagement={navigateToFacilityManagement}
+          onNavigateToCourtManagement={navigateToCourtManagement}
+          onNavigateToBookingManagement={navigateToBookingManagement}
+          onNavigateToAdminBooking={navigateToAdminBooking}
+          onNavigateToMemberManagement={navigateToMemberManagement}
+          onNavigateToAnalytics={navigateToAnalytics}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
+      )}
+
+      {currentScreen === 'court-management' && (
+        <CourtManagement
+          onBack={navigateBack}
+          onLogout={handleLogout}
+          onNavigateToProfile={navigateToProfile}
+          onNavigateToPlayerDashboard={navigateToPlayerDashboard}
+          onNavigateToCalendar={navigateToCourtCalendar}
+          onNavigateToClub={navigateToClub}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          onNavigateToAdminDashboard={navigateToAdminDashboard}
+          onNavigateToFacilityManagement={navigateToFacilityManagement}
+          onNavigateToCourtManagement={navigateToCourtManagement}
+          onNavigateToBookingManagement={navigateToBookingManagement}
+          onNavigateToAdminBooking={navigateToAdminBooking}
+          onNavigateToMemberManagement={navigateToMemberManagement}
+          onNavigateToAnalytics={navigateToAnalytics}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
+      )}
+
+      {currentScreen === 'booking-management' && (
+        <BookingManagement
+          onBack={navigateBack}
+          onLogout={handleLogout}
+          onNavigateToProfile={navigateToProfile}
+          onNavigateToPlayerDashboard={navigateToPlayerDashboard}
+          onNavigateToCalendar={navigateToCourtCalendar}
+          onNavigateToClub={navigateToClub}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          onNavigateToAdminDashboard={navigateToAdminDashboard}
+          onNavigateToFacilityManagement={navigateToFacilityManagement}
+          onNavigateToCourtManagement={navigateToCourtManagement}
+          onNavigateToBookingManagement={navigateToBookingManagement}
+          onNavigateToAdminBooking={navigateToAdminBooking}
+          onNavigateToMemberManagement={navigateToMemberManagement}
+          onNavigateToAnalytics={navigateToAnalytics}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
+      )}
+
+      {currentScreen === 'admin-booking' && (
+        <AdminBooking
+          onBack={navigateBack}
+          onLogout={handleLogout}
+          onNavigateToProfile={navigateToProfile}
+          onNavigateToPlayerDashboard={navigateToPlayerDashboard}
+          onNavigateToCalendar={navigateToCourtCalendar}
+          onNavigateToClub={navigateToClub}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          onNavigateToAdminDashboard={navigateToAdminDashboard}
+          onNavigateToFacilityManagement={navigateToFacilityManagement}
+          onNavigateToCourtManagement={navigateToCourtManagement}
+          onNavigateToBookingManagement={navigateToBookingManagement}
+          onNavigateToAdminBooking={navigateToAdminBooking}
+          onNavigateToMemberManagement={navigateToMemberManagement}
+          onNavigateToAnalytics={navigateToAnalytics}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
+      )}
+
+      {currentScreen === 'member-management' && (
+        <MemberManagement
+          onBack={navigateBack}
+          onLogout={handleLogout}
+          onNavigateToProfile={navigateToProfile}
+          onNavigateToPlayerDashboard={navigateToPlayerDashboard}
+          onNavigateToCalendar={navigateToCourtCalendar}
+          onNavigateToClub={navigateToClub}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          onNavigateToAdminDashboard={navigateToAdminDashboard}
+          onNavigateToFacilityManagement={navigateToFacilityManagement}
+          onNavigateToCourtManagement={navigateToCourtManagement}
+          onNavigateToBookingManagement={navigateToBookingManagement}
+          onNavigateToAdminBooking={navigateToAdminBooking}
+          onNavigateToMemberManagement={navigateToMemberManagement}
+          onNavigateToAnalytics={navigateToAnalytics}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
+      )}
+
+      {currentScreen === 'analytics' && (
+        <Analytics
+          onBack={navigateBack}
+          onLogout={handleLogout}
+          onNavigateToProfile={navigateToProfile}
+          onNavigateToPlayerDashboard={navigateToPlayerDashboard}
+          onNavigateToCalendar={navigateToCourtCalendar}
+          onNavigateToClub={navigateToClub}
+          onNavigateToHittingPartner={navigateToHittingPartner}
+          onNavigateToAdminDashboard={navigateToAdminDashboard}
+          onNavigateToFacilityManagement={navigateToFacilityManagement}
+          onNavigateToCourtManagement={navigateToCourtManagement}
+          onNavigateToBookingManagement={navigateToBookingManagement}
+          onNavigateToAdminBooking={navigateToAdminBooking}
+          onNavigateToMemberManagement={navigateToMemberManagement}
+          onNavigateToAnalytics={navigateToAnalytics}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
         />

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from './ui/switch';
 import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { ArrowLeft, Camera, Save, User, Mail, Phone, Shield, Trophy, Heart, Bell } from 'lucide-react';
+import { ArrowLeft, Camera, Save, User, Mail, Phone, Shield, Bell } from 'lucide-react';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -17,20 +17,20 @@ interface PlayerProfileProps {
   onNavigateToProfile?: () => void;
   onNavigateToPlayerDashboard?: () => void;
   onNavigateToClub?: (clubId: string) => void;
-  onNavigateToSettings?: () => void;
+  onNavigateToHittingPartner?: () => void;
   selectedFacilityId?: string;
   onFacilityChange?: (facilityId: string) => void;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }
 
-export function PlayerProfile({ 
-  onBack, 
+export function PlayerProfile({
+  onBack,
   onLogout,
   onNavigateToProfile = () => {},
   onNavigateToPlayerDashboard = () => {},
   onNavigateToClub = () => {},
-  onNavigateToSettings = () => {},
+  onNavigateToHittingPartner = () => {},
   selectedFacilityId,
   onFacilityChange,
   sidebarCollapsed = false,
@@ -43,9 +43,7 @@ export function PlayerProfile({
     email: 'john.doe@email.com',
     phoneNumber: '+1 (555) 123-4567',
     password: '••••••••',
-    role: 'player',
     skillLevel: 'intermediate',
-    preferredSport: 'tennis',
     profilePicture: '',
     notificationPreferences: {
       emailBookingConfirmations: true,
@@ -110,7 +108,7 @@ export function PlayerProfile({
         onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
         onNavigateToCalendar={onBack}
         onNavigateToClub={onNavigateToClub}
-        onNavigateToSettings={onNavigateToSettings}
+        onNavigateToHittingPartner={onNavigateToHittingPartner}
         onLogout={onLogout}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={onToggleSidebar}
@@ -187,14 +185,10 @@ export function PlayerProfile({
                   {profileData.firstName} {profileData.lastName}
                 </CardTitle>
                 <CardDescription className="capitalize">
-                  {profileData.role} • {profileData.skillLevel} Level
+                  {profileData.skillLevel} Level
                 </CardDescription>
               </CardHeader>
               <CardContent className="text-center space-y-2">
-                <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                  <Trophy className="h-4 w-4" />
-                  <span>Preferred Sport: {profileData.preferredSport}</span>
-                </div>
                 <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
                   <Shield className="h-4 w-4" />
                   <span>Member since January 2024</span>
@@ -276,71 +270,22 @@ export function PlayerProfile({
                     <p className="text-sm text-gray-500 mt-1">Leave blank to keep current password</p>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Sports Preferences */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Heart className="h-5 w-5" />
-                  Sports Preferences
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="role">Role</Label>
-                    <Select
-                      value={profileData.role}
-                      onValueChange={(value) => handleInputChange('role', value)}
-                      disabled={!isEditing}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="player">Player</SelectItem>
-                        <SelectItem value="coach">Coach</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="skillLevel">Skill Level</Label>
-                    <Select
-                      value={profileData.skillLevel}
-                      onValueChange={(value) => handleInputChange('skillLevel', value)}
-                      disabled={!isEditing}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="beginner">Beginner</SelectItem>
-                        <SelectItem value="intermediate">Intermediate</SelectItem>
-                        <SelectItem value="advanced">Advanced</SelectItem>
-                        <SelectItem value="professional">Professional</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
                 <div>
-                  <Label htmlFor="preferredSport">Preferred Sport</Label>
+                  <Label htmlFor="skillLevel">Skill Level</Label>
                   <Select
-                    value={profileData.preferredSport}
-                    onValueChange={(value) => handleInputChange('preferredSport', value)}
+                    value={profileData.skillLevel}
+                    onValueChange={(value) => handleInputChange('skillLevel', value)}
                     disabled={!isEditing}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="tennis">Tennis</SelectItem>
-                      <SelectItem value="pickleball">Pickleball</SelectItem>
-                      <SelectItem value="both">Both Tennis & Pickleball</SelectItem>
+                      <SelectItem value="beginner">Beginner</SelectItem>
+                      <SelectItem value="intermediate">Intermediate</SelectItem>
+                      <SelectItem value="advanced">Advanced</SelectItem>
+                      <SelectItem value="professional">Professional</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

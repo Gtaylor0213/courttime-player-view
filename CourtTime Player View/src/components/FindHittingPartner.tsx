@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UnifiedSidebar } from './UnifiedSidebar';
-import { Search, Filter, MapPin, Users, Calendar, Plus, X } from 'lucide-react';
+import { Search, Filter, Users, Calendar, Plus, X, Building } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Input } from './ui/input';
@@ -31,14 +32,11 @@ interface PartnerPost {
     skillLevel: string;
     memberClubs: string[];
   };
-  location: {
-    city: string;
-    state: string;
-  };
   availability: string;
   playStyle: string[];
   description: string;
   postedDate: string;
+  expiresAt: string; // ISO date string
 }
 
 // Sample posts
@@ -49,16 +47,13 @@ const samplePosts: PartnerPost[] = [
       name: 'Sarah Martinez',
       initials: 'SM',
       skillLevel: 'Advanced',
-      memberClubs: ['Riverside Tennis Club']
-    },
-    location: {
-      city: 'Springfield',
-      state: 'IL'
+      memberClubs: ['riverside']
     },
     availability: 'Weekday mornings',
     playStyle: ['Singles', 'Competitive'],
     description: 'Looking for consistent hitting partner for weekday morning sessions. I play at an advanced level and looking to prepare for upcoming tournaments. Prefer someone who can rally and practice match play.',
-    postedDate: '2 days ago'
+    postedDate: '2 days ago',
+    expiresAt: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString() // Expires in 28 days
   },
   {
     id: '2',
@@ -66,16 +61,13 @@ const samplePosts: PartnerPost[] = [
       name: 'Michael Chen',
       initials: 'MC',
       skillLevel: 'Intermediate',
-      memberClubs: ['Downtown Racquet Club', 'Riverside Tennis Club']
-    },
-    location: {
-      city: 'Springfield',
-      state: 'IL'
+      memberClubs: ['sunrise-valley', 'riverside']
     },
     availability: 'Evenings & Weekends',
     playStyle: ['Doubles', 'Social'],
     description: 'Casual player looking for doubles partners. I enjoy friendly matches and improving my game. Open to players of similar skill level for fun rallies and maybe some social doubles games.',
-    postedDate: '4 days ago'
+    postedDate: '4 days ago',
+    expiresAt: new Date(Date.now() + 26 * 24 * 60 * 60 * 1000).toISOString() // Expires in 26 days
   },
   {
     id: '3',
@@ -83,16 +75,13 @@ const samplePosts: PartnerPost[] = [
       name: 'Jennifer Wu',
       initials: 'JW',
       skillLevel: 'Intermediate',
-      memberClubs: ['Riverside Tennis Club']
-    },
-    location: {
-      city: 'Springfield',
-      state: 'IL'
+      memberClubs: ['sunrise-valley']
     },
     availability: 'Weekend mornings',
     playStyle: ['Singles', 'Drills'],
     description: 'Looking for someone to practice with on Saturday or Sunday mornings. Would love to work on specific drills and improve consistency. I\'m a 3.5 level player working my way up.',
-    postedDate: '1 week ago'
+    postedDate: '1 week ago',
+    expiresAt: new Date(Date.now() + 23 * 24 * 60 * 60 * 1000).toISOString() // Expires in 23 days
   },
   {
     id: '4',
@@ -100,16 +89,13 @@ const samplePosts: PartnerPost[] = [
       name: 'David Thompson',
       initials: 'DT',
       skillLevel: 'Beginner',
-      memberClubs: ['Downtown Racquet Club']
-    },
-    location: {
-      city: 'Springfield',
-      state: 'IL'
+      memberClubs: ['downtown']
     },
     availability: 'Flexible',
     playStyle: ['Singles', 'Learning'],
-    description: 'New to tennis and looking for a patient hitting partner to learn with. Happy to split court fees and practice basic strokes. Located near downtown area.',
-    postedDate: '3 days ago'
+    description: 'New to tennis and looking for a patient hitting partner to learn with. Happy to split court fees and practice basic strokes.',
+    postedDate: '3 days ago',
+    expiresAt: new Date(Date.now() + 27 * 24 * 60 * 60 * 1000).toISOString() // Expires in 27 days
   },
   {
     id: '5',
@@ -117,17 +103,23 @@ const samplePosts: PartnerPost[] = [
       name: 'Amanda Rodriguez',
       initials: 'AR',
       skillLevel: 'Advanced',
-      memberClubs: ['Riverside Tennis Club']
-    },
-    location: {
-      city: 'Springfield',
-      state: 'IL'
+      memberClubs: ['riverside']
     },
     availability: 'Tuesday & Thursday evenings',
     playStyle: ['Singles', 'Competitive', 'Match Play'],
     description: 'Competitive player seeking hitting partner for Tuesday/Thursday evening sessions. Looking for someone who can push me and enjoys playing points/practice matches. 4.5+ level preferred.',
-    postedDate: '5 days ago'
+    postedDate: '5 days ago',
+    expiresAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString() // Expires in 25 days
   }
+];
+
+// Define facilities (matching the structure from CourtCalendarView)
+const memberFacilities = [
+  { id: 'sunrise-valley', name: 'Sunrise Valley HOA' },
+  { id: 'downtown', name: 'Downtown Tennis Center' },
+  { id: 'riverside', name: 'Riverside Tennis Club' },
+  { id: 'mountain-view', name: 'Mountain View Racquet Club' },
+  { id: 'lakeside', name: 'Lakeside Sports Complex' }
 ];
 
 export function FindHittingPartner({
@@ -142,24 +134,24 @@ export function FindHittingPartner({
   sidebarCollapsed,
   onToggleSidebar
 }: FindHittingPartnerProps) {
+  const { user } = useAuth();
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterPlayStyle, setFilterPlayStyle] = useState('all');
+  const [selectedFacilityFilter, setSelectedFacilityFilter] = useState<string>('all');
 
   // Form state for creating new post
   const [newPost, setNewPost] = useState({
-    city: '',
-    state: '',
     availability: '',
     playStyle: [] as string[],
-    description: ''
+    description: '',
+    expirationDays: 30 // Default to 30 days
   });
 
   const filteredPosts = samplePosts.filter(post => {
     const matchesSearch =
       post.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.location.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
       post.description.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesLevel = filterLevel === 'all' || post.user.skillLevel.toLowerCase() === filterLevel;
@@ -167,7 +159,16 @@ export function FindHittingPartner({
       style.toLowerCase() === filterPlayStyle
     );
 
-    return matchesSearch && matchesLevel && matchesPlayStyle;
+    // Filter out expired posts
+    const isNotExpired = new Date(post.expiresAt) > new Date();
+
+    // Filter by facility membership - only show posts from members of the same facility
+    const userMemberFacilities = user?.memberFacilities || [];
+    const hasSameFacility = selectedFacilityFilter === 'all'
+      ? post.user.memberClubs.some(club => userMemberFacilities.includes(club))
+      : post.user.memberClubs.includes(selectedFacilityFilter);
+
+    return matchesSearch && matchesLevel && matchesPlayStyle && isNotExpired && hasSameFacility;
   });
 
   const handleTogglePlayStyle = (style: string) => {
@@ -185,11 +186,10 @@ export function FindHittingPartner({
     setShowCreatePost(false);
     // Reset form
     setNewPost({
-      city: '',
-      state: '',
       availability: '',
       playStyle: [],
-      description: ''
+      description: '',
+      expirationDays: 30
     });
   };
 
@@ -230,13 +230,34 @@ export function FindHittingPartner({
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="Search by name, location, or keywords..."
+                    placeholder="Search by name or keywords..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10"
                   />
                 </div>
               </div>
+
+              {/* Facility Filter - only show if user has multiple memberships */}
+              {user?.memberFacilities && user.memberFacilities.length > 1 && (
+                <Select value={selectedFacilityFilter} onValueChange={setSelectedFacilityFilter}>
+                  <SelectTrigger className="w-[220px]">
+                    <Building className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="All My Facilities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All My Facilities</SelectItem>
+                    {user.memberFacilities.map((facilityId) => {
+                      const facility = memberFacilities.find(f => f.id === facilityId);
+                      return (
+                        <SelectItem key={facilityId} value={facilityId}>
+                          {facility?.name || facilityId}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
 
               <Select value={filterLevel} onValueChange={setFilterLevel}>
                 <SelectTrigger className="w-[180px]">
@@ -291,9 +312,6 @@ export function FindHittingPartner({
                           <h3 className="font-semibold text-lg">{post.user.name}</h3>
                           <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
                             <Badge variant="secondary">{post.user.skillLevel}</Badge>
-                            <span>•</span>
-                            <MapPin className="h-3 w-3" />
-                            <span>{post.location.city}, {post.location.state}</span>
                           </div>
                         </div>
                         <span className="text-sm text-gray-500">{post.postedDate}</span>
@@ -304,7 +322,10 @@ export function FindHittingPartner({
                         <div className="flex items-center gap-2 mb-3">
                           <Users className="h-4 w-4 text-gray-400" />
                           <span className="text-sm text-gray-600">
-                            Member: {post.user.memberClubs.join(', ')}
+                            Member: {post.user.memberClubs.map(clubId => {
+                              const facility = memberFacilities.find(f => f.id === clubId);
+                              return facility?.name || clubId;
+                            }).join(', ')}
                           </span>
                         </div>
                       )}
@@ -385,28 +406,6 @@ export function FindHittingPartner({
 
               {/* Form */}
               <div className="space-y-4">
-                {/* Location */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="city">City/Town</Label>
-                    <Input
-                      id="city"
-                      placeholder="e.g., Springfield"
-                      value={newPost.city}
-                      onChange={(e) => setNewPost({ ...newPost, city: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="state">State</Label>
-                    <Input
-                      id="state"
-                      placeholder="e.g., IL"
-                      value={newPost.state}
-                      onChange={(e) => setNewPost({ ...newPost, state: e.target.value })}
-                    />
-                  </div>
-                </div>
-
                 {/* Availability */}
                 <div>
                   <Label htmlFor="availability">Availability</Label>
@@ -416,6 +415,29 @@ export function FindHittingPartner({
                     value={newPost.availability}
                     onChange={(e) => setNewPost({ ...newPost, availability: e.target.value })}
                   />
+                </div>
+
+                {/* Post Duration */}
+                <div>
+                  <Label htmlFor="expiration">Post Duration</Label>
+                  <Select
+                    value={newPost.expirationDays.toString()}
+                    onValueChange={(value) => setNewPost({ ...newPost, expirationDays: parseInt(value) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7">7 days</SelectItem>
+                      <SelectItem value="14">14 days</SelectItem>
+                      <SelectItem value="30">30 days</SelectItem>
+                      <SelectItem value="60">60 days</SelectItem>
+                      <SelectItem value="90">90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Your post will automatically expire after the selected duration.
+                  </p>
                 </div>
 
                 {/* Play Style */}

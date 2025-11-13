@@ -1,15 +1,16 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner@2.0.3';
+import { authApi } from '../api/client';
 
-// DEV MODE: Set to true to bypass authentication (for development only)
-// TODO: Remove or set to false when database is connected
-const DEV_MODE = true;
+// DEV MODE: Set to true to use mock data, false to use real database
+const DEV_MODE = false;
 
 export interface User {
   id: string;
   email: string;
   fullName: string;
   userType: 'player' | 'admin';
+  memberFacilities?: string[]; // Array of facility IDs user belongs to
   preferences?: {
     notifications: boolean;
     timezone: string;
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: email,
           fullName: 'Development User',
           userType: 'player',
+          memberFacilities: ['sunrise-valley', 'riverside'],
           preferences: {
             notifications: true,
             timezone: 'America/New_York'
@@ -81,9 +83,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
 
-      // TODO: Implement your login logic here
-      toast.error('Login functionality requires authentication backend');
-      return false;
+      // Real database login
+      const result = await authApi.login(email, password);
+
+      if (result.success && result.data) {
+        setUser(result.data.user);
+        setAccessToken('token-' + result.data.user.id);
+        toast.success('Logged in successfully');
+        return true;
+      } else {
+        toast.error(result.error || 'Login failed');
+        return false;
+      }
     } catch (error: any) {
       console.error('Login failed:', error);
       toast.error(error.message || 'Login failed');
@@ -109,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: email,
           fullName: fullName,
           userType: userType || 'player',
+          memberFacilities: ['sunrise-valley'],
           preferences: {
             notifications: true,
             timezone: 'America/New_York'
@@ -120,9 +132,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
 
-      // TODO: Implement your registration logic here
-      toast.error('Registration functionality requires authentication backend');
-      return false;
+      // Real database registration
+      const result = await authApi.register({
+        email,
+        password,
+        fullName,
+        userType: userType || 'player'
+      });
+
+      if (result.success && result.data) {
+        setUser(result.data.user);
+        setAccessToken('token-' + result.data.user.id);
+        toast.success('Registration successful!');
+        return true;
+      } else {
+        toast.error(result.error || 'Registration failed');
+        return false;
+      }
     } catch (error: any) {
       console.error('Registration failed:', error);
       toast.error(error.message || 'Registration failed');

@@ -15,6 +15,10 @@ dotenv.config();
 import authRoutes from './routes/auth';
 import facilityRoutes from './routes/facilities';
 import userRoutes from './routes/users';
+import memberRoutes from './routes/members';
+import playerProfileRoutes from './routes/playerProfile';
+import hittingPartnerRoutes from './routes/hittingPartner';
+import bulletinBoardRoutes from './routes/bulletinBoard';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -39,6 +43,10 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/facilities', facilityRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/members', memberRoutes);
+app.use('/api/player-profile', playerProfileRoutes);
+app.use('/api/hitting-partner', hittingPartnerRoutes);
+app.use('/api/bulletin-board', bulletinBoardRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -71,6 +79,7 @@ async function startServer() {
       console.log(`📍 Health check: http://localhost:${PORT}/health`);
       console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
       console.log(`🏢 Facilities API: http://localhost:${PORT}/api/facilities`);
+      console.log(`👥 Members API: http://localhost:${PORT}/api/members`);
       console.log(`\n✅ Server ready!\n`);
     });
   } catch (error) {

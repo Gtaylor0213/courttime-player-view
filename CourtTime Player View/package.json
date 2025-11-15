@@ -71,7 +71,8 @@
             "build": "vite build",
             "db:setup": "node scripts/setup-database.js",
             "db:check": "node scripts/check-database.js",
-            "db:migrate": "node scripts/run-migration.js"
+            "db:migrate": "node scripts/run-migration.js",
+            "db:test-data": "tsx scripts/setup-test-data.ts"
       },
       "description": "This is a code bundle for CourtTime Player View. The original project is available at https://www.figma.com/design/UQjuGWTemayM81rKCsqEHl/CourtTime-Player-View.",
       "main": "index.js",

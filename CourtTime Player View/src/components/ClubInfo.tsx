@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import { ArrowLeft, MapPin, Phone, Mail, Globe, Clock, Users, Star, Calendar, Clipboard } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { facilitiesApi } from '../api/client';
+import { toast } from 'sonner';
 
 interface ClubInfoProps {
   onBack: () => void;
@@ -22,63 +24,27 @@ interface ClubInfoProps {
   clubId: string;
 }
 
-interface Club {
+interface FacilityData {
   id: string;
   name: string;
   description: string;
   address: string;
+  city: string;
+  state: string;
+  zipCode: string;
   phone: string;
   email: string;
   website: string;
-  hours: string;
-  memberCount: number;
-  rating: number;
-  image: string;
+  operatingHours: string;
+  memberCount?: number;
   courts: {
-    type: string;
-    count: number;
+    id: string;
+    name: string;
+    courtType: string;
+    surfaceType: string;
+    isIndoor: boolean;
   }[];
 }
-
-// Sample club data
-const clubsData: { [key: string]: Club } = {
-  'riverside-tennis': {
-    id: 'riverside-tennis',
-    name: 'Riverside Tennis Club',
-    description: 'Premier tennis facility offering world-class courts and professional coaching. Our club has been serving the community for over 30 years with excellent facilities and a welcoming atmosphere.',
-    address: '1234 Riverside Drive, Springfield, ST 12345',
-    phone: '(555) 123-4567',
-    email: 'info@riversidetc.com',
-    website: 'www.riversidetc.com',
-    hours: 'Mon-Sun: 6:00 AM - 10:00 PM',
-    memberCount: 450,
-    rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1606151595697-648a9a840cdc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0ZW5uaXMlMjBjbHViJTIwZmFjaWxpdHl8ZW58MXx8fHwxNzU5Nzk3NTE1fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    courts: [
-      { type: 'Hard Court', count: 8 },
-      { type: 'Clay Court', count: 4 },
-      { type: 'Indoor Court', count: 2 }
-    ]
-  },
-  'downtown-racquet': {
-    id: 'downtown-racquet',
-    name: 'Downtown Racquet Club',
-    description: 'Modern urban sports facility featuring state-of-the-art courts and equipment. Located in the heart of downtown, we offer convenient access and flexible membership options.',
-    address: '567 Main Street, Downtown, ST 12345',
-    phone: '(555) 987-6543',
-    email: 'hello@downtownrc.com',
-    website: 'www.downtownracquet.com',
-    hours: 'Mon-Fri: 5:30 AM - 11:00 PM, Sat-Sun: 7:00 AM - 9:00 PM',
-    memberCount: 320,
-    rating: 4.6,
-    image: 'https://images.unsplash.com/photo-1628308256079-9a1684f2cc64?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBzcG9ydHMlMjBjZW50ZXIlMjByYWNxdWV0fGVufDF8fHx8MTc1OTc5NzUxOHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    courts: [
-      { type: 'Hard Court', count: 6 },
-      { type: 'Squash Court', count: 3 },
-      { type: 'Badminton Court', count: 2 }
-    ]
-  }
-};
 
 export function ClubInfo({
   onBack,
@@ -95,9 +61,48 @@ export function ClubInfo({
   onToggleSidebar,
   clubId
 }: ClubInfoProps) {
-  const club = clubsData[clubId];
+  const [loading, setLoading] = useState(true);
+  const [facility, setFacility] = useState<FacilityData | null>(null);
 
-  if (!club) {
+  useEffect(() => {
+    if (clubId) {
+      loadFacilityData();
+    }
+  }, [clubId]);
+
+  const loadFacilityData = async () => {
+    try {
+      setLoading(true);
+
+      const facilityResponse = await facilitiesApi.getById(clubId);
+      if (facilityResponse.success && facilityResponse.data?.facility) {
+        setFacility(facilityResponse.data.facility);
+
+        // Load courts for this facility
+        const courtsResponse = await facilitiesApi.getCourts(clubId);
+        if (courtsResponse.success && courtsResponse.data?.courts) {
+          setFacility(prev => prev ? { ...prev, courts: courtsResponse.data.courts } : null);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading facility data:', error);
+      toast.error('Failed to load facility information');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg font-medium">Loading facility information...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!facility) {
     return (
       <div className="min-h-screen bg-gray-50 flex">
         <UnifiedSidebar
@@ -167,44 +172,48 @@ export function ClubInfo({
             <CardContent className="p-6">
               <div className="flex flex-col md:flex-row gap-6">
                 <div className="md:w-1/3">
-                  <ImageWithFallback
-                    src={club.image}
-                    alt={club.name}
-                    className="w-full h-48 object-cover rounded-lg bg-gray-100 flex items-center justify-center"
-                  />
+                  <div className="w-full h-48 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center text-white">
+                    <div className="text-center">
+                      <Users className="h-16 w-16 mx-auto mb-2" />
+                      <p className="font-medium">{facility.name}</p>
+                    </div>
+                  </div>
                 </div>
                 <div className="md:w-2/3">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h1 className="mb-2">{club.name}</h1>
+                      <h1 className="mb-2">{facility.name}</h1>
                       <div className="flex items-center gap-2 mb-3">
-                        <div className="flex items-center">
-                          <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                          <span className="ml-1">{club.rating}</span>
-                        </div>
-                        <Badge variant="secondary">
-                          <Users className="h-3 w-3 mr-1" />
-                          {club.memberCount} members
+                        {facility.memberCount && (
+                          <Badge variant="secondary">
+                            <Users className="h-3 w-3 mr-1" />
+                            {facility.memberCount} members
+                          </Badge>
+                        )}
+                        <Badge variant="outline">
+                          {facility.courts?.length || 0} courts
                         </Badge>
                       </div>
                     </div>
                   </div>
-                  <p className="text-gray-600 mb-4">{club.description}</p>
-                  
+                  <p className="text-gray-600 mb-4">{facility.description || 'Professional tennis facility'}</p>
+
                   {/* Quick Actions */}
                   <div className="flex gap-3 flex-wrap">
                     <Button onClick={onNavigateToCalendar}>
                       <Calendar className="h-4 w-4 mr-2" />
                       Book Court
                     </Button>
-                    <Button variant="outline" onClick={() => onNavigateToBulletinBoard(club.id, club.name)}>
+                    <Button variant="outline" onClick={() => onNavigateToBulletinBoard(facility.id, facility.name)}>
                       <Clipboard className="h-4 w-4 mr-2" />
                       Bulletin Board
                     </Button>
-                    <Button variant="outline">
-                      <Phone className="h-4 w-4 mr-2" />
-                      Call Club
-                    </Button>
+                    {facility.phone && (
+                      <Button variant="outline" onClick={() => window.open(`tel:${facility.phone}`)}>
+                        <Phone className="h-4 w-4 mr-2" />
+                        Call Club
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -221,33 +230,42 @@ export function ClubInfo({
                 <div className="flex items-center">
                   <MapPin className="h-4 w-4 text-gray-400 mr-3" />
                   <div>
-                    <p>{club.address}</p>
+                    <p>{facility.address}</p>
+                    <p className="text-sm text-gray-600">{facility.city}, {facility.state} {facility.zipCode}</p>
                   </div>
                 </div>
-                <div className="flex items-center">
-                  <Phone className="h-4 w-4 text-gray-400 mr-3" />
-                  <div>
-                    <p>{club.phone}</p>
+                {facility.phone && (
+                  <div className="flex items-center">
+                    <Phone className="h-4 w-4 text-gray-400 mr-3" />
+                    <div>
+                      <p>{facility.phone}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center">
-                  <Mail className="h-4 w-4 text-gray-400 mr-3" />
-                  <div>
-                    <p>{club.email}</p>
+                )}
+                {facility.email && (
+                  <div className="flex items-center">
+                    <Mail className="h-4 w-4 text-gray-400 mr-3" />
+                    <div>
+                      <p>{facility.email}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center">
-                  <Globe className="h-4 w-4 text-gray-400 mr-3" />
-                  <div>
-                    <p>{club.website}</p>
+                )}
+                {facility.website && (
+                  <div className="flex items-center">
+                    <Globe className="h-4 w-4 text-gray-400 mr-3" />
+                    <div>
+                      <p>{facility.website}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center">
-                  <Clock className="h-4 w-4 text-gray-400 mr-3" />
-                  <div>
-                    <p>{club.hours}</p>
+                )}
+                {facility.operatingHours && (
+                  <div className="flex items-center">
+                    <Clock className="h-4 w-4 text-gray-400 mr-3" />
+                    <div>
+                      <p>{facility.operatingHours}</p>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -260,14 +278,23 @@ export function ClubInfo({
                 <div className="space-y-4">
                   <div>
                     <h4 className="mb-3">Available Courts</h4>
-                    <div className="space-y-2">
-                      {club.courts.map((court, index) => (
-                        <div key={index} className="flex justify-between items-center">
-                          <span>{court.type}</span>
-                          <Badge variant="outline">{court.count} courts</Badge>
-                        </div>
-                      ))}
-                    </div>
+                    {facility.courts && facility.courts.length > 0 ? (
+                      <div className="space-y-2">
+                        {facility.courts.map((court) => (
+                          <div key={court.id} className="flex justify-between items-center p-2 border border-gray-200 rounded">
+                            <div>
+                              <p className="font-medium">{court.name}</p>
+                              <p className="text-sm text-gray-600">
+                                {court.surfaceType} • {court.isIndoor ? 'Indoor' : 'Outdoor'}
+                              </p>
+                            </div>
+                            <Badge variant="outline">{court.courtType}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No courts information available</p>
+                    )}
                   </div>
                 </div>
               </CardContent>

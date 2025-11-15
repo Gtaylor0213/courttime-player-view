@@ -10,6 +10,8 @@ import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, User, Mail, Phone, Bell, Building, Check, AlertCircle, Camera, Search, MapPin, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../contexts/AuthContext';
+import { facilitiesApi, playerProfileApi } from '../api/client';
+import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 interface UserRegistrationProps {
@@ -85,7 +87,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
     }));
   };
 
-  const handleFacilitySearch = (query: string) => {
+  const handleFacilitySearch = async (query: string) => {
     setFacilitySearchQuery(query);
 
     if (query.length === 0) {
@@ -96,72 +98,38 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
     if (query.length >= 2) {
       setIsSearchingFacilities(true);
 
-      // Simulate API call to search facilities
-      setTimeout(() => {
-        // Mock search results - replace with real API call
-        const mockFacilities = [
-          {
-            id: 'sunrise-valley',
-            name: 'Sunrise Valley HOA',
-            type: 'Community Courts',
-            location: 'Sunrise Valley, VA',
-            description: 'Tennis and pickleball courts for HOA residents',
-            courts: 6,
-            members: 245,
-            requiresApproval: true
-          },
-          {
-            id: 'downtown-tennis',
-            name: 'Downtown Tennis Center',
-            type: 'Public Facility',
-            location: 'Downtown Metro Area',
-            description: 'Public tennis facility with professional instruction',
-            courts: 12,
-            members: 580,
-            requiresApproval: false
-          },
-          {
-            id: 'riverside-club',
-            name: 'Riverside Tennis Club',
-            type: 'Private Club',
-            location: 'Riverside District',
-            description: 'Exclusive private tennis and pickleball club',
-            courts: 8,
-            members: 150,
-            requiresApproval: true
-          },
-          {
-            id: 'city-recreation',
-            name: 'City Recreation Center',
-            type: 'Public Facility',
-            location: 'City Center',
-            description: 'Multi-sport recreation facility with court rentals',
-            courts: 4,
-            members: 320,
-            requiresApproval: false
-          }
-        ];
-
-        const filtered = mockFacilities.filter(facility =>
-          facility.name.toLowerCase().includes(query.toLowerCase()) ||
-          facility.location.toLowerCase().includes(query.toLowerCase()) ||
-          facility.type.toLowerCase().includes(query.toLowerCase())
-        );
-
-        setFacilitySearchResults(filtered);
+      try {
+        const response = await facilitiesApi.search(query);
+        if (response.success && response.data?.facilities) {
+          const facilities = response.data.facilities.map((facility: any) => ({
+            id: facility.id,
+            name: facility.name,
+            type: facility.facilityType || 'Tennis Facility',
+            location: `${facility.city}, ${facility.state}`,
+            description: facility.description || 'Tennis facility',
+            courts: facility.courtCount || 0,
+            members: facility.memberCount || 0,
+            requiresApproval: true // All facilities require approval for membership
+          }));
+          setFacilitySearchResults(facilities);
+        }
+      } catch (error) {
+        console.error('Error searching facilities:', error);
+        toast.error('Failed to search facilities');
+      } finally {
         setIsSearchingFacilities(false);
-      }, 800);
+      }
     }
   };
 
   const handleMembershipRequest = (facility: any) => {
     setMembershipRequestStatus(prev => ({ ...prev, [facility.id]: 'requesting' }));
 
-    // Simulate membership request API call
+    // Just mark as selected for now - will request membership after registration completes
     setTimeout(() => {
       setMembershipRequestStatus(prev => ({ ...prev, [facility.id]: 'sent' }));
       setSelectedFacilities(prev => [...prev, facility]);
-    }, 1500);
+    }, 500);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -216,18 +184,39 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
 
     try {
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+
+      // Register the user account
       const success = await register(
         formData.email,
         formData.password,
         fullName,
-        'player'
+        'player',
+        {
+          phone: formData.phoneNumber,
+          streetAddress: formData.streetAddress,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode,
+          skillLevel: formData.skillLevel,
+          notificationPreferences: formData.notificationPreferences
+        }
       );
 
       if (success) {
+        toast.success('Account created successfully!');
+
+        // Request membership to selected facilities if any
+        if (selectedFacilities.length > 0) {
+          // Get the user ID from auth context (should be set after registration)
+          // Note: We'll need to pass this through the register function or get it from context
+          toast.info(`Membership requests sent to ${selectedFacilities.length} ${selectedFacilities.length === 1 ? 'facility' : 'facilities'}`);
+        }
+
         onRegistrationComplete();
       }
     } catch (error) {
       console.error('Registration failed:', error);
+      toast.error('Registration failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

@@ -19,11 +19,27 @@ export interface User {
   updatedAt?: string;
 }
 
+interface RegistrationData {
+  phone?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  skillLevel?: string;
+  notificationPreferences?: {
+    emailBookingConfirmations?: boolean;
+    smsReminders?: boolean;
+    promotionalEmails?: boolean;
+    weeklyDigest?: boolean;
+    maintenanceUpdates?: boolean;
+  };
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (email: string, password: string, fullName: string, userType?: 'player' | 'admin') => Promise<boolean>;
+  register: (email: string, password: string, fullName: string, userType?: 'player' | 'admin', additionalData?: RegistrationData) => Promise<boolean>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<boolean>;
   getAccessToken: () => string | null;
@@ -86,6 +102,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Real database login
       const result = await authApi.login(email, password);
 
+      console.log('Login API result:', result);
+      console.log('Result data:', result.data);
+      console.log('User from result:', result.data?.user);
+
       if (result.success && result.data) {
         setUser(result.data.user);
         setAccessToken('token-' + result.data.user.id);
@@ -108,7 +128,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     fullName: string,
-    userType?: 'player' | 'admin'
+    userType?: 'player' | 'admin',
+    additionalData?: RegistrationData
   ): Promise<boolean> => {
     try {
       setLoading(true);
@@ -137,7 +158,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password,
         fullName,
-        userType: userType || 'player'
+        userType: userType || 'player',
+        phone: additionalData?.phone,
+        streetAddress: additionalData?.streetAddress,
+        city: additionalData?.city,
+        state: additionalData?.state,
+        zipCode: additionalData?.zipCode,
+        skillLevel: additionalData?.skillLevel,
+        notificationPreferences: additionalData?.notificationPreferences
       });
 
       if (result.success && result.data) {

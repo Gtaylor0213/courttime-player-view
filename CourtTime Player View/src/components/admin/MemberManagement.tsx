@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UnifiedSidebar } from '../UnifiedSidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Phone, Edit, Ban, CheckCircle } from 'lucide-react';
+import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
+import { membersApi } from '../../api/client';
+import { toast } from 'sonner';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface MemberManagementProps {
   onBack: () => void;
@@ -26,17 +29,22 @@ interface MemberManagementProps {
   onNavigateToAnalytics?: () => void;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  facilityId?: string;
 }
 
 interface Member {
-  id: string;
-  name: string;
+  userId: string;
   email: string;
-  phone: string;
+  fullName: string;
+  membershipId: string;
   membershipType: string;
-  status: 'Active' | 'Pending' | 'Suspended';
-  joinDate: string;
+  status: 'active' | 'pending' | 'expired' | 'suspended';
+  isFacilityAdmin: boolean;
+  startDate: string;
+  endDate?: string;
   skillLevel?: string;
+  ntrpRating?: number;
+  createdAt: string;
 }
 
 export function MemberManagement({
@@ -54,31 +62,133 @@ export function MemberManagement({
   onNavigateToMemberManagement = () => {},
   onNavigateToAnalytics = () => {},
   sidebarCollapsed = false,
-  onToggleSidebar
+  onToggleSidebar,
+  facilityId
 }: MemberManagementProps) {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterMembership, setFilterMembership] = useState<string>('all');
-  const [members, setMembers] = useState<Member[]>([
-    { id: '1', name: 'John Doe', email: 'john@example.com', phone: '(555) 123-4567', membershipType: 'Full', status: 'Active', joinDate: '2024-01-15', skillLevel: '4.0' },
-    { id: '2', name: 'Jane Smith', email: 'jane@example.com', phone: '(555) 234-5678', membershipType: 'Full', status: 'Active', joinDate: '2024-02-20', skillLevel: '4.5' },
-    { id: '3', name: 'Bob Johnson', email: 'bob@example.com', phone: '(555) 345-6789', membershipType: 'Social', status: 'Active', joinDate: '2024-03-10', skillLevel: '3.5' },
-    { id: '4', name: 'Alice Williams', email: 'alice@example.com', phone: '(555) 456-7890', membershipType: 'Full', status: 'Pending', joinDate: '2025-11-12' },
-    { id: '5', name: 'Mike Brown', email: 'mike@example.com', phone: '(555) 567-8901', membershipType: 'Junior', status: 'Suspended', joinDate: '2024-06-01', skillLevel: '3.0' },
-  ]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingMember, setEditingMember] = useState<string | null>(null);
 
-  const handleApprove = (id: string) => {
-    setMembers(members.map(m => m.id === id ? { ...m, status: 'Active' as const } : m));
+  // Use the first facility from user's memberships if facilityId not provided
+  const currentFacilityId = facilityId || user?.memberFacilities?.[0];
+
+  useEffect(() => {
+    if (currentFacilityId) {
+      loadMembers();
+    }
+  }, [currentFacilityId]);
+
+  const loadMembers = async () => {
+    if (!currentFacilityId) {
+      toast.error('No facility selected');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await membersApi.getFacilityMembers(currentFacilityId);
+
+      if (response.success && response.data?.members) {
+        setMembers(response.data.members);
+      } else {
+        toast.error(response.error || 'Failed to load members');
+      }
+    } catch (error) {
+      console.error('Error loading members:', error);
+      toast.error('Failed to load members');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSuspend = (id: string) => {
-    if (confirm('Are you sure you want to suspend this member?')) {
-      setMembers(members.map(m => m.id === id ? { ...m, status: 'Suspended' as const } : m));
+  const handleUpdateStatus = async (userId: string, status: 'active' | 'pending' | 'suspended') => {
+    if (!currentFacilityId) return;
+
+    try {
+      const response = await membersApi.updateMember(currentFacilityId, userId, { status });
+
+      if (response.success) {
+        toast.success(`Member status updated to ${status}`);
+        loadMembers(); // Reload members
+      } else {
+        toast.error(response.error || 'Failed to update member status');
+      }
+    } catch (error) {
+      console.error('Error updating member status:', error);
+      toast.error('Failed to update member status');
+    }
+  };
+
+  const handleUpdateMembershipType = async (userId: string, membershipType: string) => {
+    if (!currentFacilityId) return;
+
+    try {
+      const response = await membersApi.updateMember(currentFacilityId, userId, { membershipType });
+
+      if (response.success) {
+        toast.success('Membership type updated');
+        loadMembers(); // Reload members
+      } else {
+        toast.error(response.error || 'Failed to update membership type');
+      }
+    } catch (error) {
+      console.error('Error updating membership type:', error);
+      toast.error('Failed to update membership type');
+    }
+  };
+
+  const handleToggleAdmin = async (userId: string, currentIsAdmin: boolean) => {
+    if (!currentFacilityId) return;
+
+    const action = currentIsAdmin ? 'remove admin privileges from' : 'grant admin privileges to';
+
+    if (!confirm(`Are you sure you want to ${action} this member?`)) {
+      return;
+    }
+
+    try {
+      const response = await membersApi.setAdmin(currentFacilityId, userId, !currentIsAdmin);
+
+      if (response.success) {
+        toast.success(`Admin privileges ${currentIsAdmin ? 'removed' : 'granted'}`);
+        loadMembers(); // Reload members
+      } else {
+        toast.error(response.error || 'Failed to update admin status');
+      }
+    } catch (error) {
+      console.error('Error updating admin status:', error);
+      toast.error('Failed to update admin status');
+    }
+  };
+
+  const handleRemoveMember = async (userId: string, memberName: string) => {
+    if (!currentFacilityId) return;
+
+    if (!confirm(`Are you sure you want to remove ${memberName} from this facility? This will NOT delete their user account, only their membership to this facility.`)) {
+      return;
+    }
+
+    try {
+      const response = await membersApi.removeMember(currentFacilityId, userId);
+
+      if (response.success) {
+        toast.success('Member removed from facility');
+        loadMembers(); // Reload members
+      } else {
+        toast.error(response.error || 'Failed to remove member');
+      }
+    } catch (error) {
+      console.error('Error removing member:', error);
+      toast.error('Failed to remove member');
     }
   };
 
   const filteredMembers = members.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = member.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          member.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || member.status === filterStatus;
     const matchesMembership = filterMembership === 'all' || member.membershipType === filterMembership;
@@ -87,9 +197,10 @@ export function MemberManagement({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Active': return 'bg-green-100 text-green-800';
-      case 'Pending': return 'bg-yellow-100 text-yellow-800';
-      case 'Suspended': return 'bg-red-100 text-red-800';
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'suspended': return 'bg-red-100 text-red-800';
+      case 'expired': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -97,6 +208,19 @@ export function MemberManagement({
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
+
+  if (!currentFacilityId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>No Facility Selected</CardTitle>
+            <CardDescription>You need to be associated with a facility to manage members.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -124,9 +248,8 @@ export function MemberManagement({
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Member Management</h1>
-            <Button>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Add New Member
+            <Button onClick={loadMembers} variant="outline">
+              Refresh
             </Button>
           </div>
 
@@ -159,9 +282,10 @@ export function MemberManagement({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                      <SelectItem value="Suspended">Suspended</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="expired">Expired</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -189,79 +313,124 @@ export function MemberManagement({
               <CardTitle>All Members ({filteredMembers.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {filteredMembers.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
-                    No members found matching your filters.
-                  </div>
-                ) : (
-                  filteredMembers.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-4 flex-1">
-                        <Avatar className="h-12 w-12">
-                          <AvatarFallback>{getInitials(member.name)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4">
-                          <div>
-                            <div className="font-medium">{member.name}</div>
-                            <div className="text-sm text-gray-500 flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {member.email}
+              {loading ? (
+                <div className="text-center py-12 text-gray-500">
+                  Loading members...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredMembers.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      No members found matching your filters.
+                    </div>
+                  ) : (
+                    filteredMembers.map((member) => (
+                      <div
+                        key={member.userId}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback>{getInitials(member.fullName)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div>
+                              <div className="font-medium flex items-center gap-2">
+                                {member.fullName}
+                                {member.isFacilityAdmin && (
+                                  <Badge variant="outline" className="text-blue-600 border-blue-600">
+                                    <Shield className="h-3 w-3 mr-1" />
+                                    Admin
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-500 flex items-center gap-1">
+                                <Mail className="h-3 w-3" />
+                                {member.email}
+                              </div>
                             </div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-500">Phone</div>
-                            <div className="text-sm flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {member.phone}
+                            <div>
+                              <div className="text-sm text-gray-500">Membership</div>
+                              <div className="text-sm font-medium">{member.membershipType}</div>
                             </div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-500">Membership</div>
-                            <div className="text-sm font-medium">{member.membershipType}</div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-500">Skill Level</div>
-                            <div className="text-sm font-medium">{member.skillLevel || 'N/A'}</div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-500">Status</div>
-                            <Badge className={getStatusColor(member.status)}>{member.status}</Badge>
+                            <div>
+                              <div className="text-sm text-gray-500">Skill Level</div>
+                              <div className="text-sm font-medium">
+                                {member.ntrpRating ? `${member.ntrpRating} NTRP` : member.skillLevel || 'N/A'}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-500">Join Date</div>
+                              <div className="text-sm font-medium">
+                                {new Date(member.startDate).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-500">Status</div>
+                              <Badge className={getStatusColor(member.status)}>
+                                {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex gap-2 ml-4">
-                        <Button variant="outline" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {member.status === 'Pending' && (
+                        <div className="flex gap-2 ml-4">
+                          {member.status === 'pending' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUpdateStatus(member.userId, 'active')}
+                              className="text-green-600 hover:text-green-700"
+                              title="Approve member"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {member.status === 'active' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUpdateStatus(member.userId, 'suspended')}
+                              className="text-orange-600 hover:text-orange-700"
+                              title="Suspend member"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {member.status === 'suspended' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUpdateStatus(member.userId, 'active')}
+                              className="text-green-600 hover:text-green-700"
+                              title="Reactivate member"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleApprove(member.id)}
-                            className="text-green-600 hover:text-green-700"
+                            onClick={() => handleToggleAdmin(member.userId, member.isFacilityAdmin)}
+                            className={member.isFacilityAdmin ? 'text-orange-600 hover:text-orange-700' : 'text-blue-600 hover:text-blue-700'}
+                            title={member.isFacilityAdmin ? 'Remove admin privileges' : 'Grant admin privileges'}
                           >
-                            <CheckCircle className="h-4 w-4" />
+                            {member.isFacilityAdmin ? <ShieldOff className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
                           </Button>
-                        )}
-                        {member.status === 'Active' && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleSuspend(member.id)}
+                            onClick={() => handleRemoveMember(member.userId, member.fullName)}
                             className="text-red-600 hover:text-red-700"
+                            title="Remove member from facility"
                           >
-                            <Ban className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

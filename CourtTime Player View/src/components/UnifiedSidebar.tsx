@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { User, LogOut, ChevronDown, ChevronLeft, ChevronRight, Calendar, Building2, LayoutDashboard, UserSearch, Settings, Users, BarChart3, BookOpen, UserCog } from 'lucide-react';
+import { User, LogOut, ChevronLeft, ChevronRight, Calendar, Building2, LayoutDashboard, UserSearch, Settings, Users, BarChart3, BookOpen, UserCog, MessageSquare } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 interface Facility {
@@ -12,12 +12,18 @@ interface Facility {
   type: string;
 }
 
+interface Club {
+  id: string;
+  name: string;
+}
+
 interface UnifiedSidebarProps {
   userType: 'player' | 'admin' | null;
   onNavigateToProfile: () => void;
   onNavigateToPlayerDashboard: () => void;
   onNavigateToCalendar: () => void;
   onNavigateToClub?: (clubId: string) => void;
+  onNavigateToBulletinBoard?: () => void;
   onNavigateToHittingPartner?: () => void;
   onNavigateToAdminDashboard?: () => void;
   onNavigateToFacilityManagement?: () => void;
@@ -34,6 +40,7 @@ interface UnifiedSidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   currentPage?: string;
+  clubs?: Club[];
 }
 
 export function UnifiedSidebar({
@@ -42,6 +49,7 @@ export function UnifiedSidebar({
   onNavigateToPlayerDashboard,
   onNavigateToCalendar,
   onNavigateToClub,
+  onNavigateToBulletinBoard = () => {},
   onNavigateToHittingPartner = () => {},
   onNavigateToAdminDashboard = () => {},
   onNavigateToFacilityManagement = () => {},
@@ -57,8 +65,15 @@ export function UnifiedSidebar({
   showFacilityOptions = false,
   isCollapsed = false,
   onToggleCollapse,
-  currentPage
+  currentPage,
+  clubs = []
 }: UnifiedSidebarProps) {
+
+  // Default clubs if none provided
+  const userClubs = clubs.length > 0 ? clubs : [
+    { id: 'riverside-tennis', name: 'Riverside Tennis Club' },
+    { id: 'downtown-racquet', name: 'Downtown Racquet Club' }
+  ];
   
   const SidebarButton = ({ 
     onClick, 
@@ -214,52 +229,25 @@ export function UnifiedSidebar({
           <div>
             {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">My Clubs</h3>}
             <div className="space-y-1">
-              {isCollapsed ? (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="w-full rounded-lg px-3 py-2 text-left hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center">
-                          <Building2 className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => onNavigateToClub?.('riverside-tennis')}>
-                            <Building2 className="h-4 w-4 mr-2" />
-                            Riverside Tennis Club
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onNavigateToClub?.('downtown-racquet')}>
-                            <Building2 className="h-4 w-4 mr-2" />
-                            Downtown Racquet Club
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <p>My Clubs</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ) : (
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="w-full rounded-lg px-3 py-2 text-left hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Building2 className="h-4 w-4 mr-3" />
-                      My Clubs
-                    </div>
-                    <ChevronDown className="h-4 w-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => onNavigateToClub?.('riverside-tennis')}>
-                      <Building2 className="h-4 w-4 mr-2" />
-                      Riverside Tennis Club
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onNavigateToClub?.('downtown-racquet')}>
-                      <Building2 className="h-4 w-4 mr-2" />
-                      Downtown Racquet Club
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+              {/* Bulletin Board */}
+              <SidebarButton
+                onClick={onNavigateToBulletinBoard}
+                icon={MessageSquare}
+                label="Bulletin Board"
+                isActive={currentPage === 'bulletin-board'}
+              />
+
+              {/* Individual Club Listings */}
+              {userClubs.map((club) => (
+                <div key={club.id}>
+                  <SidebarButton
+                    onClick={() => onNavigateToClub?.(club.id)}
+                    icon={Building2}
+                    label={club.name}
+                    isActive={currentPage === 'club-info'}
+                  />
+                </div>
+              ))}
             </div>
           </div>
 

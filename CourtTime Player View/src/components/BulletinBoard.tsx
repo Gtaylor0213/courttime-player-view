@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar, Clock, Users, MapPin, Tag, Pin } from 'lucide-reac
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface BulletinBoardProps {
   onBack: () => void;
@@ -12,13 +13,14 @@ interface BulletinBoardProps {
   onNavigateToPlayerDashboard: () => void;
   onNavigateToCalendar: () => void;
   onNavigateToClub?: (clubId: string) => void;
+  onNavigateToBulletinBoard?: () => void;
   onNavigateToHittingPartner?: () => void;
   selectedFacilityId?: string;
   onFacilityChange?: (facilityId: string) => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
-  clubId: string;
-  clubName: string;
+  clubId?: string;
+  clubName?: string;
 }
 
 interface BulletinPost {
@@ -29,6 +31,8 @@ interface BulletinPost {
   date: string;
   time: string;
   location: string;
+  clubId: string;
+  clubName: string;
   spots?: number;
   spotsAvailable?: number;
   instructor?: string;
@@ -48,6 +52,8 @@ const samplePosts: BulletinPost[] = [
     date: 'July 15-17, 2025',
     time: '9:00 AM - 12:00 PM',
     location: 'Courts 1-4',
+    clubId: 'riverside-tennis',
+    clubName: 'Riverside Tennis Club',
     spots: 20,
     spotsAvailable: 7,
     instructor: 'Coach Sarah Martinez',
@@ -64,6 +70,8 @@ const samplePosts: BulletinPost[] = [
     date: 'June 28, 2025',
     time: '6:00 PM - 9:00 PM',
     location: 'Clubhouse & Courts',
+    clubId: 'riverside-tennis',
+    clubName: 'Riverside Tennis Club',
     tags: ['Social', 'Free Event'],
     color: 'bg-pink-100 border-pink-200',
     rotation: 1
@@ -76,6 +84,8 @@ const samplePosts: BulletinPost[] = [
     date: 'July 8-9, 2025',
     time: 'All Day',
     location: 'All Courts',
+    clubId: 'downtown-racquet',
+    clubName: 'Downtown Racquet Club',
     spots: 32,
     spotsAvailable: 12,
     fee: '$40',
@@ -91,6 +101,8 @@ const samplePosts: BulletinPost[] = [
     date: 'Starts Aug 1, 2025',
     time: 'Mon/Wed 4:00 PM - 6:00 PM',
     location: 'Courts 5-6',
+    clubId: 'downtown-racquet',
+    clubName: 'Downtown Racquet Club',
     spots: 16,
     spotsAvailable: 4,
     instructor: 'Coach Mike Thompson',
@@ -107,6 +119,8 @@ const samplePosts: BulletinPost[] = [
     date: 'Every Tue & Thu',
     time: '7:00 AM - 9:00 AM',
     location: 'Courts 2-4',
+    clubId: 'riverside-tennis',
+    clubName: 'Riverside Tennis Club',
     tags: ['Drop-In', 'Social', 'Free'],
     color: 'bg-orange-100 border-orange-200',
     rotation: -3
@@ -119,6 +133,8 @@ const samplePosts: BulletinPost[] = [
     date: 'July 22, 2025',
     time: '2:00 PM - 5:00 PM',
     location: 'Court 1',
+    clubId: 'downtown-racquet',
+    clubName: 'Downtown Racquet Club',
     spots: 12,
     spotsAvailable: 9,
     instructor: 'Coach David Lee',
@@ -150,6 +166,7 @@ export function BulletinBoard({
   onNavigateToPlayerDashboard,
   onNavigateToCalendar,
   onNavigateToClub = () => {},
+  onNavigateToBulletinBoard = () => {},
   onNavigateToHittingPartner = () => {},
   selectedFacilityId,
   onFacilityChange,
@@ -158,12 +175,25 @@ export function BulletinBoard({
   clubId,
   clubName
 }: BulletinBoardProps) {
+  // Get unique clubs from posts
+  const availableClubs = Array.from(new Set(samplePosts.map(post => post.clubId)))
+    .map(id => ({
+      id,
+      name: samplePosts.find(p => p.clubId === id)?.clubName || id
+    }));
+
   const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedClub, setSelectedClub] = useState<string>(clubId || 'all');
   const [selectedPost, setSelectedPost] = useState<BulletinPost | null>(null);
 
-  const filteredPosts = selectedType === 'all'
-    ? samplePosts
-    : samplePosts.filter(post => post.type === selectedType);
+  // Filter by both type and club
+  let filteredPosts = samplePosts;
+  if (selectedClub !== 'all') {
+    filteredPosts = filteredPosts.filter(post => post.clubId === selectedClub);
+  }
+  if (selectedType !== 'all') {
+    filteredPosts = filteredPosts.filter(post => post.type === selectedType);
+  }
 
   const TypeIcon = selectedPost ? typeIcons[selectedPost.type] : Calendar;
 
@@ -175,26 +205,36 @@ export function BulletinBoard({
         onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
         onNavigateToCalendar={onNavigateToCalendar}
         onNavigateToClub={onNavigateToClub}
+        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
         onNavigateToHittingPartner={onNavigateToHittingPartner}
         onLogout={onLogout}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={onToggleSidebar}
-        currentPage="club-info"
+        currentPage="bulletin-board"
       />
 
       <div className={`flex-1 ${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
         {/* Header */}
         <div className="bg-white border-b border-gray-200 p-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <Button variant="ghost" onClick={onBack} className="mr-4">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Club
-              </Button>
-              <div>
-                <h1 className="text-2xl font-bold">Bulletin Board</h1>
-                <p className="text-sm text-gray-600">{clubName}</p>
-              </div>
+            <div>
+              <h1 className="text-2xl font-bold">Bulletin Board</h1>
+              <p className="text-sm text-gray-600">Events, clinics, and announcements from your clubs</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Select value={selectedClub} onValueChange={setSelectedClub}>
+                <SelectTrigger className="w-[240px]">
+                  <SelectValue placeholder="Select a club" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Clubs</SelectItem>
+                  {availableClubs.map(club => (
+                    <SelectItem key={club.id} value={club.id}>
+                      {club.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -284,8 +324,11 @@ export function BulletinBoard({
                       <div className="space-y-3">
                         {/* Header */}
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-bold text-gray-800 text-lg leading-tight">{post.title}</h3>
-                          <div className={`${typeColors[post.type]} p-1.5 rounded-full`}>
+                          <div className="flex-1">
+                            <h3 className="font-bold text-gray-800 text-lg leading-tight">{post.title}</h3>
+                            <p className="text-xs text-gray-600 font-medium mt-1">{post.clubName}</p>
+                          </div>
+                          <div className={`${typeColors[post.type]} p-1.5 rounded-full flex-shrink-0`}>
                             <Icon className="h-4 w-4 text-white" />
                           </div>
                         </div>

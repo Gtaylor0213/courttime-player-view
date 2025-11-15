@@ -97,9 +97,11 @@ function AppContent() {
     setCurrentScreen('hitting-partner');
   };
 
-  const navigateToBulletinBoard = (clubId: string, clubName: string) => {
-    setSelectedClubId(clubId);
-    setSelectedClubName(clubName);
+  const navigateToBulletinBoard = (clubId?: string, clubName?: string) => {
+    if (clubId && clubName) {
+      setSelectedClubId(clubId);
+      setSelectedClubName(clubName);
+    }
     setCurrentScreen('bulletin-board');
   };
 
@@ -235,6 +237,7 @@ function AppContent() {
           onNavigateToPlayerDashboard={navigateToPlayerDashboard}
           onNavigateToProfile={navigateToProfile}
           onNavigateToClub={navigateToClub}
+          onNavigateToBulletinBoard={navigateToBulletinBoard}
           onNavigateToHittingPartner={navigateToHittingPartner}
           onLogout={handleLogout}
           selectedFacilityId={selectedFacilityId}
@@ -307,12 +310,13 @@ function AppContent() {
 
       {currentScreen === 'bulletin-board' && (
         <BulletinBoard
-          onBack={navigateBackToClub}
+          onBack={navigateToCourtCalendar}
           onLogout={handleLogout}
           onNavigateToProfile={navigateToProfile}
           onNavigateToPlayerDashboard={navigateToPlayerDashboard}
           onNavigateToCalendar={navigateToCourtCalendar}
           onNavigateToClub={navigateToClub}
+          onNavigateToBulletinBoard={navigateToBulletinBoard}
           onNavigateToHittingPartner={navigateToHittingPartner}
           selectedFacilityId={selectedFacilityId}
           onFacilityChange={handleFacilityChange}

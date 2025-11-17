@@ -56,6 +56,19 @@ export const authApi = {
     fullName: string;
     userType?: string;
     selectedFacilities?: string[];
+    phone?: string;
+    streetAddress?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    skillLevel?: string;
+    notificationPreferences?: {
+      emailBookingConfirmations?: boolean;
+      smsReminders?: boolean;
+      promotionalEmails?: boolean;
+      weeklyDigest?: boolean;
+      maintenanceUpdates?: boolean;
+    };
   }) => {
     return apiRequest('/api/auth/register', {
       method: 'POST',
@@ -295,6 +308,48 @@ export const bulletinBoardApi = {
     return apiRequest(`/api/bulletin-board/${postId}/pin`, {
       method: 'PUT',
       body: JSON.stringify({ facilityId, isPinned }),
+    });
+  },
+};
+
+// Booking API
+export const bookingApi = {
+  getByFacility: async (facilityId: string, date: string) => {
+    return apiRequest(`/api/bookings/facility/${facilityId}?date=${date}`);
+  },
+
+  getByCourt: async (courtId: string, date: string) => {
+    return apiRequest(`/api/bookings/court/${courtId}?date=${date}`);
+  },
+
+  getByUser: async (userId: string, upcoming: boolean = true) => {
+    return apiRequest(`/api/bookings/user/${userId}?upcoming=${upcoming}`);
+  },
+
+  getById: async (bookingId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}`);
+  },
+
+  create: async (data: {
+    courtId: string;
+    userId: string;
+    facilityId: string;
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+    bookingType?: string;
+    notes?: string;
+  }) => {
+    return apiRequest('/api/bookings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  cancel: async (bookingId: string, userId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}?userId=${userId}`, {
+      method: 'DELETE',
     });
   },
 };

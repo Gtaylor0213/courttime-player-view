@@ -8,6 +8,8 @@ import { BookingWizard } from './BookingWizard';
 import { QuickReservePopup } from './QuickReservePopup';
 import { NotificationDropdown } from './NotificationDropdown';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
+import { facilitiesApi, usersApi, bookingApi } from '../api/client';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown } from 'lucide-react';
 
 interface CourtCalendarViewProps {
@@ -38,18 +40,25 @@ export function CourtCalendarView({
   onToggleSidebar
 }: CourtCalendarViewProps) {
   const { unreadCount } = useNotifications();
+  const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedFacility, setSelectedFacility] = useState(selectedFacilityId);
   const [selectedView, setSelectedView] = useState('week');
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball'>('tennis');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
+  const [loadingFacilities, setLoadingFacilities] = useState(true);
+  const [bookingsData, setBookingsData] = useState<any>({});
+  const [loadingBookings, setLoadingBookings] = useState(false);
   const [bookingWizard, setBookingWizard] = useState({
     isOpen: false,
     court: '',
+    courtId: '',
     time: '',
     date: '',
     facility: '',
-    selectedSlots: undefined as Array<{ court: string; time: string }> | undefined
+    facilityId: '',
+    selectedSlots: undefined as Array<{ court: string; courtId: string; time: string }> | undefined
   });
 
   // Drag selection state
@@ -77,13 +86,129 @@ export function CourtCalendarView({
     const timer = setTimeout(() => {
       setShowQuickReserve(true);
     }, 500);
-    
+
     return () => clearTimeout(timer);
   }, []); // Empty dependency array means this runs once when component mounts
 
+  // Fetch user's member facilities with courts
+  useEffect(() => {
+    const fetchFacilities = async () => {
+      if (!user?.memberFacilities || user.memberFacilities.length === 0) {
+        setLoadingFacilities(false);
+        return;
+      }
 
-  // Member facilities (tennis and pickleball only)
-  const memberFacilities = [
+      try {
+        setLoadingFacilities(true);
+        const facilitiesData = [];
+
+        for (const facilityId of user.memberFacilities) {
+          // Fetch facility details
+          const facilityResponse = await facilitiesApi.getById(facilityId);
+          if (facilityResponse.success && facilityResponse.data) {
+            const facility = facilityResponse.data.facility;
+
+            // Fetch courts for this facility
+            const courtsResponse = await facilitiesApi.getCourts(facilityId);
+            const courts = courtsResponse.success && courtsResponse.data?.courts
+              ? courtsResponse.data.courts.map((court: any) => ({
+                  id: court.id,
+                  name: court.name,
+                  type: court.courtType?.toLowerCase() || 'tennis'
+                }))
+              : [];
+
+            facilitiesData.push({
+              id: facility.id,
+              name: facility.name,
+              type: facility.type || facility.facilityType || 'Tennis Facility',
+              courts
+            });
+          }
+        }
+
+        setMemberFacilities(facilitiesData);
+      } catch (error) {
+        console.error('Error fetching facilities:', error);
+      } finally {
+        setLoadingFacilities(false);
+      }
+    };
+
+    fetchFacilities();
+  }, [user?.memberFacilities]);
+
+  // Function to fetch bookings (can be called directly)
+  const fetchBookings = React.useCallback(async () => {
+    if (!selectedFacility) {
+      console.log('⚠️ No facility selected, skipping booking fetch');
+      return;
+    }
+
+    try {
+      setLoadingBookings(true);
+
+      // Format date as YYYY-MM-DD for API
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      console.log('📅 Fetching bookings for facility:', selectedFacility, 'date:', dateStr);
+
+      const response = await bookingApi.getByFacility(selectedFacility, dateStr);
+      console.log('📦 Bookings API response:', response);
+
+      if (response.success && response.data?.bookings) {
+        console.log('✅ Processing', response.data.bookings.length, 'bookings');
+        // Transform API bookings to match the format expected by the UI
+        const transformedBookings: any = {};
+
+        response.data.bookings.forEach((booking: any) => {
+          const courtName = booking.courtName;
+
+          // Convert 24h time to 12h format for UI
+          const startTime = formatTimeTo12Hour(booking.startTime);
+          console.log('  📍 Booking:', courtName, 'at', startTime, '- User:', booking.userName);
+
+          if (!transformedBookings[courtName]) {
+            transformedBookings[courtName] = {};
+          }
+
+          transformedBookings[courtName][startTime] = {
+            player: booking.userName || 'Reserved',
+            duration: `${booking.durationMinutes}min`,
+            type: 'reservation',
+            bookingId: booking.id,
+            userId: booking.userId
+          };
+        });
+
+        console.log('🎨 Transformed bookings:', transformedBookings);
+        setBookingsData(transformedBookings);
+      } else {
+        console.log('❌ No bookings found or request failed');
+        setBookingsData({});
+      }
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+      setBookingsData({});
+    } finally {
+      setLoadingBookings(false);
+    }
+  }, [selectedFacility, selectedDate]);
+
+  // Fetch bookings for selected facility and date
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings]);
+
+  // Helper to convert 24h time to 12h format (e.g., "14:00:00" -> "2:00 PM")
+  const formatTimeTo12Hour = (time24: string): string => {
+    const [hours24, minutes] = time24.split(':').map(Number);
+    const period = hours24 >= 12 ? 'PM' : 'AM';
+    const hours12 = hours24 % 12 || 12;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
+  // Hardcoded fallback facilities (for users without memberships)
+  const fallbackFacilities = [
     { 
       id: 'sunrise-valley', 
       name: 'Sunrise Valley HOA', 
@@ -185,7 +310,9 @@ export function CourtCalendarView({
     onNavigateToAdminDashboard();
   };
 
-  const currentFacility = memberFacilities.find(f => f.id === selectedFacility);
+  // Use fetched facilities or fallback to hardcoded ones
+  const availableFacilities = memberFacilities.length > 0 ? memberFacilities : fallbackFacilities;
+  const currentFacility = availableFacilities.find(f => f.id === selectedFacility);
   
   // Filter courts based on selected court type
   const allCourts = currentFacility?.courts || [];
@@ -234,45 +361,8 @@ export function CourtCalendarView({
     return allTimeSlots.filter(timeSlot => !isPastTime(timeSlot));
   }, [selectedDate, currentTime, isToday, isPastTime]);
 
-  // Mock booking data - in real app this would come from API
-  const bookings = {
-    'Tennis Court 1': {
-      '9:00 AM': { player: 'J. Smith', duration: '1hr', type: 'reservation' },
-      '2:00 PM': { player: 'M. Johnson', duration: '1.5hr', type: 'reservation' },
-      '6:00 PM': { player: 'Available', duration: '1hr', type: 'available' }
-    },
-    'Tennis Court 2': {
-      '8:00 AM': { player: 'L. Davis', duration: '1hr', type: 'reservation' },
-      '11:00 AM': { player: 'Available', duration: '1hr', type: 'available' },
-      '4:00 PM': { player: 'R. Wilson', duration: '2hr', type: 'reservation' }
-    },
-    'Pickleball Court 1': {
-      '7:00 AM': { player: 'A. Chen', duration: '1hr', type: 'reservation' },
-      '10:00 AM': { player: 'Available', duration: '1hr', type: 'available' },
-      '3:00 PM': { player: 'Available', duration: '1hr', type: 'available' },
-      '7:00 PM': { player: 'B. Taylor', duration: '1hr', type: 'reservation' }
-    },
-    'Pickleball Court 2': {
-      '9:00 AM': { player: 'Available', duration: '1hr', type: 'available' },
-      '1:00 PM': { player: 'S. Brown', duration: '1hr', type: 'reservation' },
-      '5:00 PM': { player: 'Available', duration: '1hr', type: 'available' }
-    },
-    'Court 1': {
-      '8:00 AM': { player: 'D. Miller', duration: '1hr', type: 'reservation' },
-      '10:00 AM': { player: 'Available', duration: '1hr', type: 'available' },
-      '2:00 PM': { player: 'K. White', duration: '1.5hr', type: 'reservation' }
-    },
-    'Court 2': {
-      '9:00 AM': { player: 'Available', duration: '1hr', type: 'available' },
-      '11:00 AM': { player: 'P. Green', duration: '1hr', type: 'reservation' },
-      '4:00 PM': { player: 'Available', duration: '1hr', type: 'available' }
-    },
-    'Center Court': {
-      '7:00 AM': { player: 'M. Black', duration: '1hr', type: 'reservation' },
-      '1:00 PM': { player: 'Available', duration: '1hr', type: 'available' },
-      '5:00 PM': { player: 'T. Blue', duration: '2hr', type: 'reservation' }
-    }
-  };
+  // Use fetched bookings from API
+  const bookings = bookingsData;
 
   const navigateDate = (direction: 'prev' | 'next') => {
     const newDate = new Date(selectedDate);
@@ -299,30 +389,58 @@ export function CourtCalendarView({
 
   const handleEmptySlotClick = (courtName: string, time: string) => {
     if (isPastTime(time)) return; // Don't allow booking past times
-    
+
+    // Find the court object to get its ID
+    const courtObj = courts.find(c => c.name === courtName);
+    if (!courtObj) {
+      console.error('Court not found:', courtName);
+      return;
+    }
+
     // If we have selected cells from dragging, open booking wizard with them
     if (dragState.selectedCells.size > 0) {
       const selectedSlots = Array.from(dragState.selectedCells).map(cellId => {
         const [court, timeSlot] = cellId.split('|');
-        return { court, time: timeSlot };
+        const slotCourtObj = courts.find(c => c.name === court);
+        return {
+          court,
+          courtId: slotCourtObj?.id || '',
+          time: timeSlot
+        };
       });
-      
+
+      // Format date as YYYY-MM-DD to avoid timezone issues
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
       setBookingWizard({
         isOpen: true,
         court: courtName,
+        courtId: courtObj.id,
         time: time,
-        date: formatDate(selectedDate),
+        date: dateStr,
         facility: currentFacility?.name || '',
+        facilityId: currentFacility?.id || '',
         selectedSlots: selectedSlots
       });
     } else {
       // Single slot booking
+      // Format date as YYYY-MM-DD to avoid timezone issues
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
       setBookingWizard({
         isOpen: true,
         court: courtName,
+        courtId: courtObj.id,
         time,
-        date: formatDate(selectedDate),
+        date: dateStr,
         facility: currentFacility?.name || '',
+        facilityId: currentFacility?.id || '',
         selectedSlots: undefined
       });
     }
@@ -422,12 +540,14 @@ export function CourtCalendarView({
     setBookingWizard({
       isOpen: false,
       court: '',
+      courtId: '',
       time: '',
       date: '',
       facility: '',
+      facilityId: '',
       selectedSlots: undefined
     });
-    
+
     // Clear drag selection when closing
     setDragState({
       isDragging: false,
@@ -543,7 +663,7 @@ export function CourtCalendarView({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {memberFacilities.map((facility) => (
+                    {availableFacilities.map((facility) => (
                       <SelectItem key={facility.id} value={facility.id}>
                         {facility.name}
                       </SelectItem>
@@ -703,10 +823,13 @@ export function CourtCalendarView({
         isOpen={bookingWizard.isOpen}
         onClose={closeBookingWizard}
         court={bookingWizard.court}
+        courtId={bookingWizard.courtId}
         date={bookingWizard.date}
         time={bookingWizard.time}
         facility={bookingWizard.facility}
+        facilityId={bookingWizard.facilityId}
         selectedSlots={bookingWizard.selectedSlots}
+        onBookingCreated={fetchBookings}
       />
 
       {/* Quick Reserve Popup */}

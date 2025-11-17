@@ -128,7 +128,9 @@ function AppContent() {
   };
 
   const handleUserRegistrationComplete = () => {
-    setCurrentScreen('login');
+    // User is automatically logged in after registration
+    // Navigate directly to the court calendar
+    setCurrentScreen('court-calendar');
   };
 
   const navigateToFacilityRegistration = () => {

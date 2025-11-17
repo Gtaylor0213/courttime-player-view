@@ -31,7 +31,12 @@
       "Bash(cat:*)",
       "Bash(psql:*)",
       "Bash(tsx:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(git push:*)",
+      "Bash(npx tsc:*)",
+      "Bash(server/index.ts)",
+      "Bash(cmd.exe //c \"taskkill /PID 8692 /F\")",
+      "Bash(tasklist:*)"
     ],
     "deny": [],
     "ask": []

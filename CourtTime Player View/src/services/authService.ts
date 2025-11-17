@@ -35,6 +35,22 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
   return await bcrypt.compare(password, hash);
 }
 
+interface AdditionalUserData {
+  phone?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  skillLevel?: string;
+  notificationPreferences?: {
+    emailBookingConfirmations?: boolean;
+    smsReminders?: boolean;
+    promotionalEmails?: boolean;
+    weeklyDigest?: boolean;
+    maintenanceUpdates?: boolean;
+  };
+}
+
 /**
  * Register a new user
  */
@@ -42,7 +58,8 @@ export async function registerUser(
   email: string,
   password: string,
   fullName: string,
-  userType: 'player' | 'admin' = 'player'
+  userType: 'player' | 'admin' = 'player',
+  additionalData?: AdditionalUserData
 ): Promise<RegisterResult> {
   try {
     // Check if user already exists
@@ -63,29 +80,60 @@ export async function registerUser(
 
     // Create user in transaction
     const result = await transaction(async (client) => {
-      // Insert user
+      // Insert user with contact information
       const userResult = await client.query(
-        `INSERT INTO users (email, password_hash, full_name, user_type)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, email, full_name as "fullName", user_type as "userType", created_at as "createdAt", updated_at as "updatedAt"`,
-        [email.toLowerCase(), passwordHash, fullName, userType]
+        `INSERT INTO users (email, password_hash, full_name, user_type, phone, street_address, city, state, zip_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, email, full_name as "fullName", user_type as "userType", phone, street_address as "streetAddress", city, state, zip_code as "zipCode", created_at as "createdAt", updated_at as "updatedAt"`,
+        [
+          email.toLowerCase(),
+          passwordHash,
+          fullName,
+          userType,
+          additionalData?.phone || null,
+          additionalData?.streetAddress || null,
+          additionalData?.city || null,
+          additionalData?.state || null,
+          additionalData?.zipCode || null
+        ]
       );
 
       const user = userResult.rows[0];
 
-      // Create default user preferences
+      // Create user preferences with notification settings
+      const notifPrefs = additionalData?.notificationPreferences || {};
       await client.query(
-        `INSERT INTO user_preferences (user_id, notifications, timezone, theme)
-         VALUES ($1, true, 'America/New_York', 'light')`,
-        [user.id]
+        `INSERT INTO user_preferences (
+          user_id,
+          notifications,
+          timezone,
+          theme,
+          email_booking_confirmations,
+          sms_reminders,
+          promotional_emails,
+          weekly_digest,
+          maintenance_updates
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          user.id,
+          true,
+          'America/New_York',
+          'light',
+          notifPrefs.emailBookingConfirmations !== undefined ? notifPrefs.emailBookingConfirmations : true,
+          notifPrefs.smsReminders !== undefined ? notifPrefs.smsReminders : true,
+          notifPrefs.promotionalEmails !== undefined ? notifPrefs.promotionalEmails : false,
+          notifPrefs.weeklyDigest !== undefined ? notifPrefs.weeklyDigest : true,
+          notifPrefs.maintenanceUpdates !== undefined ? notifPrefs.maintenanceUpdates : true
+        ]
       );
 
       // Create player profile if user is a player
       if (userType === 'player') {
         await client.query(
-          `INSERT INTO player_profiles (user_id)
-           VALUES ($1)`,
-          [user.id]
+          `INSERT INTO player_profiles (user_id, skill_level)
+           VALUES ($1, $2)`,
+          [user.id, additionalData?.skillLevel || null]
         );
       }
 

@@ -7,84 +7,138 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Calendar, Clock, MapPin, User } from 'lucide-react';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
+import { bookingApi } from '../api/client';
 
 interface BookingWizardProps {
   isOpen: boolean;
   onClose: () => void;
   court: string;
+  courtId: string;
   date: string;
   time: string;
   facility: string;
-  selectedSlots?: Array<{ court: string; time: string }>;
+  facilityId: string;
+  selectedSlots?: Array<{ court: string; courtId: string; time: string }>;
+  onBookingCreated?: () => void;
 }
 
-export function BookingWizard({ isOpen, onClose, court, date, time, facility, selectedSlots }: BookingWizardProps) {
+export function BookingWizard({ isOpen, onClose, court, courtId, date, time, facility, facilityId, selectedSlots, onBookingCreated }: BookingWizardProps) {
   const [duration, setDuration] = useState('1');
   const [notes, setNotes] = useState('');
-  const [playerName, setPlayerName] = useState('John Doe');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { showToast } = useNotifications();
+  const { user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    console.log('Booking submitted:', {
-      court,
-      date,
-      time,
-      duration,
-      notes,
-      playerName,
-      facility,
-      selectedSlots
-    });
-    
-    setIsSubmitting(false);
-    onClose();
-    
-    // Show success notification
-    const reservationDetails = {
-      facility,
-      court,
-      date,
-      time: selectedSlots && selectedSlots.length > 1 && timeRange 
-        ? `${timeRange.start} - ${timeRange.end}` 
-        : `${time} - ${calculateEndTime(time, duration)}`
-    };
 
-    if (selectedSlots && selectedSlots.length > 1) {
-      showToast(
-        'reservation_confirmed',
-        'Multiple Courts Booked!',
-        `${selectedSlots.length} consecutive slots at ${facility} have been confirmed.`,
-        reservationDetails
-      );
-    } else {
-      showToast(
-        'reservation_confirmed',
-        'Court Reservation Confirmed',
-        `Your ${court} booking at ${facility} has been confirmed.`,
-        reservationDetails
-      );
+    if (!user?.id) {
+      showToast('error', 'Error', 'You must be logged in to book a court.');
+      return;
     }
 
-    // Simulate additional payment notification after a short delay
-    setTimeout(() => {
-      const cost = selectedSlots && selectedSlots.length > 1 
-        ? selectedSlots.length * 35 
-        : parseFloat(duration) * 35;
-      
-      showToast(
-        'payment_received',
-        'Payment Processed',
-        `Payment of ${cost}.00 has been successfully processed for your court reservation.`,
-        reservationDetails
-      );
-    }, 2000);
+    setIsSubmitting(true);
+
+    try {
+      // Helper to convert 12h time to 24h format
+      const convertTo24Hour = (time12h: string): string => {
+        const [time, period] = time12h.split(' ');
+        let [hours, minutes] = time.split(':').map(Number);
+
+        if (period === 'PM' && hours !== 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+
+        return `${hours.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}:00`;
+      };
+
+      // Helper to parse date string to YYYY-MM-DD
+      const parseDate = (dateStr: string): string => {
+        // If date is already in ISO format, extract date part
+        if (dateStr.includes('-')) {
+          return dateStr.split('T')[0];
+        }
+        // Parse from format like "Monday, November 15, 2025"
+        const parsed = new Date(dateStr);
+        // Use local date instead of UTC to avoid timezone issues
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      const bookingDate = parseDate(date);
+      const startTime24 = convertTo24Hour(time);
+      const durationMinutes = parseFloat(duration) * 60;
+
+      // Calculate end time
+      const [hours, minutes] = startTime24.split(':').map(Number);
+      const endDate = new Date();
+      endDate.setHours(hours, minutes + durationMinutes, 0, 0);
+      const endTime24 = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}:00`;
+
+      console.log('📝 Creating booking with data:', {
+        courtId,
+        userId: user.id,
+        facilityId,
+        bookingDate,
+        startTime: startTime24,
+        endTime: endTime24,
+        durationMinutes,
+        court,
+        facility
+      });
+
+      // Create the booking
+      const result = await bookingApi.create({
+        courtId: courtId,
+        userId: user.id,
+        facilityId: facilityId,
+        bookingDate: bookingDate,
+        startTime: startTime24,
+        endTime: endTime24,
+        durationMinutes: durationMinutes,
+        bookingType: 'player_reservation',
+        notes: notes || undefined
+      });
+
+      if (result.success) {
+        console.log('✅ Booking created successfully:', result);
+
+        // Show success notification
+        const reservationDetails = {
+          facility,
+          court,
+          date,
+          time: `${time} - ${calculateEndTime(time, duration)}`
+        };
+
+        showToast(
+          'reservation_confirmed',
+          'Court Reservation Confirmed',
+          `Your ${court} booking at ${facility} has been confirmed.`,
+          reservationDetails
+        );
+
+        // Call the callback to refresh the calendar
+        console.log('🔄 Calling onBookingCreated callback...');
+        if (onBookingCreated) {
+          await onBookingCreated();
+          console.log('✅ Calendar refresh complete');
+        } else {
+          console.warn('⚠️ No onBookingCreated callback provided');
+        }
+
+        onClose();
+      } else {
+        showToast('error', 'Booking Failed', result.error || 'Failed to create booking. Please try again.');
+      }
+    } catch (error) {
+      console.error('Booking error:', error);
+      showToast('error', 'Booking Failed', 'An error occurred while creating your booking.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const calculateEndTime = (startTime: string, durationHours: string) => {
@@ -136,6 +190,22 @@ export function BookingWizard({ isOpen, onClose, court, date, time, facility, se
 
   const timeRange = getTimeRangeForSelectedSlots();
 
+  // Format date for display (YYYY-MM-DD -> readable format)
+  const formatDateForDisplay = (dateStr: string): string => {
+    if (dateStr.includes('-') && dateStr.split('-').length === 3) {
+      // Already in YYYY-MM-DD format
+      const [year, month, day] = dateStr.split('-');
+      const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return dateObj.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+    return dateStr; // Already formatted or unknown format
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-md">
@@ -145,7 +215,7 @@ export function BookingWizard({ isOpen, onClose, court, date, time, facility, se
             Complete your reservation details below.
           </DialogDescription>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Court & Facility Info */}
           <div className="space-y-3">
@@ -155,7 +225,7 @@ export function BookingWizard({ isOpen, onClose, court, date, time, facility, se
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="h-4 w-4" />
-              <span>{date}</span>
+              <span>{formatDateForDisplay(date)}</span>
             </div>
             <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
               <div className="flex items-center gap-2 text-blue-800">
@@ -175,20 +245,6 @@ export function BookingWizard({ isOpen, onClose, court, date, time, facility, se
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Player Name */}
-          <div className="space-y-2">
-            <Label htmlFor="playerName" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              Player Name
-            </Label>
-            <Input
-              id="playerName"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              required
-            />
           </div>
 
           {/* Duration - Hide for multi-slot selections since duration is predetermined */}

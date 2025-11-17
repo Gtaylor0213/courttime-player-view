@@ -14,7 +14,20 @@ const router = express.Router();
  */
 router.post('/register', async (req, res, next) => {
   try {
-    const { email, password, fullName, userType, selectedFacilities } = req.body;
+    const {
+      email,
+      password,
+      fullName,
+      userType,
+      selectedFacilities,
+      phone,
+      streetAddress,
+      city,
+      state,
+      zipCode,
+      skillLevel,
+      notificationPreferences
+    } = req.body;
 
     // Validation
     if (!email || !password || !fullName) {
@@ -24,8 +37,22 @@ router.post('/register', async (req, res, next) => {
       });
     }
 
-    // Register user
-    const result = await registerUser(email, password, fullName, userType || 'player');
+    // Register user with additional data
+    const result = await registerUser(
+      email,
+      password,
+      fullName,
+      userType || 'player',
+      {
+        phone,
+        streetAddress,
+        city,
+        state,
+        zipCode,
+        skillLevel,
+        notificationPreferences
+      }
+    );
 
     if (!result.success) {
       return res.status(400).json(result);

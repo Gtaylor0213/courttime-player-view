@@ -21,12 +21,25 @@ export function getPool(): Pool {
       },
       max: 20, // Maximum number of clients in the pool
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 10000, // Increased to 10 seconds
+      // Retry configuration
+      query_timeout: 30000, // 30 second query timeout
+      statement_timeout: 30000, // 30 second statement timeout
     });
 
-    // Error handling for the pool
+    // Error handling for the pool with auto-reconnect
     pool.on('error', (err) => {
-      console.error('Unexpected error on idle database client', err);
+      console.error('⚠️  Unexpected error on idle database client:', err.message);
+      console.log('Connection pool will automatically attempt to recover...');
+    });
+
+    // Handle pool connection events
+    pool.on('connect', () => {
+      console.log('🔌 New database client connected to pool');
+    });
+
+    pool.on('remove', () => {
+      console.log('🔌 Database client removed from pool');
     });
 
     console.log('✅ Database pool created successfully');
@@ -74,21 +87,39 @@ export async function closePool(): Promise<void> {
 }
 
 /**
- * Test database connection
+ * Test database connection with retry logic
  */
-export async function testConnection(): Promise<boolean> {
-  try {
-    const pool = getPool();
-    const result = await pool.query('SELECT NOW() as current_time, current_database() as database_name, version() as version');
-    console.log('✅ Database connection successful!');
-    console.log('Connected to:', result.rows[0].database_name);
-    console.log('Server time:', result.rows[0].current_time);
-    console.log('PostgreSQL version:', result.rows[0].version);
-    return true;
-  } catch (error) {
-    console.error('❌ Database connection failed:', error);
-    return false;
+export async function testConnection(maxRetries = 5, delayMs = 2000): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔌 Testing database connection (attempt ${attempt}/${maxRetries})...`);
+      const pool = getPool();
+      const result = await pool.query('SELECT NOW() as current_time, current_database() as database_name, version() as version');
+      console.log('✅ Database connection successful!');
+      console.log('📊 Connected to:', result.rows[0].database_name);
+      console.log('⏰ Server time:', result.rows[0].current_time);
+      console.log('🗄️  PostgreSQL version:', result.rows[0].version.split(' ')[0] + ' ' + result.rows[0].version.split(' ')[1]);
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Database connection attempt ${attempt}/${maxRetries} failed:`, error.message);
+
+      if (attempt < maxRetries) {
+        console.log(`⏳ Retrying in ${delayMs / 1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        // Exponential backoff: double the delay for next attempt (max 10 seconds)
+        delayMs = Math.min(delayMs * 1.5, 10000);
+      } else {
+        console.error('❌ All database connection attempts failed');
+        console.error('💡 Troubleshooting tips:');
+        console.error('   1. Check if DATABASE_URL is set correctly in .env file');
+        console.error('   2. Verify your database is running and accessible');
+        console.error('   3. Check your internet connection');
+        console.error('   4. Verify database credentials are correct');
+        return false;
+      }
+    }
   }
+  return false;
 }
 
 /**

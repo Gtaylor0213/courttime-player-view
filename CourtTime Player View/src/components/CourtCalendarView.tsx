@@ -324,8 +324,8 @@ export function CourtCalendarView({
     onNavigateToAdminDashboard();
   };
 
-  // Use fetched facilities or fallback to hardcoded ones
-  const availableFacilities = memberFacilities.length > 0 ? memberFacilities : fallbackFacilities;
+  // Only use member facilities - no fallback for users without memberships
+  const availableFacilities = memberFacilities;
   const currentFacility = availableFacilities.find(f => f.id === selectedFacility);
   
   // Filter courts based on selected court type
@@ -645,6 +645,29 @@ export function CourtCalendarView({
 
         {/* Controls */}
         <div className="px-6 py-6">
+        {memberFacilities.length === 0 ? (
+          // Show "no membership" message when user has no facilities
+          <Card>
+            <CardContent className="p-8">
+              <div className="text-center space-y-4">
+                <div className="flex justify-center">
+                  <Calendar className="h-16 w-16 text-gray-300" />
+                </div>
+                <h3 className="text-xl font-medium text-gray-900">No Facility Memberships</h3>
+                <p className="text-gray-600 max-w-md mx-auto">
+                  You need to be a member of a facility to view and book courts. Request membership to a facility to get started.
+                </p>
+                <Button
+                  onClick={onNavigateToProfile}
+                  className="mt-4"
+                >
+                  Request Facility Membership
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
         <div className="flex flex-col gap-6 mb-6">
           {/* Facility Name and Court Type Filter */}
           <div className="flex flex-wrap items-center gap-4">
@@ -836,6 +859,8 @@ export function CourtCalendarView({
             </div>
           )}
         </div>
+        </>
+        )}
         </div>
       </div>
 

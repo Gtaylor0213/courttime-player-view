@@ -36,7 +36,11 @@
       "Bash(npx tsc:*)",
       "Bash(server/index.ts)",
       "Bash(cmd.exe //c \"taskkill /PID 8692 /F\")",
-      "Bash(tasklist:*)"
+      "Bash(tasklist:*)",
+      "Bash(cmd.exe //c \"taskkill /PID 21940 /F\")",
+      "Bash(cmd.exe //c \"taskkill /PID 19000 /F\")",
+      "Bash(node scripts/create-admin.js:*)",
+      "Bash(node scripts/populate-sample-data.js:*)"
     ],
     "deny": [],
     "ask": []

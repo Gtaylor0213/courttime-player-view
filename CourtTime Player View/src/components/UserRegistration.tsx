@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Separator } from './ui/separator';
+import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, User, Mail, Phone, Bell, Building, Check, AlertCircle, Camera, Search, MapPin, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -49,6 +50,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
 
     // Skill Level (Optional)
     skillLevel: '',
+    bio: '',
 
     // Notification Preferences
     notificationPreferences: {
@@ -198,6 +200,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
           state: formData.state,
           zipCode: formData.zipCode,
           skillLevel: formData.skillLevel,
+          bio: formData.bio,
           notificationPreferences: formData.notificationPreferences
         }
       );
@@ -382,6 +385,20 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
                     <SelectItem value="professional">Professional</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Bio */}
+              <div className="mt-4">
+                <Label htmlFor="bio">Bio (Optional)</Label>
+                <Textarea
+                  id="bio"
+                  value={formData.bio}
+                  onChange={(e) => handleInputChange('bio', e.target.value)}
+                  placeholder="Tell us about yourself, your playing style, or what you're looking for in hitting partners..."
+                  className="h-24 resize-none"
+                  maxLength={500}
+                />
+                <p className="text-sm text-gray-500 mt-1">{formData.bio.length}/500 characters</p>
               </div>
             </div>
 

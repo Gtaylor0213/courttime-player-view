@@ -27,6 +27,7 @@ interface RegistrationData {
   state?: string;
   zipCode?: string;
   skillLevel?: string;
+  bio?: string;
   notificationPreferences?: {
     emailBookingConfirmations?: boolean;
     smsReminders?: boolean;
@@ -168,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         state: additionalData?.state,
         zipCode: additionalData?.zipCode,
         skillLevel: additionalData?.skillLevel,
+        bio: additionalData?.bio,
         notificationPreferences: additionalData?.notificationPreferences
       });
 

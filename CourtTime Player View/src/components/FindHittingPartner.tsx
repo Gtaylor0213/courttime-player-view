@@ -21,6 +21,7 @@ interface FindHittingPartnerProps {
   onNavigateToPlayerDashboard: () => void;
   onNavigateToCalendar: () => void;
   onNavigateToClub?: (clubId: string) => void;
+  onNavigateToBulletinBoard?: () => void;
   selectedFacilityId?: string;
   onFacilityChange?: (facilityId: string) => void;
   sidebarCollapsed: boolean;
@@ -34,6 +35,7 @@ export function FindHittingPartner({
   onNavigateToPlayerDashboard,
   onNavigateToCalendar,
   onNavigateToClub = () => {},
+  onNavigateToBulletinBoard = () => {},
   selectedFacilityId,
   onFacilityChange,
   sidebarCollapsed,
@@ -73,13 +75,17 @@ export function FindHittingPartner({
 
       // Load user's facilities
       const profileResponse = await playerProfileApi.getProfile(user.id);
+      const activeFacilities: any[] = [];
+
       if (profileResponse.success && profileResponse.data?.profile) {
         const facilities = profileResponse.data.profile.memberFacilities || [];
-        setMemberFacilities(facilities.filter((f: any) => f.status === 'active'));
+        const active = facilities.filter((f: any) => f.status === 'active');
+        activeFacilities.push(...active);
+        setMemberFacilities(active);
 
         // Set default facility for creating posts
-        if (facilities.length > 0 && !formData.facilityId) {
-          setFormData(prev => ({ ...prev, facilityId: facilities[0].facilityId }));
+        if (active.length > 0 && !formData.facilityId) {
+          setFormData(prev => ({ ...prev, facilityId: active[0].facilityId }));
         }
       }
 
@@ -87,9 +93,9 @@ export function FindHittingPartner({
       let postsResponse;
       if (selectedFacilityFilter === 'all' || !selectedFacilityFilter) {
         // If user has facilities, fetch posts from all their facilities
-        if (memberFacilities.length > 0) {
+        if (activeFacilities.length > 0) {
           // Fetch posts from all member facilities
-          const facilityIds = memberFacilities.map((f: any) => f.facilityId);
+          const facilityIds = activeFacilities.map((f: any) => f.facilityId);
           const allPosts: any[] = [];
 
           for (const facilityId of facilityIds) {
@@ -102,15 +108,23 @@ export function FindHittingPartner({
           // Remove duplicates and set posts
           const uniquePosts = Array.from(new Map(allPosts.map(post => [post.id, post])).values());
           setPosts(uniquePosts);
+        } else {
+          // If no facilities, show NO posts (user must join a facility first)
+          setPosts([]);
+        }
+        setLoading(false);
+        return;
+      } else {
+        // Show posts for specific facility - but only if user is a member
+        const isMember = activeFacilities.some((f: any) => f.facilityId === selectedFacilityFilter);
+        if (isMember) {
+          postsResponse = await hittingPartnerApi.getByFacility(selectedFacilityFilter);
+        } else {
+          // User is not a member of this facility
+          setPosts([]);
           setLoading(false);
           return;
-        } else {
-          // If no facilities, show all posts (browse mode)
-          postsResponse = await hittingPartnerApi.getAll();
         }
-      } else {
-        // Show posts for specific facility
-        postsResponse = await hittingPartnerApi.getByFacility(selectedFacilityFilter);
       }
 
       if (postsResponse.success && postsResponse.data?.posts) {
@@ -295,6 +309,7 @@ export function FindHittingPartner({
         onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
         onNavigateToCalendar={onNavigateToCalendar}
         onNavigateToClub={onNavigateToClub}
+        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
         onNavigateToHittingPartner={() => {}}
         onLogout={onLogout}
         isCollapsed={sidebarCollapsed}
@@ -326,14 +341,15 @@ export function FindHittingPartner({
                   <div className="flex-1">
                     <h3 className="font-medium text-blue-900 mb-1">No Facility Membership</h3>
                     <p className="text-sm text-blue-800 mb-3">
-                      You need to be a member of a facility to create hitting partner posts. You can still browse posts from all facilities.
+                      You need to join a facility to view and create hitting partner posts. Hitting partner posts are facility-specific to help you connect with players at your club.
                     </p>
                     <Button
                       onClick={onNavigateToProfile}
                       size="sm"
                       className="bg-blue-600 hover:bg-blue-700"
                     >
-                      Request Membership
+                      <Building className="h-4 w-4 mr-2" />
+                      Request Facility Membership
                     </Button>
                   </div>
                 </div>

@@ -42,6 +42,7 @@ interface AdditionalUserData {
   state?: string;
   zipCode?: string;
   skillLevel?: string;
+  bio?: string;
   notificationPreferences?: {
     emailBookingConfirmations?: boolean;
     smsReminders?: boolean;
@@ -78,17 +79,24 @@ export async function registerUser(
     // Hash password
     const passwordHash = await hashPassword(password);
 
+    // Split full name into first and last name
+    const nameParts = fullName.trim().split(/\s+/);
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     // Create user in transaction
     const result = await transaction(async (client) => {
       // Insert user with contact information
       const userResult = await client.query(
-        `INSERT INTO users (email, password_hash, full_name, user_type, phone, street_address, city, state, zip_code)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING id, email, full_name as "fullName", user_type as "userType", phone, street_address as "streetAddress", city, state, zip_code as "zipCode", created_at as "createdAt", updated_at as "updatedAt"`,
+        `INSERT INTO users (email, password_hash, full_name, first_name, last_name, user_type, phone, street_address, city, state, zip_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, email, full_name as "fullName", first_name as "firstName", last_name as "lastName", user_type as "userType", phone, street_address as "streetAddress", city, state, zip_code as "zipCode", created_at as "createdAt", updated_at as "updatedAt"`,
         [
           email.toLowerCase(),
           passwordHash,
           fullName,
+          firstName,
+          lastName,
           userType,
           additionalData?.phone || null,
           additionalData?.streetAddress || null,
@@ -131,9 +139,9 @@ export async function registerUser(
       // Create player profile if user is a player
       if (userType === 'player') {
         await client.query(
-          `INSERT INTO player_profiles (user_id, skill_level)
-           VALUES ($1, $2)`,
-          [user.id, additionalData?.skillLevel || null]
+          `INSERT INTO player_profiles (user_id, skill_level, bio)
+           VALUES ($1, $2, $3)`,
+          [user.id, additionalData?.skillLevel || null, additionalData?.bio || null]
         );
       }
 

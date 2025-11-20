@@ -286,7 +286,8 @@ export function UnifiedSidebar({
             </div>
           </div>
 
-          {/* My Clubs Section */}
+          {/* My Clubs Section - Only show if user has facilities */}
+          {memberFacilities.length > 0 && (
           <div>
             {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">My Clubs</h3>}
             <div className="space-y-1">
@@ -325,6 +326,7 @@ export function UnifiedSidebar({
               ))}
             </div>
           </div>
+          )}
 
 
         </nav>

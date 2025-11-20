@@ -36,6 +36,10 @@ function AppContent() {
   // Update screen based on authentication state
   useEffect(() => {
     if (user && currentScreen === 'login') {
+      // If user has facilities, select the first one
+      if (user.memberFacilities && user.memberFacilities.length > 0) {
+        setSelectedFacilityId(user.memberFacilities[0]);
+      }
       setCurrentScreen('court-calendar');
     } else if (!user && currentScreen !== 'login' && currentScreen !== 'user-registration' && currentScreen !== 'facility-registration' && currentScreen !== 'forgot-password' && currentScreen !== 'reset-password') {
       setCurrentScreen('login');
@@ -128,6 +132,7 @@ function AppContent() {
   const handleUserRegistrationComplete = () => {
     // User is automatically logged in after registration
     // Navigate directly to the court calendar
+    // The useEffect hook will automatically select the first facility if available
     setCurrentScreen('court-calendar');
   };
 

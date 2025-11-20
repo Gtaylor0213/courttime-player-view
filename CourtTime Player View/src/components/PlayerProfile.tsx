@@ -19,6 +19,7 @@ interface PlayerProfileProps {
   onNavigateToProfile?: () => void;
   onNavigateToPlayerDashboard?: () => void;
   onNavigateToClub?: (clubId: string) => void;
+  onNavigateToBulletinBoard?: () => void;
   onNavigateToHittingPartner?: () => void;
   onNavigateToCalendar?: () => void;
   selectedFacilityId?: string;
@@ -33,12 +34,13 @@ export function PlayerProfile({
   onNavigateToProfile = () => {},
   onNavigateToPlayerDashboard = () => {},
   onNavigateToClub = () => {},
+  onNavigateToBulletinBoard = () => {},
   onNavigateToHittingPartner = () => {},
   onNavigateToCalendar = () => {},
   sidebarCollapsed = false,
   onToggleSidebar
 }: PlayerProfileProps) {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,6 +55,7 @@ export function PlayerProfile({
   const [profileData, setProfileData] = useState({
     firstName: '',
     lastName: '',
+    fullName: '',
     email: user?.email || '',
     address: '',
     streetAddress: '',
@@ -96,6 +99,7 @@ export function PlayerProfile({
         setProfileData({
           firstName: profile.firstName || '',
           lastName: profile.lastName || '',
+          fullName: profile.fullName || '',
           email: user?.email || profile.email || '',
           address: profile.address || '',
           streetAddress: profile.streetAddress || '',
@@ -174,6 +178,13 @@ export function PlayerProfile({
       const response = await playerProfileApi.updateProfile(user.id, updates);
 
       if (response.success) {
+        // Update the AuthContext user with new profile data
+        const fullName = `${profileData.firstName} ${profileData.lastName}`.trim() || profileData.fullName;
+        await updateProfile({
+          fullName: fullName,
+          profileImageUrl: profileData.profileImageUrl
+        });
+
         toast.success('Profile updated successfully');
         setIsEditing(false);
         loadProfile(); // Reload to get updated data
@@ -281,11 +292,24 @@ export function PlayerProfile({
   const getInitials = () => {
     const firstName = profileData.firstName || '';
     const lastName = profileData.lastName || '';
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || 'U';
+    const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+
+    // If no first/last name, try to get initials from fullName
+    if (!initials && profileData.fullName) {
+      const nameParts = profileData.fullName.trim().split(/\s+/);
+      if (nameParts.length >= 2) {
+        return `${nameParts[0].charAt(0)}${nameParts[nameParts.length - 1].charAt(0)}`.toUpperCase();
+      } else if (nameParts.length === 1) {
+        return nameParts[0].charAt(0).toUpperCase();
+      }
+    }
+
+    return initials || 'U';
   };
 
   const getFullName = () => {
-    return `${profileData.firstName} ${profileData.lastName}`.trim() || 'No name set';
+    const name = `${profileData.firstName} ${profileData.lastName}`.trim();
+    return name || profileData.fullName || 'No name set';
   };
 
   if (loading) {
@@ -306,6 +330,7 @@ export function PlayerProfile({
         onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
         onNavigateToCalendar={onNavigateToCalendar}
         onNavigateToClub={onNavigateToClub}
+        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
         onNavigateToHittingPartner={onNavigateToHittingPartner}
         onLogout={onLogout}
         isCollapsed={sidebarCollapsed}

@@ -18,6 +18,13 @@ interface BulletinBoardProps {
   onNavigateToClub?: (clubId: string) => void;
   onNavigateToBulletinBoard?: () => void;
   onNavigateToHittingPartner?: () => void;
+  onNavigateToAdminDashboard?: () => void;
+  onNavigateToFacilityManagement?: () => void;
+  onNavigateToCourtManagement?: () => void;
+  onNavigateToBookingManagement?: () => void;
+  onNavigateToAdminBooking?: () => void;
+  onNavigateToMemberManagement?: () => void;
+  onNavigateToAnalytics?: () => void;
   selectedFacilityId?: string;
   onFacilityChange?: (facilityId: string) => void;
   sidebarCollapsed: boolean;
@@ -71,6 +78,13 @@ export function BulletinBoard({
   onNavigateToClub = () => {},
   onNavigateToBulletinBoard = () => {},
   onNavigateToHittingPartner = () => {},
+  onNavigateToAdminDashboard = () => {},
+  onNavigateToFacilityManagement = () => {},
+  onNavigateToCourtManagement = () => {},
+  onNavigateToBookingManagement = () => {},
+  onNavigateToAdminBooking = () => {},
+  onNavigateToMemberManagement = () => {},
+  onNavigateToAnalytics = () => {},
   selectedFacilityId,
   onFacilityChange,
   sidebarCollapsed,
@@ -100,23 +114,36 @@ export function BulletinBoard({
 
       // Load user's facilities
       const profileResponse = await playerProfileApi.getProfile(user.id);
+      const activeFacilities: any[] = [];
+
       if (profileResponse.success && profileResponse.data?.profile) {
         const facilities = profileResponse.data.profile.memberFacilities || [];
-        setMemberFacilities(facilities.filter((f: any) => f.status === 'active'));
+        const active = facilities.filter((f: any) => f.status === 'active');
+        activeFacilities.push(...active);
+        setMemberFacilities(active);
       }
 
       // Load bulletin posts
       if (selectedFacility === 'all') {
-        // Load posts from all user's facilities
+        // Load posts from all user's facilities - only if they have facilities
         const allPosts: BulletinPost[] = [];
-        for (const facility of memberFacilities) {
-          const response = await bulletinBoardApi.getPosts(facility.facilityId);
-          if (response.success && response.data?.posts) {
-            allPosts.push(...response.data.posts);
+        if (activeFacilities.length > 0) {
+          for (const facility of activeFacilities) {
+            const response = await bulletinBoardApi.getPosts(facility.facilityId);
+            if (response.success && response.data?.posts) {
+              allPosts.push(...response.data.posts);
+            }
           }
         }
         setPosts(allPosts);
       } else {
+        // Only load posts for specific facility if user is a member
+        const isMember = activeFacilities.some((f: any) => f.facilityId === selectedFacility);
+        if (!isMember) {
+          setPosts([]);
+          setLoading(false);
+          return;
+        }
         const response = await bulletinBoardApi.getPosts(selectedFacility);
         if (response.success && response.data?.posts) {
           setPosts(response.data.posts);
@@ -167,6 +194,13 @@ export function BulletinBoard({
         onNavigateToClub={onNavigateToClub}
         onNavigateToBulletinBoard={onNavigateToBulletinBoard}
         onNavigateToHittingPartner={onNavigateToHittingPartner}
+        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
+        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
+        onNavigateToCourtManagement={onNavigateToCourtManagement}
+        onNavigateToBookingManagement={onNavigateToBookingManagement}
+        onNavigateToAdminBooking={onNavigateToAdminBooking}
+        onNavigateToMemberManagement={onNavigateToMemberManagement}
+        onNavigateToAnalytics={onNavigateToAnalytics}
         onLogout={onLogout}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={onToggleSidebar}

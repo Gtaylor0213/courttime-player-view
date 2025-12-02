@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
+import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Calendar, Clock, MapPin, User } from 'lucide-react';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -31,12 +32,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     }
     return '1'; // Default to 1 hour for single slots
   });
+  const [isMatch, setIsMatch] = useState(false);
+  const [isLesson, setIsLesson] = useState(false);
+  const [isBallMachine, setIsBallMachine] = useState(false);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { showToast } = useNotifications();
   const { user } = useAuth();
 
-  // Update duration when selectedSlots changes OR when modal opens
+  // Update duration and reset form when selectedSlots changes OR when modal opens
   useEffect(() => {
     if (isOpen) {
       if (selectedSlots && selectedSlots.length > 1) {
@@ -46,6 +50,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         // Reset to default for single slot bookings
         setDuration('1');
       }
+      // Reset booking type and notes when modal opens
+      setIsMatch(false);
+      setIsLesson(false);
+      setIsBallMachine(false);
+      setNotes('');
     }
   }, [selectedSlots, isOpen]);
 
@@ -112,6 +121,13 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         facility
       });
 
+      // Build booking type string from checkboxes
+      const bookingTypes: string[] = [];
+      if (isMatch) bookingTypes.push('Match');
+      if (isLesson) bookingTypes.push('Lesson');
+      if (isBallMachine) bookingTypes.push('Ball Machine');
+      const bookingType = bookingTypes.length > 0 ? bookingTypes.join(', ') : undefined;
+
       // Create the booking
       const result = await bookingApi.create({
         courtId: courtId,
@@ -121,7 +137,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         startTime: startTime24,
         endTime: endTime24,
         durationMinutes: durationMinutes,
-        bookingType: 'player_reservation',
+        bookingType: bookingType,
         notes: notes || undefined
       });
 
@@ -293,6 +309,43 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               </Select>
             </div>
           )}
+
+          {/* Booking Type Checkboxes */}
+          <div className="space-y-2">
+            <Label>Type (Optional)</Label>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="booking-match"
+                  checked={isMatch}
+                  onCheckedChange={(checked) => setIsMatch(checked === true)}
+                />
+                <Label htmlFor="booking-match" className="text-sm cursor-pointer">
+                  Match
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="booking-lesson"
+                  checked={isLesson}
+                  onCheckedChange={(checked) => setIsLesson(checked === true)}
+                />
+                <Label htmlFor="booking-lesson" className="text-sm cursor-pointer">
+                  Lesson
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="booking-ball-machine"
+                  checked={isBallMachine}
+                  onCheckedChange={(checked) => setIsBallMachine(checked === true)}
+                />
+                <Label htmlFor="booking-ball-machine" className="text-sm cursor-pointer">
+                  Ball Machine
+                </Label>
+              </div>
+            </div>
+          </div>
 
           {/* Notes */}
           <div className="space-y-2">

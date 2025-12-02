@@ -52,7 +52,10 @@
       "Bash(python:*)",
       "Bash(cmd.exe /c \"taskkill /PID 19884 /F\")",
       "Bash(PORT=3003 npm run dev:server:*)",
-      "Bash(PORT=3003 npx tsx:*)"
+      "Bash(PORT=3003 npx tsx:*)",
+      "Bash(node scripts/run-migration.js:*)",
+      "Bash(cmd.exe /c \"taskkill /PID 21908 /F\")",
+      "Bash(node scripts/check-memberships.js:*)"
     ],
     "deny": [],
     "ask": []

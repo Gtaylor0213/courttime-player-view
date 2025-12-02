@@ -591,3 +591,440 @@ export async function getFacilityStats(facilityId: string): Promise<any> {
 
   return result.rows[0];
 }
+
+/**
+ * Court creation data
+ */
+export interface CourtCreateData {
+  name: string;
+  courtNumber: number;
+  surfaceType: 'Hard' | 'Clay' | 'Grass' | 'Synthetic';
+  courtType: 'Tennis' | 'Pickleball' | 'Dual';
+  isIndoor: boolean;
+  hasLights: boolean;
+  canSplit?: boolean;
+  splitConfig?: {
+    splitNames: string[];
+    splitType: 'Tennis' | 'Pickleball';
+  };
+}
+
+/**
+ * Facility contact data
+ */
+export interface FacilityContactData {
+  name: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  isPrimary?: boolean;
+}
+
+/**
+ * Full facility registration data
+ */
+export interface FacilityRegistrationData {
+  // Super Admin Account (if creating new user)
+  adminEmail?: string;
+  adminPassword?: string;
+  adminFullName?: string;
+
+  // Facility Information
+  facilityName: string;
+  facilityType: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phone: string;
+  email: string;
+  contactName: string;
+  description?: string;
+
+  // Contacts
+  primaryContact?: FacilityContactData;
+  secondaryContacts?: FacilityContactData[];
+
+  // Operating Hours
+  operatingHours: Record<string, { open: string; close: string; closed?: boolean }>;
+
+  // Facility Rules
+  generalRules: string;
+
+  // Restriction settings
+  restrictionType: 'account' | 'address';
+  maxBookingsPerWeek: number; // -1 means unlimited
+  maxBookingDurationHours: number; // -1 means unlimited
+  advanceBookingDays: number; // -1 means unlimited
+  cancellationNoticeHours: number; // 0 means no notice required
+
+  // Admin restrictions (optional)
+  restrictionsApplyToAdmins?: boolean;
+  adminRestrictions?: {
+    maxBookingsPerWeek: number;
+    maxBookingDurationHours: number;
+    advanceBookingDays: number;
+    cancellationNoticeHours: number;
+  };
+
+  // Peak hours policy (optional) - with per-day time slots
+  peakHoursPolicy?: {
+    enabled: boolean;
+    applyToAdmins: boolean;
+    timeSlots: Record<string, Array<{ id: string; startTime: string; endTime: string }>>; // e.g., { monday: [{id, startTime, endTime}], ... }
+    maxBookingsPerWeek: number;
+    maxDurationHours: number;
+  };
+
+  // Weekend policy (optional)
+  weekendPolicy?: {
+    enabled: boolean;
+    applyToAdmins: boolean;
+    maxBookingsPerWeekend: number;
+    maxDurationHours: number;
+    advanceBookingDays: number;
+  };
+
+  // Courts
+  courts: CourtCreateData[];
+
+  // Admin Invites (emails)
+  adminInvites?: string[];
+}
+
+/**
+ * Register a new facility with super admin
+ * Creates facility, courts, rules, and sets up admin user
+ */
+export async function registerFacility(
+  data: FacilityRegistrationData,
+  existingUserId?: string
+): Promise<{ facility: any; user: any; courts: any[] }> {
+  const bcrypt = await import('bcrypt');
+  const SALT_ROUNDS = 10;
+
+  return transaction(async (client: PoolClient) => {
+    let superAdminUserId = existingUserId;
+    let userResult: any = null;
+
+    // 1. Create super admin user if credentials provided
+    if (!existingUserId && data.adminEmail && data.adminPassword && data.adminFullName) {
+      // Check if user already exists
+      const existingUser = await client.query(
+        'SELECT id FROM users WHERE email = $1',
+        [data.adminEmail.toLowerCase()]
+      );
+
+      if (existingUser.rows.length > 0) {
+        throw new Error('User with this email already exists');
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(data.adminPassword, SALT_ROUNDS);
+
+      // Split full name
+      const nameParts = data.adminFullName.trim().split(/\s+/);
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      // Create user
+      userResult = await client.query(
+        `INSERT INTO users (email, password_hash, full_name, first_name, last_name, user_type, is_super_admin)
+         VALUES ($1, $2, $3, $4, $5, 'admin', true)
+         RETURNING id, email, full_name as "fullName", first_name as "firstName", last_name as "lastName", user_type as "userType", is_super_admin as "isSuperAdmin", created_at as "createdAt"`,
+        [data.adminEmail.toLowerCase(), passwordHash, data.adminFullName, firstName, lastName]
+      );
+
+      superAdminUserId = userResult.rows[0].id;
+
+      // Create user preferences
+      await client.query(
+        `INSERT INTO user_preferences (user_id, notifications, timezone, theme)
+         VALUES ($1, true, 'America/New_York', 'light')`,
+        [superAdminUserId]
+      );
+    } else if (existingUserId) {
+      // Mark existing user as super admin
+      await client.query(
+        `UPDATE users SET user_type = 'admin', is_super_admin = true WHERE id = $1`,
+        [existingUserId]
+      );
+
+      // Get existing user data
+      userResult = await client.query(
+        `SELECT id, email, full_name as "fullName", first_name as "firstName", last_name as "lastName",
+         user_type as "userType", is_super_admin as "isSuperAdmin", created_at as "createdAt"
+         FROM users WHERE id = $1`,
+        [existingUserId]
+      );
+    }
+
+    if (!superAdminUserId) {
+      throw new Error('No admin user ID available');
+    }
+
+    // 2. Generate facility ID from name (slug format)
+    const facilityId = data.facilityName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    // Check if facility ID already exists
+    const existingFacility = await client.query(
+      'SELECT id FROM facilities WHERE id = $1',
+      [facilityId]
+    );
+
+    if (existingFacility.rows.length > 0) {
+      throw new Error('A facility with a similar name already exists');
+    }
+
+    // 3. Create facility
+    const facilityResult = await client.query(
+      `INSERT INTO facilities (
+        id, name, type, street_address, city, state, zip_code, address,
+        phone, email, contact_name, description, operating_hours,
+        general_rules, cancellation_policy, booking_rules, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'active')
+      RETURNING
+        id, name, type, street_address as "streetAddress", city, state, zip_code as "zipCode",
+        address, phone, email, contact_name as "contactName", description,
+        operating_hours as "operatingHours", general_rules as "generalRules",
+        cancellation_policy as "cancellationPolicy", booking_rules as "bookingRules",
+        status, created_at as "createdAt"`,
+      [
+        facilityId,
+        data.facilityName,
+        data.facilityType,
+        data.streetAddress,
+        data.city,
+        data.state,
+        data.zipCode,
+        `${data.streetAddress}, ${data.city}, ${data.state} ${data.zipCode}`, // Full address for legacy field
+        data.phone,
+        data.email,
+        data.contactName,
+        data.description || null,
+        JSON.stringify(data.operatingHours),
+        data.generalRules,
+        data.cancellationPolicy || null,
+        data.bookingRules || null,
+      ]
+    );
+
+    const facility = facilityResult.rows[0];
+
+    // 4. Add user as facility admin (super admin)
+    await client.query(
+      `INSERT INTO facility_admins (user_id, facility_id, is_super_admin, status, permissions)
+       VALUES ($1, $2, true, 'active', '{"manage_courts": true, "manage_bookings": true, "manage_admins": true, "manage_bulletin": true, "manage_rules": true}'::jsonb)`,
+      [superAdminUserId, facilityId]
+    );
+
+    // 5. Create facility membership for super admin
+    await client.query(
+      `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)
+       VALUES ($1, $2, 'admin', 'active', CURRENT_DATE)`,
+      [superAdminUserId, facilityId]
+    );
+
+    // 6. Create facility rules
+    // Main booking limit rule (for regular members)
+    await client.query(
+      `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config, created_by)
+       VALUES ($1, 'booking_limit', 'Default Booking Limits', 'Default booking limits for this facility', $2, $3)`,
+      [
+        facilityId,
+        JSON.stringify({
+          restriction_type: data.restrictionType || 'account',
+          max_bookings_per_week: data.maxBookingsPerWeek,
+          max_duration_hours: data.maxBookingDurationHours,
+          advance_booking_days: data.advanceBookingDays,
+          cancellation_notice_hours: data.cancellationNoticeHours,
+          applies_to_admins: data.restrictionsApplyToAdmins !== false,
+        }),
+        superAdminUserId,
+      ]
+    );
+
+    // Admin-specific restrictions (if different from regular members)
+    if (data.restrictionsApplyToAdmins === false && data.adminRestrictions) {
+      await client.query(
+        `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config, created_by)
+         VALUES ($1, 'admin_booking_limit', 'Admin Booking Limits', 'Booking limits for facility administrators', $2, $3)`,
+        [
+          facilityId,
+          JSON.stringify({
+            max_bookings_per_week: data.adminRestrictions.maxBookingsPerWeek,
+            max_duration_hours: data.adminRestrictions.maxBookingDurationHours,
+            advance_booking_days: data.adminRestrictions.advanceBookingDays,
+            cancellation_notice_hours: data.adminRestrictions.cancellationNoticeHours,
+          }),
+          superAdminUserId,
+        ]
+      );
+    }
+
+    // Peak hours policy - with per-day time slots
+    if (data.peakHoursPolicy?.enabled) {
+      // Convert timeSlots to a cleaner format for storage (remove client-side IDs)
+      const cleanedTimeSlots: Record<string, Array<{ startTime: string; endTime: string }>> = {};
+      for (const [day, slots] of Object.entries(data.peakHoursPolicy.timeSlots || {})) {
+        if (slots && slots.length > 0) {
+          cleanedTimeSlots[day] = slots.map(slot => ({
+            startTime: slot.startTime,
+            endTime: slot.endTime
+          }));
+        }
+      }
+
+      await client.query(
+        `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config, created_by)
+         VALUES ($1, 'peak_hours', 'Peak Hours Restrictions', 'Special restrictions during peak hours', $2, $3)`,
+        [
+          facilityId,
+          JSON.stringify({
+            apply_to_admins: data.peakHoursPolicy.applyToAdmins !== false,
+            time_slots: cleanedTimeSlots, // Per-day time slots
+            max_bookings_per_week: data.peakHoursPolicy.maxBookingsPerWeek,
+            max_duration_hours: data.peakHoursPolicy.maxDurationHours,
+          }),
+          superAdminUserId,
+        ]
+      );
+    }
+
+    // Weekend policy
+    if (data.weekendPolicy?.enabled) {
+      await client.query(
+        `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config, created_by)
+         VALUES ($1, 'weekend_policy', 'Weekend Restrictions', 'Special restrictions for weekends', $2, $3)`,
+        [
+          facilityId,
+          JSON.stringify({
+            apply_to_admins: data.weekendPolicy.applyToAdmins !== false,
+            max_bookings_per_weekend: data.weekendPolicy.maxBookingsPerWeekend,
+            max_duration_hours: data.weekendPolicy.maxDurationHours,
+            advance_booking_days: data.weekendPolicy.advanceBookingDays,
+          }),
+          superAdminUserId,
+        ]
+      );
+    }
+
+    // 7. Create courts
+    const createdCourts: any[] = [];
+
+    for (const court of data.courts) {
+      const courtResult = await client.query(
+        `INSERT INTO courts (
+          facility_id, name, court_number, surface_type, court_type,
+          is_indoor, has_lights, status, is_split_court, split_configuration
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'available', $8, $9)
+        RETURNING
+          id, facility_id as "facilityId", name, court_number as "courtNumber",
+          surface_type as "surfaceType", court_type as "courtType",
+          is_indoor as "isIndoor", has_lights as "hasLights", status,
+          is_split_court as "isSplitCourt", split_configuration as "splitConfiguration"`,
+        [
+          facilityId,
+          court.name,
+          court.courtNumber,
+          court.surfaceType,
+          court.courtType,
+          court.isIndoor,
+          court.hasLights,
+          court.canSplit || false,
+          court.splitConfig ? JSON.stringify(court.splitConfig) : null,
+        ]
+      );
+
+      const createdCourt = courtResult.rows[0];
+      createdCourts.push(createdCourt);
+
+      // If court can split, create child courts
+      if (court.canSplit && court.splitConfig?.splitNames && court.splitConfig.splitNames.length > 0) {
+        for (let i = 0; i < court.splitConfig.splitNames.length; i++) {
+          const splitName = court.splitConfig.splitNames[i];
+          await client.query(
+            `INSERT INTO courts (
+              facility_id, name, court_number, surface_type, court_type,
+              is_indoor, has_lights, status, parent_court_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'available', $8)`,
+            [
+              facilityId,
+              `Court ${splitName}`,
+              court.courtNumber * 100 + (i + 1), // e.g., Court 3a = 301, 3b = 302
+              court.surfaceType,
+              court.splitConfig.splitType,
+              court.isIndoor,
+              court.hasLights,
+              createdCourt.id,
+            ]
+          );
+        }
+      }
+    }
+
+    // 8. Store facility contacts
+    // First, add primary contact
+    if (data.primaryContact || data.contactName) {
+      const primaryName = data.primaryContact?.name || data.contactName;
+      const primaryEmail = data.primaryContact?.email || data.email;
+      const primaryPhone = data.primaryContact?.phone || data.phone;
+
+      if (primaryName) {
+        await client.query(
+          `INSERT INTO facility_contacts (facility_id, name, email, phone, is_primary, role)
+           VALUES ($1, $2, $3, $4, true, 'Primary Contact')`,
+          [facilityId, primaryName, primaryEmail || null, primaryPhone || null]
+        );
+      }
+    }
+
+    // Add secondary contacts
+    if (data.secondaryContacts && data.secondaryContacts.length > 0) {
+      for (const contact of data.secondaryContacts) {
+        if (contact.name && contact.name.trim()) {
+          await client.query(
+            `INSERT INTO facility_contacts (facility_id, name, email, phone, is_primary, role)
+             VALUES ($1, $2, $3, $4, false, $5)`,
+            [
+              facilityId,
+              contact.name.trim(),
+              contact.email?.trim() || null,
+              contact.phone?.trim() || null,
+              contact.role?.trim() || null
+            ]
+          );
+        }
+      }
+    }
+
+    // 9. Store admin invitations (for future email sending)
+    if (data.adminInvites && data.adminInvites.length > 0) {
+      for (const inviteEmail of data.adminInvites) {
+        if (inviteEmail && inviteEmail.trim()) {
+          await client.query(
+            `INSERT INTO facility_admins (facility_id, invitation_email, invited_by, invitation_sent_at, status, is_super_admin)
+             VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 'pending', false)`,
+            [facilityId, inviteEmail.trim().toLowerCase(), superAdminUserId]
+          );
+        }
+      }
+    }
+
+    // Get user data with memberFacilities
+    const userData = userResult ? userResult.rows[0] : null;
+    if (userData) {
+      userData.memberFacilities = [facilityId];
+      userData.userType = 'admin';
+    }
+
+    return {
+      facility,
+      user: userData,
+      courts: createdCourts,
+    };
+  });
+}

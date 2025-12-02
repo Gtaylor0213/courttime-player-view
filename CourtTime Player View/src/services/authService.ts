@@ -42,6 +42,7 @@ interface AdditionalUserData {
   state?: string;
   zipCode?: string;
   skillLevel?: string;
+  ustaRating?: string;
   bio?: string;
   profilePicture?: string;
   notificationPreferences?: {
@@ -140,9 +141,9 @@ export async function registerUser(
       // Create player profile if user is a player
       if (userType === 'player') {
         await client.query(
-          `INSERT INTO player_profiles (user_id, skill_level, bio, profile_image_url)
-           VALUES ($1, $2, $3, $4)`,
-          [user.id, additionalData?.skillLevel || null, additionalData?.bio || null, additionalData?.profilePicture || null]
+          `INSERT INTO player_profiles (user_id, skill_level, ntrp_rating, bio, profile_image_url)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [user.id, additionalData?.skillLevel || null, additionalData?.ustaRating || null, additionalData?.bio || null, additionalData?.profilePicture || null]
         );
       }
 

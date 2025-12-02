@@ -67,6 +67,7 @@ export function PlayerProfile({
     zipCode: '',
     phone: '',
     skillLevel: '',
+    ustaRating: '',
     bio: '',
     profileImageUrl: '',
     memberFacilities: [] as any[]
@@ -111,6 +112,7 @@ export function PlayerProfile({
           zipCode: profile.zipCode || '',
           phone: profile.phone || '',
           skillLevel: profile.skillLevel || '',
+          ustaRating: profile.ustaRating || '',
           bio: profile.bio || '',
           profileImageUrl: profile.profileImageUrl || '',
           memberFacilities: profile.memberFacilities || []
@@ -174,6 +176,7 @@ export function PlayerProfile({
         zipCode: profileData.zipCode || undefined,
         phone: profileData.phone || undefined,
         skillLevel: profileData.skillLevel || undefined,
+        ustaRating: profileData.ustaRating || undefined,
         bio: profileData.bio || undefined,
         profileImageUrl: profileData.profileImageUrl || undefined
       };
@@ -501,23 +504,51 @@ export function PlayerProfile({
                     <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
                   </div>
 
-                  <div>
-                    <Label htmlFor="skillLevel">Skill Level</Label>
-                    <Select
-                      value={profileData.skillLevel?.toLowerCase() || ''}
-                      onValueChange={(value) => setProfileData(prev => ({ ...prev, skillLevel: value }))}
-                      disabled={!isEditing}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select skill level" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="beginner">Beginner</SelectItem>
-                        <SelectItem value="intermediate">Intermediate</SelectItem>
-                        <SelectItem value="advanced">Advanced</SelectItem>
-                        <SelectItem value="professional">Professional</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="skillLevel">Skill Level</Label>
+                      <Select
+                        value={profileData.skillLevel?.toLowerCase() || ''}
+                        onValueChange={(value) => setProfileData(prev => ({ ...prev, skillLevel: value }))}
+                        disabled={!isEditing}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select skill level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="beginner">Beginner</SelectItem>
+                          <SelectItem value="intermediate">Intermediate</SelectItem>
+                          <SelectItem value="advanced">Advanced</SelectItem>
+                          <SelectItem value="professional">Professional</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="ustaRating">USTA Rating (Optional)</Label>
+                      <Select
+                        value={profileData.ustaRating || ''}
+                        onValueChange={(value) => setProfileData(prev => ({ ...prev, ustaRating: value }))}
+                        disabled={!isEditing}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select USTA rating" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1.5">1.5</SelectItem>
+                          <SelectItem value="2.0">2.0</SelectItem>
+                          <SelectItem value="2.5">2.5</SelectItem>
+                          <SelectItem value="3.0">3.0</SelectItem>
+                          <SelectItem value="3.5">3.5</SelectItem>
+                          <SelectItem value="4.0">4.0</SelectItem>
+                          <SelectItem value="4.5">4.5</SelectItem>
+                          <SelectItem value="5.0">5.0</SelectItem>
+                          <SelectItem value="5.5">5.5</SelectItem>
+                          <SelectItem value="6.0">6.0</SelectItem>
+                          <SelectItem value="7.0">7.0</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500 mt-1">National Tennis Rating Program (NTRP) rating</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

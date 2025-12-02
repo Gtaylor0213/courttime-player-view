@@ -226,6 +226,8 @@ export function CourtCalendarView({
               bookingId: booking.id,
               userId: booking.userId,
               isFirstSlot: i === 0, // Mark first slot for display purposes
+              bookingType: booking.bookingType, // Match type (Singles, Doubles, Lesson, etc.)
+              notes: booking.notes, // Reservation notes
               fullDetails: {
                 ...booking,
                 facilityName: currentFacility?.name
@@ -698,15 +700,6 @@ export function CourtCalendarView({
               </div>
               
               <div className="flex items-center gap-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowQuickReserve(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Calendar className="h-4 w-4" />
-                  Quick Reserve
-                </Button>
                 <NotificationBell />
               </div>
             </div>
@@ -739,31 +732,43 @@ export function CourtCalendarView({
         ) : (
           <>
         <div className="flex flex-col gap-6 mb-6">
-          {/* Facility Name and Court Type Filter */}
-          <div className="flex flex-wrap items-center gap-4">
-            <h3 className="text-lg font-medium">{currentFacility?.name}</h3>
-            <Badge variant="outline">{currentFacility?.type}</Badge>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-600">Court Type:</span>
-              <div className="flex gap-2">
-                <Button
-                  variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
-                  className={selectedCourtType === 'tennis' ? 'bg-blue-600 hover:bg-blue-700' : ''}
-                >
-                  Tennis
-                </Button>
-                <Button
-                  variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
-                  className={selectedCourtType === 'pickleball' ? 'bg-blue-600 hover:bg-blue-700' : ''}
-                >
-                  Pickleball
-                </Button>
+          {/* Facility Name, Court Type Filter, and Quick Reserve */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <h3 className="text-lg font-medium">{currentFacility?.name}</h3>
+              <Badge variant="outline">{currentFacility?.type}</Badge>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-600">Court Type:</span>
+                <div className="flex gap-2">
+                  <Button
+                    variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
+                    className={selectedCourtType === 'tennis' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                  >
+                    Tennis
+                  </Button>
+                  <Button
+                    variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
+                    className={selectedCourtType === 'pickleball' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                  >
+                    Pickleball
+                  </Button>
+                </div>
               </div>
             </div>
+
+            {/* Quick Reserve Button */}
+            <Button
+              onClick={() => setShowQuickReserve(true)}
+              className="flex items-center gap-2 !bg-green-600 hover:!bg-green-700 !text-white px-6 py-2 text-base font-medium shadow-md"
+              size="lg"
+            >
+              <Calendar className="h-5 w-5" />
+              Quick Reserve
+            </Button>
           </div>
 
           {/* Facility Selection and Date Navigation */}
@@ -833,26 +838,24 @@ export function CourtCalendarView({
               </div>
             ) : (
               <div className="relative border border-gray-200" style={{ height: '600px', maxHeight: '70vh' }}>
-                {/* Header Row - Court Names (Fixed at top) */}
-                <div className="absolute top-0 left-0 right-0 grid grid-cols-[120px_repeat(var(--court-count),_200px)] border-b-2 border-gray-300 shadow-md pointer-events-none" style={{...({'--court-count': courts.length} as React.CSSProperties), backgroundColor: '#ffffff', zIndex: 50}}>
-                  <div className="p-4 border-r border-gray-200 pointer-events-auto">
-                    <span className="font-medium text-sm text-gray-600">Time</span>
-                  </div>
-                  {courts.map((court, index) => (
-                    <div key={index} className="p-4 border-r border-gray-200 last:border-r-0 pointer-events-auto">
-                      <div className="font-medium text-sm">{court.name}</div>
-                      <div className="text-xs text-gray-600 mt-1 capitalize">{court.type}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Scrollable Content Area */}
+                {/* Scrollable Content Area - handles both horizontal and vertical scrolling */}
                 <div
                   ref={calendarScrollRef}
-                  className="overflow-x-auto overflow-y-scroll h-full"
-                  style={{ paddingTop: '73px' }}
+                  className="overflow-auto h-full"
                 >
                   <div className="min-w-max">
+                    {/* Header Row - Court Names (Sticky at top, scrolls horizontally with content) */}
+                    <div className="sticky top-0 grid grid-cols-[120px_repeat(var(--court-count),_200px)] border-b-2 border-gray-300 shadow-md bg-white" style={{...({'--court-count': courts.length} as React.CSSProperties), zIndex: 50}}>
+                      <div className="p-4 border-r border-gray-200">
+                        <span className="font-medium text-sm text-gray-600">Time</span>
+                      </div>
+                      {courts.map((court, index) => (
+                        <div key={index} className="p-4 border-r border-gray-200 last:border-r-0">
+                          <div className="font-medium text-sm">{court.name}</div>
+                          <div className="text-xs text-gray-600 mt-1 capitalize">{court.type}</div>
+                        </div>
+                      ))}
+                    </div>
                 {/* Time Slots */}
                 {timeSlots.map((time, timeIndex) => {
                   const isHourMark = time.endsWith(':00 AM') || time.endsWith(':00 PM');
@@ -885,7 +888,7 @@ export function CourtCalendarView({
                           >
                             {booking && booking.type === 'reservation' && booking.isFirstSlot && (
                               <div
-                                className={`p-1 rounded-md border transition-colors hover:opacity-80 absolute top-0 left-0 right-0 ${
+                                className={`p-1 rounded-md border transition-colors hover:opacity-80 absolute top-0 left-0 right-0 overflow-hidden ${
                                   court.type === 'tennis'
                                     ? 'bg-blue-100 text-blue-800 border-blue-300'
                                     : 'bg-green-100 text-green-800 border-green-300'
@@ -895,7 +898,27 @@ export function CourtCalendarView({
                                 }}
                               >
                                 <div className="text-[10px] font-medium leading-tight">{booking.player}</div>
-                                <div className="text-[9px] opacity-75">{booking.duration}</div>
+                                <div className="text-[9px] opacity-75 flex items-center gap-1">
+                                  <span>{booking.duration}</span>
+                                  {booking.bookingType && (
+                                    <span className={`px-1 rounded text-[8px] font-medium ${
+                                      court.type === 'tennis'
+                                        ? 'bg-blue-200 text-blue-900'
+                                        : 'bg-green-200 text-green-900'
+                                    }`}>
+                                      {booking.bookingType}
+                                    </span>
+                                  )}
+                                </div>
+                                {booking.notes && (
+                                  <div className={`text-[8px] mt-0.5 truncate italic ${
+                                    court.type === 'tennis'
+                                      ? 'text-blue-600'
+                                      : 'text-green-600'
+                                  }`}>
+                                    {booking.notes.length > 30 ? `${booking.notes.substring(0, 30)}...` : booking.notes}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

@@ -89,6 +89,10 @@ export const authApi = {
       body: JSON.stringify({ userId, facilityId, membershipType }),
     });
   },
+
+  getMe: async (userId: string) => {
+    return apiRequest(`/api/auth/me/${userId}`);
+  },
 };
 
 // Facilities API
@@ -111,6 +115,103 @@ export const facilitiesApi = {
 
   getStats: async () => {
     return apiRequest('/api/facilities/stats');
+  },
+
+  register: async (data: {
+    // Super Admin Account (if creating new user)
+    adminEmail?: string;
+    adminPassword?: string;
+    adminFullName?: string;
+
+    // Facility Information
+    facilityName: string;
+    facilityType: string;
+    streetAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    phone: string;
+    email: string;
+    contactName: string;
+    description?: string;
+
+    // Contacts
+    primaryContact?: {
+      name: string;
+      email?: string;
+      phone?: string;
+    };
+    secondaryContacts?: Array<{
+      name: string;
+      email?: string;
+      phone?: string;
+    }>;
+
+    // Operating Hours
+    operatingHours: Record<string, { open: string; close: string; closed?: boolean }>;
+
+    // Facility Rules
+    generalRules: string;
+
+    // Restriction settings
+    restrictionType: 'account' | 'address';
+    maxBookingsPerWeek: string;
+    maxBookingDurationHours: string;
+    advanceBookingDays: string;
+    cancellationNoticeHours: string;
+
+    // Admin restrictions (optional, if different from regular members)
+    restrictionsApplyToAdmins?: boolean;
+    adminRestrictions?: {
+      maxBookingsPerWeek: number;
+      maxBookingDurationHours: number;
+      advanceBookingDays: number;
+      cancellationNoticeHours: number;
+    };
+
+    // Peak hours policy (optional) - with per-day time slots
+    peakHoursPolicy?: {
+      enabled: boolean;
+      applyToAdmins: boolean;
+      timeSlots: Record<string, Array<{ id: string; startTime: string; endTime: string }>>; // e.g., { monday: [{id, startTime, endTime}], ... }
+      maxBookingsPerWeek: number;
+      maxDurationHours: number;
+    };
+
+    // Weekend policy (optional)
+    weekendPolicy?: {
+      enabled: boolean;
+      applyToAdmins: boolean;
+      maxBookingsPerWeekend: number;
+      maxDurationHours: number;
+      advanceBookingDays: number;
+    };
+
+    // Courts
+    courts: Array<{
+      name: string;
+      courtNumber: number;
+      surfaceType: string;
+      courtType: string;
+      isIndoor: boolean;
+      hasLights: boolean;
+      canSplit?: boolean;
+      splitConfig?: {
+        splitNames: string[];
+        splitType: string;
+      };
+    }>;
+
+    // Admin Invites
+    adminInvites?: Array<{ email: string }>;
+
+    // Existing user ID (if already logged in)
+    existingUserId?: string;
+  }) => {
+    return apiRequest('/api/facilities/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };
 

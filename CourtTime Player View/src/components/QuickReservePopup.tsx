@@ -49,6 +49,11 @@ export function QuickReservePopup({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingBookings, setExistingBookings] = useState<any>({});
 
+  // Booking type checkboxes
+  const [isMatch, setIsMatch] = useState(false);
+  const [isLesson, setIsLesson] = useState(false);
+  const [isBallMachine, setIsBallMachine] = useState(false);
+
   // Advanced booking state
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
@@ -82,8 +87,11 @@ export function QuickReservePopup({
 
     setSelectedTime(`${hours}:${minutes.toString().padStart(2, '0')} ${period}`);
 
-    // Reset notes and advanced booking when modal opens
+    // Reset notes, booking types, and advanced booking when modal opens
     setNotes('');
+    setIsMatch(false);
+    setIsLesson(false);
+    setIsBallMachine(false);
     setAdvancedBooking(false);
     setRecurringDays([]);
     setRecurringEndDate('');
@@ -98,6 +106,22 @@ export function QuickReservePopup({
 
   const currentFacility = facilities.find(f => f.id === selectedFacility);
   const allCourts = currentFacility?.courts || [];
+
+  // Determine if facility has both types of courts
+  const hasTennisCourts = allCourts.some(court => court.type === 'tennis');
+  const hasPickleballCourts = allCourts.some(court => court.type === 'pickleball');
+  const hasMultipleCourtTypes = hasTennisCourts && hasPickleballCourts;
+
+  // Auto-select court type when there's only one type available
+  useEffect(() => {
+    if (!hasMultipleCourtTypes && selectedCourtType === null) {
+      if (hasTennisCourts && !hasPickleballCourts) {
+        setSelectedCourtType('tennis');
+      } else if (hasPickleballCourts && !hasTennisCourts) {
+        setSelectedCourtType('pickleball');
+      }
+    }
+  }, [hasMultipleCourtTypes, hasTennisCourts, hasPickleballCourts, selectedCourtType]);
 
   // Filter courts by selected type
   const availableCourts = React.useMemo(() => {
@@ -172,6 +196,39 @@ export function QuickReservePopup({
         return slots;
       };
 
+      // Generate all time slots that a booking would occupy based on duration
+      const generateBookingSlots = (startTime: string, durationHours: string): string[] => {
+        const slots: string[] = [];
+        const [time, period] = startTime.split(' ');
+        const [hourStr, minuteStr] = time.split(':');
+        let hour = parseInt(hourStr);
+        let minute = parseInt(minuteStr);
+
+        // Convert to 24-hour format for calculation
+        if (period === 'PM' && hour !== 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+
+        const durationMinutes = parseFloat(durationHours) * 60;
+        const numSlots = Math.ceil(durationMinutes / 15);
+
+        for (let i = 0; i < numSlots; i++) {
+          const slotHour24 = hour + Math.floor((minute + i * 15) / 60);
+          const slotMinute = (minute + i * 15) % 60;
+          const slotPeriod = slotHour24 >= 12 ? 'PM' : 'AM';
+          const slotHour12 = slotHour24 % 12 || 12;
+          slots.push(`${slotHour12}:${slotMinute.toString().padStart(2, '0')} ${slotPeriod}`);
+        }
+
+        return slots;
+      };
+
+      // Check if a court is available for the full duration at a given start time
+      const isCourtAvailableForDuration = (court: any, startTime: string): boolean => {
+        const courtBookings = existingBookings[court.name] || new Set();
+        const bookingSlots = generateBookingSlots(startTime, duration);
+        return !bookingSlots.some(slot => courtBookings.has(slot));
+      };
+
       const allTimeSlots = generateTimeSlots();
 
       // Determine starting time index based on selected date
@@ -200,19 +257,17 @@ export function QuickReservePopup({
         if (startTimeIndex === -1) startTimeIndex = 0;
       }
 
-      // Find the SOONEST available time across ALL courts of this type
+      // Find the SOONEST available time across ALL courts of this type (checking full duration)
       let soonestSlot: { court: any; time: string; timeIndex: number } | null = null;
 
       // Check each time slot starting from the appropriate time
       for (let i = startTimeIndex; i < allTimeSlots.length; i++) {
         const timeSlot = allTimeSlots[i];
 
-        // Check if ANY court is available at this time
+        // Check if ANY court is available for the full duration at this time
         for (const court of availableCourts) {
-          const courtBookings = existingBookings[court.name] || new Set();
-
-          if (!courtBookings.has(timeSlot)) {
-            // Found an available court at this time!
+          if (isCourtAvailableForDuration(court, timeSlot)) {
+            // Found an available court at this time for full duration!
             soonestSlot = { court, time: timeSlot, timeIndex: i };
             break;
           }
@@ -238,12 +293,52 @@ export function QuickReservePopup({
       setSelectedCourt('');
       setSelectedCourtId('');
     }
-  }, [selectedCourtType, availableCourts, existingBookings, selectedDate]);
+  }, [selectedCourtType, availableCourts, existingBookings, selectedDate, duration]);
 
-  // Determine if facility has both types of courts
-  const hasTennisCourts = allCourts.some(court => court.type === 'tennis');
-  const hasPickleballCourts = allCourts.some(court => court.type === 'pickleball');
-  const hasMultipleCourtTypes = hasTennisCourts && hasPickleballCourts;
+  // Calculate which courts are available at the selected time and duration
+  const courtsWithAvailability = React.useMemo(() => {
+    if (!selectedCourtType || !selectedTime || availableCourts.length === 0) {
+      return [];
+    }
+
+    // Generate all time slots that this booking would occupy based on duration
+    const generateBookingSlots = (startTime: string, durationHours: string): string[] => {
+      const slots: string[] = [];
+      const [time, period] = startTime.split(' ');
+      const [hourStr, minuteStr] = time.split(':');
+      let hour = parseInt(hourStr);
+      let minute = parseInt(minuteStr);
+
+      // Convert to 24-hour format for calculation
+      if (period === 'PM' && hour !== 12) hour += 12;
+      if (period === 'AM' && hour === 12) hour = 0;
+
+      const durationMinutes = parseFloat(durationHours) * 60;
+      const numSlots = Math.ceil(durationMinutes / 15);
+
+      for (let i = 0; i < numSlots; i++) {
+        const slotHour24 = hour + Math.floor((minute + i * 15) / 60);
+        const slotMinute = (minute + i * 15) % 60;
+        const slotPeriod = slotHour24 >= 12 ? 'PM' : 'AM';
+        const slotHour12 = slotHour24 % 12 || 12;
+        slots.push(`${slotHour12}:${slotMinute.toString().padStart(2, '0')} ${slotPeriod}`);
+      }
+
+      return slots;
+    };
+
+    const bookingSlots = generateBookingSlots(selectedTime, duration);
+
+    return availableCourts.map(court => {
+      const courtBookings = existingBookings[court.name] || new Set();
+      // Check if ANY of the booking slots conflict with existing bookings
+      const isAvailable = !bookingSlots.some(slot => courtBookings.has(slot));
+      return {
+        ...court,
+        isAvailable
+      };
+    });
+  }, [selectedCourtType, selectedTime, duration, availableCourts, existingBookings]);
 
   // Generate time slots (15-minute intervals), filtering out fully booked times
   const timeSlots = React.useMemo(() => {
@@ -362,6 +457,13 @@ export function QuickReservePopup({
       // Generate dates for booking
       const datesToBook = generateRecurringDates();
 
+      // Build booking type string from checkboxes
+      const bookingTypes: string[] = [];
+      if (isMatch) bookingTypes.push('Match');
+      if (isLesson) bookingTypes.push('Lesson');
+      if (isBallMachine) bookingTypes.push('Ball Machine');
+      const bookingType = bookingTypes.length > 0 ? bookingTypes.join(', ') : undefined;
+
       // Create bookings for all dates
       const results = await Promise.all(
         datesToBook.map(date =>
@@ -373,6 +475,7 @@ export function QuickReservePopup({
             startTime: startTime24,
             endTime: endTime24,
             durationMinutes: Math.round(durationMinutes),
+            bookingType,
             notes: notes || undefined
           })
         )
@@ -513,32 +616,6 @@ export function QuickReservePopup({
             </div>
           )}
 
-          {/* Court Selection */}
-          <div className="flex items-center gap-3">
-            <Label htmlFor="court" className="min-w-[80px]">Court</Label>
-            <Select
-              value={selectedCourtId}
-              onValueChange={(value) => {
-                const court = availableCourts.find(c => c.id === value);
-                if (court) {
-                  setSelectedCourtId(value);
-                  setSelectedCourt(court.name);
-                }
-              }}
-            >
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select court" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableCourts.map((court) => (
-                  <SelectItem key={court.id} value={court.id}>
-                    {court.name} ({court.type})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Date Selection */}
           <div className="flex items-center gap-3">
             <Label htmlFor="date" className="flex items-center gap-2 min-w-[80px]">
@@ -598,6 +675,43 @@ export function QuickReservePopup({
             </Select>
           </div>
 
+          {/* Booking Type Checkboxes */}
+          <div className="flex items-center gap-3">
+            <Label className="min-w-[80px]">Type</Label>
+            <div className="flex gap-4 flex-1">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="booking-match"
+                  checked={isMatch}
+                  onCheckedChange={(checked) => setIsMatch(checked === true)}
+                />
+                <Label htmlFor="booking-match" className="text-sm cursor-pointer">
+                  Match
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="booking-lesson"
+                  checked={isLesson}
+                  onCheckedChange={(checked) => setIsLesson(checked === true)}
+                />
+                <Label htmlFor="booking-lesson" className="text-sm cursor-pointer">
+                  Lesson
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="booking-ball-machine"
+                  checked={isBallMachine}
+                  onCheckedChange={(checked) => setIsBallMachine(checked === true)}
+                />
+                <Label htmlFor="booking-ball-machine" className="text-sm cursor-pointer">
+                  Ball Machine
+                </Label>
+              </div>
+            </div>
+          </div>
+
           {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor="notes">Notes (Optional)</Label>
@@ -610,6 +724,45 @@ export function QuickReservePopup({
               className="resize-none"
             />
           </div>
+
+          {/* Available Courts Selection - Show when court type, date, and time are selected */}
+          {selectedCourtType && selectedDate && selectedTime && courtsWithAvailability.length > 0 && (
+            <div className="space-y-2">
+              <Label>Available Courts</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {courtsWithAvailability.map((court) => (
+                  <button
+                    key={court.id}
+                    type="button"
+                    disabled={!court.isAvailable}
+                    onClick={() => {
+                      if (court.isAvailable) {
+                        setSelectedCourtId(court.id);
+                        setSelectedCourt(court.name);
+                      }
+                    }}
+                    className={`
+                      p-3 rounded-md border-2 text-left transition-all
+                      ${court.isAvailable
+                        ? selectedCourtId === court.id
+                          ? 'border-blue-600 bg-blue-50 text-blue-800'
+                          : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer'
+                        : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                      }
+                    `}
+                  >
+                    <div className="font-medium text-sm">{court.name}</div>
+                    <div className={`text-xs ${court.isAvailable ? 'text-green-600' : 'text-red-500'}`}>
+                      {court.isAvailable ? 'Available' : 'Booked'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {!selectedCourtId && (
+                <p className="text-xs text-amber-600">Please select a court above</p>
+              )}
+            </div>
+          )}
 
           {/* Advanced Booking Checkbox */}
           <div className="flex items-center gap-2 pt-2">

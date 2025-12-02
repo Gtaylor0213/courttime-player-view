@@ -16,6 +16,7 @@ export interface PlayerProfileData {
   zipCode?: string;
   phone?: string;
   skillLevel?: string;
+  ustaRating?: string;
   bio?: string;
   profileImageUrl?: string;
 }
@@ -33,6 +34,7 @@ export interface PlayerProfileWithUser {
   zipCode?: string;
   phone?: string;
   skillLevel?: string;
+  ustaRating?: string;
   bio?: string;
   profileImageUrl?: string;
   memberFacilities?: Array<{
@@ -64,6 +66,7 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfileWit
         u.zip_code as "zipCode",
         u.phone,
         pp.skill_level as "skillLevel",
+        pp.ntrp_rating as "ustaRating",
         pp.bio,
         pp.profile_image_url as "profileImageUrl"
        FROM users u
@@ -175,6 +178,11 @@ export async function updatePlayerProfile(
     if (updates.skillLevel !== undefined) {
       profileFields.push(`skill_level = $${profileParamIndex++}`);
       profileValues.push(updates.skillLevel);
+    }
+
+    if (updates.ustaRating !== undefined) {
+      profileFields.push(`ntrp_rating = $${profileParamIndex++}`);
+      profileValues.push(updates.ustaRating);
     }
 
     if (updates.bio !== undefined) {

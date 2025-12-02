@@ -21,6 +21,7 @@ export interface User {
   zipCode?: string;
   phone?: string;
   userType: 'player' | 'admin';
+  isSuperAdmin?: boolean; // True if user created/owns a facility
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,11 +43,21 @@ export interface Facility {
   name: string;
   type?: string;
   address?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   phone?: string;
   email?: string;
+  contactName?: string;
   description?: string;
   amenities?: string[];
-  operatingHours?: Record<string, { open: string; close: string }>;
+  operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
+  generalRules?: string;
+  cancellationPolicy?: string;
+  bookingRules?: string;
+  status?: 'active' | 'pending' | 'suspended' | 'closed';
+  logoUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -205,6 +216,7 @@ export interface LeagueParticipant {
 export interface PlayerProfile {
   userId: string;
   skillLevel?: string; // Beginner, Intermediate, Advanced, Professional
+  ustaRating?: string; // USTA/NTRP rating (e.g., "3.0", "3.5", "4.0", etc.)
   bio?: string;
   profileImageUrl?: string;
   createdAt: Date;

@@ -51,7 +51,7 @@ export async function getFacilityHittingPartnerPosts(facilityId: string): Promis
         u.full_name as "userName",
         hp.facility_id as "facilityId",
         f.name as "facilityName",
-        hp.skill_level as "skillLevel",
+        COALESCE(pp.skill_level, hp.skill_level) as "skillLevel",
         hp.availability,
         hp.play_style as "playStyle",
         hp.description,
@@ -61,6 +61,7 @@ export async function getFacilityHittingPartnerPosts(facilityId: string): Promis
        FROM hitting_partner_posts hp
        JOIN users u ON hp.user_id = u.id
        JOIN facilities f ON hp.facility_id = f.id
+       LEFT JOIN player_profiles pp ON hp.user_id = pp.user_id
        WHERE hp.facility_id = $1 AND hp.status = 'active'
        ORDER BY hp.posted_date DESC`,
       [facilityId]
@@ -88,7 +89,7 @@ export async function getAllHittingPartnerPosts(): Promise<HittingPartnerPost[]>
         u.full_name as "userName",
         hp.facility_id as "facilityId",
         f.name as "facilityName",
-        hp.skill_level as "skillLevel",
+        COALESCE(pp.skill_level, hp.skill_level) as "skillLevel",
         hp.availability,
         hp.play_style as "playStyle",
         hp.description,
@@ -98,6 +99,7 @@ export async function getAllHittingPartnerPosts(): Promise<HittingPartnerPost[]>
        FROM hitting_partner_posts hp
        JOIN users u ON hp.user_id = u.id
        JOIN facilities f ON hp.facility_id = f.id
+       LEFT JOIN player_profiles pp ON hp.user_id = pp.user_id
        WHERE hp.status = 'active' AND hp.expires_at > CURRENT_TIMESTAMP
        ORDER BY hp.posted_date DESC
        LIMIT 50`,
@@ -209,7 +211,7 @@ export async function updateHittingPartnerPost(
       values
     );
 
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   } catch (error) {
     console.error('Update hitting partner post error:', error);
     throw new Error('Failed to update hitting partner post');
@@ -228,7 +230,7 @@ export async function deleteHittingPartnerPost(postId: string, userId: string): 
       [postId, userId]
     );
 
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   } catch (error) {
     console.error('Delete hitting partner post error:', error);
     throw new Error('Failed to delete hitting partner post');
@@ -247,7 +249,7 @@ export async function getUserHittingPartnerPosts(userId: string): Promise<Hittin
         u.full_name as "userName",
         hp.facility_id as "facilityId",
         f.name as "facilityName",
-        hp.skill_level as "skillLevel",
+        COALESCE(pp.skill_level, hp.skill_level) as "skillLevel",
         hp.availability,
         hp.play_style as "playStyle",
         hp.description,
@@ -257,6 +259,7 @@ export async function getUserHittingPartnerPosts(userId: string): Promise<Hittin
        FROM hitting_partner_posts hp
        JOIN users u ON hp.user_id = u.id
        JOIN facilities f ON hp.facility_id = f.id
+       LEFT JOIN player_profiles pp ON hp.user_id = pp.user_id
        WHERE hp.user_id = $1 AND hp.status IN ('active', 'expired')
        ORDER BY hp.posted_date DESC`,
       [userId]

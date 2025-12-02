@@ -112,6 +112,39 @@ router.post('/login', async (req, res, next) => {
 });
 
 /**
+ * GET /api/auth/me/:userId
+ * Get current user with memberships (for session refresh)
+ */
+router.get('/me/:userId', async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    const userWithMemberships = await getUserWithMemberships(userId);
+
+    if (!userWithMemberships) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: userWithMemberships
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/auth/add-facility
  * Add user to a facility
  */

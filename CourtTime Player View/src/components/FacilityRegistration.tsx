@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { toast } from 'sonner';
+import { facilitiesApi } from '../api/client';
 
 interface FacilityRegistrationProps {
   onBack: () => void;
@@ -42,6 +43,22 @@ interface AdminInvite {
   status: 'pending' | 'sent';
 }
 
+interface FacilityContact {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+// US State abbreviations
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+];
+
 export function FacilityRegistration({ onBack, onRegistrationComplete }: FacilityRegistrationProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,8 +80,23 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
     zipCode: '',
     phone: '',
     email: '',
-    contactName: '',
     description: '',
+    facilityImage: null as File | null,
+    facilityImagePreview: '',
+
+    // Primary Contact (auto-filled from admin account if applicable)
+    primaryContact: {
+      name: user?.fullName || '',
+      email: user?.email || '',
+      phone: '',
+    },
+
+    // Secondary Contacts
+    secondaryContacts: [] as Array<{ id: string; name: string; email: string; phone: string }>,
+
+    // Address Whitelist
+    addressWhitelistFile: null as File | null,
+    addressWhitelistFileName: '',
 
     // Operating Hours
     operatingHours: {
@@ -79,12 +111,55 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
 
     // Step 3: Facility-Wide Rules
     generalRules: '',
-    bookingRules: '',
-    cancellationPolicy: '',
+
+    // Booking restriction type
+    restrictionType: 'account' as 'account' | 'address', // per account or per address
+
+    // Booking restrictions with unlimited options
     maxBookingsPerWeek: '3',
+    maxBookingsPerWeekUnlimited: false,
     maxBookingDurationHours: '2',
+    maxBookingDurationUnlimited: false,
     advanceBookingDays: '14',
-    cancellationNoticehours: '24',
+    advanceBookingDaysUnlimited: false,
+    cancellationNoticeHours: '24',
+    cancellationNoticeUnlimited: false,
+
+    // Admin restrictions
+    restrictionsApplyToAdmins: true,
+    adminMaxBookingsPerWeek: '10',
+    adminMaxBookingsUnlimited: true,
+    adminMaxBookingDurationHours: '4',
+    adminMaxDurationUnlimited: true,
+    adminAdvanceBookingDays: '30',
+    adminAdvanceBookingUnlimited: true,
+    adminCancellationNoticeHours: '1',
+    adminCancellationUnlimited: true,
+
+    // Peak hours settings - with multiple time slots per day
+    hasPeakHours: false,
+    peakHoursApplyToAdmins: true,
+    peakHoursSlots: {} as Record<string, Array<{ id: string; startTime: string; endTime: string }>>,
+    // e.g., { monday: [{ id: '1', startTime: '07:00', endTime: '10:00' }, { id: '2', startTime: '18:00', endTime: '20:00' }] }
+    peakHoursRestrictions: {
+      maxBookingsPerWeek: '2',
+      maxBookingsUnlimited: false,
+      maxDurationHours: '1.5',
+      maxDurationUnlimited: false,
+    },
+
+    // Weekend policy settings
+    hasWeekendPolicy: false,
+    weekendPolicyApplyToAdmins: true,
+    weekendPolicy: {
+      enabled: false,
+      maxBookingsPerWeekend: '2',
+      maxBookingsUnlimited: false,
+      maxDurationHours: '2',
+      maxDurationUnlimited: false,
+      advanceBookingDays: '7',
+      advanceBookingUnlimited: false,
+    },
 
     // Step 4: Courts (will be filled dynamically)
     courts: [] as Court[],
@@ -130,60 +205,288 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
     }));
   };
 
-  const validateStep = (step: number): boolean => {
-    const newErrors: Record<string, string> = {};
+  const handlePeakHoursRestrictionsChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      peakHoursRestrictions: {
+        ...prev.peakHoursRestrictions,
+        [field]: value
+      }
+    }));
+  };
+
+  const handleWeekendPolicyChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      weekendPolicy: {
+        ...prev.weekendPolicy,
+        [field]: value
+      }
+    }));
+  };
+
+  // Handle primary contact changes
+  const handlePrimaryContactChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      primaryContact: {
+        ...prev.primaryContact,
+        [field]: value
+      }
+    }));
+  };
+
+  // Add a secondary contact
+  const addSecondaryContact = () => {
+    const newContact = {
+      id: `contact-${Date.now()}`,
+      name: '',
+      email: '',
+      phone: '',
+    };
+    setFormData(prev => ({
+      ...prev,
+      secondaryContacts: [...prev.secondaryContacts, newContact]
+    }));
+  };
+
+  // Update a secondary contact
+  const updateSecondaryContact = (contactId: string, field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      secondaryContacts: prev.secondaryContacts.map(contact =>
+        contact.id === contactId ? { ...contact, [field]: value } : contact
+      )
+    }));
+  };
+
+  // Remove a secondary contact
+  const removeSecondaryContact = (contactId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      secondaryContacts: prev.secondaryContacts.filter(contact => contact.id !== contactId)
+    }));
+  };
+
+  // Handle facility image upload
+  const handleFacilityImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      setFormData(prev => ({
+        ...prev,
+        facilityImage: file,
+        facilityImagePreview: previewUrl
+      }));
+    }
+  };
+
+  // Remove facility image
+  const removeFacilityImage = () => {
+    if (formData.facilityImagePreview) {
+      URL.revokeObjectURL(formData.facilityImagePreview);
+    }
+    setFormData(prev => ({
+      ...prev,
+      facilityImage: null,
+      facilityImagePreview: ''
+    }));
+  };
+
+  // Handle address whitelist file upload
+  const handleAddressWhitelistChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type (CSV or Excel)
+      const validTypes = ['.csv', '.xlsx', '.xls'];
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!validTypes.includes(fileExtension)) {
+        toast.error('Please select a CSV or Excel file');
+        return;
+      }
+      setFormData(prev => ({
+        ...prev,
+        addressWhitelistFile: file,
+        addressWhitelistFileName: file.name
+      }));
+    }
+  };
+
+  // Remove address whitelist file
+  const removeAddressWhitelist = () => {
+    setFormData(prev => ({
+      ...prev,
+      addressWhitelistFile: null,
+      addressWhitelistFileName: ''
+    }));
+  };
+
+  // Add a time slot to a specific day
+  const addPeakHourSlot = (day: string) => {
+    setFormData(prev => {
+      const currentSlots = prev.peakHoursSlots[day] || [];
+      const newSlot = {
+        id: `${day}-${Date.now()}`,
+        startTime: '17:00',
+        endTime: '20:00'
+      };
+      return {
+        ...prev,
+        peakHoursSlots: {
+          ...prev.peakHoursSlots,
+          [day]: [...currentSlots, newSlot]
+        }
+      };
+    });
+  };
+
+  // Remove a time slot from a specific day
+  const removePeakHourSlot = (day: string, slotId: string) => {
+    setFormData(prev => {
+      const currentSlots = prev.peakHoursSlots[day] || [];
+      const newSlots = currentSlots.filter(slot => slot.id !== slotId);
+      const newPeakHoursSlots = { ...prev.peakHoursSlots };
+      if (newSlots.length === 0) {
+        delete newPeakHoursSlots[day];
+      } else {
+        newPeakHoursSlots[day] = newSlots;
+      }
+      return {
+        ...prev,
+        peakHoursSlots: newPeakHoursSlots
+      };
+    });
+  };
+
+  // Update a specific time slot
+  const updatePeakHourSlot = (day: string, slotId: string, field: 'startTime' | 'endTime', value: string) => {
+    setFormData(prev => {
+      const currentSlots = prev.peakHoursSlots[day] || [];
+      const newSlots = currentSlots.map(slot =>
+        slot.id === slotId ? { ...slot, [field]: value } : slot
+      );
+      return {
+        ...prev,
+        peakHoursSlots: {
+          ...prev.peakHoursSlots,
+          [day]: newSlots
+        }
+      };
+    });
+  };
+
+  // Check if a day has peak hours configured
+  const dayHasPeakHours = (day: string): boolean => {
+    return (formData.peakHoursSlots[day]?.length || 0) > 0;
+  };
+
+  // Validate a single step and return errors (without setting state)
+  const getStepErrors = (step: number): Record<string, string> => {
+    const stepErrors: Record<string, string> = {};
 
     if (!user && step === 1) {
       // Validate Super Admin Account
-      if (!formData.adminFullName.trim()) newErrors.adminFullName = 'Full name is required';
-      if (!formData.adminEmail.trim()) newErrors.adminEmail = 'Email is required';
-      if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) newErrors.adminEmail = 'Email is invalid';
-      if (!formData.adminPassword) newErrors.adminPassword = 'Password is required';
-      if (formData.adminPassword.length < 8) newErrors.adminPassword = 'Password must be at least 8 characters';
+      if (!formData.adminFullName.trim()) stepErrors.adminFullName = 'Full name is required';
+      if (!formData.adminEmail.trim()) stepErrors.adminEmail = 'Email is required';
+      else if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) stepErrors.adminEmail = 'Email is invalid';
+      if (!formData.adminPassword) stepErrors.adminPassword = 'Password is required';
+      else if (formData.adminPassword.length < 8) stepErrors.adminPassword = 'Password must be at least 8 characters';
       if (formData.adminPassword !== formData.adminConfirmPassword) {
-        newErrors.adminConfirmPassword = 'Passwords do not match';
+        stepErrors.adminConfirmPassword = 'Passwords do not match';
       }
     }
 
     const facilityStep = user ? 1 : 2;
     if (step === facilityStep) {
       // Validate Facility Information
-      if (!formData.facilityName.trim()) newErrors.facilityName = 'Facility name is required';
-      if (!formData.facilityType) newErrors.facilityType = 'Facility type is required';
-      if (!formData.streetAddress.trim()) newErrors.streetAddress = 'Street address is required';
-      if (!formData.city.trim()) newErrors.city = 'City is required';
-      if (!formData.state.trim()) newErrors.state = 'State is required';
-      if (!formData.zipCode.trim()) newErrors.zipCode = 'ZIP code is required';
-      if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
-      if (!formData.email.trim()) newErrors.email = 'Email is required';
-      if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
-      if (!formData.contactName.trim()) newErrors.contactName = 'Contact name is required';
+      if (!formData.facilityName.trim()) stepErrors.facilityName = 'Facility name is required';
+      if (!formData.facilityType) stepErrors.facilityType = 'Facility type is required';
+      if (!formData.streetAddress.trim()) stepErrors.streetAddress = 'Street address is required';
+      if (!formData.city.trim()) stepErrors.city = 'City is required';
+      if (!formData.state) stepErrors.state = 'State is required';
+      if (!formData.zipCode.trim()) stepErrors.zipCode = 'ZIP code is required';
+      if (!formData.phone.trim()) stepErrors.phone = 'Facility phone number is required';
+      if (!formData.email.trim()) stepErrors.email = 'Facility email is required';
+      else if (!/\S+@\S+\.\S+/.test(formData.email)) stepErrors.email = 'Facility email is invalid';
+      // Validate primary contact
+      if (!formData.primaryContact.name.trim()) stepErrors.primaryContactName = 'Primary contact name is required';
+      if (!formData.primaryContact.email.trim()) stepErrors.primaryContactEmail = 'Primary contact email is required';
+      else if (!/\S+@\S+\.\S+/.test(formData.primaryContact.email)) stepErrors.primaryContactEmail = 'Primary contact email is invalid';
+      if (!formData.primaryContact.phone.trim()) stepErrors.primaryContactPhone = 'Primary contact phone is required';
     }
 
     const rulesStep = user ? 2 : 3;
     if (step === rulesStep) {
       // Validate Facility Rules
-      if (!formData.generalRules.trim()) newErrors.generalRules = 'General rules are required';
-      if (!formData.maxBookingsPerWeek) newErrors.maxBookingsPerWeek = 'Required';
-      if (!formData.maxBookingDurationHours) newErrors.maxBookingDurationHours = 'Required';
+      if (!formData.generalRules.trim()) stepErrors.generalRules = 'General rules are required';
+      if (!formData.restrictionType) stepErrors.restrictionType = 'Please select how restrictions apply';
+      // Only validate numeric values if not unlimited
+      if (!formData.maxBookingsPerWeekUnlimited && !formData.maxBookingsPerWeek) {
+        stepErrors.maxBookingsPerWeek = 'Required';
+      }
+      if (!formData.maxBookingDurationUnlimited && !formData.maxBookingDurationHours) {
+        stepErrors.maxBookingDurationHours = 'Required';
+      }
     }
 
     const courtsStep = user ? 3 : 4;
     if (step === courtsStep) {
       // Validate Courts
       if (formData.courts.length === 0) {
-        newErrors.courts = 'At least one court is required';
+        stepErrors.courts = 'At least one court is required';
       }
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return stepErrors;
+  };
+
+  // Check if a step has any validation errors
+  const stepHasErrors = (step: number): boolean => {
+    return Object.keys(getStepErrors(step)).length > 0;
+  };
+
+  // Validate all steps and return combined errors with the first invalid step
+  const validateAllSteps = (): { isValid: boolean; errors: Record<string, string>; firstInvalidStep: number | null } => {
+    const allErrors: Record<string, string> = {};
+    let firstInvalidStep: number | null = null;
+
+    for (let step = 1; step <= totalSteps; step++) {
+      const stepErrors = getStepErrors(step);
+      if (Object.keys(stepErrors).length > 0) {
+        Object.assign(allErrors, stepErrors);
+        if (firstInvalidStep === null) {
+          firstInvalidStep = step;
+        }
+      }
+    }
+
+    return {
+      isValid: Object.keys(allErrors).length === 0,
+      errors: allErrors,
+      firstInvalidStep
+    };
+  };
+
+  // Navigate to a specific step (always allowed)
+  const goToStep = (step: number) => {
+    if (step >= 1 && step <= totalSteps) {
+      setErrors({}); // Clear errors when navigating
+      setCurrentStep(step);
+    }
   };
 
   const handleNext = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep(prev => Math.min(prev + 1, totalSteps));
-    }
+    setCurrentStep(prev => Math.min(prev + 1, totalSteps));
   };
 
   const handleBack = () => {
@@ -243,9 +546,20 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
   const updateCourt = (courtId: string, updates: Partial<Court>) => {
     setFormData(prev => ({
       ...prev,
-      courts: prev.courts.map(court =>
-        court.id === courtId ? { ...court, ...updates } : court
-      )
+      courts: prev.courts.map(court => {
+        if (court.id !== courtId) return court;
+
+        // Initialize splitConfig when canSplit is enabled
+        if (updates.canSplit && !court.splitConfig) {
+          return {
+            ...court,
+            ...updates,
+            splitConfig: { splitNames: [], splitType: 'Pickleball' as const }
+          };
+        }
+
+        return { ...court, ...updates };
+      })
     }));
   };
 
@@ -285,22 +599,145 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(currentStep)) return;
+    // Validate ALL steps before submission
+    const validation = validateAllSteps();
+
+    if (!validation.isValid) {
+      setErrors(validation.errors);
+      if (validation.firstInvalidStep !== null) {
+        setCurrentStep(validation.firstInvalidStep);
+        toast.error('Please complete all required fields before submitting');
+      }
+      return;
+    }
 
     setIsSubmitting(true);
 
     try {
-      // TODO: Implement actual API calls
-      // 1. Create super admin account (if needed)
-      // 2. Create facility with all data
-      // 3. Create courts
-      // 4. Send admin invitations
+      // Prepare registration data
+      const registrationData = {
+        // Super Admin Account (if creating new user)
+        ...(user ? {} : {
+          adminEmail: formData.adminEmail,
+          adminPassword: formData.adminPassword,
+          adminFullName: formData.adminFullName,
+        }),
 
-      console.log('Submitting facility registration:', formData);
+        // Facility Information
+        facilityName: formData.facilityName,
+        facilityType: formData.facilityType,
+        streetAddress: formData.streetAddress,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode,
+        phone: formData.primaryContact.phone || formData.phone,
+        email: formData.primaryContact.email || formData.email,
+        contactName: formData.primaryContact.name,
+        description: formData.description,
 
-      toast.success('Facility registered successfully!');
+        // Contacts
+        primaryContact: {
+          name: formData.primaryContact.name,
+          email: formData.primaryContact.email,
+          phone: formData.primaryContact.phone,
+        },
+        secondaryContacts: formData.secondaryContacts
+          .filter(c => c.name.trim())
+          .map(c => ({
+            name: c.name,
+            email: c.email || undefined,
+            phone: c.phone || undefined,
+          })),
+
+        // Operating Hours
+        operatingHours: formData.operatingHours,
+
+        // Facility Rules
+        generalRules: formData.generalRules,
+
+        // Restriction settings
+        restrictionType: formData.restrictionType,
+        maxBookingsPerWeek: formData.maxBookingsPerWeekUnlimited ? '-1' : formData.maxBookingsPerWeek,
+        maxBookingDurationHours: formData.maxBookingDurationUnlimited ? '-1' : formData.maxBookingDurationHours,
+        advanceBookingDays: formData.advanceBookingDaysUnlimited ? '-1' : formData.advanceBookingDays,
+        cancellationNoticeHours: formData.cancellationNoticeUnlimited ? '0' : formData.cancellationNoticeHours,
+
+        // Admin restrictions
+        restrictionsApplyToAdmins: formData.restrictionsApplyToAdmins,
+        adminRestrictions: !formData.restrictionsApplyToAdmins ? {
+          maxBookingsPerWeek: formData.adminMaxBookingsUnlimited ? -1 : parseInt(formData.adminMaxBookingsPerWeek),
+          maxBookingDurationHours: formData.adminMaxDurationUnlimited ? -1 : parseFloat(formData.adminMaxBookingDurationHours),
+          advanceBookingDays: formData.adminAdvanceBookingUnlimited ? -1 : parseInt(formData.adminAdvanceBookingDays),
+          cancellationNoticeHours: formData.adminCancellationUnlimited ? 0 : parseInt(formData.adminCancellationNoticeHours),
+        } : undefined,
+
+        // Peak hours policy - with per-day time slots
+        peakHoursPolicy: formData.hasPeakHours ? {
+          enabled: true,
+          applyToAdmins: formData.peakHoursApplyToAdmins,
+          timeSlots: formData.peakHoursSlots, // Per-day time slots: { monday: [{id, startTime, endTime}], ... }
+          maxBookingsPerWeek: formData.peakHoursRestrictions.maxBookingsUnlimited ? -1 : parseInt(formData.peakHoursRestrictions.maxBookingsPerWeek),
+          maxDurationHours: formData.peakHoursRestrictions.maxDurationUnlimited ? -1 : parseFloat(formData.peakHoursRestrictions.maxDurationHours),
+        } : undefined,
+
+        // Weekend policy
+        weekendPolicy: formData.hasWeekendPolicy ? {
+          enabled: true,
+          applyToAdmins: formData.weekendPolicyApplyToAdmins,
+          maxBookingsPerWeekend: formData.weekendPolicy.maxBookingsUnlimited ? -1 : parseInt(formData.weekendPolicy.maxBookingsPerWeekend),
+          maxDurationHours: formData.weekendPolicy.maxDurationUnlimited ? -1 : parseFloat(formData.weekendPolicy.maxDurationHours),
+          advanceBookingDays: formData.weekendPolicy.advanceBookingUnlimited ? -1 : parseInt(formData.weekendPolicy.advanceBookingDays),
+        } : undefined,
+
+        // Courts
+        courts: formData.courts.map(court => ({
+          name: court.name,
+          courtNumber: court.courtNumber,
+          surfaceType: court.surfaceType,
+          courtType: court.courtType,
+          isIndoor: court.isIndoor,
+          hasLights: court.hasLights,
+          canSplit: court.canSplit,
+          splitConfig: court.splitConfig,
+        })),
+
+        // Admin Invites
+        adminInvites: formData.adminInvites.filter(invite => invite.email),
+
+        // Existing user ID (if already logged in)
+        existingUserId: user?.id,
+      };
+
+      // Call the API to register the facility
+      const result = await facilitiesApi.register(registrationData);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Registration failed');
+      }
+
+      // Auto-login the new user
+      const backendResponse = result.data as any;
+      if (backendResponse.user) {
+        // Save user data to localStorage for auto-login
+        const userData = {
+          ...backendResponse.user,
+          userType: 'admin',
+          memberFacilities: [backendResponse.facility.id],
+        };
+        const token = 'token-' + userData.id;
+
+        localStorage.setItem('auth_user', JSON.stringify(userData));
+        localStorage.setItem('auth_token', token);
+
+        toast.success('Facility registered successfully! You are now logged in as the facility admin.');
+      } else {
+        toast.success('Facility registered successfully!');
+      }
+
+      // Navigate to the app after a short delay
       setTimeout(() => {
-        onRegistrationComplete();
+        // Force a page reload to re-initialize auth state with the new user
+        window.location.reload();
       }, 1500);
 
     } catch (error: any) {
@@ -311,55 +748,101 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
     }
   };
 
-  const renderProgressBar = () => (
-    <div className="mb-8">
-      <div className="flex justify-between mb-2">
-        {Array.from({ length: totalSteps }).map((_, index) => {
-          const stepNumber = index + 1;
-          const isCompleted = stepNumber < currentStep;
-          const isCurrent = stepNumber === currentStep;
+  // Get step label based on step number and user status
+  const getStepLabel = (stepNumber: number): string => {
+    if (!user) {
+      // Not logged in - 6 steps
+      switch (stepNumber) {
+        case 1: return 'Admin Account';
+        case 2: return 'Facility Info';
+        case 3: return 'Rules';
+        case 4: return 'Courts';
+        case 5: return 'Admins';
+        case 6: return 'Review';
+        default: return '';
+      }
+    } else {
+      // Logged in - 5 steps
+      switch (stepNumber) {
+        case 1: return 'Facility Info';
+        case 2: return 'Rules';
+        case 3: return 'Courts';
+        case 4: return 'Admins';
+        case 5: return 'Review';
+        default: return '';
+      }
+    }
+  };
 
-          return (
-            <div key={stepNumber} className="flex-1 flex items-center">
-              <div className="flex flex-col items-center flex-1">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                    isCompleted
-                      ? 'bg-green-600 border-green-600 text-white'
-                      : isCurrent
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-white border-gray-300 text-gray-400'
-                  }`}
-                >
-                  {isCompleted ? <Check className="h-5 w-5" /> : stepNumber}
+  const renderProgressBar = () => {
+    return (
+      <div className="mb-8">
+        <div className="flex justify-between mb-2">
+          {Array.from({ length: totalSteps }).map((_, index) => {
+            const stepNumber = index + 1;
+            const isCurrent = stepNumber === currentStep;
+            // A step is "visited" if we've moved past it
+            const isVisited = stepNumber < currentStep;
+
+            // Determine colors based on state
+            let bgColor = 'white';
+            let borderColor = '#d1d5db';
+            let textColor = '#6b7280';
+
+            if (isCurrent) {
+              bgColor = '#2563eb';
+              borderColor = '#2563eb';
+              textColor = 'white';
+            } else if (isVisited) {
+              bgColor = '#16a34a';
+              borderColor = '#16a34a';
+              textColor = 'white';
+            }
+
+            return (
+              <div key={stepNumber} className="flex-1 flex items-center">
+                <div className="flex flex-col items-center flex-1">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => goToStep(stepNumber)}
+                    onKeyDown={(e) => e.key === 'Enter' && goToStep(stepNumber)}
+                    className="w-10 h-10 flex items-center justify-center transition-all cursor-pointer hover:scale-105 font-medium"
+                    style={{
+                      backgroundColor: bgColor,
+                      borderColor: borderColor,
+                      borderWidth: '2px',
+                      borderStyle: 'solid',
+                      borderRadius: '9999px',
+                      color: textColor,
+                    }}
+                    title={`Go to step ${stepNumber}: ${getStepLabel(stepNumber)}`}
+                  >
+                    {isVisited ? <Check className="h-5 w-5" /> : stepNumber}
+                  </div>
+                  <div
+                    className="text-xs mt-2 text-center"
+                    style={{ color: isCurrent ? '#2563eb' : '#6b7280', fontWeight: isCurrent ? 600 : 400 }}
+                  >
+                    {getStepLabel(stepNumber)}
+                  </div>
                 </div>
-                <div className={`text-xs mt-2 text-center ${isCurrent ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>
-                  {!user && stepNumber === 1 && 'Admin Account'}
-                  {user && stepNumber === 1 && 'Facility Info'}
-                  {!user && stepNumber === 2 && 'Facility Info'}
-                  {user && stepNumber === 2 && 'Rules'}
-                  {!user && stepNumber === 3 && 'Rules'}
-                  {user && stepNumber === 3 && 'Courts'}
-                  {!user && stepNumber === 4 && 'Courts'}
-                  {user && stepNumber === 4 && 'Admins'}
-                  {!user && stepNumber === 5 && 'Admins'}
-                  {user && stepNumber === 5 && 'Review'}
-                  {!user && stepNumber === 6 && 'Review'}
-                </div>
+                {stepNumber < totalSteps && (
+                  <div
+                    className="flex-1 mx-2 transition-colors"
+                    style={{ backgroundColor: isVisited ? '#16a34a' : '#d1d5db', height: '2px' }}
+                  />
+                )}
               </div>
-              {stepNumber < totalSteps && (
-                <div
-                  className={`h-0.5 flex-1 mx-2 transition-colors ${
-                    isCompleted ? 'bg-green-600' : 'bg-gray-300'
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+        <p className="text-xs text-center" style={{ color: '#6b7280' }}>
+          Click any step above to navigate. All required fields must be completed before registration.
+        </p>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStep1AdminAccount = () => (
     <div className="space-y-6">
@@ -431,154 +914,381 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
 
   const renderStep2FacilityInfo = () => (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Facility Information</h3>
-        <p className="text-sm text-gray-600 mb-6">
-          Provide basic information about your tennis or pickleball facility.
-        </p>
-      </div>
+      {/* Facility Information Section */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Building className="h-5 w-5" />
+            Facility Information
+          </CardTitle>
+          <CardDescription>
+            Basic details about your tennis or pickleball facility
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Left Column - Address & Contact Info */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="facilityName">Facility Name *</Label>
+                <Input
+                  id="facilityName"
+                  value={formData.facilityName}
+                  onChange={(e) => handleInputChange('facilityName', e.target.value)}
+                  placeholder="Sunrise Valley Tennis Courts"
+                />
+                {errors.facilityName && (
+                  <p className="text-sm text-red-600 mt-1">{errors.facilityName}</p>
+                )}
+              </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <Label htmlFor="facilityName">Facility Name *</Label>
-          <Input
-            id="facilityName"
-            value={formData.facilityName}
-            onChange={(e) => handleInputChange('facilityName', e.target.value)}
-            placeholder="Sunrise Valley Tennis Courts"
-          />
-          {errors.facilityName && (
-            <p className="text-sm text-red-600 mt-1">{errors.facilityName}</p>
+              <div>
+                <Label htmlFor="streetAddress">Street Address *</Label>
+                <Input
+                  id="streetAddress"
+                  value={formData.streetAddress}
+                  onChange={(e) => handleInputChange('streetAddress', e.target.value)}
+                  placeholder="123 Main Street"
+                />
+                {errors.streetAddress && (
+                  <p className="text-sm text-red-600 mt-1">{errors.streetAddress}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="city">City *</Label>
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) => handleInputChange('city', e.target.value)}
+                  placeholder="Richmond"
+                />
+                {errors.city && (
+                  <p className="text-sm text-red-600 mt-1">{errors.city}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="state">State *</Label>
+                  <Select
+                    value={formData.state}
+                    onValueChange={(value) => handleInputChange('state', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {US_STATES.map((state) => (
+                        <SelectItem key={state} value={state}>{state}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.state && (
+                    <p className="text-sm text-red-600 mt-1">{errors.state}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="zipCode">ZIP Code *</Label>
+                  <Input
+                    id="zipCode"
+                    value={formData.zipCode}
+                    onChange={(e) => handleInputChange('zipCode', e.target.value)}
+                    placeholder="23220"
+                  />
+                  {errors.zipCode && (
+                    <p className="text-sm text-red-600 mt-1">{errors.zipCode}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="phone">Facility Phone *</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  placeholder="(804) 555-1234"
+                />
+                {errors.phone && (
+                  <p className="text-sm text-red-600 mt-1">{errors.phone}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="email">Facility Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  placeholder="info@facility.com"
+                />
+                {errors.email && (
+                  <p className="text-sm text-red-600 mt-1">{errors.email}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column - Image, Type & Description */}
+            <div className="space-y-4">
+              {/* Facility Image Upload */}
+              <div>
+                <Label>Facility Image</Label>
+                <div className="mt-2">
+                  {formData.facilityImagePreview ? (
+                    <div className="relative inline-block w-full">
+                      <img
+                        src={formData.facilityImagePreview}
+                        alt="Facility preview"
+                        className="w-full h-36 object-cover rounded-lg border"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full"
+                        onClick={removeFacilityImage}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500">Upload Image</span>
+                      <span className="text-xs text-gray-400 mt-1">Max 5MB</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFacilityImageChange}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="facilityType">Facility Type *</Label>
+                <Select
+                  value={formData.facilityType}
+                  onValueChange={(value) => handleInputChange('facilityType', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select facility type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="HOA Tennis & Pickleball Courts">HOA Tennis & Pickleball Courts</SelectItem>
+                    <SelectItem value="Tennis Club">Tennis Club</SelectItem>
+                    <SelectItem value="Pickleball Club">Pickleball Club</SelectItem>
+                    <SelectItem value="Racquet Club">Racquet Club</SelectItem>
+                    <SelectItem value="Public Recreation Facility">Public Recreation Facility</SelectItem>
+                    <SelectItem value="Private Sports Club">Private Sports Club</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.facilityType && (
+                  <p className="text-sm text-red-600 mt-1">{errors.facilityType}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="description">Facility Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  placeholder="Brief description of your facility, amenities, and what makes it special..."
+                  rows={4}
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Primary Contact Section */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Primary Contact
+          </CardTitle>
+          <CardDescription>
+            Main point of contact for facility inquiries
+            {user && <span className="text-blue-600"> (auto-filled from your account)</span>}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 sm:col-span-1">
+              <Label htmlFor="primaryContactName">Contact Name *</Label>
+              <Input
+                id="primaryContactName"
+                value={formData.primaryContact.name}
+                onChange={(e) => handlePrimaryContactChange('name', e.target.value)}
+                placeholder="John Smith"
+              />
+              {errors.primaryContactName && (
+                <p className="text-sm text-red-600 mt-1">{errors.primaryContactName}</p>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-1">
+              <Label htmlFor="primaryContactPhone">Phone Number *</Label>
+              <Input
+                id="primaryContactPhone"
+                type="tel"
+                value={formData.primaryContact.phone}
+                onChange={(e) => handlePrimaryContactChange('phone', e.target.value)}
+                placeholder="(804) 555-1234"
+              />
+              {errors.primaryContactPhone && (
+                <p className="text-sm text-red-600 mt-1">{errors.primaryContactPhone}</p>
+              )}
+            </div>
+
+            <div className="col-span-2">
+              <Label htmlFor="primaryContactEmail">Email Address *</Label>
+              <Input
+                id="primaryContactEmail"
+                type="email"
+                value={formData.primaryContact.email}
+                onChange={(e) => handlePrimaryContactChange('email', e.target.value)}
+                placeholder="contact@facility.com"
+              />
+              {errors.primaryContactEmail && (
+                <p className="text-sm text-red-600 mt-1">{errors.primaryContactEmail}</p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Secondary Contacts Section */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Secondary Contacts
+              </CardTitle>
+              <CardDescription>
+                Additional contacts for facility management (optional)
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addSecondaryContact}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Contact
+            </Button>
+          </div>
+        </CardHeader>
+        {formData.secondaryContacts.length > 0 && (
+          <CardContent className="space-y-4">
+            {formData.secondaryContacts.map((contact, index) => (
+              <div key={contact.id} className="p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-gray-700">Contact {index + 1}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeSecondaryContact(contact.id)}
+                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2 sm:col-span-1">
+                    <Label className="text-xs">Name</Label>
+                    <Input
+                      value={contact.name}
+                      onChange={(e) => updateSecondaryContact(contact.id, 'name', e.target.value)}
+                      placeholder="Contact name"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Label className="text-xs">Phone</Label>
+                    <Input
+                      type="tel"
+                      value={contact.phone}
+                      onChange={(e) => updateSecondaryContact(contact.id, 'phone', e.target.value)}
+                      placeholder="(555) 123-4567"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Email</Label>
+                    <Input
+                      type="email"
+                      value={contact.email}
+                      onChange={(e) => updateSecondaryContact(contact.id, 'email', e.target.value)}
+                      placeholder="contact@email.com"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Address Whitelist Upload */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Address Whitelist
+          </CardTitle>
+          <CardDescription>
+            Upload a list of approved addresses for membership verification (optional)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {formData.addressWhitelistFileName ? (
+            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-green-600" />
+                <span className="text-sm text-green-700">{formData.addressWhitelistFileName}</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={removeAddressWhitelist}
+                className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <Upload className="h-6 w-6 text-gray-400 mb-1" />
+              <span className="text-sm text-gray-500">Upload Address List</span>
+              <span className="text-xs text-gray-400 mt-1">CSV or Excel file</span>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={handleAddressWhitelistChange}
+                className="hidden"
+              />
+            </label>
           )}
-        </div>
-
-        <div className="col-span-2">
-          <Label htmlFor="facilityType">Facility Type *</Label>
-          <Select
-            value={formData.facilityType}
-            onValueChange={(value) => handleInputChange('facilityType', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select facility type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="HOA Tennis & Pickleball Courts">HOA Tennis & Pickleball Courts</SelectItem>
-              <SelectItem value="Tennis Club">Tennis Club</SelectItem>
-              <SelectItem value="Pickleball Club">Pickleball Club</SelectItem>
-              <SelectItem value="Racquet Club">Racquet Club</SelectItem>
-              <SelectItem value="Public Recreation Facility">Public Recreation Facility</SelectItem>
-              <SelectItem value="Private Sports Club">Private Sports Club</SelectItem>
-            </SelectContent>
-          </Select>
-          {errors.facilityType && (
-            <p className="text-sm text-red-600 mt-1">{errors.facilityType}</p>
-          )}
-        </div>
-
-        <div className="col-span-2">
-          <Label htmlFor="streetAddress">Street Address *</Label>
-          <Input
-            id="streetAddress"
-            value={formData.streetAddress}
-            onChange={(e) => handleInputChange('streetAddress', e.target.value)}
-            placeholder="123 Main Street"
-          />
-          {errors.streetAddress && (
-            <p className="text-sm text-red-600 mt-1">{errors.streetAddress}</p>
-          )}
-        </div>
-
-        <div>
-          <Label htmlFor="city">City *</Label>
-          <Input
-            id="city"
-            value={formData.city}
-            onChange={(e) => handleInputChange('city', e.target.value)}
-            placeholder="Richmond"
-          />
-          {errors.city && (
-            <p className="text-sm text-red-600 mt-1">{errors.city}</p>
-          )}
-        </div>
-
-        <div>
-          <Label htmlFor="state">State *</Label>
-          <Input
-            id="state"
-            value={formData.state}
-            onChange={(e) => handleInputChange('state', e.target.value)}
-            placeholder="VA"
-          />
-          {errors.state && (
-            <p className="text-sm text-red-600 mt-1">{errors.state}</p>
-          )}
-        </div>
-
-        <div>
-          <Label htmlFor="zipCode">ZIP Code *</Label>
-          <Input
-            id="zipCode"
-            value={formData.zipCode}
-            onChange={(e) => handleInputChange('zipCode', e.target.value)}
-            placeholder="23220"
-          />
-          {errors.zipCode && (
-            <p className="text-sm text-red-600 mt-1">{errors.zipCode}</p>
-          )}
-        </div>
-
-        <div>
-          <Label htmlFor="phone">Phone Number *</Label>
-          <Input
-            id="phone"
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => handleInputChange('phone', e.target.value)}
-            placeholder="(804) 555-1234"
-          />
-          {errors.phone && (
-            <p className="text-sm text-red-600 mt-1">{errors.phone}</p>
-          )}
-        </div>
-
-        <div className="col-span-2">
-          <Label htmlFor="email">Facility Email *</Label>
-          <Input
-            id="email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => handleInputChange('email', e.target.value)}
-            placeholder="info@facility.com"
-          />
-          {errors.email && (
-            <p className="text-sm text-red-600 mt-1">{errors.email}</p>
-          )}
-        </div>
-
-        <div className="col-span-2">
-          <Label htmlFor="contactName">Primary Contact Name *</Label>
-          <Input
-            id="contactName"
-            value={formData.contactName}
-            onChange={(e) => handleInputChange('contactName', e.target.value)}
-            placeholder="John Smith"
-          />
-          {errors.contactName && (
-            <p className="text-sm text-red-600 mt-1">{errors.contactName}</p>
-          )}
-        </div>
-
-        <div className="col-span-2">
-          <Label htmlFor="description">Facility Description</Label>
-          <Textarea
-            id="description"
-            value={formData.description}
-            onChange={(e) => handleInputChange('description', e.target.value)}
-            placeholder="Brief description of your facility..."
-            rows={3}
-          />
-        </div>
-      </div>
+          <p className="text-xs text-gray-500 mt-2">
+            The file should contain one address per row. Members will be verified against this list during registration.
+          </p>
+        </CardContent>
+      </Card>
 
       <Separator className="my-6" />
 
@@ -651,94 +1361,524 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
 
         <Separator />
 
+        {/* Booking Restrictions Header with Type Selection */}
         <div>
-          <h4 className="font-semibold mb-3">Booking Restrictions</h4>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-semibold">Booking Restrictions</h4>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">Apply restrictions:</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  id="restrictionAccount"
+                  name="restrictionType"
+                  checked={formData.restrictionType === 'account'}
+                  onChange={() => handleInputChange('restrictionType', 'account')}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="restrictionAccount" className="text-sm font-normal cursor-pointer">Per Account</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  id="restrictionAddress"
+                  name="restrictionType"
+                  checked={formData.restrictionType === 'address'}
+                  onChange={() => handleInputChange('restrictionType', 'address')}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="restrictionAddress" className="text-sm font-normal cursor-pointer">Per Address</Label>
+              </div>
+            </div>
+          </div>
+          {errors.restrictionType && (
+            <p className="text-sm text-red-600 mb-3">{errors.restrictionType}</p>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="maxBookingsPerWeek">Max Bookings Per Week *</Label>
+            {/* Max Bookings Per Week */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="maxBookingsPerWeek">Max Bookings Per Week</Label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="maxBookingsUnlimited"
+                    checked={formData.maxBookingsPerWeekUnlimited}
+                    onCheckedChange={(checked) => handleInputChange('maxBookingsPerWeekUnlimited', checked)}
+                  />
+                  <Label htmlFor="maxBookingsUnlimited" className="text-xs text-gray-500">Unlimited</Label>
+                </div>
+              </div>
               <Input
                 id="maxBookingsPerWeek"
                 type="number"
                 min="1"
-                max="20"
+                max="50"
                 value={formData.maxBookingsPerWeek}
                 onChange={(e) => handleInputChange('maxBookingsPerWeek', e.target.value)}
+                disabled={formData.maxBookingsPerWeekUnlimited}
+                className={formData.maxBookingsPerWeekUnlimited ? 'opacity-50' : ''}
               />
               {errors.maxBookingsPerWeek && (
-                <p className="text-sm text-red-600 mt-1">{errors.maxBookingsPerWeek}</p>
+                <p className="text-sm text-red-600">{errors.maxBookingsPerWeek}</p>
               )}
             </div>
 
-            <div>
-              <Label htmlFor="maxBookingDurationHours">Max Booking Duration (hours) *</Label>
+            {/* Max Booking Duration */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="maxBookingDurationHours">Max Booking Duration (hours)</Label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="maxDurationUnlimited"
+                    checked={formData.maxBookingDurationUnlimited}
+                    onCheckedChange={(checked) => handleInputChange('maxBookingDurationUnlimited', checked)}
+                  />
+                  <Label htmlFor="maxDurationUnlimited" className="text-xs text-gray-500">Unlimited</Label>
+                </div>
+              </div>
               <Input
                 id="maxBookingDurationHours"
                 type="number"
                 min="0.5"
-                max="8"
+                max="12"
                 step="0.5"
                 value={formData.maxBookingDurationHours}
                 onChange={(e) => handleInputChange('maxBookingDurationHours', e.target.value)}
+                disabled={formData.maxBookingDurationUnlimited}
+                className={formData.maxBookingDurationUnlimited ? 'opacity-50' : ''}
               />
               {errors.maxBookingDurationHours && (
-                <p className="text-sm text-red-600 mt-1">{errors.maxBookingDurationHours}</p>
+                <p className="text-sm text-red-600">{errors.maxBookingDurationHours}</p>
               )}
             </div>
 
-            <div>
-              <Label htmlFor="advanceBookingDays">Advance Booking Window (days)</Label>
+            {/* Advance Booking Window */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="advanceBookingDays">Advance Booking Window (days)</Label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="advanceBookingUnlimited"
+                    checked={formData.advanceBookingDaysUnlimited}
+                    onCheckedChange={(checked) => handleInputChange('advanceBookingDaysUnlimited', checked)}
+                  />
+                  <Label htmlFor="advanceBookingUnlimited" className="text-xs text-gray-500">Unlimited</Label>
+                </div>
+              </div>
               <Input
                 id="advanceBookingDays"
                 type="number"
                 min="1"
-                max="90"
+                max="365"
                 value={formData.advanceBookingDays}
                 onChange={(e) => handleInputChange('advanceBookingDays', e.target.value)}
+                disabled={formData.advanceBookingDaysUnlimited}
+                className={formData.advanceBookingDaysUnlimited ? 'opacity-50' : ''}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                How far in advance members can book
-              </p>
+              <p className="text-xs text-gray-500">How far in advance members can book</p>
             </div>
 
-            <div>
-              <Label htmlFor="cancellationNoticehours">Cancellation Notice (hours)</Label>
+            {/* Cancellation Notice */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="cancellationNoticeHours">Cancellation Notice (hours)</Label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="cancellationUnlimited"
+                    checked={formData.cancellationNoticeUnlimited}
+                    onCheckedChange={(checked) => handleInputChange('cancellationNoticeUnlimited', checked)}
+                  />
+                  <Label htmlFor="cancellationUnlimited" className="text-xs text-gray-500">No Limit</Label>
+                </div>
+              </div>
               <Input
-                id="cancellationNoticehours"
+                id="cancellationNoticeHours"
                 type="number"
-                min="1"
+                min="0"
                 max="168"
-                value={formData.cancellationNoticehours}
-                onChange={(e) => handleInputChange('cancellationNoticehours', e.target.value)}
+                value={formData.cancellationNoticeHours}
+                onChange={(e) => handleInputChange('cancellationNoticeHours', e.target.value)}
+                disabled={formData.cancellationNoticeUnlimited}
+                className={formData.cancellationNoticeUnlimited ? 'opacity-50' : ''}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Minimum notice required to cancel
-              </p>
+              <p className="text-xs text-gray-500">Minimum notice required to cancel (0 = anytime)</p>
             </div>
           </div>
         </div>
 
         <Separator />
 
+        {/* Admin Restrictions Section */}
         <div>
-          <Label htmlFor="bookingRules">Additional Booking Rules</Label>
-          <Textarea
-            id="bookingRules"
-            value={formData.bookingRules}
-            onChange={(e) => handleInputChange('bookingRules', e.target.value)}
-            placeholder="E.g., Peak hours restrictions, Weekend policies..."
-            rows={3}
-          />
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-semibold">Admin Restrictions</h4>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="restrictionsApplyToAdmins"
+                checked={formData.restrictionsApplyToAdmins}
+                onCheckedChange={(checked) => handleInputChange('restrictionsApplyToAdmins', checked)}
+              />
+              <Label htmlFor="restrictionsApplyToAdmins" className="text-sm">
+                Same restrictions apply to admins
+              </Label>
+            </div>
+          </div>
+
+          {!formData.restrictionsApplyToAdmins && (
+            <Card className="bg-gray-50">
+              <CardContent className="pt-4">
+                <p className="text-sm text-gray-600 mb-4">
+                  Set different booking restrictions for facility administrators.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Admin Max Bookings */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Max Bookings Per Week</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={formData.adminMaxBookingsUnlimited}
+                          onCheckedChange={(checked) => handleInputChange('adminMaxBookingsUnlimited', checked)}
+                        />
+                        <Label className="text-xs text-gray-500">Unlimited</Label>
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={formData.adminMaxBookingsPerWeek}
+                      onChange={(e) => handleInputChange('adminMaxBookingsPerWeek', e.target.value)}
+                      disabled={formData.adminMaxBookingsUnlimited}
+                      className={formData.adminMaxBookingsUnlimited ? 'opacity-50' : ''}
+                    />
+                  </div>
+
+                  {/* Admin Max Duration */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Max Booking Duration (hours)</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={formData.adminMaxDurationUnlimited}
+                          onCheckedChange={(checked) => handleInputChange('adminMaxDurationUnlimited', checked)}
+                        />
+                        <Label className="text-xs text-gray-500">Unlimited</Label>
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min="0.5"
+                      max="24"
+                      step="0.5"
+                      value={formData.adminMaxBookingDurationHours}
+                      onChange={(e) => handleInputChange('adminMaxBookingDurationHours', e.target.value)}
+                      disabled={formData.adminMaxDurationUnlimited}
+                      className={formData.adminMaxDurationUnlimited ? 'opacity-50' : ''}
+                    />
+                  </div>
+
+                  {/* Admin Advance Booking */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Advance Booking (days)</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={formData.adminAdvanceBookingUnlimited}
+                          onCheckedChange={(checked) => handleInputChange('adminAdvanceBookingUnlimited', checked)}
+                        />
+                        <Label className="text-xs text-gray-500">Unlimited</Label>
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={formData.adminAdvanceBookingDays}
+                      onChange={(e) => handleInputChange('adminAdvanceBookingDays', e.target.value)}
+                      disabled={formData.adminAdvanceBookingUnlimited}
+                      className={formData.adminAdvanceBookingUnlimited ? 'opacity-50' : ''}
+                    />
+                  </div>
+
+                  {/* Admin Cancellation Notice */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Cancellation Notice (hours)</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={formData.adminCancellationUnlimited}
+                          onCheckedChange={(checked) => handleInputChange('adminCancellationUnlimited', checked)}
+                        />
+                        <Label className="text-xs text-gray-500">No Limit</Label>
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="168"
+                      value={formData.adminCancellationNoticeHours}
+                      onChange={(e) => handleInputChange('adminCancellationNoticeHours', e.target.value)}
+                      disabled={formData.adminCancellationUnlimited}
+                      className={formData.adminCancellationUnlimited ? 'opacity-50' : ''}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
+        <Separator />
+
+        {/* Peak Hours Section */}
         <div>
-          <Label htmlFor="cancellationPolicy">Cancellation Policy</Label>
-          <Textarea
-            id="cancellationPolicy"
-            value={formData.cancellationPolicy}
-            onChange={(e) => handleInputChange('cancellationPolicy', e.target.value)}
-            placeholder="E.g., Cancellations must be made 24 hours in advance..."
-            rows={3}
-          />
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h4 className="font-semibold">Peak Hours Restrictions</h4>
+              <p className="text-xs text-gray-500">Set different limits during high-demand times for each day</p>
+            </div>
+            <Switch
+              checked={formData.hasPeakHours}
+              onCheckedChange={(checked) => handleInputChange('hasPeakHours', checked)}
+            />
+          </div>
+
+          {formData.hasPeakHours && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="pt-4 space-y-4">
+                {/* Apply to Admins Toggle */}
+                <div className="flex items-center justify-between pb-2 border-b border-blue-200">
+                  <Label className="text-sm font-medium">Apply peak hour restrictions to admins</Label>
+                  <Switch
+                    checked={formData.peakHoursApplyToAdmins}
+                    onCheckedChange={(checked) => handleInputChange('peakHoursApplyToAdmins', checked)}
+                  />
+                </div>
+
+                {/* Peak Hours by Day */}
+                <div>
+                  <Label className="text-sm mb-3 block font-medium">Configure Peak Hours by Day</Label>
+                  <p className="text-xs text-gray-600 mb-3">Click on a day to add time slots. You can add multiple peak periods per day.</p>
+                  <div className="space-y-3">
+                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+                      const daySlots = formData.peakHoursSlots[day] || [];
+                      const hasSlotsConfigured = daySlots.length > 0;
+
+                      return (
+                        <div key={day} className="border border-blue-200 rounded-lg p-3 bg-white">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium capitalize text-sm">{day}</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addPeakHourSlot(day)}
+                              className="h-7 text-xs"
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add Time Slot
+                            </Button>
+                          </div>
+
+                          {daySlots.length === 0 ? (
+                            <p className="text-xs text-gray-400 italic">No peak hours configured for this day</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {daySlots.map((slot, index) => (
+                                <div key={slot.id} className="flex items-center gap-2 bg-blue-50 p-2 rounded">
+                                  <span className="text-xs text-gray-500 w-12">Slot {index + 1}:</span>
+                                  <Input
+                                    type="time"
+                                    value={slot.startTime}
+                                    onChange={(e) => updatePeakHourSlot(day, slot.id, 'startTime', e.target.value)}
+                                    className="h-8 w-28 text-sm"
+                                  />
+                                  <span className="text-gray-500 text-sm">to</span>
+                                  <Input
+                                    type="time"
+                                    value={slot.endTime}
+                                    onChange={(e) => updatePeakHourSlot(day, slot.id, 'endTime', e.target.value)}
+                                    className="h-8 w-28 text-sm"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removePeakHourSlot(day, slot.id)}
+                                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <Separator className="bg-blue-200" />
+
+                {/* Peak Hours Restrictions */}
+                <div>
+                  <Label className="text-sm mb-3 block font-medium">Peak Hours Booking Limits</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Max Bookings During Peak (per week)</Label>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={formData.peakHoursRestrictions.maxBookingsUnlimited}
+                            onCheckedChange={(checked) => handlePeakHoursRestrictionsChange('maxBookingsUnlimited', checked)}
+                          />
+                          <Label className="text-xs text-gray-500">Unlimited</Label>
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={formData.peakHoursRestrictions.maxBookingsPerWeek}
+                        onChange={(e) => handlePeakHoursRestrictionsChange('maxBookingsPerWeek', e.target.value)}
+                        disabled={formData.peakHoursRestrictions.maxBookingsUnlimited}
+                        className={formData.peakHoursRestrictions.maxBookingsUnlimited ? 'opacity-50' : ''}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Max Duration During Peak (hrs)</Label>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={formData.peakHoursRestrictions.maxDurationUnlimited}
+                            onCheckedChange={(checked) => handlePeakHoursRestrictionsChange('maxDurationUnlimited', checked)}
+                          />
+                          <Label className="text-xs text-gray-500">Unlimited</Label>
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min="0.5"
+                        max="8"
+                        step="0.5"
+                        value={formData.peakHoursRestrictions.maxDurationHours}
+                        onChange={(e) => handlePeakHoursRestrictionsChange('maxDurationHours', e.target.value)}
+                        disabled={formData.peakHoursRestrictions.maxDurationUnlimited}
+                        className={formData.peakHoursRestrictions.maxDurationUnlimited ? 'opacity-50' : ''}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Weekend Policy Section */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h4 className="font-semibold">Weekend Policy</h4>
+              <p className="text-xs text-gray-500">Set different limits for Saturday and Sunday</p>
+            </div>
+            <Switch
+              checked={formData.hasWeekendPolicy}
+              onCheckedChange={(checked) => handleInputChange('hasWeekendPolicy', checked)}
+            />
+          </div>
+
+          {formData.hasWeekendPolicy && (
+            <Card className="bg-amber-50 border-amber-200">
+              <CardContent className="pt-4 space-y-4">
+                {/* Apply to Admins Toggle */}
+                <div className="flex items-center justify-between pb-2 border-b border-amber-200">
+                  <Label className="text-sm font-medium">Apply weekend restrictions to admins</Label>
+                  <Switch
+                    checked={formData.weekendPolicyApplyToAdmins}
+                    onCheckedChange={(checked) => handleInputChange('weekendPolicyApplyToAdmins', checked)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Weekend Max Bookings */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Max Bookings Per Weekend</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={formData.weekendPolicy.maxBookingsUnlimited}
+                          onCheckedChange={(checked) => handleWeekendPolicyChange('maxBookingsUnlimited', checked)}
+                        />
+                        <Label className="text-xs text-gray-500">Unlimited</Label>
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={formData.weekendPolicy.maxBookingsPerWeekend}
+                      onChange={(e) => handleWeekendPolicyChange('maxBookingsPerWeekend', e.target.value)}
+                      disabled={formData.weekendPolicy.maxBookingsUnlimited}
+                      className={formData.weekendPolicy.maxBookingsUnlimited ? 'opacity-50' : ''}
+                    />
+                  </div>
+
+                  {/* Weekend Max Duration */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Max Booking Duration (hours)</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={formData.weekendPolicy.maxDurationUnlimited}
+                          onCheckedChange={(checked) => handleWeekendPolicyChange('maxDurationUnlimited', checked)}
+                        />
+                        <Label className="text-xs text-gray-500">Unlimited</Label>
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min="0.5"
+                      max="8"
+                      step="0.5"
+                      value={formData.weekendPolicy.maxDurationHours}
+                      onChange={(e) => handleWeekendPolicyChange('maxDurationHours', e.target.value)}
+                      disabled={formData.weekendPolicy.maxDurationUnlimited}
+                      className={formData.weekendPolicy.maxDurationUnlimited ? 'opacity-50' : ''}
+                    />
+                  </div>
+
+                  {/* Weekend Advance Booking */}
+                  <div className="space-y-2 col-span-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Advance Booking for Weekends (days)</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={formData.weekendPolicy.advanceBookingUnlimited}
+                          onCheckedChange={(checked) => handleWeekendPolicyChange('advanceBookingUnlimited', checked)}
+                        />
+                        <Label className="text-xs text-gray-500">Same as weekdays</Label>
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="90"
+                      value={formData.weekendPolicy.advanceBookingDays}
+                      onChange={(e) => handleWeekendPolicyChange('advanceBookingDays', e.target.value)}
+                      disabled={formData.weekendPolicy.advanceBookingUnlimited}
+                      className={`max-w-xs ${formData.weekendPolicy.advanceBookingUnlimited ? 'opacity-50' : ''}`}
+                    />
+                    <p className="text-xs text-gray-500">How far in advance members can book weekend slots</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
@@ -971,8 +2111,9 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
                         <Label className="text-xs">Split Names (comma-separated)</Label>
                         <Input
                           placeholder="3a, 3b"
-                          value={court.splitConfig?.splitNames.join(', ') || ''}
-                          onChange={(e) => {
+                          defaultValue={court.splitConfig?.splitNames.join(', ') || ''}
+                          key={court.id + '-splitnames'}
+                          onBlur={(e) => {
                             const names = e.target.value.split(',').map(n => n.trim()).filter(Boolean);
                             updateCourt(court.id, {
                               splitConfig: { ...court.splitConfig, splitNames: names } as any
@@ -1082,13 +2223,53 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
         <CardHeader>
           <CardTitle className="text-base">Facility Information</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
+        <CardContent className="space-y-3 text-sm">
+          {formData.facilityImagePreview && (
+            <div className="mb-4">
+              <span className="font-medium block mb-2">Facility Image:</span>
+              <img
+                src={formData.facilityImagePreview}
+                alt="Facility preview"
+                className="w-full max-w-md h-48 object-cover rounded-lg border"
+              />
+            </div>
+          )}
           <div><span className="font-medium">Name:</span> {formData.facilityName}</div>
           <div><span className="font-medium">Type:</span> {formData.facilityType}</div>
           <div><span className="font-medium">Address:</span> {formData.streetAddress}, {formData.city}, {formData.state} {formData.zipCode}</div>
           <div><span className="font-medium">Phone:</span> {formData.phone}</div>
           <div><span className="font-medium">Email:</span> {formData.email}</div>
-          <div><span className="font-medium">Contact:</span> {formData.contactName}</div>
+          {formData.description && <div><span className="font-medium">Description:</span> {formData.description}</div>}
+          {formData.addressWhitelistFileName && <div><span className="font-medium">Address Whitelist:</span> {formData.addressWhitelistFileName}</div>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Contacts</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div>
+            <div className="font-medium text-gray-700 mb-1">Primary Contact</div>
+            <div className="pl-3 space-y-1 text-gray-600">
+              <div>{formData.primaryContact.name}</div>
+              <div>{formData.primaryContact.email}</div>
+              <div>{formData.primaryContact.phone}</div>
+            </div>
+          </div>
+          {formData.secondaryContacts.length > 0 && (
+            <div>
+              <div className="font-medium text-gray-700 mb-1">Secondary Contacts</div>
+              {formData.secondaryContacts.map((contact, index) => (
+                <div key={contact.id} className="pl-3 space-y-1 text-gray-600 mb-2">
+                  <div className="text-xs text-gray-500">Contact {index + 1}</div>
+                  <div>{contact.name}</div>
+                  <div>{contact.email}</div>
+                  <div>{contact.phone}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1119,7 +2300,7 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
           <div><span className="font-medium">Max bookings per week:</span> {formData.maxBookingsPerWeek}</div>
           <div><span className="font-medium">Max booking duration:</span> {formData.maxBookingDurationHours} hours</div>
           <div><span className="font-medium">Advance booking window:</span> {formData.advanceBookingDays} days</div>
-          <div><span className="font-medium">Cancellation notice:</span> {formData.cancellationNoticehours} hours</div>
+          <div><span className="font-medium">Cancellation notice:</span> {formData.cancellationNoticeHours} hours</div>
         </CardContent>
       </Card>
 
@@ -1151,12 +2332,12 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-4xl">
         <CardHeader>
-          <div className="flex items-center justify-between mb-6">
-            <img src={logoImage} alt="CourtTime" className="h-8" />
-            <Button variant="ghost" onClick={onBack}>
+          <div className="flex flex-col items-center mb-6">
+            <Button variant="ghost" onClick={onBack} className="self-start mb-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Login
             </Button>
+            <img src={logoImage} alt="CourtTime" className="h-16" />
           </div>
           <CardTitle className="text-2xl">Facility Registration</CardTitle>
           <CardDescription>

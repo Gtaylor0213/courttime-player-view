@@ -13,6 +13,7 @@ export interface User {
   memberFacilities?: string[]; // Array of facility IDs user belongs to
   profileImageUrl?: string; // Profile image (base64 or URL)
   skillLevel?: string;
+  ustaRating?: string; // USTA/NTRP rating (e.g., "3.0", "3.5", "4.0", etc.)
   bio?: string;
   preferences?: {
     notifications: boolean;
@@ -29,6 +30,7 @@ interface RegistrationData {
   state?: string;
   zipCode?: string;
   skillLevel?: string;
+  ustaRating?: string;
   bio?: string;
   profilePicture?: string;
   notificationPreferences?: {
@@ -79,9 +81,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (savedUser && savedToken) {
         try {
           const parsedUser = JSON.parse(savedUser);
-          setUser(parsedUser);
           setAccessToken(savedToken);
-          console.log('Session restored from localStorage');
+
+          // Refresh user data from API to get latest memberships
+          const result = await authApi.getMe(parsedUser.id);
+          if (result.success && result.data?.user) {
+            const refreshedUser = result.data.user;
+            setUser(refreshedUser);
+            // Update localStorage with fresh data
+            localStorage.setItem('auth_user', JSON.stringify(refreshedUser));
+            console.log('Session restored and refreshed from API');
+          } else {
+            // Fall back to cached user if API fails
+            setUser(parsedUser);
+            console.log('Session restored from localStorage (API refresh failed)');
+          }
         } catch (parseError) {
           console.error('Failed to parse saved user:', parseError);
           // Clear invalid data
@@ -199,6 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         state: additionalData?.state,
         zipCode: additionalData?.zipCode,
         skillLevel: additionalData?.skillLevel,
+        ustaRating: additionalData?.ustaRating,
         bio: additionalData?.bio,
         profilePicture: additionalData?.profilePicture,
         notificationPreferences: additionalData?.notificationPreferences

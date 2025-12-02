@@ -50,6 +50,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
 
     // Skill Level (Optional)
     skillLevel: '',
+    ustaRating: '',
     bio: '',
 
     // Notification Preferences
@@ -200,6 +201,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
           state: formData.state,
           zipCode: formData.zipCode,
           skillLevel: formData.skillLevel,
+          ustaRating: formData.ustaRating,
           bio: formData.bio,
           profilePicture: formData.profilePicture,
           notificationPreferences: formData.notificationPreferences
@@ -423,22 +425,49 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
 
             {/* Skill Level (Optional) */}
             <div className="pt-4 border-t">
-              <div>
-                <Label htmlFor="skillLevel">Skill Level (Optional)</Label>
-                <Select
-                  value={formData.skillLevel}
-                  onValueChange={(value) => handleInputChange('skillLevel', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your skill level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="beginner">Beginner</SelectItem>
-                    <SelectItem value="intermediate">Intermediate</SelectItem>
-                    <SelectItem value="advanced">Advanced</SelectItem>
-                    <SelectItem value="professional">Professional</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="skillLevel">Skill Level (Optional)</Label>
+                  <Select
+                    value={formData.skillLevel}
+                    onValueChange={(value) => handleInputChange('skillLevel', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your skill level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="beginner">Beginner</SelectItem>
+                      <SelectItem value="intermediate">Intermediate</SelectItem>
+                      <SelectItem value="advanced">Advanced</SelectItem>
+                      <SelectItem value="professional">Professional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="ustaRating">USTA Rating (Optional)</Label>
+                  <Select
+                    value={formData.ustaRating}
+                    onValueChange={(value) => handleInputChange('ustaRating', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select USTA rating" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1.5">1.5</SelectItem>
+                      <SelectItem value="2.0">2.0</SelectItem>
+                      <SelectItem value="2.5">2.5</SelectItem>
+                      <SelectItem value="3.0">3.0</SelectItem>
+                      <SelectItem value="3.5">3.5</SelectItem>
+                      <SelectItem value="4.0">4.0</SelectItem>
+                      <SelectItem value="4.5">4.5</SelectItem>
+                      <SelectItem value="5.0">5.0</SelectItem>
+                      <SelectItem value="5.5">5.5</SelectItem>
+                      <SelectItem value="6.0">6.0</SelectItem>
+                      <SelectItem value="7.0">7.0</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">National Tennis Rating Program (NTRP)</p>
+                </div>
               </div>
 
               {/* Bio */}

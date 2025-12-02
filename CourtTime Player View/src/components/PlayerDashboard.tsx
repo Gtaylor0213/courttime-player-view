@@ -7,7 +7,7 @@ import { NotificationDropdown } from './NotificationDropdown';
 import { ReservationManagementModal } from './ReservationManagementModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
-import { playerProfileApi } from '../api/client';
+import { playerProfileApi, facilitiesApi } from '../api/client';
 import { Bell, Calendar, Clock, MapPin, Plus, Users, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -70,11 +70,39 @@ export function PlayerDashboard({
     try {
       setLoading(true);
 
-      // Load profile to get facilities
+      // Load profile to get facilities with full details
       const profileResponse = await playerProfileApi.getProfile(user.id);
-      if (profileResponse.success && profileResponse.data?.profile) {
-        setMemberFacilities(profileResponse.data.profile.memberFacilities || []);
+      console.log('Dashboard - Profile API response:', profileResponse);
+
+      // Check for facilities in the API response (handles both data.profile and direct profile)
+      let facilities = profileResponse.data?.profile?.memberFacilities
+        || profileResponse.data?.memberFacilities
+        || [];
+
+      // If API didn't return facilities, fall back to AuthContext and fetch details
+      if (facilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
+        console.log('Dashboard - Falling back to AuthContext memberFacilities:', user.memberFacilities);
+        // Fetch facility details for each facility ID from AuthContext
+        const facilitiesData = [];
+        for (const facilityId of user.memberFacilities) {
+          try {
+            const facilityResponse = await facilitiesApi.getById(facilityId);
+            if (facilityResponse.success && facilityResponse.data?.facility) {
+              facilitiesData.push({
+                facilityId: facilityResponse.data.facility.id,
+                facilityName: facilityResponse.data.facility.name,
+                membershipType: 'Member',
+                status: 'active'
+              });
+            }
+          } catch (err) {
+            console.error('Error fetching facility details:', err);
+          }
+        }
+        facilities = facilitiesData;
       }
+
+      setMemberFacilities(facilities);
 
       // Load upcoming bookings
       const bookingsResponse = await playerProfileApi.getBookings(user.id, true);

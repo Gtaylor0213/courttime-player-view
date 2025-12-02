@@ -837,30 +837,53 @@ export function CourtCalendarView({
                 </Button>
               </div>
             ) : (
-              <div className="relative border border-gray-200" style={{ height: '600px', maxHeight: '70vh' }}>
+              <div className="relative border border-gray-200 flex flex-col" style={{ height: '600px', maxHeight: '70vh' }}>
+                {/* Header Row - Court Names (Fixed at top, scrolls horizontally with content) */}
+                <div
+                  className="flex-shrink-0 overflow-x-auto overflow-y-hidden border-b-2 border-gray-300 shadow-md bg-white scrollbar-hide"
+                  style={{ zIndex: 50, scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  id="court-header"
+                >
+                  <div
+                    className="grid border-b-0"
+                    style={{
+                      gridTemplateColumns: `120px repeat(${courts.length}, 200px)`,
+                      minWidth: `${120 + courts.length * 200}px`
+                    }}
+                  >
+                    <div className="p-4 border-r border-gray-200 bg-white">
+                      <span className="font-medium text-sm text-gray-600">Time</span>
+                    </div>
+                    {courts.map((court, index) => (
+                      <div key={index} className="p-4 border-r border-gray-200 last:border-r-0 bg-white">
+                        <div className="font-medium text-sm">{court.name}</div>
+                        <div className="text-xs text-gray-600 mt-1 capitalize">{court.type}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 {/* Scrollable Content Area - handles both horizontal and vertical scrolling */}
                 <div
                   ref={calendarScrollRef}
-                  className="overflow-auto h-full"
+                  className="overflow-auto flex-1"
+                  onScroll={(e) => {
+                    // Sync horizontal scroll between header and content
+                    const header = document.getElementById('court-header');
+                    if (header) {
+                      header.scrollLeft = e.currentTarget.scrollLeft;
+                    }
+                  }}
                 >
-                  <div className="min-w-max">
-                    {/* Header Row - Court Names (Sticky at top, scrolls horizontally with content) */}
-                    <div className="sticky top-0 grid grid-cols-[120px_repeat(var(--court-count),_200px)] border-b-2 border-gray-300 shadow-md bg-white" style={{...({'--court-count': courts.length} as React.CSSProperties), zIndex: 50}}>
-                      <div className="p-4 border-r border-gray-200">
-                        <span className="font-medium text-sm text-gray-600">Time</span>
-                      </div>
-                      {courts.map((court, index) => (
-                        <div key={index} className="p-4 border-r border-gray-200 last:border-r-0">
-                          <div className="font-medium text-sm">{court.name}</div>
-                          <div className="text-xs text-gray-600 mt-1 capitalize">{court.type}</div>
-                        </div>
-                      ))}
-                    </div>
+                  <div style={{ minWidth: `${120 + courts.length * 200}px` }}>
                 {/* Time Slots */}
                 {timeSlots.map((time, timeIndex) => {
                   const isHourMark = time.endsWith(':00 AM') || time.endsWith(':00 PM');
                   return (
-                    <div key={timeIndex} className={`grid grid-cols-[120px_repeat(var(--court-count),_200px)] border-b last:border-b-0 ${isHourMark ? 'border-gray-300' : 'border-gray-100'}`} style={{'--court-count': courts.length} as React.CSSProperties}>
+                    <div
+                      key={timeIndex}
+                      className={`grid border-b last:border-b-0 ${isHourMark ? 'border-gray-300' : 'border-gray-100'}`}
+                      style={{ gridTemplateColumns: `120px repeat(${courts.length}, 200px)` }}
+                    >
                       <div className="p-2 border-r border-gray-200 bg-gray-50">
                         <span className={`text-xs ${isHourMark ? 'font-semibold' : 'font-normal'}`}>{time}</span>
                       </div>
@@ -870,10 +893,10 @@ export function CourtCalendarView({
                           <div
                             key={courtIndex}
                             className={`
-                              p-1 border-r border-gray-200 last:border-r-0 min-h-[40px] relative
-                              ${!booking ? 'cursor-pointer hover:bg-gray-50' : ''}
+                              border-r border-gray-200 last:border-r-0 min-h-[40px]
+                              ${!booking ? 'p-1 cursor-pointer hover:bg-gray-50' : 'flex'}
                               ${booking ? 'cursor-pointer' : ''}
-                              ${dragState.selectedCells.has(`${court.name}|${time}`) ? 'bg-blue-100 border-blue-300' : ''}
+                              ${dragState.selectedCells.has(`${court.name}|${time}`) ? 'p-1 bg-blue-100 border-blue-300' : ''}
                               ${dragState.isDragging && !booking ? 'select-none' : ''}
                             `}
                             onClick={() => {
@@ -888,14 +911,11 @@ export function CourtCalendarView({
                           >
                             {booking && booking.type === 'reservation' && booking.isFirstSlot && (
                               <div
-                                className={`p-1 rounded-md border transition-colors hover:opacity-80 absolute top-0 left-0 right-0 overflow-hidden ${
+                                className={`px-2 py-1 border-t border-l border-r transition-colors hover:opacity-80 overflow-hidden flex-1 w-full ${
                                   court.type === 'tennis'
                                     ? 'bg-blue-100 text-blue-800 border-blue-300'
                                     : 'bg-green-100 text-green-800 border-green-300'
                                 }`}
-                                style={{
-                                  height: `${Math.ceil(parseInt(booking.duration) / 15) * 40}px`
-                                }}
                               >
                                 <div className="text-[10px] font-medium leading-tight">{booking.player}</div>
                                 <div className="text-[9px] opacity-75 flex items-center gap-1">
@@ -920,6 +940,15 @@ export function CourtCalendarView({
                                   </div>
                                 )}
                               </div>
+                            )}
+                            {booking && booking.type === 'reservation' && !booking.isFirstSlot && (
+                              <div
+                                className={`flex-1 w-full border-l border-r ${
+                                  court.type === 'tennis'
+                                    ? 'bg-blue-100 border-blue-300'
+                                    : 'bg-green-100 border-green-300'
+                                }`}
+                              />
                             )}
                           </div>
                         );

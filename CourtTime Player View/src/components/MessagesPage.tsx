@@ -3,7 +3,7 @@ import { UnifiedSidebar } from './UnifiedSidebar';
 import { NotificationBell } from './NotificationBell';
 import { Messages } from './Messages';
 import { useAuth } from '../contexts/AuthContext';
-import { playerProfileApi } from '../api/client';
+import { playerProfileApi, facilitiesApi } from '../api/client';
 
 interface MessagesPageProps {
   onBack: () => void;
@@ -67,12 +67,39 @@ export function MessagesPage({
     try {
       setLoading(true);
       const profileResponse = await playerProfileApi.getProfile(user.id);
+      console.log('MessagesPage - Profile API response:', profileResponse);
 
-      if (profileResponse.success && profileResponse.data?.profile) {
-        const facilities = profileResponse.data.profile.memberFacilities || [];
-        const active = facilities.filter((f: any) => f.status === 'active');
-        setMemberFacilities(active);
+      // Check for facilities in the API response (handles both data.profile and direct profile)
+      let facilities = profileResponse.data?.profile?.memberFacilities
+        || profileResponse.data?.memberFacilities
+        || [];
+
+      // Filter for active status
+      let activeFacilities = facilities.filter((f: any) => f.status === 'active');
+
+      // If API didn't return facilities, fall back to AuthContext and fetch details
+      if (activeFacilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
+        console.log('MessagesPage - Falling back to AuthContext memberFacilities:', user.memberFacilities);
+        // Fetch facility details for each facility ID from AuthContext
+        activeFacilities = [];
+        for (const facilityId of user.memberFacilities) {
+          try {
+            const facilityResponse = await facilitiesApi.getById(facilityId);
+            if (facilityResponse.success && facilityResponse.data?.facility) {
+              activeFacilities.push({
+                facilityId: facilityResponse.data.facility.id,
+                facilityName: facilityResponse.data.facility.name,
+                membershipType: 'Member',
+                status: 'active'
+              });
+            }
+          } catch (err) {
+            console.error('Error fetching facility details:', err);
+          }
+        }
       }
+
+      setMemberFacilities(activeFacilities);
     } catch (error) {
       console.error('Error loading facilities:', error);
     } finally {

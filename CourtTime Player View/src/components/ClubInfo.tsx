@@ -103,16 +103,32 @@ export function ClubInfo({
       // Load user's member facilities to check if they're a member
       if (user?.id) {
         const profileResponse = await playerProfileApi.getProfile(user.id);
-        if (profileResponse.success && profileResponse.data?.profile) {
-          const facilities = profileResponse.data.profile.memberFacilities || [];
-          setMemberFacilities(facilities);
+        console.log('ClubInfo - Profile API response:', profileResponse);
 
-          // Check if user is a member of this facility
-          const isActiveMember = facilities.some(
-            (f: any) => f.facilityId === clubId && f.status === 'active'
-          );
-          setIsMember(isActiveMember);
+        // Check for facilities in the API response (handles both data.profile and direct profile)
+        let facilities = profileResponse.data?.profile?.memberFacilities
+          || profileResponse.data?.memberFacilities
+          || [];
+
+        // If API didn't return facilities, fall back to AuthContext
+        if (facilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
+          console.log('ClubInfo - Falling back to AuthContext memberFacilities:', user.memberFacilities);
+          // Create facility objects from IDs
+          facilities = user.memberFacilities.map(facilityId => ({
+            facilityId,
+            facilityName: '',
+            membershipType: 'Member',
+            status: 'active'
+          }));
         }
+
+        setMemberFacilities(facilities);
+
+        // Check if user is a member of this facility (from API response or AuthContext fallback)
+        const isActiveMember = facilities.some(
+          (f: any) => f.facilityId === clubId && f.status === 'active'
+        ) || (user.memberFacilities && user.memberFacilities.includes(clubId));
+        setIsMember(isActiveMember);
       }
 
       const facilityResponse = await facilitiesApi.getById(clubId);

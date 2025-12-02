@@ -3,7 +3,7 @@ import { UnifiedSidebar } from './UnifiedSidebar';
 import { NotificationBell } from './NotificationBell';
 import { Search, Filter, Users, Calendar, Plus, X, Building, Edit, Trash2, AlertCircle, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { hittingPartnerApi, playerProfileApi } from '../api/client';
+import { hittingPartnerApi, playerProfileApi, facilitiesApi } from '../api/client';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Input } from './ui/input';
@@ -88,20 +88,46 @@ export function FindHittingPartner({
     try {
       setLoading(true);
 
-      // Load user's facilities
+      // Load user's facilities with full details
       const profileResponse = await playerProfileApi.getProfile(user.id);
-      const activeFacilities: any[] = [];
+      console.log('HittingPartner - Profile API response:', profileResponse);
 
-      if (profileResponse.success && profileResponse.data?.profile) {
-        const facilities = profileResponse.data.profile.memberFacilities || [];
-        const active = facilities.filter((f: any) => f.status === 'active');
-        activeFacilities.push(...active);
-        setMemberFacilities(active);
+      let activeFacilities: any[] = [];
 
-        // Set default facility for creating posts
-        if (active.length > 0 && !formData.facilityId) {
-          setFormData(prev => ({ ...prev, facilityId: active[0].facilityId }));
+      // Check for facilities in the API response (handles both data.profile and direct profile)
+      let facilities = profileResponse.data?.profile?.memberFacilities
+        || profileResponse.data?.memberFacilities
+        || [];
+
+      // Filter for active status
+      activeFacilities = facilities.filter((f: any) => f.status === 'active');
+
+      // If API didn't return facilities, fall back to AuthContext and fetch details
+      if (activeFacilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
+        console.log('HittingPartner - Falling back to AuthContext memberFacilities:', user.memberFacilities);
+        // Fetch facility details for each facility ID from AuthContext
+        for (const facilityId of user.memberFacilities) {
+          try {
+            const facilityResponse = await facilitiesApi.getById(facilityId);
+            if (facilityResponse.success && facilityResponse.data?.facility) {
+              activeFacilities.push({
+                facilityId: facilityResponse.data.facility.id,
+                facilityName: facilityResponse.data.facility.name,
+                membershipType: 'Member',
+                status: 'active'
+              });
+            }
+          } catch (err) {
+            console.error('Error fetching facility details:', err);
+          }
         }
+      }
+
+      setMemberFacilities(activeFacilities);
+
+      // Set default facility for creating posts
+      if (activeFacilities.length > 0 && !formData.facilityId) {
+        setFormData(prev => ({ ...prev, facilityId: activeFacilities[0].facilityId }));
       }
 
       // Load hitting partner posts - filter by member facilities

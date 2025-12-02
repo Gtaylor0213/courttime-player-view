@@ -10,7 +10,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { useAuth } from '../contexts/AuthContext';
-import { bulletinBoardApi, playerProfileApi } from '../api/client';
+import { bulletinBoardApi, playerProfileApi, facilitiesApi } from '../api/client';
 import { toast } from 'sonner';
 
 interface BulletinBoardProps {
@@ -147,16 +147,43 @@ export function BulletinBoard({
     try {
       setLoading(true);
 
-      // Load user's facilities
+      // Load user's facilities with full details
       const profileResponse = await playerProfileApi.getProfile(user.id);
-      const activeFacilities: any[] = [];
+      console.log('BulletinBoard - Profile API response:', profileResponse);
 
-      if (profileResponse.success && profileResponse.data?.profile) {
-        const facilities = profileResponse.data.profile.memberFacilities || [];
-        const active = facilities.filter((f: any) => f.status === 'active');
-        activeFacilities.push(...active);
-        setMemberFacilities(active);
+      let activeFacilities: any[] = [];
+
+      // Check for facilities in the API response (handles both data.profile and direct profile)
+      let facilities = profileResponse.data?.profile?.memberFacilities
+        || profileResponse.data?.memberFacilities
+        || [];
+
+      // Filter for active status
+      activeFacilities = facilities.filter((f: any) => f.status === 'active');
+
+      // If API didn't return facilities, fall back to AuthContext and fetch details
+      if (activeFacilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
+        console.log('BulletinBoard - Falling back to AuthContext memberFacilities:', user.memberFacilities);
+        // Fetch facility details for each facility ID from AuthContext
+        for (const facilityId of user.memberFacilities) {
+          try {
+            const facilityResponse = await facilitiesApi.getById(facilityId);
+            if (facilityResponse.success && facilityResponse.data?.facility) {
+              activeFacilities.push({
+                facilityId: facilityResponse.data.facility.id,
+                facilityName: facilityResponse.data.facility.name,
+                membershipType: 'Member',
+                status: 'active',
+                isFacilityAdmin: false
+              });
+            }
+          } catch (err) {
+            console.error('Error fetching facility details:', err);
+          }
+        }
       }
+
+      setMemberFacilities(activeFacilities);
 
       // Load bulletin posts
       if (selectedFacility === 'all') {

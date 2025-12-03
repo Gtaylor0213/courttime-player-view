@@ -2,6 +2,7 @@ services:
   - type: web
     name: courttime
     runtime: node
+    rootDir: CourtTime Player View
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:

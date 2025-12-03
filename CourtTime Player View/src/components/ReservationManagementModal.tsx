@@ -350,7 +350,10 @@ export function ReservationManagementModal({
                   type="date"
                   value={editDate}
                   onChange={(e) => setEditDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={(() => {
+                    const now = new Date();
+                    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                  })()}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

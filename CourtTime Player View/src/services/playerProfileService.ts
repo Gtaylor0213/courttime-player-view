@@ -294,7 +294,11 @@ export async function getUserBookings(userId: string, upcoming: boolean = true):
     // If upcoming, filter out bookings that have already ended today
     if (upcoming && result.rows.length > 0) {
       const now = new Date();
-      const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      // Use local date components to avoid timezone issues
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const currentDate = `${year}-${month}-${day}`; // YYYY-MM-DD
       const currentTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
 
       console.log('Filtering bookings - Current date:', currentDate, 'Current time:', currentTime);

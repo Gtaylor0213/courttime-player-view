@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -13,6 +13,24 @@ import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, usersApi, bookingApi } from '../api/client';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown } from 'lucide-react';
+
+// Helper to get current time in Eastern Time
+const getEasternTime = (): Date => {
+  const now = new Date();
+  // Convert to Eastern Time using Intl API
+  const easternTimeStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+  return new Date(easternTimeStr);
+};
+
+// Helper to format time for display in Eastern Time
+const formatEasternTime = (date: Date): string => {
+  return date.toLocaleTimeString('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+};
 
 interface CourtCalendarViewProps {
   onNavigateToPlayerDashboard: () => void;
@@ -61,12 +79,13 @@ export function CourtCalendarView({
   const [selectedFacility, setSelectedFacility] = useState(selectedFacilityId);
   const [selectedView, setSelectedView] = useState('week');
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>('tennis');
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState(getEasternTime());
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [bookingsData, setBookingsData] = useState<any>({});
   const [loadingBookings, setLoadingBookings] = useState(false);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const timeColumnRef = useRef<HTMLDivElement>(null);
   const [bookingWizard, setBookingWizard] = useState({
     isOpen: false,
     court: '',
@@ -95,13 +114,46 @@ export function CourtCalendarView({
     reservation: null as any
   });
 
-  // Update current time every second for smooth line movement
+  // Update current time every 30 seconds for the time indicator line (Eastern Time)
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const updateTime = () => setCurrentTime(getEasternTime());
+    updateTime(); // Initial update
+    const interval = setInterval(updateTime, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, []);
+
+  // Helper function to check if date is today (must be defined before currentTimeLinePosition)
+  const isToday = useCallback((date: Date) => {
+    const today = getEasternTime();
+    return date.toDateString() === today.toDateString();
+  }, []);
+
+  // Calculate the position of the current time indicator line
+  const currentTimeLinePosition = useMemo(() => {
+    if (!isToday(selectedDate)) return null;
+
+    const easternNow = currentTime;
+    const hours = easternNow.getHours();
+    const minutes = easternNow.getMinutes();
+
+    // Calendar starts at 6 AM (6) and ends at 9 PM (21)
+    // Each hour has 4 slots (15 min each), each slot is 48px tall (min-h-[48px])
+    const SLOT_HEIGHT = 48;
+    const SLOTS_PER_HOUR = 4;
+    const START_HOUR = 6;
+    const END_HOUR = 21;
+
+    // Check if current time is within calendar hours
+    if (hours < START_HOUR || hours > END_HOUR) return null;
+
+    // Calculate position from top
+    const hoursFromStart = hours - START_HOUR;
+    const minuteFraction = minutes / 60;
+    const totalHours = hoursFromStart + minuteFraction;
+    const position = totalHours * SLOTS_PER_HOUR * SLOT_HEIGHT;
+
+    return position;
+  }, [currentTime, selectedDate, isToday]);
 
   // Show quick reserve popup only on first login (once per session)
   useEffect(() => {
@@ -178,8 +230,11 @@ export function CourtCalendarView({
     try {
       setLoadingBookings(true);
 
-      // Format date as YYYY-MM-DD for API
-      const dateStr = selectedDate.toISOString().split('T')[0];
+      // Format date as YYYY-MM-DD for API (using local date to avoid timezone issues)
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
       console.log('📅 Fetching bookings for facility:', selectedFacility, 'date:', dateStr);
 
       const response = await bookingApi.getByFacility(selectedFacility, dateStr);
@@ -381,27 +436,29 @@ export function CourtCalendarView({
     return allCourts.filter(court => court.type === selectedCourtType);
   }, [allCourts, selectedCourtType]);
 
-  // Helper function to check if date is today
-  const isToday = React.useCallback((date: Date) => {
-    const today = new Date();
-    return date.toDateString() === today.toDateString();
-  }, []);
-
-  // Helper function to check if a time slot is in the past
-  const isPastTime = React.useCallback((timeSlot: string) => {
+  // Helper function to check if a time slot is in the past (using Eastern Time)
+  const isPastTime = useCallback((timeSlot: string) => {
     if (!isToday(selectedDate)) return false;
-    
+
     const [time, period] = timeSlot.split(' ');
     let [hours, minutes] = time.split(':').map(Number);
-    
+
     // Convert to 24-hour format
     if (period === 'PM' && hours !== 12) hours += 12;
     if (period === 'AM' && hours === 12) hours = 0;
-    
-    const slotTime = new Date();
-    slotTime.setHours(hours, minutes || 0, 0, 0);
-    
-    return slotTime < currentTime;
+
+    // Compare with Eastern Time
+    const easternNow = currentTime;
+    const slotHour = hours;
+    const slotMinute = minutes || 0;
+
+    const nowHour = easternNow.getHours();
+    const nowMinute = easternNow.getMinutes();
+
+    // Compare hours and minutes
+    if (slotHour < nowHour) return true;
+    if (slotHour === nowHour && slotMinute < nowMinute) return true;
+    return false;
   }, [selectedDate, currentTime, isToday]);
 
   // Generate time slots for the day (15-minute intervals)
@@ -657,13 +714,33 @@ export function CourtCalendarView({
 
 
 
-  // Auto-scroll to top when viewing today (since we're filtering out past times)
+  // Function to scroll to current time
+  const scrollToCurrentTime = useCallback(() => {
+    if (!calendarScrollRef.current || currentTimeLinePosition === null) return;
+
+    const container = calendarScrollRef.current;
+    const containerHeight = container.clientHeight;
+    const headerHeight = 56; // Header row height
+
+    // Scroll so the current time line is visible (position adjusted for header)
+    const actualPosition = currentTimeLinePosition + headerHeight;
+    const scrollPosition = Math.max(0, actualPosition - containerHeight / 3);
+    container.scrollTo({
+      top: scrollPosition,
+      behavior: 'smooth'
+    });
+  }, [currentTimeLinePosition]);
+
+  // Auto-scroll to current time when viewing today
   useEffect(() => {
-    if (isToday(selectedDate) && calendarScrollRef.current) {
-      // Scroll to top to show the first available time slot
-      calendarScrollRef.current.scrollTop = 0;
+    if (isToday(selectedDate) && calendarScrollRef.current && currentTimeLinePosition !== null) {
+      // Small delay to ensure content is rendered
+      const timer = setTimeout(() => {
+        scrollToCurrentTime();
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [selectedDate, isToday]);
+  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -817,137 +894,221 @@ export function CourtCalendarView({
               <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
+              {/* Jump to Now button - only shown when viewing today */}
+              {isToday(selectedDate) && currentTimeLinePosition !== null && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={scrollToCurrentTime}
+                  className="ml-2 text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400"
+                >
+                  <div className="w-2 h-2 bg-red-600 rounded-full mr-2" />
+                  Now
+                </Button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Calendar Grid */}
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            {courts.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <p>No {selectedCourtType} courts available at this facility.</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? 'pickleball' : 'tennis')}
-                >
-                  Show {selectedCourtType === 'tennis' ? 'Pickleball' : 'Tennis'} Courts
-                </Button>
-              </div>
-            ) : (
-              <div className="relative border border-gray-200 flex flex-col" style={{ height: '600px', maxHeight: '70vh' }}>
-                {/* Header Row - Court Names (Fixed at top, scrolls horizontally with content) */}
+        {/* Calendar Grid - Simple scrollable container */}
+        <div
+          className="bg-white rounded-lg shadow-lg border border-gray-200"
+          style={{ height: 'calc(100vh - 320px)', minHeight: '500px' }}
+        >
+          {courts.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <p>No {selectedCourtType} courts available at this facility.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? 'pickleball' : 'tennis')}
+              >
+                Show {selectedCourtType === 'tennis' ? 'Pickleball' : 'Tennis'} Courts
+              </Button>
+            </div>
+          ) : (
+            <div
+              ref={calendarScrollRef}
+              className="calendar-scroll h-full w-full overflow-y-scroll overflow-x-auto"
+              style={{ position: 'relative' }}
+            >
+              {/* Current Time Indicator Line - positioned in the scroll container */}
+              {currentTimeLinePosition !== null && (
                 <div
-                  className="flex-shrink-0 overflow-x-auto overflow-y-hidden border-b-2 border-gray-300 shadow-md bg-white scrollbar-hide"
-                  style={{ zIndex: 50, scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                  id="court-header"
-                >
-                  <div
-                    className="grid border-b-0"
-                    style={{
-                      gridTemplateColumns: `120px repeat(${courts.length}, 200px)`,
-                      minWidth: `${120 + courts.length * 200}px`
-                    }}
-                  >
-                    <div className="p-4 border-r border-gray-200 bg-white">
-                      <span className="font-medium text-sm text-gray-600">Time</span>
-                    </div>
-                    {courts.map((court, index) => (
-                      <div key={index} className="p-4 border-r border-gray-200 last:border-r-0 bg-white">
-                        <div className="font-medium text-sm">{court.name}</div>
-                        <div className="text-xs text-gray-600 mt-1 capitalize">{court.type}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {/* Scrollable Content Area - handles both horizontal and vertical scrolling */}
-                <div
-                  ref={calendarScrollRef}
-                  className="overflow-auto flex-1"
-                  onScroll={(e) => {
-                    // Sync horizontal scroll between header and content
-                    const header = document.getElementById('court-header');
-                    if (header) {
-                      header.scrollLeft = e.currentTarget.scrollLeft;
-                    }
+                  className="pointer-events-none"
+                  style={{
+                    position: 'absolute',
+                    top: `${currentTimeLinePosition + 56}px`, // +56 for header height
+                    left: 0,
+                    right: 0,
+                    zIndex: 25,
+                    height: '2px'
                   }}
                 >
-                  <div style={{ minWidth: `${120 + courts.length * 200}px` }}>
-                {/* Time Slots */}
+                  {/* Time label - sticky to left */}
+                  <div
+                    className="sticky left-0 inline-flex items-center"
+                    style={{ zIndex: 35 }}
+                  >
+                    <div className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-r shadow-md">
+                      {formatEasternTime(currentTime)}
+                    </div>
+                  </div>
+                  {/* Red line */}
+                  <div
+                    className="absolute bg-red-600"
+                    style={{
+                      left: '100px',
+                      right: 0,
+                      top: '50%',
+                      height: '2px',
+                      transform: 'translateY(-50%)',
+                      boxShadow: '0 0 6px rgba(220, 38, 38, 0.6)'
+                    }}
+                  />
+                  {/* Circle indicator */}
+                  <div
+                    className="absolute w-3 h-3 bg-red-600 rounded-full border-2 border-white shadow-md"
+                    style={{
+                      left: '94px',
+                      top: '50%',
+                      transform: 'translateY(-50%)'
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Header Row - Sticky */}
+              <div
+                className="sticky top-0 z-20 bg-white border-b-2 border-gray-300"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `100px repeat(${courts.length}, 180px)`,
+                  minWidth: `${100 + courts.length * 180}px`
+                }}
+              >
+                {/* Time Header - double sticky (top + left) */}
+                <div
+                  className="sticky left-0 z-30 bg-gray-100 border-r border-gray-300 p-3 flex items-center justify-center"
+                  style={{ height: '56px' }}
+                >
+                  <span className="font-semibold text-sm text-gray-700">Time (EST)</span>
+                </div>
+                {/* Court Headers */}
+                {courts.map((court, index) => (
+                  <div
+                    key={index}
+                    className="bg-white border-r border-gray-200 last:border-r-0 p-3"
+                    style={{ height: '56px' }}
+                  >
+                    <div className="font-semibold text-sm text-gray-900">{court.name}</div>
+                    <div className="text-xs text-gray-500 mt-0.5 capitalize">{court.type}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Time Slots Grid */}
+              <div style={{ minWidth: `${100 + courts.length * 180}px` }}>
                 {timeSlots.map((time, timeIndex) => {
                   const isHourMark = time.endsWith(':00 AM') || time.endsWith(':00 PM');
+                  const isPast = isPastTime(time);
                   return (
                     <div
                       key={timeIndex}
-                      className={`grid border-b last:border-b-0 ${isHourMark ? 'border-gray-300' : 'border-gray-100'}`}
-                      style={{ gridTemplateColumns: `120px repeat(${courts.length}, 200px)` }}
+                      className={isPast ? 'opacity-50' : ''}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: `100px repeat(${courts.length}, 180px)`,
+                        height: '48px'
+                      }}
                     >
-                      <div className="p-2 border-r border-gray-200 bg-gray-50">
-                        <span className={`text-xs ${isHourMark ? 'font-semibold' : 'font-normal'}`}>{time}</span>
+                      {/* Sticky Time Column */}
+                      <div
+                        className={`
+                          sticky left-0 z-10 bg-gray-50 border-r border-gray-200 px-2 flex items-center justify-end
+                          ${isHourMark ? 'border-b border-gray-300' : 'border-b border-gray-100'}
+                        `}
+                      >
+                        <span className={`text-xs ${isHourMark ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                          {time}
+                        </span>
                       </div>
+
+                      {/* Court Columns */}
                       {courts.map((court, courtIndex) => {
                         const booking = bookings[court.name as keyof typeof bookings]?.[time];
+                        const isSelected = dragState.selectedCells.has(`${court.name}|${time}`);
+
                         return (
                           <div
                             key={courtIndex}
                             className={`
-                              border-r border-gray-200 last:border-r-0 min-h-[40px]
-                              ${!booking ? 'p-1 cursor-pointer hover:bg-gray-50' : 'flex'}
+                              border-r border-gray-200 last:border-r-0 relative
+                              ${isHourMark ? 'border-b border-gray-300' : 'border-b border-gray-100'}
+                              ${!booking && !isPast ? 'cursor-pointer hover:bg-blue-50' : ''}
                               ${booking ? 'cursor-pointer' : ''}
-                              ${dragState.selectedCells.has(`${court.name}|${time}`) ? 'p-1 bg-blue-100 border-blue-300' : ''}
+                              ${isPast && !booking ? 'bg-gray-100 cursor-not-allowed' : ''}
+                              ${isSelected ? 'bg-blue-100 ring-1 ring-inset ring-blue-400' : ''}
                               ${dragState.isDragging && !booking ? 'select-none' : ''}
                             `}
                             onClick={() => {
+                              if (isPast && !booking) return;
                               if (booking) {
                                 handleBookingClick(court.name, time);
                               } else {
                                 handleEmptySlotClick(court.name, time);
                               }
                             }}
-                            onMouseDown={(e) => !booking && handleMouseDown(court.name, time, e)}
-                            onMouseEnter={() => handleMouseEnter(court.name, time)}
+                            onMouseDown={(e) => !booking && !isPast && handleMouseDown(court.name, time, e)}
+                            onMouseEnter={() => !isPast && handleMouseEnter(court.name, time)}
                           >
-                            {booking && booking.type === 'reservation' && booking.isFirstSlot && (
-                              <div
-                                className={`px-2 py-1 border-t border-l border-r transition-colors hover:opacity-80 overflow-hidden flex-1 w-full ${
-                                  court.type === 'tennis'
-                                    ? 'bg-blue-100 text-blue-800 border-blue-300'
-                                    : 'bg-green-100 text-green-800 border-green-300'
-                                }`}
-                              >
-                                <div className="text-[10px] font-medium leading-tight">{booking.player}</div>
-                                <div className="text-[9px] opacity-75 flex items-center gap-1">
-                                  <span>{booking.duration}</span>
-                                  {booking.bookingType && (
-                                    <span className={`px-1 rounded text-[8px] font-medium ${
-                                      court.type === 'tennis'
-                                        ? 'bg-blue-200 text-blue-900'
-                                        : 'bg-green-200 text-green-900'
-                                    }`}>
-                                      {booking.bookingType}
-                                    </span>
+                                  {/* Booking Display - First Slot */}
+                                  {booking && booking.type === 'reservation' && booking.isFirstSlot && (
+                                    <div
+                                      className={`
+                                        absolute inset-0 m-0.5 px-2 py-1 rounded
+                                        transition-all duration-150 hover:shadow-md
+                                        overflow-hidden
+                                        ${court.type === 'tennis'
+                                          ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                          : 'bg-green-100 text-green-900 border border-green-300'
+                                        }
+                                      `}
+                                    >
+                                      <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>
+                                      <div className="text-[10px] opacity-80 flex items-center gap-1 mt-0.5">
+                                        <span>{booking.duration}</span>
+                                        {booking.bookingType && (
+                                          <span className={`px-1 py-0.5 rounded text-[9px] font-medium ${
+                                            court.type === 'tennis'
+                                              ? 'bg-blue-200 text-blue-900'
+                                              : 'bg-green-200 text-green-900'
+                                          }`}>
+                                            {booking.bookingType}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {booking.notes && (
+                                        <div className={`text-[9px] mt-0.5 truncate italic ${
+                                          court.type === 'tennis' ? 'text-blue-700' : 'text-green-700'
+                                        }`}>
+                                          {booking.notes.length > 25 ? `${booking.notes.substring(0, 25)}...` : booking.notes}
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
-                                </div>
-                                {booking.notes && (
-                                  <div className={`text-[8px] mt-0.5 truncate italic ${
-                                    court.type === 'tennis'
-                                      ? 'text-blue-600'
-                                      : 'text-green-600'
-                                  }`}>
-                                    {booking.notes.length > 30 ? `${booking.notes.substring(0, 30)}...` : booking.notes}
-                                  </div>
-                                )}
-                              </div>
-                            )}
+
+                            {/* Booking Display - Continuation Slots */}
                             {booking && booking.type === 'reservation' && !booking.isFirstSlot && (
                               <div
-                                className={`flex-1 w-full border-l border-r ${
-                                  court.type === 'tennis'
-                                    ? 'bg-blue-100 border-blue-300'
-                                    : 'bg-green-100 border-green-300'
-                                }`}
+                                className={`
+                                  absolute inset-0 m-0.5 rounded-b
+                                  ${court.type === 'tennis'
+                                    ? 'bg-blue-100 border-l border-r border-blue-300'
+                                    : 'bg-green-100 border-l border-r border-green-300'
+                                  }
+                                `}
                               />
                             )}
                           </div>
@@ -958,10 +1119,8 @@ export function CourtCalendarView({
                 })}
               </div>
             </div>
-            </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </div>
 
         {/* Legend */}
         <div className="mt-4 flex flex-wrap items-center gap-6 text-sm">
@@ -976,6 +1135,10 @@ export function CourtCalendarView({
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-white border border-gray-300 rounded"></div>
             <span>Available</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-0.5 bg-red-600 rounded"></div>
+            <span>Current Time (EST)</span>
           </div>
         </div>
         </>

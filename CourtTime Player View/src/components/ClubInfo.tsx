@@ -433,12 +433,27 @@ export function ClubInfo({
               <CardContent>
                 {facility.operatingHours && typeof facility.operatingHours === 'object' && Object.keys(facility.operatingHours).length > 0 ? (
                   <div className="grid grid-cols-1 gap-2">
-                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-                      <div key={day} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
-                        <span className="font-medium capitalize text-gray-700">{day}</span>
-                        <span className="text-gray-600">{facility.operatingHours[day] || 'Closed'}</span>
-                      </div>
-                    ))}
+                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
+                      const hours = facility.operatingHours[day];
+                      let hoursDisplay = 'Closed';
+                      if (hours) {
+                        if (typeof hours === 'string') {
+                          hoursDisplay = hours;
+                        } else if (typeof hours === 'object') {
+                          if (hours.closed) {
+                            hoursDisplay = 'Closed';
+                          } else if (hours.open && hours.close) {
+                            hoursDisplay = `${hours.open} - ${hours.close}`;
+                          }
+                        }
+                      }
+                      return (
+                        <div key={day} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
+                          <span className="font-medium capitalize text-gray-700">{day}</span>
+                          <span className="text-gray-600">{hoursDisplay}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-sm">Hours not available</p>

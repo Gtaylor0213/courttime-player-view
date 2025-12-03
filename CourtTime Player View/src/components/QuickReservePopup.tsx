@@ -65,8 +65,11 @@ export function QuickReservePopup({
 
     const now = new Date();
 
-    // Set current date
-    const dateStr = now.toISOString().split('T')[0];
+    // Set current date (using local date to avoid timezone issues)
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     setSelectedDate(dateStr);
 
     // Set current time rounded to next 15-minute interval
@@ -233,7 +236,10 @@ export function QuickReservePopup({
 
       // Determine starting time index based on selected date
       const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
+      const todayYear = now.getFullYear();
+      const todayMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const todayDay = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${todayYear}-${todayMonth}-${todayDay}`;
       const isToday = selectedDate === todayStr;
 
       let startTimeIndex = 0; // Start from beginning for future dates
@@ -398,7 +404,11 @@ export function QuickReservePopup({
     while (current <= end) {
       const dayName = getDayOfWeek(current);
       if (recurringDays.includes(dayName)) {
-        dates.push(current.toISOString().split('T')[0]);
+        // Use local date components to avoid timezone issues
+        const year = current.getFullYear();
+        const month = String(current.getMonth() + 1).padStart(2, '0');
+        const day = String(current.getDate()).padStart(2, '0');
+        dates.push(`${year}-${month}-${day}`);
       }
       current.setDate(current.getDate() + 1);
     }
@@ -627,7 +637,10 @@ export function QuickReservePopup({
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
+              min={(() => {
+                const now = new Date();
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+              })()}
               required
               className="flex-1"
             />

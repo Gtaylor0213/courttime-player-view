@@ -91,8 +91,16 @@ export function BookingManagement({
       const weekAhead = new Date(today);
       weekAhead.setDate(weekAhead.getDate() + 7);
 
-      setStartDate(weekAgo.toISOString().split('T')[0]);
-      setEndDate(weekAhead.toISOString().split('T')[0]);
+      // Use local date components to avoid timezone issues
+      const formatLocalDate = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      setStartDate(formatLocalDate(weekAgo));
+      setEndDate(formatLocalDate(weekAhead));
 
       // Load courts for the facility
       loadCourts();

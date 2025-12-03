@@ -752,16 +752,15 @@ export function FacilityManagement({
 
       <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out p-8`}>
         <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-medium text-gray-900">Facility Management</h1>
-          </div>
-
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full max-w-xl grid-cols-3">
-              <TabsTrigger value="details">Facility Details</TabsTrigger>
-              <TabsTrigger value="rules">Booking Rules</TabsTrigger>
-              <TabsTrigger value="courts">Court Management</TabsTrigger>
-            </TabsList>
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-2xl font-medium text-gray-900">Facility Management</h1>
+              <TabsList className="flex">
+                <TabsTrigger value="details" className="px-4">Facility Details</TabsTrigger>
+                <TabsTrigger value="rules" className="px-4">Booking Rules</TabsTrigger>
+                <TabsTrigger value="courts" className="px-4">Court Management</TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* Facility Details Tab */}
             <TabsContent value="details" className="space-y-6">
@@ -849,10 +848,10 @@ export function FacilityManagement({
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex flex-col items-center gap-4">
-                      {facilityData.logoUrl ? (
+                      {(facilityData.facilityImagePreview || facilityData.logoUrl) ? (
                         <div className="relative">
                           <img
-                            src={facilityData.logoUrl}
+                            src={facilityData.facilityImagePreview || facilityData.logoUrl}
                             alt="Facility Logo"
                             className="w-32 h-32 object-cover rounded-lg border border-gray-200"
                           />
@@ -861,7 +860,12 @@ export function FacilityManagement({
                               variant="destructive"
                               size="sm"
                               className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full"
-                              onClick={() => setFacilityData({ ...facilityData, logoUrl: '' })}
+                              onClick={() => {
+                                if (facilityData.facilityImagePreview && facilityData.facilityImagePreview.startsWith('blob:')) {
+                                  URL.revokeObjectURL(facilityData.facilityImagePreview);
+                                }
+                                setFacilityData({ ...facilityData, logoUrl: '', facilityImagePreview: '', facilityImage: null });
+                              }}
                             >
                               <X className="h-3 w-3" />
                             </Button>
@@ -873,18 +877,37 @@ export function FacilityManagement({
                         </div>
                       )}
                       {isEditing && (
-                        <div className="w-full space-y-2">
-                          <Label htmlFor="logoUrl">Logo URL</Label>
-                          <div className="flex gap-2">
-                            <Input
-                              id="logoUrl"
-                              value={facilityData.logoUrl}
-                              onChange={(e) => setFacilityData({ ...facilityData, logoUrl: e.target.value })}
-                              placeholder="https://example.com/logo.png"
-                              className="flex-1"
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500">Enter a URL to your facility's logo image</p>
+                        <div className="w-full">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (facilityData.facilityImagePreview && facilityData.facilityImagePreview.startsWith('blob:')) {
+                                  URL.revokeObjectURL(facilityData.facilityImagePreview);
+                                }
+                                const previewUrl = URL.createObjectURL(file);
+                                setFacilityData({
+                                  ...facilityData,
+                                  facilityImage: file,
+                                  facilityImagePreview: previewUrl,
+                                  logoUrl: previewUrl
+                                });
+                              }
+                            }}
+                            className="hidden"
+                            id="facilityLogo"
+                          />
+                          <label htmlFor="facilityLogo">
+                            <Button variant="outline" asChild className="w-full cursor-pointer">
+                              <span>
+                                <Upload className="h-4 w-4 mr-2" />
+                                {facilityData.facilityImagePreview ? 'Change Image' : 'Upload Image'}
+                              </span>
+                            </Button>
+                          </label>
+                          <p className="text-xs text-gray-500 text-center mt-2">PNG, JPG up to 5MB</p>
                         </div>
                       )}
                     </div>

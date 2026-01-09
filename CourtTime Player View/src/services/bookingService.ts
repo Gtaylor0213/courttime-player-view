@@ -354,9 +354,14 @@ export async function createBookingWithOverride(
     activityType?: string;
     notes?: string;
   },
-  adminId: string,
-  overrideReason: string
+  override: {
+    adminUserId: string;
+    reason: string;
+    overriddenRules?: string[];
+  }
 ): Promise<BookingResult> {
+  const adminId = override.adminUserId;
+  const overrideReason = override.reason;
   try {
     const request: BookingRequest = {
       userId: bookingData.userId,
@@ -738,13 +743,13 @@ export async function getUserStrikes(
  */
 export async function markNoShow(
   bookingId: string,
-  facilityId: string,
-  markedBy?: string
+  markedBy: string,
+  reason?: string
 ): Promise<{ success: boolean; strikeId?: string; error?: string }> {
   try {
     // Get booking details
     const bookingResult = await query(
-      `SELECT user_id as "userId" FROM bookings WHERE id = $1`,
+      `SELECT user_id as "userId", facility_id as "facilityId" FROM bookings WHERE id = $1`,
       [bookingId]
     );
 
@@ -753,6 +758,7 @@ export async function markNoShow(
     }
 
     const userId = bookingResult.rows[0].userId;
+    const facilityId = bookingResult.rows[0].facilityId;
 
     // Update booking
     await query(
@@ -767,7 +773,7 @@ export async function markNoShow(
       userId,
       facilityId,
       'no_show',
-      'Did not show up for reservation',
+      reason || 'Did not show up for reservation',
       bookingId,
       undefined,
       markedBy
@@ -784,16 +790,15 @@ export async function markNoShow(
  * Check in for a booking
  */
 export async function checkInBooking(
-  bookingId: string,
-  userId: string
+  bookingId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const result = await query(
       `UPDATE bookings
        SET checked_in = true, checked_in_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND user_id = $2 AND status = 'confirmed'
+       WHERE id = $1 AND status = 'confirmed'
        RETURNING id`,
-      [bookingId, userId]
+      [bookingId]
     );
 
     if (result.rows.length === 0) {

@@ -26,7 +26,6 @@ export const notificationService = {
         type,
         is_read,
         action_url,
-        priority,
         created_at
       FROM notifications
       WHERE user_id = $1
@@ -46,7 +45,7 @@ export const notificationService = {
         timestamp: new Date(row.created_at),
         read: row.is_read,
         actionUrl: row.action_url,
-        priority: row.priority || this.inferPriority(row.type)
+        priority: this.inferPriority(row.type)
       }));
     } catch (error) {
       console.error('Error fetching notifications:', error);

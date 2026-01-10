@@ -12,7 +12,7 @@ import { ReservationDetailsModal } from './ReservationDetailsModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, usersApi, bookingApi } from '../api/client';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, Minus, Plus } from 'lucide-react';
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 
 // Helper to get current time components in Eastern Time
@@ -803,9 +803,9 @@ export function CourtCalendarView({
       />
 
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+      <div className={`transition-all duration-300 h-screen flex flex-col overflow-hidden ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 relative z-10">
+        <header className="bg-white border-b border-gray-200 relative z-10 flex-shrink-0">
           <div className="px-6 py-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-6">
@@ -819,10 +819,10 @@ export function CourtCalendarView({
           </div>
         </header>
 
-        {/* Controls */}
-        <div className="px-6 py-6 overflow-x-hidden">
+        {/* Controls - Sticky Header */}
         {memberFacilities.length === 0 ? (
           // Show "no membership" message when user has no facilities
+          <div className="px-6 py-6">
           <Card>
             <CardContent className="p-8">
               <div className="text-center space-y-4">
@@ -842,141 +842,152 @@ export function CourtCalendarView({
               </div>
             </CardContent>
           </Card>
+          </div>
         ) : (
           <>
-        <div className="flex flex-col gap-6 mb-6">
-          {/* Facility Name, Court Type Filter, and Quick Reserve */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <h3 className="text-lg font-medium">{currentFacility?.name}</h3>
-              <Badge variant="outline">{currentFacility?.type}</Badge>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-600">Court Type:</span>
-                <div className="flex gap-2">
-                  <Button
-                    variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
-                    className={selectedCourtType === 'tennis' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+        {/* Controls Header */}
+        <div className="flex-shrink-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+          <div className="px-6 py-4">
+            {/* Top Row: Facility Name, Court Type Filter, Courts, Zoom, Quick Reserve */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <h3 className="text-lg font-medium">{currentFacility?.name}</h3>
+                <Badge variant="outline">{currentFacility?.type}</Badge>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Court Type:</span>
+                  <div className="flex gap-1">
+                    <Button
+                      variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
+                      className={selectedCourtType === 'tennis' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                    >
+                      Tennis
+                    </Button>
+                    <Button
+                      variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
+                      className={selectedCourtType === 'pickleball' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                    >
+                      Pickleball
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Court Display Count */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Courts:</span>
+                  <Select
+                    value={displayedCourtsCount?.toString() || 'all'}
+                    onValueChange={(v) => setDisplayedCourtsCount(v === 'all' ? null : parseInt(v))}
                   >
-                    Tennis
-                  </Button>
-                  <Button
-                    variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
-                    className={selectedCourtType === 'pickleball' ? 'bg-blue-600 hover:bg-blue-700' : ''}
-                  >
-                    Pickleball
-                  </Button>
+                    <SelectTrigger className="w-[90px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2">2</SelectItem>
+                      <SelectItem value="4">4</SelectItem>
+                      <SelectItem value="6">6</SelectItem>
+                      <SelectItem value="all">All ({filteredCourts.length})</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Zoom Control - Buttons instead of dropdown */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Zoom:</span>
+                  <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setZoomLevel(Math.max(75, zoomLevel - 25))}
+                      disabled={zoomLevel <= 75}
+                      className="h-7 w-7 p-0 hover:bg-white"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="text-sm font-medium min-w-[40px] text-center">{zoomLevel}%</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setZoomLevel(Math.min(150, zoomLevel + 25))}
+                      disabled={zoomLevel >= 150}
+                      className="h-7 w-7 p-0 hover:bg-white"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
 
-              {/* Court Display Count */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-600">Courts:</span>
-                <Select
-                  value={displayedCourtsCount?.toString() || 'all'}
-                  onValueChange={(v) => setDisplayedCourtsCount(v === 'all' ? null : parseInt(v))}
-                >
-                  <SelectTrigger className="w-[90px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2">2</SelectItem>
-                    <SelectItem value="4">4</SelectItem>
-                    <SelectItem value="6">6</SelectItem>
-                    <SelectItem value="all">All ({filteredCourts.length})</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Zoom Control */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-600">Zoom:</span>
-                <Select
-                  value={zoomLevel.toString()}
-                  onValueChange={(v) => setZoomLevel(parseInt(v))}
-                >
-                  <SelectTrigger className="w-[80px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="75">75%</SelectItem>
-                    <SelectItem value="100">100%</SelectItem>
-                    <SelectItem value="125">125%</SelectItem>
-                    <SelectItem value="150">150%</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Quick Reserve Button */}
+              <Button
+                onClick={() => setShowQuickReserve(true)}
+                className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-black px-6 py-2 text-base font-medium shadow-md"
+                size="lg"
+              >
+                <Calendar className="h-5 w-5" />
+                Quick Reserve
+              </Button>
             </div>
 
-            {/* Quick Reserve Button */}
-            <Button
-              onClick={() => setShowQuickReserve(true)}
-              className="flex items-center gap-2 !bg-green-600 hover:!bg-green-700 !text-white px-6 py-2 text-base font-medium shadow-md"
-              size="lg"
-            >
-              <Calendar className="h-5 w-5" />
-              Quick Reserve
-            </Button>
-          </div>
+            {/* Bottom Row: Facility Selection and Date Navigation */}
+            <div className="flex flex-wrap items-center justify-between gap-4 mt-4">
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Facility Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Facility:</span>
+                  <Select value={selectedFacility} onValueChange={setSelectedFacility}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableFacilities.map((facility) => (
+                        <SelectItem key={facility.id} value={facility.id}>
+                          {facility.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-          {/* Facility Selection and Date Navigation */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-            <div className="flex flex-wrap items-center gap-4">
-              {/* Facility Selector */}
+                  {/* Info Popover */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full">
+                        <Info className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <p className="text-sm text-gray-700">
+                        Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots.
+                      </p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {/* Date Navigation */}
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-600">Facility:</span>
-                <Select value={selectedFacility} onValueChange={setSelectedFacility}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableFacilities.map((facility) => (
-                      <SelectItem key={facility.id} value={facility.id}>
-                        {facility.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Info Popover */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full">
-                      <Info className="h-4 w-4 text-gray-500" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80">
-                    <p className="text-sm text-gray-700">
-                      Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots.
-                    </p>
-                  </PopoverContent>
-                </Popover>
+                <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="text-center min-w-[200px]">
+                  <h2 className="font-medium">{formatDate(selectedDate)}</h2>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
-            </div>
-
-            {/* Date Navigation */}
-            <div className="flex items-center justify-end gap-4">
-              <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="text-center min-w-[120px]">
-                <h2 className="font-medium">{formatDate(selectedDate)}</h2>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
             </div>
           </div>
         </div>
 
-        {/* Calendar Grid - Scrollable container like Excel */}
+        {/* Calendar Grid Container */}
+        <div className="flex-1 overflow-auto px-6 py-4">
         {courts.length === 0 ? (
           <div
-            className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center text-gray-500"
-            style={{ height: 'calc(100vh - 320px)', minHeight: '500px' }}
+            className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center text-gray-500 h-full"
           >
             <p>No {selectedCourtType} courts available at this facility.</p>
             <Button
@@ -991,8 +1002,7 @@ export function CourtCalendarView({
         ) : (
           <div
             ref={calendarScrollRef}
-            className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full"
-            style={{ height: 'calc(100vh - 320px)', minHeight: '500px', maxWidth: '100%' }}
+            className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full h-full"
           >
               {/* Header Row - Sticky at top */}
               <div
@@ -1179,10 +1189,10 @@ export function CourtCalendarView({
               )}
           </div>
         )}
+        </div>
 
         </>
         )}
-        </div>
       </div>
 
       {/* Booking Wizard */}

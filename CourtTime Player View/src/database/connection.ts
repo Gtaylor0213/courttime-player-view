@@ -1,4 +1,8 @@
 import { Pool, PoolClient } from 'pg';
+import dns from 'dns';
+
+// Force IPv4 DNS resolution (Render cannot reach Supabase over IPv6)
+dns.setDefaultResultOrder('ipv4first');
 
 // Database connection pool
 let pool: Pool | null = null;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UnifiedSidebar } from '../UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -11,24 +11,6 @@ import { Checkbox } from '../ui/checkbox';
 import { useAuth } from '../../contexts/AuthContext';
 import { bookingApi, membersApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
-
-interface AdminBookingProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  sidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
-}
 
 interface Member {
   id: string;
@@ -44,23 +26,9 @@ interface Facility {
   courts: Array<{ id: string; name: string; type: string }>;
 }
 
-export function AdminBooking({
-  onLogout,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  sidebarCollapsed = false,
-  onToggleSidebar
-}: AdminBookingProps) {
+export function AdminBooking() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Facility and court selection
   const [facilities, setFacilities] = useState<Facility[]>([]);
@@ -634,27 +602,7 @@ export function AdminBooking({
   const selectedMember = members.find(m => m.id === selectedMemberId);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <UnifiedSidebar
-        userType="admin"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-        onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="admin-booking"
-      />
-
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out p-8`}>
+      <div className="p-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-8">
             <h1 className="text-2xl font-medium text-gray-900 flex items-center gap-2">
@@ -1052,6 +1000,5 @@ export function AdminBooking({
           </Card>
         </div>
       </div>
-    </div>
   );
 }

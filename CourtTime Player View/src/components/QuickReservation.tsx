@@ -4,36 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { UnifiedSidebar } from './UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Clock, Users, Calendar, Filter } from 'lucide-react';
 
-interface QuickReservationProps {
-  onBack: () => void;
-  onLogout?: () => void;
-  onNavigateToProfile?: () => void;
-  onNavigateToPlayerDashboard?: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToMessages?: () => void;
-  selectedFacilityId?: string;
-  onFacilityChange?: (facilityId: string) => void;
-  sidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
-}
-
-export function QuickReservation({
-  onBack,
-  onLogout = () => {},
-  onNavigateToProfile = () => {},
-  onNavigateToPlayerDashboard = () => {},
-  onNavigateToClub = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToMessages = () => {},
-  selectedFacilityId,
-  onFacilityChange,
-  sidebarCollapsed = false,
-  onToggleSidebar
-}: QuickReservationProps) {
+export function QuickReservation() {
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedFacility, setSelectedFacility] = useState('');
   const [selectedCourtType, setSelectedCourtType] = useState('');
@@ -110,30 +85,13 @@ export function QuickReservation({
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Unified Sidebar */}
-      <UnifiedSidebar
-        userType="player"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onBack}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToMessages={onNavigateToMessages}
-        onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="quick-reservation"
-      />
-
-      {/* Main Content */}
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
+    <>
         {/* Header */}
         <header className="bg-white border-b border-gray-200">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center gap-4">
-                <Button variant="ghost" onClick={onBack}>
+                <Button variant="ghost" onClick={() => navigate('/calendar')}>
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back
                 </Button>
@@ -376,7 +334,6 @@ export function QuickReservation({
           </div>
         </div>
         </div>
-      </div>
-    </div>
+    </>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UnifiedSidebar } from './UnifiedSidebar';
+import { useParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { ArrowLeft, MapPin, Phone, Mail, Globe, Clock, Users, Star, Calendar, Clipboard, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
@@ -10,28 +10,6 @@ import { facilitiesApi, playerProfileApi } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 
-interface ClubInfoProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToMessages?: () => void;
-  onNavigateToBulletinBoard?: (clubId: string, clubName: string) => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  selectedFacilityId?: string;
-  onFacilityChange?: (facilityId: string) => void;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
-  clubId: string;
-}
 
 interface FacilityData {
   id: string;
@@ -62,28 +40,9 @@ interface FacilityData {
   }[];
 }
 
-export function ClubInfo({
-  onBack,
-  onLogout,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToMessages = () => {},
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  selectedFacilityId,
-  onFacilityChange,
-  sidebarCollapsed,
-  onToggleSidebar,
-  clubId
-}: ClubInfoProps) {
+export function ClubInfo() {
+  const { clubId } = useParams<{ clubId: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [facility, setFacility] = useState<FacilityData | null>(null);
@@ -216,70 +175,23 @@ export function ClubInfo({
 
   if (!facility) {
     return (
-      <div className="min-h-screen bg-gray-50 flex">
-        <UnifiedSidebar
-          userType="player"
-          onNavigateToProfile={onNavigateToProfile}
-          onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-          onNavigateToCalendar={onNavigateToCalendar}
-          onNavigateToClub={onNavigateToClub}
-          onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-          onNavigateToHittingPartner={onNavigateToHittingPartner}
-          onNavigateToMessages={onNavigateToMessages}
-          onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-          onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-          onNavigateToCourtManagement={onNavigateToCourtManagement}
-          onNavigateToBookingManagement={onNavigateToBookingManagement}
-          onNavigateToAdminBooking={onNavigateToAdminBooking}
-          onNavigateToMemberManagement={onNavigateToMemberManagement}
-                    onLogout={onLogout}
-          isCollapsed={sidebarCollapsed}
-          onToggleCollapse={onToggleSidebar}
-          currentPage="club-info"
-        />
-
-        <div className={`flex-1 ${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
-          <div className="p-8 flex items-center justify-center min-h-screen">
-            <Card className="max-w-md">
-              <CardContent className="p-6 text-center">
-                <h2 className="mb-2">Club not found</h2>
-                <p className="text-gray-600 mb-4">The requested club information could not be found.</p>
-                <Button onClick={onBack}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Go Back
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+      <div className="p-8 flex items-center justify-center min-h-screen">
+        <Card className="max-w-md">
+          <CardContent className="p-6 text-center">
+            <h2 className="mb-2">Club not found</h2>
+            <p className="text-gray-600 mb-4">The requested club information could not be found.</p>
+            <Button onClick={() => navigate('/calendar')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Go Back
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <UnifiedSidebar
-        userType="player"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToMessages={onNavigateToMessages}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-                onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="club-info"
-      />
-
-      <div className={`flex-1 ${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
+    <>
         {/* Header */}
         <div className="bg-white border-b border-gray-200 p-6">
           <div className="flex items-center justify-between">
@@ -302,7 +214,7 @@ export function ClubInfo({
                       You're viewing information for a facility you're not currently a member of. Request membership to access courts and book sessions.
                     </p>
                     <Button
-                      onClick={onNavigateToProfile}
+                      onClick={() => navigate('/profile')}
                       size="sm"
                       className="bg-blue-600 hover:bg-blue-700"
                     >
@@ -356,11 +268,11 @@ export function ClubInfo({
 
                   {/* Quick Actions */}
                   <div className="flex gap-3 flex-wrap">
-                    <Button onClick={onNavigateToCalendar}>
+                    <Button onClick={() => navigate('/calendar')}>
                       <Calendar className="h-4 w-4 mr-2" />
                       Book Court
                     </Button>
-                    <Button variant="outline" onClick={() => onNavigateToBulletinBoard(facility.id, facility.name)}>
+                    <Button variant="outline" onClick={() => navigate(`/bulletin-board?clubId=${facility.id}&clubName=${encodeURIComponent(facility.name)}`)}>
                       <Clipboard className="h-4 w-4 mr-2" />
                       Bulletin Board
                     </Button>
@@ -509,7 +421,6 @@ export function ClubInfo({
             </Card>
           </div>
         </div>
-      </div>
-    </div>
+    </>
   );
 }

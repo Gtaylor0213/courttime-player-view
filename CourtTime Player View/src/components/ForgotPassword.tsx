@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -7,11 +8,8 @@ import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, Mail, CheckCircle, AlertCircle } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
-interface ForgotPasswordProps {
-  onBack: () => void;
-}
-
-export function ForgotPassword({ onBack }: ForgotPasswordProps) {
+export function ForgotPassword() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -95,7 +93,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
                 <Button
                   variant="ghost"
-                  onClick={onBack}
+                  onClick={() => navigate('/login')}
                   className="w-full"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
@@ -138,7 +136,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={onBack}
+                    onClick={() => navigate('/login')}
                     className="w-full"
                     disabled={isSubmitting}
                   >

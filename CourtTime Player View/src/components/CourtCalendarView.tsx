@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { UnifiedSidebar } from './UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '../contexts/AppContext';
 import { BookingWizard } from './BookingWizard';
 import { QuickReservePopup } from './QuickReservePopup';
 import { NotificationBell } from './NotificationBell';
@@ -58,47 +59,9 @@ const formatCurrentEasternTime = (): string => {
   });
 };
 
-interface CourtCalendarViewProps {
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToClub: (clubId: string) => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToMessages?: () => void;
-  onNavigateToSettings?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  onLogout: () => void;
-  selectedFacilityId?: string;
-  onFacilityChange?: (facilityId: string) => void;
-  sidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
-}
-
-export function CourtCalendarView({
-  onNavigateToPlayerDashboard,
-  onNavigateToProfile,
-  onNavigateToClub,
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToMessages = () => {},
-  onNavigateToSettings = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  onLogout,
-  selectedFacilityId = 'sunrise-valley',
-  onFacilityChange,
-  sidebarCollapsed = false,
-  onToggleSidebar
-}: CourtCalendarViewProps) {
+export function CourtCalendarView() {
+  const navigate = useNavigate();
+  const { selectedFacilityId = 'sunrise-valley', setSelectedFacilityId } = useAppContext();
   const { unreadCount } = useNotifications();
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -434,13 +397,9 @@ export function CourtCalendarView({
 
   const handleFacilityChange = (facilityId: string) => {
     setSelectedFacility(facilityId);
-    if (onFacilityChange) {
-      onFacilityChange(facilityId);
+    if (setSelectedFacilityId) {
+      setSelectedFacilityId(facilityId);
     }
-  };
-
-  const handleAdminDashboardNavigation = () => {
-    onNavigateToAdminDashboard();
   };
 
   // Only use member facilities - no fallback for users without memberships
@@ -779,31 +738,9 @@ export function CourtCalendarView({
   }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Unified Sidebar */}
-      <UnifiedSidebar
-        userType="player"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={() => {}} // Already on calendar view
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToMessages={onNavigateToMessages}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-                onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="court-calendar"
-      />
-
+    <>
       {/* Main Content */}
-      <div className={`transition-all duration-300 h-screen flex flex-col overflow-hidden ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+      <div className="h-screen flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 relative z-10 flex-shrink-0">
           <div className="px-6 py-4">
@@ -834,7 +771,7 @@ export function CourtCalendarView({
                   You need to be a member of a facility to view and book courts. Request membership to a facility to get started.
                 </p>
                 <Button
-                  onClick={onNavigateToProfile}
+                  onClick={() => navigate('/profile')}
                   className="mt-4"
                 >
                   Request Facility Membership
@@ -1225,6 +1162,6 @@ export function CourtCalendarView({
         reservation={reservationDetailsModal.reservation}
         onCancelReservation={handleCancelReservation}
       />
-    </div>
+    </>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -7,14 +8,9 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
-interface LoginPageProps {
-  onLogin: () => void;
-  onNavigateToUserRegistration: () => void;
-  onNavigateToFacilityRegistration?: () => void;
-  onNavigateToForgotPassword: () => void;
-}
-
-export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToFacilityRegistration, onNavigateToForgotPassword }: LoginPageProps) {
+export function LoginPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('testplayer@courttime.com');
   const [password, setPassword] = useState('password123');
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +26,8 @@ export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToF
       const success = await login(email, password);
       console.log('Login result:', success);
       if (success) {
-        onLogin(); // The auth context handles user state
+        const from = (location.state as any)?.from?.pathname || '/calendar';
+        navigate(from, { replace: true });
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -111,7 +108,7 @@ export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToF
                     <Label htmlFor="password">Password</Label>
                     <button
                       type="button"
-                      onClick={onNavigateToForgotPassword}
+                      onClick={() => navigate('/forgot-password')}
                       className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
                     >
                       Forgot password?
@@ -150,14 +147,14 @@ export function LoginPage({ onLogin, onNavigateToUserRegistration, onNavigateToF
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={onNavigateToUserRegistration}
+                    onClick={() => navigate('/register')}
                   >
                     Create Player Account
                   </Button>
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={onNavigateToFacilityRegistration}
+                    onClick={() => navigate('/register/facility')}
                   >
                     Register a Facility
                   </Button>

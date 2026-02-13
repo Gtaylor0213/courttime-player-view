@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -15,12 +16,8 @@ import { facilitiesApi, playerProfileApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
-interface UserRegistrationProps {
-  onBack: () => void;
-  onRegistrationComplete: () => void;
-}
-
-export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistrationProps) {
+export function UserRegistration() {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register } = useAuth();
@@ -218,7 +215,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
           toast.info(`Membership requests sent to ${selectedFacilities.length} ${selectedFacilities.length === 1 ? 'facility' : 'facilities'}`);
         }
 
-        onRegistrationComplete();
+        navigate('/calendar');
       }
     } catch (error) {
       console.error('Registration failed:', error);
@@ -727,7 +724,7 @@ export function UserRegistration({ onBack, onRegistrationComplete }: UserRegistr
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-20">
-            <Button variant="ghost" onClick={onBack} className="flex items-center gap-2 hover:bg-gray-100">
+            <Button variant="ghost" onClick={() => navigate('/login')} className="flex items-center gap-2 hover:bg-gray-100">
               <ArrowLeft className="h-4 w-4" />
               Back to Login
             </Button>

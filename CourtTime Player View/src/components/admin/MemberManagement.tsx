@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UnifiedSidebar } from '../UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -12,25 +12,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { membersApi, addressWhitelistApi } from '../../api/client';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
-
-interface MemberManagementProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  sidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
-  facilityId?: string;
-}
 
 interface Member {
   userId: string;
@@ -47,24 +28,9 @@ interface Member {
   createdAt: string;
 }
 
-export function MemberManagement({
-  onLogout,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  sidebarCollapsed = false,
-  onToggleSidebar,
-  facilityId
-}: MemberManagementProps) {
+export function MemberManagement() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterMembership, setFilterMembership] = useState<string>('all');
@@ -77,8 +43,7 @@ export function MemberManagement({
   const [newAddress, setNewAddress] = useState('');
   const [accountsPerAddress, setAccountsPerAddress] = useState(4);
 
-  // Use the first facility from user's memberships if facilityId not provided
-  const currentFacilityId = facilityId || user?.memberFacilities?.[0];
+  const currentFacilityId = user?.memberFacilities?.[0];
 
   useEffect(() => {
     if (currentFacilityId) {
@@ -259,7 +224,7 @@ export function MemberManagement({
 
   if (!currentFacilityId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center h-64">
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle>No Facility Selected</CardTitle>
@@ -271,27 +236,8 @@ export function MemberManagement({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <UnifiedSidebar
-        userType="admin"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-                onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="member-management"
-      />
-
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out p-8`}>
+    <>
+      <div className="p-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
@@ -581,6 +527,6 @@ export function MemberManagement({
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

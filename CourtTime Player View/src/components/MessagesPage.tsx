@@ -1,59 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { UnifiedSidebar } from './UnifiedSidebar';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { Messages } from './Messages';
 import { useAuth } from '../contexts/AuthContext';
 import { playerProfileApi, facilitiesApi } from '../api/client';
 
-interface MessagesPageProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToMessages?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  selectedFacilityId?: string;
-  onFacilityChange?: (facilityId: string) => void;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
-  selectedRecipientId?: string;
-}
-
-export function MessagesPage({
-  onBack,
-  onLogout,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub = () => {},
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToMessages = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  selectedFacilityId,
-  onFacilityChange,
-  sidebarCollapsed,
-  onToggleSidebar,
-  selectedRecipientId
-}: MessagesPageProps) {
+export function MessagesPage() {
+  const [searchParams] = useSearchParams();
+  const selectedRecipientId = searchParams.get('recipientId') || undefined;
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedFacilityFilter, setSelectedFacilityFilter] = useState<string>(selectedFacilityId || 'all');
+  const [selectedFacilityFilter, setSelectedFacilityFilter] = useState<string>('all');
 
   useEffect(() => {
     if (user?.id) {
@@ -116,29 +75,7 @@ export function MessagesPage({
   )?.facilityName;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <UnifiedSidebar
-        userType="player"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToMessages={onNavigateToMessages}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-                onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="messages"
-      />
-
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out p-6`}>
+    <div className="p-6">
         <div className="mb-4 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-medium">Messages</h1>
@@ -163,6 +100,5 @@ export function MessagesPage({
           />
         )}
       </div>
-    </div>
   );
 }

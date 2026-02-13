@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UnifiedSidebar } from '../UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -12,25 +12,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { facilitiesApi, adminApi } from '../../api/client';
 import { toast } from 'sonner';
 
-interface CourtManagementProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  sidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
-}
-
 interface Court {
   id: string;
   name: string;
@@ -42,24 +23,9 @@ interface Court {
   status: 'active' | 'maintenance' | 'inactive';
 }
 
-export function CourtManagement({
-  onLogout,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  sidebarCollapsed = false,
-  onToggleSidebar
-}: CourtManagementProps) {
+export function CourtManagement() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [courts, setCourts] = useState<Court[]>([]);
   const [editingCourt, setEditingCourt] = useState<Court | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -184,35 +150,14 @@ export function CourtManagement({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <UnifiedSidebar
-        userType="admin"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-                onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="court-management"
-      />
-
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out p-8`}>
+      <div className="p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-2xl font-medium text-gray-900">Court Management</h1>
@@ -381,6 +326,5 @@ export function CourtManagement({
           )}
         </div>
       </div>
-    </div>
   );
 }

@@ -7,42 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera } from 'lucide-react';
-import { UnifiedSidebar } from './UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { playerProfileApi, facilitiesApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
-interface PlayerProfileProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile?: () => void;
-  onNavigateToPlayerDashboard?: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToMessages?: () => void;
-  onNavigateToCalendar?: () => void;
-  selectedFacilityId?: string;
-  onFacilityChange?: (facilityId: string) => void;
-  sidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
-}
-
-export function PlayerProfile({
-  onBack,
-  onLogout,
-  onNavigateToProfile = () => {},
-  onNavigateToPlayerDashboard = () => {},
-  onNavigateToClub = () => {},
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToMessages = () => {},
-  onNavigateToCalendar = () => {},
-  sidebarCollapsed = false,
-  onToggleSidebar
-}: PlayerProfileProps) {
+export function PlayerProfile() {
+  const navigate = useNavigate();
   const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -329,23 +302,7 @@ export function PlayerProfile({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <UnifiedSidebar
-        userType="player"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToMessages={onNavigateToMessages}
-        onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="profile"
-      />
-
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
+    <>
         <header className="bg-white border-b border-gray-200">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
@@ -714,7 +671,6 @@ export function PlayerProfile({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </>
   );
 }

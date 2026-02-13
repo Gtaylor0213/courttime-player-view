@@ -2,8 +2,11 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner@2.0.3';
 import { authApi } from '../api/client';
 
-// DEV MODE: Set to true to use mock data, false to use real database
-const DEV_MODE = false;
+function generateSessionToken(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
 
 export interface User {
   id: string;
@@ -115,41 +118,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
 
-      // DEV MODE: Auto-login without database
-      if (DEV_MODE) {
-        const mockUser: User = {
-          id: 'dev-user-123',
-          email: email,
-          fullName: 'Development User',
-          userType: 'player',
-          memberFacilities: ['sunrise-valley', 'riverside'],
-          preferences: {
-            notifications: true,
-            timezone: 'America/New_York'
-          }
-        };
-        setUser(mockUser);
-        setAccessToken('dev-token-123');
-        // Save to localStorage
-        localStorage.setItem('auth_user', JSON.stringify(mockUser));
-        localStorage.setItem('auth_token', 'dev-token-123');
-        toast.success('Logged in (Dev Mode)');
-        return true;
-      }
-
-      // Real database login
       const result = await authApi.login(email, password);
 
-      console.log('Login API result:', result);
-
       if (result.success && result.data) {
-        // The API client wraps backend response: { success: true, data: { success: true, user: {...} } }
         const backendResponse = result.data as any;
         if (backendResponse.user) {
-          const token = 'token-' + backendResponse.user.id;
+          const token = generateSessionToken();
           setUser(backendResponse.user);
           setAccessToken(token);
-          // Save to localStorage
           localStorage.setItem('auth_user', JSON.stringify(backendResponse.user));
           localStorage.setItem('auth_token', token);
           toast.success('Logged in successfully');
@@ -178,30 +154,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
 
-      // DEV MODE: Auto-register without database
-      if (DEV_MODE) {
-        const mockUser: User = {
-          id: 'dev-user-' + Date.now(),
-          email: email,
-          fullName: fullName,
-          userType: userType || 'player',
-          memberFacilities: ['sunrise-valley'],
-          preferences: {
-            notifications: true,
-            timezone: 'America/New_York'
-          }
-        };
-        const token = 'dev-token-' + Date.now();
-        setUser(mockUser);
-        setAccessToken(token);
-        // Save to localStorage
-        localStorage.setItem('auth_user', JSON.stringify(mockUser));
-        localStorage.setItem('auth_token', token);
-        toast.success('Registered successfully (Dev Mode)');
-        return true;
-      }
-
-      // Real database registration
       const result = await authApi.register({
         email,
         password,
@@ -220,17 +172,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (result.success && result.data && result.data.user) {
-        const user = result.data.user;
-        const token = 'token-' + user.id;
-        setUser(user);
+        const registeredUser = result.data.user;
+        const token = generateSessionToken();
+        setUser(registeredUser);
         setAccessToken(token);
-        // Save to localStorage
-        localStorage.setItem('auth_user', JSON.stringify(user));
+        localStorage.setItem('auth_user', JSON.stringify(registeredUser));
         localStorage.setItem('auth_token', token);
-        console.log('Registration successful, user set:', user.id);
         return true;
       } else {
-        console.error('Registration response missing user:', result);
         toast.error(result.error || 'Registration failed');
         return false;
       }

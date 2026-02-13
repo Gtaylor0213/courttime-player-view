@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -7,13 +8,10 @@ import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
-interface ResetPasswordProps {
-  onBack: () => void;
-  onResetComplete: () => void;
-  resetToken?: string;
-}
-
-export function ResetPassword({ onBack, onResetComplete, resetToken }: ResetPasswordProps) {
+export function ResetPassword() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resetToken = searchParams.get('token') || '';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -91,7 +89,7 @@ export function ResetPassword({ onBack, onResetComplete, resetToken }: ResetPass
 
       // Navigate back to login after 3 seconds
       setTimeout(() => {
-        onResetComplete();
+        navigate('/login');
       }, 3000);
     } catch (error) {
       setStatus('error');
@@ -127,7 +125,7 @@ export function ResetPassword({ onBack, onResetComplete, resetToken }: ResetPass
                 </p>
 
                 <Button
-                  onClick={onBack}
+                  onClick={() => navigate('/login')}
                   className="w-full bg-blue-600 hover:bg-blue-700"
                 >
                   Request New Reset Link
@@ -173,7 +171,7 @@ export function ResetPassword({ onBack, onResetComplete, resetToken }: ResetPass
 
                 <Button
                   variant="outline"
-                  onClick={onResetComplete}
+                  onClick={() => navigate('/login')}
                   className="w-full"
                 >
                   Go to Login
@@ -271,7 +269,7 @@ export function ResetPassword({ onBack, onResetComplete, resetToken }: ResetPass
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={onBack}
+                    onClick={() => navigate('/login')}
                     className="w-full"
                     disabled={isSubmitting}
                   >

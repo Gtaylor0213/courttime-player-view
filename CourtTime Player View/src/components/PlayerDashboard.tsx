@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { UnifiedSidebar } from './UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
 import { NotificationDropdown } from './NotificationDropdown';
 import { ReservationManagementModal } from './ReservationManagementModal';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -11,45 +11,8 @@ import { playerProfileApi, facilitiesApi } from '../api/client';
 import { Bell, Calendar, Clock, MapPin, Plus, Users, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface PlayerDashboardProps {
-  onLogout: () => void;
-  onQuickBook: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub: (clubId: string) => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToMessages?: () => void;
-  onNavigateToSettings?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  sidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
-}
-
-export function PlayerDashboard({
-  onLogout,
-  onQuickBook,
-  onNavigateToProfile,
-  onNavigateToCalendar,
-  onNavigateToClub,
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToMessages = () => {},
-  onNavigateToSettings = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  sidebarCollapsed = false,
-  onToggleSidebar
-}: PlayerDashboardProps) {
+export function PlayerDashboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { unreadCount, showToast } = useNotifications();
   const [loading, setLoading] = useState(true);
@@ -215,29 +178,7 @@ export function PlayerDashboard({
   const hasNoFacilities = memberFacilities.length === 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <UnifiedSidebar
-        userType="player"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={() => {}}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToMessages={onNavigateToMessages}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-                onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="player-dashboard"
-      />
-
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
+    <>
         <header className="bg-white border-b border-gray-200 relative z-10">
           <div className="px-6 py-4">
             <div className="flex justify-between items-center">
@@ -283,7 +224,7 @@ export function PlayerDashboard({
                       You're not currently a member of any facility. Request membership to access courts and start booking sessions.
                     </p>
                     <Button
-                      onClick={onNavigateToProfile}
+                      onClick={() => navigate('/profile')}
                       size="sm"
                       className="bg-blue-600 hover:bg-blue-700"
                     >
@@ -310,7 +251,7 @@ export function PlayerDashboard({
                       <CardDescription>Your scheduled court bookings</CardDescription>
                     </div>
                     {!hasNoFacilities && (
-                      <Button onClick={onQuickBook} size="sm">
+                      <Button onClick={() => navigate('/calendar')} size="sm">
                         <Plus className="h-4 w-4 mr-1" />
                         Book Court
                       </Button>
@@ -328,7 +269,7 @@ export function PlayerDashboard({
                           : 'Book a court to get started'}
                       </p>
                       {!hasNoFacilities && (
-                        <Button onClick={onQuickBook} className="mt-4" size="sm">
+                        <Button onClick={() => navigate('/calendar')} className="mt-4" size="sm">
                           Book Your First Court
                         </Button>
                       )}
@@ -388,7 +329,7 @@ export function PlayerDashboard({
                     <div className="text-center py-8 text-gray-500">
                       <Users className="h-10 w-10 mx-auto mb-2 text-gray-300" />
                       <p className="text-sm mb-3">You haven't joined any facilities yet</p>
-                      <Button onClick={onNavigateToProfile} variant="outline" size="sm">
+                      <Button onClick={() => navigate('/profile')} variant="outline" size="sm">
                         Browse Facilities
                       </Button>
                     </div>
@@ -397,7 +338,7 @@ export function PlayerDashboard({
                       {memberFacilities.map((facility: any) => (
                         <div
                           key={facility.facilityId}
-                          onClick={() => onNavigateToClub(facility.facilityId)}
+                          onClick={() => navigate(`/club/${facility.facilityId}`)}
                           className="flex items-center justify-between p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex-1">
@@ -433,7 +374,7 @@ export function PlayerDashboard({
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <Button
-                      onClick={onNavigateToCalendar}
+                      onClick={() => navigate('/calendar')}
                       variant="outline"
                       className="w-full justify-start"
                     >
@@ -441,7 +382,7 @@ export function PlayerDashboard({
                       View Court Calendar
                     </Button>
                     <Button
-                      onClick={onNavigateToHittingPartner}
+                      onClick={() => navigate('/hitting-partner')}
                       variant="outline"
                       className="w-full justify-start"
                     >
@@ -454,7 +395,6 @@ export function PlayerDashboard({
             </div>
           </div>
         </main>
-      </div>
 
       {/* Reservation Management Modal */}
       <ReservationManagementModal
@@ -463,6 +403,6 @@ export function PlayerDashboard({
         reservation={selectedReservation}
         onUpdate={handleReservationUpdate}
       />
-    </div>
+    </>
   );
 }

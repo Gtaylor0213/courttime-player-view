@@ -1,17 +1,12 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, Users, BookOpen, UserCog, MessageSquare, MessageCircle } from 'lucide-react';
+import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
-
-interface Facility {
-  id: string;
-  name: string;
-  type: string;
-}
 
 interface Club {
   id: string;
@@ -20,68 +15,26 @@ interface Club {
 
 interface UnifiedSidebarProps {
   userType: 'player' | 'admin' | null;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToMessages?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
   onLogout: () => void;
-  facilities?: Facility[];
-  selectedFacilityId?: string;
-  onFacilityChange?: (facilityId: string) => void;
-  showFacilityOptions?: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   currentPage?: string;
-  clubs?: Club[];
 }
 
 export function UnifiedSidebar({
   userType,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub,
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToMessages = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
   onLogout,
-  facilities = [],
-  selectedFacilityId,
-  onFacilityChange,
-  showFacilityOptions = false,
   isCollapsed = false,
   onToggleCollapse,
   currentPage,
-  clubs = []
 }: UnifiedSidebarProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [memberFacilities, setMemberFacilities] = React.useState<Club[]>([]);
   const [loadingFacilities, setLoadingFacilities] = React.useState(true);
 
   // Use the actual user's type from AuthContext, or fall back to the prop
   const actualUserType = user?.userType || userType;
-
-  // Debug logging
-  React.useEffect(() => {
-    console.log('UnifiedSidebar - user:', user);
-    console.log('UnifiedSidebar - actualUserType:', actualUserType);
-    console.log('UnifiedSidebar - userType prop:', userType);
-  }, [user, actualUserType, userType]);
 
   // Fetch user's member facilities
   React.useEffect(() => {
@@ -117,9 +70,6 @@ export function UnifiedSidebar({
     fetchMemberFacilities();
   }, [user?.memberFacilities]);
 
-  // Use clubs passed as prop, or use fetched member facilities, or empty array
-  const userClubs = clubs.length > 0 ? clubs : memberFacilities;
-
   // Get user initials
   const getUserInitials = () => {
     if (!user?.fullName) return 'U';
@@ -130,7 +80,7 @@ export function UnifiedSidebar({
       .toUpperCase()
       .substring(0, 2);
   };
-  
+
   const SidebarButton = ({
     onClick,
     icon: Icon,
@@ -142,14 +92,9 @@ export function UnifiedSidebar({
     label: string;
     isActive?: boolean;
   }) => {
-    const handleClick = () => {
-      console.log('SidebarButton clicked:', label);
-      onClick();
-    };
-
     const button = (
       <button
-        onClick={handleClick}
+        onClick={onClick}
         className={`w-full rounded-lg px-3 py-2 text-left hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center transition-colors ${
           isActive ? 'bg-blue-50 text-blue-700' : ''
         } ${isCollapsed ? 'justify-center' : ''}`}
@@ -216,31 +161,31 @@ export function UnifiedSidebar({
               {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">Admin</h3>}
               <div className="space-y-1">
                 <SidebarButton
-                  onClick={onNavigateToAdminDashboard}
+                  onClick={() => navigate('/admin')}
                   icon={LayoutDashboard}
                   label="Admin Dashboard"
                   isActive={currentPage === 'admin-dashboard'}
                 />
                 <SidebarButton
-                  onClick={onNavigateToFacilityManagement}
+                  onClick={() => navigate('/admin/facilities')}
                   icon={Building2}
                   label="Facility Management"
                   isActive={currentPage === 'facility-management' || currentPage === 'court-management'}
                 />
                 <SidebarButton
-                  onClick={onNavigateToBookingManagement}
+                  onClick={() => navigate('/admin/bookings')}
                   icon={BookOpen}
                   label="Booking Management"
                   isActive={currentPage === 'booking-management'}
                 />
                 <SidebarButton
-                  onClick={onNavigateToAdminBooking}
+                  onClick={() => navigate('/admin/booking')}
                   icon={Calendar}
                   label="Admin Booking"
                   isActive={currentPage === 'admin-booking'}
                 />
                 <SidebarButton
-                  onClick={onNavigateToMemberManagement}
+                  onClick={() => navigate('/admin/members')}
                   icon={UserCog}
                   label="Member Management"
                   isActive={currentPage === 'member-management'}
@@ -254,25 +199,25 @@ export function UnifiedSidebar({
             {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">{actualUserType === 'admin' ? 'Player Features' : 'Navigation'}</h3>}
             <div className="space-y-1">
               <SidebarButton
-                onClick={onNavigateToCalendar}
+                onClick={() => navigate('/calendar')}
                 icon={Calendar}
                 label="Court Calendar"
                 isActive={currentPage === 'court-calendar'}
               />
               <SidebarButton
-                onClick={onNavigateToPlayerDashboard}
+                onClick={() => navigate('/dashboard')}
                 icon={LayoutDashboard}
                 label="Dashboard"
                 isActive={currentPage === 'player-dashboard'}
               />
               <SidebarButton
-                onClick={onNavigateToHittingPartner}
+                onClick={() => navigate('/hitting-partner')}
                 icon={UserSearch}
                 label="Find Hitting Partner"
                 isActive={currentPage === 'hitting-partner'}
               />
               <SidebarButton
-                onClick={onNavigateToMessages}
+                onClick={() => navigate('/messages')}
                 icon={MessageCircle}
                 label="Messages"
                 isActive={currentPage === 'messages'}
@@ -287,7 +232,7 @@ export function UnifiedSidebar({
             <div className="space-y-1">
               {/* Bulletin Board */}
               <SidebarButton
-                onClick={onNavigateToBulletinBoard}
+                onClick={() => navigate('/bulletin-board')}
                 icon={MessageSquare}
                 label="Bulletin Board"
                 isActive={currentPage === 'bulletin-board'}
@@ -301,17 +246,17 @@ export function UnifiedSidebar({
               )}
 
               {/* No facilities message */}
-              {!loadingFacilities && userClubs.length === 0 && !isCollapsed && (
+              {!loadingFacilities && memberFacilities.length === 0 && !isCollapsed && (
                 <div className="px-3 py-2 text-sm text-gray-500">
                   No facility memberships
                 </div>
               )}
 
               {/* Individual Club Listings */}
-              {!loadingFacilities && userClubs.map((club) => (
+              {!loadingFacilities && memberFacilities.map((club) => (
                 <div key={club.id}>
                   <SidebarButton
-                    onClick={() => onNavigateToClub?.(club.id)}
+                    onClick={() => navigate(`/club/${club.id}`)}
                     icon={Building2}
                     label={club.name}
                     isActive={currentPage === 'club-info'}
@@ -345,7 +290,7 @@ export function UnifiedSidebar({
                         <p className="text-sm font-medium">{user?.fullName || 'User'}</p>
                         <p className="text-xs text-gray-600 capitalize">{actualUserType || 'Player'}</p>
                       </div>
-                      <DropdownMenuItem onClick={onNavigateToProfile}>
+                      <DropdownMenuItem onClick={() => navigate('/profile')}>
                         <User className="h-4 w-4 mr-2" />
                         View Profile
                       </DropdownMenuItem>
@@ -378,7 +323,7 @@ export function UnifiedSidebar({
                 <ChevronDown className="h-4 w-4 text-gray-400" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={onNavigateToProfile}>
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
                   <User className="h-4 w-4 mr-2" />
                   View Profile
                 </DropdownMenuItem>

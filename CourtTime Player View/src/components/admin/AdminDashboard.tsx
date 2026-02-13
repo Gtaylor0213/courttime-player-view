@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UnifiedSidebar } from '../UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from '../NotificationBell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -10,25 +10,6 @@ import { Badge } from '../ui/badge';
 import { adminApi } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
-
-interface AdminDashboardProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  sidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
-}
 
 interface DashboardStats {
   totalBookings: number;
@@ -65,24 +46,9 @@ interface AnalyticsData {
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export function AdminDashboard({
-  onLogout,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  sidebarCollapsed = false,
-  onToggleSidebar
-}: AdminDashboardProps) {
+export function AdminDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'overview' | 'courts' | 'times' | 'members'>('overview');
   const [timeRange, setTimeRange] = useState('30');
   const [stats, setStats] = useState<DashboardStats>({
@@ -311,28 +277,7 @@ export function AdminDashboard({
   const totalStatusCount = analyticsData.statusBreakdown.reduce((sum, s) => sum + Number(s.count), 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <UnifiedSidebar
-        userType="admin"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-        onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="admin-dashboard"
-      />
-
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out p-8`}>
+      <div className="p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-medium text-gray-900">Admin Dashboard</h1>
@@ -471,21 +416,21 @@ export function AdminDashboard({
                       </CardHeader>
                       <CardContent className="space-y-2">
                         <button
-                          onClick={onNavigateToAdminBooking}
+                          onClick={() => navigate('/admin/booking')}
                           className="w-full text-left p-3 rounded-lg hover:bg-gray-100 transition-colors"
                         >
                           <div className="font-medium">Create Booking</div>
                           <div className="text-sm text-gray-600">Book a court for a member</div>
                         </button>
                         <button
-                          onClick={onNavigateToMemberManagement}
+                          onClick={() => navigate('/admin/members')}
                           className="w-full text-left p-3 rounded-lg hover:bg-gray-100 transition-colors"
                         >
                           <div className="font-medium">Manage Members</div>
                           <div className="text-sm text-gray-600">View and edit member information</div>
                         </button>
                         <button
-                          onClick={onNavigateToCourtManagement}
+                          onClick={() => navigate('/admin/courts')}
                           className="w-full text-left p-3 rounded-lg hover:bg-gray-100 transition-colors"
                         >
                           <div className="font-medium">Court Settings</div>
@@ -875,6 +820,5 @@ export function AdminDashboard({
           )}
         </div>
       </div>
-    </div>
   );
 }

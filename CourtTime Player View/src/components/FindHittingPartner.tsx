@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UnifiedSidebar } from './UnifiedSidebar';
+import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { Search, Filter, Users, Calendar, Plus, X, Building, Edit, Trash2, AlertCircle, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,47 +15,8 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { toast } from 'sonner';
 
-interface FindHittingPartnerProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToMessages?: (recipientId?: string) => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  selectedFacilityId?: string;
-  onFacilityChange?: (facilityId: string) => void;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
-}
-
-export function FindHittingPartner({
-  onBack,
-  onLogout,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub = () => {},
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToMessages = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  selectedFacilityId,
-  onFacilityChange,
-  sidebarCollapsed,
-  onToggleSidebar
-}: FindHittingPartnerProps) {
+export function FindHittingPartner() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<any[]>([]);
@@ -65,7 +26,7 @@ export function FindHittingPartner({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterPlayStyle, setFilterPlayStyle] = useState('all');
-  const [selectedFacilityFilter, setSelectedFacilityFilter] = useState<string>(selectedFacilityId || 'all');
+  const [selectedFacilityFilter, setSelectedFacilityFilter] = useState<string>('all');
 
   // Form state for creating/editing post
   const [formData, setFormData] = useState({
@@ -343,29 +304,7 @@ export function FindHittingPartner({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <UnifiedSidebar
-        userType="player"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToHittingPartner={() => {}}
-        onNavigateToMessages={onNavigateToMessages}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-                onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="hitting-partner"
-      />
-
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
+    <>
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <div>
@@ -395,7 +334,7 @@ export function FindHittingPartner({
                       You need to join a facility to view and create hitting partner posts. Hitting partner posts are facility-specific to help you connect with players at your club.
                     </p>
                     <Button
-                      onClick={onNavigateToProfile}
+                      onClick={() => navigate('/profile')}
                       size="sm"
                       className="bg-blue-600 hover:bg-blue-700"
                     >
@@ -529,7 +468,7 @@ export function FindHittingPartner({
                                 <Button
                                   variant="default"
                                   size="sm"
-                                  onClick={() => onNavigateToMessages(post.userId)}
+                                  onClick={() => navigate(`/messages?recipientId=${post.userId}`)}
                                   className="bg-blue-600 hover:bg-blue-700"
                                 >
                                   <MessageCircle className="h-4 w-4 mr-1" />
@@ -696,7 +635,6 @@ export function FindHittingPartner({
             </DialogContent>
           </Dialog>
         </div>
-      </div>
-    </div>
+    </>
   );
 }

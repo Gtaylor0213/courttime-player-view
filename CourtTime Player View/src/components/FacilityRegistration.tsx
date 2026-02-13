@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -16,11 +17,6 @@ import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { toast } from 'sonner';
 import { facilitiesApi } from '../api/client';
-
-interface FacilityRegistrationProps {
-  onBack: () => void;
-  onRegistrationComplete: () => void;
-}
 
 interface Court {
   id: string;
@@ -59,7 +55,8 @@ const US_STATES = [
   'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
 ];
 
-export function FacilityRegistration({ onBack, onRegistrationComplete }: FacilityRegistrationProps) {
+export function FacilityRegistration() {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register, user } = useAuth();
@@ -2333,7 +2330,7 @@ export function FacilityRegistration({ onBack, onRegistrationComplete }: Facilit
       <Card className="w-full max-w-4xl">
         <CardHeader>
           <div className="flex flex-col items-center mb-6">
-            <Button variant="ghost" onClick={onBack} className="self-start mb-4">
+            <Button variant="ghost" onClick={() => navigate('/login')} className="self-start mb-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Login
             </Button>

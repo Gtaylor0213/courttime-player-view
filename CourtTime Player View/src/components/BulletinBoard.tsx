@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UnifiedSidebar } from './UnifiedSidebar';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { Calendar, Clock, Users, MapPin, Tag, Pin, AlertCircle, Plus, X } from 'lucide-react';
 import { Button } from './ui/button';
@@ -13,29 +13,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { bulletinBoardApi, playerProfileApi, facilitiesApi } from '../api/client';
 import { toast } from 'sonner';
 
-interface BulletinBoardProps {
-  onBack: () => void;
-  onLogout: () => void;
-  onNavigateToProfile: () => void;
-  onNavigateToPlayerDashboard: () => void;
-  onNavigateToCalendar: () => void;
-  onNavigateToClub?: (clubId: string) => void;
-  onNavigateToBulletinBoard?: () => void;
-  onNavigateToHittingPartner?: () => void;
-  onNavigateToMessages?: () => void;
-  onNavigateToAdminDashboard?: () => void;
-  onNavigateToFacilityManagement?: () => void;
-  onNavigateToCourtManagement?: () => void;
-  onNavigateToBookingManagement?: () => void;
-  onNavigateToAdminBooking?: () => void;
-  onNavigateToMemberManagement?: () => void;
-  selectedFacilityId?: string;
-  onFacilityChange?: (facilityId: string) => void;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
-  clubId?: string;
-  clubName?: string;
-}
 
 interface BulletinPost {
   id: string;
@@ -70,29 +47,11 @@ const typeColors: Record<string, string> = {
   announcement: 'bg-orange-500'
 };
 
-export function BulletinBoard({
-  onBack,
-  onLogout,
-  onNavigateToProfile,
-  onNavigateToPlayerDashboard,
-  onNavigateToCalendar,
-  onNavigateToClub = () => {},
-  onNavigateToBulletinBoard = () => {},
-  onNavigateToHittingPartner = () => {},
-  onNavigateToMessages = () => {},
-  onNavigateToAdminDashboard = () => {},
-  onNavigateToFacilityManagement = () => {},
-  onNavigateToCourtManagement = () => {},
-  onNavigateToBookingManagement = () => {},
-  onNavigateToAdminBooking = () => {},
-  onNavigateToMemberManagement = () => {},
-  selectedFacilityId,
-  onFacilityChange,
-  sidebarCollapsed,
-  onToggleSidebar,
-  clubId,
-  clubName
-}: BulletinBoardProps) {
+export function BulletinBoard() {
+  const [searchParams] = useSearchParams();
+  const clubId = searchParams.get('clubId') || undefined;
+  const clubName = searchParams.get('clubName') || undefined;
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<BulletinPost[]>([]);
@@ -311,29 +270,7 @@ export function BulletinBoard({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <UnifiedSidebar
-        userType="player"
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigateToPlayerDashboard={onNavigateToPlayerDashboard}
-        onNavigateToCalendar={onNavigateToCalendar}
-        onNavigateToClub={onNavigateToClub}
-        onNavigateToBulletinBoard={onNavigateToBulletinBoard}
-        onNavigateToHittingPartner={onNavigateToHittingPartner}
-        onNavigateToMessages={onNavigateToMessages}
-        onNavigateToAdminDashboard={onNavigateToAdminDashboard}
-        onNavigateToFacilityManagement={onNavigateToFacilityManagement}
-        onNavigateToCourtManagement={onNavigateToCourtManagement}
-        onNavigateToBookingManagement={onNavigateToBookingManagement}
-        onNavigateToAdminBooking={onNavigateToAdminBooking}
-        onNavigateToMemberManagement={onNavigateToMemberManagement}
-                onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={onToggleSidebar}
-        currentPage="bulletin-board"
-      />
-
-      <div className={`flex-1 ${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
+    <>
         {/* Header */}
         <div className="bg-white border-b border-gray-200 p-6">
           <div className="flex items-center justify-between">
@@ -386,7 +323,7 @@ export function BulletinBoard({
                       You're not currently a member of any facility. Request membership to see events and announcements.
                     </p>
                     <Button
-                      onClick={onNavigateToProfile}
+                      onClick={() => navigate('/profile')}
                       size="sm"
                       className="bg-blue-600 hover:bg-blue-700"
                     >
@@ -541,7 +478,6 @@ export function BulletinBoard({
             </div>
           )}
         </div>
-      </div>
 
       {/* Detail Modal */}
       {selectedPost && (
@@ -838,6 +774,6 @@ export function BulletinBoard({
           </Card>
         </div>
       )}
-    </div>
+    </>
   );
 }

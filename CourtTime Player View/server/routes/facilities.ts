@@ -113,12 +113,12 @@ router.get('/:id/courts', async (req, res, next) => {
 
 /**
  * POST /api/facilities/register
- * Register a new facility with super admin
+ * Register a new facility with facility administrator
  */
 router.post('/register', async (req, res, next) => {
   try {
     const {
-      // Super Admin Account (if creating new user)
+      // Facility Administrator Account (if creating new user)
       adminEmail,
       adminPassword,
       adminFullName,
@@ -134,6 +134,7 @@ router.post('/register', async (req, res, next) => {
       email,
       contactName,
       description,
+      facilityImage,
 
       // Contacts
       primaryContact,
@@ -163,6 +164,9 @@ router.post('/register', async (req, res, next) => {
 
       // Admin Invites
       adminInvites,
+
+      // Address Whitelist
+      hoaAddresses,
 
       // Existing user ID (if already logged in)
       existingUserId
@@ -213,6 +217,7 @@ router.post('/register', async (req, res, next) => {
       email,
       contactName,
       description,
+      facilityImage: facilityImage || undefined,
       primaryContact: primaryContact || undefined,
       secondaryContacts: secondaryContacts?.filter((c: any) => c.name?.trim()) || [],
       operatingHours: operatingHours || {},
@@ -236,7 +241,8 @@ router.post('/register', async (req, res, next) => {
         canSplit: court.canSplit || false,
         splitConfig: court.splitConfig
       })),
-      adminInvites: adminInvites?.map((invite: any) => invite.email || invite).filter(Boolean)
+      adminInvites: adminInvites?.map((invite: any) => invite.email || invite).filter(Boolean),
+      hoaAddresses: hoaAddresses || undefined
     };
 
     // Register facility

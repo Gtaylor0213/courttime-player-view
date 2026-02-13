@@ -62,7 +62,7 @@ export function FacilityRegistration() {
   const { register, user } = useAuth();
 
   const [formData, setFormData] = useState({
-    // Step 1: Super Admin Account (if not logged in)
+    // Step 1: Facility Administrator Account (if not logged in)
     adminEmail: user?.email || '',
     adminPassword: '',
     adminConfirmPassword: '',
@@ -80,6 +80,7 @@ export function FacilityRegistration() {
     description: '',
     facilityImage: null as File | null,
     facilityImagePreview: '',
+    facilityImageBase64: '',
 
     // Primary Contact (auto-filled from admin account if applicable)
     primaryContact: {
@@ -94,6 +95,7 @@ export function FacilityRegistration() {
     // Address Whitelist
     addressWhitelistFile: null as File | null,
     addressWhitelistFileName: '',
+    parsedAddresses: [] as Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>,
 
     // Operating Hours
     operatingHours: {
@@ -285,6 +287,15 @@ export function FacilityRegistration() {
         facilityImage: file,
         facilityImagePreview: previewUrl
       }));
+      // Convert to base64 for storage
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({
+          ...prev,
+          facilityImageBase64: reader.result as string
+        }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -296,19 +307,53 @@ export function FacilityRegistration() {
     setFormData(prev => ({
       ...prev,
       facilityImage: null,
-      facilityImagePreview: ''
+      facilityImagePreview: '',
+      facilityImageBase64: ''
     }));
+  };
+
+  // Parse CSV text into address objects
+  const parseCSV = (text: string): Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }> => {
+    const lines = text.split(/\r?\n/).filter(line => line.trim());
+    if (lines.length === 0) return [];
+
+    // Try to detect headers
+    const firstLine = lines[0].toLowerCase();
+    const hasHeaders = firstLine.includes('street') || firstLine.includes('address') || firstLine.includes('city') || firstLine.includes('zip');
+
+    if (hasHeaders) {
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s_-]+/g, ''));
+      const colMap = {
+        streetAddress: headers.findIndex(h => h.includes('street') || h === 'address'),
+        city: headers.findIndex(h => h === 'city'),
+        state: headers.findIndex(h => h === 'state'),
+        zipCode: headers.findIndex(h => h.includes('zip') || h.includes('postal')),
+        householdName: headers.findIndex(h => h.includes('household') || h.includes('name')),
+      };
+
+      return lines.slice(1).map(line => {
+        const cols = line.split(',').map(c => c.trim());
+        return {
+          streetAddress: colMap.streetAddress >= 0 ? cols[colMap.streetAddress] : cols[0],
+          city: colMap.city >= 0 ? cols[colMap.city] : undefined,
+          state: colMap.state >= 0 ? cols[colMap.state] : undefined,
+          zipCode: colMap.zipCode >= 0 ? cols[colMap.zipCode] : undefined,
+          householdName: colMap.householdName >= 0 ? cols[colMap.householdName] : undefined,
+        };
+      }).filter(addr => addr.streetAddress);
+    }
+
+    // No headers: treat each line as a street address
+    return lines.map(line => ({ streetAddress: line.trim() })).filter(addr => addr.streetAddress);
   };
 
   // Handle address whitelist file upload
   const handleAddressWhitelistChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type (CSV or Excel)
-      const validTypes = ['.csv', '.xlsx', '.xls'];
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-      if (!validTypes.includes(fileExtension)) {
-        toast.error('Please select a CSV or Excel file');
+      if (fileExtension !== '.csv') {
+        toast.error('Please select a CSV file');
         return;
       }
       setFormData(prev => ({
@@ -316,6 +361,22 @@ export function FacilityRegistration() {
         addressWhitelistFile: file,
         addressWhitelistFileName: file.name
       }));
+      // Parse CSV
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const text = reader.result as string;
+        const addresses = parseCSV(text);
+        setFormData(prev => ({
+          ...prev,
+          parsedAddresses: addresses
+        }));
+        if (addresses.length > 0) {
+          toast.success(`Parsed ${addresses.length} address${addresses.length !== 1 ? 'es' : ''} from file`);
+        } else {
+          toast.error('No addresses found in file');
+        }
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -324,7 +385,8 @@ export function FacilityRegistration() {
     setFormData(prev => ({
       ...prev,
       addressWhitelistFile: null,
-      addressWhitelistFileName: ''
+      addressWhitelistFileName: '',
+      parsedAddresses: []
     }));
   };
 
@@ -392,7 +454,7 @@ export function FacilityRegistration() {
     const stepErrors: Record<string, string> = {};
 
     if (!user && step === 1) {
-      // Validate Super Admin Account
+      // Validate Facility Administrator Account
       if (!formData.adminFullName.trim()) stepErrors.adminFullName = 'Full name is required';
       if (!formData.adminEmail.trim()) stepErrors.adminEmail = 'Email is required';
       else if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) stepErrors.adminEmail = 'Email is invalid';
@@ -613,7 +675,7 @@ export function FacilityRegistration() {
     try {
       // Prepare registration data
       const registrationData = {
-        // Super Admin Account (if creating new user)
+        // Facility Administrator Account (if creating new user)
         ...(user ? {} : {
           adminEmail: formData.adminEmail,
           adminPassword: formData.adminPassword,
@@ -631,6 +693,7 @@ export function FacilityRegistration() {
         email: formData.primaryContact.email || formData.email,
         contactName: formData.primaryContact.name,
         description: formData.description,
+        facilityImage: formData.facilityImageBase64 || undefined,
 
         // Contacts
         primaryContact: {
@@ -701,6 +764,9 @@ export function FacilityRegistration() {
         // Admin Invites
         adminInvites: formData.adminInvites.filter(invite => invite.email),
 
+        // Address Whitelist
+        hoaAddresses: formData.parsedAddresses.length > 0 ? formData.parsedAddresses : undefined,
+
         // Existing user ID (if already logged in)
         existingUserId: user?.id,
       };
@@ -750,7 +816,7 @@ export function FacilityRegistration() {
     if (!user) {
       // Not logged in - 6 steps
       switch (stepNumber) {
-        case 1: return 'Admin Account';
+        case 1: return 'Your Account';
         case 2: return 'Facility Info';
         case 3: return 'Rules';
         case 4: return 'Courts';
@@ -844,9 +910,9 @@ export function FacilityRegistration() {
   const renderStep1AdminAccount = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-4">Create Super Admin Account</h3>
+        <h3 className="text-lg font-semibold mb-4">Create Facility Administrator Account</h3>
         <p className="text-sm text-gray-600 mb-6">
-          As the facility creator, you will be the super administrator with full access to manage your facility.
+          As the facility creator, you will be the primary administrator with full access to manage your facility.
         </p>
       </div>
 
@@ -1256,7 +1322,7 @@ export function FacilityRegistration() {
             <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-green-600" />
-                <span className="text-sm text-green-700">{formData.addressWhitelistFileName}</span>
+                <span className="text-sm text-green-700">{formData.addressWhitelistFileName} ({formData.parsedAddresses.length} addresses)</span>
               </div>
               <Button
                 type="button"
@@ -1272,10 +1338,10 @@ export function FacilityRegistration() {
             <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
               <Upload className="h-6 w-6 text-gray-400 mb-1" />
               <span className="text-sm text-gray-500">Upload Address List</span>
-              <span className="text-xs text-gray-400 mt-1">CSV or Excel file</span>
+              <span className="text-xs text-gray-400 mt-1">CSV file</span>
               <input
                 type="file"
-                accept=".csv,.xlsx,.xls"
+                accept=".csv"
                 onChange={handleAddressWhitelistChange}
                 className="hidden"
               />

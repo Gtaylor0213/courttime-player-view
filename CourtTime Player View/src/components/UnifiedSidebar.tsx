@@ -205,12 +205,6 @@ export function UnifiedSidebar({
                 isActive={currentPage === 'court-calendar'}
               />
               <SidebarButton
-                onClick={() => navigate('/dashboard')}
-                icon={LayoutDashboard}
-                label="Dashboard"
-                isActive={currentPage === 'player-dashboard'}
-              />
-              <SidebarButton
                 onClick={() => navigate('/hitting-partner')}
                 icon={UserSearch}
                 label="Find Hitting Partner"

@@ -12,7 +12,6 @@ function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/admin/members')) return 'member-management';
   if (pathname.startsWith('/admin')) return 'admin-dashboard';
   if (pathname.startsWith('/calendar')) return 'court-calendar';
-  if (pathname.startsWith('/dashboard')) return 'player-dashboard';
   if (pathname.startsWith('/profile')) return 'profile';
   if (pathname.startsWith('/quick-reservation')) return 'quick-reservation';
   if (pathname.startsWith('/club/')) return 'club-info';

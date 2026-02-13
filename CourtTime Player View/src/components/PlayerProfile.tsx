@@ -6,7 +6,9 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera } from 'lucide-react';
+import { Badge } from './ui/badge';
+import { ReservationManagementModal } from './ReservationManagementModal';
+import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
@@ -27,6 +29,11 @@ export function PlayerProfile() {
   const [facilitySearchResults, setFacilitySearchResults] = useState<any[]>([]);
   const [isSearchingFacilities, setIsSearchingFacilities] = useState(false);
   const [requestingMembership, setRequestingMembership] = useState<string | null>(null);
+
+  // Upcoming reservations
+  const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
+  const [selectedReservation, setSelectedReservation] = useState<any>(null);
+  const [showReservationModal, setShowReservationModal] = useState(false);
 
   const [profileData, setProfileData] = useState({
     firstName: '',
@@ -90,6 +97,12 @@ export function PlayerProfile() {
           profileImageUrl: profile.profileImageUrl || '',
           memberFacilities: profile.memberFacilities || []
         });
+      }
+
+      // Load upcoming bookings
+      const bookingsResponse = await playerProfileApi.getBookings(user.id, true);
+      if (bookingsResponse.success && bookingsResponse.data?.bookings) {
+        setUpcomingBookings(bookingsResponse.data.bookings);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -291,6 +304,54 @@ export function PlayerProfile() {
     return name || profileData.fullName || 'No name set';
   };
 
+  const formatDate = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const compareDate = new Date(date);
+    compareDate.setHours(0, 0, 0, 0);
+    if (compareDate.getTime() === today.getTime()) return 'Today';
+    if (compareDate.getTime() === tomorrow.getTime()) return 'Tomorrow';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatTime = (startTime: string, endTime: string) => {
+    const formatTimeOnly = (time: string) => {
+      const [hours, minutes] = time.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${minutes} ${ampm}`;
+    };
+    return `${formatTimeOnly(startTime)} - ${formatTimeOnly(endTime)}`;
+  };
+
+  const getBookingStatusColor = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'default';
+      case 'pending': return 'secondary';
+      case 'cancelled': return 'destructive';
+      default: return 'outline';
+    }
+  };
+
+  const handleReservationClick = (booking: any) => {
+    setSelectedReservation(booking);
+    setShowReservationModal(true);
+  };
+
+  const handleCloseReservationModal = () => {
+    setShowReservationModal(false);
+    setSelectedReservation(null);
+  };
+
+  const handleReservationUpdate = () => {
+    loadProfile();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -419,6 +480,75 @@ export function PlayerProfile() {
 
             {/* Profile Details */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Upcoming Reservations */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Upcoming Reservations
+                      </CardTitle>
+                      <CardDescription>Your scheduled court bookings</CardDescription>
+                    </div>
+                    {profileData.memberFacilities.length > 0 && (
+                      <Button onClick={() => navigate('/calendar')} size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Book Court
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {upcomingBookings.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                      <p className="font-medium">No upcoming bookings</p>
+                      <p className="text-sm mt-1">
+                        {profileData.memberFacilities.length === 0
+                          ? 'Join a facility to start booking courts'
+                          : 'Book a court to get started'}
+                      </p>
+                      {profileData.memberFacilities.length > 0 && (
+                        <Button onClick={() => navigate('/calendar')} className="mt-4" size="sm">
+                          Book Your First Court
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {upcomingBookings.map((booking) => (
+                        <div
+                          key={booking.id}
+                          onClick={() => handleReservationClick(booking)}
+                          className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-2 h-10 bg-blue-500 rounded-full"></div>
+                            <div>
+                              <h4 className="font-medium">{booking.courtName}</h4>
+                              <p className="text-sm text-gray-600 flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {booking.facilityName}
+                              </p>
+                              <p className="text-sm text-gray-600 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatDate(booking.bookingDate)} • {formatTime(booking.startTime, booking.endTime)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={getBookingStatusColor(booking.status)}>
+                              {booking.status}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Personal Information */}
               <Card>
                 <CardHeader>
@@ -671,6 +801,14 @@ export function PlayerProfile() {
             </div>
           </div>
         </div>
+
+      {/* Reservation Management Modal */}
+      <ReservationManagementModal
+        isOpen={showReservationModal}
+        onClose={handleCloseReservationModal}
+        reservation={selectedReservation}
+        onUpdate={handleReservationUpdate}
+      />
     </>
   );
 }

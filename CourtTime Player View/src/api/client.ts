@@ -158,6 +158,7 @@ export const facilitiesApi = {
     email: string;
     contactName: string;
     description?: string;
+    facilityImage?: string;
 
     // Contacts
     primaryContact?: {
@@ -228,6 +229,9 @@ export const facilitiesApi = {
 
     // Admin Invites
     adminInvites?: Array<{ email: string }>;
+
+    // Address Whitelist
+    hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>;
 
     // Existing user ID (if already logged in)
     existingUserId?: string;

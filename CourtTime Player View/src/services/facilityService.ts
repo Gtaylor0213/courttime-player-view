@@ -2,6 +2,72 @@ import { query, transaction } from '../database/connection';
 import { Facility, Court } from '../types/database';
 import type { PoolClient } from 'pg';
 
+const RESEND_API_URL = 'https://api.resend.com/emails';
+
+/**
+ * Send an admin invitation email via Resend
+ */
+async function sendAdminInviteEmail(
+  inviteEmail: string,
+  facilityName: string,
+  invitedByName: string
+): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error('RESEND_API_KEY is not set - skipping admin invite email');
+    return false;
+  }
+
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const registerLink = `${appUrl}/register`;
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'CourtTime <onboarding@resend.dev>';
+
+  try {
+    const response = await fetch(RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [inviteEmail],
+        subject: `You've been invited to manage ${facilityName} on CourtTime`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2563eb;">CourtTime Admin Invitation</h2>
+            <p>Hi there,</p>
+            <p><strong>${invitedByName}</strong> has invited you to be an administrator of <strong>${facilityName}</strong> on CourtTime.</p>
+            <p>As a facility administrator, you'll be able to manage courts, bookings, members, and more.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${registerLink}"
+                 style="background-color: #2563eb; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                Get Started
+              </a>
+            </div>
+            <p style="color: #666; font-size: 14px;">If you already have an account, simply log in and you'll see the facility in your dashboard.</p>
+            <p style="color: #666; font-size: 14px;">If you didn't expect this invitation, you can safely ignore this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Resend API error (admin invite):', errorData);
+      return false;
+    }
+
+    console.log(`Admin invite email sent to ${inviteEmail} for facility ${facilityName}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send admin invite email:', error);
+    return false;
+  }
+}
+
 /**
  * Facility Service
  * Handles facility and court-related operations, facility registration, and admin management
@@ -640,6 +706,7 @@ export interface FacilityRegistrationData {
   email: string;
   contactName: string;
   description?: string;
+  facilityImage?: string;
 
   // Contacts
   primaryContact?: FacilityContactData;
@@ -690,6 +757,9 @@ export interface FacilityRegistrationData {
 
   // Admin Invites (emails)
   adminInvites?: string[];
+
+  // Address Whitelist
+  hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>;
 }
 
 /**
@@ -784,14 +854,14 @@ export async function registerFacility(
       `INSERT INTO facilities (
         id, name, type, street_address, city, state, zip_code, address,
         phone, email, contact_name, description, operating_hours,
-        general_rules, cancellation_policy, booking_rules, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'active')
+        general_rules, cancellation_policy, booking_rules, logo_url, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'active')
       RETURNING
         id, name, type, street_address as "streetAddress", city, state, zip_code as "zipCode",
         address, phone, email, contact_name as "contactName", description,
         operating_hours as "operatingHours", general_rules as "generalRules",
         cancellation_policy as "cancellationPolicy", booking_rules as "bookingRules",
-        status, created_at as "createdAt"`,
+        logo_url as "logoUrl", status, created_at as "createdAt"`,
       [
         facilityId,
         data.facilityName,
@@ -809,6 +879,7 @@ export async function registerFacility(
         data.generalRules,
         data.cancellationPolicy || null,
         data.bookingRules || null,
+        data.facilityImage || null,
       ]
     );
 
@@ -1001,14 +1072,41 @@ export async function registerFacility(
       }
     }
 
-    // 9. Store admin invitations (for future email sending)
+    // 9. Store admin invitations and send invite emails
     if (data.adminInvites && data.adminInvites.length > 0) {
+      const inviterName = data.adminFullName || 'A facility administrator';
       for (const inviteEmail of data.adminInvites) {
         if (inviteEmail && inviteEmail.trim()) {
           await client.query(
             `INSERT INTO facility_admins (facility_id, invitation_email, invited_by, invitation_sent_at, status, is_super_admin)
              VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 'pending', false)`,
             [facilityId, inviteEmail.trim().toLowerCase(), superAdminUserId]
+          );
+          // Send invite email (fire-and-forget, don't block registration)
+          sendAdminInviteEmail(inviteEmail.trim().toLowerCase(), data.facilityName, inviterName).catch(err => {
+            console.error(`Failed to send invite email to ${inviteEmail}:`, err);
+          });
+        }
+      }
+    }
+
+    // 10. Insert HOA addresses from whitelist
+    if (data.hoaAddresses && data.hoaAddresses.length > 0) {
+      for (const addr of data.hoaAddresses) {
+        if (addr.streetAddress?.trim()) {
+          await client.query(
+            `INSERT INTO hoa_addresses (facility_id, street_address, city, state, zip_code, household_name, uploaded_by, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+             ON CONFLICT (facility_id, street_address) DO NOTHING`,
+            [
+              facilityId,
+              addr.streetAddress.trim(),
+              addr.city?.trim() || null,
+              addr.state?.trim() || null,
+              addr.zipCode?.trim() || null,
+              addr.householdName?.trim() || null,
+              superAdminUserId
+            ]
           );
         }
       }

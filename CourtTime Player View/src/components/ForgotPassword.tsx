@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+import { authApi } from '../api/client';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 export function ForgotPassword() {
@@ -29,13 +30,14 @@ export function ForgotPassword() {
     setErrorMessage('');
 
     try {
-      // Simulate API call to send password reset email
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await authApi.forgotPassword(email);
 
-      // In a real app, this would call the backend API
-      // await sendPasswordResetEmail(email);
-
-      setStatus('success');
+      if (result.success) {
+        setStatus('success');
+      } else {
+        setStatus('error');
+        setErrorMessage(result.error || 'Failed to send reset email. Please try again.');
+      }
     } catch (error) {
       setStatus('error');
       setErrorMessage('Failed to send reset email. Please try again.');

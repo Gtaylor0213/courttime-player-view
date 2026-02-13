@@ -5,6 +5,11 @@ import {
   getUserWithMemberships,
   addUserToFacility
 } from '../../src/services/authService';
+import {
+  requestPasswordReset,
+  validateResetToken,
+  resetPassword
+} from '../../src/services/passwordResetService';
 
 const router = express.Router();
 
@@ -176,6 +181,84 @@ router.post('/add-facility', async (req, res, next) => {
         error: 'Failed to add user to facility'
       });
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/auth/forgot-password
+ * Request a password reset email
+ */
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
+      });
+    }
+
+    const result = await requestPasswordReset(email);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/auth/validate-reset-token
+ * Validate a password reset token
+ */
+router.get('/validate-reset-token', async (req, res, next) => {
+  try {
+    const token = req.query.token as string;
+
+    if (!token) {
+      return res.status(400).json({
+        valid: false,
+        message: 'Token is required'
+      });
+    }
+
+    const result = await validateResetToken(token);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Reset password using a valid token
+ */
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token and password are required'
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters'
+      });
+    }
+
+    const result = await resetPassword(token, password);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
   } catch (error) {
     next(error);
   }

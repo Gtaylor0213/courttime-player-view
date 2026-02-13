@@ -99,6 +99,24 @@ export const authApi = {
   getMe: async (userId: string) => {
     return apiRequest(`/api/auth/me/${userId}`);
   },
+
+  forgotPassword: async (email: string) => {
+    return apiRequest('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  validateResetToken: async (token: string) => {
+    return apiRequest(`/api/auth/validate-reset-token?token=${encodeURIComponent(token)}`);
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    return apiRequest('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+  },
 };
 
 // Facilities API

@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { authApi } from '../api/client';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 export function ResetPassword() {
@@ -22,26 +23,19 @@ export function ResetPassword() {
   const [errors, setErrors] = useState<{ password?: string; confirmPassword?: string }>({});
 
   useEffect(() => {
-    // Simulate token validation
     if (!resetToken) {
       setStatus('invalid-token');
       setErrorMessage('Invalid or missing reset token');
       return;
     }
 
-    // In a real app, validate the token with the backend
     const validateToken = async () => {
       try {
-        // Simulate API call to validate token
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const result = await authApi.validateResetToken(resetToken);
 
-        // Mock validation - replace with real API call
-        // const isValid = await validateResetToken(resetToken);
-        const isValid = true;
-
-        if (!isValid) {
+        if (!result.success || !result.data?.valid) {
           setStatus('invalid-token');
-          setErrorMessage('This password reset link has expired or is invalid');
+          setErrorMessage(result.data?.message || result.error || 'This password reset link has expired or is invalid');
         }
       } catch (error) {
         setStatus('invalid-token');
@@ -79,18 +73,17 @@ export function ResetPassword() {
     setErrorMessage('');
 
     try {
-      // Simulate API call to reset password
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await authApi.resetPassword(resetToken, password);
 
-      // In a real app, this would call the backend API
-      // await resetPassword(resetToken, password);
-
-      setStatus('success');
-
-      // Navigate back to login after 3 seconds
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
+      if (result.success) {
+        setStatus('success');
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
+      } else {
+        setStatus('error');
+        setErrorMessage(result.error || 'Failed to reset password. Please try again.');
+      }
     } catch (error) {
       setStatus('error');
       setErrorMessage('Failed to reset password. Please try again.');

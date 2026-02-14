@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Home } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
+import { facilitiesApi } from '../api/client';
 
 interface Club {
   id: string;
@@ -46,7 +47,6 @@ export function UnifiedSidebar({
       }
 
       try {
-        const { facilitiesApi } = await import('../api/client');
         const facilitiesData: Club[] = [];
 
         for (const facilityId of user.memberFacilities) {

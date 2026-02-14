@@ -1,5 +1,7 @@
 import { query, transaction } from '../database/connection';
 import { rulesEngine, EvaluationResult, RuleResult, BookingRequest } from './rulesEngine';
+import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
+import { notificationService } from './notificationService';
 
 export interface Booking {
   id: string;
@@ -695,10 +697,81 @@ async function issueStrike(
       RETURNING id`,
       [userId, facilityId, strikeType, reason, relatedBookingId, relatedRuleId, issuedBy, expiresAt]
     );
-    return result.rows[0]?.id;
+
+    const strikeId = result.rows[0]?.id;
+
+    // Fire-and-forget: send email + in-app notification
+    if (strikeId) {
+      sendStrikeNotifications(userId, facilityId, strikeType, reason, expiresAt?.toISOString() ?? null).catch(() => {});
+    }
+
+    return strikeId;
   } catch (error) {
     console.error('Failed to issue strike:', error);
     return undefined;
+  }
+}
+
+/**
+ * Send email + in-app notifications after a strike is issued
+ */
+async function sendStrikeNotifications(
+  userId: string,
+  facilityId: string,
+  strikeType: string,
+  reason: string,
+  expiresAt: string | null
+): Promise<void> {
+  try {
+    // Fetch user email + name
+    const userResult = await query(
+      'SELECT email, full_name as "fullName" FROM users WHERE id = $1',
+      [userId]
+    );
+    const user = userResult.rows[0];
+    if (!user) return;
+
+    // Fetch facility name
+    const facilityResult = await query(
+      'SELECT name FROM facilities WHERE id = $1',
+      [facilityId]
+    );
+    const facilityName = facilityResult.rows[0]?.name || 'your facility';
+
+    // Send email notification
+    await sendStrikeIssuedEmail(user.email, user.fullName, strikeType, reason, facilityName, expiresAt);
+
+    // Create in-app notification
+    await notificationService.notifyStrikeIssued(userId, facilityName, strikeType, reason);
+
+    // Check if user is now locked out (strike count >= threshold)
+    const configResult = await query(
+      `SELECT rule_config FROM facility_rule_configs frc
+       JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
+       WHERE frc.facility_id = $1 AND brd.rule_code = 'ACC-009' AND frc.is_enabled = true`,
+      [facilityId]
+    );
+    const config = configResult.rows[0]?.rule_config || { strike_threshold: 3, strike_window_days: 30, lockout_days: 7 };
+    const threshold = config.strike_threshold || 3;
+    const windowDays = config.strike_window_days || 30;
+    const lockoutDays = config.lockout_days || 7;
+
+    const activeResult = await query(
+      `SELECT COUNT(*) as count FROM account_strikes
+       WHERE user_id = $1 AND facility_id = $2
+         AND revoked = false
+         AND issued_at > CURRENT_TIMESTAMP - INTERVAL '1 day' * $3`,
+      [userId, facilityId, windowDays]
+    );
+    const activeCount = parseInt(activeResult.rows[0].count);
+
+    if (activeCount >= threshold) {
+      const lockoutEndsAt = new Date(Date.now() + lockoutDays * 24 * 60 * 60 * 1000).toISOString();
+      await sendLockoutEmail(user.email, user.fullName, facilityName, lockoutEndsAt);
+      await notificationService.notifyAccountLockedOut(userId, facilityName, lockoutEndsAt);
+    }
+  } catch (error) {
+    console.error('Failed to send strike notifications:', error);
   }
 }
 

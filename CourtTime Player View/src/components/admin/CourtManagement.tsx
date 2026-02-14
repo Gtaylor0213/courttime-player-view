@@ -4,12 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Edit, Trash2, Save, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Settings } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
-import { facilitiesApi, adminApi } from '../../api/client';
+import { facilitiesApi, adminApi, courtConfigApi } from '../../api/client';
 import { toast } from 'sonner';
 
 interface Court {
@@ -31,6 +31,12 @@ export function CourtManagement() {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Court schedule config state
+  const [configuringCourtId, setConfiguringCourtId] = useState<string | null>(null);
+  const [courtSchedule, setCourtSchedule] = useState<any[]>([]);
+  const [courtScheduleLoading, setCourtScheduleLoading] = useState(false);
+  const [courtScheduleSaving, setCourtScheduleSaving] = useState(false);
 
   const currentFacilityId = user?.memberFacilities?.[0];
 
@@ -132,6 +138,62 @@ export function CourtManagement() {
     } catch (error: any) {
       console.error('Error deactivating court:', error);
       toast.error('Failed to deactivate court');
+    }
+  };
+
+  // Court schedule config functions
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const loadCourtSchedule = async (courtId: string) => {
+    try {
+      setCourtScheduleLoading(true);
+      const response = await courtConfigApi.getSchedule(courtId);
+      if (response.success && response.data?.schedule) {
+        setCourtSchedule(response.data.schedule);
+      }
+    } catch (error) {
+      console.error('Error loading court schedule:', error);
+      toast.error('Failed to load court schedule');
+    } finally {
+      setCourtScheduleLoading(false);
+    }
+  };
+
+  const handleToggleCourtConfig = async (courtId: string) => {
+    if (configuringCourtId === courtId) {
+      setConfiguringCourtId(null);
+      setCourtSchedule([]);
+      return;
+    }
+    setConfiguringCourtId(courtId);
+    await loadCourtSchedule(courtId);
+  };
+
+  const updateCourtScheduleDay = (dayOfWeek: number, field: string, value: any) => {
+    setCourtSchedule(prev => prev.map(day =>
+      day.day_of_week === dayOfWeek ? { ...day, [field]: value } : day
+    ));
+  };
+
+  const updateAllScheduleDays = (field: string, value: any) => {
+    setCourtSchedule(prev => prev.map(day => ({ ...day, [field]: value })));
+  };
+
+  const saveCourtSchedule = async () => {
+    if (!configuringCourtId) return;
+    try {
+      setCourtScheduleSaving(true);
+      const response = await courtConfigApi.updateSchedule(configuringCourtId, courtSchedule);
+      if (response.success) {
+        toast.success('Court schedule saved');
+      } else {
+        toast.error(response.error || 'Failed to save schedule');
+      }
+    } catch (error) {
+      console.error('Error saving court schedule:', error);
+      toast.error('Failed to save court schedule');
+    } finally {
+      setCourtScheduleSaving(false);
     }
   };
 
@@ -276,44 +338,188 @@ export function CourtManagement() {
           {/* Courts List */}
           <div className="grid grid-cols-1 gap-4">
             {courts.map((court) => (
-              <Card key={court.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold">{court.name}</h3>
-                        <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
+              <React.Fragment key={court.id}>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-semibold">{court.name}</h3>
+                          <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                          <span>Court #: <strong>{court.courtNumber}</strong></span>
+                          <span>Type: <strong>{court.courtType}</strong></span>
+                          <span>Surface: <strong>{court.surfaceType}</strong></span>
+                          <span>{court.isIndoor ? 'Indoor' : 'Outdoor'}</span>
+                          <span>{court.hasLights ? 'With Lights' : 'No Lights'}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                        <span>Court #: <strong>{court.courtNumber}</strong></span>
-                        <span>Type: <strong>{court.courtType}</strong></span>
-                        <span>Surface: <strong>{court.surfaceType}</strong></span>
-                        <span>{court.isIndoor ? 'Indoor' : 'Outdoor'}</span>
-                        <span>{court.hasLights ? 'With Lights' : 'No Lights'}</span>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleCourtConfig(court.id)}
+                          disabled={editingCourt !== null}
+                          className={configuringCourtId === court.id ? 'bg-blue-100 border-blue-300' : ''}
+                          title="Schedule Settings"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(court)}
+                          disabled={editingCourt !== null}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(court.id)}
+                          disabled={editingCourt !== null}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(court)}
-                        disabled={editingCourt !== null}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(court.id)}
-                        disabled={editingCourt !== null}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                {/* Court Schedule Config Panel */}
+                {configuringCourtId === court.id && (
+                  <Card className="border-blue-200 bg-blue-50/50">
+                    <CardHeader>
+                      <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
+                      <CardDescription>Configure hours, prime time, and slot settings per day</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {courtScheduleLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left p-2">Day</th>
+                                  <th className="text-center p-2">Open</th>
+                                  <th className="text-center p-2">Open Time</th>
+                                  <th className="text-center p-2">Close Time</th>
+                                  <th className="text-center p-2">Prime Start</th>
+                                  <th className="text-center p-2">Prime End</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {courtSchedule.map((day: any) => (
+                                  <tr key={day.day_of_week} className="border-b">
+                                    <td className="p-2 font-medium">{DAY_NAMES[day.day_of_week]}</td>
+                                    <td className="p-2 text-center">
+                                      <Switch
+                                        checked={day.is_open}
+                                        onCheckedChange={(checked: boolean) => updateCourtScheduleDay(day.day_of_week, 'is_open', checked)}
+                                      />
+                                    </td>
+                                    <td className="p-2">
+                                      <Input
+                                        type="time"
+                                        value={day.open_time || '06:00'}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'open_time', e.target.value)}
+                                        disabled={!day.is_open}
+                                        className="w-28"
+                                      />
+                                    </td>
+                                    <td className="p-2">
+                                      <Input
+                                        type="time"
+                                        value={day.close_time || '22:00'}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'close_time', e.target.value)}
+                                        disabled={!day.is_open}
+                                        className="w-28"
+                                      />
+                                    </td>
+                                    <td className="p-2">
+                                      <Input
+                                        type="time"
+                                        value={day.prime_time_start || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'prime_time_start', e.target.value || null)}
+                                        disabled={!day.is_open}
+                                        className="w-28"
+                                      />
+                                    </td>
+                                    <td className="p-2">
+                                      <Input
+                                        type="time"
+                                        value={day.prime_time_end || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'prime_time_end', e.target.value || null)}
+                                        disabled={!day.is_open}
+                                        className="w-28"
+                                      />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+                            <div className="space-y-1">
+                              <Label className="text-sm">Slot Duration (min)</Label>
+                              <Select
+                                value={String(courtSchedule[0]?.slot_duration || 30)}
+                                onValueChange={(val: string) => updateAllScheduleDays('slot_duration', parseInt(val))}
+                              >
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="15">15 min</SelectItem>
+                                  <SelectItem value="30">30 min</SelectItem>
+                                  <SelectItem value="60">60 min</SelectItem>
+                                  <SelectItem value="90">90 min</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-sm">Buffer Before (min)</Label>
+                              <Input
+                                type="number"
+                                value={courtSchedule[0]?.buffer_before || 0}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllScheduleDays('buffer_before', parseInt(e.target.value) || 0)}
+                                min="0"
+                                max="30"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-sm">Buffer After (min)</Label>
+                              <Input
+                                type="number"
+                                value={courtSchedule[0]?.buffer_after || 0}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllScheduleDays('buffer_after', parseInt(e.target.value) || 0)}
+                                min="0"
+                                max="30"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 pt-4">
+                            <Button onClick={saveCourtSchedule} disabled={courtScheduleSaving}>
+                              <Save className="h-4 w-4 mr-2" />
+                              {courtScheduleSaving ? 'Saving...' : 'Save Schedule'}
+                            </Button>
+                            <Button variant="outline" onClick={() => setConfiguringCourtId(null)}>
+                              <X className="h-4 w-4 mr-2" />
+                              Close
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </React.Fragment>
             ))}
           </div>
 

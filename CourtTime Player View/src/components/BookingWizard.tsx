@@ -5,11 +5,24 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Calendar, Clock, MapPin, User } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, AlertCircle, Info } from 'lucide-react';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi } from '../api/client';
 import { BOOKING_TYPES } from '../constants/bookingTypes';
+
+interface RuleViolation {
+  ruleCode: string;
+  ruleName: string;
+  message: string;
+  severity: string;
+}
+
+interface RuleWarning {
+  ruleCode: string;
+  ruleName: string;
+  message: string;
+}
 
 interface BookingWizardProps {
   isOpen: boolean;
@@ -35,6 +48,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [bookingType, setBookingType] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ruleViolations, setRuleViolations] = useState<RuleViolation[]>([]);
+  const [ruleWarnings, setRuleWarnings] = useState<RuleWarning[]>([]);
+  const [isPrimeTime, setIsPrimeTime] = useState(false);
   const { showToast } = useNotifications();
   const { user } = useAuth();
 
@@ -48,9 +64,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         // Reset to default for single slot bookings
         setDuration('1');
       }
-      // Reset booking type and notes when modal opens
+      // Reset booking type, notes, and violations when modal opens
       setBookingType('');
       setNotes('');
+      setRuleViolations([]);
+      setRuleWarnings([]);
+      setIsPrimeTime(false);
     }
   }, [selectedSlots, isOpen]);
 
@@ -159,7 +178,22 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
         onClose();
       } else {
-        showToast('error', 'Booking Failed', result.error || 'Failed to create booking. Please try again.');
+        // Show rule violations inline if available
+        if (result.ruleViolations && result.ruleViolations.length > 0) {
+          setRuleViolations(result.ruleViolations);
+        } else {
+          setRuleViolations([]);
+        }
+        if (result.warnings && result.warnings.length > 0) {
+          setRuleWarnings(result.warnings);
+        }
+        if (result.isPrimeTime !== undefined) {
+          setIsPrimeTime(result.isPrimeTime);
+        }
+        // Only show generic toast if no specific violations
+        if (!result.ruleViolations || result.ruleViolations.length === 0) {
+          showToast('error', 'Booking Failed', result.error || 'Failed to create booking. Please try again.');
+        }
       }
     } catch (error) {
       console.error('Booking error:', error);
@@ -274,6 +308,50 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               </div>
             </div>
           </div>
+
+          {/* Rule Violations */}
+          {ruleViolations.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 space-y-2">
+              <div className="flex items-center gap-2 text-red-800 font-medium text-sm">
+                <AlertCircle className="h-4 w-4" />
+                Booking could not be completed
+              </div>
+              <ul className="space-y-1">
+                {ruleViolations.map((v, i) => (
+                  <li key={i} className="text-sm text-red-700 flex items-start gap-2">
+                    <span className="text-red-400 mt-0.5">-</span>
+                    <span>{v.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Rule Warnings */}
+          {ruleWarnings.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 space-y-2">
+              <div className="flex items-center gap-2 text-amber-800 font-medium text-sm">
+                <Info className="h-4 w-4" />
+                Heads up
+              </div>
+              <ul className="space-y-1">
+                {ruleWarnings.map((w, i) => (
+                  <li key={i} className="text-sm text-amber-700 flex items-start gap-2">
+                    <span className="text-amber-400 mt-0.5">-</span>
+                    <span>{w.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Prime Time Badge */}
+          {isPrimeTime && (
+            <div className="flex items-center gap-2 text-sm bg-purple-50 border border-purple-200 text-purple-700 rounded-md px-3 py-2">
+              <Clock className="h-4 w-4" />
+              This slot is during prime time
+            </div>
+          )}
 
           {/* Duration - Hide for multi-slot selections since duration is predetermined */}
           {(!selectedSlots || selectedSlots.length <= 1) && (

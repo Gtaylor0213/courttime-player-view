@@ -4,12 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings } from 'lucide-react';
+import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
-import { membersApi, addressWhitelistApi } from '../../api/client';
+import { membersApi, addressWhitelistApi, tiersApi, strikesApi } from '../../api/client';
+import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -43,12 +44,25 @@ export function MemberManagement() {
   const [newAddress, setNewAddress] = useState('');
   const [accountsPerAddress, setAccountsPerAddress] = useState(4);
 
+  // Tier management
+  const [facilityTiers, setFacilityTiers] = useState<any[]>([]);
+  const [memberTiers, setMemberTiers] = useState<Record<string, string>>({}); // userId -> tierId
+
+  // Strike management
+  const [strikeDialogUserId, setStrikeDialogUserId] = useState<string | null>(null);
+  const [strikeDialogName, setStrikeDialogName] = useState('');
+  const [userStrikes, setUserStrikes] = useState<any[]>([]);
+  const [strikesLoading, setStrikesLoading] = useState(false);
+  const [newStrikeType, setNewStrikeType] = useState<string>('manual');
+  const [newStrikeReason, setNewStrikeReason] = useState('');
+
   const currentFacilityId = user?.memberFacilities?.[0];
 
   useEffect(() => {
     if (currentFacilityId) {
       loadMembers();
       loadWhitelistAddresses();
+      loadFacilityTiers();
     }
   }, [currentFacilityId]);
 
@@ -64,6 +78,9 @@ export function MemberManagement() {
 
       if (response.success && response.data?.members) {
         setMembers(response.data.members);
+        if (facilityTiers.length > 0) {
+          loadMemberTiers(response.data.members);
+        }
       } else {
         toast.error(response.error || 'Failed to load members');
       }
@@ -86,6 +103,129 @@ export function MemberManagement() {
       }
     } catch (error) {
       console.error('Error loading whitelist addresses:', error);
+    }
+  };
+
+  const loadFacilityTiers = async () => {
+    if (!currentFacilityId) return;
+    try {
+      const response = await tiersApi.getByFacility(currentFacilityId);
+      if (response.success && response.data?.tiers) {
+        setFacilityTiers(response.data.tiers);
+      }
+    } catch (error) {
+      console.error('Error loading facility tiers:', error);
+    }
+  };
+
+  const loadMemberTiers = async (memberList: Member[]) => {
+    if (!currentFacilityId) return;
+    const tierMap: Record<string, string> = {};
+    for (const member of memberList) {
+      try {
+        const response = await tiersApi.getUserTier(member.userId, currentFacilityId);
+        if (response.success && response.data?.tiers?.length > 0) {
+          tierMap[member.userId] = response.data.tiers[0].tier_id;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    setMemberTiers(tierMap);
+  };
+
+  const handleTierChange = async (userId: string, tierId: string) => {
+    if (!currentFacilityId) return;
+    try {
+      if (tierId === 'none') {
+        await tiersApi.unassignUser(userId, currentFacilityId);
+        setMemberTiers(prev => {
+          const next = { ...prev };
+          delete next[userId];
+          return next;
+        });
+        toast.success('Tier removed');
+      } else {
+        await tiersApi.assignTier(tierId, {
+          userId,
+          facilityId: currentFacilityId,
+          assignedBy: user?.id,
+        });
+        setMemberTiers(prev => ({ ...prev, [userId]: tierId }));
+        toast.success('Tier assigned');
+      }
+    } catch (error) {
+      console.error('Error changing tier:', error);
+      toast.error('Failed to change tier');
+    }
+  };
+
+  const openStrikeDialog = async (userId: string, name: string) => {
+    setStrikeDialogUserId(userId);
+    setStrikeDialogName(name);
+    setNewStrikeType('manual');
+    setNewStrikeReason('');
+    await loadUserStrikes(userId);
+  };
+
+  const loadUserStrikes = async (userId: string) => {
+    if (!currentFacilityId) return;
+    try {
+      setStrikesLoading(true);
+      const response = await strikesApi.getByFacility(currentFacilityId, { userId });
+      if (response.success && response.data?.strikes) {
+        setUserStrikes(response.data.strikes);
+      }
+    } catch (error) {
+      console.error('Error loading strikes:', error);
+    } finally {
+      setStrikesLoading(false);
+    }
+  };
+
+  const handleIssueStrike = async () => {
+    if (!currentFacilityId || !strikeDialogUserId) return;
+    if (!newStrikeReason.trim()) {
+      toast.error('Please provide a reason for the strike');
+      return;
+    }
+    try {
+      const response = await strikesApi.issue({
+        userId: strikeDialogUserId,
+        facilityId: currentFacilityId,
+        strikeType: newStrikeType as 'no_show' | 'late_cancel' | 'manual',
+        strikeReason: newStrikeReason,
+        issuedBy: user?.id,
+      });
+      if (response.success) {
+        toast.success('Strike issued');
+        setNewStrikeReason('');
+        loadUserStrikes(strikeDialogUserId);
+      } else {
+        toast.error(response.error || 'Failed to issue strike');
+      }
+    } catch (error) {
+      console.error('Error issuing strike:', error);
+      toast.error('Failed to issue strike');
+    }
+  };
+
+  const handleRevokeStrike = async (strikeId: string) => {
+    if (!strikeDialogUserId) return;
+    try {
+      const response = await strikesApi.revoke(strikeId, {
+        revokedBy: user?.id || '',
+        revokeReason: 'Revoked by admin',
+      });
+      if (response.success) {
+        toast.success('Strike revoked');
+        loadUserStrikes(strikeDialogUserId);
+      } else {
+        toast.error(response.error || 'Failed to revoke strike');
+      }
+    } catch (error) {
+      console.error('Error revoking strike:', error);
+      toast.error('Failed to revoke strike');
     }
   };
 
@@ -359,6 +499,22 @@ export function MemberManagement() {
                             <Badge className={`${getStatusColor(member.status)} text-xs px-2 py-0`}>
                               {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                             </Badge>
+                            {facilityTiers.length > 0 && (
+                              <Select
+                                value={memberTiers[member.userId] || 'none'}
+                                onValueChange={(value) => handleTierChange(member.userId, value)}
+                              >
+                                <SelectTrigger className="w-28 h-6 text-xs">
+                                  <SelectValue placeholder="No tier" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No tier</SelectItem>
+                                  {facilityTiers.map((tier) => (
+                                    <SelectItem key={tier.id} value={tier.id}>{tier.tier_name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-1 ml-3">
@@ -403,6 +559,15 @@ export function MemberManagement() {
                             title={member.isFacilityAdmin ? 'Remove admin' : 'Make admin'}
                           >
                             {member.isFacilityAdmin ? <ShieldOff className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openStrikeDialog(member.userId, member.fullName)}
+                            className="text-amber-600 hover:text-amber-700 h-7 w-7 p-0"
+                            title="Manage strikes"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="outline"
@@ -522,6 +687,110 @@ export function MemberManagement() {
                 setShowAddressDialog(false);
               }}>
                 Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Strike Management Dialog */}
+      <Dialog open={strikeDialogUserId !== null} onOpenChange={(open) => { if (!open) setStrikeDialogUserId(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Strikes - {strikeDialogName}
+            </DialogTitle>
+            <DialogDescription>
+              View, issue, and revoke strikes for this member.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Issue New Strike */}
+            <div className="p-4 border rounded-lg bg-amber-50 space-y-3">
+              <h4 className="font-medium text-sm">Issue New Strike</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Strike Type</Label>
+                  <Select value={newStrikeType} onValueChange={setNewStrikeType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no_show">No Show</SelectItem>
+                      <SelectItem value="late_cancel">Late Cancellation</SelectItem>
+                      <SelectItem value="manual">Manual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Reason</Label>
+                  <Input
+                    value={newStrikeReason}
+                    onChange={(e) => setNewStrikeReason(e.target.value)}
+                    placeholder="Reason for strike..."
+                  />
+                </div>
+              </div>
+              <Button size="sm" onClick={handleIssueStrike}>
+                Issue Strike
+              </Button>
+            </div>
+
+            {/* Strike History */}
+            <div>
+              <Label className="text-sm font-medium">Strike History ({userStrikes.length})</Label>
+              <div className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                {strikesLoading ? (
+                  <div className="text-center py-4 text-gray-500 text-sm">Loading strikes...</div>
+                ) : userStrikes.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500 text-sm">No strikes on record.</div>
+                ) : (
+                  userStrikes.map((strike) => (
+                    <div
+                      key={strike.id}
+                      className={`flex items-center justify-between p-3 border rounded-lg ${
+                        strike.revoked ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Badge className={
+                          strike.revoked ? 'bg-gray-100 text-gray-500' :
+                          strike.strike_type === 'no_show' ? 'bg-red-100 text-red-700' :
+                          strike.strike_type === 'late_cancel' ? 'bg-orange-100 text-orange-700' :
+                          'bg-amber-100 text-amber-700'
+                        }>
+                          {strike.strike_type === 'no_show' ? 'No Show' :
+                           strike.strike_type === 'late_cancel' ? 'Late Cancel' : 'Manual'}
+                        </Badge>
+                        <div>
+                          <div className="text-sm">{strike.strike_reason || 'No reason provided'}</div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(strike.issued_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {strike.revoked && ' (Revoked)'}
+                          </div>
+                        </div>
+                      </div>
+                      {!strike.revoked && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRevokeStrike(strike.id)}
+                          className="text-xs h-7"
+                        >
+                          Revoke
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t">
+              <Button variant="outline" onClick={() => setStrikeDialogUserId(null)}>
+                Close
               </Button>
             </div>
           </div>

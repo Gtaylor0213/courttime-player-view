@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS account_strikes (
 
 CREATE INDEX IF NOT EXISTS idx_account_strikes_user ON account_strikes(user_id, facility_id);
 CREATE INDEX IF NOT EXISTS idx_account_strikes_active ON account_strikes(user_id, facility_id)
-    WHERE revoked = false AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP);
+    WHERE revoked = false;
 CREATE INDEX IF NOT EXISTS idx_account_strikes_type ON account_strikes(strike_type);
 
 COMMENT ON TABLE account_strikes IS 'Tracks strikes for no-shows, late cancellations, and rule violations';

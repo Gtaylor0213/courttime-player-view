@@ -154,6 +154,67 @@ export const notificationService = {
     }
   },
 
+  // Strike & lockout notification helpers
+  async notifyStrikeIssued(
+    userId: string,
+    facilityName: string,
+    strikeType: string,
+    reason: string
+  ): Promise<string> {
+    const typeLabel = strikeType === 'no_show' ? 'No Show'
+      : strikeType === 'late_cancel' ? 'Late Cancellation'
+      : 'Manual Strike';
+    const title = `Strike Issued - ${facilityName}`;
+    const message = `You received a ${typeLabel} strike at ${facilityName}: ${reason}`;
+
+    return this.createNotification(
+      userId,
+      title,
+      message,
+      'strike_issued',
+      { actionUrl: '/profile', priority: 'high' }
+    );
+  },
+
+  async notifyStrikeRevoked(
+    userId: string,
+    facilityName: string,
+    revokeReason?: string
+  ): Promise<string> {
+    const title = `Strike Removed - ${facilityName}`;
+    const message = revokeReason
+      ? `A strike on your account at ${facilityName} has been removed: ${revokeReason}`
+      : `A strike on your account at ${facilityName} has been removed.`;
+
+    return this.createNotification(
+      userId,
+      title,
+      message,
+      'strike_revoked',
+      { actionUrl: '/profile', priority: 'medium' }
+    );
+  },
+
+  async notifyAccountLockedOut(
+    userId: string,
+    facilityName: string,
+    lockoutEndsAt?: string | null
+  ): Promise<string> {
+    const title = `Account Locked Out - ${facilityName}`;
+    const endsNote = lockoutEndsAt
+      ? ` until ${new Date(lockoutEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+      : '';
+    const message = `Your booking privileges at ${facilityName} have been suspended${endsNote}. Contact the facility administrator for more information.`;
+
+    return this.createNotification(
+      userId,
+      title,
+      message,
+      'account_lockout',
+      { actionUrl: '/profile', priority: 'high' }
+    );
+  },
+
   // Helper: Map database type to frontend type
   mapDatabaseTypeToNotificationType(dbType: string): Notification['type'] {
     const typeMap: Record<string, Notification['type']> = {
@@ -163,7 +224,10 @@ export const notificationService = {
       'court_change': 'court_change',
       'payment': 'payment_received',
       'announcement': 'facility_announcement',
-      'weather': 'weather_alert'
+      'weather': 'weather_alert',
+      'strike_issued': 'facility_announcement',
+      'strike_revoked': 'facility_announcement',
+      'account_lockout': 'facility_announcement'
     };
 
     return typeMap[dbType] || 'facility_announcement';

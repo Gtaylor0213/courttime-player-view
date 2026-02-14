@@ -436,6 +436,13 @@ export function AdminDashboard() {
                           <div className="font-medium">Court Settings</div>
                           <div className="text-sm text-gray-600">Configure court availability</div>
                         </button>
+                        <button
+                          onClick={() => navigate('/admin/households')}
+                          className="w-full text-left p-3 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="font-medium">Manage Households</div>
+                          <div className="text-sm text-gray-600">View and manage address-based households</div>
+                        </button>
                       </CardContent>
                     </Card>
 

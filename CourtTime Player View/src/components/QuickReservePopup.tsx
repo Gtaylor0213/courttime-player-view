@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Calendar, Clock, MapPin, User, Zap } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Zap, AlertCircle, Info } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi } from '../api/client';
 import { BOOKING_TYPES } from '../constants/bookingTypes';
@@ -49,6 +49,9 @@ export function QuickReservePopup({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingBookings, setExistingBookings] = useState<any>({});
+  const [bookingErrors, setBookingErrors] = useState<Array<{ ruleCode: string; ruleName: string; message: string; severity: string }>>([]);
+  const [bookingWarnings, setBookingWarnings] = useState<Array<{ ruleCode: string; ruleName: string; message: string }>>([]);
+  const [isPrimeTime, setIsPrimeTime] = useState(false);
 
   // Booking type
   const [bookingType, setBookingType] = useState<string>('');
@@ -89,12 +92,15 @@ export function QuickReservePopup({
 
     setSelectedTime(`${hours}:${minutes.toString().padStart(2, '0')} ${period}`);
 
-    // Reset notes, booking type, and advanced booking when modal opens
+    // Reset notes, booking type, advanced booking, and errors when modal opens
     setNotes('');
     setBookingType('');
     setAdvancedBooking(false);
     setRecurringDays([]);
     setRecurringEndDate('');
+    setBookingErrors([]);
+    setBookingWarnings([]);
+    setIsPrimeTime(false);
   }, [isOpen]);
 
   // Reset court selection when facility changes
@@ -497,16 +503,36 @@ export function QuickReservePopup({
         onReserve(reservation);
 
         if (failedBookings.length > 0) {
-          alert(`${successfulBookings.length} bookings created successfully. ${failedBookings.length} bookings failed (possibly due to conflicts).`);
+          // Collect rule violations from failed bookings
+          const violations = failedBookings
+            .filter(r => r.ruleViolations && r.ruleViolations.length > 0)
+            .flatMap(r => r.ruleViolations!);
+          if (violations.length > 0) {
+            setBookingErrors(violations);
+          } else {
+            setBookingErrors([{ ruleCode: '', ruleName: '', message: `${failedBookings.length} bookings failed (possibly due to conflicts).`, severity: 'error' }]);
+          }
         }
 
         onClose();
       } else {
-        alert('Failed to create any bookings. There may be conflicts with existing reservations.');
+        // Show rule violations from the first failed result
+        const firstFailed = failedBookings[0];
+        if (firstFailed?.ruleViolations && firstFailed.ruleViolations.length > 0) {
+          setBookingErrors(firstFailed.ruleViolations);
+          if (firstFailed.warnings) {
+            setBookingWarnings(firstFailed.warnings);
+          }
+          if (firstFailed.isPrimeTime !== undefined) {
+            setIsPrimeTime(firstFailed.isPrimeTime);
+          }
+        } else {
+          setBookingErrors([{ ruleCode: '', ruleName: '', message: firstFailed?.error || 'Failed to create booking. There may be conflicts with existing reservations.', severity: 'error' }]);
+        }
       }
     } catch (error) {
       console.error('Booking error:', error);
-      alert('An error occurred while creating your booking(s)');
+      setBookingErrors([{ ruleCode: '', ruleName: '', message: 'An error occurred while creating your booking(s)', severity: 'error' }]);
     } finally {
       setIsSubmitting(false);
     }
@@ -808,6 +834,50 @@ export function QuickReservePopup({
               )}
             </div>
           )}
+
+              {/* Rule Violations */}
+              {bookingErrors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-red-800 font-medium text-sm">
+                    <AlertCircle className="h-4 w-4" />
+                    Booking could not be completed
+                  </div>
+                  <ul className="space-y-1">
+                    {bookingErrors.map((v, i) => (
+                      <li key={i} className="text-sm text-red-700 flex items-start gap-2">
+                        <span className="text-red-400 mt-0.5">-</span>
+                        <span>{v.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Rule Warnings */}
+              {bookingWarnings.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-md p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-amber-800 font-medium text-sm">
+                    <Info className="h-4 w-4" />
+                    Heads up
+                  </div>
+                  <ul className="space-y-1">
+                    {bookingWarnings.map((w, i) => (
+                      <li key={i} className="text-sm text-amber-700 flex items-start gap-2">
+                        <span className="text-amber-400 mt-0.5">-</span>
+                        <span>{w.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Prime Time Badge */}
+              {isPrimeTime && (
+                <div className="flex items-center gap-2 text-sm bg-purple-50 border border-purple-200 text-purple-700 rounded-md px-3 py-2">
+                  <Clock className="h-4 w-4" />
+                  This slot is during prime time
+                </div>
+              )}
 
               {/* Reservation Summary */}
               {selectedCourt && selectedTime && selectedDate && (

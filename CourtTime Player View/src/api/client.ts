@@ -13,6 +13,9 @@ interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+  ruleViolations?: Array<{ ruleCode: string; ruleName: string; message: string; severity: string }>;
+  warnings?: Array<{ ruleCode: string; ruleName: string; message: string }>;
+  isPrimeTime?: boolean;
 }
 
 async function apiRequest<T = any>(
@@ -34,6 +37,9 @@ async function apiRequest<T = any>(
       return {
         success: false,
         error: data.error || data.message || 'Request failed',
+        ...(data.ruleViolations && { ruleViolations: data.ruleViolations }),
+        ...(data.warnings && { warnings: data.warnings }),
+        ...(data.isPrimeTime !== undefined && { isPrimeTime: data.isPrimeTime }),
       };
     }
 
@@ -481,6 +487,21 @@ export const bookingApi = {
       method: 'DELETE',
     });
   },
+
+  validate: async (data: {
+    courtId: string;
+    userId: string;
+    facilityId: string;
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+  }) => {
+    return apiRequest('/api/bookings/validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 // Admin API
@@ -555,6 +576,276 @@ export const adminApi = {
   // Analytics
   getAnalytics: async (facilityId: string, period?: number) => {
     return apiRequest(`/api/admin/analytics/${facilityId}?period=${period || 30}`);
+  },
+};
+
+// Court Config API
+export const courtConfigApi = {
+  getSchedule: async (courtId: string) => {
+    return apiRequest(`/api/court-config/${courtId}/schedule`);
+  },
+
+  updateSchedule: async (courtId: string, schedule: Array<{
+    day_of_week: number;
+    is_open?: boolean;
+    open_time?: string;
+    close_time?: string;
+    prime_time_start?: string | null;
+    prime_time_end?: string | null;
+    prime_time_max_duration?: number;
+    slot_duration?: number;
+    min_duration?: number;
+    max_duration?: number;
+    buffer_before?: number;
+    buffer_after?: number;
+  }>) => {
+    return apiRequest(`/api/court-config/${courtId}/schedule`, {
+      method: 'PUT',
+      body: JSON.stringify({ schedule }),
+    });
+  },
+
+  getFacilityBlackouts: async (facilityId: string, options?: {
+    startDate?: string;
+    endDate?: string;
+    includeExpired?: boolean;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.startDate) params.append('startDate', options.startDate);
+    if (options?.endDate) params.append('endDate', options.endDate);
+    if (options?.includeExpired) params.append('includeExpired', 'true');
+    const qs = params.toString();
+    return apiRequest(`/api/court-config/facility/${facilityId}/blackouts${qs ? `?${qs}` : ''}`);
+  },
+
+  createBlackout: async (data: {
+    courtId?: string | null;
+    facilityId: string;
+    blackoutType?: string;
+    title?: string;
+    description?: string;
+    startDatetime: string;
+    endDatetime: string;
+    recurrenceRule?: string | null;
+    createdBy?: string;
+  }) => {
+    return apiRequest('/api/court-config/blackouts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateBlackout: async (blackoutId: string, data: {
+    courtId?: string | null;
+    blackoutType?: string;
+    title?: string;
+    description?: string;
+    startDatetime?: string;
+    endDatetime?: string;
+    recurrenceRule?: string | null;
+  }) => {
+    return apiRequest(`/api/court-config/blackouts/${blackoutId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteBlackout: async (blackoutId: string) => {
+    return apiRequest(`/api/court-config/blackouts/${blackoutId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Rules API
+export const rulesApi = {
+  getDefinitions: async (category?: string) => {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+    return apiRequest(`/api/rules/definitions${qs}`);
+  },
+
+  getFacilityRules: async (facilityId: string) => {
+    return apiRequest(`/api/rules/facility/${facilityId}`);
+  },
+
+  getEffectiveRules: async (facilityId: string) => {
+    return apiRequest(`/api/rules/facility/${facilityId}/effective`);
+  },
+
+  configureRule: async (facilityId: string, data: {
+    ruleCode: string;
+    isEnabled: boolean;
+    severity?: string;
+    ruleConfig?: Record<string, any>;
+    customMessage?: string;
+  }) => {
+    return apiRequest(`/api/rules/facility/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateRule: async (facilityId: string, ruleCode: string, data: {
+    isEnabled?: boolean;
+    severity?: string;
+    ruleConfig?: Record<string, any>;
+    customMessage?: string;
+  }) => {
+    return apiRequest(`/api/rules/facility/${facilityId}/${ruleCode}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteRule: async (facilityId: string, ruleCode: string) => {
+    return apiRequest(`/api/rules/facility/${facilityId}/${ruleCode}`, {
+      method: 'DELETE',
+    });
+  },
+
+  bulkUpdate: async (facilityId: string, rules: Array<{
+    ruleCode: string;
+    isEnabled: boolean;
+    severity?: string;
+    ruleConfig?: Record<string, any>;
+    customMessage?: string;
+  }>) => {
+    return apiRequest(`/api/rules/facility/${facilityId}/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ rules }),
+    });
+  },
+
+  enableAll: async (facilityId: string) => {
+    return apiRequest(`/api/rules/facility/${facilityId}/enable-all`, {
+      method: 'POST',
+    });
+  },
+
+  disableAll: async (facilityId: string) => {
+    return apiRequest(`/api/rules/facility/${facilityId}/disable-all`, {
+      method: 'POST',
+    });
+  },
+};
+
+// Tiers API
+export const tiersApi = {
+  getByFacility: async (facilityId: string) => {
+    return apiRequest(`/api/tiers/facility/${facilityId}`);
+  },
+
+  create: async (data: {
+    facilityId: string;
+    tierName: string;
+    tierLevel: number;
+    advanceBookingDays?: number;
+    primeTimeEligible?: boolean;
+    primeTimeMaxPerWeek?: number | null;
+    maxActiveReservations?: number | null;
+    maxReservationsPerWeek?: number | null;
+    maxMinutesPerWeek?: number | null;
+    isDefault?: boolean;
+  }) => {
+    return apiRequest('/api/tiers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (tierId: string, data: {
+    tierName?: string;
+    tierLevel?: number;
+    advanceBookingDays?: number;
+    primeTimeEligible?: boolean;
+    primeTimeMaxPerWeek?: number | null;
+    maxActiveReservations?: number | null;
+    maxReservationsPerWeek?: number | null;
+    maxMinutesPerWeek?: number | null;
+    isDefault?: boolean;
+  }) => {
+    return apiRequest(`/api/tiers/${tierId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (tierId: string) => {
+    return apiRequest(`/api/tiers/${tierId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getUserTier: async (userId: string, facilityId?: string) => {
+    const qs = facilityId ? `?facilityId=${facilityId}` : '';
+    return apiRequest(`/api/tiers/user/${userId}${qs}`);
+  },
+
+  assignTier: async (tierId: string, data: {
+    userId: string;
+    facilityId: string;
+    assignedBy?: string;
+    expiresAt?: string | null;
+  }) => {
+    return apiRequest(`/api/tiers/${tierId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  unassignUser: async (userId: string, facilityId: string) => {
+    return apiRequest(`/api/tiers/user/${userId}/unassign?facilityId=${facilityId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Strikes API
+export const strikesApi = {
+  getByFacility: async (facilityId: string, options?: { activeOnly?: boolean; userId?: string }) => {
+    const params = new URLSearchParams();
+    if (options?.activeOnly) params.append('activeOnly', 'true');
+    if (options?.userId) params.append('userId', options.userId);
+    const qs = params.toString();
+    return apiRequest(`/api/strikes/facility/${facilityId}${qs ? `?${qs}` : ''}`);
+  },
+
+  getByUser: async (userId: string, facilityId?: string) => {
+    const qs = facilityId ? `?facilityId=${facilityId}` : '';
+    return apiRequest(`/api/strikes/user/${userId}${qs}`);
+  },
+
+  issue: async (data: {
+    userId: string;
+    facilityId: string;
+    strikeType: 'no_show' | 'late_cancel' | 'manual';
+    strikeReason?: string;
+    relatedBookingId?: string;
+    issuedBy?: string;
+    expiresAt?: string | null;
+  }) => {
+    return apiRequest('/api/strikes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  revoke: async (strikeId: string, data: { revokedBy: string; revokeReason?: string }) => {
+    return apiRequest(`/api/strikes/${strikeId}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (strikeId: string) => {
+    return apiRequest(`/api/strikes/${strikeId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  checkLockout: async (userId: string, facilityId?: string) => {
+    const qs = facilityId ? `?facilityId=${facilityId}` : '';
+    return apiRequest(`/api/strikes/check/${userId}${qs}`);
   },
 };
 
@@ -667,6 +958,99 @@ export const notificationsApi = {
   delete: async (notificationId: string) => {
     return apiRequest(`/api/notifications/${notificationId}`, {
       method: 'DELETE',
+    });
+  },
+};
+
+// Households API
+export const householdsApi = {
+  getByFacility: async (facilityId: string) => {
+    return apiRequest(`/api/households/facility/${facilityId}`);
+  },
+
+  getById: async (householdId: string) => {
+    return apiRequest(`/api/households/${householdId}`);
+  },
+
+  getByUser: async (userId: string, facilityId?: string) => {
+    const qs = facilityId ? `?facilityId=${facilityId}` : '';
+    return apiRequest(`/api/households/user/${userId}${qs}`);
+  },
+
+  create: async (data: {
+    facilityId: string;
+    streetAddress: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    householdName?: string;
+    maxMembers?: number;
+    maxActiveReservations?: number;
+    primeTimeMaxPerWeek?: number;
+    hoaAddressId?: string;
+  }) => {
+    return apiRequest('/api/households', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (householdId: string, data: {
+    householdName?: string;
+    maxMembers?: number;
+    maxActiveReservations?: number;
+    primeTimeMaxPerWeek?: number;
+  }) => {
+    return apiRequest(`/api/households/${householdId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (householdId: string, force?: boolean) => {
+    const qs = force ? '?force=true' : '';
+    return apiRequest(`/api/households/${householdId}${qs}`, {
+      method: 'DELETE',
+    });
+  },
+
+  addMember: async (householdId: string, data: {
+    userId: string;
+    isPrimary?: boolean;
+    addedBy?: string;
+  }) => {
+    return apiRequest(`/api/households/${householdId}/members`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateMember: async (householdId: string, userId: string, data: {
+    isPrimary?: boolean;
+    verificationStatus?: 'pending' | 'verified' | 'rejected';
+    verifiedBy?: string;
+  }) => {
+    return apiRequest(`/api/households/${householdId}/members/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  removeMember: async (householdId: string, userId: string) => {
+    return apiRequest(`/api/households/${householdId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getBookings: async (householdId: string, includePast?: boolean) => {
+    const qs = includePast ? '?includePast=true' : '';
+    return apiRequest(`/api/households/${householdId}/bookings${qs}`);
+  },
+
+  autoCreate: async (facilityId: string) => {
+    return apiRequest('/api/households/auto-create', {
+      method: 'POST',
+      body: JSON.stringify({ facilityId }),
     });
   },
 };

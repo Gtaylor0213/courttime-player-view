@@ -30,6 +30,7 @@ import { CourtManagement } from './components/admin/CourtManagement';
 import { BookingManagement } from './components/admin/BookingManagement';
 import { AdminBooking } from './components/admin/AdminBooking';
 import { MemberManagement } from './components/admin/MemberManagement';
+import { HouseholdManagement } from './components/admin/HouseholdManagement';
 
 // Developer
 import { DeveloperConsole } from './components/developer';
@@ -70,6 +71,7 @@ export default function App() {
               <Route path="/admin/bookings" element={<BookingManagement />} />
               <Route path="/admin/booking" element={<AdminBooking />} />
               <Route path="/admin/members" element={<MemberManagement />} />
+              <Route path="/admin/households" element={<HouseholdManagement />} />
             </Route>
 
             {/* Default redirect */}

@@ -12,7 +12,7 @@ import { NotificationBell } from './NotificationBell';
 import { ReservationDetailsModal } from './ReservationDetailsModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
-import { facilitiesApi, usersApi, bookingApi } from '../api/client';
+import { facilitiesApi, usersApi, bookingApi, courtConfigApi } from '../api/client';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, Minus, Plus } from 'lucide-react';
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 
@@ -107,6 +107,9 @@ export function CourtCalendarView() {
   const [displayedCourtsCount, setDisplayedCourtsCount] = useState<number | null>(null);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  // Prime-time config per court: courtId -> schedule array
+  const [primeTimeConfigs, setPrimeTimeConfigs] = useState<Record<string, any[]>>({});
 
   // Device detection for responsive defaults
   useEffect(() => {
@@ -204,6 +207,56 @@ export function CourtCalendarView() {
 
     fetchFacilities();
   }, [user?.memberFacilities]);
+
+  // Fetch prime-time configs for visible courts
+  useEffect(() => {
+    const fetchPrimeTimeConfigs = async () => {
+      if (!courts || courts.length === 0) return;
+      const configs: Record<string, any[]> = {};
+      for (const court of courts) {
+        if (!court.id || primeTimeConfigs[court.id]) continue;
+        try {
+          const response = await courtConfigApi.getSchedule(court.id);
+          if (response.success && response.data) {
+            const schedule = response.data.schedule || response.data;
+            configs[court.id] = Array.isArray(schedule) ? schedule : [];
+          }
+        } catch {
+          // Court config may not exist yet
+        }
+      }
+      if (Object.keys(configs).length > 0) {
+        setPrimeTimeConfigs(prev => ({ ...prev, ...configs }));
+      }
+    };
+    fetchPrimeTimeConfigs();
+  }, [courts]);
+
+  // Helper: check if a time slot is during prime time for a court
+  const isPrimeTimeSlot = useCallback((courtId: string, time: string): boolean => {
+    const schedule = primeTimeConfigs[courtId];
+    if (!schedule || schedule.length === 0) return false;
+
+    const dayOfWeek = selectedDate.getDay();
+    const dayConfig = schedule.find((c: any) => c.dayOfWeek === dayOfWeek || c.day_of_week === dayOfWeek);
+    if (!dayConfig) return false;
+
+    const ptStart = dayConfig.primeTimeStart || dayConfig.prime_time_start;
+    const ptEnd = dayConfig.primeTimeEnd || dayConfig.prime_time_end;
+    if (!ptStart || !ptEnd) return false;
+
+    // Parse the 12-hour time slot to 24-hour HH:MM
+    const [timePart, period] = time.split(' ');
+    let [hours, minutes] = timePart.split(':').map(Number);
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    const slot24 = `${hours.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`;
+
+    // Compare as strings (HH:MM format)
+    const startNorm = ptStart.substring(0, 5);
+    const endNorm = ptEnd.substring(0, 5);
+    return slot24 >= startNorm && slot24 < endNorm;
+  }, [primeTimeConfigs, selectedDate]);
 
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async () => {
@@ -856,6 +909,16 @@ export function CourtCalendarView() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Prime-Time Legend */}
+                {Object.values(primeTimeConfigs).some(schedule =>
+                  schedule.some((c: any) => (c.primeTimeStart || c.prime_time_start))
+                ) && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm bg-purple-100 border border-purple-300" />
+                    <span className="text-xs text-gray-500">Prime Time</span>
+                  </div>
+                )}
               </div>
 
               {/* Quick Reserve Button */}
@@ -1001,6 +1064,7 @@ export function CourtCalendarView() {
                       {courts.map((court, courtIndex) => {
                         const booking = bookings[court.name as keyof typeof bookings]?.[time];
                         const isSelected = dragState.selectedCells.has(`${court.name}|${time}`);
+                        const isPrime = isPrimeTimeSlot(court.id, time);
 
                         return (
                           <div
@@ -1008,10 +1072,11 @@ export function CourtCalendarView() {
                             className={`
                               border-r border-gray-200 last:border-r-0 relative
                               ${isHourMark ? 'border-b border-gray-300' : 'border-b border-gray-100'}
-                              ${!booking && !isPast ? 'cursor-pointer hover:bg-blue-50' : ''}
+                              ${!booking && !isPast ? `cursor-pointer ${isPrime ? 'hover:bg-purple-100' : 'hover:bg-blue-50'}` : ''}
                               ${booking ? 'cursor-pointer' : ''}
                               ${isPast && !booking ? 'bg-gray-100 cursor-not-allowed' : ''}
                               ${isSelected ? 'bg-blue-100 ring-1 ring-inset ring-blue-400' : ''}
+                              ${isPrime && !booking && !isPast && !isSelected ? 'bg-purple-50' : ''}
                               ${dragState.isDragging && !booking ? 'select-none' : ''}
                             `}
                             onClick={() => {

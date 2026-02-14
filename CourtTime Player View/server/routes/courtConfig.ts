@@ -121,19 +121,22 @@ router.put('/:courtId/schedule', async (req, res, next) => {
           `INSERT INTO court_operating_config (
             court_id, day_of_week, is_open, open_time, close_time,
             prime_time_start, prime_time_end, prime_time_max_duration,
-            slot_duration, buffer_minutes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            slot_duration, min_duration, max_duration, buffer_before, buffer_after
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
           [
             courtId,
             day.day_of_week,
             day.is_open ?? true,
             day.open_time || '06:00',
             day.close_time || '22:00',
-            day.prime_time_start,
-            day.prime_time_end,
-            day.prime_time_max_duration,
+            day.prime_time_start || null,
+            day.prime_time_end || null,
+            day.prime_time_max_duration || 90,
             day.slot_duration || 30,
-            day.buffer_minutes || 0
+            day.min_duration || 30,
+            day.max_duration || 120,
+            day.buffer_before || 0,
+            day.buffer_after || 5
           ]
         );
       }
@@ -178,15 +181,18 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
       primeTimeEnd,
       primeTimeMaxDuration,
       slotDuration,
-      bufferMinutes
+      minDuration,
+      maxDuration,
+      bufferBefore,
+      bufferAfter
     } = req.body;
 
     const result = await pool.query(
       `INSERT INTO court_operating_config (
         court_id, day_of_week, is_open, open_time, close_time,
         prime_time_start, prime_time_end, prime_time_max_duration,
-        slot_duration, buffer_minutes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        slot_duration, min_duration, max_duration, buffer_before, buffer_after
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       ON CONFLICT (court_id, day_of_week)
       DO UPDATE SET
         is_open = EXCLUDED.is_open,
@@ -196,7 +202,10 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
         prime_time_end = EXCLUDED.prime_time_end,
         prime_time_max_duration = EXCLUDED.prime_time_max_duration,
         slot_duration = EXCLUDED.slot_duration,
-        buffer_minutes = EXCLUDED.buffer_minutes,
+        min_duration = EXCLUDED.min_duration,
+        max_duration = EXCLUDED.max_duration,
+        buffer_before = EXCLUDED.buffer_before,
+        buffer_after = EXCLUDED.buffer_after,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *`,
       [
@@ -205,11 +214,14 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
         isOpen ?? true,
         openTime || '06:00',
         closeTime || '22:00',
-        primeTimeStart,
-        primeTimeEnd,
-        primeTimeMaxDuration,
+        primeTimeStart || null,
+        primeTimeEnd || null,
+        primeTimeMaxDuration || 90,
         slotDuration || 30,
-        bufferMinutes || 0
+        minDuration || 30,
+        maxDuration || 120,
+        bufferBefore || 0,
+        bufferAfter || 5
       ]
     );
 

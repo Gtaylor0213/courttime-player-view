@@ -8,11 +8,11 @@ import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { ReservationManagementModal } from './ReservationManagementModal';
-import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin } from 'lucide-react';
+import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
-import { playerProfileApi, facilitiesApi } from '../api/client';
+import { playerProfileApi, facilitiesApi, strikesApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -34,6 +34,11 @@ export function PlayerProfile() {
   const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
+
+  // Strike history
+  const [strikes, setStrikes] = useState<any[]>([]);
+  const [lockoutStatuses, setLockoutStatuses] = useState<Record<string, any>>({});
+  const [showStrikeHistory, setShowStrikeHistory] = useState(false);
 
   const [profileData, setProfileData] = useState({
     firstName: '',
@@ -103,6 +108,33 @@ export function PlayerProfile() {
       const bookingsResponse = await playerProfileApi.getBookings(user.id, true);
       if (bookingsResponse.success && bookingsResponse.data?.bookings) {
         setUpcomingBookings(bookingsResponse.data.bookings);
+      }
+
+      // Load strikes
+      try {
+        const strikesResponse = await strikesApi.getByUser(user.id);
+        if (strikesResponse.success && strikesResponse.data?.strikes) {
+          setStrikes(strikesResponse.data.strikes);
+        }
+      } catch {
+        // Strikes table may not exist yet — gracefully skip
+      }
+
+      // Check lockout status per facility
+      if (response.success && response.data?.profile?.memberFacilities) {
+        const facilities = response.data.profile.memberFacilities;
+        const statuses: Record<string, any> = {};
+        for (const fac of facilities) {
+          try {
+            const lockoutRes = await strikesApi.checkLockout(user.id, fac.facilityId);
+            if (lockoutRes.success && lockoutRes.data) {
+              statuses[fac.facilityId] = { ...lockoutRes.data, facilityName: fac.facilityName };
+            }
+          } catch {
+            // Skip if not available
+          }
+        }
+        setLockoutStatuses(statuses);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -544,6 +576,137 @@ export function PlayerProfile() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Account Status */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldAlert className="h-5 w-5" />
+                    Account Status
+                  </CardTitle>
+                  <CardDescription>Strike history and account standing</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Lockout Banners */}
+                  {Object.values(lockoutStatuses).some((s: any) => s.isLockedOut) && (
+                    <div className="space-y-2">
+                      {Object.entries(lockoutStatuses)
+                        .filter(([, status]: [string, any]) => status.isLockedOut)
+                        .map(([facilityId, status]: [string, any]) => (
+                          <div key={facilityId} className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-red-800">
+                                Account locked out at {status.facilityName}
+                              </p>
+                              {status.lockoutEndsAt && (
+                                <p className="text-xs text-red-600 mt-1">
+                                  Until {new Date(status.lockoutEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Per-Facility Summary Badges */}
+                  {Object.keys(lockoutStatuses).length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(lockoutStatuses).map(([facilityId, status]: [string, any]) => {
+                        const activeCount = status.activeStrikes || 0;
+                        const isLocked = status.isLockedOut;
+                        return (
+                          <div
+                            key={facilityId}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${
+                              isLocked
+                                ? 'bg-red-100 text-red-800'
+                                : activeCount > 0
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-green-100 text-green-800'
+                            }`}
+                          >
+                            {isLocked ? (
+                              <XCircle className="h-3 w-3" />
+                            ) : activeCount > 0 ? (
+                              <AlertTriangle className="h-3 w-3" />
+                            ) : (
+                              <CheckCircle className="h-3 w-3" />
+                            )}
+                            {status.facilityName}: {activeCount} active strike{activeCount !== 1 ? 's' : ''}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Strike History */}
+                  {strikes.length > 0 ? (
+                    <div>
+                      <button
+                        onClick={() => setShowStrikeHistory(!showStrikeHistory)}
+                        className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors w-full"
+                      >
+                        {showStrikeHistory ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        Strike History ({strikes.length} total)
+                      </button>
+
+                      {showStrikeHistory && (
+                        <div className="mt-3 space-y-2">
+                          {[...strikes]
+                            .sort((a, b) => new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime())
+                            .map((strike) => (
+                              <div
+                                key={strike.id}
+                                className={`p-3 border rounded-lg ${strike.revoked ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Badge
+                                      variant={
+                                        strike.strike_type === 'no_show' ? 'destructive' :
+                                        strike.strike_type === 'late_cancellation' ? 'secondary' :
+                                        'outline'
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {strike.strike_type === 'no_show' ? 'No Show' :
+                                       strike.strike_type === 'late_cancellation' ? 'Late Cancel' :
+                                       'Manual'}
+                                    </Badge>
+                                    {strike.revoked && (
+                                      <span className="text-xs text-gray-500 italic">(Revoked)</span>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(strike.issued_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </span>
+                                </div>
+                                {strike.strike_reason && (
+                                  <p className="text-sm text-gray-600 mt-1">{strike.strike_reason}</p>
+                                )}
+                                {(strike.court_name || strike.booking_date) && (
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    {strike.court_name && `${strike.court_name}`}
+                                    {strike.court_name && strike.booking_date && ' • '}
+                                    {strike.booking_date && new Date(strike.booking_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
+                      <ShieldCheck className="h-10 w-10 mx-auto mb-2 text-green-500" />
+                      <p className="text-sm font-medium text-green-700">No strikes on your account</p>
+                      <p className="text-xs text-gray-500 mt-1">Keep up the great work!</p>
                     </div>
                   )}
                 </CardContent>

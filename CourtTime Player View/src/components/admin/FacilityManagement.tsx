@@ -5,13 +5,13 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users, FileText, Upload } from 'lucide-react';
+import { Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users, FileText, Upload, Settings, Shield, AlertTriangle, Zap, Home } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
-import { facilitiesApi, adminApi } from '../../api/client';
+import { facilitiesApi, adminApi, courtConfigApi, rulesApi, tiersApi } from '../../api/client';
 import { toast } from 'sonner';
 
 // US State abbreviations
@@ -75,6 +75,46 @@ interface BookingRules {
     advanceBookingDays: string;
     advanceBookingUnlimited: boolean;
   };
+  // ACC-001: Max active reservations
+  maxActiveReservationsEnabled: boolean;
+  maxActiveReservations: string;
+  // ACC-003: Max hours per week
+  maxHoursPerWeekEnabled: boolean;
+  maxHoursPerWeek: string;
+  // ACC-004: No overlapping reservations
+  noOverlappingReservations: boolean;
+  // ACC-006: Minimum lead time
+  minimumLeadTimeEnabled: boolean;
+  minimumLeadTimeMinutes: string;
+  // ACC-007: Cancellation cooldown
+  cancellationCooldownEnabled: boolean;
+  cancellationCooldownMinutes: string;
+  // ACC-009: Strike system
+  strikeSystemEnabled: boolean;
+  strikeThreshold: string;
+  strikeWindowDays: string;
+  strikeLockoutDays: string;
+  // ACC-011: Rate limiting
+  rateLimitEnabled: boolean;
+  rateLimitMaxActions: string;
+  rateLimitWindowSeconds: string;
+  // CRT-003: Prime time tier restriction
+  primeTimeRequiresTierEnabled: boolean;
+  primeTimeAllowedTiers: string[];
+  primeTimeAdminOverride: boolean;
+  // CRT-010: Court weekly cap
+  courtWeeklyCapEnabled: boolean;
+  courtWeeklyCap: string;
+  // CRT-011: Court release time
+  courtReleaseTimeEnabled: boolean;
+  courtReleaseTime: string;
+  courtReleaseDaysAhead: string;
+  // HH-002: Household max active reservations
+  householdMaxActiveEnabled: boolean;
+  householdMaxActive: string;
+  // HH-003: Household prime-time cap
+  householdPrimeCapEnabled: boolean;
+  householdPrimeCap: string;
 }
 
 interface FacilityData {
@@ -165,6 +205,34 @@ export function FacilityManagement() {
       advanceBookingDays: '7',
       advanceBookingUnlimited: false,
     },
+    maxActiveReservationsEnabled: false,
+    maxActiveReservations: '3',
+    maxHoursPerWeekEnabled: false,
+    maxHoursPerWeek: '10',
+    noOverlappingReservations: true,
+    minimumLeadTimeEnabled: false,
+    minimumLeadTimeMinutes: '60',
+    cancellationCooldownEnabled: false,
+    cancellationCooldownMinutes: '30',
+    strikeSystemEnabled: false,
+    strikeThreshold: '3',
+    strikeWindowDays: '30',
+    strikeLockoutDays: '7',
+    rateLimitEnabled: false,
+    rateLimitMaxActions: '10',
+    rateLimitWindowSeconds: '60',
+    primeTimeRequiresTierEnabled: false,
+    primeTimeAllowedTiers: [],
+    primeTimeAdminOverride: true,
+    courtWeeklyCapEnabled: false,
+    courtWeeklyCap: '5',
+    courtReleaseTimeEnabled: false,
+    courtReleaseTime: '07:00',
+    courtReleaseDaysAhead: '7',
+    householdMaxActiveEnabled: false,
+    householdMaxActive: '4',
+    householdPrimeCapEnabled: false,
+    householdPrimeCap: '3',
   };
 
   const defaultOperatingHours = {
@@ -210,12 +278,35 @@ export function FacilityManagement() {
   const [isAddingNewCourt, setIsAddingNewCourt] = useState(false);
   const [courtSaving, setCourtSaving] = useState(false);
 
+  // Court schedule config state
+  const [configuringCourtId, setConfiguringCourtId] = useState<string | null>(null);
+  const [courtSchedule, setCourtSchedule] = useState<any[]>([]);
+  const [courtScheduleLoading, setCourtScheduleLoading] = useState(false);
+  const [courtScheduleSaving, setCourtScheduleSaving] = useState(false);
+
+  // Blackout state
+  const [blackouts, setBlackouts] = useState<any[]>([]);
+  const [blackoutsLoading, setBlackoutsLoading] = useState(false);
+  const [editingBlackout, setEditingBlackout] = useState<any | null>(null);
+  const [isAddingBlackout, setIsAddingBlackout] = useState(false);
+  const [blackoutSaving, setBlackoutSaving] = useState(false);
+
+  // Tier state
+  const [tiers, setTiers] = useState<any[]>([]);
+  const [tiersLoading, setTiersLoading] = useState(false);
+  const [editingTier, setEditingTier] = useState<any | null>(null);
+  const [isAddingTier, setIsAddingTier] = useState(false);
+  const [tierSaving, setTierSaving] = useState(false);
+
   const currentFacilityId = user?.memberFacilities?.[0];
 
   useEffect(() => {
     if (currentFacilityId) {
       loadFacilityData();
       loadCourts();
+      loadBlackouts();
+      loadFacilityRules();
+      loadTiers();
     }
   }, [currentFacilityId]);
 
@@ -370,6 +461,7 @@ export function FacilityManagement() {
       const response = await adminApi.updateFacility(currentFacilityId, facilityData);
 
       if (response.success) {
+        await syncBookingRulesToEngine();
         toast.success('Facility updated successfully');
         setIsEditing(false);
         setOriginalData(facilityData);
@@ -670,6 +762,651 @@ export function FacilityManagement() {
     } catch (error: any) {
       console.error('Error deactivating court:', error);
       toast.error('Failed to deactivate court');
+    }
+  };
+
+  // Court schedule config functions
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const loadCourtSchedule = async (courtId: string) => {
+    try {
+      setCourtScheduleLoading(true);
+      const response = await courtConfigApi.getSchedule(courtId);
+      if (response.success && response.data?.schedule) {
+        setCourtSchedule(response.data.schedule);
+      }
+    } catch (error) {
+      console.error('Error loading court schedule:', error);
+      toast.error('Failed to load court schedule');
+    } finally {
+      setCourtScheduleLoading(false);
+    }
+  };
+
+  const handleToggleCourtConfig = async (courtId: string) => {
+    if (configuringCourtId === courtId) {
+      setConfiguringCourtId(null);
+      setCourtSchedule([]);
+      return;
+    }
+    setConfiguringCourtId(courtId);
+    await loadCourtSchedule(courtId);
+  };
+
+  const updateCourtScheduleDay = (dayOfWeek: number, field: string, value: any) => {
+    setCourtSchedule(prev => prev.map(day =>
+      day.day_of_week === dayOfWeek ? { ...day, [field]: value } : day
+    ));
+  };
+
+  const updateAllScheduleDays = (field: string, value: any) => {
+    setCourtSchedule(prev => prev.map(day => ({ ...day, [field]: value })));
+  };
+
+  const saveCourtSchedule = async () => {
+    if (!configuringCourtId) return;
+    try {
+      setCourtScheduleSaving(true);
+      const response = await courtConfigApi.updateSchedule(configuringCourtId, courtSchedule);
+      if (response.success) {
+        toast.success('Court schedule saved');
+      } else {
+        toast.error(response.error || 'Failed to save schedule');
+      }
+    } catch (error) {
+      console.error('Error saving court schedule:', error);
+      toast.error('Failed to save court schedule');
+    } finally {
+      setCourtScheduleSaving(false);
+    }
+  };
+
+  // Blackout functions
+  const loadBlackouts = async () => {
+    if (!currentFacilityId) return;
+    try {
+      setBlackoutsLoading(true);
+      const response = await courtConfigApi.getFacilityBlackouts(currentFacilityId);
+      if (response.success && response.data?.blackouts) {
+        setBlackouts(response.data.blackouts);
+      }
+    } catch (error) {
+      console.error('Error loading blackouts:', error);
+    } finally {
+      setBlackoutsLoading(false);
+    }
+  };
+
+  const handleAddBlackout = () => {
+    setEditingBlackout({
+      courtId: null,
+      blackoutType: 'maintenance',
+      title: '',
+      description: '',
+      startDatetime: '',
+      endDatetime: '',
+    });
+    setIsAddingBlackout(true);
+  };
+
+  const handleSaveBlackout = async () => {
+    if (!editingBlackout || !currentFacilityId) return;
+    try {
+      setBlackoutSaving(true);
+      if (editingBlackout.id) {
+        const response = await courtConfigApi.updateBlackout(editingBlackout.id, editingBlackout);
+        if (!response.success) {
+          toast.error(response.error || 'Failed to update blackout');
+          return;
+        }
+        toast.success('Blackout updated');
+      } else {
+        const response = await courtConfigApi.createBlackout({
+          ...editingBlackout,
+          facilityId: currentFacilityId,
+        });
+        if (!response.success) {
+          toast.error(response.error || 'Failed to create blackout');
+          return;
+        }
+        toast.success('Blackout created');
+      }
+      setEditingBlackout(null);
+      setIsAddingBlackout(false);
+      await loadBlackouts();
+    } catch (error) {
+      console.error('Error saving blackout:', error);
+      toast.error('Failed to save blackout');
+    } finally {
+      setBlackoutSaving(false);
+    }
+  };
+
+  const handleDeleteBlackout = async (blackoutId: string) => {
+    if (!confirm('Are you sure you want to delete this blackout?')) return;
+    try {
+      const response = await courtConfigApi.deleteBlackout(blackoutId);
+      if (response.success) {
+        toast.success('Blackout deleted');
+        await loadBlackouts();
+      } else {
+        toast.error(response.error || 'Failed to delete blackout');
+      }
+    } catch (error) {
+      console.error('Error deleting blackout:', error);
+      toast.error('Failed to delete blackout');
+    }
+  };
+
+  // Rules engine sync
+  const dayNameToNumber: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6,
+  };
+
+  // Tier management functions
+  const loadTiers = async () => {
+    if (!currentFacilityId) return;
+    try {
+      setTiersLoading(true);
+      const response = await tiersApi.getByFacility(currentFacilityId);
+      if (response.success && response.data?.tiers) {
+        setTiers(response.data.tiers);
+      }
+    } catch (error) {
+      console.error('Error loading tiers:', error);
+    } finally {
+      setTiersLoading(false);
+    }
+  };
+
+  const handleAddTier = () => {
+    setIsAddingTier(true);
+    setEditingTier({
+      tier_name: '',
+      tier_level: tiers.length + 1,
+      advance_booking_days: 7,
+      max_active_reservations: null,
+      max_reservations_per_week: null,
+      max_minutes_per_week: null,
+      prime_time_eligible: true,
+      prime_time_max_per_week: null,
+      is_default: tiers.length === 0,
+    });
+  };
+
+  const handleSaveTier = async () => {
+    if (!currentFacilityId || !editingTier) return;
+    if (!editingTier.tier_name?.trim()) {
+      toast.error('Tier name is required');
+      return;
+    }
+    try {
+      setTierSaving(true);
+      if (isAddingTier) {
+        const response = await tiersApi.create({
+          facilityId: currentFacilityId,
+          tierName: editingTier.tier_name,
+          tierLevel: editingTier.tier_level,
+          advanceBookingDays: editingTier.advance_booking_days,
+          maxActiveReservations: editingTier.max_active_reservations,
+          maxReservationsPerWeek: editingTier.max_reservations_per_week,
+          maxMinutesPerWeek: editingTier.max_minutes_per_week,
+          primeTimeEligible: editingTier.prime_time_eligible,
+          primeTimeMaxPerWeek: editingTier.prime_time_max_per_week,
+          isDefault: editingTier.is_default,
+        });
+        if (response.success) {
+          toast.success('Tier created');
+        } else {
+          toast.error(response.error || 'Failed to create tier');
+          return;
+        }
+      } else {
+        const response = await tiersApi.update(editingTier.id, {
+          tierName: editingTier.tier_name,
+          tierLevel: editingTier.tier_level,
+          advanceBookingDays: editingTier.advance_booking_days,
+          maxActiveReservations: editingTier.max_active_reservations,
+          maxReservationsPerWeek: editingTier.max_reservations_per_week,
+          maxMinutesPerWeek: editingTier.max_minutes_per_week,
+          primeTimeEligible: editingTier.prime_time_eligible,
+          primeTimeMaxPerWeek: editingTier.prime_time_max_per_week,
+          isDefault: editingTier.is_default,
+        });
+        if (response.success) {
+          toast.success('Tier updated');
+        } else {
+          toast.error(response.error || 'Failed to update tier');
+          return;
+        }
+      }
+      setEditingTier(null);
+      setIsAddingTier(false);
+      loadTiers();
+    } catch (error) {
+      console.error('Error saving tier:', error);
+      toast.error('Failed to save tier');
+    } finally {
+      setTierSaving(false);
+    }
+  };
+
+  const handleDeleteTier = async (tierId: string) => {
+    if (!confirm('Delete this tier? Members assigned to it will lose their tier.')) return;
+    try {
+      const response = await tiersApi.delete(tierId);
+      if (response.success) {
+        toast.success('Tier deleted');
+        loadTiers();
+      } else {
+        toast.error(response.error || 'Failed to delete tier');
+      }
+    } catch (error) {
+      console.error('Error deleting tier:', error);
+      toast.error('Failed to delete tier');
+    }
+  };
+
+  const syncBookingRulesToEngine = async () => {
+    if (!currentFacilityId) return;
+    const rules = facilityData.bookingRules;
+    const ruleConfigs: Array<{
+      ruleCode: string;
+      isEnabled: boolean;
+      ruleConfig?: Record<string, any>;
+    }> = [];
+
+    // ACC-001: Max active reservations
+    if (rules.maxActiveReservationsEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'ACC-001',
+        isEnabled: true,
+        ruleConfig: { max_active_reservations: parseInt(rules.maxActiveReservations) || 3 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'ACC-001', isEnabled: false });
+    }
+
+    // ACC-002: Max bookings per week
+    ruleConfigs.push({
+      ruleCode: 'ACC-002',
+      isEnabled: !rules.maxBookingsPerWeekUnlimited,
+      ruleConfig: { max_per_week: parseInt(rules.maxBookingsPerWeek) || 3 },
+    });
+
+    // ACC-003: Max hours per week
+    if (rules.maxHoursPerWeekEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'ACC-003',
+        isEnabled: true,
+        ruleConfig: { max_minutes_per_week: (parseFloat(rules.maxHoursPerWeek) || 10) * 60 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'ACC-003', isEnabled: false });
+    }
+
+    // ACC-004: No overlapping reservations
+    ruleConfigs.push({
+      ruleCode: 'ACC-004',
+      isEnabled: rules.noOverlappingReservations,
+      ruleConfig: { allow_overlap: !rules.noOverlappingReservations },
+    });
+
+    // ACC-005: Advance booking window
+    ruleConfigs.push({
+      ruleCode: 'ACC-005',
+      isEnabled: !rules.advanceBookingDaysUnlimited,
+      ruleConfig: { max_days_ahead: parseInt(rules.advanceBookingDays) || 14 },
+    });
+
+    // ACC-006: Minimum lead time
+    if (rules.minimumLeadTimeEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'ACC-006',
+        isEnabled: true,
+        ruleConfig: { min_minutes_before_start: parseInt(rules.minimumLeadTimeMinutes) || 60 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'ACC-006', isEnabled: false });
+    }
+
+    // ACC-007: Cancellation cooldown
+    if (rules.cancellationCooldownEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'ACC-007',
+        isEnabled: true,
+        ruleConfig: { cooldown_minutes: parseInt(rules.cancellationCooldownMinutes) || 30 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'ACC-007', isEnabled: false });
+    }
+
+    // ACC-008: Cancellation notice
+    ruleConfigs.push({
+      ruleCode: 'ACC-008',
+      isEnabled: !rules.cancellationNoticeUnlimited,
+      ruleConfig: { late_cancel_cutoff_minutes: (parseInt(rules.cancellationNoticeHours) || 24) * 60 },
+    });
+
+    // ACC-009: Strike system
+    if (rules.strikeSystemEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'ACC-009',
+        isEnabled: true,
+        ruleConfig: {
+          strike_threshold: parseInt(rules.strikeThreshold) || 3,
+          strike_window_days: parseInt(rules.strikeWindowDays) || 30,
+          lockout_duration_days: parseInt(rules.strikeLockoutDays) || 7,
+        },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'ACC-009', isEnabled: false });
+    }
+
+    // ACC-011: Rate limiting
+    if (rules.rateLimitEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'ACC-011',
+        isEnabled: true,
+        ruleConfig: {
+          max_actions: parseInt(rules.rateLimitMaxActions) || 10,
+          window_seconds: parseInt(rules.rateLimitWindowSeconds) || 60,
+        },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'ACC-011', isEnabled: false });
+    }
+
+    // CRT-005: Max booking duration
+    ruleConfigs.push({
+      ruleCode: 'CRT-005',
+      isEnabled: !rules.maxBookingDurationUnlimited,
+      ruleConfig: { max_duration_minutes: (parseFloat(rules.maxBookingDurationHours) || 2) * 60 },
+    });
+
+    // Peak hours rules
+    if (rules.hasPeakHours) {
+      ruleConfigs.push({
+        ruleCode: 'ACC-010',
+        isEnabled: !rules.peakHoursRestrictions.maxBookingsUnlimited,
+        ruleConfig: { max_prime_per_week: parseInt(rules.peakHoursRestrictions.maxBookingsPerWeek) || 2 },
+      });
+      ruleConfigs.push({
+        ruleCode: 'CRT-002',
+        isEnabled: !rules.peakHoursRestrictions.maxDurationUnlimited,
+        ruleConfig: { max_minutes_prime: (parseFloat(rules.peakHoursRestrictions.maxDurationHours) || 1.5) * 60 },
+      });
+      const primeWindows = Object.entries(rules.peakHoursSlots).flatMap(([day, slots]) =>
+        slots.map(slot => ({
+          day_of_week: dayNameToNumber[day],
+          start_time: slot.startTime,
+          end_time: slot.endTime,
+        }))
+      );
+      ruleConfigs.push({
+        ruleCode: 'CRT-001',
+        isEnabled: true,
+        ruleConfig: { prime_windows: primeWindows },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'ACC-010', isEnabled: false });
+      ruleConfigs.push({ ruleCode: 'CRT-002', isEnabled: false });
+      ruleConfigs.push({ ruleCode: 'CRT-001', isEnabled: false });
+    }
+
+    // CRT-003: Prime time tier restriction
+    if (rules.primeTimeRequiresTierEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'CRT-003',
+        isEnabled: true,
+        ruleConfig: {
+          allowed_tiers: rules.primeTimeAllowedTiers,
+          allow_admin_override: rules.primeTimeAdminOverride,
+        },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'CRT-003', isEnabled: false });
+    }
+
+    // CRT-010: Court weekly cap
+    if (rules.courtWeeklyCapEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'CRT-010',
+        isEnabled: true,
+        ruleConfig: { max_per_week_per_account: parseInt(rules.courtWeeklyCap) || 5 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'CRT-010', isEnabled: false });
+    }
+
+    // CRT-011: Court release time
+    if (rules.courtReleaseTimeEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'CRT-011',
+        isEnabled: true,
+        ruleConfig: {
+          release_time_local: rules.courtReleaseTime || '07:00',
+          days_ahead: parseInt(rules.courtReleaseDaysAhead) || 7,
+        },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'CRT-011', isEnabled: false });
+    }
+
+    // HH-002: Household max active reservations
+    if (rules.householdMaxActiveEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'HH-002',
+        isEnabled: true,
+        ruleConfig: { max_active_household: parseInt(rules.householdMaxActive) || 4 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'HH-002', isEnabled: false });
+    }
+
+    // HH-003: Household prime-time cap
+    if (rules.householdPrimeCapEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'HH-003',
+        isEnabled: true,
+        ruleConfig: { max_prime_per_week_household: parseInt(rules.householdPrimeCap) || 3 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'HH-003', isEnabled: false });
+    }
+
+    try {
+      await rulesApi.bulkUpdate(currentFacilityId, ruleConfigs);
+    } catch (error) {
+      console.error('Error syncing rules to engine:', error);
+    }
+  };
+
+  const loadFacilityRules = async () => {
+    if (!currentFacilityId) return;
+    try {
+      const response = await rulesApi.getEffectiveRules(currentFacilityId);
+      if (response.success && response.data?.rules) {
+        const ruleMap = new Map(response.data.rules.map((r: any) => [r.rule_code, r]));
+        setFacilityData(prev => {
+          const updated = { ...prev, bookingRules: { ...prev.bookingRules } };
+
+          const acc001 = ruleMap.get('ACC-001') as any;
+          if (acc001) {
+            updated.bookingRules.maxActiveReservationsEnabled = !!acc001.isEnabled;
+            if (acc001.effectiveConfig?.max_active_reservations) {
+              updated.bookingRules.maxActiveReservations = String(acc001.effectiveConfig.max_active_reservations);
+            }
+          }
+
+          const acc002 = ruleMap.get('ACC-002') as any;
+          if (acc002) {
+            updated.bookingRules.maxBookingsPerWeekUnlimited = !acc002.isEnabled;
+            if (acc002.effectiveConfig?.max_per_week) {
+              updated.bookingRules.maxBookingsPerWeek = String(acc002.effectiveConfig.max_per_week);
+            }
+          }
+
+          const acc003 = ruleMap.get('ACC-003') as any;
+          if (acc003) {
+            updated.bookingRules.maxHoursPerWeekEnabled = !!acc003.isEnabled;
+            if (acc003.effectiveConfig?.max_minutes_per_week) {
+              updated.bookingRules.maxHoursPerWeek = String(acc003.effectiveConfig.max_minutes_per_week / 60);
+            }
+          }
+
+          const acc004 = ruleMap.get('ACC-004') as any;
+          if (acc004) {
+            updated.bookingRules.noOverlappingReservations = !!acc004.isEnabled;
+          }
+
+          const acc005 = ruleMap.get('ACC-005') as any;
+          if (acc005) {
+            updated.bookingRules.advanceBookingDaysUnlimited = !acc005.isEnabled;
+            if (acc005.effectiveConfig?.max_days_ahead) {
+              updated.bookingRules.advanceBookingDays = String(acc005.effectiveConfig.max_days_ahead);
+            }
+          }
+
+          const acc006 = ruleMap.get('ACC-006') as any;
+          if (acc006) {
+            updated.bookingRules.minimumLeadTimeEnabled = !!acc006.isEnabled;
+            if (acc006.effectiveConfig?.min_minutes_before_start) {
+              updated.bookingRules.minimumLeadTimeMinutes = String(acc006.effectiveConfig.min_minutes_before_start);
+            }
+          }
+
+          const acc007 = ruleMap.get('ACC-007') as any;
+          if (acc007) {
+            updated.bookingRules.cancellationCooldownEnabled = !!acc007.isEnabled;
+            if (acc007.effectiveConfig?.cooldown_minutes) {
+              updated.bookingRules.cancellationCooldownMinutes = String(acc007.effectiveConfig.cooldown_minutes);
+            }
+          }
+
+          const acc008 = ruleMap.get('ACC-008') as any;
+          if (acc008) {
+            updated.bookingRules.cancellationNoticeUnlimited = !acc008.isEnabled;
+            if (acc008.effectiveConfig?.late_cancel_cutoff_minutes) {
+              updated.bookingRules.cancellationNoticeHours = String(acc008.effectiveConfig.late_cancel_cutoff_minutes / 60);
+            }
+          }
+
+          const acc009 = ruleMap.get('ACC-009') as any;
+          if (acc009) {
+            updated.bookingRules.strikeSystemEnabled = !!acc009.isEnabled;
+            if (acc009.effectiveConfig) {
+              if (acc009.effectiveConfig.strike_threshold) {
+                updated.bookingRules.strikeThreshold = String(acc009.effectiveConfig.strike_threshold);
+              }
+              if (acc009.effectiveConfig.strike_window_days) {
+                updated.bookingRules.strikeWindowDays = String(acc009.effectiveConfig.strike_window_days);
+              }
+              if (acc009.effectiveConfig.lockout_duration_days) {
+                updated.bookingRules.strikeLockoutDays = String(acc009.effectiveConfig.lockout_duration_days);
+              }
+            }
+          }
+
+          const acc010 = ruleMap.get('ACC-010') as any;
+          if (acc010) {
+            updated.bookingRules.peakHoursRestrictions = {
+              ...updated.bookingRules.peakHoursRestrictions,
+              maxBookingsUnlimited: !acc010.isEnabled,
+            };
+            if (acc010.effectiveConfig?.max_prime_per_week) {
+              updated.bookingRules.peakHoursRestrictions.maxBookingsPerWeek = String(acc010.effectiveConfig.max_prime_per_week);
+            }
+          }
+
+          const acc011 = ruleMap.get('ACC-011') as any;
+          if (acc011) {
+            updated.bookingRules.rateLimitEnabled = !!acc011.isEnabled;
+            if (acc011.effectiveConfig) {
+              if (acc011.effectiveConfig.max_actions) {
+                updated.bookingRules.rateLimitMaxActions = String(acc011.effectiveConfig.max_actions);
+              }
+              if (acc011.effectiveConfig.window_seconds) {
+                updated.bookingRules.rateLimitWindowSeconds = String(acc011.effectiveConfig.window_seconds);
+              }
+            }
+          }
+
+          const crt005 = ruleMap.get('CRT-005') as any;
+          if (crt005) {
+            updated.bookingRules.maxBookingDurationUnlimited = !crt005.isEnabled;
+            if (crt005.effectiveConfig?.max_duration_minutes) {
+              updated.bookingRules.maxBookingDurationHours = String(crt005.effectiveConfig.max_duration_minutes / 60);
+            }
+          }
+
+          const crt002 = ruleMap.get('CRT-002') as any;
+          if (crt002) {
+            updated.bookingRules.peakHoursRestrictions = {
+              ...updated.bookingRules.peakHoursRestrictions,
+              maxDurationUnlimited: !crt002.isEnabled,
+            };
+            if (crt002.effectiveConfig?.max_minutes_prime) {
+              updated.bookingRules.peakHoursRestrictions.maxDurationHours = String(crt002.effectiveConfig.max_minutes_prime / 60);
+            }
+          }
+
+          const crt003 = ruleMap.get('CRT-003') as any;
+          if (crt003) {
+            updated.bookingRules.primeTimeRequiresTierEnabled = !!crt003.isEnabled;
+            if (crt003.effectiveConfig) {
+              if (crt003.effectiveConfig.allowed_tiers) {
+                updated.bookingRules.primeTimeAllowedTiers = crt003.effectiveConfig.allowed_tiers;
+              }
+              if (crt003.effectiveConfig.allow_admin_override !== undefined) {
+                updated.bookingRules.primeTimeAdminOverride = crt003.effectiveConfig.allow_admin_override;
+              }
+            }
+          }
+
+          const crt010 = ruleMap.get('CRT-010') as any;
+          if (crt010) {
+            updated.bookingRules.courtWeeklyCapEnabled = !!crt010.isEnabled;
+            if (crt010.effectiveConfig?.max_per_week_per_account) {
+              updated.bookingRules.courtWeeklyCap = String(crt010.effectiveConfig.max_per_week_per_account);
+            }
+          }
+
+          const crt011 = ruleMap.get('CRT-011') as any;
+          if (crt011) {
+            updated.bookingRules.courtReleaseTimeEnabled = !!crt011.isEnabled;
+            if (crt011.effectiveConfig) {
+              if (crt011.effectiveConfig.release_time_local) {
+                updated.bookingRules.courtReleaseTime = crt011.effectiveConfig.release_time_local;
+              }
+              if (crt011.effectiveConfig.days_ahead) {
+                updated.bookingRules.courtReleaseDaysAhead = String(crt011.effectiveConfig.days_ahead);
+              }
+            }
+          }
+
+          const hh002 = ruleMap.get('HH-002') as any;
+          if (hh002) {
+            updated.bookingRules.householdMaxActiveEnabled = !!hh002.isEnabled;
+            if (hh002.effectiveConfig?.max_active_household) {
+              updated.bookingRules.householdMaxActive = String(hh002.effectiveConfig.max_active_household);
+            }
+          }
+
+          const hh003 = ruleMap.get('HH-003') as any;
+          if (hh003) {
+            updated.bookingRules.householdPrimeCapEnabled = !!hh003.isEnabled;
+            if (hh003.effectiveConfig?.max_prime_per_week_household) {
+              updated.bookingRules.householdPrimeCap = String(hh003.effectiveConfig.max_prime_per_week_household);
+            }
+          }
+
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error('Error loading facility rules:', error);
     }
   };
 
@@ -1206,6 +1943,186 @@ export function FacilityManagement() {
                 )}
               </div>
 
+              {/* Membership Tiers */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Membership Tiers
+                      </CardTitle>
+                      <CardDescription>Define membership levels with different booking privileges</CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleAddTier} disabled={editingTier !== null}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Tier
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {tiersLoading ? (
+                    <div className="text-center py-4 text-gray-500 text-sm">Loading tiers...</div>
+                  ) : tiers.length === 0 && !editingTier ? (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                      No membership tiers configured. All members will have the same booking privileges.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {tiers.map((tier) => (
+                        <div
+                          key={tier.id}
+                          className="flex items-center justify-between px-4 py-3 border rounded-lg hover:bg-gray-50"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">Level {tier.tier_level}</Badge>
+                              <span className="font-medium text-sm">{tier.tier_name}</span>
+                              {tier.is_default && (
+                                <Badge className="bg-blue-100 text-blue-700 text-[10px]">Default</Badge>
+                              )}
+                            </div>
+                            <div className="hidden md:flex items-center gap-4 text-xs text-gray-500">
+                              <span>{tier.advance_booking_days}d advance</span>
+                              <span>{tier.max_active_reservations ?? 'No limit'} active</span>
+                              <span>{tier.max_reservations_per_week ?? 'No limit'}/wk</span>
+                              {tier.prime_time_eligible ? (
+                                <span className="text-green-600">Prime eligible</span>
+                              ) : (
+                                <span className="text-red-600">No prime</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => { setEditingTier({ ...tier }); setIsAddingTier(false); }}
+                              disabled={editingTier !== null}
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                              onClick={() => handleDeleteTier(tier.id)}
+                              disabled={editingTier !== null}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tier Edit/Add Form */}
+                  {editingTier && (
+                    <div className="mt-4 p-4 border-2 border-blue-200 bg-blue-50 rounded-lg space-y-4">
+                      <h4 className="font-medium text-sm">{isAddingTier ? 'Add New Tier' : 'Edit Tier'}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Tier Name</Label>
+                          <Input
+                            value={editingTier.tier_name}
+                            onChange={(e) => setEditingTier({ ...editingTier, tier_name: e.target.value })}
+                            placeholder="e.g., Gold"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Level (1=lowest)</Label>
+                          <Input
+                            type="number"
+                            value={editingTier.tier_level}
+                            onChange={(e) => setEditingTier({ ...editingTier, tier_level: parseInt(e.target.value) || 1 })}
+                            min="1"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Advance Booking (days)</Label>
+                          <Input
+                            type="number"
+                            value={editingTier.advance_booking_days}
+                            onChange={(e) => setEditingTier({ ...editingTier, advance_booking_days: parseInt(e.target.value) || 7 })}
+                            min="1"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Max Active Reservations</Label>
+                          <Input
+                            type="number"
+                            value={editingTier.max_active_reservations ?? ''}
+                            onChange={(e) => setEditingTier({ ...editingTier, max_active_reservations: e.target.value ? parseInt(e.target.value) : null })}
+                            placeholder="Unlimited"
+                            min="1"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Max Bookings/Week</Label>
+                          <Input
+                            type="number"
+                            value={editingTier.max_reservations_per_week ?? ''}
+                            onChange={(e) => setEditingTier({ ...editingTier, max_reservations_per_week: e.target.value ? parseInt(e.target.value) : null })}
+                            placeholder="Unlimited"
+                            min="1"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Max Hours/Week</Label>
+                          <Input
+                            type="number"
+                            value={editingTier.max_minutes_per_week ? editingTier.max_minutes_per_week / 60 : ''}
+                            onChange={(e) => setEditingTier({ ...editingTier, max_minutes_per_week: e.target.value ? parseFloat(e.target.value) * 60 : null })}
+                            placeholder="Unlimited"
+                            min="1"
+                            step="0.5"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={editingTier.prime_time_eligible}
+                            onCheckedChange={(checked: boolean) => setEditingTier({ ...editingTier, prime_time_eligible: checked })}
+                          />
+                          <Label className="text-xs">Prime Time Eligible</Label>
+                        </div>
+                        {editingTier.prime_time_eligible && (
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs">Prime/Week:</Label>
+                            <Input
+                              type="number"
+                              value={editingTier.prime_time_max_per_week ?? ''}
+                              onChange={(e) => setEditingTier({ ...editingTier, prime_time_max_per_week: e.target.value ? parseInt(e.target.value) : null })}
+                              placeholder="Unlimited"
+                              className="w-24"
+                              min="1"
+                            />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={editingTier.is_default}
+                            onCheckedChange={(checked: boolean) => setEditingTier({ ...editingTier, is_default: checked })}
+                          />
+                          <Label className="text-xs">Default Tier</Label>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveTier} disabled={tierSaving}>
+                          {tierSaving ? 'Saving...' : 'Save Tier'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setEditingTier(null); setIsAddingTier(false); }}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* General Rules */}
                 <Card className="lg:col-span-2">
@@ -1363,6 +2280,402 @@ export function FacilityManagement() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Advanced Account Rules */}
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      Advanced Account Rules
+                    </CardTitle>
+                    <CardDescription>Additional booking constraints and account-level policies</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* ACC-001: Max Active Reservations */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Max Active Reservations</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.maxActiveReservationsEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('maxActiveReservationsEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          value={facilityData.bookingRules.maxActiveReservations}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('maxActiveReservations', e.target.value)}
+                          disabled={!isEditing || !facilityData.bookingRules.maxActiveReservationsEnabled}
+                          min="1"
+                        />
+                        <p className="text-xs text-gray-500">Max upcoming reservations a user can have at once</p>
+                      </div>
+
+                      {/* ACC-003: Max Hours Per Week */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Max Hours Per Week</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.maxHoursPerWeekEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('maxHoursPerWeekEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          value={facilityData.bookingRules.maxHoursPerWeek}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('maxHoursPerWeek', e.target.value)}
+                          disabled={!isEditing || !facilityData.bookingRules.maxHoursPerWeekEnabled}
+                          min="1"
+                          step="0.5"
+                        />
+                        <p className="text-xs text-gray-500">Total booking hours allowed per week</p>
+                      </div>
+
+                      {/* ACC-004: No Overlapping Reservations */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Prevent Overlapping Reservations</Label>
+                          <Switch
+                            checked={facilityData.bookingRules.noOverlappingReservations}
+                            onCheckedChange={(checked: boolean) => handleBookingRulesChange('noOverlappingReservations', checked)}
+                            disabled={!isEditing}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500">Block users from booking overlapping time slots</p>
+                      </div>
+
+                      {/* ACC-006: Minimum Lead Time */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Minimum Lead Time (minutes)</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.minimumLeadTimeEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('minimumLeadTimeEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          value={facilityData.bookingRules.minimumLeadTimeMinutes}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('minimumLeadTimeMinutes', e.target.value)}
+                          disabled={!isEditing || !facilityData.bookingRules.minimumLeadTimeEnabled}
+                          min="0"
+                        />
+                        <p className="text-xs text-gray-500">Minimum minutes before start time to allow booking</p>
+                      </div>
+
+                      {/* ACC-007: Cancellation Cooldown */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Cancellation Cooldown (minutes)</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.cancellationCooldownEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('cancellationCooldownEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          value={facilityData.bookingRules.cancellationCooldownMinutes}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('cancellationCooldownMinutes', e.target.value)}
+                          disabled={!isEditing || !facilityData.bookingRules.cancellationCooldownEnabled}
+                          min="0"
+                        />
+                        <p className="text-xs text-gray-500">Cooldown period after cancellation before rebooking</p>
+                      </div>
+
+                      {/* ACC-011: Rate Limiting */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label className="flex items-center gap-1">
+                            <Zap className="h-3.5 w-3.5" />
+                            Rate Limiting
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.rateLimitEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('rateLimitEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Max Actions</Label>
+                            <Input
+                              type="number"
+                              value={facilityData.bookingRules.rateLimitMaxActions}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('rateLimitMaxActions', e.target.value)}
+                              disabled={!isEditing || !facilityData.bookingRules.rateLimitEnabled}
+                              min="1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Window (seconds)</Label>
+                            <Input
+                              type="number"
+                              value={facilityData.bookingRules.rateLimitWindowSeconds}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('rateLimitWindowSeconds', e.target.value)}
+                              disabled={!isEditing || !facilityData.bookingRules.rateLimitEnabled}
+                              min="1"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500">Limit booking actions to prevent abuse</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* No-Show / Strike System */}
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5" />
+                        No-Show / Strike System
+                      </span>
+                      <Switch
+                        checked={facilityData.bookingRules.strikeSystemEnabled}
+                        onCheckedChange={(checked: boolean) => handleBookingRulesChange('strikeSystemEnabled', checked)}
+                        disabled={!isEditing}
+                      />
+                    </CardTitle>
+                    <CardDescription>Automatically track no-shows and late cancellations with escalating penalties</CardDescription>
+                  </CardHeader>
+                  {facilityData.bookingRules.strikeSystemEnabled && (
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Strike Threshold</Label>
+                          <Input
+                            type="number"
+                            value={facilityData.bookingRules.strikeThreshold}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('strikeThreshold', e.target.value)}
+                            disabled={!isEditing}
+                            min="1"
+                          />
+                          <p className="text-xs text-gray-500">Strikes before lockout</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Window (days)</Label>
+                          <Input
+                            type="number"
+                            value={facilityData.bookingRules.strikeWindowDays}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('strikeWindowDays', e.target.value)}
+                            disabled={!isEditing}
+                            min="1"
+                          />
+                          <p className="text-xs text-gray-500">Rolling window for counting strikes</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Lockout Duration (days)</Label>
+                          <Input
+                            type="number"
+                            value={facilityData.bookingRules.strikeLockoutDays}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('strikeLockoutDays', e.target.value)}
+                            disabled={!isEditing}
+                            min="1"
+                          />
+                          <p className="text-xs text-gray-500">Days locked out after threshold</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+
+                {/* Court Scheduling Rules */}
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      Court Scheduling Rules
+                    </CardTitle>
+                    <CardDescription>Per-court scheduling constraints and release policies</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* CRT-003: Prime Time Tier Restriction */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Prime Time Tier Restriction</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.primeTimeRequiresTierEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('primeTimeRequiresTierEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        {facilityData.bookingRules.primeTimeRequiresTierEnabled && (
+                          <>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Allowed Tiers (comma-separated names)</Label>
+                              <Input
+                                value={facilityData.bookingRules.primeTimeAllowedTiers.join(', ')}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                  const tierNames = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
+                                  handleBookingRulesChange('primeTimeAllowedTiers', tierNames);
+                                }}
+                                placeholder="e.g. Premium, Gold"
+                                disabled={!isEditing}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={facilityData.bookingRules.primeTimeAdminOverride}
+                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('primeTimeAdminOverride', checked)}
+                                disabled={!isEditing}
+                              />
+                              <span className="text-xs text-gray-500">Admins can override</span>
+                            </div>
+                          </>
+                        )}
+                        <p className="text-xs text-gray-500">Restrict prime-time booking to specific membership tiers</p>
+                      </div>
+
+                      {/* CRT-010: Court Weekly Cap */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Per-Court Weekly Cap</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.courtWeeklyCapEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('courtWeeklyCapEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          value={facilityData.bookingRules.courtWeeklyCap}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtWeeklyCap', e.target.value)}
+                          disabled={!isEditing || !facilityData.bookingRules.courtWeeklyCapEnabled}
+                          min="1"
+                        />
+                        <p className="text-xs text-gray-500">Max bookings per account per week on the same court</p>
+                      </div>
+
+                      {/* CRT-011: Court Release Time */}
+                      <div className="space-y-2 p-3 border rounded-lg md:col-span-2">
+                        <div className="flex justify-between items-center">
+                          <Label>Booking Release Schedule</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.courtReleaseTimeEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('courtReleaseTimeEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        {facilityData.bookingRules.courtReleaseTimeEnabled && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-xs">Release Time</Label>
+                              <Input
+                                type="time"
+                                value={facilityData.bookingRules.courtReleaseTime}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtReleaseTime', e.target.value)}
+                                disabled={!isEditing}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Days Ahead</Label>
+                              <Input
+                                type="number"
+                                value={facilityData.bookingRules.courtReleaseDaysAhead}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtReleaseDaysAhead', e.target.value)}
+                                disabled={!isEditing}
+                                min="1"
+                              />
+                            </div>
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500">Courts become bookable at a specific time, X days ahead</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Household Rules - only show when restriction type is address-based */}
+                {facilityData.bookingRules.restrictionType === 'address' && (
+                  <Card className="lg:col-span-2">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Home className="h-5 w-5" />
+                        Household Rules
+                      </CardTitle>
+                      <CardDescription>Limits applied per household address (address-based restriction mode)</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* HH-002: Household Max Active Reservations */}
+                        <div className="space-y-2 p-3 border rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <Label>Household Max Active Reservations</Label>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={facilityData.bookingRules.householdMaxActiveEnabled}
+                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('householdMaxActiveEnabled', checked)}
+                                disabled={!isEditing}
+                              />
+                              <span className="text-sm text-gray-500">Enabled</span>
+                            </div>
+                          </div>
+                          <Input
+                            type="number"
+                            value={facilityData.bookingRules.householdMaxActive}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('householdMaxActive', e.target.value)}
+                            disabled={!isEditing || !facilityData.bookingRules.householdMaxActiveEnabled}
+                            min="1"
+                          />
+                          <p className="text-xs text-gray-500">Max active reservations across all accounts at this address</p>
+                        </div>
+
+                        {/* HH-003: Household Prime-Time Cap */}
+                        <div className="space-y-2 p-3 border rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <Label>Household Prime-Time Cap</Label>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={facilityData.bookingRules.householdPrimeCapEnabled}
+                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('householdPrimeCapEnabled', checked)}
+                                disabled={!isEditing}
+                              />
+                              <span className="text-sm text-gray-500">Enabled</span>
+                            </div>
+                          </div>
+                          <Input
+                            type="number"
+                            value={facilityData.bookingRules.householdPrimeCap}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('householdPrimeCap', e.target.value)}
+                            disabled={!isEditing || !facilityData.bookingRules.householdPrimeCapEnabled}
+                            min="1"
+                          />
+                          <p className="text-xs text-gray-500">Max prime-time bookings per week for all accounts at this address</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Admin Restrictions */}
                 <Card>
@@ -1819,44 +3132,188 @@ export function FacilityManagement() {
               ) : (
                 <div className="grid grid-cols-1 gap-4">
                   {courts.map((court) => (
-                    <Card key={court.id}>
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-lg font-semibold">{court.name}</h3>
-                              <Badge className={getCourtStatusColor(court.status)}>{formatCourtStatus(court.status)}</Badge>
+                    <React.Fragment key={court.id}>
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-lg font-semibold">{court.name}</h3>
+                                <Badge className={getCourtStatusColor(court.status)}>{formatCourtStatus(court.status)}</Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                                <span>Court #: <strong>{court.courtNumber}</strong></span>
+                                <span>Type: <strong>{court.courtType}</strong></span>
+                                <span>Surface: <strong>{court.surfaceType}</strong></span>
+                                <span>{court.isIndoor ? 'Indoor' : 'Outdoor'}</span>
+                                <span>{court.hasLights ? 'With Lights' : 'No Lights'}</span>
+                              </div>
                             </div>
-                            <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                              <span>Court #: <strong>{court.courtNumber}</strong></span>
-                              <span>Type: <strong>{court.courtType}</strong></span>
-                              <span>Surface: <strong>{court.surfaceType}</strong></span>
-                              <span>{court.isIndoor ? 'Indoor' : 'Outdoor'}</span>
-                              <span>{court.hasLights ? 'With Lights' : 'No Lights'}</span>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleToggleCourtConfig(court.id)}
+                                disabled={editingCourt !== null}
+                                className={configuringCourtId === court.id ? 'bg-blue-100 border-blue-300' : ''}
+                                title="Schedule Settings"
+                              >
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditCourt(court)}
+                                disabled={editingCourt !== null}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteCourt(court.id)}
+                                disabled={editingCourt !== null}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditCourt(court)}
-                              disabled={editingCourt !== null}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteCourt(court.id)}
-                              disabled={editingCourt !== null}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
+
+                      {/* Court Schedule Config Panel */}
+                      {configuringCourtId === court.id && (
+                        <Card className="border-blue-200 bg-blue-50/50">
+                          <CardHeader>
+                            <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
+                            <CardDescription>Configure hours, prime time, and slot settings per day</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {courtScheduleLoading ? (
+                              <div className="flex items-center justify-center py-8">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead>
+                                      <tr className="border-b">
+                                        <th className="text-left p-2">Day</th>
+                                        <th className="text-center p-2">Open</th>
+                                        <th className="text-center p-2">Open Time</th>
+                                        <th className="text-center p-2">Close Time</th>
+                                        <th className="text-center p-2">Prime Start</th>
+                                        <th className="text-center p-2">Prime End</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {courtSchedule.map((day: any) => (
+                                        <tr key={day.day_of_week} className="border-b">
+                                          <td className="p-2 font-medium">{DAY_NAMES[day.day_of_week]}</td>
+                                          <td className="p-2 text-center">
+                                            <Switch
+                                              checked={day.is_open}
+                                              onCheckedChange={(checked: boolean) => updateCourtScheduleDay(day.day_of_week, 'is_open', checked)}
+                                            />
+                                          </td>
+                                          <td className="p-2">
+                                            <Input
+                                              type="time"
+                                              value={day.open_time || '06:00'}
+                                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'open_time', e.target.value)}
+                                              disabled={!day.is_open}
+                                              className="w-28"
+                                            />
+                                          </td>
+                                          <td className="p-2">
+                                            <Input
+                                              type="time"
+                                              value={day.close_time || '22:00'}
+                                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'close_time', e.target.value)}
+                                              disabled={!day.is_open}
+                                              className="w-28"
+                                            />
+                                          </td>
+                                          <td className="p-2">
+                                            <Input
+                                              type="time"
+                                              value={day.prime_time_start || ''}
+                                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'prime_time_start', e.target.value || null)}
+                                              disabled={!day.is_open}
+                                              className="w-28"
+                                            />
+                                          </td>
+                                          <td className="p-2">
+                                            <Input
+                                              type="time"
+                                              value={day.prime_time_end || ''}
+                                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'prime_time_end', e.target.value || null)}
+                                              disabled={!day.is_open}
+                                              className="w-28"
+                                            />
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+                                  <div className="space-y-1">
+                                    <Label className="text-sm">Slot Duration (min)</Label>
+                                    <Select
+                                      value={String(courtSchedule[0]?.slot_duration || 30)}
+                                      onValueChange={(val: string) => updateAllScheduleDays('slot_duration', parseInt(val))}
+                                    >
+                                      <SelectTrigger><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="15">15 min</SelectItem>
+                                        <SelectItem value="30">30 min</SelectItem>
+                                        <SelectItem value="60">60 min</SelectItem>
+                                        <SelectItem value="90">90 min</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-sm">Buffer Before (min)</Label>
+                                    <Input
+                                      type="number"
+                                      value={courtSchedule[0]?.buffer_before || 0}
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllScheduleDays('buffer_before', parseInt(e.target.value) || 0)}
+                                      min="0"
+                                      max="30"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-sm">Buffer After (min)</Label>
+                                    <Input
+                                      type="number"
+                                      value={courtSchedule[0]?.buffer_after || 0}
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllScheduleDays('buffer_after', parseInt(e.target.value) || 0)}
+                                      min="0"
+                                      max="30"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-4">
+                                  <Button onClick={saveCourtSchedule} disabled={courtScheduleSaving}>
+                                    <Save className="h-4 w-4 mr-2" />
+                                    {courtScheduleSaving ? 'Saving...' : 'Save Schedule'}
+                                  </Button>
+                                  <Button variant="outline" onClick={() => setConfiguringCourtId(null)}>
+                                    <X className="h-4 w-4 mr-2" />
+                                    Close
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </React.Fragment>
                   ))}
                 </div>
               )}
@@ -1868,6 +3325,146 @@ export function FacilityManagement() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Blackout Periods */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      Blackout Periods
+                    </span>
+                    <Button size="sm" onClick={handleAddBlackout} disabled={!!editingBlackout}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Blackout
+                    </Button>
+                  </CardTitle>
+                  <CardDescription>Court closures for maintenance, events, or weather</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {editingBlackout && (
+                    <div className="p-4 mb-4 border rounded-lg bg-blue-50 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Title</Label>
+                          <Input
+                            value={editingBlackout.title || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingBlackout({ ...editingBlackout, title: e.target.value })}
+                            placeholder="e.g., Court Resurfacing"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Type</Label>
+                          <Select
+                            value={editingBlackout.blackoutType || 'maintenance'}
+                            onValueChange={(val: string) => setEditingBlackout({ ...editingBlackout, blackoutType: val })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="maintenance">Maintenance</SelectItem>
+                              <SelectItem value="event">Event</SelectItem>
+                              <SelectItem value="tournament">Tournament</SelectItem>
+                              <SelectItem value="holiday">Holiday</SelectItem>
+                              <SelectItem value="weather">Weather</SelectItem>
+                              <SelectItem value="custom">Custom</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Court</Label>
+                          <Select
+                            value={editingBlackout.courtId || 'all'}
+                            onValueChange={(val: string) => setEditingBlackout({ ...editingBlackout, courtId: val === 'all' ? null : val })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Courts</SelectItem>
+                              {courts.map(c => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Description</Label>
+                          <Input
+                            value={editingBlackout.description || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingBlackout({ ...editingBlackout, description: e.target.value })}
+                            placeholder="Optional details"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Start Date/Time</Label>
+                          <Input
+                            type="datetime-local"
+                            value={editingBlackout.startDatetime || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingBlackout({ ...editingBlackout, startDatetime: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>End Date/Time</Label>
+                          <Input
+                            type="datetime-local"
+                            value={editingBlackout.endDatetime || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingBlackout({ ...editingBlackout, endDatetime: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={handleSaveBlackout} disabled={blackoutSaving}>
+                          <Save className="h-4 w-4 mr-2" />
+                          {blackoutSaving ? 'Saving...' : 'Save Blackout'}
+                        </Button>
+                        <Button variant="outline" onClick={() => { setEditingBlackout(null); setIsAddingBlackout(false); }}>
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {blackoutsLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : blackouts.length === 0 && !editingBlackout ? (
+                    <p className="text-sm text-gray-500 text-center py-4">No blackout periods configured.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {blackouts.map((b: any) => (
+                        <div key={b.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{b.title || 'Untitled'}</span>
+                              <Badge variant="outline">{b.blackout_type || 'maintenance'}</Badge>
+                              {b.court_name && <Badge variant="secondary">{b.court_name}</Badge>}
+                            </div>
+                            <p className="text-sm text-gray-500">
+                              {new Date(b.start_datetime).toLocaleString()} — {new Date(b.end_datetime).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setEditingBlackout({
+                              id: b.id,
+                              courtId: b.court_id,
+                              blackoutType: b.blackout_type,
+                              title: b.title,
+                              description: b.description,
+                              startDatetime: b.start_datetime?.slice(0, 16),
+                              endDatetime: b.end_datetime?.slice(0, 16),
+                            })}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => handleDeleteBlackout(b.id)} className="text-red-600 hover:text-red-700">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>

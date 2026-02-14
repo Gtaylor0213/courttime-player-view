@@ -4,86 +4,15 @@ This document tracks features and improvements that need to be completed in futu
 
 ---
 
-## High Priority
+## All items complete!
 
-### 1. Run Booking Rules Engine Database Migration
-**Status:** Pending
-**Issue:** The rules engine code is complete but the database tables don't exist yet.
-
-**Required Action:**
-Run the SQL migration file against your PostgreSQL database:
-```
-CourtTime Player View/src/database/migrations/007_booking_rules_engine.sql
-```
-
-**Tables Created:**
-- `membership_tiers` - Tier system with booking privileges
-- `user_tiers` - Assigns users to tiers
-- `account_strikes` - Strike tracking for no-shows/late cancellations
-- `household_groups` - Address-based grouping for household rules
-- `household_members` - User-to-household links
-- `court_operating_config` - Per-court schedules and settings
-- `court_blackouts` - Maintenance/event blocks
-- `booking_rule_definitions` - Master rule catalog (26 rules pre-seeded)
-- `facility_rule_configs` - Configured rules per facility
-- `booking_cancellations` - Cancellation tracking
-- `booking_rate_limits` - Rate limiting for API actions
-
-**Temporary Workaround:** The rules engine gracefully skips validation when tables are missing, allowing bookings to proceed without rule enforcement.
-
----
-
-## Medium Priority
-
-### 2. Update Frontend Components with Rule Violation Display
-**Status:** Pending
-**Description:** Show rule violation messages in BookingWizard and QuickReservePopup when bookings fail due to rules.
-
-**Files to update:**
-- `src/components/BookingWizard.tsx`
-- `src/components/QuickReservePopup.tsx`
-
-**Features to add:**
-- Display blocked booking reasons with rule codes
-- Show warnings for non-blocking rule violations
-- Indicate prime-time slots visually
-- Show tier-based booking limits
-
-### 3. Admin Rules Configuration UI
-**Status:** Not Started
-**Description:** Build admin interface to enable/configure rules per facility.
-
-**Components needed:**
-- `RulesConfiguration.tsx` - Enable/configure rules per facility
-- `TierManagement.tsx` - Create/edit tiers, assign users
-- `StrikeManagement.tsx` - View/revoke strikes
-- `CourtScheduleConfig.tsx` - Set operating hours, prime time windows
-- `BlackoutManager.tsx` - Create/edit blackout periods
-
-### 4. User Profile - Strike History
-**Status:** Not Started
-**Description:** Show users their strike history and current account status.
-
----
-
-## Low Priority
-
-### 5. Household Management UI
-**Status:** Not Started
-**Description:** Allow facility admins to manage household groupings.
-
-### 6. Rate Limiting Enhancement
-**Status:** Not Started
-**Description:** Implement Redis-based rate limiting for better performance at scale.
-
-### 7. Email Notifications for Rule Events
-**Status:** Not Started
-**Description:** Send email notifications when strikes are issued, bookings are blocked, etc.
+No remaining TODO items. All features have been implemented.
 
 ---
 
 ## Completed Items
 
+### Server-Side (Pre-existing)
 - [x] Create database migration file (007_booking_rules_engine.sql)
 - [x] Create rules engine types (src/services/rulesEngine/types.ts)
 - [x] Create RuleContext builder for fetching booking context
@@ -94,6 +23,59 @@ CourtTime Player View/src/database/migrations/007_booking_rules_engine.sql
 - [x] Integrate rules engine into bookingService.ts
 - [x] Add new API routes (tiers, strikes, court config, rules, households)
 - [x] Make rules engine graceful when tables don't exist (temporary fix)
+
+### Phase 1-2: Court Config & Basic Rules Admin UI
+- [x] Discovery + DB migration 007
+- [x] Court config panel (operating hours, blackouts, buffer time)
+- [x] Basic rule wiring to FacilityManagement
+
+### Phase 3: Account Rules Admin UI
+- [x] ACC-001 through ACC-011 admin UI controls in Booking Rules tab
+- [x] Tier CRUD (create/edit/delete tiers in FacilityManagement)
+- [x] Strike management dialog in MemberManagement (issue/revoke strikes)
+- [x] Tier assignment per member in MemberManagement
+
+### Phase 4: Court/Household Rules + Booking Flow
+- [x] CRT-003, CRT-010, CRT-011 admin UI controls (Court Scheduling Rules card)
+- [x] HH-002, HH-003 admin UI controls (Household Rules card)
+- [x] Fix apiRequest to pass through ruleViolations/warnings/isPrimeTime
+- [x] Add bookingApi.validate method
+- [x] BookingWizard: rule violation display (red errors, amber warnings, prime-time badge)
+- [x] QuickReservePopup: rule violation display (red errors, amber warnings, prime-time badge)
+
+### Phase 5: Player Profile Strike History
+- [x] Add householdsApi to client.ts (11 methods for Phase 6 prep)
+- [x] PlayerProfile: strike history with expandable list
+- [x] PlayerProfile: lockout banners (red warning per locked facility)
+- [x] PlayerProfile: per-facility summary badges (green/amber/red)
+- [x] PlayerProfile: empty state ("No strikes on your account")
+
+### Phase 6: Household Management Admin UI
+- [x] Run migration 007 (verified already applied — all 26 rules seeded)
+- [x] HouseholdManagement.tsx — full CRUD admin page
+- [x] Household list with search, expandable rows showing members
+- [x] Auto-Create from HOA addresses button
+- [x] Create/Edit/Delete household dialogs
+- [x] Add member dialog with facility member search
+- [x] Member verification (verify/reject), set primary, remove
+- [x] Route, sidebar nav, page mapping, dashboard quick action
+
+### Phase 7: Calendar Prime-Time Visualization
+- [x] Fetch court operating configs (prime_time_start/end per court per day)
+- [x] isPrimeTimeSlot() helper for 12h→24h time comparison
+- [x] Purple tint (bg-purple-50) on empty prime-time calendar slots
+- [x] Purple hover (hover:bg-purple-100) for prime-time slots
+- [x] Prime-time legend indicator in calendar header
+
+### Phase 8: Rate Limiting + Email Notifications
+- [x] Install express-rate-limit, add tiered middleware (global 100/15min, auth 10/15min, sensitive 20/15min)
+- [x] Create centralized emailService.ts (sendStrikeIssuedEmail, sendStrikeRevokedEmail, sendLockoutEmail)
+- [x] Add strike notification helpers to notificationService.ts (in-app notifications)
+- [x] Hook email + in-app notifications into bookingService.ts issueStrike() (auto strikes)
+- [x] Hook email + in-app notifications into strikes.ts routes (manual issue + revoke)
+- [x] Lockout detection: send lockout email when strike count crosses ACC-009 threshold
+
+### UI/UX Fixes
 - [x] Fix notification service priority column error
 - [x] Make court calendar header sticky with only calendar scrolling
 - [x] Change zoom control to +/- buttons
@@ -149,3 +131,14 @@ If deployed on Render, use the database shell in the Render dashboard.
 - HH-001: Max Members Per Address
 - HH-002: Household Max Active Reservations
 - HH-003: Household Prime-Time Cap
+
+### Admin UI Rule Coverage
+
+**Rules with full admin UI controls (19):**
+ACC-001, ACC-002, ACC-003, ACC-004, ACC-005, ACC-006, ACC-007, ACC-008, ACC-009, ACC-010, ACC-011, CRT-001, CRT-002, CRT-003, CRT-005, CRT-010, CRT-011, HH-002, HH-003
+
+**Rules configured via Court Management panel (3):**
+CRT-004 (operating hours), CRT-006 (blackouts), CRT-007 (buffer time)
+
+**Rules evaluated server-side only — no admin config needed (4):**
+CRT-008 (allowed activities — niche), CRT-009 (sub-amenity inventory — niche), CRT-012 (cancellation deadline — informational during booking), HH-001 (max members — informational during booking)

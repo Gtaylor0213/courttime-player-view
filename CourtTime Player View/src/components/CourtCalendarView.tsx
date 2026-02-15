@@ -936,7 +936,7 @@ export function CourtCalendarView() {
         </div>
 
         {/* Calendar Grid Container */}
-        <div className="flex-1 overflow-auto px-6 py-4">
+        <div className="flex-1 min-h-0 px-6 py-4">
         {courts.length === 0 ? (
           <div
             className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center text-gray-500 h-full"

@@ -963,7 +963,7 @@ export function CourtCalendarView() {
         </div>
 
         {/* Calendar Grid Container */}
-        <div className="flex-1 min-h-0 px-6 py-4">
+        <div className="flex-1 min-h-0 flex flex-col px-6 py-4">
         {courts.length === 0 ? (
           <div
             className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center text-gray-500 h-full"
@@ -979,10 +979,9 @@ export function CourtCalendarView() {
             </Button>
           </div>
         ) : (
-          <div className="calendar-scroll-wrapper w-full h-full">
           <div
             ref={calendarScrollRef}
-            className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full h-full"
+            className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0"
           >
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: `${TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH}px` }}>
               <thead>
@@ -1199,7 +1198,6 @@ export function CourtCalendarView() {
                 />
               </div>
             )}
-          </div>
           </div>
         )}
         </div>

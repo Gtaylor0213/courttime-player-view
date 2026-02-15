@@ -208,56 +208,6 @@ export function CourtCalendarView() {
     fetchFacilities();
   }, [user?.memberFacilities]);
 
-  // Fetch prime-time configs for visible courts
-  useEffect(() => {
-    const fetchPrimeTimeConfigs = async () => {
-      if (!courts || courts.length === 0) return;
-      const configs: Record<string, any[]> = {};
-      for (const court of courts) {
-        if (!court.id || primeTimeConfigs[court.id]) continue;
-        try {
-          const response = await courtConfigApi.getSchedule(court.id);
-          if (response.success && response.data) {
-            const schedule = response.data.schedule || response.data;
-            configs[court.id] = Array.isArray(schedule) ? schedule : [];
-          }
-        } catch {
-          // Court config may not exist yet
-        }
-      }
-      if (Object.keys(configs).length > 0) {
-        setPrimeTimeConfigs(prev => ({ ...prev, ...configs }));
-      }
-    };
-    fetchPrimeTimeConfigs();
-  }, [courts]);
-
-  // Helper: check if a time slot is during prime time for a court
-  const isPrimeTimeSlot = useCallback((courtId: string, time: string): boolean => {
-    const schedule = primeTimeConfigs[courtId];
-    if (!schedule || schedule.length === 0) return false;
-
-    const dayOfWeek = selectedDate.getDay();
-    const dayConfig = schedule.find((c: any) => c.dayOfWeek === dayOfWeek || c.day_of_week === dayOfWeek);
-    if (!dayConfig) return false;
-
-    const ptStart = dayConfig.primeTimeStart || dayConfig.prime_time_start;
-    const ptEnd = dayConfig.primeTimeEnd || dayConfig.prime_time_end;
-    if (!ptStart || !ptEnd) return false;
-
-    // Parse the 12-hour time slot to 24-hour HH:MM
-    const [timePart, period] = time.split(' ');
-    let [hours, minutes] = timePart.split(':').map(Number);
-    if (period === 'PM' && hours !== 12) hours += 12;
-    if (period === 'AM' && hours === 12) hours = 0;
-    const slot24 = `${hours.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`;
-
-    // Compare as strings (HH:MM format)
-    const startNorm = ptStart.substring(0, 5);
-    const endNorm = ptEnd.substring(0, 5);
-    return slot24 >= startNorm && slot24 < endNorm;
-  }, [primeTimeConfigs, selectedDate]);
-
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async () => {
     if (!selectedFacility) {
@@ -483,6 +433,56 @@ export function CourtCalendarView() {
     // Desktop shows all courts
     return filteredCourts;
   }, [filteredCourts, displayedCourtsCount, isMobile]);
+
+  // Fetch prime-time configs for visible courts
+  useEffect(() => {
+    const fetchPrimeTimeConfigs = async () => {
+      if (!courts || courts.length === 0) return;
+      const configs: Record<string, any[]> = {};
+      for (const court of courts) {
+        if (!court.id || primeTimeConfigs[court.id]) continue;
+        try {
+          const response = await courtConfigApi.getSchedule(court.id);
+          if (response.success && response.data) {
+            const schedule = response.data.schedule || response.data;
+            configs[court.id] = Array.isArray(schedule) ? schedule : [];
+          }
+        } catch {
+          // Court config may not exist yet
+        }
+      }
+      if (Object.keys(configs).length > 0) {
+        setPrimeTimeConfigs(prev => ({ ...prev, ...configs }));
+      }
+    };
+    fetchPrimeTimeConfigs();
+  }, [courts]);
+
+  // Helper: check if a time slot is during prime time for a court
+  const isPrimeTimeSlot = useCallback((courtId: string, time: string): boolean => {
+    const schedule = primeTimeConfigs[courtId];
+    if (!schedule || schedule.length === 0) return false;
+
+    const dayOfWeek = selectedDate.getDay();
+    const dayConfig = schedule.find((c: any) => c.dayOfWeek === dayOfWeek || c.day_of_week === dayOfWeek);
+    if (!dayConfig) return false;
+
+    const ptStart = dayConfig.primeTimeStart || dayConfig.prime_time_start;
+    const ptEnd = dayConfig.primeTimeEnd || dayConfig.prime_time_end;
+    if (!ptStart || !ptEnd) return false;
+
+    // Parse the 12-hour time slot to 24-hour HH:MM
+    const [timePart, period] = time.split(' ');
+    let [hours, minutes] = timePart.split(':').map(Number);
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    const slot24 = `${hours.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}`;
+
+    // Compare as strings (HH:MM format)
+    const startNorm = ptStart.substring(0, 5);
+    const endNorm = ptEnd.substring(0, 5);
+    return slot24 >= startNorm && slot24 < endNorm;
+  }, [primeTimeConfigs, selectedDate]);
 
   // Helper function to check if a time slot is in the past (using Eastern Time)
   const isPastTime = useCallback((timeSlot: string) => {

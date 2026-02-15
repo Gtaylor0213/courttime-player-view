@@ -199,8 +199,8 @@ export function UnifiedSidebar({
             )
           )}
 
-          {/* Admin Navigation Section */}
-          {actualUserType === 'admin' && (
+          {/* Admin Navigation Section — only if user is admin of the selected facility */}
+          {user?.adminFacilities?.includes(selectedFacilityId) && (
             <div>
               {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">Admin</h3>}
               <div className="space-y-1">
@@ -232,9 +232,9 @@ export function UnifiedSidebar({
             </div>
           )}
 
-          {/* Main Navigation Section */}
+          {/* Player Navigation Section */}
           <div>
-            {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">{actualUserType === 'admin' ? 'Player Features' : 'Navigation'}</h3>}
+            {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">Player</h3>}
             <div className="space-y-1">
               <SidebarButton
                 onClick={() => navigate('/calendar')}
@@ -254,53 +254,27 @@ export function UnifiedSidebar({
                 label="Messages"
                 isActive={currentPage === 'messages'}
               />
-            </div>
-          </div>
-
-          {/* My Clubs Section - Only show if user has facilities */}
-          {memberFacilities.length > 0 && (
-          <div>
-            {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">My Clubs</h3>}
-            <div className="space-y-1">
-              {/* Bulletin Board */}
               <SidebarButton
                 onClick={() => navigate('/bulletin-board')}
                 icon={MessageSquare}
                 label="Bulletin Board"
                 isActive={currentPage === 'bulletin-board'}
               />
-
-              {/* Loading state */}
-              {loadingFacilities && !isCollapsed && (
-                <div className="px-3 py-2 text-sm text-gray-500">
-                  Loading facilities...
-                </div>
-              )}
-
-              {/* No facilities message */}
-              {!loadingFacilities && memberFacilities.length === 0 && !isCollapsed && (
-                <div className="px-3 py-2 text-sm text-gray-500">
-                  No facility memberships
-                </div>
-              )}
-
-              {/* Individual Club Listings */}
-              {!loadingFacilities && memberFacilities.map((club) => (
-                <div key={club.id}>
+              {/* Selected Club Info */}
+              {!loadingFacilities && (() => {
+                const selectedClub = memberFacilities.find(f => f.id === selectedFacilityId);
+                if (!selectedClub) return null;
+                return (
                   <SidebarButton
-                    onClick={() => {
-                      setSelectedFacilityId(club.id);
-                      navigate(`/club/${club.id}`);
-                    }}
+                    onClick={() => navigate(`/club/${selectedClub.id}`)}
                     icon={Building2}
-                    label={club.name}
+                    label={selectedClub.name}
                     isActive={currentPage === 'club-info'}
                   />
-                </div>
-              ))}
+                );
+              })()}
             </div>
           </div>
-          )}
 
 
         </nav>

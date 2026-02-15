@@ -14,6 +14,7 @@ export interface User {
   fullName: string;
   userType: 'player' | 'admin';
   memberFacilities?: string[]; // Array of facility IDs user belongs to
+  adminFacilities?: string[]; // Array of facility IDs user is admin of
   profileImageUrl?: string; // Profile image (base64 or URL)
   skillLevel?: string;
   ustaRating?: string; // USTA/NTRP rating (e.g., "3.0", "3.5", "4.0", etc.)

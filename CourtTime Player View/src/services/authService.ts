@@ -223,6 +223,16 @@ export async function loginUser(email: string, password: string): Promise<LoginR
 
     const memberFacilities = membershipsResult.rows.map(row => row.facilityId);
 
+    // Get facilities where user is an admin
+    const adminResult = await query(
+      `SELECT facility_id as "facilityId"
+       FROM facility_admins
+       WHERE user_id = $1 AND status = 'active'`,
+      [user.id]
+    );
+
+    const adminFacilities = adminResult.rows.map(row => row.facilityId);
+
     // Remove password hash from response
     delete user.passwordHash;
 
@@ -230,7 +240,8 @@ export async function loginUser(email: string, password: string): Promise<LoginR
       success: true,
       user: {
         ...user,
-        memberFacilities
+        memberFacilities,
+        adminFacilities
       },
       message: 'Login successful'
     };
@@ -287,7 +298,7 @@ export async function getUserById(userId: string): Promise<User | null> {
 /**
  * Get user with memberships
  */
-export async function getUserWithMemberships(userId: string): Promise<(User & { memberFacilities: string[] }) | null> {
+export async function getUserWithMemberships(userId: string): Promise<(User & { memberFacilities: string[]; adminFacilities: string[] }) | null> {
   try {
     const user = await getUserById(userId);
 
@@ -305,9 +316,20 @@ export async function getUserWithMemberships(userId: string): Promise<(User & { 
 
     const memberFacilities = membershipsResult.rows.map(row => row.facilityId);
 
+    // Get facilities where user is an admin
+    const adminResult = await query(
+      `SELECT facility_id as "facilityId"
+       FROM facility_admins
+       WHERE user_id = $1 AND status = 'active'`,
+      [userId]
+    );
+
+    const adminFacilities = adminResult.rows.map(row => row.facilityId);
+
     return {
       ...user,
-      memberFacilities
+      memberFacilities,
+      adminFacilities
     };
   } catch (error) {
     console.error('Get user with memberships error:', error);

@@ -21,7 +21,7 @@ interface Court {
   surfaceType: string;
   isIndoor: boolean;
   hasLights: boolean;
-  status: 'active' | 'maintenance' | 'inactive';
+  status: 'available' | 'maintenance' | 'closed';
 }
 
 export function CourtManagement() {
@@ -78,7 +78,7 @@ export function CourtManagement() {
       surfaceType: 'Hard Court',
       isIndoor: false,
       hasLights: false,
-      status: 'active',
+      status: 'available',
     });
     setIsAddingNew(true);
   };
@@ -128,7 +128,7 @@ export function CourtManagement() {
     if (!confirm('Are you sure you want to delete this court?')) return;
 
     try {
-      const response = await adminApi.updateCourt(id, { status: 'inactive' });
+      const response = await adminApi.updateCourt(id, { status: 'closed' });
       if (response.success) {
         toast.success('Court deactivated successfully');
         await loadCourts();
@@ -199,9 +199,9 @@ export function CourtManagement() {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'active': return 'bg-green-100 text-green-800';
+      case 'available': return 'bg-green-100 text-green-800';
       case 'maintenance': return 'bg-yellow-100 text-yellow-800';
-      case 'inactive': return 'bg-gray-100 text-gray-800';
+      case 'closed': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -292,15 +292,15 @@ export function CourtManagement() {
                     <Label htmlFor="courtStatus">Status</Label>
                     <Select
                       value={editingCourt.status}
-                      onValueChange={(value: 'active' | 'maintenance' | 'inactive') => setEditingCourt({ ...editingCourt, status: value })}
+                      onValueChange={(value: 'available' | 'maintenance' | 'closed') => setEditingCourt({ ...editingCourt, status: value })}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="available">Available</SelectItem>
                         <SelectItem value="maintenance">Maintenance</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

@@ -13,7 +13,13 @@ import { ReservationDetailsModal } from './ReservationDetailsModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, usersApi, bookingApi, courtConfigApi } from '../api/client';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, Minus, Plus } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown } from 'lucide-react';
+
+// Layout constants
+const SLOT_HEIGHT = 48;
+const TIME_COL_WIDTH = 72;
+const COURT_COL_WIDTH = 180;
+const HEADER_HEIGHT = 56;
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 
 // Helper to get current time components in Eastern Time
@@ -74,7 +80,6 @@ export function CourtCalendarView() {
   const [bookingsData, setBookingsData] = useState<any>({});
   const [loadingBookings, setLoadingBookings] = useState(false);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
-  const timeColumnRef = useRef<HTMLDivElement>(null);
   const [bookingWizard, setBookingWizard] = useState({
     isOpen: false,
     court: '',
@@ -105,7 +110,6 @@ export function CourtCalendarView() {
 
   // Calendar display customization
   const [displayedCourtsCount, setDisplayedCourtsCount] = useState<number | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(100);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
   // Prime-time config per court: courtId -> schedule array
@@ -132,9 +136,6 @@ export function CourtCalendarView() {
     return date.toDateString() === today.toDateString();
   }, []);
 
-  // Calculate dynamic slot height based on zoom level
-  const slotHeight = useMemo(() => Math.round(48 * (zoomLevel / 100)), [zoomLevel]);
-
   // Calculate the position of the current time indicator line
   const currentTimeLinePosition = useMemo(() => {
     if (!isToday(selectedDate)) return null;
@@ -155,10 +156,10 @@ export function CourtCalendarView() {
     const hoursFromStart = hours - START_HOUR;
     const minuteFraction = minutes / 60;
     const totalHours = hoursFromStart + minuteFraction;
-    const position = totalHours * SLOTS_PER_HOUR * slotHeight;
+    const position = totalHours * SLOTS_PER_HOUR * SLOT_HEIGHT;
 
     return position;
-  }, [currentTime, selectedDate, isToday, slotHeight]);
+  }, [currentTime, selectedDate, isToday]);
 
   // Fetch user's member facilities with courts
   useEffect(() => {
@@ -875,32 +876,6 @@ export function CourtCalendarView() {
                   </Select>
                 </div>
 
-                {/* Zoom Control - Buttons instead of dropdown */}
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600">Zoom:</span>
-                  <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setZoomLevel(Math.max(75, zoomLevel - 25))}
-                      disabled={zoomLevel <= 75}
-                      className="h-7 w-7 p-0 hover:bg-white"
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </Button>
-                    <span className="text-sm font-medium min-w-[40px] text-center">{zoomLevel}%</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setZoomLevel(Math.min(150, zoomLevel + 25))}
-                      disabled={zoomLevel >= 150}
-                      className="h-7 w-7 p-0 hover:bg-white"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
                 {/* Prime-Time Legend */}
                 {Object.values(primeTimeConfigs).some(schedule =>
                   schedule.some((c: any) => (c.primeTimeStart || c.prime_time_start))
@@ -981,70 +956,60 @@ export function CourtCalendarView() {
             ref={calendarScrollRef}
             className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full h-full"
           >
-              {/* Header Row - Sticky at top */}
-              <div
-                className="sticky top-0 z-30 bg-white border-b-2 border-gray-300 shadow-sm"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: `100px repeat(${courts.length}, 180px)`,
-                  minWidth: `${100 + courts.length * 180}px`
-                }}
-              >
-                {/* Time Header - double sticky (top + left) */}
-                <div
-                  className="sticky left-0 z-40 bg-gray-100 border-r border-gray-300 p-3 flex items-center justify-center"
-                  style={{ height: '56px' }}
-                >
-                  <span className="font-semibold text-sm text-gray-700">Time (EST)</span>
-                </div>
-                {/* Court Headers */}
-                {courts.map((court, index) => (
-                  <div
-                    key={index}
-                    className="bg-white border-r border-gray-200 last:border-r-0 p-3"
-                    style={{ height: '56px' }}
+            <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: `${TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH}px` }}>
+              <thead>
+                <tr>
+                  {/* Corner cell: sticky in both directions */}
+                  <th
+                    className="sticky top-0 left-0 z-40 bg-gray-100 border-r border-b-2 border-gray-300"
+                    style={{ width: TIME_COL_WIDTH, minWidth: TIME_COL_WIDTH, height: HEADER_HEIGHT, textAlign: 'center', verticalAlign: 'middle' }}
                   >
-                    <div className="font-semibold text-sm text-gray-900">{court.name}</div>
-                    <div className="text-xs text-gray-500 mt-0.5 capitalize">{court.type}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Time Slots Grid */}
-              <div style={{ minWidth: `${100 + courts.length * 180}px` }}>
+                    <span className="font-semibold text-xs text-gray-700">Time (EST)</span>
+                  </th>
+                  {/* Court header cells: sticky top */}
+                  {courts.map((court, index) => (
+                    <th
+                      key={index}
+                      className="sticky top-0 z-30 bg-white border-r border-b-2 border-gray-300 last:border-r-0 p-3 text-left font-normal"
+                      style={{ minWidth: COURT_COL_WIDTH, height: HEADER_HEIGHT, verticalAlign: 'middle' }}
+                    >
+                      <div className="font-semibold text-sm text-gray-900">{court.name}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 capitalize">{court.type}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
                 {timeSlots.map((time, timeIndex) => {
                   const isHourMark = time.endsWith(':00 AM') || time.endsWith(':00 PM');
                   const isPast = isPastTime(time);
                   return (
-                    <div
+                    <tr
                       key={timeIndex}
                       className={isPast ? 'opacity-50' : ''}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: `100px repeat(${courts.length}, 180px)`,
-                        height: `${slotHeight}px`
-                      }}
+                      style={{ height: SLOT_HEIGHT }}
                     >
-                      {/* Sticky Time Column */}
-                      <div
+                      {/* Sticky time label */}
+                      <td
                         className={`
-                          sticky left-0 z-10 bg-gray-50 border-r border-gray-200 px-2 flex items-center justify-end
+                          sticky left-0 z-10 bg-gray-50 border-r border-gray-200 px-2
                           ${isHourMark ? 'border-b border-gray-300' : 'border-b border-gray-100'}
                         `}
+                        style={{ width: TIME_COL_WIDTH, minWidth: TIME_COL_WIDTH, textAlign: 'right', verticalAlign: 'middle' }}
                       >
                         <span className={`text-xs ${isHourMark ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
                           {time}
                         </span>
-                      </div>
+                      </td>
 
-                      {/* Court Columns */}
+                      {/* Court cells */}
                       {courts.map((court, courtIndex) => {
                         const booking = bookings[court.name as keyof typeof bookings]?.[time];
                         const isSelected = dragState.selectedCells.has(`${court.name}|${time}`);
                         const isPrime = isPrimeTimeSlot(court.id, time);
 
                         return (
-                          <div
+                          <td
                             key={courtIndex}
                             className={`
                               border-r border-gray-200 last:border-r-0 relative
@@ -1056,6 +1021,7 @@ export function CourtCalendarView() {
                               ${isPrime && !booking && !isPast && !isSelected ? 'bg-purple-50' : ''}
                               ${dragState.isDragging && !booking ? 'select-none' : ''}
                             `}
+                            style={{ minWidth: COURT_COL_WIDTH, height: SLOT_HEIGHT, verticalAlign: 'top', padding: 0 }}
                             onClick={() => {
                               if (isPast && !booking) return;
                               if (booking) {
@@ -1067,37 +1033,35 @@ export function CourtCalendarView() {
                             onMouseDown={(e) => !booking && !isPast && handleMouseDown(court.name, time, e)}
                             onMouseEnter={() => !isPast && handleMouseEnter(court.name, time)}
                           >
-                                  {/* Booking Display - First Slot */}
-                                  {booking && booking.type === 'reservation' && booking.isFirstSlot && (
-                                    <div
-                                      className={`
-                                        absolute inset-0 m-0.5 px-2 py-1 rounded
-                                        transition-all duration-150 hover:shadow-md
-                                        overflow-hidden border
-                                        ${booking.bookingType
-                                          ? getBookingTypeBadgeColor(booking.bookingType)
-                                          : (court.type === 'tennis'
-                                              ? 'bg-green-100 text-green-900 border-green-300'
-                                              : 'bg-green-100 text-green-900 border-green-300')
-                                        }
-                                      `}
-                                    >
-                                      <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>
-                                      <div className="text-[10px] opacity-80 flex items-center gap-1 mt-0.5">
-                                        <span>{booking.duration}</span>
-                                        {booking.bookingType && (
-                                          <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-white/50">
-                                            {getBookingTypeLabel(booking.bookingType)}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {booking.notes && (
-                                        <div className="text-[9px] mt-0.5 truncate italic opacity-80">
-                                          {booking.notes.length > 25 ? `${booking.notes.substring(0, 25)}...` : booking.notes}
-                                        </div>
-                                      )}
-                                    </div>
+                            {/* Booking Display - First Slot */}
+                            {booking && booking.type === 'reservation' && booking.isFirstSlot && (
+                              <div
+                                className={`
+                                  absolute inset-0 m-0.5 px-2 py-1 rounded
+                                  transition-all duration-150 hover:shadow-md
+                                  overflow-hidden border
+                                  ${booking.bookingType
+                                    ? getBookingTypeBadgeColor(booking.bookingType)
+                                    : 'bg-green-100 text-green-900 border-green-300'
+                                  }
+                                `}
+                              >
+                                <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>
+                                <div className="text-[10px] opacity-80 flex items-center gap-1 mt-0.5">
+                                  <span>{booking.duration}</span>
+                                  {booking.bookingType && (
+                                    <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-white/50">
+                                      {getBookingTypeLabel(booking.bookingType)}
+                                    </span>
                                   )}
+                                </div>
+                                {booking.notes && (
+                                  <div className="text-[9px] mt-0.5 truncate italic opacity-80">
+                                    {booking.notes.length > 25 ? `${booking.notes.substring(0, 25)}...` : booking.notes}
+                                  </div>
+                                )}
+                              </div>
+                            )}
 
                             {/* Booking Display - Continuation Slots */}
                             {booking && booking.type === 'reservation' && !booking.isFirstSlot && (
@@ -1106,66 +1070,65 @@ export function CourtCalendarView() {
                                   absolute inset-0 m-0.5 rounded-b border-l border-r
                                   ${booking.bookingType
                                     ? getBookingTypeColor(booking.bookingType)
-                                    : (court.type === 'tennis'
-                                        ? 'bg-green-100 border-green-300'
-                                        : 'bg-green-100 border-green-300')
+                                    : 'bg-green-100 border-green-300'
                                   }
                                 `}
                               />
                             )}
-                          </div>
+                          </td>
                         );
                       })}
-                    </div>
+                    </tr>
                   );
                 })}
-              </div>
+              </tbody>
+            </table>
 
-              {/* Current Time Indicator Line - positioned absolutely in scroll container */}
-              {currentTimeLinePosition !== null && (
+            {/* Current Time Indicator Line - positioned absolutely in scroll container */}
+            {currentTimeLinePosition !== null && (
+              <div
+                className="pointer-events-none"
+                style={{
+                  position: 'absolute',
+                  top: `${currentTimeLinePosition + HEADER_HEIGHT}px`,
+                  left: 0,
+                  right: 0,
+                  zIndex: 20,
+                  height: '2px'
+                }}
+              >
+                {/* Time label - sticky to left */}
                 <div
-                  className="pointer-events-none"
-                  style={{
-                    position: 'absolute',
-                    top: `${currentTimeLinePosition + 56}px`, // +56 for header height
-                    left: 0,
-                    right: 0,
-                    zIndex: 20,
-                    height: '2px'
-                  }}
+                  className="sticky left-0 inline-flex items-center"
+                  style={{ zIndex: 25 }}
                 >
-                  {/* Time label - sticky to left */}
-                  <div
-                    className="sticky left-0 inline-flex items-center"
-                    style={{ zIndex: 25 }}
-                  >
-                    <div className="bg-white border border-red-400 text-gray-800 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md">
-                      {formatCurrentEasternTime()}
-                    </div>
+                  <div className="bg-white border border-red-400 text-gray-800 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md">
+                    {formatCurrentEasternTime()}
                   </div>
-                  {/* Red line */}
-                  <div
-                    className="absolute bg-red-600"
-                    style={{
-                      left: '100px',
-                      right: 0,
-                      top: '50%',
-                      height: '2px',
-                      transform: 'translateY(-50%)',
-                      boxShadow: '0 0 6px rgba(220, 38, 38, 0.6)'
-                    }}
-                  />
-                  {/* Circle indicator */}
-                  <div
-                    className="absolute w-3 h-3 bg-red-600 rounded-full border-2 border-white shadow-md"
-                    style={{
-                      left: '94px',
-                      top: '50%',
-                      transform: 'translateY(-50%)'
-                    }}
-                  />
                 </div>
-              )}
+                {/* Red line */}
+                <div
+                  className="absolute bg-red-600"
+                  style={{
+                    left: `${TIME_COL_WIDTH}px`,
+                    right: 0,
+                    top: '50%',
+                    height: '2px',
+                    transform: 'translateY(-50%)',
+                    boxShadow: '0 0 6px rgba(220, 38, 38, 0.6)'
+                  }}
+                />
+                {/* Circle indicator */}
+                <div
+                  className="absolute w-3 h-3 bg-red-600 rounded-full border-2 border-white shadow-md"
+                  style={{
+                    left: `${TIME_COL_WIDTH - 6}px`,
+                    top: '50%',
+                    transform: 'translateY(-50%)'
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
         </div>

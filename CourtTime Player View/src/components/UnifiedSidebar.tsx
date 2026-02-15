@@ -158,52 +158,51 @@ export function UnifiedSidebar({
 
         {/* Navigation */}
         <nav className={`flex-1 ${isCollapsed ? 'p-2' : 'p-4'} space-y-6 overflow-y-auto`}>
+          {/* Facility Selector — shown for any user with 2+ facilities */}
+          {!loadingFacilities && memberFacilities.length >= 2 && (
+            isCollapsed ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        const currentIndex = memberFacilities.findIndex(f => f.id === selectedFacilityId);
+                        const nextIndex = (currentIndex + 1) % memberFacilities.length;
+                        setSelectedFacilityId(memberFacilities[nextIndex].id);
+                      }}
+                      className="w-full rounded-lg px-3 py-2 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                    >
+                      <ChevronsUpDown className="h-4 w-4 text-gray-500" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{memberFacilities.find(f => f.id === selectedFacilityId)?.name || 'Switch facility'}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <div>
+                <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId}>
+                  <SelectTrigger className="w-full h-9 text-sm bg-green-50 border-green-200">
+                    <Building2 className="h-3.5 w-3.5 mr-2 text-green-600 flex-shrink-0" />
+                    <SelectValue placeholder="Select facility" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {memberFacilities.map((facility) => (
+                      <SelectItem key={facility.id} value={facility.id}>
+                        {facility.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )
+          )}
+
           {/* Admin Navigation Section */}
           {actualUserType === 'admin' && (
             <div>
               {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">Admin</h3>}
-
-              {/* Facility Selector — shown when admin of 2+ facilities */}
-              {!loadingFacilities && memberFacilities.length >= 2 && (
-                isCollapsed ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => {
-                            const currentIndex = memberFacilities.findIndex(f => f.id === selectedFacilityId);
-                            const nextIndex = (currentIndex + 1) % memberFacilities.length;
-                            setSelectedFacilityId(memberFacilities[nextIndex].id);
-                          }}
-                          className="w-full mb-2 rounded-lg px-3 py-2 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                        >
-                          <ChevronsUpDown className="h-4 w-4 text-gray-500" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">
-                        <p>{memberFacilities.find(f => f.id === selectedFacilityId)?.name || 'Switch facility'}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <div className="mb-3">
-                    <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId}>
-                      <SelectTrigger className="w-full h-9 text-sm bg-green-50 border-green-200">
-                        <Building2 className="h-3.5 w-3.5 mr-2 text-green-600 flex-shrink-0" />
-                        <SelectValue placeholder="Select facility" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {memberFacilities.map((facility) => (
-                          <SelectItem key={facility.id} value={facility.id}>
-                            {facility.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )
-              )}
-
               <div className="space-y-1">
                 <SidebarButton
                   onClick={() => navigate('/admin')}
@@ -301,7 +300,10 @@ export function UnifiedSidebar({
               {!loadingFacilities && memberFacilities.map((club) => (
                 <div key={club.id}>
                   <SidebarButton
-                    onClick={() => navigate(`/club/${club.id}`)}
+                    onClick={() => {
+                      setSelectedFacilityId(club.id);
+                      navigate(`/club/${club.id}`);
+                    }}
                     icon={Building2}
                     label={club.name}
                     isActive={currentPage === 'club-info'}

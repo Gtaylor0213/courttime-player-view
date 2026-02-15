@@ -10,6 +10,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppContext } from '../contexts/AppContext';
 import { bulletinBoardApi, playerProfileApi, facilitiesApi } from '../api/client';
 import { toast } from 'sonner';
 
@@ -53,11 +54,13 @@ export function BulletinBoard() {
   const clubName = searchParams.get('clubName') || undefined;
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { selectedFacilityId } = useAppContext();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<BulletinPost[]>([]);
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedFacility, setSelectedFacility] = useState<string>(clubId || 'all');
+  // Use clubId from URL params if present, otherwise use sidebar facility selection
+  const selectedFacility = clubId || selectedFacilityId || 'all';
   const [selectedPost, setSelectedPost] = useState<BulletinPost | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -291,19 +294,6 @@ export function BulletinBoard() {
                   </Button>
                 )}
                 <NotificationBell />
-                <Select value={selectedFacility} onValueChange={setSelectedFacility}>
-                  <SelectTrigger className="w-[240px]">
-                    <SelectValue placeholder="Select a facility" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Facilities</SelectItem>
-                    {memberFacilities.map(facility => (
-                      <SelectItem key={facility.facilityId} value={facility.facilityId}>
-                        {facility.facilityName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             )}
           </div>

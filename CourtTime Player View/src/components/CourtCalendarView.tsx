@@ -61,11 +61,11 @@ const formatCurrentEasternTime = (): string => {
 
 export function CourtCalendarView() {
   const navigate = useNavigate();
-  const { selectedFacilityId = 'sunrise-valley', setSelectedFacilityId } = useAppContext();
+  const { selectedFacilityId = 'sunrise-valley' } = useAppContext();
   const { unreadCount } = useNotifications();
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedFacility, setSelectedFacility] = useState(selectedFacilityId);
+  const selectedFacility = selectedFacilityId;
   const [selectedView, setSelectedView] = useState('week');
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>('tennis');
   const [currentTime, setCurrentTime] = useState(getEasternTime());
@@ -397,13 +397,6 @@ export function CourtCalendarView() {
       type: 'Multi-Sport Complex'
     }
   ];
-
-  const handleFacilityChange = (facilityId: string) => {
-    setSelectedFacility(facilityId);
-    if (setSelectedFacilityId) {
-      setSelectedFacilityId(facilityId);
-    }
-  };
 
   // Only use member facilities - no fallback for users without memberships
   const availableFacilities = memberFacilities;
@@ -932,39 +925,25 @@ export function CourtCalendarView() {
               </Button>
             </div>
 
-            {/* Bottom Row: Facility Selection and Date Navigation */}
+            {/* Bottom Row: Facility Name and Date Navigation */}
             <div className="flex flex-wrap items-center justify-between gap-4 mt-4">
-              <div className="flex flex-wrap items-center gap-4">
-                {/* Facility Selector */}
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600">Facility:</span>
-                  <Select value={selectedFacility} onValueChange={setSelectedFacility}>
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableFacilities.map((facility) => (
-                        <SelectItem key={facility.id} value={facility.id}>
-                          {facility.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-600">Facility:</span>
+                <span className="text-sm font-semibold text-gray-900">{currentFacility?.name || 'Loading...'}</span>
 
-                  {/* Info Popover */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full">
-                        <Info className="h-4 w-4 text-gray-500" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                      <p className="text-sm text-gray-700">
-                        Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots.
-                      </p>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                {/* Info Popover */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full">
+                      <Info className="h-4 w-4 text-gray-500" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <p className="text-sm text-gray-700">
+                      Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
+                    </p>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {/* Date Navigation */}

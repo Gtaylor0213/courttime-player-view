@@ -223,7 +223,7 @@ export function DeveloperTableView({ tableName, onBack }: DeveloperTableViewProp
             <Download className="h-4 w-4 mr-2" />
             JSON
           </Button>
-          <Button onClick={() => setShowCreateForm(true)} size="sm" className="bg-green-600 hover:bg-green-700">
+          <Button onClick={() => setShowCreateForm(true)} size="sm">
             <Plus className="h-4 w-4 mr-2" />
             Add Record
           </Button>

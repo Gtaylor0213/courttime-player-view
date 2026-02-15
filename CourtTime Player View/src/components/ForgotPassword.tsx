@@ -129,7 +129,7 @@ export function ForgotPassword() {
                 <div className="space-y-2">
                   <Button
                     type="submit"
-                    className="w-full bg-green-600 hover:bg-green-700"
+                    className="w-full"
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? 'Sending...' : 'Send Reset Link'}

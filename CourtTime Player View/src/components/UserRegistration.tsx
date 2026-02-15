@@ -812,13 +812,12 @@ export function UserRegistration() {
                   </div>
                   <div>
                     {currentStep < 2 ? (
-                      <Button onClick={handleNext} className="bg-green-600 hover:bg-green-700">
+                      <Button onClick={handleNext}>
                         Next Step
                       </Button>
                     ) : (
                       <Button
                         onClick={handleSubmit}
-                        className="bg-green-600 hover:bg-green-700"
                         disabled={isSubmitting}
                       >
                         {isSubmitting ? 'Creating Account...' : 'Create Account'}

@@ -215,7 +215,6 @@ export function DeveloperSQLConsole() {
               <Button
                 onClick={handleExecute}
                 disabled={isExecuting || !sql.trim()}
-                className="bg-green-600 hover:bg-green-700"
               >
                 {isExecuting ? (
                   <>

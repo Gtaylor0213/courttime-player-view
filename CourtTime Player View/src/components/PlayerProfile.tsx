@@ -430,13 +430,13 @@ export function PlayerProfile() {
                     <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
                       Cancel
                     </Button>
-                    <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700" disabled={saving}>
+                    <Button onClick={handleSave} disabled={saving}>
                       <Save className="h-4 w-4 mr-2" />
                       {saving ? 'Saving...' : 'Save Changes'}
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={() => setIsEditing(true)} className="bg-green-600 hover:bg-green-700">
+                  <Button onClick={() => setIsEditing(true)}>
                     Edit Profile
                   </Button>
                 )}

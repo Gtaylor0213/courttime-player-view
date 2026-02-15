@@ -364,7 +364,6 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
             <Button
               size="sm"
               onClick={handleNewChatClick}
-              className="bg-green-600 hover:bg-green-700"
             >
               <Plus className="h-4 w-4 mr-1" />
               New Chat
@@ -523,7 +522,6 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                 <Button
                   onClick={sendMessage}
                   disabled={!newMessage.trim() || sending}
-                  className="bg-green-600 hover:bg-green-700"
                 >
                   <Send className="h-4 w-4" />
                 </Button>

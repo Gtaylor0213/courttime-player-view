@@ -336,7 +336,6 @@ export function FindHittingPartner() {
                     <Button
                       onClick={() => navigate('/profile')}
                       size="sm"
-                      className="bg-green-600 hover:bg-green-700"
                     >
                       <Building className="h-4 w-4 mr-2" />
                       Request Facility Membership
@@ -469,7 +468,6 @@ export function FindHittingPartner() {
                                   variant="default"
                                   size="sm"
                                   onClick={() => navigate(`/messages?recipientId=${post.userId}`)}
-                                  className="bg-green-600 hover:bg-green-700"
                                 >
                                   <MessageCircle className="h-4 w-4 mr-1" />
                                   Message

@@ -216,7 +216,6 @@ export function ClubInfo() {
                     <Button
                       onClick={() => navigate('/profile')}
                       size="sm"
-                      className="bg-green-600 hover:bg-green-700"
                     >
                       Request Membership
                     </Button>

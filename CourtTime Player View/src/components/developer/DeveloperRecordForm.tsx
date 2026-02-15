@@ -339,7 +339,6 @@ export function DeveloperRecordForm({
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="bg-green-600 hover:bg-green-700"
             >
               {isSubmitting ? (
                 <>

@@ -119,7 +119,7 @@ export function ResetPassword() {
 
                 <Button
                   onClick={() => navigate('/login')}
-                  className="w-full bg-green-600 hover:bg-green-700"
+                  className="w-full"
                 >
                   Request New Reset Link
                 </Button>
@@ -253,7 +253,7 @@ export function ResetPassword() {
                 <div className="space-y-2">
                   <Button
                     type="submit"
-                    className="w-full bg-green-600 hover:bg-green-700"
+                    className="w-full"
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? 'Resetting Password...' : 'Reset Password'}

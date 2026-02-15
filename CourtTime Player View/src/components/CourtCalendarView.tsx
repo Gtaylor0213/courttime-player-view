@@ -843,7 +843,6 @@ export function CourtCalendarView() {
                       variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
-                      className={selectedCourtType === 'tennis' ? 'bg-green-600 hover:bg-green-700' : ''}
                     >
                       Tennis
                     </Button>
@@ -851,7 +850,6 @@ export function CourtCalendarView() {
                       variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
-                      className={selectedCourtType === 'pickleball' ? 'bg-green-600 hover:bg-green-700' : ''}
                     >
                       Pickleball
                     </Button>
@@ -917,7 +915,7 @@ export function CourtCalendarView() {
               {/* Quick Reserve Button */}
               <Button
                 onClick={() => setShowQuickReserve(true)}
-                className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-black px-6 py-2 text-base font-medium shadow-md"
+                className="flex items-center gap-2 px-6 py-2 text-base font-medium shadow-md"
                 size="lg"
               >
                 <Calendar className="h-5 w-5" />

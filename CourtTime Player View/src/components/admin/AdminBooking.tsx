@@ -721,7 +721,6 @@ export function AdminBooking() {
                           variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
-                          className={selectedCourtType === 'tennis' ? 'bg-green-600 hover:bg-green-700' : ''}
                         >
                           Tennis
                         </Button>
@@ -732,7 +731,6 @@ export function AdminBooking() {
                           variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
-                          className={selectedCourtType === 'pickleball' ? 'bg-green-600 hover:bg-green-700' : ''}
                         >
                           Pickleball
                         </Button>

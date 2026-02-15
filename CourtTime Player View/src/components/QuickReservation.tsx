@@ -320,7 +320,7 @@ export function QuickReservation() {
                 </div>
 
                 <Button 
-                  className="w-full bg-green-600 hover:bg-green-700"
+                  className="w-full"
                   disabled={selectedTimeSlots.length === 0 || !selectedFacility || !selectedCourtType}
                 >
                   Confirm Reservation

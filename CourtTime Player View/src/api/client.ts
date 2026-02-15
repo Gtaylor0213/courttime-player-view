@@ -239,6 +239,13 @@ export const facilitiesApi = {
     // Address Whitelist
     hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>;
 
+    // Rules engine configs
+    ruleConfigs?: Array<{
+      ruleCode: string;
+      isEnabled: boolean;
+      ruleConfig: Record<string, any>;
+    }>;
+
     // Existing user ID (if already logged in)
     existingUserId?: string;
   }) => {

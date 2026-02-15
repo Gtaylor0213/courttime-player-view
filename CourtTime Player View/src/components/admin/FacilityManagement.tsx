@@ -109,6 +109,9 @@ interface BookingRules {
   courtReleaseTimeEnabled: boolean;
   courtReleaseTime: string;
   courtReleaseDaysAhead: string;
+  // HH-001: Max members per address
+  householdMaxMembersEnabled: boolean;
+  householdMaxMembers: string;
   // HH-002: Household max active reservations
   householdMaxActiveEnabled: boolean;
   householdMaxActive: string;
@@ -229,6 +232,8 @@ export function FacilityManagement() {
     courtReleaseTimeEnabled: false,
     courtReleaseTime: '07:00',
     courtReleaseDaysAhead: '7',
+    householdMaxMembersEnabled: false,
+    householdMaxMembers: '6',
     householdMaxActiveEnabled: false,
     householdMaxActive: '4',
     householdPrimeCapEnabled: false,
@@ -1194,6 +1199,17 @@ export function FacilityManagement() {
       ruleConfigs.push({ ruleCode: 'CRT-011', isEnabled: false });
     }
 
+    // HH-001: Max members per address
+    if (rules.householdMaxMembersEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'HH-001',
+        isEnabled: true,
+        ruleConfig: { max_members: parseInt(rules.householdMaxMembers) || 6, verification_method: 'admin_approval' },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'HH-001', isEnabled: false });
+    }
+
     // HH-002: Household max active reservations
     if (rules.householdMaxActiveEnabled) {
       ruleConfigs.push({
@@ -1383,6 +1399,14 @@ export function FacilityManagement() {
               if (crt011.effectiveConfig.days_ahead) {
                 updated.bookingRules.courtReleaseDaysAhead = String(crt011.effectiveConfig.days_ahead);
               }
+            }
+          }
+
+          const hh001 = ruleMap.get('HH-001') as any;
+          if (hh001) {
+            updated.bookingRules.householdMaxMembersEnabled = !!hh001.isEnabled;
+            if (hh001.effectiveConfig?.max_members) {
+              updated.bookingRules.householdMaxMembers = String(hh001.effectiveConfig.max_members);
             }
           }
 
@@ -2627,6 +2651,29 @@ export function FacilityManagement() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* HH-001: Max Members Per Address */}
+                        <div className="space-y-2 p-3 border rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <Label>Max Members Per Address</Label>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={facilityData.bookingRules.householdMaxMembersEnabled}
+                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('householdMaxMembersEnabled', checked)}
+                                disabled={!isEditing}
+                              />
+                              <span className="text-sm text-gray-500">Enabled</span>
+                            </div>
+                          </div>
+                          <Input
+                            type="number"
+                            value={facilityData.bookingRules.householdMaxMembers}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('householdMaxMembers', e.target.value)}
+                            disabled={!isEditing || !facilityData.bookingRules.householdMaxMembersEnabled}
+                            min="1"
+                          />
+                          <p className="text-xs text-gray-500">Limits how many accounts can be registered at a single address</p>
+                        </div>
+
                         {/* HH-002: Household Max Active Reservations */}
                         <div className="space-y-2 p-3 border rounded-lg">
                           <div className="flex justify-between items-center">

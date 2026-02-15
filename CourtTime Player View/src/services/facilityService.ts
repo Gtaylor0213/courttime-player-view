@@ -983,6 +983,30 @@ export async function registerFacility(
       );
     }
 
+    // 6b. Save rules engine configs (facility_rule_configs table)
+    if (data.ruleConfigs && Array.isArray(data.ruleConfigs)) {
+      try {
+        for (const rule of data.ruleConfigs) {
+          const defResult = await client.query(
+            'SELECT id FROM booking_rule_definitions WHERE rule_code = $1',
+            [rule.ruleCode]
+          );
+          if (defResult.rows.length > 0) {
+            await client.query(
+              `INSERT INTO facility_rule_configs (facility_id, rule_definition_id, rule_config, is_enabled, created_by)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT (facility_id, rule_definition_id) DO UPDATE SET
+                 rule_config = EXCLUDED.rule_config, is_enabled = EXCLUDED.is_enabled, updated_at = CURRENT_TIMESTAMP`,
+              [facilityId, defResult.rows[0].id, JSON.stringify(rule.ruleConfig), rule.isEnabled, superAdminUserId]
+            );
+          }
+        }
+      } catch (ruleConfigError) {
+        // Non-fatal: rules engine tables may not exist if migration 007 hasn't been applied
+        console.warn('Could not save rule engine configs (tables may not exist yet):', ruleConfigError);
+      }
+    }
+
     // 7. Create courts
     const createdCourts: any[] = [];
 

@@ -11,12 +11,15 @@ import { Separator } from './ui/separator';
 import { Alert, AlertDescription } from './ui/alert';
 import {
   ArrowLeft, ArrowRight, Building, MapPin, Clock, FileText,
-  Plus, Trash2, Check, AlertCircle, Upload, Mail, User, Users
+  Plus, Trash2, Check, AlertCircle, Upload, Mail, User, Users,
+  Grid3X3, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { toast } from 'sonner';
 import { facilitiesApi } from '../api/client';
+import { RulesStep } from './facility-registration/RulesStep';
+import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG, RULE_METADATA } from './facility-registration/rule-defaults';
 
 interface Court {
   id: string;
@@ -108,57 +111,8 @@ export function FacilityRegistration() {
       sunday: { open: '09:00', close: '18:00', closed: false },
     },
 
-    // Step 3: Facility-Wide Rules
-    generalRules: '',
-
-    // Booking restriction type
-    restrictionType: 'account' as 'account' | 'address', // per account or per address
-
-    // Booking restrictions with unlimited options
-    maxBookingsPerWeek: '3',
-    maxBookingsPerWeekUnlimited: false,
-    maxBookingDurationHours: '2',
-    maxBookingDurationUnlimited: false,
-    advanceBookingDays: '14',
-    advanceBookingDaysUnlimited: false,
-    cancellationNoticeHours: '24',
-    cancellationNoticeUnlimited: false,
-
-    // Admin restrictions
-    restrictionsApplyToAdmins: true,
-    adminMaxBookingsPerWeek: '10',
-    adminMaxBookingsUnlimited: true,
-    adminMaxBookingDurationHours: '4',
-    adminMaxDurationUnlimited: true,
-    adminAdvanceBookingDays: '30',
-    adminAdvanceBookingUnlimited: true,
-    adminCancellationNoticeHours: '1',
-    adminCancellationUnlimited: true,
-
-    // Peak hours settings - with multiple time slots per day
-    hasPeakHours: false,
-    peakHoursApplyToAdmins: true,
-    peakHoursSlots: {} as Record<string, Array<{ id: string; startTime: string; endTime: string }>>,
-    // e.g., { monday: [{ id: '1', startTime: '07:00', endTime: '10:00' }, { id: '2', startTime: '18:00', endTime: '20:00' }] }
-    peakHoursRestrictions: {
-      maxBookingsPerWeek: '2',
-      maxBookingsUnlimited: false,
-      maxDurationHours: '1.5',
-      maxDurationUnlimited: false,
-    },
-
-    // Weekend policy settings
-    hasWeekendPolicy: false,
-    weekendPolicyApplyToAdmins: true,
-    weekendPolicy: {
-      enabled: false,
-      maxBookingsPerWeekend: '2',
-      maxBookingsUnlimited: false,
-      maxDurationHours: '2',
-      maxDurationUnlimited: false,
-      advanceBookingDays: '7',
-      advanceBookingUnlimited: false,
-    },
+    // Step 3: Courts (now before Rules)
+    rulesConfig: { ...DEFAULT_RULES_CONFIG } as RulesConfig,
 
     // Step 4: Courts (will be filled dynamically)
     courts: [] as Court[],
@@ -204,23 +158,40 @@ export function FacilityRegistration() {
     }));
   };
 
-  const handlePeakHoursRestrictionsChange = (field: string, value: any) => {
+  // --- Rules config handlers ---
+  const handleRulesChange = (updates: Partial<RulesConfig>) => {
     setFormData(prev => ({
       ...prev,
-      peakHoursRestrictions: {
-        ...prev.peakHoursRestrictions,
-        [field]: value
-      }
+      rulesConfig: { ...prev.rulesConfig, ...updates },
     }));
   };
 
-  const handleWeekendPolicyChange = (field: string, value: any) => {
+  const handleRuleEntryChange = (ruleCode: string, updates: Partial<RuleEntry>) => {
     setFormData(prev => ({
       ...prev,
-      weekendPolicy: {
-        ...prev.weekendPolicy,
-        [field]: value
-      }
+      rulesConfig: {
+        ...prev.rulesConfig,
+        rules: {
+          ...prev.rulesConfig.rules,
+          [ruleCode]: { ...prev.rulesConfig.rules[ruleCode], ...updates },
+        },
+      },
+    }));
+  };
+
+  const handleRuleConfigFieldChange = (ruleCode: string, field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      rulesConfig: {
+        ...prev.rulesConfig,
+        rules: {
+          ...prev.rulesConfig.rules,
+          [ruleCode]: {
+            ...prev.rulesConfig.rules[ruleCode],
+            config: { ...prev.rulesConfig.rules[ruleCode].config, [field]: value },
+          },
+        },
+      },
     }));
   };
 
@@ -393,7 +364,7 @@ export function FacilityRegistration() {
   // Add a time slot to a specific day
   const addPeakHourSlot = (day: string) => {
     setFormData(prev => {
-      const currentSlots = prev.peakHoursSlots[day] || [];
+      const currentSlots = prev.rulesConfig.peakHoursSlots[day] || [];
       const newSlot = {
         id: `${day}-${Date.now()}`,
         startTime: '17:00',
@@ -401,9 +372,12 @@ export function FacilityRegistration() {
       };
       return {
         ...prev,
-        peakHoursSlots: {
-          ...prev.peakHoursSlots,
-          [day]: [...currentSlots, newSlot]
+        rulesConfig: {
+          ...prev.rulesConfig,
+          peakHoursSlots: {
+            ...prev.rulesConfig.peakHoursSlots,
+            [day]: [...currentSlots, newSlot]
+          }
         }
       };
     });
@@ -412,9 +386,9 @@ export function FacilityRegistration() {
   // Remove a time slot from a specific day
   const removePeakHourSlot = (day: string, slotId: string) => {
     setFormData(prev => {
-      const currentSlots = prev.peakHoursSlots[day] || [];
+      const currentSlots = prev.rulesConfig.peakHoursSlots[day] || [];
       const newSlots = currentSlots.filter(slot => slot.id !== slotId);
-      const newPeakHoursSlots = { ...prev.peakHoursSlots };
+      const newPeakHoursSlots = { ...prev.rulesConfig.peakHoursSlots };
       if (newSlots.length === 0) {
         delete newPeakHoursSlots[day];
       } else {
@@ -422,7 +396,10 @@ export function FacilityRegistration() {
       }
       return {
         ...prev,
-        peakHoursSlots: newPeakHoursSlots
+        rulesConfig: {
+          ...prev.rulesConfig,
+          peakHoursSlots: newPeakHoursSlots
+        }
       };
     });
   };
@@ -430,23 +407,21 @@ export function FacilityRegistration() {
   // Update a specific time slot
   const updatePeakHourSlot = (day: string, slotId: string, field: 'startTime' | 'endTime', value: string) => {
     setFormData(prev => {
-      const currentSlots = prev.peakHoursSlots[day] || [];
+      const currentSlots = prev.rulesConfig.peakHoursSlots[day] || [];
       const newSlots = currentSlots.map(slot =>
         slot.id === slotId ? { ...slot, [field]: value } : slot
       );
       return {
         ...prev,
-        peakHoursSlots: {
-          ...prev.peakHoursSlots,
-          [day]: newSlots
+        rulesConfig: {
+          ...prev.rulesConfig,
+          peakHoursSlots: {
+            ...prev.rulesConfig.peakHoursSlots,
+            [day]: newSlots
+          }
         }
       };
     });
-  };
-
-  // Check if a day has peak hours configured
-  const dayHasPeakHours = (day: string): boolean => {
-    return (formData.peakHoursSlots[day]?.length || 0) > 0;
   };
 
   // Validate a single step and return errors (without setting state)
@@ -484,26 +459,18 @@ export function FacilityRegistration() {
       if (!formData.primaryContact.phone.trim()) stepErrors.primaryContactPhone = 'Primary contact phone is required';
     }
 
-    const rulesStep = user ? 2 : 3;
-    if (step === rulesStep) {
-      // Validate Facility Rules
-      if (!formData.generalRules.trim()) stepErrors.generalRules = 'General rules are required';
-      if (!formData.restrictionType) stepErrors.restrictionType = 'Please select how restrictions apply';
-      // Only validate numeric values if not unlimited
-      if (!formData.maxBookingsPerWeekUnlimited && !formData.maxBookingsPerWeek) {
-        stepErrors.maxBookingsPerWeek = 'Required';
-      }
-      if (!formData.maxBookingDurationUnlimited && !formData.maxBookingDurationHours) {
-        stepErrors.maxBookingDurationHours = 'Required';
-      }
-    }
-
-    const courtsStep = user ? 3 : 4;
+    const courtsStep = user ? 2 : 3;
     if (step === courtsStep) {
       // Validate Courts
       if (formData.courts.length === 0) {
         stepErrors.courts = 'At least one court is required';
       }
+    }
+
+    const rulesStep = user ? 3 : 4;
+    if (step === rulesStep) {
+      if (!formData.rulesConfig.generalRules.trim()) stepErrors.generalRules = 'General rules are required';
+      if (!formData.rulesConfig.restrictionType) stepErrors.restrictionType = 'Please select how restrictions apply';
     }
 
     return stepErrors;
@@ -713,41 +680,54 @@ export function FacilityRegistration() {
         operatingHours: formData.operatingHours,
 
         // Facility Rules
-        generalRules: formData.generalRules,
+        generalRules: formData.rulesConfig.generalRules,
 
-        // Restriction settings
-        restrictionType: formData.restrictionType,
-        maxBookingsPerWeek: formData.maxBookingsPerWeekUnlimited ? '-1' : formData.maxBookingsPerWeek,
-        maxBookingDurationHours: formData.maxBookingDurationUnlimited ? '-1' : formData.maxBookingDurationHours,
-        advanceBookingDays: formData.advanceBookingDaysUnlimited ? '-1' : formData.advanceBookingDays,
-        cancellationNoticeHours: formData.cancellationNoticeUnlimited ? '0' : formData.cancellationNoticeHours,
+        // Restriction settings - map from rules engine entries for backward compatibility
+        restrictionType: formData.rulesConfig.restrictionType,
+        maxBookingsPerWeek: formData.rulesConfig.rules['ACC-002']?.enabled
+          ? String(formData.rulesConfig.rules['ACC-002'].config.max_per_week || 10) : '-1',
+        maxBookingDurationHours: formData.rulesConfig.rules['CRT-005']?.enabled
+          ? String((formData.rulesConfig.rules['CRT-005'].config.max_duration_minutes || 120) / 60) : '-1',
+        advanceBookingDays: formData.rulesConfig.rules['ACC-005']?.enabled
+          ? String(formData.rulesConfig.rules['ACC-005'].config.max_days_ahead || 14) : '-1',
+        cancellationNoticeHours: formData.rulesConfig.rules['ACC-008']?.enabled
+          ? String((formData.rulesConfig.rules['ACC-008'].config.late_cancel_cutoff_minutes || 120) / 60) : '0',
 
         // Admin restrictions
-        restrictionsApplyToAdmins: formData.restrictionsApplyToAdmins,
-        adminRestrictions: !formData.restrictionsApplyToAdmins ? {
-          maxBookingsPerWeek: formData.adminMaxBookingsUnlimited ? -1 : parseInt(formData.adminMaxBookingsPerWeek),
-          maxBookingDurationHours: formData.adminMaxDurationUnlimited ? -1 : parseFloat(formData.adminMaxBookingDurationHours),
-          advanceBookingDays: formData.adminAdvanceBookingUnlimited ? -1 : parseInt(formData.adminAdvanceBookingDays),
-          cancellationNoticeHours: formData.adminCancellationUnlimited ? 0 : parseInt(formData.adminCancellationNoticeHours),
+        restrictionsApplyToAdmins: formData.rulesConfig.restrictionsApplyToAdmins,
+        adminRestrictions: !formData.rulesConfig.restrictionsApplyToAdmins ? {
+          maxBookingsPerWeek: formData.rulesConfig.adminRestrictions.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.adminRestrictions.maxBookingsPerWeek),
+          maxBookingDurationHours: formData.rulesConfig.adminRestrictions.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.adminRestrictions.maxDurationHours),
+          advanceBookingDays: formData.rulesConfig.adminRestrictions.advanceBookingUnlimited ? -1 : parseInt(formData.rulesConfig.adminRestrictions.advanceBookingDays),
+          cancellationNoticeHours: formData.rulesConfig.adminRestrictions.cancellationUnlimited ? 0 : parseInt(formData.rulesConfig.adminRestrictions.cancellationNoticeHours),
         } : undefined,
 
         // Peak hours policy - with per-day time slots
-        peakHoursPolicy: formData.hasPeakHours ? {
+        peakHoursPolicy: formData.rulesConfig.hasPeakHours ? {
           enabled: true,
-          applyToAdmins: formData.peakHoursApplyToAdmins,
-          timeSlots: formData.peakHoursSlots, // Per-day time slots: { monday: [{id, startTime, endTime}], ... }
-          maxBookingsPerWeek: formData.peakHoursRestrictions.maxBookingsUnlimited ? -1 : parseInt(formData.peakHoursRestrictions.maxBookingsPerWeek),
-          maxDurationHours: formData.peakHoursRestrictions.maxDurationUnlimited ? -1 : parseFloat(formData.peakHoursRestrictions.maxDurationHours),
+          applyToAdmins: formData.rulesConfig.peakHoursApplyToAdmins,
+          timeSlots: formData.rulesConfig.peakHoursSlots,
+          maxBookingsPerWeek: formData.rulesConfig.peakHoursRestrictions.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.peakHoursRestrictions.maxBookingsPerWeek),
+          maxDurationHours: formData.rulesConfig.peakHoursRestrictions.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.peakHoursRestrictions.maxDurationHours),
         } : undefined,
 
         // Weekend policy
-        weekendPolicy: formData.hasWeekendPolicy ? {
+        weekendPolicy: formData.rulesConfig.hasWeekendPolicy ? {
           enabled: true,
-          applyToAdmins: formData.weekendPolicyApplyToAdmins,
-          maxBookingsPerWeekend: formData.weekendPolicy.maxBookingsUnlimited ? -1 : parseInt(formData.weekendPolicy.maxBookingsPerWeekend),
-          maxDurationHours: formData.weekendPolicy.maxDurationUnlimited ? -1 : parseFloat(formData.weekendPolicy.maxDurationHours),
-          advanceBookingDays: formData.weekendPolicy.advanceBookingUnlimited ? -1 : parseInt(formData.weekendPolicy.advanceBookingDays),
+          applyToAdmins: formData.rulesConfig.weekendPolicyApplyToAdmins,
+          maxBookingsPerWeekend: formData.rulesConfig.weekendPolicy.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.weekendPolicy.maxBookingsPerWeekend),
+          maxDurationHours: formData.rulesConfig.weekendPolicy.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.weekendPolicy.maxDurationHours),
+          advanceBookingDays: formData.rulesConfig.weekendPolicy.advanceBookingUnlimited ? -1 : parseInt(formData.rulesConfig.weekendPolicy.advanceBookingDays),
         } : undefined,
+
+        // Rules engine configs for facility_rule_configs table
+        ruleConfigs: Object.entries(formData.rulesConfig.rules)
+          .filter(([key]) => /^(ACC|CRT|HH)-\d{3}$/.test(key))
+          .map(([ruleCode, entry]) => ({
+            ruleCode,
+            isEnabled: entry.enabled,
+            ruleConfig: entry.config,
+          })),
 
         // Courts
         courts: formData.courts.map(court => ({
@@ -818,8 +798,8 @@ export function FacilityRegistration() {
       switch (stepNumber) {
         case 1: return 'Your Account';
         case 2: return 'Facility Info';
-        case 3: return 'Rules';
-        case 4: return 'Courts';
+        case 3: return 'Courts';
+        case 4: return 'Rules';
         case 5: return 'Admins';
         case 6: return 'Review';
         default: return '';
@@ -828,8 +808,8 @@ export function FacilityRegistration() {
       // Logged in - 5 steps
       switch (stepNumber) {
         case 1: return 'Facility Info';
-        case 2: return 'Rules';
-        case 3: return 'Courts';
+        case 2: return 'Courts';
+        case 3: return 'Rules';
         case 4: return 'Admins';
         case 5: return 'Review';
         default: return '';
@@ -1395,556 +1375,17 @@ export function FacilityRegistration() {
     </div>
   );
 
-  const renderStep3Rules = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Facility-Wide Rules & Policies</h3>
-        <p className="text-sm text-gray-600 mb-6">
-          Set rules and policies that apply to all courts at your facility.
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="generalRules">General Usage Rules *</Label>
-          <Textarea
-            id="generalRules"
-            value={formData.generalRules}
-            onChange={(e) => handleInputChange('generalRules', e.target.value)}
-            placeholder="E.g., No food on courts, Proper tennis attire required, Clean up after use..."
-            rows={4}
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            These rules will be displayed to all members
-          </p>
-          {errors.generalRules && (
-            <p className="text-sm text-red-600 mt-1">{errors.generalRules}</p>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Booking Restrictions Header with Type Selection */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold">Booking Restrictions</h4>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">Apply restrictions:</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  id="restrictionAccount"
-                  name="restrictionType"
-                  checked={formData.restrictionType === 'account'}
-                  onChange={() => handleInputChange('restrictionType', 'account')}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="restrictionAccount" className="text-sm font-normal cursor-pointer">Per Account</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  id="restrictionAddress"
-                  name="restrictionType"
-                  checked={formData.restrictionType === 'address'}
-                  onChange={() => handleInputChange('restrictionType', 'address')}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="restrictionAddress" className="text-sm font-normal cursor-pointer">Per Address</Label>
-              </div>
-            </div>
-          </div>
-          {errors.restrictionType && (
-            <p className="text-sm text-red-600 mb-3">{errors.restrictionType}</p>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Max Bookings Per Week */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="maxBookingsPerWeek">Max Bookings Per Week</Label>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="maxBookingsUnlimited"
-                    checked={formData.maxBookingsPerWeekUnlimited}
-                    onCheckedChange={(checked) => handleInputChange('maxBookingsPerWeekUnlimited', checked)}
-                  />
-                  <Label htmlFor="maxBookingsUnlimited" className="text-xs text-gray-500">Unlimited</Label>
-                </div>
-              </div>
-              <Input
-                id="maxBookingsPerWeek"
-                type="number"
-                min="1"
-                max="50"
-                value={formData.maxBookingsPerWeek}
-                onChange={(e) => handleInputChange('maxBookingsPerWeek', e.target.value)}
-                disabled={formData.maxBookingsPerWeekUnlimited}
-                className={formData.maxBookingsPerWeekUnlimited ? 'opacity-50' : ''}
-              />
-              {errors.maxBookingsPerWeek && (
-                <p className="text-sm text-red-600">{errors.maxBookingsPerWeek}</p>
-              )}
-            </div>
-
-            {/* Max Booking Duration */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="maxBookingDurationHours">Max Booking Duration (hours)</Label>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="maxDurationUnlimited"
-                    checked={formData.maxBookingDurationUnlimited}
-                    onCheckedChange={(checked) => handleInputChange('maxBookingDurationUnlimited', checked)}
-                  />
-                  <Label htmlFor="maxDurationUnlimited" className="text-xs text-gray-500">Unlimited</Label>
-                </div>
-              </div>
-              <Input
-                id="maxBookingDurationHours"
-                type="number"
-                min="0.5"
-                max="12"
-                step="0.5"
-                value={formData.maxBookingDurationHours}
-                onChange={(e) => handleInputChange('maxBookingDurationHours', e.target.value)}
-                disabled={formData.maxBookingDurationUnlimited}
-                className={formData.maxBookingDurationUnlimited ? 'opacity-50' : ''}
-              />
-              {errors.maxBookingDurationHours && (
-                <p className="text-sm text-red-600">{errors.maxBookingDurationHours}</p>
-              )}
-            </div>
-
-            {/* Advance Booking Window */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="advanceBookingDays">Advance Booking Window (days)</Label>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="advanceBookingUnlimited"
-                    checked={formData.advanceBookingDaysUnlimited}
-                    onCheckedChange={(checked) => handleInputChange('advanceBookingDaysUnlimited', checked)}
-                  />
-                  <Label htmlFor="advanceBookingUnlimited" className="text-xs text-gray-500">Unlimited</Label>
-                </div>
-              </div>
-              <Input
-                id="advanceBookingDays"
-                type="number"
-                min="1"
-                max="365"
-                value={formData.advanceBookingDays}
-                onChange={(e) => handleInputChange('advanceBookingDays', e.target.value)}
-                disabled={formData.advanceBookingDaysUnlimited}
-                className={formData.advanceBookingDaysUnlimited ? 'opacity-50' : ''}
-              />
-              <p className="text-xs text-gray-500">How far in advance members can book</p>
-            </div>
-
-            {/* Cancellation Notice */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="cancellationNoticeHours">Cancellation Notice (hours)</Label>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="cancellationUnlimited"
-                    checked={formData.cancellationNoticeUnlimited}
-                    onCheckedChange={(checked) => handleInputChange('cancellationNoticeUnlimited', checked)}
-                  />
-                  <Label htmlFor="cancellationUnlimited" className="text-xs text-gray-500">No Limit</Label>
-                </div>
-              </div>
-              <Input
-                id="cancellationNoticeHours"
-                type="number"
-                min="0"
-                max="168"
-                value={formData.cancellationNoticeHours}
-                onChange={(e) => handleInputChange('cancellationNoticeHours', e.target.value)}
-                disabled={formData.cancellationNoticeUnlimited}
-                className={formData.cancellationNoticeUnlimited ? 'opacity-50' : ''}
-              />
-              <p className="text-xs text-gray-500">Minimum notice required to cancel (0 = anytime)</p>
-            </div>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Admin Restrictions Section */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold">Admin Restrictions</h4>
-            <div className="flex items-center gap-2">
-              <Switch
-                id="restrictionsApplyToAdmins"
-                checked={formData.restrictionsApplyToAdmins}
-                onCheckedChange={(checked) => handleInputChange('restrictionsApplyToAdmins', checked)}
-              />
-              <Label htmlFor="restrictionsApplyToAdmins" className="text-sm">
-                Same restrictions apply to admins
-              </Label>
-            </div>
-          </div>
-
-          {!formData.restrictionsApplyToAdmins && (
-            <Card className="bg-gray-50">
-              <CardContent className="pt-4">
-                <p className="text-sm text-gray-600 mb-4">
-                  Set different booking restrictions for facility administrators.
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Admin Max Bookings */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Max Bookings Per Week</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.adminMaxBookingsUnlimited}
-                          onCheckedChange={(checked) => handleInputChange('adminMaxBookingsUnlimited', checked)}
-                        />
-                        <Label className="text-xs text-gray-500">Unlimited</Label>
-                      </div>
-                    </div>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={formData.adminMaxBookingsPerWeek}
-                      onChange={(e) => handleInputChange('adminMaxBookingsPerWeek', e.target.value)}
-                      disabled={formData.adminMaxBookingsUnlimited}
-                      className={formData.adminMaxBookingsUnlimited ? 'opacity-50' : ''}
-                    />
-                  </div>
-
-                  {/* Admin Max Duration */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Max Booking Duration (hours)</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.adminMaxDurationUnlimited}
-                          onCheckedChange={(checked) => handleInputChange('adminMaxDurationUnlimited', checked)}
-                        />
-                        <Label className="text-xs text-gray-500">Unlimited</Label>
-                      </div>
-                    </div>
-                    <Input
-                      type="number"
-                      min="0.5"
-                      max="24"
-                      step="0.5"
-                      value={formData.adminMaxBookingDurationHours}
-                      onChange={(e) => handleInputChange('adminMaxBookingDurationHours', e.target.value)}
-                      disabled={formData.adminMaxDurationUnlimited}
-                      className={formData.adminMaxDurationUnlimited ? 'opacity-50' : ''}
-                    />
-                  </div>
-
-                  {/* Admin Advance Booking */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Advance Booking (days)</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.adminAdvanceBookingUnlimited}
-                          onCheckedChange={(checked) => handleInputChange('adminAdvanceBookingUnlimited', checked)}
-                        />
-                        <Label className="text-xs text-gray-500">Unlimited</Label>
-                      </div>
-                    </div>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="365"
-                      value={formData.adminAdvanceBookingDays}
-                      onChange={(e) => handleInputChange('adminAdvanceBookingDays', e.target.value)}
-                      disabled={formData.adminAdvanceBookingUnlimited}
-                      className={formData.adminAdvanceBookingUnlimited ? 'opacity-50' : ''}
-                    />
-                  </div>
-
-                  {/* Admin Cancellation Notice */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Cancellation Notice (hours)</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.adminCancellationUnlimited}
-                          onCheckedChange={(checked) => handleInputChange('adminCancellationUnlimited', checked)}
-                        />
-                        <Label className="text-xs text-gray-500">No Limit</Label>
-                      </div>
-                    </div>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="168"
-                      value={formData.adminCancellationNoticeHours}
-                      onChange={(e) => handleInputChange('adminCancellationNoticeHours', e.target.value)}
-                      disabled={formData.adminCancellationUnlimited}
-                      className={formData.adminCancellationUnlimited ? 'opacity-50' : ''}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Peak Hours Section */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h4 className="font-semibold">Peak Hours Restrictions</h4>
-              <p className="text-xs text-gray-500">Set different limits during high-demand times for each day</p>
-            </div>
-            <Switch
-              checked={formData.hasPeakHours}
-              onCheckedChange={(checked) => handleInputChange('hasPeakHours', checked)}
-            />
-          </div>
-
-          {formData.hasPeakHours && (
-            <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="pt-4 space-y-4">
-                {/* Apply to Admins Toggle */}
-                <div className="flex items-center justify-between pb-2 border-b border-blue-200">
-                  <Label className="text-sm font-medium">Apply peak hour restrictions to admins</Label>
-                  <Switch
-                    checked={formData.peakHoursApplyToAdmins}
-                    onCheckedChange={(checked) => handleInputChange('peakHoursApplyToAdmins', checked)}
-                  />
-                </div>
-
-                {/* Peak Hours by Day */}
-                <div>
-                  <Label className="text-sm mb-3 block font-medium">Configure Peak Hours by Day</Label>
-                  <p className="text-xs text-gray-600 mb-3">Click on a day to add time slots. You can add multiple peak periods per day.</p>
-                  <div className="space-y-3">
-                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
-                      const daySlots = formData.peakHoursSlots[day] || [];
-                      const hasSlotsConfigured = daySlots.length > 0;
-
-                      return (
-                        <div key={day} className="border border-blue-200 rounded-lg p-3 bg-white">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium capitalize text-sm">{day}</span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => addPeakHourSlot(day)}
-                              className="h-7 text-xs"
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add Time Slot
-                            </Button>
-                          </div>
-
-                          {daySlots.length === 0 ? (
-                            <p className="text-xs text-gray-400 italic">No peak hours configured for this day</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {daySlots.map((slot, index) => (
-                                <div key={slot.id} className="flex items-center gap-2 bg-blue-50 p-2 rounded">
-                                  <span className="text-xs text-gray-500 w-12">Slot {index + 1}:</span>
-                                  <Input
-                                    type="time"
-                                    value={slot.startTime}
-                                    onChange={(e) => updatePeakHourSlot(day, slot.id, 'startTime', e.target.value)}
-                                    className="h-8 w-28 text-sm"
-                                  />
-                                  <span className="text-gray-500 text-sm">to</span>
-                                  <Input
-                                    type="time"
-                                    value={slot.endTime}
-                                    onChange={(e) => updatePeakHourSlot(day, slot.id, 'endTime', e.target.value)}
-                                    className="h-8 w-28 text-sm"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => removePeakHourSlot(day, slot.id)}
-                                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <Separator className="bg-blue-200" />
-
-                {/* Peak Hours Restrictions */}
-                <div>
-                  <Label className="text-sm mb-3 block font-medium">Peak Hours Booking Limits</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm">Max Bookings During Peak (per week)</Label>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={formData.peakHoursRestrictions.maxBookingsUnlimited}
-                            onCheckedChange={(checked) => handlePeakHoursRestrictionsChange('maxBookingsUnlimited', checked)}
-                          />
-                          <Label className="text-xs text-gray-500">Unlimited</Label>
-                        </div>
-                      </div>
-                      <Input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={formData.peakHoursRestrictions.maxBookingsPerWeek}
-                        onChange={(e) => handlePeakHoursRestrictionsChange('maxBookingsPerWeek', e.target.value)}
-                        disabled={formData.peakHoursRestrictions.maxBookingsUnlimited}
-                        className={formData.peakHoursRestrictions.maxBookingsUnlimited ? 'opacity-50' : ''}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm">Max Duration During Peak (hrs)</Label>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={formData.peakHoursRestrictions.maxDurationUnlimited}
-                            onCheckedChange={(checked) => handlePeakHoursRestrictionsChange('maxDurationUnlimited', checked)}
-                          />
-                          <Label className="text-xs text-gray-500">Unlimited</Label>
-                        </div>
-                      </div>
-                      <Input
-                        type="number"
-                        min="0.5"
-                        max="8"
-                        step="0.5"
-                        value={formData.peakHoursRestrictions.maxDurationHours}
-                        onChange={(e) => handlePeakHoursRestrictionsChange('maxDurationHours', e.target.value)}
-                        disabled={formData.peakHoursRestrictions.maxDurationUnlimited}
-                        className={formData.peakHoursRestrictions.maxDurationUnlimited ? 'opacity-50' : ''}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Weekend Policy Section */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h4 className="font-semibold">Weekend Policy</h4>
-              <p className="text-xs text-gray-500">Set different limits for Saturday and Sunday</p>
-            </div>
-            <Switch
-              checked={formData.hasWeekendPolicy}
-              onCheckedChange={(checked) => handleInputChange('hasWeekendPolicy', checked)}
-            />
-          </div>
-
-          {formData.hasWeekendPolicy && (
-            <Card className="bg-amber-50 border-amber-200">
-              <CardContent className="pt-4 space-y-4">
-                {/* Apply to Admins Toggle */}
-                <div className="flex items-center justify-between pb-2 border-b border-amber-200">
-                  <Label className="text-sm font-medium">Apply weekend restrictions to admins</Label>
-                  <Switch
-                    checked={formData.weekendPolicyApplyToAdmins}
-                    onCheckedChange={(checked) => handleInputChange('weekendPolicyApplyToAdmins', checked)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Weekend Max Bookings */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Max Bookings Per Weekend</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.weekendPolicy.maxBookingsUnlimited}
-                          onCheckedChange={(checked) => handleWeekendPolicyChange('maxBookingsUnlimited', checked)}
-                        />
-                        <Label className="text-xs text-gray-500">Unlimited</Label>
-                      </div>
-                    </div>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={formData.weekendPolicy.maxBookingsPerWeekend}
-                      onChange={(e) => handleWeekendPolicyChange('maxBookingsPerWeekend', e.target.value)}
-                      disabled={formData.weekendPolicy.maxBookingsUnlimited}
-                      className={formData.weekendPolicy.maxBookingsUnlimited ? 'opacity-50' : ''}
-                    />
-                  </div>
-
-                  {/* Weekend Max Duration */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Max Booking Duration (hours)</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.weekendPolicy.maxDurationUnlimited}
-                          onCheckedChange={(checked) => handleWeekendPolicyChange('maxDurationUnlimited', checked)}
-                        />
-                        <Label className="text-xs text-gray-500">Unlimited</Label>
-                      </div>
-                    </div>
-                    <Input
-                      type="number"
-                      min="0.5"
-                      max="8"
-                      step="0.5"
-                      value={formData.weekendPolicy.maxDurationHours}
-                      onChange={(e) => handleWeekendPolicyChange('maxDurationHours', e.target.value)}
-                      disabled={formData.weekendPolicy.maxDurationUnlimited}
-                      className={formData.weekendPolicy.maxDurationUnlimited ? 'opacity-50' : ''}
-                    />
-                  </div>
-
-                  {/* Weekend Advance Booking */}
-                  <div className="space-y-2 col-span-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Advance Booking for Weekends (days)</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.weekendPolicy.advanceBookingUnlimited}
-                          onCheckedChange={(checked) => handleWeekendPolicyChange('advanceBookingUnlimited', checked)}
-                        />
-                        <Label className="text-xs text-gray-500">Same as weekdays</Label>
-                      </div>
-                    </div>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="90"
-                      value={formData.weekendPolicy.advanceBookingDays}
-                      onChange={(e) => handleWeekendPolicyChange('advanceBookingDays', e.target.value)}
-                      disabled={formData.weekendPolicy.advanceBookingUnlimited}
-                      className={`max-w-xs ${formData.weekendPolicy.advanceBookingUnlimited ? 'opacity-50' : ''}`}
-                    />
-                    <p className="text-xs text-gray-500">How far in advance members can book weekend slots</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-    </div>
+  const renderRulesStep = () => (
+    <RulesStep
+      rulesConfig={formData.rulesConfig}
+      onRulesChange={handleRulesChange}
+      onRuleEntryChange={handleRuleEntryChange}
+      onRuleConfigFieldChange={handleRuleConfigFieldChange}
+      onAddPeakHourSlot={addPeakHourSlot}
+      onRemovePeakHourSlot={removePeakHourSlot}
+      onUpdatePeakHourSlot={updatePeakHourSlot}
+      errors={errors}
+    />
   );
 
   const renderStep4Courts = () => (
@@ -2359,11 +1800,48 @@ export function FacilityRegistration() {
         <CardHeader>
           <CardTitle className="text-base">Booking Rules</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <div><span className="font-medium">Max bookings per week:</span> {formData.maxBookingsPerWeek}</div>
-          <div><span className="font-medium">Max booking duration:</span> {formData.maxBookingDurationHours} hours</div>
-          <div><span className="font-medium">Advance booking window:</span> {formData.advanceBookingDays} days</div>
-          <div><span className="font-medium">Cancellation notice:</span> {formData.cancellationNoticeHours} hours</div>
+        <CardContent className="space-y-3 text-sm">
+          {formData.rulesConfig.generalRules && (
+            <div>
+              <span className="font-medium">General Rules:</span>
+              <p className="text-gray-600 mt-1 whitespace-pre-line">{formData.rulesConfig.generalRules}</p>
+            </div>
+          )}
+          <div><span className="font-medium">Restriction Type:</span> {formData.rulesConfig.restrictionType === 'account' ? 'Per Account' : 'Per Address'}</div>
+
+          <div className="mt-2">
+            <span className="font-medium block mb-1">Enabled Rules:</span>
+            <div className="space-y-1 pl-2">
+              {Object.entries(formData.rulesConfig.rules)
+                .filter(([, entry]) => entry.enabled)
+                .map(([code, entry]) => {
+                  const meta = RULE_METADATA.find(m => m.code === code);
+                  if (!meta) return null;
+                  const configSummary = meta.fields.map(f => {
+                    const val = entry.config[f.key];
+                    if (val === undefined) return null;
+                    const displayVal = f.key === 'max_minutes_per_week' ? `${val / 60} hrs` : `${val}${f.suffix ? ` ${f.suffix}` : ''}`;
+                    return `${f.label}: ${displayVal}`;
+                  }).filter(Boolean).join(', ');
+                  return (
+                    <div key={code} className="text-gray-600">
+                      <span className="text-gray-800">{meta.name}</span>
+                      {configSummary && <span className="text-gray-500"> ({configSummary})</span>}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          {!formData.rulesConfig.restrictionsApplyToAdmins && (
+            <div><span className="font-medium">Admin Overrides:</span> Custom admin restrictions configured</div>
+          )}
+          {formData.rulesConfig.hasPeakHours && (
+            <div><span className="font-medium">Peak Hours:</span> Configured with custom time slots</div>
+          )}
+          {formData.rulesConfig.hasWeekendPolicy && (
+            <div><span className="font-medium">Weekend Policy:</span> Custom weekend limits configured</div>
+          )}
         </CardContent>
       </Card>
 
@@ -2414,8 +1892,8 @@ export function FacilityRegistration() {
           <div className="mt-8">
             {!user && currentStep === 1 && renderStep1AdminAccount()}
             {(user ? currentStep === 1 : currentStep === 2) && renderStep2FacilityInfo()}
-            {(user ? currentStep === 2 : currentStep === 3) && renderStep3Rules()}
-            {(user ? currentStep === 3 : currentStep === 4) && renderStep4Courts()}
+            {(user ? currentStep === 2 : currentStep === 3) && renderStep4Courts()}
+            {(user ? currentStep === 3 : currentStep === 4) && renderRulesStep()}
             {(user ? currentStep === 4 : currentStep === 5) && renderStep5Admins()}
             {(user ? currentStep === 5 : currentStep === 6) && renderStep6Review()}
           </div>

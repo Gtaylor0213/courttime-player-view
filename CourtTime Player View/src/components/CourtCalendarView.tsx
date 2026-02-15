@@ -475,14 +475,20 @@ export function CourtCalendarView() {
 
   // Helper function to check if a time slot is in the past (using Eastern Time)
   const isPastTime = useCallback((timeSlot: string) => {
+    // Check if the selected date is BEFORE today — all slots are past
+    const today = getEasternTime();
+    const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    if (selectedDateOnly < today) return true;
+
+    // If it's not today, nothing is past
     if (!isToday(selectedDate)) return false;
 
+    // Parse the slot time
     const [time, period] = timeSlot.split(' ');
     let [hours, minutes] = time.split(':').map(Number);
     if (period === 'PM' && hours !== 12) hours += 12;
     if (period === 'AM' && hours === 12) hours = 0;
 
-    // Use getEasternTimeComponents() for accurate time
     const { hours: nowHour, minutes: nowMinute } = getEasternTimeComponents();
 
     if (hours < nowHour) return true;
@@ -978,7 +984,7 @@ export function CourtCalendarView() {
             ref={calendarScrollRef}
             className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full h-full"
           >
-            <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: `${TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH}px` }}>
+            <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: `${TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH}px` }}>
               <thead>
                 <tr>
                   {/* Corner cell: sticky in both directions */}

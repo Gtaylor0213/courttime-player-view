@@ -983,7 +983,7 @@ export function CourtCalendarView() {
             ref={calendarScrollRef}
             className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0"
           >
-            <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: `${TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH}px` }}>
+            <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH }}>
               <thead>
                 <tr>
                   {/* Corner cell: sticky in both directions */}
@@ -1105,11 +1105,14 @@ export function CourtCalendarView() {
 
             {/* Booking Overlay Layer — positioned on top of the grid */}
             <div
-              className="absolute top-0 left-0 pointer-events-none"
               style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
                 width: TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH,
                 height: HEADER_HEIGHT + visibleTimeSlots.length * ROW_HEIGHT,
                 zIndex: 5,
+                pointerEvents: 'none',
               }}
             >
               {bookingOverlays.map((overlay, idx) => {

@@ -517,8 +517,7 @@ export function CourtCalendarV2() {
 
                   {/* ── Booking Overlay Layer ── */}
                   <div
-                    className="absolute top-0 left-0 pointer-events-none"
-                    style={{ width: tableWidth, height: tableHeight, zIndex: 5 }}
+                    style={{ position: 'absolute', top: 0, left: 0, width: tableWidth, height: tableHeight, zIndex: 5, pointerEvents: 'none' }}
                   >
                     {courts.map((court, courtIdx) =>
                       (consolidatedBookings[court.name] || []).map(booking => {

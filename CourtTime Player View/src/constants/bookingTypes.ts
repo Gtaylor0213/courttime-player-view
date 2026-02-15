@@ -1,8 +1,8 @@
 export const BOOKING_TYPES = {
   match: {
     label: 'Match',
-    color: 'bg-blue-100 text-blue-800 border-blue-300',
-    bgColor: 'bg-blue-100'
+    color: 'bg-green-100 text-green-800 border-green-300',
+    bgColor: 'bg-green-100'
   },
   league_match: {
     label: 'League Match',

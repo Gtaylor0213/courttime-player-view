@@ -580,7 +580,7 @@ export function QuickReservePopup({
       <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-blue-600" />
+            <Zap className="h-5 w-5 text-green-600" />
             Quick Reserve
           </DialogTitle>
           <DialogDescription>
@@ -622,7 +622,7 @@ export function QuickReservePopup({
                     variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
-                    className={selectedCourtType === 'tennis' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                    className={selectedCourtType === 'tennis' ? 'bg-green-600 hover:bg-green-700' : ''}
                   >
                     Tennis
                   </Button>
@@ -633,7 +633,7 @@ export function QuickReservePopup({
                     variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
-                    className={selectedCourtType === 'pickleball' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                    className={selectedCourtType === 'pickleball' ? 'bg-green-600 hover:bg-green-700' : ''}
                   >
                     Pickleball
                   </Button>
@@ -752,8 +752,8 @@ export function QuickReservePopup({
                       p-3 rounded-md border-2 text-left transition-all
                       ${court.isAvailable
                         ? selectedCourtId === court.id
-                          ? 'border-blue-600 bg-blue-50 text-blue-800'
-                          : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer'
+                          ? 'border-green-600 bg-green-50 text-green-800'
+                          : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50 cursor-pointer'
                         : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
                       }
                     `}
@@ -822,7 +822,7 @@ export function QuickReservePopup({
 
               {/* Recurring Summary */}
               {recurringDays.length > 0 && recurringEndDate && (
-                <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded border border-blue-200">
+                <div className="text-xs text-gray-600 bg-green-50 p-2 rounded border border-green-200">
                   <span className="font-medium">Will create bookings:</span>
                   <div className="mt-1">
                     Every {recurringDays.join(', ')} from {new Date(selectedDate + 'T00:00:00').toLocaleDateString()} to {new Date(recurringEndDate + 'T00:00:00').toLocaleDateString()}
@@ -881,10 +881,10 @@ export function QuickReservePopup({
 
               {/* Reservation Summary */}
               {selectedCourt && selectedTime && selectedDate && (
-                <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                <div className="bg-green-50 p-3 rounded-md border border-green-200">
                   <div className="text-sm">
-                    <div className="font-medium text-blue-800 mb-1">Reservation Summary</div>
-                    <div className="text-blue-700">
+                    <div className="font-medium text-green-800 mb-1">Reservation Summary</div>
+                    <div className="text-green-700">
                       <div>{currentFacility?.name}</div>
                       <div>{selectedCourt}</div>
                       <div>{formatDisplayDate(selectedDate)}</div>

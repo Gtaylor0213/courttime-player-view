@@ -19,7 +19,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
       case 'reservation_cancelled':
         return <X className="h-4 w-4 text-red-600" />;
       case 'reservation_reminder':
-        return <Clock className="h-4 w-4 text-blue-600" />;
+        return <Clock className="h-4 w-4 text-green-600" />;
       case 'court_change':
         return <Calendar className="h-4 w-4 text-orange-600" />;
       case 'payment_received':
@@ -38,7 +38,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
     
     switch (priority) {
       case 'high':
-        return 'text-gray-900 bg-blue-50 border-l-4 border-blue-500';
+        return 'text-gray-900 bg-green-50 border-l-4 border-green-500';
       case 'medium':
         return 'text-gray-900 bg-orange-50 border-l-4 border-orange-500';
       case 'low':
@@ -138,7 +138,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
                       )}
                       {!notification.read && (
                         <div className="absolute right-2 top-3">
-                          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                          <div className="w-2 h-2 bg-green-600 rounded-full"></div>
                         </div>
                       )}
                     </div>
@@ -152,7 +152,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
         {notifications.length > 8 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-center text-sm text-blue-600 hover:text-blue-700 cursor-pointer p-3">
+            <DropdownMenuItem className="text-center text-sm text-green-600 hover:text-green-700 cursor-pointer p-3">
               View all notifications
             </DropdownMenuItem>
           </>

@@ -220,10 +220,10 @@ export function AdminDashboard() {
     if (maxBookings === 0) return 'bg-gray-100';
     const ratio = bookings / maxBookings;
     if (ratio === 0) return 'bg-gray-100';
-    if (ratio < 0.25) return 'bg-blue-100';
-    if (ratio < 0.5) return 'bg-blue-300';
-    if (ratio < 0.75) return 'bg-blue-500 text-white';
-    return 'bg-blue-700 text-white';
+    if (ratio < 0.25) return 'bg-green-100';
+    if (ratio < 0.5) return 'bg-green-300';
+    if (ratio < 0.75) return 'bg-green-500 text-white';
+    return 'bg-green-700 text-white';
   };
 
   const getStatusColor = (status: string) => {
@@ -269,7 +269,7 @@ export function AdminDashboard() {
       case 'cancelled':
         return 'bg-red-500';
       default:
-        return 'bg-blue-500';
+        return 'bg-green-500';
     }
   };
 
@@ -351,7 +351,7 @@ export function AdminDashboard() {
 
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
             </div>
           ) : (
             <>
@@ -523,7 +523,7 @@ export function AdminDashboard() {
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
                                   <div
-                                    className="bg-blue-600 h-2 rounded-full transition-all"
+                                    className="bg-green-600 h-2 rounded-full transition-all"
                                     style={{ width: `${percent}%` }}
                                   />
                                 </div>
@@ -650,7 +650,7 @@ export function AdminDashboard() {
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-3">
                                   <div
-                                    className="bg-blue-600 h-3 rounded-full"
+                                    className="bg-green-600 h-3 rounded-full"
                                     style={{ width: `${percent}%` }}
                                   />
                                 </div>
@@ -740,10 +740,10 @@ export function AdminDashboard() {
                       <div className="flex items-center gap-2 mt-4 text-xs">
                         <span>Less</span>
                         <div className="w-4 h-4 bg-gray-100 rounded"></div>
-                        <div className="w-4 h-4 bg-blue-100 rounded"></div>
-                        <div className="w-4 h-4 bg-blue-300 rounded"></div>
-                        <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                        <div className="w-4 h-4 bg-blue-700 rounded"></div>
+                        <div className="w-4 h-4 bg-green-100 rounded"></div>
+                        <div className="w-4 h-4 bg-green-300 rounded"></div>
+                        <div className="w-4 h-4 bg-green-500 rounded"></div>
+                        <div className="w-4 h-4 bg-green-700 rounded"></div>
                         <span>More</span>
                       </div>
                     </CardContent>

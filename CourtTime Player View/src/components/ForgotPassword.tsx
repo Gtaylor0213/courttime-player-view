@@ -47,7 +47,7 @@ export function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -129,7 +129,7 @@ export function ForgotPassword() {
                 <div className="space-y-2">
                   <Button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    className="w-full bg-green-600 hover:bg-green-700"
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? 'Sending...' : 'Send Reset Link'}
@@ -154,7 +154,7 @@ export function ForgotPassword() {
         {/* Additional Help */}
         <div className="mt-6 text-center text-sm text-gray-600">
           <p>Need help? Contact support at</p>
-          <a href="mailto:support@courttime.com" className="text-blue-600 hover:text-blue-700 font-medium">
+          <a href="mailto:support@courttime.com" className="text-green-600 hover:text-green-700 font-medium">
             support@courttime.com
           </a>
         </div>

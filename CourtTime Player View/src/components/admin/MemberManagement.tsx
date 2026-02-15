@@ -483,7 +483,7 @@ export function MemberManagement() {
                               <div className="font-medium text-sm flex items-center gap-2">
                                 <span className="truncate">{member.fullName}</span>
                                 {member.isFacilityAdmin && (
-                                  <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-600 px-1.5 py-0">
+                                  <Badge variant="outline" className="text-[10px] text-green-600 border-green-600 px-1.5 py-0">
                                     Admin
                                   </Badge>
                                 )}
@@ -556,7 +556,7 @@ export function MemberManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleToggleAdmin(member.userId, member.isFacilityAdmin)}
-                            className={`${member.isFacilityAdmin ? 'text-orange-600 hover:text-orange-700' : 'text-blue-600 hover:text-blue-700'} h-7 w-7 p-0`}
+                            className={`${member.isFacilityAdmin ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'} h-7 w-7 p-0`}
                             title={member.isFacilityAdmin ? 'Remove admin' : 'Make admin'}
                           >
                             {member.isFacilityAdmin ? <ShieldOff className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}

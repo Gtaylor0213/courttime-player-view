@@ -204,19 +204,19 @@ export function ClubInfo() {
         <div className="p-6 max-w-6xl mx-auto">
           {/* Non-Member Notice */}
           {!isMember && (
-            <Card className="mb-6 border-blue-200 bg-blue-50">
+            <Card className="mb-6 border-green-200 bg-green-50">
               <CardContent className="pt-6">
                 <div className="flex items-start gap-4">
-                  <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <AlertCircle className="h-5 w-5 text-green-600 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="font-medium text-blue-900 mb-1">Not a Member</h3>
-                    <p className="text-sm text-blue-800 mb-3">
+                    <h3 className="font-medium text-green-900 mb-1">Not a Member</h3>
+                    <p className="text-sm text-green-800 mb-3">
                       You're viewing information for a facility you're not currently a member of. Request membership to access courts and book sessions.
                     </p>
                     <Button
                       onClick={() => navigate('/profile')}
                       size="sm"
-                      className="bg-blue-600 hover:bg-blue-700"
+                      className="bg-green-600 hover:bg-green-700"
                     >
                       Request Membership
                     </Button>
@@ -238,7 +238,7 @@ export function ClubInfo() {
                       className="w-full h-48 object-cover rounded-lg border border-gray-200"
                     />
                   ) : (
-                    <div className="w-full h-48 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center text-white">
+                    <div className="w-full h-48 bg-gradient-to-br from-green-500 to-green-700 rounded-lg flex items-center justify-center text-white">
                       <div className="text-center">
                         <Users className="h-16 w-16 mx-auto mb-2" />
                         <p className="font-medium">{facility.name}</p>
@@ -310,7 +310,7 @@ export function ClubInfo() {
                 {facility.phone && (
                   <div className="flex items-center">
                     <Phone className="h-4 w-4 text-gray-400 mr-3" />
-                    <a href={`tel:${facility.phone}`} className="text-blue-600 hover:underline">
+                    <a href={`tel:${facility.phone}`} className="text-green-600 hover:underline">
                       {facility.phone}
                     </a>
                   </div>
@@ -318,7 +318,7 @@ export function ClubInfo() {
                 {facility.email && (
                   <div className="flex items-center">
                     <Mail className="h-4 w-4 text-gray-400 mr-3" />
-                    <a href={`mailto:${facility.email}`} className="text-blue-600 hover:underline">
+                    <a href={`mailto:${facility.email}`} className="text-green-600 hover:underline">
                       {facility.email}
                     </a>
                   </div>
@@ -326,7 +326,7 @@ export function ClubInfo() {
                 {facility.website && (
                   <div className="flex items-center">
                     <Globe className="h-4 w-4 text-gray-400 mr-3" />
-                    <a href={facility.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    <a href={facility.website} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">
                       {facility.website}
                     </a>
                   </div>

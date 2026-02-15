@@ -86,7 +86,7 @@ export function MessagesPage() {
 
         {loading ? (
           <div className="flex items-center justify-center bg-white rounded-lg border" style={{ height: 'calc(100vh - 160px)' }}>
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
           </div>
         ) : memberFacilities.length === 0 ? (
           <div className="flex items-center justify-center text-center bg-white rounded-lg border" style={{ height: 'calc(100vh - 160px)' }}>

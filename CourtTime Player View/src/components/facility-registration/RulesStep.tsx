@@ -33,9 +33,9 @@ const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 's
 
 function InstructionCard({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-3 mb-4">
-      <Icon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-      <p className="text-sm text-blue-800">{text}</p>
+    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3 mb-4">
+      <Icon className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+      <p className="text-sm text-green-800">{text}</p>
     </div>
   );
 }
@@ -200,7 +200,7 @@ export function RulesStep({
                   value="account"
                   checked={rulesConfig.restrictionType === 'account'}
                   onChange={() => onRulesChange({ restrictionType: 'account' })}
-                  className="accent-blue-600"
+                  className="accent-green-600"
                 />
                 <span className="text-sm font-medium">Per Account</span>
               </label>
@@ -211,7 +211,7 @@ export function RulesStep({
                   value="address"
                   checked={rulesConfig.restrictionType === 'address'}
                   onChange={() => onRulesChange({ restrictionType: 'address' })}
-                  className="accent-blue-600"
+                  className="accent-green-600"
                 />
                 <span className="text-sm font-medium">Per Address</span>
               </label>
@@ -418,7 +418,7 @@ export function RulesStep({
                         <span className="text-sm font-medium capitalize">{day}</span>
                         <button
                           type="button"
-                          className="text-xs text-blue-600 hover:text-blue-800"
+                          className="text-xs text-green-600 hover:text-green-800"
                           onClick={() => onAddPeakHourSlot(day)}
                         >
                           + Add Slot

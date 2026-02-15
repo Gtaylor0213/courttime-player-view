@@ -1160,7 +1160,7 @@ export function FacilityRegistration() {
           </CardTitle>
           <CardDescription>
             Main point of contact for facility inquiries
-            {user && <span className="text-blue-600"> (auto-filled from your account)</span>}
+            {user && <span className="text-green-600"> (auto-filled from your account)</span>}
           </CardDescription>
         </CardHeader>
         <CardContent>

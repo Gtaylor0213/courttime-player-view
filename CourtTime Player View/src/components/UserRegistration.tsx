@@ -242,7 +242,7 @@ export function UserRegistration() {
                     </AvatarFallback>
                   )}
                 </Avatar>
-                <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700 transition-colors">
+                <label className="absolute bottom-0 right-0 bg-green-600 text-white p-2 rounded-full cursor-pointer hover:bg-green-700 transition-colors">
                   <Camera className="h-3 w-3" />
                   <input
                     type="file"
@@ -544,7 +544,7 @@ export function UserRegistration() {
               {/* Search Results */}
               {isSearchingFacilities && (
                 <div className="text-center py-4">
-                  <AlertCircle className="h-6 w-6 animate-spin mx-auto mb-2 text-blue-600" />
+                  <AlertCircle className="h-6 w-6 animate-spin mx-auto mb-2 text-green-600" />
                   <p className="text-sm text-gray-600">Searching facilities...</p>
                 </div>
               )}
@@ -585,7 +585,7 @@ export function UserRegistration() {
                                     ? 'bg-purple-100 text-purple-700'
                                     : facility.type === 'Public Facility'
                                     ? 'bg-green-100 text-green-700'
-                                    : 'bg-blue-100 text-blue-700'
+                                    : 'bg-green-100 text-green-700'
                                 }`}>
                                   {facility.type}
                                 </span>
@@ -604,7 +604,7 @@ export function UserRegistration() {
                               )}
 
                               {status === 'requesting' && (
-                                <div className="flex items-center gap-2 text-blue-600">
+                                <div className="flex items-center gap-2 text-green-600">
                                   <AlertCircle className="h-4 w-4 animate-pulse" />
                                   <span className="text-xs">Sending...</span>
                                 </div>
@@ -747,13 +747,13 @@ export function UserRegistration() {
                   <div
                     className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium border-2 transition-all duration-200 mb-2 ${
                       1 <= currentStep
-                        ? 'bg-blue-600 text-white border-blue-600'
+                        ? 'bg-green-600 text-white border-green-600'
                         : 'bg-white text-gray-400 border-gray-300'
                     }`}
                   >
                     1
                   </div>
-                  <p className={`text-sm font-medium ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-500'}`}>
+                  <p className={`text-sm font-medium ${currentStep >= 1 ? 'text-green-600' : 'text-gray-500'}`}>
                     Personal Information
                   </p>
                 </div>
@@ -762,7 +762,7 @@ export function UserRegistration() {
                 <div className="flex justify-center">
                   <div className="w-0.5 h-12 bg-gray-200">
                     <div
-                      className="w-full bg-blue-600 transition-all duration-300"
+                      className="w-full bg-green-600 transition-all duration-300"
                       style={{ height: `${currentStep >= 2 ? '100' : '0'}%` }}
                     />
                   </div>
@@ -773,13 +773,13 @@ export function UserRegistration() {
                   <div
                     className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium border-2 transition-all duration-200 mb-2 ${
                       2 <= currentStep
-                        ? 'bg-blue-600 text-white border-blue-600'
+                        ? 'bg-green-600 text-white border-green-600'
                         : 'bg-white text-gray-400 border-gray-300'
                     }`}
                   >
                     2
                   </div>
-                  <p className={`text-sm font-medium ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-500'}`}>
+                  <p className={`text-sm font-medium ${currentStep >= 2 ? 'text-green-600' : 'text-gray-500'}`}>
                     Facilities & Notifications
                   </p>
                 </div>
@@ -812,13 +812,13 @@ export function UserRegistration() {
                   </div>
                   <div>
                     {currentStep < 2 ? (
-                      <Button onClick={handleNext} className="bg-blue-600 hover:bg-blue-700">
+                      <Button onClick={handleNext} className="bg-green-600 hover:bg-green-700">
                         Next Step
                       </Button>
                     ) : (
                       <Button
                         onClick={handleSubmit}
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className="bg-green-600 hover:bg-green-700"
                         disabled={isSubmitting}
                       >
                         {isSubmitting ? 'Creating Account...' : 'Create Account'}

@@ -213,7 +213,7 @@ export function CourtManagement() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
@@ -231,7 +231,7 @@ export function CourtManagement() {
 
           {/* Edit/Add Form */}
           {editingCourt && (
-            <Card className="mb-6 border-blue-200 bg-blue-50">
+            <Card className="mb-6 border-green-200 bg-green-50">
               <CardHeader>
                 <CardTitle>{isAddingNew ? 'Add New Court' : `Edit ${editingCourt.name}`}</CardTitle>
                 <CardDescription>Configure court details and settings</CardDescription>
@@ -361,7 +361,7 @@ export function CourtManagement() {
                           size="sm"
                           onClick={() => handleToggleCourtConfig(court.id)}
                           disabled={editingCourt !== null}
-                          className={configuringCourtId === court.id ? 'bg-blue-100 border-blue-300' : ''}
+                          className={configuringCourtId === court.id ? 'bg-green-100 border-green-300' : ''}
                           title="Schedule Settings"
                         >
                           <Settings className="h-4 w-4" />
@@ -390,7 +390,7 @@ export function CourtManagement() {
 
                 {/* Court Schedule Config Panel */}
                 {configuringCourtId === court.id && (
-                  <Card className="border-blue-200 bg-blue-50/50">
+                  <Card className="border-green-200 bg-green-50/50">
                     <CardHeader>
                       <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
                       <CardDescription>Configure hours, prime time, and slot settings per day</CardDescription>
@@ -398,7 +398,7 @@ export function CourtManagement() {
                     <CardContent>
                       {courtScheduleLoading ? (
                         <div className="flex items-center justify-center py-8">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
                         </div>
                       ) : (
                         <div className="space-y-4">

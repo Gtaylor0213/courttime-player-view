@@ -324,19 +324,19 @@ export function FindHittingPartner() {
 
           {/* No Facility Alert */}
           {hasNoFacilities && (
-            <Card className="mb-6 border-blue-200 bg-blue-50">
+            <Card className="mb-6 border-green-200 bg-green-50">
               <CardContent className="pt-6">
                 <div className="flex items-start gap-4">
-                  <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <AlertCircle className="h-5 w-5 text-green-600 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="font-medium text-blue-900 mb-1">No Facility Membership</h3>
-                    <p className="text-sm text-blue-800 mb-3">
+                    <h3 className="font-medium text-green-900 mb-1">No Facility Membership</h3>
+                    <p className="text-sm text-green-800 mb-3">
                       You need to join a facility to view and create hitting partner posts. Hitting partner posts are facility-specific to help you connect with players at your club.
                     </p>
                     <Button
                       onClick={() => navigate('/profile')}
                       size="sm"
-                      className="bg-blue-600 hover:bg-blue-700"
+                      className="bg-green-600 hover:bg-green-700"
                     >
                       <Building className="h-4 w-4 mr-2" />
                       Request Facility Membership
@@ -469,7 +469,7 @@ export function FindHittingPartner() {
                                   variant="default"
                                   size="sm"
                                   onClick={() => navigate(`/messages?recipientId=${post.userId}`)}
-                                  className="bg-blue-600 hover:bg-blue-700"
+                                  className="bg-green-600 hover:bg-green-700"
                                 >
                                   <MessageCircle className="h-4 w-4 mr-1" />
                                   Message

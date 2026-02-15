@@ -850,7 +850,7 @@ export function CourtCalendarView() {
                       variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
-                      className={selectedCourtType === 'tennis' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                      className={selectedCourtType === 'tennis' ? 'bg-green-600 hover:bg-green-700' : ''}
                     >
                       Tennis
                     </Button>
@@ -858,7 +858,7 @@ export function CourtCalendarView() {
                       variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
-                      className={selectedCourtType === 'pickleball' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                      className={selectedCourtType === 'pickleball' ? 'bg-green-600 hover:bg-green-700' : ''}
                     >
                       Pickleball
                     </Button>
@@ -1072,10 +1072,10 @@ export function CourtCalendarView() {
                             className={`
                               border-r border-gray-200 last:border-r-0 relative
                               ${isHourMark ? 'border-b border-gray-300' : 'border-b border-gray-100'}
-                              ${!booking && !isPast ? `cursor-pointer ${isPrime ? 'hover:bg-purple-100' : 'hover:bg-blue-50'}` : ''}
+                              ${!booking && !isPast ? `cursor-pointer ${isPrime ? 'hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
                               ${booking ? 'cursor-pointer' : ''}
                               ${isPast && !booking ? 'bg-gray-100 cursor-not-allowed' : ''}
-                              ${isSelected ? 'bg-blue-100 ring-1 ring-inset ring-blue-400' : ''}
+                              ${isSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
                               ${isPrime && !booking && !isPast && !isSelected ? 'bg-purple-50' : ''}
                               ${dragState.isDragging && !booking ? 'select-none' : ''}
                             `}
@@ -1100,7 +1100,7 @@ export function CourtCalendarView() {
                                         ${booking.bookingType
                                           ? getBookingTypeBadgeColor(booking.bookingType)
                                           : (court.type === 'tennis'
-                                              ? 'bg-blue-100 text-blue-900 border-blue-300'
+                                              ? 'bg-green-100 text-green-900 border-green-300'
                                               : 'bg-green-100 text-green-900 border-green-300')
                                         }
                                       `}
@@ -1130,7 +1130,7 @@ export function CourtCalendarView() {
                                   ${booking.bookingType
                                     ? getBookingTypeColor(booking.bookingType)
                                     : (court.type === 'tennis'
-                                        ? 'bg-blue-100 border-blue-300'
+                                        ? 'bg-green-100 border-green-300'
                                         : 'bg-green-100 border-green-300')
                                   }
                                 `}

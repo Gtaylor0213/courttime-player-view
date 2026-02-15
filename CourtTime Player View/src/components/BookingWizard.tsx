@@ -289,12 +289,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               <Calendar className="h-4 w-4" />
               <span>{formatDateForDisplay(date)}</span>
             </div>
-            <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-              <div className="flex items-center gap-2 text-blue-800">
+            <div className="bg-green-50 p-3 rounded-md border border-green-200">
+              <div className="flex items-center gap-2 text-green-800">
                 <Clock className="h-4 w-4" />
                 <span className="font-medium">{court}</span>
               </div>
-              <div className="text-sm text-blue-600 mt-1">
+              <div className="text-sm text-green-600 mt-1">
                 {selectedSlots && selectedSlots.length > 1 ? (
                   <>
                     <div className="font-medium mb-1">{selectedSlots.length} consecutive slots selected</div>

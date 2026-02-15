@@ -282,7 +282,7 @@ export function BookingManagement() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
@@ -481,7 +481,7 @@ export function BookingManagement() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleCompleteBooking(booking.id)}
-                                  className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
                                 >
                                   Complete
                                 </Button>

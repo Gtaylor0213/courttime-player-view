@@ -94,7 +94,7 @@ export function ResetPassword() {
 
   if (status === 'invalid-token') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <img src={logoImage} alt="CourtTime" className="h-16 w-auto mx-auto mb-4" />
@@ -119,7 +119,7 @@ export function ResetPassword() {
 
                 <Button
                   onClick={() => navigate('/login')}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full bg-green-600 hover:bg-green-700"
                 >
                   Request New Reset Link
                 </Button>
@@ -132,7 +132,7 @@ export function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -253,7 +253,7 @@ export function ResetPassword() {
                 <div className="space-y-2">
                   <Button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    className="w-full bg-green-600 hover:bg-green-700"
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? 'Resetting Password...' : 'Reset Password'}
@@ -276,9 +276,9 @@ export function ResetPassword() {
         </Card>
 
         {/* Security Tips */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <h3 className="text-sm font-medium text-blue-900 mb-2">Password Tips:</h3>
-          <ul className="text-xs text-blue-800 space-y-1">
+        <div className="mt-6 p-4 bg-green-50 rounded-lg">
+          <h3 className="text-sm font-medium text-green-900 mb-2">Password Tips:</h3>
+          <ul className="text-xs text-green-800 space-y-1">
             <li>• Use at least 8 characters</li>
             <li>• Include uppercase and lowercase letters</li>
             <li>• Add numbers and special characters</li>

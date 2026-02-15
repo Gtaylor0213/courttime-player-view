@@ -189,7 +189,7 @@ export function QuickReservation() {
                         h-10 w-full rounded-md text-sm font-medium transition-colors
                         ${day === null ? 'invisible' : ''}
                         ${isDateSelected(day) 
-                          ? 'bg-blue-600 text-white' 
+                          ? 'bg-green-600 text-white'
                           : day && day < currentDate.getDate() 
                             ? 'text-gray-400 cursor-not-allowed'
                             : 'hover:bg-gray-100 text-gray-900'
@@ -226,8 +226,8 @@ export function QuickReservation() {
                         ${!slot.available 
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' 
                           : selectedTimeSlots.includes(slot.time)
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-900 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                            ? 'bg-green-600 text-white border-green-600'
+                            : 'bg-white text-gray-900 border-gray-200 hover:border-green-300 hover:bg-green-50'
                         }
                       `}
                       onClick={() => handleTimeSlotClick(slot.time, slot.available)}
@@ -320,7 +320,7 @@ export function QuickReservation() {
                 </div>
 
                 <Button 
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full bg-green-600 hover:bg-green-700"
                   disabled={selectedTimeSlots.length === 0 || !selectedFacility || !selectedCourtType}
                 >
                   Confirm Reservation

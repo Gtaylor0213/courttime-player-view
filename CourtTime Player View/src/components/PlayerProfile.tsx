@@ -430,13 +430,13 @@ export function PlayerProfile() {
                     <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
                       Cancel
                     </Button>
-                    <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                    <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700" disabled={saving}>
                       <Save className="h-4 w-4 mr-2" />
                       {saving ? 'Saving...' : 'Save Changes'}
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={() => setIsEditing(true)} className="bg-blue-600 hover:bg-blue-700">
+                  <Button onClick={() => setIsEditing(true)} className="bg-green-600 hover:bg-green-700">
                     Edit Profile
                   </Button>
                 )}
@@ -463,7 +463,7 @@ export function PlayerProfile() {
                     {isEditing && (
                       <button
                         onClick={handleImageClick}
-                        className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors shadow-lg"
+                        className="absolute bottom-0 right-0 bg-green-600 text-white p-2 rounded-full hover:bg-green-700 transition-colors shadow-lg"
                         title="Upload profile picture"
                       >
                         <Camera className="h-4 w-4" />
@@ -592,7 +592,7 @@ export function PlayerProfile() {
                           className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                         >
                           <div className="flex items-center gap-4">
-                            <div className="w-2 h-10 bg-blue-500 rounded-full"></div>
+                            <div className="w-2 h-10 bg-green-500 rounded-full"></div>
                             <div>
                               <h4 className="font-medium">{booking.courtName}</h4>
                               <p className="text-sm text-gray-600 flex items-center gap-1">

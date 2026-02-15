@@ -98,8 +98,8 @@ export function UnifiedSidebar({
     const button = (
       <button
         onClick={onClick}
-        className={`w-full rounded-lg px-3 py-2 text-left hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center transition-colors ${
-          isActive ? 'bg-blue-50 text-blue-700' : ''
+        className={`w-full rounded-lg px-3 py-2 text-left hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center transition-colors ${
+          isActive ? 'bg-green-50 text-green-700' : ''
         } ${isCollapsed ? 'justify-center' : ''}`}
       >
         <Icon className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'}`} />
@@ -188,8 +188,8 @@ export function UnifiedSidebar({
                 ) : (
                   <div className="mb-3">
                     <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId}>
-                      <SelectTrigger className="w-full h-9 text-sm bg-blue-50 border-blue-200">
-                        <Building2 className="h-3.5 w-3.5 mr-2 text-blue-600 flex-shrink-0" />
+                      <SelectTrigger className="w-full h-9 text-sm bg-green-50 border-green-200">
+                        <Building2 className="h-3.5 w-3.5 mr-2 text-green-600 flex-shrink-0" />
                         <SelectValue placeholder="Select facility" />
                       </SelectTrigger>
                       <SelectContent>
@@ -322,7 +322,7 @@ export function UnifiedSidebar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenu>
-                    <DropdownMenuTrigger className="w-full flex items-center justify-center py-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <DropdownMenuTrigger className="w-full flex items-center justify-center py-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
                       <Avatar className="h-8 w-8">
                         {user?.profileImageUrl && (
                           <AvatarImage src={user.profileImageUrl} alt={user.fullName || 'User'} />
@@ -354,7 +354,7 @@ export function UnifiedSidebar({
             </TooltipProvider>
           ) : (
             <DropdownMenu>
-              <DropdownMenuTrigger className="w-full flex items-center px-3 py-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <DropdownMenuTrigger className="w-full flex items-center px-3 py-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
                 <Avatar className="h-8 w-8 mr-3">
                   {user?.profileImageUrl && (
                     <AvatarImage src={user.profileImageUrl} alt={user.fullName || 'User'} />

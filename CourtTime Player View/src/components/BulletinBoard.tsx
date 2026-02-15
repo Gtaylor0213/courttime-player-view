@@ -40,7 +40,7 @@ const typeIcons = {
 };
 
 const typeColors: Record<string, string> = {
-  event: 'bg-blue-500',
+  event: 'bg-green-500',
   clinic: 'bg-green-500',
   tournament: 'bg-purple-500',
   social: 'bg-pink-500',
@@ -313,19 +313,19 @@ export function BulletinBoard() {
         <div className="p-6 max-w-7xl mx-auto">
           {/* No Facility Alert */}
           {hasNoFacilities && (
-            <Card className="mb-6 border-blue-200 bg-blue-50">
+            <Card className="mb-6 border-green-200 bg-green-50">
               <div className="p-6">
                 <div className="flex items-start gap-4">
-                  <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <AlertCircle className="h-5 w-5 text-green-600 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="font-medium text-blue-900 mb-1">No Facility Membership</h3>
-                    <p className="text-sm text-blue-800 mb-3">
+                    <h3 className="font-medium text-green-900 mb-1">No Facility Membership</h3>
+                    <p className="text-sm text-green-800 mb-3">
                       You're not currently a member of any facility. Request membership to see events and announcements.
                     </p>
                     <Button
                       onClick={() => navigate('/profile')}
                       size="sm"
-                      className="bg-blue-600 hover:bg-blue-700"
+                      className="bg-green-600 hover:bg-green-700"
                     >
                       Request Membership
                     </Button>
@@ -410,7 +410,7 @@ export function BulletinBoard() {
                   {filteredPosts.map((post) => {
                     const Icon = typeIcons[post.type] || AlertCircle;
                     const bgColor = {
-                      event: 'bg-blue-50 border-blue-100',
+                      event: 'bg-green-50 border-green-100',
                       clinic: 'bg-green-50 border-green-100',
                       tournament: 'bg-purple-50 border-purple-100',
                       social: 'bg-pink-50 border-pink-100',
@@ -655,7 +655,7 @@ export function BulletinBoard() {
                       </SelectItem>
                       <SelectItem value="event">
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-blue-500" />
+                          <Calendar className="h-4 w-4 text-green-500" />
                           Event
                         </div>
                       </SelectItem>

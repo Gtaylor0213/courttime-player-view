@@ -109,7 +109,7 @@ export function LoginPage() {
                     <button
                       type="button"
                       onClick={() => navigate('/forgot-password')}
-                      className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                      className="text-sm text-green-600 hover:text-green-700 hover:underline"
                     >
                       Forgot password?
                     </button>
@@ -125,7 +125,7 @@ export function LoginPage() {
                 </div>
                 <Button
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full bg-green-600 hover:bg-green-700"
                   disabled={isLoading}
                 >
                   {isLoading ? 'Signing In...' : 'Sign In'}

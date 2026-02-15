@@ -349,7 +349,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
   if (loading) {
     return (
       <div className="flex items-center justify-center bg-white rounded-lg border" style={{ height: 'calc(100vh - 160px)' }}>
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
@@ -364,7 +364,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
             <Button
               size="sm"
               onClick={handleNewChatClick}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-green-600 hover:bg-green-700"
             >
               <Plus className="h-4 w-4 mr-1" />
               New Chat
@@ -398,12 +398,12 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                 key={conv.id}
                 onClick={() => setSelectedConversation(conv.id)}
                 className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
-                  selectedConversation === conv.id ? 'bg-blue-50' : ''
+                  selectedConversation === conv.id ? 'bg-green-50' : ''
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <Avatar>
-                    <AvatarFallback className="bg-blue-100 text-blue-700">
+                    <AvatarFallback className="bg-green-100 text-green-700">
                       {getInitials(conv.otherUser.name)}
                     </AvatarFallback>
                   </Avatar>
@@ -426,7 +426,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                     )}
                   </div>
                   {conv.unreadCount > 0 && (
-                    <Badge className="bg-blue-600 text-white text-xs">
+                    <Badge className="bg-green-600 text-white text-xs">
                       {conv.unreadCount}
                     </Badge>
                   )}
@@ -445,7 +445,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
             <div className="flex-shrink-0 p-4 border-b flex items-center justify-between bg-white">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarFallback className="bg-blue-100 text-blue-700">
+                  <AvatarFallback className="bg-green-100 text-green-700">
                     {getInitials(selectedConv?.otherUser.name || newConversationUser?.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -486,7 +486,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                     <div
                       className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                         message.senderId === user?.id
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-green-600 text-white'
                           : 'bg-gray-100 text-gray-900'
                       }`}
                     >
@@ -496,7 +496,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                       <p
                         className={`text-xs mt-1 ${
                           message.senderId === user?.id
-                            ? 'text-blue-100'
+                            ? 'text-green-100'
                             : 'text-gray-500'
                         }`}
                       >
@@ -523,7 +523,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                 <Button
                   onClick={sendMessage}
                   disabled={!newMessage.trim() || sending}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-green-600 hover:bg-green-700"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -546,7 +546,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-blue-600" />
+              <UserPlus className="h-5 w-5 text-green-600" />
               Start New Conversation
             </DialogTitle>
             <DialogDescription>
@@ -570,7 +570,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
             <div className="max-h-96 overflow-y-auto space-y-1">
               {loadingMembers ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
                 </div>
               ) : facilityMembers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
@@ -587,7 +587,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                     className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
                   >
                     <Avatar>
-                      <AvatarFallback className="bg-blue-100 text-blue-700">
+                      <AvatarFallback className="bg-green-100 text-green-700">
                         {getInitials(member.fullName)}
                       </AvatarFallback>
                     </Avatar>

@@ -1451,7 +1451,7 @@ export function FacilityManagement() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
@@ -1932,7 +1932,7 @@ export function FacilityManagement() {
                         {facilityData.amenities.map((amenity: string, index: number) => (
                           <span
                             key={index}
-                            className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                            className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
                           >
                             {amenity}
                           </span>
@@ -2004,7 +2004,7 @@ export function FacilityManagement() {
                               <Badge variant="outline" className="text-xs">Level {tier.tier_level}</Badge>
                               <span className="font-medium text-sm">{tier.tier_name}</span>
                               {tier.is_default && (
-                                <Badge className="bg-blue-100 text-blue-700 text-[10px]">Default</Badge>
+                                <Badge className="bg-green-100 text-green-700 text-[10px]">Default</Badge>
                               )}
                             </div>
                             <div className="hidden md:flex items-center gap-4 text-xs text-gray-500">
@@ -2045,7 +2045,7 @@ export function FacilityManagement() {
 
                   {/* Tier Edit/Add Form */}
                   {editingTier && (
-                    <div className="mt-4 p-4 border-2 border-blue-200 bg-blue-50 rounded-lg space-y-4">
+                    <div className="mt-4 p-4 border-2 border-green-200 bg-green-50 rounded-lg space-y-4">
                       <h4 className="font-medium text-sm">{isAddingTier ? 'Add New Tier' : 'Edit Tier'}</h4>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div className="space-y-1">
@@ -3068,7 +3068,7 @@ export function FacilityManagement() {
 
               {/* Edit/Add Court Form */}
               {editingCourt && (
-                <Card className="border-blue-200 bg-blue-50">
+                <Card className="border-green-200 bg-green-50">
                   <CardHeader>
                     <CardTitle>{isAddingNewCourt ? 'Add New Court' : `Edit ${editingCourt.name}`}</CardTitle>
                     <CardDescription>Configure court details and settings</CardDescription>
@@ -3175,7 +3175,7 @@ export function FacilityManagement() {
               {/* Courts List */}
               {courtsLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
@@ -3203,7 +3203,7 @@ export function FacilityManagement() {
                                 size="sm"
                                 onClick={() => handleToggleCourtConfig(court.id)}
                                 disabled={editingCourt !== null}
-                                className={configuringCourtId === court.id ? 'bg-blue-100 border-blue-300' : ''}
+                                className={configuringCourtId === court.id ? 'bg-green-100 border-green-300' : ''}
                                 title="Schedule Settings"
                               >
                                 <Settings className="h-4 w-4" />
@@ -3232,7 +3232,7 @@ export function FacilityManagement() {
 
                       {/* Court Schedule Config Panel */}
                       {configuringCourtId === court.id && (
-                        <Card className="border-blue-200 bg-blue-50/50">
+                        <Card className="border-green-200 bg-green-50/50">
                           <CardHeader>
                             <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
                             <CardDescription>Configure hours, prime time, and slot settings per day</CardDescription>
@@ -3240,7 +3240,7 @@ export function FacilityManagement() {
                           <CardContent>
                             {courtScheduleLoading ? (
                               <div className="flex items-center justify-center py-8">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
                               </div>
                             ) : (
                               <div className="space-y-4">
@@ -3391,7 +3391,7 @@ export function FacilityManagement() {
                 </CardHeader>
                 <CardContent>
                   {editingBlackout && (
-                    <div className="p-4 mb-4 border rounded-lg bg-blue-50 space-y-4">
+                    <div className="p-4 mb-4 border rounded-lg bg-green-50 space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Title</Label>
@@ -3473,7 +3473,7 @@ export function FacilityManagement() {
 
                   {blackoutsLoading ? (
                     <div className="flex items-center justify-center py-4">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
                     </div>
                   ) : blackouts.length === 0 && !editingBlackout ? (
                     <p className="text-sm text-gray-500 text-center py-4">No blackout periods configured.</p>

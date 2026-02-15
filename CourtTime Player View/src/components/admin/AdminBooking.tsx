@@ -606,7 +606,7 @@ export function AdminBooking() {
         <div className="max-w-2xl mx-auto">
           <div className="mb-8">
             <h1 className="text-2xl font-medium text-gray-900 flex items-center gap-2">
-              <Zap className="h-6 w-6 text-blue-600" />
+              <Zap className="h-6 w-6 text-green-600" />
               Create Booking
             </h1>
             <p className="text-gray-600 mt-2">
@@ -721,7 +721,7 @@ export function AdminBooking() {
                           variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
-                          className={selectedCourtType === 'tennis' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                          className={selectedCourtType === 'tennis' ? 'bg-green-600 hover:bg-green-700' : ''}
                         >
                           Tennis
                         </Button>
@@ -732,7 +732,7 @@ export function AdminBooking() {
                           variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
-                          className={selectedCourtType === 'pickleball' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                          className={selectedCourtType === 'pickleball' ? 'bg-green-600 hover:bg-green-700' : ''}
                         >
                           Pickleball
                         </Button>
@@ -873,8 +873,8 @@ export function AdminBooking() {
                             p-3 rounded-md border-2 text-left transition-all
                             ${court.isAvailable
                               ? selectedCourtId === court.id
-                                ? 'border-blue-600 bg-blue-50 text-blue-800'
-                                : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer'
+                                ? 'border-green-600 bg-green-50 text-green-800'
+                                : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50 cursor-pointer'
                               : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
                             }
                           `}
@@ -940,7 +940,7 @@ export function AdminBooking() {
                     </div>
 
                     {recurringDays.length > 0 && recurringEndDate && (
-                      <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded border border-blue-200">
+                      <div className="text-xs text-gray-600 bg-green-50 p-2 rounded border border-green-200">
                         <span className="font-medium">Will create bookings:</span>
                         <div className="mt-1">
                           Every {recurringDays.join(', ')} from {new Date(selectedDate + 'T00:00:00').toLocaleDateString()} to {new Date(recurringEndDate + 'T00:00:00').toLocaleDateString()}
@@ -955,10 +955,10 @@ export function AdminBooking() {
 
                 {/* Reservation Summary */}
                 {selectedCourt && selectedTime && selectedDate && (isWalkIn ? walkInName : selectedMember) && (
-                  <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                  <div className="bg-green-50 p-3 rounded-md border border-green-200">
                     <div className="text-sm">
-                      <div className="font-medium text-blue-800 mb-1">Reservation Summary</div>
-                      <div className="text-blue-700 space-y-0.5">
+                      <div className="font-medium text-green-800 mb-1">Reservation Summary</div>
+                      <div className="text-green-700 space-y-0.5">
                         <div><span className="font-medium">For:</span> {isWalkIn ? `${walkInName} (Walk-in)` : selectedMember?.fullName}</div>
                         <div><span className="font-medium">Facility:</span> {currentFacility?.name}</div>
                         <div><span className="font-medium">Court:</span> {selectedCourt}</div>

@@ -469,7 +469,7 @@ export function HouseholdManagement() {
                         onClick={() => handleExpandToggle(household.id)}
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="flex-shrink-0 h-9 w-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
+                          <div className="flex-shrink-0 h-9 w-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center">
                             <Home className="h-4 w-4" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -517,7 +517,7 @@ export function HouseholdManagement() {
                             variant="outline"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleOpenAddMember(household.id); }}
-                            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700"
+                            className="h-7 w-7 p-0 text-green-600 hover:text-green-700"
                             title="Add member"
                           >
                             <UserPlus className="h-3.5 w-3.5" />

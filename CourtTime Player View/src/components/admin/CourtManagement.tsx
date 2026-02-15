@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppContext } from '../../contexts/AppContext';
 import { facilitiesApi, adminApi, courtConfigApi } from '../../api/client';
 import { toast } from 'sonner';
 
@@ -25,6 +26,7 @@ interface Court {
 
 export function CourtManagement() {
   const { user } = useAuth();
+  const { selectedFacilityId: currentFacilityId } = useAppContext();
   const navigate = useNavigate();
   const [courts, setCourts] = useState<Court[]>([]);
   const [editingCourt, setEditingCourt] = useState<Court | null>(null);
@@ -37,8 +39,6 @@ export function CourtManagement() {
   const [courtSchedule, setCourtSchedule] = useState<any[]>([]);
   const [courtScheduleLoading, setCourtScheduleLoading] = useState(false);
   const [courtScheduleSaving, setCourtScheduleSaving] = useState(false);
-
-  const currentFacilityId = user?.memberFacilities?.[0];
 
   useEffect(() => {
     if (currentFacilityId) {

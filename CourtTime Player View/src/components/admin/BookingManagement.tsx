@@ -8,6 +8,7 @@ import { Calendar, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLef
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppContext } from '../../contexts/AppContext';
 import { adminApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
 
@@ -30,6 +31,7 @@ interface Booking {
 
 export function BookingManagement() {
   const { user } = useAuth();
+  const { selectedFacilityId: currentFacilityId } = useAppContext();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -45,8 +47,6 @@ export function BookingManagement() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
-
-  const currentFacilityId = user?.memberFacilities?.[0];
 
   useEffect(() => {
     if (currentFacilityId) {

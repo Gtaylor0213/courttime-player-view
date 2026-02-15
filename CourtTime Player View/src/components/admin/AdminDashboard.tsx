@@ -9,6 +9,7 @@ import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { adminApi } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
 
 interface DashboardStats {
@@ -48,6 +49,7 @@ const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function AdminDashboard() {
   const { user } = useAuth();
+  const { selectedFacilityId: currentFacilityId } = useAppContext();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'overview' | 'courts' | 'times' | 'members'>('overview');
   const [timeRange, setTimeRange] = useState('30');
@@ -72,8 +74,6 @@ export function AdminDashboard() {
     topBookers: [],
   });
   const [loading, setLoading] = useState(true);
-
-  const currentFacilityId = user?.memberFacilities?.[0];
 
   useEffect(() => {
     if (currentFacilityId) {

@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppContext } from '../../contexts/AppContext';
 import { facilitiesApi, adminApi, courtConfigApi, rulesApi, tiersApi } from '../../api/client';
 import { toast } from 'sonner';
 
@@ -303,7 +304,7 @@ export function FacilityManagement() {
   const [isAddingTier, setIsAddingTier] = useState(false);
   const [tierSaving, setTierSaving] = useState(false);
 
-  const currentFacilityId = user?.memberFacilities?.[0];
+  const { selectedFacilityId: currentFacilityId } = useAppContext();
 
   useEffect(() => {
     if (currentFacilityId) {

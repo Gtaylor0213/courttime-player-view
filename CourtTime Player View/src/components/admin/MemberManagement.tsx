@@ -13,6 +13,7 @@ import { membersApi, addressWhitelistApi, tiersApi, strikesApi } from '../../api
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppContext } from '../../contexts/AppContext';
 
 interface Member {
   userId: string;
@@ -56,7 +57,7 @@ export function MemberManagement() {
   const [newStrikeType, setNewStrikeType] = useState<string>('manual');
   const [newStrikeReason, setNewStrikeReason] = useState('');
 
-  const currentFacilityId = user?.memberFacilities?.[0];
+  const { selectedFacilityId: currentFacilityId } = useAppContext();
 
   useEffect(() => {
     if (currentFacilityId) {

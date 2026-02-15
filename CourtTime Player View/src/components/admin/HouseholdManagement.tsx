@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { householdsApi, membersApi } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
 
 interface Household {
@@ -93,7 +94,7 @@ export function HouseholdManagement() {
   const [membersSearchLoading, setMembersSearchLoading] = useState(false);
   const [addingAsPrimary, setAddingAsPrimary] = useState(false);
 
-  const currentFacilityId = user?.memberFacilities?.[0];
+  const { selectedFacilityId: currentFacilityId } = useAppContext();
 
   useEffect(() => {
     if (currentFacilityId) {

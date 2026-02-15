@@ -4,9 +4,11 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Home } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Home, ChevronsUpDown } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppContext } from '../contexts/AppContext';
 import { facilitiesApi } from '../api/client';
 
 interface Club {
@@ -30,6 +32,7 @@ export function UnifiedSidebar({
   currentPage,
 }: UnifiedSidebarProps) {
   const { user } = useAuth();
+  const { selectedFacilityId, setSelectedFacilityId } = useAppContext();
   const navigate = useNavigate();
   const [memberFacilities, setMemberFacilities] = React.useState<Club[]>([]);
   const [loadingFacilities, setLoadingFacilities] = React.useState(true);
@@ -159,6 +162,48 @@ export function UnifiedSidebar({
           {actualUserType === 'admin' && (
             <div>
               {!isCollapsed && <h3 className="text-sm font-medium text-gray-900 mb-3">Admin</h3>}
+
+              {/* Facility Selector — shown when admin of 2+ facilities */}
+              {!loadingFacilities && memberFacilities.length >= 2 && (
+                isCollapsed ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => {
+                            const currentIndex = memberFacilities.findIndex(f => f.id === selectedFacilityId);
+                            const nextIndex = (currentIndex + 1) % memberFacilities.length;
+                            setSelectedFacilityId(memberFacilities[nextIndex].id);
+                          }}
+                          className="w-full mb-2 rounded-lg px-3 py-2 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                        >
+                          <ChevronsUpDown className="h-4 w-4 text-gray-500" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <p>{memberFacilities.find(f => f.id === selectedFacilityId)?.name || 'Switch facility'}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <div className="mb-3">
+                    <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId}>
+                      <SelectTrigger className="w-full h-9 text-sm bg-blue-50 border-blue-200">
+                        <Building2 className="h-3.5 w-3.5 mr-2 text-blue-600 flex-shrink-0" />
+                        <SelectValue placeholder="Select facility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {memberFacilities.map((facility) => (
+                          <SelectItem key={facility.id} value={facility.id}>
+                            {facility.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )
+              )}
+
               <div className="space-y-1">
                 <SidebarButton
                   onClick={() => navigate('/admin')}

@@ -591,7 +591,6 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{member.fullName}</p>
-                      <p className="text-xs text-gray-500 truncate">{member.email}</p>
                       {member.isFacilityAdmin && (
                         <Badge variant="secondary" className="text-xs mt-1">
                           Admin

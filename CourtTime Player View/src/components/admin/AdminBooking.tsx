@@ -157,7 +157,10 @@ export function AdminBooking() {
   }, [selectedFacility]);
 
   const currentFacility = facilities.find(f => f.id === selectedFacility);
-  const allCourts = currentFacility?.courts || [];
+  const allCourts = (currentFacility?.courts || []).filter((court: any) => {
+    const s = (court.status || 'available').toLowerCase();
+    return s === 'available' || s === 'active';
+  });
 
   // Determine if facility has both types of courts
   const hasTennisCourts = allCourts.some(court => court.type === 'tennis');

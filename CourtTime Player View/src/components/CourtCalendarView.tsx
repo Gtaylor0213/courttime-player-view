@@ -184,11 +184,16 @@ export function CourtCalendarView() {
             // Fetch courts for this facility
             const courtsResponse = await facilitiesApi.getCourts(facilityId);
             const courts = courtsResponse.success && courtsResponse.data?.courts
-              ? courtsResponse.data.courts.map((court: any) => ({
-                  id: court.id,
-                  name: court.name,
-                  type: court.courtType?.toLowerCase() || 'tennis'
-                }))
+              ? courtsResponse.data.courts
+                  .filter((court: any) => {
+                    const s = (court.status || 'available').toLowerCase();
+                    return s === 'available' || s === 'active';
+                  })
+                  .map((court: any) => ({
+                    id: court.id,
+                    name: court.name,
+                    type: court.courtType?.toLowerCase() || 'tennis'
+                  }))
               : [];
 
             facilitiesData.push({

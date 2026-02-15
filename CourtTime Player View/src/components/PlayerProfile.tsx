@@ -8,11 +8,11 @@ import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { ReservationManagementModal } from './ReservationManagementModal';
-import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
-import { playerProfileApi, facilitiesApi, strikesApi } from '../api/client';
+import { playerProfileApi, facilitiesApi, strikesApi, membersApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -29,6 +29,7 @@ export function PlayerProfile() {
   const [facilitySearchResults, setFacilitySearchResults] = useState<any[]>([]);
   const [isSearchingFacilities, setIsSearchingFacilities] = useState(false);
   const [requestingMembership, setRequestingMembership] = useState<string | null>(null);
+  const [leavingFacility, setLeavingFacility] = useState<string | null>(null);
 
   // Upcoming reservations
   const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
@@ -285,6 +286,27 @@ export function PlayerProfile() {
     }
   };
 
+  const handleLeaveFacility = async (facilityId: string, facilityName: string) => {
+    if (!user?.id) return;
+    if (!confirm(`Are you sure you want to leave ${facilityName}? You will lose access to courts and any active bookings may be cancelled.`)) return;
+
+    setLeavingFacility(facilityId);
+    try {
+      const response = await membersApi.removeMember(facilityId, user.id);
+      if (response.success) {
+        toast.success(`You have left ${facilityName}`);
+        loadProfile();
+      } else {
+        toast.error(response.error || 'Failed to leave facility');
+      }
+    } catch (error) {
+      console.error('Error leaving facility:', error);
+      toast.error('Failed to leave facility');
+    } finally {
+      setLeavingFacility(null);
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'active':
@@ -489,14 +511,28 @@ export function PlayerProfile() {
                           key={facility.facilityId}
                           className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                          <div className="font-medium">{facility.facilityName}</div>
-                          <div className="text-sm text-gray-600 mt-1">
-                            {facility.membershipType}
-                            {facility.isFacilityAdmin && ' • Admin'}
-                          </div>
-                          <div className={`text-xs mt-2 px-2 py-1 rounded-full inline-flex items-center gap-1 ${getStatusColor(facility.status)}`}>
-                            {getStatusIcon(facility.status)}
-                            <span className="capitalize">{facility.status}</span>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium">{facility.facilityName}</div>
+                              <div className="text-sm text-gray-600 mt-1">
+                                {facility.membershipType}
+                                {facility.isFacilityAdmin && ' • Admin'}
+                              </div>
+                              <div className={`text-xs mt-2 px-2 py-1 rounded-full inline-flex items-center gap-1 ${getStatusColor(facility.status)}`}>
+                                {getStatusIcon(facility.status)}
+                                <span className="capitalize">{facility.status}</span>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2"
+                              onClick={() => handleLeaveFacility(facility.facilityId, facility.facilityName)}
+                              disabled={leavingFacility === facility.facilityId}
+                            >
+                              <LogOut className="h-4 w-4 mr-1" />
+                              {leavingFacility === facility.facilityId ? 'Leaving...' : 'Leave'}
+                            </Button>
                           </div>
                         </div>
                       ))}

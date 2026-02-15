@@ -221,6 +221,23 @@ html {
   background: #e2e8f0;
 }
 
+/* Right edge shadow when scrollable */
+.calendar-scroll-wrapper {
+  position: relative;
+}
+
+.calendar-scroll-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, rgba(0,0,0,0.06));
+  z-index: 50;
+}
+
 /* Diagonal stripe pattern for maintenance/blocked time slots */
 .unavailable-stripe {
   background: repeating-linear-gradient(

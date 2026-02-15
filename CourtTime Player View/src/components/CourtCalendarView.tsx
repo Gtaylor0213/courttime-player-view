@@ -166,7 +166,7 @@ export function CourtCalendarView() {
 
       try {
         setLoadingFacilities(true);
-        const facilitiesData = [];
+        const facilitiesData: Array<{ id: string; name: string; type: string; courts: Array<{ id: string; name: string; type: string }> }> = [];
 
         for (const facilityId of user.memberFacilities) {
           // Fetch facility details
@@ -498,7 +498,7 @@ export function CourtCalendarView() {
 
   // Generate time slots for the day (15-minute intervals)
   const allTimeSlots = React.useMemo(() => {
-    const slots = [];
+    const slots: string[] = [];
     for (let hour = 6; hour <= 21; hour++) {
       for (let minute = 0; minute < 60; minute += 15) {
         const period = hour >= 12 ? 'PM' : 'AM';
@@ -517,7 +517,7 @@ export function CourtCalendarView() {
 
   // 30-min visible rows for the table grid
   const visibleTimeSlots = React.useMemo(() => {
-    const slots = [];
+    const slots: string[] = [];
     for (let hour = 6; hour <= 21; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         const period = hour >= 12 ? 'PM' : 'AM';
@@ -601,7 +601,7 @@ export function CourtCalendarView() {
 
     // If we have selected cells from dragging, open booking wizard with them
     if (dragState.selectedCells.size > 0) {
-      const selectedSlots = Array.from(dragState.selectedCells).map(cellId => {
+      const selectedSlots = Array.from(dragState.selectedCells as Set<string>).map(cellId => {
         const [court, timeSlot] = cellId.split('|');
         const slotCourtObj = courts.find(c => c.name === court);
         return {
@@ -697,7 +697,7 @@ export function CourtCalendarView() {
   const handleMouseUp = () => {
     if (dragState.isDragging && dragState.selectedCells.size > 0) {
       // If multiple cells selected, open booking wizard
-      const firstSelected = Array.from(dragState.selectedCells)[0];
+      const firstSelected = Array.from(dragState.selectedCells as Set<string>)[0];
       const [court, time] = firstSelected.split('|');
       handleEmptySlotClick(court, time);
     }
@@ -904,8 +904,8 @@ export function CourtCalendarView() {
                 </div>
 
                 {/* Prime-Time Legend */}
-                {Object.values(primeTimeConfigs).some(schedule =>
-                  schedule.some((c: any) => (c.primeTimeStart || c.prime_time_start))
+                {Object.values(primeTimeConfigs).some((schedule: any) =>
+                  (schedule as any[]).some((c: any) => (c.primeTimeStart || c.prime_time_start))
                 ) && (
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm bg-purple-100 border border-purple-300" />

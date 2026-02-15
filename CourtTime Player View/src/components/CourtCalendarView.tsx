@@ -13,7 +13,8 @@ import { ReservationDetailsModal } from './ReservationDetailsModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, usersApi, bookingApi, courtConfigApi } from '../api/client';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut } from 'lucide-react';
+import { Calendar as CalendarPicker } from './ui/calendar';
 
 // Layout constants
 const ROW_HEIGHT = 60;            // 30-min visible row height
@@ -74,7 +75,7 @@ export function CourtCalendarView() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const selectedFacility = selectedFacilityId;
   const [selectedView, setSelectedView] = useState('week');
-  const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>('tennis');
+  const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [currentTime, setCurrentTime] = useState(getEasternTime());
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
@@ -112,6 +113,12 @@ export function CourtCalendarView() {
   // Calendar display customization
   const [displayedCourtsCount, setDisplayedCourtsCount] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  const [zoomLevel, setZoomLevel] = useState(100); // percentage: 50-150
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [scrollTrigger, setScrollTrigger] = useState(0); // forces auto-scroll on mount
+
+  // Computed court column width based on zoom
+  const effectiveCourtWidth = Math.round(COURT_COL_WIDTH * zoomLevel / 100);
 
   // Prime-time config per court: courtId -> schedule array
   const [primeTimeConfigs, setPrimeTimeConfigs] = useState<Record<string, any[]>>({});
@@ -800,36 +807,36 @@ export function CourtCalendarView() {
     });
   }, [currentTimeLinePosition]);
 
-  // Auto-scroll to current time when viewing today
+  // Trigger auto-scroll on mount (page navigation)
   useEffect(() => {
-    if (isToday(selectedDate) && calendarScrollRef.current && currentTimeLinePosition !== null) {
-      // Small delay to ensure content is rendered
-      const timer = setTimeout(() => {
-        scrollToCurrentTime();
-      }, 100);
-      return () => clearTimeout(timer);
+    setScrollTrigger(prev => prev + 1);
+  }, []);
+
+  // Also trigger auto-scroll when courts load (initial page load)
+  // On first load, courts is empty so the scroll ref doesn't exist yet
+  useEffect(() => {
+    if (courts.length > 0) {
+      setScrollTrigger(prev => prev + 1);
     }
-  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime]);
+  }, [courts.length]);
+
+  // Auto-scroll to current time when viewing today, or top on other dates
+  useEffect(() => {
+    if (!calendarScrollRef.current) return;
+    const timer = setTimeout(() => {
+      if (isToday(selectedDate) && currentTimeLinePosition !== null) {
+        scrollToCurrentTime();
+      } else {
+        calendarScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger]);
 
   return (
     <>
       {/* Main Content */}
       <div className="h-screen flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 relative z-10 flex-shrink-0">
-          <div className="px-6 py-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-6">
-                <h1 className="text-2xl font-medium">Court Calendar</h1>
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <NotificationBell />
-              </div>
-            </div>
-          </div>
-        </header>
-
         {/* Controls - Sticky Header */}
         {memberFacilities.length === 0 ? (
           // Show "no membership" message when user has no facilities
@@ -858,12 +865,11 @@ export function CourtCalendarView() {
           <>
         {/* Controls Header */}
         <div className="flex-shrink-0 z-40 bg-white border-b border-gray-200 shadow-sm">
-          <div className="px-6 py-4">
-            {/* Top Row: Facility Name, Court Type Filter, Courts, Zoom, Quick Reserve */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-4">
+          <div className="px-4 py-2">
+            {/* Top Row: Facility Name, Court Type Filter, Courts, Zoom, Bell */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <h3 className="text-lg font-medium">{currentFacility?.name}</h3>
-                <Badge variant="outline">{currentFacility?.type}</Badge>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-600">Court Type:</span>
                   <div className="flex gap-1">
@@ -903,6 +909,30 @@ export function CourtCalendarView() {
                   </Select>
                 </div>
 
+                {/* Zoom Controls */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-gray-600">Zoom:</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setZoomLevel(prev => Math.max(50, prev - 10))}
+                    disabled={zoomLevel <= 50}
+                  >
+                    <ZoomOut className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="text-xs font-medium text-gray-700 min-w-[36px] text-center">{zoomLevel}%</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setZoomLevel(prev => Math.min(150, prev + 10))}
+                    disabled={zoomLevel >= 150}
+                  >
+                    <ZoomIn className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+
                 {/* Prime-Time Legend */}
                 {Object.values(primeTimeConfigs).some((schedule: any) =>
                   (schedule as any[]).some((c: any) => (c.primeTimeStart || c.prime_time_start))
@@ -914,46 +944,67 @@ export function CourtCalendarView() {
                 )}
               </div>
 
-              {/* Quick Reserve Button */}
-              <Button
-                onClick={() => setShowQuickReserve(true)}
-                className="flex items-center gap-2 px-6 py-2 text-base font-medium shadow-md"
-                size="lg"
-              >
-                <Calendar className="h-5 w-5" />
-                Quick Reserve
-              </Button>
+              {/* Right side: Notification Bell */}
+              <NotificationBell />
             </div>
 
-            {/* Bottom Row: Facility Name and Date Navigation */}
-            <div className="flex flex-wrap items-center justify-between gap-4 mt-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-600">Facility:</span>
-                <span className="text-sm font-semibold text-gray-900">{currentFacility?.name || 'Loading...'}</span>
+            {/* Bottom Row: Facility info, Quick Reserve, Date Navigation */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Facility:</span>
+                  <span className="text-sm font-semibold text-gray-900">{currentFacility?.name || 'Loading...'}</span>
 
-                {/* Info Popover */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full">
-                      <Info className="h-4 w-4 text-gray-500" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80">
-                    <p className="text-sm text-gray-700">
-                      Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
-                    </p>
-                  </PopoverContent>
-                </Popover>
+                  {/* Info Popover */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full">
+                        <Info className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <p className="text-sm text-gray-700">
+                        Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
+                      </p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <Button
+                  onClick={() => setShowQuickReserve(true)}
+                  className="flex items-center gap-2 px-4 py-1.5 font-medium shadow-md"
+                  size="sm"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Quick Reserve
+                </Button>
               </div>
 
-              {/* Date Navigation */}
+              {/* Date Navigation with Picker */}
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="text-center min-w-[200px]">
-                  <h2 className="font-medium">{formatDate(selectedDate)}</h2>
-                </div>
+                <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" className="text-center min-w-[200px] font-medium hover:bg-gray-100">
+                      {formatDate(selectedDate)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="center">
+                    <CalendarPicker
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date: Date | undefined) => {
+                        if (date) {
+                          setSelectedDate(date);
+                          setDatePickerOpen(false);
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
                 <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -963,7 +1014,7 @@ export function CourtCalendarView() {
         </div>
 
         {/* Calendar Grid Container */}
-        <div className="flex-1 min-h-0 flex flex-col px-6 py-4">
+        <div className="flex-1 min-h-0 flex flex-col px-4 py-2">
         {courts.length === 0 ? (
           <div
             className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center text-gray-500 h-full"
@@ -983,7 +1034,7 @@ export function CourtCalendarView() {
             ref={calendarScrollRef}
             className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0"
           >
-            <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH }}>
+            <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: TIME_COL_WIDTH + courts.length * effectiveCourtWidth }}>
               <thead>
                 <tr>
                   {/* Corner cell: sticky in both directions */}
@@ -998,7 +1049,7 @@ export function CourtCalendarView() {
                     <th
                       key={index}
                       className="sticky top-0 z-30 bg-white border-r border-b-2 border-gray-300 last:border-r-0 p-3 text-left font-normal"
-                      style={{ width: COURT_COL_WIDTH, minWidth: COURT_COL_WIDTH, height: HEADER_HEIGHT, verticalAlign: 'middle' }}
+                      style={{ width: effectiveCourtWidth, minWidth: effectiveCourtWidth, height: HEADER_HEIGHT, verticalAlign: 'middle' }}
                     >
                       <div className="font-semibold text-sm text-gray-900">{court.name}</div>
                       <div className="text-xs text-gray-500 mt-0.5 capitalize">{court.type}</div>
@@ -1044,7 +1095,7 @@ export function CourtCalendarView() {
                             key={courtIndex}
                             className="relative border-r border-gray-200 last:border-r-0 p-0"
                             style={{
-                              width: COURT_COL_WIDTH, minWidth: COURT_COL_WIDTH,
+                              width: effectiveCourtWidth, minWidth: effectiveCourtWidth,
                               height: ROW_HEIGHT, verticalAlign: 'top',
                               borderBottom: isHourMark ? '1px solid #d1d5db' : '1px solid #f3f4f6',
                             }}
@@ -1109,7 +1160,7 @@ export function CourtCalendarView() {
                 position: 'absolute',
                 top: 0,
                 left: 0,
-                width: TIME_COL_WIDTH + courts.length * COURT_COL_WIDTH,
+                width: TIME_COL_WIDTH + courts.length * effectiveCourtWidth,
                 height: HEADER_HEIGHT + visibleTimeSlots.length * ROW_HEIGHT,
                 zIndex: 5,
                 pointerEvents: 'none',
@@ -1117,8 +1168,8 @@ export function CourtCalendarView() {
             >
               {bookingOverlays.map((overlay, idx) => {
                 const top = HEADER_HEIGHT + overlay.startSlotIndex * SUB_SLOT_HEIGHT + 2;
-                const left = TIME_COL_WIDTH + overlay.courtIndex * COURT_COL_WIDTH + 4;
-                const width = COURT_COL_WIDTH - 8;
+                const left = TIME_COL_WIDTH + overlay.courtIndex * effectiveCourtWidth + 4;
+                const width = effectiveCourtWidth - 8;
                 const height = overlay.slotCount * SUB_SLOT_HEIGHT - 4;
                 const { booking } = overlay;
 

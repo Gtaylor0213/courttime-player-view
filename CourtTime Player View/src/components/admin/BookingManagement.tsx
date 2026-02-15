@@ -7,10 +7,12 @@ import { Label } from '../ui/label';
 import { Calendar, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { adminApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
+import { AdminBooking } from './AdminBooking';
 
 type SortField = 'bookingDate' | 'userName' | 'courtName' | 'status' | 'startTime';
 type SortDirection = 'asc' | 'desc';
@@ -33,6 +35,7 @@ export function BookingManagement() {
   const { user } = useAuth();
   const { selectedFacilityId: currentFacilityId } = useAppContext();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('bookings');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterCourt, setFilterCourt] = useState<string>('all');
@@ -290,13 +293,17 @@ export function BookingManagement() {
   return (
       <div className="p-8">
         <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-medium text-gray-900">Booking Management</h1>
-            <Button onClick={() => navigate('/admin/booking')}>
-              <Calendar className="h-4 w-4 mr-2" />
-              Create New Booking
-            </Button>
           </div>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="flex">
+              <TabsTrigger value="bookings" className="px-4">Bookings</TabsTrigger>
+              <TabsTrigger value="admin-booking" className="px-4">Create Booking</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="bookings" className="space-y-6">
 
           {/* Filters */}
           <Card className="mb-6">
@@ -558,6 +565,12 @@ export function BookingManagement() {
               )}
             </CardContent>
           </Card>
+            </TabsContent>
+
+            <TabsContent value="admin-booking">
+              <AdminBooking />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
   );

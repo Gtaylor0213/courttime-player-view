@@ -9,11 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { membersApi, addressWhitelistApi, tiersApi, strikesApi } from '../../api/client';
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
+import { HouseholdManagement } from './HouseholdManagement';
 
 interface Member {
   userId: string;
@@ -33,6 +35,7 @@ interface Member {
 export function MemberManagement() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('members');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterMembership, setFilterMembership] = useState<string>('all');
@@ -381,9 +384,18 @@ export function MemberManagement() {
       <div className="p-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-medium text-gray-900">Member Management</h1>
-            <div className="flex gap-2">
+          </div>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="flex">
+              <TabsTrigger value="members" className="px-4">Members</TabsTrigger>
+              <TabsTrigger value="households" className="px-4">Households</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="members" className="space-y-6">
+          <div className="flex justify-end gap-2 mb-4">
               <Button onClick={() => setShowAddressDialog(true)} variant="outline">
                 <Home className="h-4 w-4 mr-2" />
                 Address Whitelist
@@ -391,7 +403,6 @@ export function MemberManagement() {
               <Button onClick={loadMembers} variant="outline">
                 Refresh
               </Button>
-            </div>
           </div>
 
           {/* Filters */}
@@ -587,6 +598,12 @@ export function MemberManagement() {
               )}
             </CardContent>
           </Card>
+            </TabsContent>
+
+            <TabsContent value="households">
+              <HouseholdManagement />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 

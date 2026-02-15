@@ -16,6 +16,7 @@ import { ResetPassword } from './components/ResetPassword';
 
 // Player pages
 import { CourtCalendarView } from './components/CourtCalendarView';
+import { CourtCalendarV2 } from './components/calendar-v2/CourtCalendarV2';
 import { PlayerProfile } from './components/PlayerProfile';
 import { QuickReservation } from './components/QuickReservation';
 import { ClubInfo } from './components/ClubInfo';
@@ -59,6 +60,7 @@ export default function App() {
               </ProtectedRoute>
             }>
               <Route path="/calendar" element={<CourtCalendarView />} />
+              <Route path="/calendar1" element={<CourtCalendarV2 />} />
               <Route path="/profile" element={<PlayerProfile />} />
               <Route path="/quick-reservation" element={<QuickReservation />} />
               <Route path="/club/:clubId" element={<ClubInfo />} />

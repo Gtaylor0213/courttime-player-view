@@ -220,3 +220,15 @@ html {
 .calendar-scroll::-webkit-scrollbar-corner {
   background: #e2e8f0;
 }
+
+/* Diagonal stripe pattern for maintenance/blocked time slots */
+.unavailable-stripe {
+  background: repeating-linear-gradient(
+    135deg,
+    #e5e7eb,
+    #e5e7eb 4px,
+    #d1d5db 4px,
+    #d1d5db 8px
+  );
+  cursor: not-allowed;
+}

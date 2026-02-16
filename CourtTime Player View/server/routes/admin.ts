@@ -5,6 +5,8 @@
 
 import express from 'express';
 import { query } from '../../src/database/connection';
+import { sendAnnouncementEmail } from '../../src/services/emailService';
+import { notificationService } from '../../src/services/notificationService';
 
 const router = express.Router();
 
@@ -562,6 +564,117 @@ router.get('/analytics/:facilityId', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error fetching analytics:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/admin/email-blast/:facilityId
+ * Send email blast to facility members
+ */
+router.post('/email-blast/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { subject, message, recipientFilter } = req.body;
+
+    if (!subject || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Subject and message are required'
+      });
+    }
+
+    // Get facility name
+    const facilityResult = await query(
+      'SELECT name FROM facilities WHERE id = $1',
+      [facilityId]
+    );
+
+    if (facilityResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Facility not found'
+      });
+    }
+
+    const facilityName = facilityResult.rows[0].name;
+
+    // Get members with their emails
+    let membersQuery = `
+      SELECT
+        u.id as "userId",
+        u.email,
+        u.full_name as "fullName",
+        fm.status,
+        fm.membership_type as "membershipType"
+      FROM facility_memberships fm
+      JOIN users u ON fm.user_id = u.id
+      WHERE fm.facility_id = $1
+    `;
+
+    const params: any[] = [facilityId];
+
+    // Apply filter
+    if (recipientFilter && recipientFilter !== 'all') {
+      if (['active', 'pending', 'suspended', 'expired'].includes(recipientFilter)) {
+        membersQuery += ' AND fm.status = $2';
+        params.push(recipientFilter);
+      } else {
+        // Filter by membership type
+        membersQuery += ' AND fm.membership_type = $2';
+        params.push(recipientFilter);
+      }
+    }
+
+    const membersResult = await query(membersQuery, params);
+    const recipients = membersResult.rows;
+
+    if (recipients.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No recipients match the selected filter'
+      });
+    }
+
+    // Send emails and in-app notifications
+    const emailResults = await Promise.allSettled(
+      recipients.map((member: any) =>
+        sendAnnouncementEmail(
+          member.email,
+          member.fullName,
+          subject,
+          message,
+          facilityName
+        )
+      )
+    );
+
+    // Create in-app notifications for all recipients
+    const userIds = recipients.map((m: any) => m.userId);
+    try {
+      await notificationService.notifyFacilityAnnouncement(userIds, subject, message);
+    } catch (notifError) {
+      console.error('Error creating in-app notifications:', notifError);
+    }
+
+    const sent = emailResults.filter(
+      r => r.status === 'fulfilled' && r.value === true
+    ).length;
+    const failed = recipients.length - sent;
+
+    res.json({
+      success: true,
+      data: {
+        sent,
+        failed,
+        total: recipients.length
+      }
+    });
+  } catch (error: any) {
+    console.error('Error sending email blast:', error);
     res.status(500).json({
       success: false,
       error: error.message

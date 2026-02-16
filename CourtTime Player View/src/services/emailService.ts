@@ -157,6 +157,40 @@ export async function sendStrikeRevokedEmail(
 /**
  * Send email when account is locked out due to strikes
  */
+/**
+ * Send announcement/blast email from admin to facility members
+ */
+export async function sendAnnouncementEmail(
+  email: string,
+  fullName: string,
+  subject: string,
+  messageBody: string,
+  facilityName: string
+): Promise<boolean> {
+  const htmlMessage = messageBody.replace(/\n/g, '<br>');
+
+  return sendEmail(
+    email,
+    `${subject} - ${facilityName}`,
+    `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #16a34a; padding: 16px 24px; border-radius: 8px 8px 0 0;">
+          <h2 style="color: white; margin: 0; font-size: 20px;">${facilityName}</h2>
+        </div>
+        <div style="border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; padding: 24px;">
+          <p style="color: #374151; margin-top: 0;">Hi ${fullName},</p>
+          <div style="color: #374151; line-height: 1.6;">${htmlMessage}</div>
+        </div>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+        <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
+      </div>
+    `
+  );
+}
+
+/**
+ * Send email when account is locked out due to strikes
+ */
 export async function sendLockoutEmail(
   email: string,
   fullName: string,

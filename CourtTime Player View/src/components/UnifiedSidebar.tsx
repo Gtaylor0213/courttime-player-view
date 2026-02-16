@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, ChevronsUpDown } from 'lucide-react';
+import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, ChevronsUpDown, Mail } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
@@ -227,6 +227,12 @@ export function UnifiedSidebar({
                   icon={UserCog}
                   label="Member Management"
                   isActive={currentPage === 'member-management' || currentPage === 'household-management'}
+                />
+                <SidebarButton
+                  onClick={() => navigate('/admin/email-blast')}
+                  icon={Mail}
+                  label="Email Blast"
+                  isActive={currentPage === 'email-blast'}
                 />
               </div>
             </div>

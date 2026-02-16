@@ -31,6 +31,7 @@ import { BookingManagement } from './components/admin/BookingManagement';
 import { AdminBooking } from './components/admin/AdminBooking';
 import { MemberManagement } from './components/admin/MemberManagement';
 import { HouseholdManagement } from './components/admin/HouseholdManagement';
+import { AdminEmailBlast } from './components/admin/AdminEmailBlast';
 
 // Developer
 import { DeveloperConsole } from './components/developer';
@@ -72,6 +73,7 @@ export default function App() {
               <Route path="/admin/booking" element={<AdminBooking />} />
               <Route path="/admin/members" element={<MemberManagement />} />
               <Route path="/admin/households" element={<HouseholdManagement />} />
+              <Route path="/admin/email-blast" element={<AdminEmailBlast />} />
             </Route>
 
             {/* Default redirect */}

@@ -584,6 +584,14 @@ export const adminApi = {
   getAnalytics: async (facilityId: string, period?: number) => {
     return apiRequest(`/api/admin/analytics/${facilityId}?period=${period || 30}`);
   },
+
+  // Email Blast
+  sendEmailBlast: async (facilityId: string, data: { subject: string; message: string; recipientFilter: string }) => {
+    return apiRequest(`/api/admin/email-blast/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 // Court Config API

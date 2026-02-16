@@ -354,7 +354,13 @@ export function ClubInfo() {
                           if (hours.closed) {
                             hoursDisplay = 'Closed';
                           } else if (hours.open && hours.close) {
-                            hoursDisplay = `${hours.open} - ${hours.close}`;
+                            const fmt = (t: string) => {
+                              const [h, m] = t.split(':').map(Number);
+                              const period = h >= 12 ? 'PM' : 'AM';
+                              const h12 = h % 12 || 12;
+                              return m ? `${h12}:${m.toString().padStart(2, '0')} ${period}` : `${h12} ${period}`;
+                            };
+                            hoursDisplay = `${fmt(hours.open)} - ${fmt(hours.close)}`;
                           }
                         }
                       }

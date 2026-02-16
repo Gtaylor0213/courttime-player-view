@@ -492,6 +492,13 @@ export function FacilityManagement() {
     setIsEditing(false);
   };
 
+  const formatTo12Hour = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return m ? `${h12}:${m.toString().padStart(2, '0')} ${period}` : `${h12} ${period}`;
+  };
+
   const getHoursDisplay = (day: string) => {
     if (!facilityData.operatingHours || !facilityData.operatingHours[day]) {
       return 'Not set';
@@ -499,7 +506,7 @@ export function FacilityManagement() {
     const hours = facilityData.operatingHours[day];
     if (typeof hours === 'string') return hours;
     if (hours.closed) return 'Closed';
-    return `${hours.open} - ${hours.close}`;
+    return `${formatTo12Hour(hours.open)} - ${formatTo12Hour(hours.close)}`;
   };
 
   // Handle operating hours changes

@@ -208,11 +208,25 @@ export function UserRegistration() {
       if (success) {
         toast.success('Account created successfully!');
 
-        // Request membership to selected facilities if any
+        // Request membership to selected facilities
         if (selectedFacilities.length > 0) {
-          // Get the user ID from auth context (should be set after registration)
-          // Note: We'll need to pass this through the register function or get it from context
-          toast.info(`Membership requests sent to ${selectedFacilities.length} ${selectedFacilities.length === 1 ? 'facility' : 'facilities'}`);
+          const storedUser = localStorage.getItem('auth_user');
+          const userId = storedUser ? JSON.parse(storedUser).id : null;
+
+          if (userId) {
+            let requestCount = 0;
+            for (const facility of selectedFacilities) {
+              try {
+                const result = await playerProfileApi.requestMembership(userId, facility.id);
+                if (result.success) requestCount++;
+              } catch (err) {
+                console.error(`Failed to request membership for ${facility.id}:`, err);
+              }
+            }
+            if (requestCount > 0) {
+              toast.info(`Membership ${requestCount === 1 ? 'request' : 'requests'} sent to ${requestCount} ${requestCount === 1 ? 'facility' : 'facilities'}`);
+            }
+          }
         }
 
         navigate('/calendar');

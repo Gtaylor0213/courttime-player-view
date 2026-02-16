@@ -429,7 +429,7 @@ router.post('/facility/:facilityId/bulk', async (req, res, next) => {
           [
             facilityId,
             ruleDefinitionId,
-            ruleConfig ? JSON.stringify(ruleConfig) : null,
+            JSON.stringify(ruleConfig || {}),
             isEnabled ?? true,
             appliesToCourtIds || null,
             appliesToTierIds || null

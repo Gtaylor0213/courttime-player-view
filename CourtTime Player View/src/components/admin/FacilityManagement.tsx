@@ -501,8 +501,10 @@ export function FacilityManagement() {
       const response = await adminApi.updateFacility(currentFacilityId, facilityData);
 
       if (response.success) {
-        await syncBookingRulesToEngine();
-        toast.success('Facility updated successfully');
+        const rulesOk = await syncBookingRulesToEngine();
+        if (rulesOk) {
+          toast.success('Facility updated successfully');
+        }
         setIsEditing(false);
         setOriginalData(facilityData);
       } else {
@@ -1279,10 +1281,13 @@ export function FacilityManagement() {
       if (!response.success) {
         console.error('Error syncing rules to engine:', response.error);
         toast.error('Failed to save booking rules to engine. Please try saving again.');
+        return false;
       }
+      return true;
     } catch (error) {
       console.error('Error syncing rules to engine:', error);
       toast.error('Failed to save booking rules to engine. Please try saving again.');
+      return false;
     }
   };
 

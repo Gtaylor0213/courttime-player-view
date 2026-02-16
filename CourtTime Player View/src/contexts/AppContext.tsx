@@ -23,10 +23,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string>('sunrise-valley');
 
-  // Auto-select first facility when user logs in or changes
+  // Auto-select first facility when user logs in or changes (prefer member, then admin)
   useEffect(() => {
-    if (user?.memberFacilities && user.memberFacilities.length > 0) {
-      setSelectedFacilityId(user.memberFacilities[0]);
+    const allFacilityIds = Array.from(new Set([
+      ...(user?.memberFacilities || []),
+      ...(user?.adminFacilities || []),
+    ]));
+    if (allFacilityIds.length > 0) {
+      setSelectedFacilityId(allFacilityIds[0]);
     }
   }, [user?.id]);
 

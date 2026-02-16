@@ -40,10 +40,15 @@ export function UnifiedSidebar({
   // Use the actual user's type from AuthContext, or fall back to the prop
   const actualUserType = user?.userType || userType;
 
-  // Fetch user's member facilities
+  // Fetch user's facilities (combine memberFacilities + adminFacilities)
   React.useEffect(() => {
     const fetchMemberFacilities = async () => {
-      if (!user?.memberFacilities || user.memberFacilities.length === 0) {
+      const allFacilityIds = Array.from(new Set([
+        ...(user?.memberFacilities || []),
+        ...(user?.adminFacilities || []),
+      ]));
+
+      if (allFacilityIds.length === 0) {
         setMemberFacilities([]);
         setLoadingFacilities(false);
         return;
@@ -52,7 +57,7 @@ export function UnifiedSidebar({
       try {
         const facilitiesData: Club[] = [];
 
-        for (const facilityId of user.memberFacilities) {
+        for (const facilityId of allFacilityIds) {
           const response = await facilitiesApi.getById(facilityId);
           if (response.success && response.data?.facility) {
             facilitiesData.push({
@@ -71,7 +76,7 @@ export function UnifiedSidebar({
     };
 
     fetchMemberFacilities();
-  }, [user?.memberFacilities]);
+  }, [user?.memberFacilities, user?.adminFacilities]);
 
   // Get user initials
   const getUserInitials = () => {

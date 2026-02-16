@@ -147,10 +147,15 @@ export function CourtCalendarView() {
     return date.toDateString() === today.toDateString();
   }, []);
 
-  // Fetch user's member facilities with courts
+  // Fetch user's member facilities with courts (combine memberFacilities + adminFacilities)
   useEffect(() => {
     const fetchFacilities = async () => {
-      if (!user?.memberFacilities || user.memberFacilities.length === 0) {
+      const allFacilityIds = Array.from(new Set([
+        ...(user?.memberFacilities || []),
+        ...(user?.adminFacilities || []),
+      ]));
+
+      if (allFacilityIds.length === 0) {
         setLoadingFacilities(false);
         return;
       }
@@ -159,7 +164,7 @@ export function CourtCalendarView() {
         setLoadingFacilities(true);
         const facilitiesData: Array<{ id: string; name: string; type: string; courts: Array<{ id: string; name: string; type: string }>; operatingHours?: any; timezone?: string }> = [];
 
-        for (const facilityId of user.memberFacilities) {
+        for (const facilityId of allFacilityIds) {
           // Fetch facility details
           const facilityResponse = await facilitiesApi.getById(facilityId);
           if (facilityResponse.success && facilityResponse.data) {
@@ -200,7 +205,7 @@ export function CourtCalendarView() {
     };
 
     fetchFacilities();
-  }, [user?.memberFacilities]);
+  }, [user?.memberFacilities, user?.adminFacilities]);
 
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async () => {

@@ -220,8 +220,12 @@ router.patch('/courts/:courtId', async (req, res) => {
       courtType,
       isIndoor,
       hasLights,
-      status
+      status: rawStatus
     } = req.body;
+
+    // Normalize legacy status values to match DB constraint
+    const statusMap: Record<string, string> = { active: 'available', inactive: 'closed' };
+    const status = rawStatus ? (statusMap[rawStatus] || rawStatus) : rawStatus;
 
     const result = await query(`
       UPDATE courts

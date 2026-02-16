@@ -57,7 +57,12 @@ export function CourtManagement() {
       const response = await facilitiesApi.getCourts(currentFacilityId);
 
       if (response.success && response.data?.courts) {
-        setCourts(response.data.courts);
+        // Normalize legacy status values to match DB constraint
+        const normalized = response.data.courts.map((c: any) => ({
+          ...c,
+          status: c.status === 'active' ? 'available' : c.status === 'inactive' ? 'closed' : c.status,
+        }));
+        setCourts(normalized);
       } else {
         toast.error(response.error || 'Failed to load courts');
       }

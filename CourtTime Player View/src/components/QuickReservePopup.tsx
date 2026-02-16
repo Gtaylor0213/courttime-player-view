@@ -45,6 +45,7 @@ export function QuickReservePopup({
   const [selectedCourtId, setSelectedCourtId] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
+  const [selectedEndTime, setSelectedEndTime] = useState('');
   const [duration, setDuration] = useState('1');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,6 +56,9 @@ export function QuickReservePopup({
 
   // Booking type
   const [bookingType, setBookingType] = useState<string>('');
+
+  // Multi-court selection
+  const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
 
   // Advanced booking state
   const [advancedBooking, setAdvancedBooking] = useState(false);
@@ -101,6 +105,7 @@ export function QuickReservePopup({
     setBookingErrors([]);
     setBookingWarnings([]);
     setIsPrimeTime(false);
+    setAdditionalCourtIds([]);
   }, [isOpen]);
 
   // Reset court selection when facility changes
@@ -108,6 +113,7 @@ export function QuickReservePopup({
     setSelectedCourt('');
     setSelectedCourtId('');
     setSelectedCourtType(null);
+    setAdditionalCourtIds([]);
   }, [selectedFacility]);
 
   const currentFacility = facilities.find(f => f.id === selectedFacility);
@@ -389,6 +395,44 @@ export function QuickReservePopup({
     );
   };
 
+  // Toggle additional court selection
+  const toggleCourtSelection = (courtId: string, courtName: string) => {
+    if (courtId === selectedCourtId) {
+      // Clicking primary court — deselect only if there are additional courts
+      if (additionalCourtIds.length > 0) {
+        const nextPrimaryId = additionalCourtIds[0];
+        const nextPrimary = availableCourts.find(c => c.id === nextPrimaryId);
+        setSelectedCourtId(nextPrimaryId);
+        setSelectedCourt(nextPrimary?.name || '');
+        setAdditionalCourtIds(prev => prev.filter(id => id !== nextPrimaryId));
+      }
+    } else if (additionalCourtIds.includes(courtId)) {
+      // Already additional — remove it
+      setAdditionalCourtIds(prev => prev.filter(id => id !== courtId));
+    } else {
+      // Not selected — add it
+      if (!selectedCourtId) {
+        setSelectedCourtId(courtId);
+        setSelectedCourt(courtName);
+      } else {
+        setAdditionalCourtIds(prev => [...prev, courtId]);
+      }
+    }
+  };
+
+  // All selected courts (primary + additional)
+  const allSelectedCourts = React.useMemo(() => {
+    const courts: Array<{ id: string; name: string }> = [];
+    if (selectedCourtId) {
+      courts.push({ id: selectedCourtId, name: selectedCourt });
+    }
+    for (const id of additionalCourtIds) {
+      const c = availableCourts.find(court => court.id === id);
+      if (c) courts.push({ id: c.id, name: c.name });
+    }
+    return courts;
+  }, [selectedCourtId, selectedCourt, additionalCourtIds, availableCourts]);
+
   const getDayOfWeek = (date: Date): string => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return days[date.getDay()];
@@ -470,21 +514,23 @@ export function QuickReservePopup({
       // Generate dates for booking
       const datesToBook = generateRecurringDates();
 
-      // Create bookings for all dates
+      // Create bookings for all courts × all dates
+      const bookingRequests = allSelectedCourts.flatMap(c =>
+        datesToBook.map(date => ({
+          courtId: c.id,
+          userId: user.id,
+          facilityId: selectedFacility,
+          bookingDate: date,
+          startTime: startTime24,
+          endTime: endTime24,
+          durationMinutes: Math.round(durationMinutes),
+          bookingType: bookingType || undefined,
+          notes: notes || undefined
+        }))
+      );
+
       const results = await Promise.all(
-        datesToBook.map(date =>
-          bookingApi.create({
-            courtId: selectedCourtId,
-            userId: user.id,
-            facilityId: selectedFacility,
-            bookingDate: date,
-            startTime: startTime24,
-            endTime: endTime24,
-            durationMinutes: Math.round(durationMinutes),
-            bookingType: bookingType || undefined,
-            notes: notes || undefined
-          })
-        )
+        bookingRequests.map(req => bookingApi.create(req))
       );
 
       const failedBookings = results.filter(r => !r.success);
@@ -575,6 +621,58 @@ export function QuickReservePopup({
     return `${displayHours}:${minutes.toString().padStart(2, '0')} ${endPeriod}`;
   };
 
+  // Generate end time options (all slots after selected start time)
+  const endTimeSlots = React.useMemo(() => {
+    if (!selectedTime) return [];
+    const allSlots: string[] = [];
+    for (let hour = 6; hour <= 21; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        allSlots.push(`${displayHour}:${minute.toString().padStart(2, '0')} ${period}`);
+      }
+    }
+    const startIdx = allSlots.indexOf(selectedTime);
+    return startIdx >= 0 ? allSlots.slice(startIdx + 1) : allSlots;
+  }, [selectedTime]);
+
+  // Sync selectedEndTime when selectedTime or duration changes
+  useEffect(() => {
+    if (selectedTime) {
+      setSelectedEndTime(calculateEndTime(selectedTime, duration));
+    }
+  }, [selectedTime, duration]);
+
+  // When user picks an end time, derive duration
+  const handleEndTimeChange = (newEndTime: string) => {
+    setSelectedEndTime(newEndTime);
+    // Calculate duration in hours from start to end
+    const convert = (t: string) => {
+      const [tm, p] = t.split(' ');
+      let [h, m] = tm.split(':').map(Number);
+      if (p === 'PM' && h !== 12) h += 12;
+      if (p === 'AM' && h === 12) h = 0;
+      return h * 60 + m;
+    };
+    const startMins = convert(selectedTime);
+    const endMins = convert(newEndTime);
+    const diff = endMins - startMins;
+    if (diff > 0) {
+      setDuration((diff / 60).toString());
+    }
+  };
+
+  // Computed duration label for display
+  const durationLabel = React.useMemo(() => {
+    const mins = parseFloat(duration) * 60;
+    if (mins <= 0) return '';
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    if (h === 0) return `${m} min`;
+    if (m === 0) return `${h} hr`;
+    return `${h} hr ${m} min`;
+  }, [duration]);
+
   return (
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
@@ -660,15 +758,18 @@ export function QuickReservePopup({
             />
           </div>
 
-          {/* Time Selection */}
+          {/* Start Time */}
           <div className="flex items-center gap-3">
             <Label htmlFor="time" className="flex items-center gap-2 min-w-[80px]">
               <Clock className="h-4 w-4" />
-              Time
+              Start
             </Label>
-            <Select value={selectedTime} onValueChange={setSelectedTime}>
+            <Select value={selectedTime} onValueChange={(val) => {
+              setSelectedTime(val);
+              // Keep same duration, recalculate end time via the effect
+            }}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select time" />
+                <SelectValue placeholder="Select start time" />
               </SelectTrigger>
               <SelectContent>
                 {timeSlots.map((time) => (
@@ -680,26 +781,24 @@ export function QuickReservePopup({
             </Select>
           </div>
 
-          {/* Duration */}
+          {/* End Time */}
           <div className="flex items-center gap-3">
-            <Label htmlFor="duration" className="min-w-[80px]">Duration</Label>
-            <Select value={duration} onValueChange={setDuration}>
+            <Label className="min-w-[80px]">End</Label>
+            <Select value={selectedEndTime} onValueChange={handleEndTimeChange}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select duration" />
+                <SelectValue placeholder="Select end time" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0.25">15 minutes</SelectItem>
-                <SelectItem value="0.5">30 minutes</SelectItem>
-                <SelectItem value="0.75">45 minutes</SelectItem>
-                <SelectItem value="1">1 hour</SelectItem>
-                <SelectItem value="1.25">1 hour 15 minutes</SelectItem>
-                <SelectItem value="1.5">1 hour 30 minutes</SelectItem>
-                <SelectItem value="1.75">1 hour 45 minutes</SelectItem>
-                <SelectItem value="2">2 hours</SelectItem>
-                <SelectItem value="2.5">2 hours 30 minutes</SelectItem>
-                <SelectItem value="3">3 hours</SelectItem>
+                {endTimeSlots.map((time) => (
+                  <SelectItem key={time} value={time}>
+                    {time}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {durationLabel && (
+              <span className="text-xs text-gray-500 min-w-[60px]">{durationLabel}</span>
+            )}
           </div>
 
           {/* Booking Type Dropdown */}
@@ -733,38 +832,40 @@ export function QuickReservePopup({
           {/* Available Courts Selection - Show when court type, date, and time are selected */}
           {selectedCourtType && selectedDate && selectedTime && courtsWithAvailability.length > 0 && (
             <div className="space-y-2">
-              <Label>Available Courts</Label>
+              <Label>Available Courts <span className="text-xs text-gray-400 font-normal">(select one or more)</span></Label>
               <div className="grid grid-cols-2 gap-2">
-                {courtsWithAvailability.map((court) => (
-                  <button
-                    key={court.id}
-                    type="button"
-                    disabled={!court.isAvailable}
-                    onClick={() => {
-                      if (court.isAvailable) {
-                        setSelectedCourtId(court.id);
-                        setSelectedCourt(court.name);
-                      }
-                    }}
-                    className={`
-                      p-3 rounded-md border-2 text-left transition-all
-                      ${court.isAvailable
-                        ? selectedCourtId === court.id
-                          ? 'border-green-600 bg-green-50 text-green-800'
-                          : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50 cursor-pointer'
-                        : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                      }
-                    `}
-                  >
-                    <div className="font-medium text-sm">{court.name}</div>
-                    <div className={`text-xs ${court.isAvailable ? 'text-green-600' : 'text-red-500'}`}>
-                      {court.isAvailable ? 'Available' : 'Booked'}
-                    </div>
-                  </button>
-                ))}
+                {courtsWithAvailability.map((court) => {
+                  const isSelected = court.id === selectedCourtId || additionalCourtIds.includes(court.id);
+                  return (
+                    <button
+                      key={court.id}
+                      type="button"
+                      disabled={!court.isAvailable}
+                      onClick={() => {
+                        if (court.isAvailable) {
+                          toggleCourtSelection(court.id, court.name);
+                        }
+                      }}
+                      className={`
+                        p-3 rounded-md border-2 text-left transition-all
+                        ${court.isAvailable
+                          ? isSelected
+                            ? 'border-green-600 bg-green-50 text-green-800'
+                            : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50 cursor-pointer'
+                          : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                        }
+                      `}
+                    >
+                      <div className="font-medium text-sm">{court.name}</div>
+                      <div className={`text-xs ${court.isAvailable ? isSelected ? 'text-green-600' : 'text-gray-500' : 'text-red-500'}`}>
+                        {court.isAvailable ? (isSelected ? 'Selected' : 'Available') : 'Booked'}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
               {!selectedCourtId && (
-                <p className="text-xs text-amber-600">Please select a court above</p>
+                <p className="text-xs text-amber-600">Please select at least one court above</p>
               )}
             </div>
           )}
@@ -826,7 +927,8 @@ export function QuickReservePopup({
                     Every {recurringDays.join(', ')} from {new Date(selectedDate + 'T00:00:00').toLocaleDateString()} to {new Date(recurringEndDate + 'T00:00:00').toLocaleDateString()}
                   </div>
                   <div className="mt-1 font-medium">
-                    Total bookings: {generateRecurringDates().length}
+                    Total bookings: {generateRecurringDates().length * allSelectedCourts.length}
+                    {allSelectedCourts.length > 1 && ` (${generateRecurringDates().length} dates × ${allSelectedCourts.length} courts)`}
                   </div>
                 </div>
               )}
@@ -884,9 +986,13 @@ export function QuickReservePopup({
                     <div className="font-medium text-green-800 mb-1">Reservation Summary</div>
                     <div className="text-green-700">
                       <div>{currentFacility?.name}</div>
-                      <div>{selectedCourt}</div>
+                      <div>
+                        {allSelectedCourts.length > 1
+                          ? `${allSelectedCourts.length} Courts: ${allSelectedCourts.map(c => c.name).join(', ')}`
+                          : selectedCourt}
+                      </div>
                       <div>{formatDisplayDate(selectedDate)}</div>
-                      <div>{selectedTime} - {calculateEndTime(selectedTime, duration)}</div>
+                      <div>{selectedTime} - {selectedEndTime} ({durationLabel})</div>
                     </div>
                   </div>
                 </div>
@@ -913,7 +1019,7 @@ export function QuickReservePopup({
             disabled={isSubmitting || !selectedCourt}
             className="flex-1"
           >
-            {isSubmitting ? 'Reserving...' : 'Quick Reserve'}
+            {isSubmitting ? 'Reserving...' : allSelectedCourts.length > 1 ? `Reserve ${allSelectedCourts.length} Courts` : 'Quick Reserve'}
           </Button>
         </div>
       </DialogContent>

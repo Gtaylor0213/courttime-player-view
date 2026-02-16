@@ -100,6 +100,10 @@ export function CourtCalendarView() {
     endCell: null as { court: string, time: string } | null,
     selectedCells: new Set<string>()
   });
+  // Keep a ref to always have the latest dragState in event listeners
+  const dragStateRef = React.useRef(dragState);
+  dragStateRef.current = dragState;
+  const dragJustFinishedRef = React.useRef(false);
 
   // Quick reserve popup state
   const [showQuickReserve, setShowQuickReserve] = useState(false);
@@ -603,7 +607,7 @@ export function CourtCalendarView() {
     }
   };
 
-  const handleEmptySlotClick = (courtName: string, time: string) => {
+  const handleEmptySlotClick = (courtName: string, time: string, dragCells?: Set<string>) => {
     // Find the court object to get its ID
     const courtObj = courts.find(c => c.name === courtName);
     if (!courtObj) {
@@ -611,9 +615,15 @@ export function CourtCalendarView() {
       return;
     }
 
+    // Format date as YYYY-MM-DD to avoid timezone issues
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
     // If we have selected cells from dragging, open booking wizard with them
-    if (dragState.selectedCells.size > 0) {
-      const selectedSlots = Array.from(dragState.selectedCells as Set<string>).map(cellId => {
+    if (dragCells && dragCells.size > 0) {
+      const selectedSlots = Array.from(dragCells).map(cellId => {
         const [court, timeSlot] = cellId.split('|');
         const slotCourtObj = courts.find(c => c.name === court);
         return {
@@ -622,12 +632,6 @@ export function CourtCalendarView() {
           time: timeSlot
         };
       });
-
-      // Format date as YYYY-MM-DD to avoid timezone issues
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
 
       setBookingWizard({
         isOpen: true,
@@ -641,12 +645,6 @@ export function CourtCalendarView() {
       });
     } else {
       // Single slot booking
-      // Format date as YYYY-MM-DD to avoid timezone issues
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-
       setBookingWizard({
         isOpen: true,
         court: courtName,
@@ -677,25 +675,26 @@ export function CourtCalendarView() {
   const handleMouseEnter = (courtName: string, time: string) => {
     if (!dragState.isDragging) return;
 
-    const booking = bookings[courtName as keyof typeof bookings]?.[time];
-    if (booking) return; // Don't include booked slots in selection
-
-    // Only allow dragging within the same court
-    if (dragState.startCell && dragState.startCell.court !== courtName) return;
-
+    // Build rectangular selection across courts and time slots
+    const startCourtIndex = courts.findIndex(c => c.name === dragState.startCell!.court);
+    const currentCourtIndex = courts.findIndex(c => c.name === courtName);
     const startTimeIndex = timeSlots.indexOf(dragState.startCell!.time);
     const currentTimeIndex = timeSlots.indexOf(time);
-    const endTimeIndex = Math.max(startTimeIndex, currentTimeIndex);
-    const beginTimeIndex = Math.min(startTimeIndex, currentTimeIndex);
 
-    // Create selection from start to current position
+    const beginCourtIdx = Math.min(startCourtIndex, currentCourtIndex);
+    const endCourtIdx = Math.max(startCourtIndex, currentCourtIndex);
+    const beginTimeIdx = Math.min(startTimeIndex, currentTimeIndex);
+    const endTimeIdx = Math.max(startTimeIndex, currentTimeIndex);
+
     const newSelectedCells = new Set<string>();
-    for (let i = beginTimeIndex; i <= endTimeIndex; i++) {
-      const timeSlot = timeSlots[i];
-      const booking = bookings[courtName as keyof typeof bookings]?.[timeSlot];
-      // Only include available slots
-      if (!booking) {
-        newSelectedCells.add(`${courtName}|${timeSlot}`);
+    for (let ci = beginCourtIdx; ci <= endCourtIdx; ci++) {
+      const c = courts[ci];
+      for (let ti = beginTimeIdx; ti <= endTimeIdx; ti++) {
+        const slot = timeSlots[ti];
+        const slotBooking = bookings[c.name as keyof typeof bookings]?.[slot];
+        if (!slotBooking) {
+          newSelectedCells.add(`${c.name}|${slot}`);
+        }
       }
     }
 
@@ -707,13 +706,19 @@ export function CourtCalendarView() {
   };
 
   const handleMouseUp = () => {
-    if (dragState.isDragging && dragState.selectedCells.size > 0) {
-      // If multiple cells selected, open booking wizard
-      const firstSelected = Array.from(dragState.selectedCells as Set<string>)[0];
+    // Read from ref to get the latest drag state (avoids stale closure)
+    const currentDrag = dragStateRef.current;
+    if (currentDrag.isDragging && currentDrag.selectedCells.size > 0) {
+      const cells = new Set<string>(currentDrag.selectedCells);
+      const firstSelected = Array.from(cells)[0] as string;
       const [court, time] = firstSelected.split('|');
-      handleEmptySlotClick(court, time);
+      // Pass cells directly to avoid stale closure issues
+      handleEmptySlotClick(court, time, cells);
+      // Suppress the click event that fires right after mouseup
+      dragJustFinishedRef.current = true;
+      setTimeout(() => { dragJustFinishedRef.current = false; }, 50);
     }
-    
+
     setDragState({
       isDragging: false,
       startCell: null,
@@ -1116,6 +1121,7 @@ export function CourtCalendarView() {
                               `}
                               style={{ height: SUB_SLOT_HEIGHT }}
                               onClick={() => {
+                                if (dragJustFinishedRef.current) return;
                                 if (topPast && !topBooking) return;
                                 if (topBooking) handleBookingClick(court.name, topTime);
                                 else handleEmptySlotClick(court.name, topTime);
@@ -1142,6 +1148,7 @@ export function CourtCalendarView() {
                                 `}
                                 style={{ top: SUB_SLOT_HEIGHT, height: SUB_SLOT_HEIGHT }}
                                 onClick={() => {
+                                  if (dragJustFinishedRef.current) return;
                                   if (bottomPast && !bottomBooking) return;
                                   if (bottomBooking) handleBookingClick(court.name, bottomTime);
                                   else handleEmptySlotClick(court.name, bottomTime);

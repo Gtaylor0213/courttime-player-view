@@ -4,7 +4,7 @@
  */
 
 import { query } from '../../database/connection';
-import { buildRuleContext, buildCancellationContext } from './RuleContext';
+import { buildRuleContext, buildCancellationContext, getFacilityLocalNow } from './RuleContext';
 import {
   BookingRequest,
   CancellationRequest,
@@ -286,9 +286,10 @@ export class RulesEngine {
       const lateCancelRule = facility.rules.find(r => r.ruleCode === 'ACC-008');
       const courtCancelRule = facility.rules.find(r => r.ruleCode === 'CRT-012');
 
-      // Calculate minutes before start
+      // Calculate minutes before start (use facility timezone for accurate comparison)
       const bookingStart = combineDateAndTime(booking.bookingDate, booking.startTime);
-      const now = new Date();
+      const facilityTimezone = (facility as any).timezone || 'America/New_York';
+      const now = getFacilityLocalNow(facilityTimezone);
       const minutesBeforeStart = minutesBetween(now, bookingStart);
 
       // Determine cutoff (court-specific or account-level)

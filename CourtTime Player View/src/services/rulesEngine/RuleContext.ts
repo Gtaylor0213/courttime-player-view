@@ -24,6 +24,42 @@ import {
 import { isPrimeTime } from './utils/primeTimeUtils';
 
 /**
+ * Get current time expressed as facility-local components.
+ * On servers running in UTC (e.g., Render), new Date() is UTC but booking
+ * times are stored as facility-local (e.g., "16:00" means 4 PM EST).
+ * This function returns a Date whose year/month/day/hour/minute match the
+ * facility's current local time, so comparisons with combineDateAndTime work correctly.
+ */
+export function getFacilityLocalNow(timezone: string): Date {
+  const now = new Date();
+  // Format current time in the facility's timezone
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+
+  const get = (type: string) => {
+    const part = parts.find(p => p.type === type);
+    return part ? parseInt(part.value, 10) : 0;
+  };
+
+  return new Date(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    get('hour'),
+    get('minute'),
+    get('second')
+  );
+}
+
+/**
  * Build the complete rule context for a booking request
  */
 export async function buildRuleContext(request: BookingRequest): Promise<RuleContext> {
@@ -61,6 +97,12 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     ? isPrimeTime(court.operatingConfig, request.bookingDate, request.startTime, request.endTime)
     : false;
 
+  // Use facility-local time for currentDateTime so comparisons with
+  // combineDateAndTime (which uses local time components) are correct
+  // even when the server runs in UTC (e.g., Render)
+  const facilityTimezone = (facility as any).timezone || 'America/New_York';
+  const currentDateTime = getFacilityLocalNow(facilityTimezone);
+
   return {
     request,
     user,
@@ -75,7 +117,7 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     strikes,
     recentCancellations,
     blackouts,
-    currentDateTime: new Date(),
+    currentDateTime,
     isPrimeTime: bookingIsPrimeTime
   };
 }
@@ -267,7 +309,8 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
     `SELECT
       id,
       name,
-      operating_hours as "operatingHours"
+      operating_hours as "operatingHours",
+      timezone
     FROM facilities
     WHERE id = $1`,
     [facilityId]

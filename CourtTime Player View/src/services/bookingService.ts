@@ -519,9 +519,16 @@ export async function cancelBooking(
     // Record rate limit action
     await recordRateLimitAction(userId, booking.facilityId, 'cancel');
 
-    // Calculate minutes before start
-    const bookingStart = new Date(`${booking.bookingDate}T${booking.startTime}`);
-    const now = new Date();
+    // Calculate minutes before start (use facility timezone for accurate comparison)
+    const facilityTzResult = await query('SELECT timezone FROM facilities WHERE id = $1', [booking.facilityId]);
+    const facilityTz = facilityTzResult.rows[0]?.timezone || 'America/New_York';
+    const { getFacilityLocalNow } = await import('./rulesEngine/RuleContext');
+    const now = getFacilityLocalNow(facilityTz);
+    // Create bookingStart using local components (same approach as combineDateAndTime)
+    // so the comparison with facility-local "now" is accurate
+    const [bYear, bMonth, bDay] = booking.bookingDate.split('-').map(Number);
+    const [bHour, bMin] = booking.startTime.split(':').map(Number);
+    const bookingStart = new Date(bYear, bMonth - 1, bDay, bHour, bMin, 0);
     const minutesBeforeStart = Math.floor((bookingStart.getTime() - now.getTime()) / 60000);
 
     // Update booking status

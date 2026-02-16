@@ -4,9 +4,12 @@
  */
 
 import express from 'express';
-import { pool } from '../../src/database/connection';
+import { getPool } from '../../src/database/connection';
 
 const router = express.Router();
+
+// Get the pool instance for direct queries and transactions
+const getDbPool = () => getPool();
 
 /**
  * GET /api/rules/definitions
@@ -28,7 +31,7 @@ router.get('/definitions', async (req, res, next) => {
 
     query += ` ORDER BY evaluation_order ASC`;
 
-    const result = await pool.query(query, params);
+    const result = await getDbPool().query(query, params);
 
     res.json({
       success: true,
@@ -47,7 +50,7 @@ router.get('/definitions/:ruleCode', async (req, res, next) => {
   try {
     const { ruleCode } = req.params;
 
-    const result = await pool.query(
+    const result = await getDbPool().query(
       `SELECT * FROM booking_rule_definitions WHERE rule_code = $1`,
       [ruleCode]
     );
@@ -97,7 +100,7 @@ router.get('/facility/:facilityId', async (req, res, next) => {
 
     query += ` ORDER BY brd.evaluation_order ASC`;
 
-    const result = await pool.query(query, params);
+    const result = await getDbPool().query(query, params);
 
     res.json({
       success: true,
@@ -117,12 +120,12 @@ router.get('/facility/:facilityId/effective', async (req, res, next) => {
     const { facilityId } = req.params;
 
     // Get all rule definitions
-    const definitionsResult = await pool.query(
+    const definitionsResult = await getDbPool().query(
       `SELECT * FROM booking_rule_definitions ORDER BY evaluation_order ASC`
     );
 
     // Get facility configs
-    const configsResult = await pool.query(
+    const configsResult = await getDbPool().query(
       `SELECT frc.*, brd.rule_code
        FROM facility_rule_configs frc
        JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
@@ -180,7 +183,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
     }
 
     // Get rule definition ID
-    const defResult = await pool.query(
+    const defResult = await getDbPool().query(
       `SELECT id FROM booking_rule_definitions WHERE rule_code = $1`,
       [ruleCode]
     );
@@ -195,7 +198,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
     const ruleDefinitionId = defResult.rows[0].id;
 
     // Check if config already exists
-    const existingResult = await pool.query(
+    const existingResult = await getDbPool().query(
       `SELECT id FROM facility_rule_configs
        WHERE facility_id = $1 AND rule_definition_id = $2`,
       [facilityId, ruleDefinitionId]
@@ -204,7 +207,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
     let result;
     if (existingResult.rows.length > 0) {
       // Update existing
-      result = await pool.query(
+      result = await getDbPool().query(
         `UPDATE facility_rule_configs SET
           rule_config = COALESCE($1, rule_config),
           is_enabled = COALESCE($2, is_enabled),
@@ -225,7 +228,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
       );
     } else {
       // Insert new
-      result = await pool.query(
+      result = await getDbPool().query(
         `INSERT INTO facility_rule_configs (
           facility_id, rule_definition_id, rule_config, is_enabled,
           applies_to_court_ids, applies_to_tier_ids, priority
@@ -244,7 +247,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
     }
 
     // Get full config with definition
-    const fullResult = await pool.query(
+    const fullResult = await getDbPool().query(
       `SELECT frc.*, brd.rule_code, brd.rule_category, brd.rule_name
        FROM facility_rule_configs frc
        JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
@@ -277,7 +280,7 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
     } = req.body;
 
     // Get rule definition ID
-    const defResult = await pool.query(
+    const defResult = await getDbPool().query(
       `SELECT id FROM booking_rule_definitions WHERE rule_code = $1`,
       [ruleCode]
     );
@@ -291,7 +294,7 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
 
     const ruleDefinitionId = defResult.rows[0].id;
 
-    const result = await pool.query(
+    const result = await getDbPool().query(
       `UPDATE facility_rule_configs SET
         rule_config = COALESCE($1, rule_config),
         is_enabled = COALESCE($2, is_enabled),
@@ -337,7 +340,7 @@ router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
     const { facilityId, ruleCode } = req.params;
 
     // Get rule definition ID
-    const defResult = await pool.query(
+    const defResult = await getDbPool().query(
       `SELECT id FROM booking_rule_definitions WHERE rule_code = $1`,
       [ruleCode]
     );
@@ -349,7 +352,7 @@ router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
       });
     }
 
-    const result = await pool.query(
+    const result = await getDbPool().query(
       `DELETE FROM facility_rule_configs
        WHERE facility_id = $1 AND rule_definition_id = $2
        RETURNING id`,
@@ -388,7 +391,7 @@ router.post('/facility/:facilityId/bulk', async (req, res, next) => {
       });
     }
 
-    const client = await pool.connect();
+    const client = await getDbPool().connect();
     const results: any[] = [];
 
     try {
@@ -463,11 +466,11 @@ router.post('/facility/:facilityId/enable-all', async (req, res, next) => {
     const { facilityId } = req.params;
 
     // Get all rule definitions
-    const defResult = await pool.query(
+    const defResult = await getDbPool().query(
       `SELECT id, rule_code, default_config FROM booking_rule_definitions`
     );
 
-    const client = await pool.connect();
+    const client = await getDbPool().connect();
     try {
       await client.query('BEGIN');
 
@@ -507,7 +510,7 @@ router.post('/facility/:facilityId/disable-all', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
 
-    await pool.query(
+    await getDbPool().query(
       `UPDATE facility_rule_configs SET is_enabled = false, updated_at = CURRENT_TIMESTAMP
        WHERE facility_id = $1`,
       [facilityId]

@@ -287,7 +287,8 @@ CREATE TABLE IF NOT EXISTS facility_rule_configs (
     priority INTEGER DEFAULT 100,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(facility_id, rule_definition_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_facility_rule_configs_facility ON facility_rule_configs(facility_id);

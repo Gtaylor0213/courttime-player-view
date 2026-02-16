@@ -147,12 +147,11 @@ export function CourtCalendarView() {
     return date.toDateString() === today.toDateString();
   }, []);
 
-  // Fetch user's member facilities with courts (combine memberFacilities + adminFacilities)
+  // Fetch only facilities the user is a member of
   useEffect(() => {
     const fetchFacilities = async () => {
       const allFacilityIds = Array.from(new Set([
         ...(user?.memberFacilities || []),
-        ...(user?.adminFacilities || []),
       ]));
 
       if (allFacilityIds.length === 0) {
@@ -205,7 +204,7 @@ export function CourtCalendarView() {
     };
 
     fetchFacilities();
-  }, [user?.memberFacilities, user?.adminFacilities]);
+  }, [user?.memberFacilities]);
 
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async () => {

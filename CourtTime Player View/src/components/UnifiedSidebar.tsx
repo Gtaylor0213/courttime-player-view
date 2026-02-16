@@ -40,12 +40,11 @@ export function UnifiedSidebar({
   // Use the actual user's type from AuthContext, or fall back to the prop
   const actualUserType = user?.userType || userType;
 
-  // Fetch user's facilities (combine memberFacilities + adminFacilities)
+  // Fetch only facilities the user is a member of
   React.useEffect(() => {
     const fetchMemberFacilities = async () => {
       const allFacilityIds = Array.from(new Set([
         ...(user?.memberFacilities || []),
-        ...(user?.adminFacilities || []),
       ]));
 
       if (allFacilityIds.length === 0) {
@@ -76,7 +75,7 @@ export function UnifiedSidebar({
     };
 
     fetchMemberFacilities();
-  }, [user?.memberFacilities, user?.adminFacilities]);
+  }, [user?.memberFacilities]);
 
   // Get user initials
   const getUserInitials = () => {

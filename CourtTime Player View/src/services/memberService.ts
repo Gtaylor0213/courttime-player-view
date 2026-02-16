@@ -16,6 +16,7 @@ export interface MemberWithProfile {
   isFacilityAdmin: boolean;
   startDate: string;
   endDate?: string;
+  suspendedUntil?: string;
   skillLevel?: string;
   phone?: string;
   streetAddress?: string;
@@ -27,6 +28,7 @@ export interface MemberUpdateData {
   status?: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin?: boolean;
   endDate?: string;
+  suspendedUntil?: string | null;
 }
 
 /**
@@ -34,6 +36,17 @@ export interface MemberUpdateData {
  */
 export async function getFacilityMembers(facilityId: string, searchTerm?: string): Promise<MemberWithProfile[]> {
   try {
+    // Auto-reactivate expired suspensions
+    await query(
+      `UPDATE facility_memberships
+       SET status = 'active', suspended_until = NULL
+       WHERE status = 'suspended'
+         AND suspended_until IS NOT NULL
+         AND suspended_until <= NOW()
+         AND facility_id = $1`,
+      [facilityId]
+    );
+
     let queryText = `SELECT
         u.id as "userId",
         u.email,
@@ -46,6 +59,7 @@ export async function getFacilityMembers(facilityId: string, searchTerm?: string
         fm.is_facility_admin as "isFacilityAdmin",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
+        TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
         fm.created_at as "createdAt",
         pp.skill_level as "skillLevel"
        FROM facility_memberships fm
@@ -92,6 +106,7 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
         fm.is_facility_admin as "isFacilityAdmin",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
+        TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
         fm.created_at as "createdAt",
         pp.skill_level as "skillLevel"
        FROM facility_memberships fm
@@ -143,6 +158,11 @@ export async function updateMemberMembership(
     if (updates.endDate !== undefined) {
       fields.push(`end_date = $${paramIndex++}`);
       values.push(updates.endDate);
+    }
+
+    if (updates.suspendedUntil !== undefined) {
+      fields.push(`suspended_until = $${paramIndex++}`);
+      values.push(updates.suspendedUntil);
     }
 
     if (fields.length === 0) {

@@ -290,6 +290,7 @@ export const membersApi = {
     status?: 'active' | 'pending' | 'expired' | 'suspended';
     isFacilityAdmin?: boolean;
     endDate?: string;
+    suspendedUntil?: string | null;
   }) => {
     return apiRequest(`/api/members/${facilityId}/${userId}`, {
       method: 'PATCH',

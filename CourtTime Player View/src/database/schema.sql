@@ -71,6 +71,7 @@ CREATE TABLE facility_memberships (
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'pending', 'expired', 'suspended')),
     start_date DATE NOT NULL,
     end_date DATE,
+    suspended_until TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, facility_id)

@@ -69,7 +69,7 @@ router.patch('/:facilityId/:userId', async (req, res, next) => {
     const updates = req.body;
 
     // Validate updates
-    const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'endDate'];
+    const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'endDate', 'suspendedUntil'];
     const invalidFields = Object.keys(updates).filter(key => !validFields.includes(key));
 
     if (invalidFields.length > 0) {

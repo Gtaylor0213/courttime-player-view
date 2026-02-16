@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle } from 'lucide-react';
+import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle, Clock } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
@@ -27,6 +27,7 @@ interface Member {
   isFacilityAdmin: boolean;
   startDate: string;
   endDate?: string;
+  suspendedUntil?: string;
   skillLevel?: string;
   phone?: string;
   createdAt: string;
@@ -59,6 +60,11 @@ export function MemberManagement() {
   const [strikesLoading, setStrikesLoading] = useState(false);
   const [newStrikeType, setNewStrikeType] = useState<string>('manual');
   const [newStrikeReason, setNewStrikeReason] = useState('');
+
+  // Suspension dialog
+  const [suspendDialogUserId, setSuspendDialogUserId] = useState<string | null>(null);
+  const [suspendDialogName, setSuspendDialogName] = useState('');
+  const [suspendDuration, setSuspendDuration] = useState<string>('7d');
 
   const { selectedFacilityId: currentFacilityId } = useAppContext();
 
@@ -237,7 +243,13 @@ export function MemberManagement() {
     if (!currentFacilityId) return;
 
     try {
-      const response = await membersApi.updateMember(currentFacilityId, userId, { status });
+      const updates: any = { status };
+      // Clear suspension date when reactivating
+      if (status === 'active') {
+        updates.suspendedUntil = null;
+      }
+
+      const response = await membersApi.updateMember(currentFacilityId, userId, updates);
 
       if (response.success) {
         toast.success(`Member status updated to ${status}`);
@@ -248,6 +260,43 @@ export function MemberManagement() {
     } catch (error) {
       console.error('Error updating member status:', error);
       toast.error('Failed to update member status');
+    }
+  };
+
+  const handleSuspendWithDuration = async () => {
+    if (!currentFacilityId || !suspendDialogUserId) return;
+
+    let suspendedUntil: string | null = null;
+
+    if (suspendDuration !== 'indefinite') {
+      const now = new Date();
+      const durationMap: Record<string, number> = {
+        '1d': 1, '3d': 3, '7d': 7, '14d': 14, '30d': 30, '90d': 90,
+      };
+      const days = durationMap[suspendDuration];
+      if (days) {
+        now.setDate(now.getDate() + days);
+        suspendedUntil = now.toISOString();
+      }
+    }
+
+    try {
+      const response = await membersApi.updateMember(currentFacilityId, suspendDialogUserId, {
+        status: 'suspended',
+        suspendedUntil,
+      });
+
+      if (response.success) {
+        const durationLabel = suspendDuration === 'indefinite' ? 'indefinitely' : `for ${suspendDuration.replace('d', ' day(s)')}`;
+        toast.success(`Member suspended ${durationLabel}`);
+        setSuspendDialogUserId(null);
+        loadMembers();
+      } else {
+        toast.error(response.error || 'Failed to suspend member');
+      }
+    } catch (error) {
+      console.error('Error suspending member:', error);
+      toast.error('Failed to suspend member');
     }
   };
 
@@ -493,11 +542,13 @@ export function MemberManagement() {
                             <div className="min-w-[180px]">
                               <div className="font-medium text-sm flex items-center gap-2">
                                 <span className="truncate">{member.fullName}</span>
-                                {member.isFacilityAdmin && (
-                                  <Badge variant="outline" className="text-[10px] text-green-600 border-green-600 px-1.5 py-0">
-                                    Admin
-                                  </Badge>
-                                )}
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
+                                  member.isFacilityAdmin
+                                    ? 'text-green-600 border-green-600'
+                                    : 'text-gray-500 border-gray-300'
+                                }`}>
+                                  {member.isFacilityAdmin ? 'Admin' : 'Regular'}
+                                </Badge>
                               </div>
                               <div className="text-xs text-gray-500 truncate">{member.email}</div>
                             </div>
@@ -509,7 +560,9 @@ export function MemberManagement() {
                               </span>
                             </div>
                             <Badge className={`${getStatusColor(member.status)} text-xs px-2 py-0`}>
-                              {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
+                              {member.status === 'suspended' && member.suspendedUntil
+                                ? `Suspended until ${new Date(member.suspendedUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                                : member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                             </Badge>
                             {facilityTiers.length > 0 && (
                               <Select
@@ -545,7 +598,11 @@ export function MemberManagement() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleUpdateStatus(member.userId, 'suspended')}
+                              onClick={() => {
+                                setSuspendDialogUserId(member.userId);
+                                setSuspendDialogName(member.fullName);
+                                setSuspendDuration('7d');
+                              }}
                               className="text-orange-600 hover:text-orange-700 h-7 w-7 p-0"
                               title="Suspend member"
                             >
@@ -809,6 +866,72 @@ export function MemberManagement() {
             <div className="flex justify-end pt-4 border-t">
               <Button variant="outline" onClick={() => setStrikeDialogUserId(null)}>
                 Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suspension Dialog */}
+      <Dialog open={suspendDialogUserId !== null} onOpenChange={(open) => { if (!open) setSuspendDialogUserId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-orange-600" />
+              Suspend Member
+            </DialogTitle>
+            <DialogDescription>
+              Choose how long to suspend <span className="font-medium">{suspendDialogName}</span>. The member will be automatically reactivated when the suspension expires.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Suspension Duration</Label>
+              <Select value={suspendDuration} onValueChange={setSuspendDuration}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1d">1 Day</SelectItem>
+                  <SelectItem value="3d">3 Days</SelectItem>
+                  <SelectItem value="7d">1 Week</SelectItem>
+                  <SelectItem value="14d">2 Weeks</SelectItem>
+                  <SelectItem value="30d">1 Month</SelectItem>
+                  <SelectItem value="90d">3 Months</SelectItem>
+                  <SelectItem value="indefinite">Indefinite</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {suspendDuration !== 'indefinite' && (
+              <p className="text-sm text-gray-600">
+                Suspension will expire on{' '}
+                <span className="font-medium">
+                  {(() => {
+                    const d = new Date();
+                    const days: Record<string, number> = { '1d': 1, '3d': 3, '7d': 7, '14d': 14, '30d': 30, '90d': 90 };
+                    d.setDate(d.getDate() + (days[suspendDuration] || 0));
+                    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                  })()}
+                </span>
+              </p>
+            )}
+            {suspendDuration === 'indefinite' && (
+              <p className="text-sm text-gray-600">
+                The member will remain suspended until manually reactivated by an admin.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button variant="outline" onClick={() => setSuspendDialogUserId(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSuspendWithDuration}
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                Suspend Member
               </Button>
             </div>
           </div>

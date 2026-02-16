@@ -8,6 +8,8 @@ import { query } from '../../src/database/connection';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
+import { getFacilityLocalNow } from '../../src/services/rulesEngine/RuleContext';
+import { combineDateAndTime, minutesBetween } from '../../src/services/rulesEngine/utils/timeUtils';
 
 const router = express.Router();
 
@@ -809,6 +811,110 @@ router.post('/email-templates/:facilityId/:templateType/preview', async (req, re
     res.json({ success: true, renderedSubject, renderedHtml });
   } catch (error: any) {
     console.error('Error previewing email template:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =====================================================
+// DIAGNOSTIC: Timezone & Rule Engine Debug
+// Remove after verifying production works correctly
+// =====================================================
+
+/**
+ * GET /api/admin/debug/timezone/:facilityId
+ * Diagnostic endpoint to verify timezone calculations on production
+ */
+router.get('/debug/timezone/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { bookingDate, startTime, endTime } = req.query;
+
+    // Fetch facility timezone
+    const facilityResult = await query(
+      'SELECT id, name, timezone FROM facilities WHERE id = $1',
+      [facilityId]
+    );
+
+    if (facilityResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Facility not found' });
+    }
+
+    const facility = facilityResult.rows[0];
+    const tz = facility.timezone || 'America/New_York';
+
+    // Server raw time
+    const serverNow = new Date();
+
+    // Facility-local time (what the fix produces)
+    const facilityNow = getFacilityLocalNow(tz);
+
+    // Sample booking comparison
+    const sampleDate = (bookingDate as string) || new Date().toISOString().split('T')[0];
+    const sampleStart = (startTime as string) || '16:00:00';
+    const sampleEnd = (endTime as string) || '17:00:00';
+
+    const bookingStart = combineDateAndTime(sampleDate, sampleStart);
+    const bookingEnd = combineDateAndTime(sampleDate, sampleEnd);
+
+    // Minutes calculations
+    const minutesUntilStart_withFix = minutesBetween(facilityNow, bookingStart);
+    const minutesUntilStart_withoutFix = minutesBetween(serverNow, bookingStart);
+
+    // Rule checks
+    const minLeadTime = 15; // ACC-006 default
+    const wouldPass_withFix = minutesUntilStart_withFix >= minLeadTime;
+    const wouldPass_withoutFix = minutesUntilStart_withoutFix >= minLeadTime;
+
+    res.json({
+      success: true,
+      facility: {
+        id: facility.id,
+        name: facility.name,
+        timezone: tz,
+      },
+      serverTime: {
+        utcISO: serverNow.toISOString(),
+        utcReadable: serverNow.toUTCString(),
+        serverLocalString: serverNow.toString(),
+        nodeTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      facilityLocalTime: {
+        components: {
+          year: facilityNow.getFullYear(),
+          month: facilityNow.getMonth() + 1,
+          day: facilityNow.getDate(),
+          hour: facilityNow.getHours(),
+          minute: facilityNow.getMinutes(),
+          second: facilityNow.getSeconds(),
+        },
+        readable: facilityNow.toLocaleString('en-US', { hour12: true }),
+      },
+      sampleBooking: {
+        date: sampleDate,
+        startTime: sampleStart,
+        endTime: sampleEnd,
+        bookingStartDate: bookingStart.toString(),
+        bookingEndDate: bookingEnd.toString(),
+      },
+      ruleEngine: {
+        ACC006_MinLeadTime: {
+          minMinutes: minLeadTime,
+          withFix: {
+            minutesUntilStart: minutesUntilStart_withFix,
+            wouldPass: wouldPass_withFix,
+            comparison: `facilityNow(${facilityNow.getHours()}:${String(facilityNow.getMinutes()).padStart(2, '0')}) vs booking(${sampleStart}) = ${minutesUntilStart_withFix} min`,
+          },
+          withoutFix_OLD: {
+            minutesUntilStart: minutesUntilStart_withoutFix,
+            wouldPass: wouldPass_withoutFix,
+            comparison: `serverUTC(${serverNow.getUTCHours()}:${String(serverNow.getUTCMinutes()).padStart(2, '0')}) vs booking(${sampleStart}) = ${minutesUntilStart_withoutFix} min`,
+          },
+          fixMadeADifference: wouldPass_withFix !== wouldPass_withoutFix,
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error('Debug timezone error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

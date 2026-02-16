@@ -310,10 +310,10 @@ export function FacilityManagement() {
 
   useEffect(() => {
     if (currentFacilityId) {
-      loadFacilityData();
+      // loadFacilityData must complete before loadFacilityRules to avoid race condition
+      loadFacilityData().then(() => loadFacilityRules());
       loadCourts();
       loadBlackouts();
-      loadFacilityRules();
       loadTiers();
     }
   }, [currentFacilityId]);
@@ -418,6 +418,37 @@ export function FacilityManagement() {
             advanceBookingDays: String(facility.weekendPolicy?.advanceBookingDays || '7'),
             advanceBookingUnlimited: facility.weekendPolicy?.advanceBookingDays === -1,
           },
+          // Rules engine fields - defaults until loadFacilityRules overlays actual values
+          maxActiveReservationsEnabled: defaultBookingRules.maxActiveReservationsEnabled,
+          maxActiveReservations: defaultBookingRules.maxActiveReservations,
+          maxHoursPerWeekEnabled: defaultBookingRules.maxHoursPerWeekEnabled,
+          maxHoursPerWeek: defaultBookingRules.maxHoursPerWeek,
+          noOverlappingReservations: defaultBookingRules.noOverlappingReservations,
+          minimumLeadTimeEnabled: defaultBookingRules.minimumLeadTimeEnabled,
+          minimumLeadTimeMinutes: defaultBookingRules.minimumLeadTimeMinutes,
+          cancellationCooldownEnabled: defaultBookingRules.cancellationCooldownEnabled,
+          cancellationCooldownMinutes: defaultBookingRules.cancellationCooldownMinutes,
+          strikeSystemEnabled: defaultBookingRules.strikeSystemEnabled,
+          strikeThreshold: defaultBookingRules.strikeThreshold,
+          strikeWindowDays: defaultBookingRules.strikeWindowDays,
+          strikeLockoutDays: defaultBookingRules.strikeLockoutDays,
+          rateLimitEnabled: defaultBookingRules.rateLimitEnabled,
+          rateLimitMaxActions: defaultBookingRules.rateLimitMaxActions,
+          rateLimitWindowSeconds: defaultBookingRules.rateLimitWindowSeconds,
+          primeTimeRequiresTierEnabled: defaultBookingRules.primeTimeRequiresTierEnabled,
+          primeTimeAllowedTiers: defaultBookingRules.primeTimeAllowedTiers,
+          primeTimeAdminOverride: defaultBookingRules.primeTimeAdminOverride,
+          courtWeeklyCapEnabled: defaultBookingRules.courtWeeklyCapEnabled,
+          courtWeeklyCap: defaultBookingRules.courtWeeklyCap,
+          courtReleaseTimeEnabled: defaultBookingRules.courtReleaseTimeEnabled,
+          courtReleaseTime: defaultBookingRules.courtReleaseTime,
+          courtReleaseDaysAhead: defaultBookingRules.courtReleaseDaysAhead,
+          householdMaxMembersEnabled: defaultBookingRules.householdMaxMembersEnabled,
+          householdMaxMembers: defaultBookingRules.householdMaxMembers,
+          householdMaxActiveEnabled: defaultBookingRules.householdMaxActiveEnabled,
+          householdMaxActive: defaultBookingRules.householdMaxActive,
+          householdPrimeCapEnabled: defaultBookingRules.householdPrimeCapEnabled,
+          householdPrimeCap: defaultBookingRules.householdPrimeCap,
         };
 
         const data: FacilityData = {
@@ -1244,9 +1275,14 @@ export function FacilityManagement() {
     }
 
     try {
-      await rulesApi.bulkUpdate(currentFacilityId, ruleConfigs);
+      const response = await rulesApi.bulkUpdate(currentFacilityId, ruleConfigs);
+      if (!response.success) {
+        console.error('Error syncing rules to engine:', response.error);
+        toast.error('Failed to save booking rules to engine. Please try saving again.');
+      }
     } catch (error) {
       console.error('Error syncing rules to engine:', error);
+      toast.error('Failed to save booking rules to engine. Please try saving again.');
     }
   };
 

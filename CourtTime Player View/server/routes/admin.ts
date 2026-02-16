@@ -7,6 +7,7 @@ import express from 'express';
 import { query } from '../../src/database/connection';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
+import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
 
 const router = express.Router();
 
@@ -682,6 +683,133 @@ router.post('/email-blast/:facilityId', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+// =====================================================
+// EMAIL TEMPLATE MANAGEMENT
+// =====================================================
+
+/**
+ * GET /api/admin/email-templates/:facilityId
+ * Get all email templates for a facility (custom + defaults for missing types)
+ */
+router.get('/email-templates/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+
+    // Get all custom templates for this facility
+    const result = await query(
+      `SELECT id, facility_id as "facilityId", template_type as "templateType",
+              subject, body_html as "bodyHtml", is_enabled as "isEnabled",
+              created_at as "createdAt", updated_at as "updatedAt"
+       FROM email_templates
+       WHERE facility_id = $1`,
+      [facilityId]
+    );
+
+    const customTemplates = result.rows;
+    const customMap = new Map(customTemplates.map(t => [t.templateType, t]));
+
+    // Build complete list with defaults for any missing types
+    const templates = Object.entries(EMAIL_TEMPLATE_TYPES).map(([type, config]) => {
+      const custom = customMap.get(type);
+      return {
+        id: custom?.id || null,
+        templateType: type,
+        subject: custom?.subject || config.defaultSubject,
+        bodyHtml: custom?.bodyHtml || config.defaultBody,
+        isEnabled: custom ? custom.isEnabled : true,
+        isCustom: !!custom,
+        label: config.label,
+        description: config.description,
+        availableVariables: config.availableVariables,
+      };
+    });
+
+    res.json({ success: true, templates });
+  } catch (error: any) {
+    console.error('Error fetching email templates:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/email-templates/:facilityId/:templateType
+ * Upsert (create or update) a custom email template
+ */
+router.put('/email-templates/:facilityId/:templateType', async (req, res) => {
+  try {
+    const { facilityId, templateType } = req.params;
+    const { subject, bodyHtml, isEnabled } = req.body;
+
+    if (!EMAIL_TEMPLATE_TYPES[templateType]) {
+      return res.status(400).json({ success: false, error: 'Invalid template type' });
+    }
+
+    if (!subject || !bodyHtml) {
+      return res.status(400).json({ success: false, error: 'Subject and body are required' });
+    }
+
+    const result = await query(
+      `INSERT INTO email_templates (facility_id, template_type, subject, body_html, is_enabled)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (facility_id, template_type)
+       DO UPDATE SET subject = $3, body_html = $4, is_enabled = $5, updated_at = CURRENT_TIMESTAMP
+       RETURNING id, template_type as "templateType", subject, body_html as "bodyHtml", is_enabled as "isEnabled"`,
+      [facilityId, templateType, subject, bodyHtml, isEnabled !== false]
+    );
+
+    res.json({ success: true, template: result.rows[0] });
+  } catch (error: any) {
+    console.error('Error saving email template:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/email-templates/:facilityId/:templateType
+ * Reset a template to default (delete the custom template row)
+ */
+router.delete('/email-templates/:facilityId/:templateType', async (req, res) => {
+  try {
+    const { facilityId, templateType } = req.params;
+
+    await query(
+      'DELETE FROM email_templates WHERE facility_id = $1 AND template_type = $2',
+      [facilityId, templateType]
+    );
+
+    res.json({ success: true, message: 'Template reset to default' });
+  } catch (error: any) {
+    console.error('Error resetting email template:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/email-templates/:facilityId/:templateType/preview
+ * Preview a template with sample data
+ */
+router.post('/email-templates/:facilityId/:templateType/preview', async (req, res) => {
+  try {
+    const { templateType } = req.params;
+    const { subject, bodyHtml } = req.body;
+
+    const config = EMAIL_TEMPLATE_TYPES[templateType];
+    if (!config) {
+      return res.status(400).json({ success: false, error: 'Invalid template type' });
+    }
+
+    const sampleVars = getSampleVariables(templateType);
+    const renderedSubject = renderTemplate(subject || config.defaultSubject, sampleVars);
+    const renderedBody = renderTemplate(bodyHtml || config.defaultBody, sampleVars);
+    const renderedHtml = wrapInEmailLayout(renderedBody, sampleVars.facilityName || 'Your Facility');
+
+    res.json({ success: true, renderedSubject, renderedHtml });
+  } catch (error: any) {
+    console.error('Error previewing email template:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

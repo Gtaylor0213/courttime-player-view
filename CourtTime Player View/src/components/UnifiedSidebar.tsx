@@ -234,10 +234,10 @@ export function UnifiedSidebar({
                   isActive={currentPage === 'member-management' || currentPage === 'household-management'}
                 />
                 <SidebarButton
-                  onClick={() => navigate('/admin/email-blast')}
+                  onClick={() => navigate('/admin/communication')}
                   icon={Mail}
-                  label="Email Blast"
-                  isActive={currentPage === 'email-blast'}
+                  label="Communication"
+                  isActive={currentPage === 'communication'}
                 />
               </div>
             </div>

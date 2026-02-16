@@ -593,6 +593,38 @@ export const adminApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // Email Templates
+  getEmailTemplates: async (facilityId: string) => {
+    return apiRequest(`/api/admin/email-templates/${facilityId}`);
+  },
+
+  upsertEmailTemplate: async (facilityId: string, templateType: string, data: {
+    subject: string;
+    bodyHtml: string;
+    isEnabled: boolean;
+  }) => {
+    return apiRequest(`/api/admin/email-templates/${facilityId}/${templateType}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  resetEmailTemplate: async (facilityId: string, templateType: string) => {
+    return apiRequest(`/api/admin/email-templates/${facilityId}/${templateType}`, {
+      method: 'DELETE',
+    });
+  },
+
+  previewEmailTemplate: async (facilityId: string, templateType: string, data: {
+    subject: string;
+    bodyHtml: string;
+  }) => {
+    return apiRequest(`/api/admin/email-templates/${facilityId}/${templateType}/preview`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 // Court Config API

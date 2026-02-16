@@ -1,7 +1,15 @@
 /**
  * Centralized Email Service
  * Sends transactional emails via Resend API
+ * Supports per-facility custom templates with fallback to defaults
  */
+
+import { query } from '../database/connection';
+import {
+  EMAIL_TEMPLATE_TYPES,
+  renderTemplate,
+  wrapInEmailLayout,
+} from './emailTemplateDefaults';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -45,6 +53,119 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
   }
 }
 
+/**
+ * Load a custom template from the database for a facility
+ * Returns null if no custom template exists
+ */
+async function getTemplateForFacility(
+  facilityId: string,
+  templateType: string
+): Promise<{ subject: string; bodyHtml: string; isEnabled: boolean } | null> {
+  try {
+    const result = await query(
+      `SELECT subject, body_html as "bodyHtml", is_enabled as "isEnabled"
+       FROM email_templates
+       WHERE facility_id = $1 AND template_type = $2`,
+      [facilityId, templateType]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error loading email template:', error);
+    return null;
+  }
+}
+
+/**
+ * Send a templated email — loads custom template if available, otherwise uses default
+ */
+async function sendTemplatedEmail(
+  to: string,
+  facilityId: string,
+  facilityName: string,
+  templateType: string,
+  variables: Record<string, string>
+): Promise<boolean> {
+  const defaults = EMAIL_TEMPLATE_TYPES[templateType];
+  if (!defaults) {
+    console.error(`Unknown template type: ${templateType}`);
+    return false;
+  }
+
+  // Try to load custom template
+  const custom = await getTemplateForFacility(facilityId, templateType);
+
+  // If custom template exists and is disabled, skip sending
+  if (custom && !custom.isEnabled) {
+    console.log(`Email template ${templateType} is disabled for facility ${facilityId}`);
+    return false;
+  }
+
+  const subjectTemplate = custom?.subject || defaults.defaultSubject;
+  const bodyTemplate = custom?.bodyHtml || defaults.defaultBody;
+
+  const renderedSubject = renderTemplate(subjectTemplate, variables);
+  const renderedBody = renderTemplate(bodyTemplate, variables);
+  const fullHtml = wrapInEmailLayout(renderedBody, facilityName);
+
+  return sendEmail(to, renderedSubject, fullHtml);
+}
+
+// =====================================================
+// BOOKING EMAILS
+// =====================================================
+
+/**
+ * Send booking confirmation email
+ */
+export async function sendBookingConfirmationEmail(
+  email: string,
+  fullName: string,
+  facilityId: string,
+  facilityName: string,
+  courtName: string,
+  bookingDate: string,
+  startTime: string,
+  endTime: string,
+  bookingType: string
+): Promise<boolean> {
+  return sendTemplatedEmail(email, facilityId, facilityName, 'booking_confirmation', {
+    playerName: fullName,
+    facilityName,
+    courtName,
+    date: bookingDate,
+    startTime,
+    endTime,
+    bookingType,
+  });
+}
+
+/**
+ * Send booking cancellation email
+ */
+export async function sendBookingCancellationEmail(
+  email: string,
+  fullName: string,
+  facilityId: string,
+  facilityName: string,
+  courtName: string,
+  bookingDate: string,
+  startTime: string,
+  reason: string
+): Promise<boolean> {
+  return sendTemplatedEmail(email, facilityId, facilityName, 'booking_cancellation', {
+    playerName: fullName,
+    facilityName,
+    courtName,
+    date: bookingDate,
+    startTime,
+    reason,
+  });
+}
+
+// =====================================================
+// STRIKE EMAILS
+// =====================================================
+
 function formatStrikeType(strikeType: string): string {
   switch (strikeType) {
     case 'no_show': return 'No Show';
@@ -52,15 +173,6 @@ function formatStrikeType(strikeType: string): string {
     case 'manual': return 'Manual Strike';
     case 'violation': return 'Violation';
     default: return strikeType;
-  }
-}
-
-function strikeTypeColor(strikeType: string): string {
-  switch (strikeType) {
-    case 'no_show': return '#dc2626';
-    case 'late_cancel': return '#d97706';
-    case 'manual': return '#6b7280';
-    default: return '#6b7280';
   }
 }
 
@@ -72,45 +184,22 @@ export async function sendStrikeIssuedEmail(
   fullName: string,
   strikeType: string,
   reason: string,
+  facilityId: string,
   facilityName: string,
   expiresAt?: string | null
 ): Promise<boolean> {
-  const appUrl = process.env.APP_URL || 'http://localhost:5173';
-  const profileLink = `${appUrl}/profile`;
   const typeLabel = formatStrikeType(strikeType);
-  const typeColor = strikeTypeColor(strikeType);
-
-  const expiryNote = expiresAt
-    ? `<p style="color: #666; font-size: 14px;">This strike expires on ${new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.</p>`
+  const expiryDate = expiresAt
+    ? `This strike expires on ${new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`
     : '';
 
-  return sendEmail(
-    email,
-    `Strike Issued - ${facilityName}`,
-    `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #dc2626;">Strike Notice</h2>
-        <p>Hi ${fullName},</p>
-        <p>A strike has been issued on your account at <strong>${facilityName}</strong>.</p>
-        <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 20px 0;">
-          <div style="display: inline-block; background-color: ${typeColor}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: bold; margin-bottom: 8px;">
-            ${typeLabel}
-          </div>
-          <p style="margin: 8px 0 0; color: #374151;">${reason}</p>
-        </div>
-        ${expiryNote}
-        <p style="color: #666; font-size: 14px;">Accumulating strikes may result in a temporary lockout from booking courts. You can view your full strike history on your profile.</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${profileLink}"
-             style="background-color: #2563eb; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-            View Your Profile
-          </a>
-        </div>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
-      </div>
-    `
-  );
+  return sendTemplatedEmail(email, facilityId, facilityName, 'strike_issued', {
+    playerName: fullName,
+    facilityName,
+    strikeType: typeLabel,
+    strikeReason: reason,
+    expiryDate,
+  });
 }
 
 /**
@@ -119,44 +208,42 @@ export async function sendStrikeIssuedEmail(
 export async function sendStrikeRevokedEmail(
   email: string,
   fullName: string,
+  facilityId: string,
   facilityName: string,
   revokeReason?: string
 ): Promise<boolean> {
-  const appUrl = process.env.APP_URL || 'http://localhost:5173';
-  const profileLink = `${appUrl}/profile`;
-
-  const reasonNote = revokeReason
-    ? `<p style="color: #666; font-size: 14px;"><strong>Reason:</strong> ${revokeReason}</p>`
-    : '';
-
-  return sendEmail(
-    email,
-    `Strike Removed - ${facilityName}`,
-    `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #16a34a;">Strike Removed</h2>
-        <p>Hi ${fullName},</p>
-        <p>A strike on your account at <strong>${facilityName}</strong> has been removed.</p>
-        <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0;">
-          <p style="margin: 0; color: #166534;">Your account standing has improved.</p>
-        </div>
-        ${reasonNote}
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${profileLink}"
-             style="background-color: #2563eb; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-            View Your Profile
-          </a>
-        </div>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
-      </div>
-    `
-  );
+  return sendTemplatedEmail(email, facilityId, facilityName, 'strike_revoked', {
+    playerName: fullName,
+    facilityName,
+    revokeReason: revokeReason ? `Reason: ${revokeReason}` : '',
+  });
 }
 
 /**
  * Send email when account is locked out due to strikes
  */
+export async function sendLockoutEmail(
+  email: string,
+  fullName: string,
+  facilityId: string,
+  facilityName: string,
+  lockoutEndsAt?: string | null
+): Promise<boolean> {
+  const lockoutEndDate = lockoutEndsAt
+    ? `Your booking privileges will be restored on ${new Date(lockoutEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`
+    : 'Please contact your facility administrator for more information.';
+
+  return sendTemplatedEmail(email, facilityId, facilityName, 'account_lockout', {
+    playerName: fullName,
+    facilityName,
+    lockoutEndDate,
+  });
+}
+
+// =====================================================
+// ANNOUNCEMENT EMAIL (not templated - admin composes directly)
+// =====================================================
+
 /**
  * Send announcement/blast email from admin to facility members
  */
@@ -168,55 +255,11 @@ export async function sendAnnouncementEmail(
   facilityName: string
 ): Promise<boolean> {
   const htmlMessage = messageBody.replace(/\n/g, '<br>');
+  const bodyContent = `
+    <p style="color: #374151; margin-top: 0;">Hi ${fullName},</p>
+    <div style="color: #374151; line-height: 1.6;">${htmlMessage}</div>
+  `;
+  const fullHtml = wrapInEmailLayout(bodyContent, facilityName);
 
-  return sendEmail(
-    email,
-    `${subject} - ${facilityName}`,
-    `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background-color: #16a34a; padding: 16px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="color: white; margin: 0; font-size: 20px;">${facilityName}</h2>
-        </div>
-        <div style="border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; padding: 24px;">
-          <p style="color: #374151; margin-top: 0;">Hi ${fullName},</p>
-          <div style="color: #374151; line-height: 1.6;">${htmlMessage}</div>
-        </div>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
-      </div>
-    `
-  );
-}
-
-/**
- * Send email when account is locked out due to strikes
- */
-export async function sendLockoutEmail(
-  email: string,
-  fullName: string,
-  facilityName: string,
-  lockoutEndsAt?: string | null
-): Promise<boolean> {
-  const lockoutNote = lockoutEndsAt
-    ? `<p style="color: #991b1b; font-size: 14px;">Your booking privileges will be restored on <strong>${new Date(lockoutEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>.</p>`
-    : `<p style="color: #991b1b; font-size: 14px;">Please contact your facility administrator for more information.</p>`;
-
-  return sendEmail(
-    email,
-    `Account Locked Out - ${facilityName}`,
-    `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #991b1b;">Account Locked Out</h2>
-        <p>Hi ${fullName},</p>
-        <p>Due to accumulated strikes, your booking privileges at <strong>${facilityName}</strong> have been temporarily suspended.</p>
-        <div style="background-color: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 16px; margin: 20px 0;">
-          <p style="margin: 0; color: #991b1b; font-weight: bold;">You are currently unable to make new court reservations at this facility.</p>
-        </div>
-        ${lockoutNote}
-        <p style="color: #666; font-size: 14px;">If you believe this is an error, please contact the facility administrator.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
-      </div>
-    `
-  );
+  return sendEmail(email, `${subject} - ${facilityName}`, fullHtml);
 }

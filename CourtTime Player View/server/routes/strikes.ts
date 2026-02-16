@@ -202,7 +202,7 @@ router.post('/', async (req, res, next) => {
         );
         const facilityName = facilityResult.rows[0]?.name || 'your facility';
 
-        await sendStrikeIssuedEmail(user.email, user.fullName, strikeType, strikeReason || '', facilityName, expiresAt);
+        await sendStrikeIssuedEmail(user.email, user.fullName, strikeType, strikeReason || '', facilityId, facilityName, expiresAt);
         await notificationService.notifyStrikeIssued(userId, facilityName, strikeType, strikeReason || 'Strike issued by administrator');
 
         // Check lockout threshold
@@ -227,7 +227,7 @@ router.post('/', async (req, res, next) => {
 
         if (parseInt(activeResult.rows[0].count) >= threshold) {
           const lockoutEndsAt = new Date(Date.now() + lockoutDays * 24 * 60 * 60 * 1000).toISOString();
-          await sendLockoutEmail(user.email, user.fullName, facilityName, lockoutEndsAt);
+          await sendLockoutEmail(user.email, user.fullName, facilityId, facilityName, lockoutEndsAt);
           await notificationService.notifyAccountLockedOut(userId, facilityName, lockoutEndsAt);
         }
       } catch (err) {
@@ -296,7 +296,7 @@ router.post('/:strikeId/revoke', async (req, res, next) => {
         );
         const facilityName = facilityResult.rows[0]?.name || 'your facility';
 
-        await sendStrikeRevokedEmail(user.email, user.fullName, facilityName, revokeReason);
+        await sendStrikeRevokedEmail(user.email, user.fullName, strike.facility_id, facilityName, revokeReason);
         await notificationService.notifyStrikeRevoked(strike.user_id, facilityName, revokeReason);
       } catch (err) {
         console.error('Failed to send strike revocation notifications:', err);

@@ -270,6 +270,25 @@ CREATE INDEX idx_messages_sender ON messages(sender_id);
 CREATE INDEX idx_conversations_facility ON conversations(facility_id);
 
 -- =====================================================
+-- EMAIL TEMPLATES
+-- =====================================================
+
+CREATE TABLE email_templates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    facility_id VARCHAR(50) NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+    template_type VARCHAR(50) NOT NULL,
+    subject VARCHAR(500) NOT NULL,
+    body_html TEXT NOT NULL,
+    is_enabled BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(facility_id, template_type)
+);
+
+CREATE INDEX idx_email_templates_facility ON email_templates(facility_id);
+CREATE INDEX idx_email_templates_type ON email_templates(template_type);
+
+-- =====================================================
 -- ANALYTICS & USAGE TRACKING
 -- =====================================================
 
@@ -321,6 +340,7 @@ CREATE TRIGGER update_bulletin_posts_updated_at BEFORE UPDATE ON bulletin_posts 
 CREATE TRIGGER update_events_updated_at BEFORE UPDATE ON events FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_player_profiles_updated_at BEFORE UPDATE ON player_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_conversations_updated_at BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON email_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to auto-expire hitting partner posts
 CREATE OR REPLACE FUNCTION expire_old_hitting_partner_posts()

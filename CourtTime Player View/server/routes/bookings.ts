@@ -12,6 +12,7 @@ import {
   checkInBooking
 } from '../../src/services/bookingService';
 import { notificationService } from '../../src/services/notificationService';
+import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
 import { pool } from '../../src/database/connection';
 
 const router = express.Router();
@@ -181,6 +182,22 @@ router.post('/', async (req, res, next) => {
         startDateTime,
         endDateTime
       );
+
+      // Send confirmation email (fire-and-forget)
+      const userQuery = await pool.query(
+        'SELECT email, full_name as "fullName" FROM users WHERE id = $1',
+        [userId]
+      );
+      const userInfo = userQuery.rows[0];
+      if (userInfo) {
+        const dateFormatted = new Date(`${bookingDate}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        const startFormatted = new Date(`${bookingDate}T${startTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const endFormatted = new Date(`${bookingDate}T${endTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        sendBookingConfirmationEmail(
+          userInfo.email, userInfo.fullName, facilityId, facilityName,
+          courtName, dateFormatted, startFormatted, endFormatted, bookingType || 'General'
+        ).catch(err => console.error('Error sending booking confirmation email:', err));
+      }
     } catch (notificationError) {
       console.error('Error creating booking notification:', notificationError);
       // Don't fail the booking if notification fails
@@ -235,6 +252,21 @@ router.delete('/:bookingId', async (req, res, next) => {
           startDateTime,
           'Cancelled by user'
         );
+
+        // Send cancellation email (fire-and-forget)
+        const userQuery = await pool.query(
+          'SELECT email, full_name as "fullName" FROM users WHERE id = $1',
+          [userId]
+        );
+        const userInfo = userQuery.rows[0];
+        if (userInfo) {
+          const dateFormatted = new Date(`${booking.bookingDate}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          const startFormatted = new Date(`${booking.bookingDate}T${booking.startTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          sendBookingCancellationEmail(
+            userInfo.email, userInfo.fullName, booking.facilityId, facilityName,
+            courtName, dateFormatted, startFormatted, (reason as string) || 'Cancelled by user'
+          ).catch(err => console.error('Error sending cancellation email:', err));
+        }
       } catch (notificationError) {
         console.error('Error creating cancellation notification:', notificationError);
         // Don't fail the cancellation if notification fails

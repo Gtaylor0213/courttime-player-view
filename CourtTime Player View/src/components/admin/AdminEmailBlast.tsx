@@ -132,12 +132,7 @@ export function AdminEmailBlast() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <Mail className="h-7 w-7 text-green-600" />
-        <h1 className="text-2xl font-bold text-gray-900">Email Blast</h1>
-      </div>
-
+    <div className="space-y-6">
       {/* Composer */}
       <Card>
         <CardHeader>

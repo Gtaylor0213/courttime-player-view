@@ -40,6 +40,7 @@ CREATE TABLE facilities (
     description TEXT,
     amenities TEXT[], -- Array of amenities
     operating_hours JSONB, -- JSON object with hours for each day
+    timezone VARCHAR(50) DEFAULT 'America/New_York',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

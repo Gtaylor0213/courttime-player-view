@@ -133,6 +133,7 @@ interface FacilityData {
   description: string;
   amenities: string[];
   operatingHours: Record<string, { open: string; close: string; closed: boolean }>;
+  timezone: string;
   logoUrl: string;
   facilityImage: File | null;
   facilityImagePreview: string;
@@ -263,6 +264,7 @@ export function FacilityManagement() {
     description: '',
     amenities: [],
     operatingHours: defaultOperatingHours,
+    timezone: 'America/New_York',
     logoUrl: '',
     facilityImage: null,
     facilityImagePreview: '',
@@ -430,6 +432,7 @@ export function FacilityManagement() {
           description: facility.description || '',
           amenities: facility.amenities || [],
           operatingHours: parsedOperatingHours,
+          timezone: facility.timezone || 'America/New_York',
           logoUrl: facility.logoUrl || '',
           facilityImage: null,
           facilityImagePreview: facility.logoUrl || '',
@@ -1720,6 +1723,31 @@ export function FacilityManagement() {
                     <CardDescription>Set your facility's operating hours for each day</CardDescription>
                   </CardHeader>
                   <CardContent>
+                    {/* Timezone Selector */}
+                    <div className="mb-6">
+                      <Label className="text-sm font-medium mb-2 block">Timezone</Label>
+                      {isEditing ? (
+                        <Select
+                          value={facilityData.timezone}
+                          onValueChange={(value: string) => setFacilityData({ ...facilityData, timezone: value })}
+                        >
+                          <SelectTrigger className="w-72">
+                            <SelectValue placeholder="Select timezone" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="America/New_York">Eastern (America/New_York)</SelectItem>
+                            <SelectItem value="America/Chicago">Central (America/Chicago)</SelectItem>
+                            <SelectItem value="America/Denver">Mountain (America/Denver)</SelectItem>
+                            <SelectItem value="America/Los_Angeles">Pacific (America/Los_Angeles)</SelectItem>
+                            <SelectItem value="America/Anchorage">Alaska (America/Anchorage)</SelectItem>
+                            <SelectItem value="Pacific/Honolulu">Hawaii (Pacific/Honolulu)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-sm text-gray-600">{facilityData.timezone}</p>
+                      )}
+                    </div>
+
                     {isEditing ? (
                       <div className="space-y-4">
                         {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (

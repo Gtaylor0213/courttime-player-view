@@ -221,6 +221,7 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
         description,
         amenities,
         operating_hours as "operatingHours",
+        timezone,
         logo_url as "logoUrl",
         created_at as "createdAt",
         updated_at as "updatedAt"
@@ -412,6 +413,10 @@ export async function updateFacility(
     fields.push(`operating_hours = $${paramCount++}`);
     values.push(JSON.stringify(updates.operatingHours));
   }
+  if ((updates as any).timezone) {
+    fields.push(`timezone = $${paramCount++}`);
+    values.push((updates as any).timezone);
+  }
   if (updates.generalRules !== undefined) {
     fields.push(`general_rules = $${paramCount++}`);
     values.push(updates.generalRules);
@@ -437,7 +442,7 @@ export async function updateFacility(
      WHERE id = $${paramCount}
      RETURNING
        id, name, type, address, phone, email, contact_name as "contactName",
-       description, operating_hours as "operatingHours",
+       description, operating_hours as "operatingHours", timezone,
        general_rules as "generalRules", cancellation_policy as "cancellationPolicy",
        booking_rules as "bookingRules", status, created_at as "createdAt"`,
     values

@@ -24,12 +24,11 @@ const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 56;
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 
-// Helper to get current time components in Eastern Time
-const getEasternTimeComponents = (): { hours: number; minutes: number; date: Date } => {
+// Helper to get current time components in a given timezone
+const getTimeComponents = (tz: string = 'America/New_York'): { hours: number; minutes: number; date: Date } => {
   const now = new Date();
-  // Use Intl.DateTimeFormat to get accurate Eastern time components
   const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: tz,
     hour: 'numeric',
     minute: 'numeric',
     hour12: false
@@ -40,11 +39,11 @@ const getEasternTimeComponents = (): { hours: number; minutes: number; date: Dat
   return { hours, minutes, date: now };
 };
 
-// Helper to get current date in Eastern Time (for date comparisons)
-const getEasternTime = (): Date => {
+// Helper to get current date in a given timezone (for date comparisons)
+const getFacilityDate = (tz: string = 'America/New_York'): Date => {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: tz,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
@@ -56,11 +55,11 @@ const getEasternTime = (): Date => {
   return new Date(year, month, day);
 };
 
-// Helper to format current time for display in Eastern Time (accurate)
-const formatCurrentEasternTime = (): string => {
+// Helper to format current time for display in a given timezone
+const formatCurrentTime = (tz: string = 'America/New_York'): string => {
   const now = new Date();
   return now.toLocaleTimeString('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: tz,
     hour: 'numeric',
     minute: '2-digit',
     hour12: true
@@ -76,7 +75,7 @@ export function CourtCalendarView() {
   const selectedFacility = selectedFacilityId;
   const [selectedView, setSelectedView] = useState('week');
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
-  const [currentTime, setCurrentTime] = useState(getEasternTime());
+  const [currentTime, setCurrentTime] = useState(getFacilityDate());
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [bookingsData, setBookingsData] = useState<any>({});
@@ -136,7 +135,7 @@ export function CourtCalendarView() {
 
   // Update current time every 30 seconds for the time indicator line (Eastern Time)
   useEffect(() => {
-    const updateTime = () => setCurrentTime(getEasternTime());
+    const updateTime = () => setCurrentTime(getFacilityDate());
     updateTime(); // Initial update
     const interval = setInterval(updateTime, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
@@ -144,28 +143,9 @@ export function CourtCalendarView() {
 
   // Helper function to check if date is today (must be defined before currentTimeLinePosition)
   const isToday = useCallback((date: Date) => {
-    const today = getEasternTime();
+    const today = getFacilityDate();
     return date.toDateString() === today.toDateString();
   }, []);
-
-  // Calculate the position of the current time indicator line
-  const currentTimeLinePosition = useMemo(() => {
-    if (!isToday(selectedDate)) return null;
-
-    const { hours, minutes } = getEasternTimeComponents();
-    const START_HOUR = 6;
-    const END_HOUR = 21;
-
-    if (hours < START_HOUR || hours > END_HOUR) return null;
-
-    // Each hour = 2 visible rows × ROW_HEIGHT = 4 sub-slots × SUB_SLOT_HEIGHT
-    const hoursFromStart = hours - START_HOUR;
-    const minuteFraction = minutes / 60;
-    const totalHours = hoursFromStart + minuteFraction;
-    const position = totalHours * 2 * ROW_HEIGHT;
-
-    return position;
-  }, [currentTime, selectedDate, isToday]);
 
   // Fetch user's member facilities with courts
   useEffect(() => {
@@ -177,7 +157,7 @@ export function CourtCalendarView() {
 
       try {
         setLoadingFacilities(true);
-        const facilitiesData: Array<{ id: string; name: string; type: string; courts: Array<{ id: string; name: string; type: string }> }> = [];
+        const facilitiesData: Array<{ id: string; name: string; type: string; courts: Array<{ id: string; name: string; type: string }>; operatingHours?: any; timezone?: string }> = [];
 
         for (const facilityId of user.memberFacilities) {
           // Fetch facility details
@@ -204,7 +184,9 @@ export function CourtCalendarView() {
               id: facility.id,
               name: facility.name,
               type: facility.type || facility.facilityType || 'Tennis Facility',
-              courts
+              courts,
+              operatingHours: facility.operatingHours,
+              timezone: facility.timezone || 'America/New_York',
             });
           }
         }
@@ -413,7 +395,62 @@ export function CourtCalendarView() {
   // Only use member facilities - no fallback for users without memberships
   const availableFacilities = memberFacilities;
   const currentFacility = availableFacilities.find(f => f.id === selectedFacility);
-  
+
+  // Derive operating hours and timezone from facility config
+  const { startHour, endHour, facilityTimezone } = useMemo(() => {
+    const oh = currentFacility?.operatingHours;
+    const tz = currentFacility?.timezone || 'America/New_York';
+    if (!oh) return { startHour: 6, endHour: 21, facilityTimezone: tz };
+
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayName = dayNames[selectedDate.getDay()];
+    const dayConfig = oh[dayName];
+
+    if (!dayConfig || dayConfig.closed) {
+      return { startHour: 6, endHour: 21, facilityTimezone: tz };
+    }
+
+    const openHour = dayConfig.open ? parseInt(dayConfig.open.split(':')[0], 10) : 6;
+    const closeHour = dayConfig.close ? parseInt(dayConfig.close.split(':')[0], 10) : 21;
+
+    return { startHour: openHour, endHour: closeHour, facilityTimezone: tz };
+  }, [currentFacility, selectedDate]);
+
+  // Calculate the position of the current time indicator line
+  const currentTimeLinePosition = useMemo(() => {
+    if (!isToday(selectedDate)) return null;
+
+    const { hours, minutes } = getTimeComponents(facilityTimezone);
+
+    if (hours < startHour || hours > endHour) return null;
+
+    // Each hour = 2 visible rows × ROW_HEIGHT = 4 sub-slots × SUB_SLOT_HEIGHT
+    const hoursFromStart = hours - startHour;
+    const minuteFraction = minutes / 60;
+    const totalHours = hoursFromStart + minuteFraction;
+    const position = totalHours * 2 * ROW_HEIGHT;
+
+    return position;
+  }, [currentTime, selectedDate, isToday, startHour, endHour, facilityTimezone]);
+
+  // Helper function to check if a time slot is in the past
+  const isPastTime = useCallback((timeSlot: string) => {
+    const today = getFacilityDate(facilityTimezone);
+    const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    if (selectedDateOnly < today) return true;
+    if (!isToday(selectedDate)) return false;
+
+    const [time, period] = timeSlot.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+
+    const { hours: nowHour, minutes: nowMinute } = getTimeComponents(facilityTimezone);
+    if (hours < nowHour) return true;
+    if (hours === nowHour && (minutes || 0) < nowMinute) return true;
+    return false;
+  }, [selectedDate, currentTime, isToday, facilityTimezone]);
+
   // Filter courts based on selected court type
   const allCourts = currentFacility?.courts || [];
   const filteredCourts = React.useMemo(() => {
@@ -489,33 +526,10 @@ export function CourtCalendarView() {
     return slot24 >= startNorm && slot24 < endNorm;
   }, [primeTimeConfigs, selectedDate]);
 
-  // Helper function to check if a time slot is in the past (using Eastern Time)
-  const isPastTime = useCallback((timeSlot: string) => {
-    // Check if the selected date is BEFORE today — all slots are past
-    const today = getEasternTime();
-    const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-    if (selectedDateOnly < today) return true;
-
-    // If it's not today, nothing is past
-    if (!isToday(selectedDate)) return false;
-
-    // Parse the slot time
-    const [time, period] = timeSlot.split(' ');
-    let [hours, minutes] = time.split(':').map(Number);
-    if (period === 'PM' && hours !== 12) hours += 12;
-    if (period === 'AM' && hours === 12) hours = 0;
-
-    const { hours: nowHour, minutes: nowMinute } = getEasternTimeComponents();
-
-    if (hours < nowHour) return true;
-    if (hours === nowHour && (minutes || 0) < nowMinute) return true;
-    return false;
-  }, [selectedDate, currentTime, isToday]);
-
   // Generate time slots for the day (15-minute intervals)
   const allTimeSlots = React.useMemo(() => {
     const slots: string[] = [];
-    for (let hour = 6; hour <= 21; hour++) {
+    for (let hour = startHour; hour <= endHour; hour++) {
       for (let minute = 0; minute < 60; minute += 15) {
         const period = hour >= 12 ? 'PM' : 'AM';
         const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
@@ -524,7 +538,7 @@ export function CourtCalendarView() {
       }
     }
     return slots;
-  }, []);
+  }, [startHour, endHour]);
 
   // Always show all time slots — past slots are greyed out, not hidden
   const timeSlots = React.useMemo(() => {
@@ -534,7 +548,7 @@ export function CourtCalendarView() {
   // 30-min visible rows for the table grid
   const visibleTimeSlots = React.useMemo(() => {
     const slots: string[] = [];
-    for (let hour = 6; hour <= 21; hour++) {
+    for (let hour = startHour; hour <= endHour; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         const period = hour >= 12 ? 'PM' : 'AM';
         const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
@@ -543,7 +557,7 @@ export function CourtCalendarView() {
       }
     }
     return slots;
-  }, []);
+  }, [startHour, endHour]);
 
   // Use fetched bookings from API
   const bookings = bookingsData;
@@ -1238,7 +1252,7 @@ export function CourtCalendarView() {
                   style={{ zIndex: 25 }}
                 >
                   <div className="bg-white border border-red-400 text-gray-800 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md">
-                    {formatCurrentEasternTime()}
+                    {formatCurrentTime(facilityTimezone)}
                   </div>
                 </div>
                 {/* Red line */}

@@ -532,6 +532,7 @@ export const adminApi = {
     description?: string;
     amenities?: string[];
     operatingHours?: any;
+    timezone?: string;
     logoUrl?: string;
   }) => {
     return apiRequest(`/api/admin/facilities/${facilityId}`, {

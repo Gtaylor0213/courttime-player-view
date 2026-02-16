@@ -146,6 +146,7 @@ router.patch('/facilities/:facilityId', async (req, res) => {
       description,
       amenities,
       operatingHours,
+      timezone,
       logoUrl
     } = req.body;
 
@@ -165,8 +166,9 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         state = COALESCE($11, state),
         zip_code = COALESCE($12, zip_code),
         logo_url = COALESCE($13, logo_url),
+        timezone = COALESCE($14, timezone),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $14
+      WHERE id = $15
       RETURNING
         id,
         name,
@@ -181,10 +183,11 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         description,
         amenities,
         operating_hours as "operatingHours",
+        timezone,
         logo_url as "logoUrl",
         created_at as "createdAt",
         updated_at as "updatedAt"
-    `, [name, type, address, phone, email, description, amenities, operatingHours, streetAddress, city, state, zipCode, logoUrl, facilityId]);
+    `, [name, type, address, phone, email, description, amenities, operatingHours, streetAddress, city, state, zipCode, logoUrl, timezone, facilityId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({

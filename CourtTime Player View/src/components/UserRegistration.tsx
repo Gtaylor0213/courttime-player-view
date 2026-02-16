@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, User, Mail, Phone, Bell, Building, Check, AlertCircle, Camera, Search, MapPin, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../contexts/AuthContext';
-import { facilitiesApi, playerProfileApi } from '../api/client';
+import { facilitiesApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -185,7 +185,8 @@ export function UserRegistration() {
     try {
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
-      // Register the user account
+      // Register the user account (selectedFacilities are passed to the backend
+      // which creates pending membership records via addUserToFacility)
       const success = await register(
         formData.email,
         formData.password,
@@ -201,6 +202,7 @@ export function UserRegistration() {
           ustaRating: formData.ustaRating,
           bio: formData.bio,
           profilePicture: formData.profilePicture,
+          selectedFacilities: selectedFacilities.map(f => f.id),
           notificationPreferences: formData.notificationPreferences
         }
       );
@@ -208,25 +210,8 @@ export function UserRegistration() {
       if (success) {
         toast.success('Account created successfully!');
 
-        // Request membership to selected facilities
         if (selectedFacilities.length > 0) {
-          const storedUser = localStorage.getItem('auth_user');
-          const userId = storedUser ? JSON.parse(storedUser).id : null;
-
-          if (userId) {
-            let requestCount = 0;
-            for (const facility of selectedFacilities) {
-              try {
-                const result = await playerProfileApi.requestMembership(userId, facility.id);
-                if (result.success) requestCount++;
-              } catch (err) {
-                console.error(`Failed to request membership for ${facility.id}:`, err);
-              }
-            }
-            if (requestCount > 0) {
-              toast.info(`Membership ${requestCount === 1 ? 'request' : 'requests'} sent to ${requestCount} ${requestCount === 1 ? 'facility' : 'facilities'}`);
-            }
-          }
+          toast.info(`Membership ${selectedFacilities.length === 1 ? 'request' : 'requests'} sent to ${selectedFacilities.length} ${selectedFacilities.length === 1 ? 'facility' : 'facilities'}`);
         }
 
         navigate('/calendar');
@@ -613,7 +598,7 @@ export function UserRegistration() {
                                   size="sm"
                                   variant="outline"
                                 >
-                                  {facility.requiresApproval ? 'Request' : 'Join'}
+                                  Request to Join
                                 </Button>
                               )}
 
@@ -628,7 +613,7 @@ export function UserRegistration() {
                                 <div className="flex items-center gap-2 text-green-600">
                                   <Check className="h-4 w-4" />
                                   <span className="text-xs font-medium">
-                                    {facility.requiresApproval ? 'Requested' : 'Joined'}
+                                    Requested
                                   </span>
                                 </div>
                               )}

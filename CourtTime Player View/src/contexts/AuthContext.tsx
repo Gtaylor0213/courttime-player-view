@@ -37,6 +37,7 @@ interface RegistrationData {
   ustaRating?: string;
   bio?: string;
   profilePicture?: string;
+  selectedFacilities?: string[];
   notificationPreferences?: {
     emailBookingConfirmations?: boolean;
     smsReminders?: boolean;
@@ -160,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
         fullName,
         userType: userType || 'player',
+        selectedFacilities: additionalData?.selectedFacilities,
         phone: additionalData?.phone,
         streetAddress: additionalData?.streetAddress,
         city: additionalData?.city,

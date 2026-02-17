@@ -111,6 +111,9 @@ export function FacilityRegistration() {
       sunday: { open: '09:00', close: '18:00', closed: false },
     },
 
+    // Timezone
+    timezone: 'America/New_York',
+
     // Step 3: Courts (now before Rules)
     rulesConfig: { ...DEFAULT_RULES_CONFIG } as RulesConfig,
 
@@ -678,6 +681,7 @@ export function FacilityRegistration() {
 
         // Operating Hours
         operatingHours: formData.operatingHours,
+        timezone: formData.timezone,
 
         // Facility Rules
         generalRules: formData.rulesConfig.generalRules,
@@ -1371,6 +1375,27 @@ export function FacilityRegistration() {
             );
           })}
         </div>
+      </div>
+
+      <div>
+        <h4 className="font-semibold mb-4">Timezone</h4>
+        <Select
+          value={formData.timezone}
+          onValueChange={(value: string) => handleInputChange('timezone', value)}
+        >
+          <SelectTrigger className="w-72">
+            <SelectValue placeholder="Select timezone" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="America/New_York">Eastern (America/New_York)</SelectItem>
+            <SelectItem value="America/Chicago">Central (America/Chicago)</SelectItem>
+            <SelectItem value="America/Denver">Mountain (America/Denver)</SelectItem>
+            <SelectItem value="America/Los_Angeles">Pacific (America/Los_Angeles)</SelectItem>
+            <SelectItem value="America/Anchorage">Alaska (America/Anchorage)</SelectItem>
+            <SelectItem value="Pacific/Honolulu">Hawaii (Pacific/Honolulu)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-gray-500 mt-1">Used for booking times and calendar display.</p>
       </div>
     </div>
   );

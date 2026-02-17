@@ -858,13 +858,13 @@ export async function registerFacility(
     const facilityResult = await client.query(
       `INSERT INTO facilities (
         id, name, type, street_address, city, state, zip_code, address,
-        phone, email, contact_name, description, operating_hours,
+        phone, email, contact_name, description, operating_hours, timezone,
         general_rules, cancellation_policy, booking_rules, logo_url, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'active')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'active')
       RETURNING
         id, name, type, street_address as "streetAddress", city, state, zip_code as "zipCode",
         address, phone, email, contact_name as "contactName", description,
-        operating_hours as "operatingHours", general_rules as "generalRules",
+        operating_hours as "operatingHours", timezone, general_rules as "generalRules",
         cancellation_policy as "cancellationPolicy", booking_rules as "bookingRules",
         logo_url as "logoUrl", status, created_at as "createdAt"`,
       [
@@ -881,6 +881,7 @@ export async function registerFacility(
         data.contactName,
         data.description || null,
         JSON.stringify(data.operatingHours),
+        data.timezone || 'America/New_York',
         data.generalRules,
         data.cancellationPolicy || null,
         data.bookingRules || null,

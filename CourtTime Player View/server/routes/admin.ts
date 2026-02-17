@@ -8,6 +8,7 @@ import { query } from '../../src/database/connection';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
+import { createCourt, createCourtsBulk, updateCourtsBulk } from '../../src/services/courtService';
 
 const router = express.Router();
 
@@ -213,6 +214,36 @@ router.patch('/facilities/:facilityId', async (req, res) => {
 });
 
 /**
+ * PATCH /api/admin/courts/bulk-update
+ * Bulk update multiple courts with shared property changes
+ * NOTE: Must be defined BEFORE /courts/:courtId to avoid matching 'bulk-update' as courtId
+ */
+router.patch('/courts/bulk-update', async (req, res) => {
+  try {
+    const { courtIds, updates } = req.body;
+
+    if (!Array.isArray(courtIds) || courtIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'courtIds must be a non-empty array' });
+    }
+
+    if (!updates || typeof updates !== 'object') {
+      return res.status(400).json({ success: false, error: 'updates object is required' });
+    }
+
+    const updatedCount = await updateCourtsBulk(courtIds, updates);
+
+    res.json({
+      success: true,
+      data: { updatedCount },
+      message: `${updatedCount} courts updated`,
+    });
+  } catch (error: any) {
+    console.error('Error bulk updating courts:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * PATCH /api/admin/courts/:courtId
  * Update court information
  */
@@ -278,6 +309,73 @@ router.patch('/courts/:courtId', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+/**
+ * POST /api/admin/courts/:facilityId
+ * Create a single court
+ */
+router.post('/courts/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { name, courtNumber, surfaceType, courtType, isIndoor, hasLights } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Court name is required' });
+    }
+
+    const court = await createCourt({
+      facilityId,
+      name,
+      courtNumber: courtNumber || 1,
+      surfaceType: surfaceType || 'Hard',
+      courtType: courtType || 'Tennis',
+      isIndoor: isIndoor || false,
+      hasLights: hasLights || false,
+    });
+
+    res.json({ success: true, data: { court } });
+  } catch (error: any) {
+    console.error('Error creating court:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/courts/:facilityId/bulk
+ * Bulk create courts with shared properties
+ */
+router.post('/courts/:facilityId/bulk', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { count, startingNumber, surfaceType, courtType, isIndoor, hasLights } = req.body;
+
+    const courtCount = parseInt(count);
+    if (isNaN(courtCount) || courtCount < 1 || courtCount > 50) {
+      return res.status(400).json({ success: false, error: 'Count must be between 1 and 50' });
+    }
+
+    const courts = await createCourtsBulk(
+      {
+        facilityId,
+        surfaceType: surfaceType || 'Hard',
+        courtType: courtType || 'Tennis',
+        isIndoor: isIndoor || false,
+        hasLights: hasLights || false,
+      },
+      courtCount,
+      parseInt(startingNumber) || 1
+    );
+
+    res.json({
+      success: true,
+      data: { courts },
+      message: `${courts.length} courts created`,
+    });
+  } catch (error: any) {
+    console.error('Error bulk creating courts:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

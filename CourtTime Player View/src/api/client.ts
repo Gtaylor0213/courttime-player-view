@@ -543,6 +543,47 @@ export const adminApi = {
   },
 
   // Court Management
+  createCourt: async (facilityId: string, data: {
+    name: string;
+    courtNumber: number;
+    surfaceType: string;
+    courtType: string;
+    isIndoor: boolean;
+    hasLights: boolean;
+  }) => {
+    return apiRequest(`/api/admin/courts/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  createCourtsBulk: async (facilityId: string, data: {
+    count: number;
+    startingNumber: number;
+    surfaceType: string;
+    courtType: string;
+    isIndoor: boolean;
+    hasLights: boolean;
+  }) => {
+    return apiRequest(`/api/admin/courts/${facilityId}/bulk`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  bulkUpdateCourts: async (courtIds: string[], updates: {
+    surfaceType?: string;
+    courtType?: string;
+    isIndoor?: boolean;
+    hasLights?: boolean;
+    status?: string;
+  }) => {
+    return apiRequest('/api/admin/courts/bulk-update', {
+      method: 'PATCH',
+      body: JSON.stringify({ courtIds, updates }),
+    });
+  },
+
   updateCourt: async (courtId: string, data: {
     name?: string;
     courtNumber?: number;

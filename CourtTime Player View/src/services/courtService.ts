@@ -206,6 +206,59 @@ export async function createSplitCourt(
 }
 
 /**
+ * Bulk update multiple courts with shared property changes
+ */
+export async function updateCourtsBulk(
+  courtIds: string[],
+  updates: {
+    surfaceType?: string;
+    courtType?: string;
+    isIndoor?: boolean;
+    hasLights?: boolean;
+    status?: string;
+  }
+): Promise<number> {
+  if (courtIds.length === 0) return 0;
+
+  const setClauses: string[] = [];
+  const params: any[] = [courtIds];
+  let paramIndex = 2;
+
+  if (updates.surfaceType !== undefined) {
+    setClauses.push(`surface_type = $${paramIndex++}`);
+    params.push(updates.surfaceType);
+  }
+  if (updates.courtType !== undefined) {
+    setClauses.push(`court_type = $${paramIndex++}`);
+    params.push(updates.courtType);
+  }
+  if (updates.isIndoor !== undefined) {
+    setClauses.push(`is_indoor = $${paramIndex++}`);
+    params.push(updates.isIndoor);
+  }
+  if (updates.hasLights !== undefined) {
+    setClauses.push(`has_lights = $${paramIndex++}`);
+    params.push(updates.hasLights);
+  }
+  if (updates.status !== undefined) {
+    const statusMap: Record<string, string> = { active: 'available', inactive: 'closed' };
+    setClauses.push(`status = $${paramIndex++}`);
+    params.push(statusMap[updates.status] || updates.status);
+  }
+
+  if (setClauses.length === 0) return 0;
+
+  setClauses.push('updated_at = CURRENT_TIMESTAMP');
+
+  const result = await query(
+    `UPDATE courts SET ${setClauses.join(', ')} WHERE id = ANY($1::uuid[])`,
+    params
+  );
+
+  return result.rowCount || 0;
+}
+
+/**
  * Get all courts for a facility
  */
 export async function getFacilityCourts(facilityId: string): Promise<Court[]> {

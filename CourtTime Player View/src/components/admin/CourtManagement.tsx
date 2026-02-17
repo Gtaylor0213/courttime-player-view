@@ -4,10 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Edit, Trash2, Save, X, Settings } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Settings, Layers, CheckSquare } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
+import { Checkbox } from '../ui/checkbox';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { facilitiesApi, adminApi, courtConfigApi } from '../../api/client';
@@ -24,6 +25,23 @@ interface Court {
   status: 'available' | 'maintenance' | 'closed';
 }
 
+interface BulkAddForm {
+  count: number;
+  startingNumber: number;
+  courtType: string;
+  surfaceType: string;
+  isIndoor: boolean;
+  hasLights: boolean;
+}
+
+interface BulkEditForm {
+  courtType: string;
+  surfaceType: string;
+  status: string;
+  isIndoor: string; // 'true' | 'false' | '' (unchanged)
+  hasLights: string;
+}
+
 export function CourtManagement() {
   const { user } = useAuth();
   const { selectedFacilityId: currentFacilityId } = useAppContext();
@@ -33,6 +51,29 @@ export function CourtManagement() {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Bulk add state
+  const [bulkAddMode, setBulkAddMode] = useState(false);
+  const [bulkAddForm, setBulkAddForm] = useState<BulkAddForm>({
+    count: 4,
+    startingNumber: 1,
+    courtType: 'Tennis',
+    surfaceType: 'Hard Court',
+    isIndoor: false,
+    hasLights: false,
+  });
+  const [bulkAdding, setBulkAdding] = useState(false);
+
+  // Bulk edit state
+  const [selectedCourts, setSelectedCourts] = useState<Set<string>>(new Set());
+  const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>({
+    courtType: '',
+    surfaceType: '',
+    status: '',
+    isIndoor: '',
+    hasLights: '',
+  });
+  const [bulkEditing, setBulkEditing] = useState(false);
 
   // Court schedule config state
   const [configuringCourtId, setConfiguringCourtId] = useState<string | null>(null);
@@ -74,11 +115,14 @@ export function CourtManagement() {
     }
   };
 
+  // --- Single Add/Edit ---
+
   const handleAddNew = () => {
+    const maxNumber = courts.length > 0 ? Math.max(...courts.map(c => c.courtNumber)) : 0;
     setEditingCourt({
       id: '',
       name: '',
-      courtNumber: courts.length + 1,
+      courtNumber: maxNumber + 1,
       courtType: 'Tennis',
       surfaceType: 'Hard Court',
       isIndoor: false,
@@ -86,6 +130,7 @@ export function CourtManagement() {
       status: 'available',
     });
     setIsAddingNew(true);
+    setBulkAddMode(false);
   };
 
   const handleEdit = (court: Court) => {
@@ -98,27 +143,42 @@ export function CourtManagement() {
 
     try {
       setSaving(true);
-      const response = await adminApi.updateCourt(editingCourt.id, {
-        name: editingCourt.name,
-        courtNumber: editingCourt.courtNumber,
-        surfaceType: editingCourt.surfaceType,
-        courtType: editingCourt.courtType,
-        isIndoor: editingCourt.isIndoor,
-        hasLights: editingCourt.hasLights,
-        status: editingCourt.status,
-      });
+
+      let response;
+      if (isAddingNew) {
+        // Create new court
+        response = await adminApi.createCourt(currentFacilityId, {
+          name: editingCourt.name || `Court ${editingCourt.courtNumber}`,
+          courtNumber: editingCourt.courtNumber,
+          surfaceType: editingCourt.surfaceType,
+          courtType: editingCourt.courtType,
+          isIndoor: editingCourt.isIndoor,
+          hasLights: editingCourt.hasLights,
+        });
+      } else {
+        // Update existing court
+        response = await adminApi.updateCourt(editingCourt.id, {
+          name: editingCourt.name,
+          courtNumber: editingCourt.courtNumber,
+          surfaceType: editingCourt.surfaceType,
+          courtType: editingCourt.courtType,
+          isIndoor: editingCourt.isIndoor,
+          hasLights: editingCourt.hasLights,
+          status: editingCourt.status,
+        });
+      }
 
       if (response.success) {
-        toast.success('Court updated successfully');
+        toast.success(isAddingNew ? 'Court created successfully' : 'Court updated successfully');
         setEditingCourt(null);
         setIsAddingNew(false);
         await loadCourts();
       } else {
-        toast.error(response.error || 'Failed to update court');
+        toast.error(response.error || 'Failed to save court');
       }
     } catch (error: any) {
       console.error('Error saving court:', error);
-      toast.error('Failed to update court');
+      toast.error('Failed to save court');
     } finally {
       setSaving(false);
     }
@@ -127,6 +187,7 @@ export function CourtManagement() {
   const handleCancel = () => {
     setEditingCourt(null);
     setIsAddingNew(false);
+    setBulkAddMode(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -146,7 +207,112 @@ export function CourtManagement() {
     }
   };
 
-  // Court schedule config functions
+  // --- Bulk Add ---
+
+  const handleBulkAddToggle = () => {
+    setBulkAddMode(true);
+    setEditingCourt(null);
+    setIsAddingNew(false);
+    const maxNumber = courts.length > 0 ? Math.max(...courts.map(c => c.courtNumber)) : 0;
+    setBulkAddForm(prev => ({ ...prev, startingNumber: maxNumber + 1 }));
+  };
+
+  const handleBulkAdd = async () => {
+    if (!currentFacilityId) return;
+
+    try {
+      setBulkAdding(true);
+      const response = await adminApi.createCourtsBulk(currentFacilityId, {
+        count: bulkAddForm.count,
+        startingNumber: bulkAddForm.startingNumber,
+        surfaceType: bulkAddForm.surfaceType,
+        courtType: bulkAddForm.courtType,
+        isIndoor: bulkAddForm.isIndoor,
+        hasLights: bulkAddForm.hasLights,
+      });
+
+      if (response.success) {
+        toast.success(`${bulkAddForm.count} courts created successfully`);
+        setBulkAddMode(false);
+        await loadCourts();
+      } else {
+        toast.error(response.error || 'Failed to create courts');
+      }
+    } catch (error: any) {
+      console.error('Error bulk creating courts:', error);
+      toast.error('Failed to create courts');
+    } finally {
+      setBulkAdding(false);
+    }
+  };
+
+  // --- Bulk Edit / Selection ---
+
+  const toggleCourtSelection = (courtId: string) => {
+    setSelectedCourts(prev => {
+      const next = new Set(prev);
+      if (next.has(courtId)) {
+        next.delete(courtId);
+      } else {
+        next.add(courtId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedCourts.size === courts.length) {
+      setSelectedCourts(new Set());
+    } else {
+      setSelectedCourts(new Set(courts.map(c => c.id)));
+    }
+  };
+
+  const handleBulkEdit = async () => {
+    if (selectedCourts.size === 0) return;
+
+    const updates: Record<string, any> = {};
+    if (bulkEditForm.courtType) updates.courtType = bulkEditForm.courtType;
+    if (bulkEditForm.surfaceType) updates.surfaceType = bulkEditForm.surfaceType;
+    if (bulkEditForm.status) updates.status = bulkEditForm.status;
+    if (bulkEditForm.isIndoor) updates.isIndoor = bulkEditForm.isIndoor === 'true';
+    if (bulkEditForm.hasLights) updates.hasLights = bulkEditForm.hasLights === 'true';
+
+    if (Object.keys(updates).length === 0) {
+      toast.error('Select at least one property to change');
+      return;
+    }
+
+    try {
+      setBulkEditing(true);
+      const response = await adminApi.bulkUpdateCourts(
+        Array.from(selectedCourts),
+        updates
+      );
+
+      if (response.success) {
+        toast.success(`${selectedCourts.size} courts updated successfully`);
+        setSelectedCourts(new Set());
+        setBulkEditForm({ courtType: '', surfaceType: '', status: '', isIndoor: '', hasLights: '' });
+        await loadCourts();
+      } else {
+        toast.error(response.error || 'Failed to update courts');
+      }
+    } catch (error: any) {
+      console.error('Error bulk updating courts:', error);
+      toast.error('Failed to update courts');
+    } finally {
+      setBulkEditing(false);
+    }
+  };
+
+  const cancelBulkEdit = () => {
+    setSelectedCourts(new Set());
+    setBulkEditForm({ courtType: '', surfaceType: '', status: '', isIndoor: '', hasLights: '' });
+  };
+
+  // --- Court Schedule Config ---
+
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const loadCourtSchedule = async (courtId: string) => {
@@ -202,6 +368,8 @@ export function CourtManagement() {
     }
   };
 
+  // --- Helpers ---
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'available': return 'bg-green-100 text-green-800';
@@ -223,18 +391,42 @@ export function CourtManagement() {
     );
   }
 
+  const isFormOpen = editingCourt !== null || bulkAddMode;
+
   return (
       <div className="p-8">
         <div className="max-w-7xl mx-auto">
+          {/* Header */}
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-2xl font-medium text-gray-900">Court Management</h1>
-            <Button onClick={handleAddNew} disabled={editingCourt !== null || isAddingNew}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add New Court
-            </Button>
+            <div>
+              <h1 className="text-2xl font-medium text-gray-900">Court Management</h1>
+              {selectedCourts.size > 0 && (
+                <p className="text-sm text-green-600 mt-1">{selectedCourts.size} court{selectedCourts.size !== 1 ? 's' : ''} selected</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {courts.length > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={toggleSelectAll}
+                  disabled={isFormOpen}
+                >
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  {selectedCourts.size === courts.length ? 'Deselect All' : 'Select All'}
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleBulkAddToggle} disabled={isFormOpen}>
+                <Layers className="h-4 w-4 mr-2" />
+                Bulk Add
+              </Button>
+              <Button onClick={handleAddNew} disabled={isFormOpen}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Court
+              </Button>
+            </div>
           </div>
 
-          {/* Edit/Add Form */}
+          {/* Single Add/Edit Form */}
           {editingCourt && (
             <Card className="mb-6 border-green-200 bg-green-50">
               <CardHeader>
@@ -249,7 +441,7 @@ export function CourtManagement() {
                       id="courtName"
                       value={editingCourt.name}
                       onChange={(e) => setEditingCourt({ ...editingCourt, name: e.target.value })}
-                      placeholder="e.g., Court 1"
+                      placeholder={`Court ${editingCourt.courtNumber}`}
                     />
                   </div>
                   <div className="space-y-2">
@@ -293,22 +485,24 @@ export function CourtManagement() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="courtStatus">Status</Label>
-                    <Select
-                      value={editingCourt.status}
-                      onValueChange={(value: 'available' | 'maintenance' | 'closed') => setEditingCourt({ ...editingCourt, status: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="available">Available</SelectItem>
-                        <SelectItem value="maintenance">Maintenance</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {!isAddingNew && (
+                    <div className="space-y-2">
+                      <Label htmlFor="courtStatus">Status</Label>
+                      <Select
+                        value={editingCourt.status}
+                        onValueChange={(value: 'available' | 'maintenance' | 'closed') => setEditingCourt({ ...editingCourt, status: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="available">Available</SelectItem>
+                          <SelectItem value="maintenance">Maintenance</SelectItem>
+                          <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="indoor"
@@ -329,9 +523,105 @@ export function CourtManagement() {
                 <div className="flex gap-2 mt-6">
                   <Button onClick={handleSave} disabled={saving}>
                     <Save className="h-4 w-4 mr-2" />
-                    {saving ? 'Saving...' : 'Save Court'}
+                    {saving ? 'Saving...' : (isAddingNew ? 'Create Court' : 'Save Court')}
                   </Button>
                   <Button variant="outline" onClick={handleCancel} disabled={saving}>
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bulk Add Form */}
+          {bulkAddMode && (
+            <Card className="mb-6 border-blue-200 bg-blue-50">
+              <CardHeader>
+                <CardTitle>Bulk Add Courts</CardTitle>
+                <CardDescription>Create multiple courts with shared properties</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bulkCount">Number of Courts</Label>
+                    <Input
+                      id="bulkCount"
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={bulkAddForm.count}
+                      onChange={(e) => setBulkAddForm({ ...bulkAddForm, count: Math.max(1, Math.min(50, parseInt(e.target.value) || 1)) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="startingNumber">Starting Number</Label>
+                    <Input
+                      id="startingNumber"
+                      type="number"
+                      min={1}
+                      value={bulkAddForm.startingNumber}
+                      onChange={(e) => setBulkAddForm({ ...bulkAddForm, startingNumber: parseInt(e.target.value) || 1 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bulkCourtType">Court Type</Label>
+                    <Select
+                      value={bulkAddForm.courtType}
+                      onValueChange={(value) => setBulkAddForm({ ...bulkAddForm, courtType: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Tennis">Tennis</SelectItem>
+                        <SelectItem value="Pickleball">Pickleball</SelectItem>
+                        <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bulkSurfaceType">Surface Type</Label>
+                    <Select
+                      value={bulkAddForm.surfaceType}
+                      onValueChange={(value) => setBulkAddForm({ ...bulkAddForm, surfaceType: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Hard Court">Hard Court</SelectItem>
+                        <SelectItem value="Clay Court">Clay Court</SelectItem>
+                        <SelectItem value="Grass Court">Grass Court</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center space-x-2 pt-6">
+                    <Switch
+                      id="bulkIndoor"
+                      checked={bulkAddForm.isIndoor}
+                      onCheckedChange={(checked) => setBulkAddForm({ ...bulkAddForm, isIndoor: checked })}
+                    />
+                    <Label htmlFor="bulkIndoor">Indoor</Label>
+                  </div>
+                  <div className="flex items-center space-x-2 pt-6">
+                    <Switch
+                      id="bulkLights"
+                      checked={bulkAddForm.hasLights}
+                      onCheckedChange={(checked) => setBulkAddForm({ ...bulkAddForm, hasLights: checked })}
+                    />
+                    <Label htmlFor="bulkLights">Has Lights</Label>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 mt-3">
+                  This will create Court {bulkAddForm.startingNumber} through Court {bulkAddForm.startingNumber + bulkAddForm.count - 1}.
+                </p>
+                <div className="flex gap-2 mt-4">
+                  <Button onClick={handleBulkAdd} disabled={bulkAdding}>
+                    <Layers className="h-4 w-4 mr-2" />
+                    {bulkAdding ? 'Creating...' : `Create ${bulkAddForm.count} Courts`}
+                  </Button>
+                  <Button variant="outline" onClick={handleCancel} disabled={bulkAdding}>
                     <X className="h-4 w-4 mr-2" />
                     Cancel
                   </Button>
@@ -344,20 +634,27 @@ export function CourtManagement() {
           <div className="grid grid-cols-1 gap-4">
             {courts.map((court) => (
               <React.Fragment key={court.id}>
-                <Card>
+                <Card className={selectedCourts.has(court.id) ? 'ring-2 ring-green-400 bg-green-50/30' : ''}>
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold">{court.name}</h3>
-                          <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
-                        </div>
-                        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                          <span>Court #: <strong>{court.courtNumber}</strong></span>
-                          <span>Type: <strong>{court.courtType}</strong></span>
-                          <span>Surface: <strong>{court.surfaceType}</strong></span>
-                          <span>{court.isIndoor ? 'Indoor' : 'Outdoor'}</span>
-                          <span>{court.hasLights ? 'With Lights' : 'No Lights'}</span>
+                      <div className="flex items-center gap-3 flex-1">
+                        <Checkbox
+                          checked={selectedCourts.has(court.id)}
+                          onCheckedChange={() => toggleCourtSelection(court.id)}
+                          className="h-5 w-5"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-semibold">{court.name}</h3>
+                            <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                            <span>Court #: <strong>{court.courtNumber}</strong></span>
+                            <span>Type: <strong>{court.courtType}</strong></span>
+                            <span>Surface: <strong>{court.surfaceType}</strong></span>
+                            <span>{court.isIndoor ? 'Indoor' : 'Outdoor'}</span>
+                            <span>{court.hasLights ? 'With Lights' : 'No Lights'}</span>
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -531,9 +828,82 @@ export function CourtManagement() {
           {courts.length === 0 && (
             <Card>
               <CardContent className="p-12 text-center">
-                <p className="text-gray-500">No courts configured. Click "Add New Court" to get started.</p>
+                <p className="text-gray-500">No courts configured. Click "Add Court" or "Bulk Add" to get started.</p>
               </CardContent>
             </Card>
+          )}
+
+          {/* Floating Bulk Edit Bar */}
+          {selectedCourts.size > 0 && (
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-50 p-4">
+              <div className="max-w-7xl mx-auto">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="font-medium text-sm whitespace-nowrap">
+                    {selectedCourts.size} court{selectedCourts.size !== 1 ? 's' : ''} selected
+                  </span>
+                  <div className="flex items-center gap-3 flex-wrap flex-1">
+                    <Select value={bulkEditForm.courtType} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, courtType: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Court Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Tennis">Tennis</SelectItem>
+                        <SelectItem value="Pickleball">Pickleball</SelectItem>
+                        <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={bulkEditForm.surfaceType} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, surfaceType: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Surface" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Hard Court">Hard Court</SelectItem>
+                        <SelectItem value="Clay Court">Clay Court</SelectItem>
+                        <SelectItem value="Grass Court">Grass Court</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={bulkEditForm.status} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, status: v })}>
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="available">Available</SelectItem>
+                        <SelectItem value="maintenance">Maintenance</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={bulkEditForm.isIndoor} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, isIndoor: v })}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue placeholder="Indoor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Indoor</SelectItem>
+                        <SelectItem value="false">Outdoor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={bulkEditForm.hasLights} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, hasLights: v })}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue placeholder="Lights" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Has Lights</SelectItem>
+                        <SelectItem value="false">No Lights</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleBulkEdit} disabled={bulkEditing}>
+                      <Save className="h-4 w-4 mr-2" />
+                      {bulkEditing ? 'Applying...' : 'Apply Changes'}
+                    </Button>
+                    <Button variant="outline" onClick={cancelBulkEdit} disabled={bulkEditing}>
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

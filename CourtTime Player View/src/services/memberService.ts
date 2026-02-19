@@ -56,7 +56,7 @@ export async function getFacilityMembers(facilityId: string, searchTerm?: string
         fm.id as "membershipId",
         fm.membership_type as "membershipType",
         fm.status,
-        fm.is_facility_admin as "isFacilityAdmin",
+        CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
@@ -65,6 +65,7 @@ export async function getFacilityMembers(facilityId: string, searchTerm?: string
        FROM facility_memberships fm
        JOIN users u ON fm.user_id = u.id
        LEFT JOIN player_profiles pp ON u.id = pp.user_id
+       LEFT JOIN facility_admins fa ON fa.user_id = fm.user_id AND fa.facility_id = fm.facility_id AND fa.status = 'active'
        WHERE fm.facility_id = $1`;
 
     const params: any[] = [facilityId];
@@ -103,7 +104,7 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
         fm.id as "membershipId",
         fm.membership_type as "membershipType",
         fm.status,
-        fm.is_facility_admin as "isFacilityAdmin",
+        CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
@@ -112,6 +113,7 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
        FROM facility_memberships fm
        JOIN users u ON fm.user_id = u.id
        LEFT JOIN player_profiles pp ON u.id = pp.user_id
+       LEFT JOIN facility_admins fa ON fa.user_id = fm.user_id AND fa.facility_id = fm.facility_id AND fa.status = 'active'
        WHERE fm.facility_id = $1 AND u.id = $2`,
       [facilityId, userId]
     );

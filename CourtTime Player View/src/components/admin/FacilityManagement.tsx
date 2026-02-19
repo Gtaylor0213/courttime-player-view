@@ -12,7 +12,7 @@ import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
-import { facilitiesApi, adminApi, courtConfigApi, rulesApi, tiersApi } from '../../api/client';
+import { facilitiesApi, adminApi, courtConfigApi, rulesApi } from '../../api/client';
 import { toast } from 'sonner';
 
 // US State abbreviations
@@ -99,10 +99,6 @@ interface BookingRules {
   rateLimitEnabled: boolean;
   rateLimitMaxActions: string;
   rateLimitWindowSeconds: string;
-  // CRT-003: Prime time tier restriction
-  primeTimeRequiresTierEnabled: boolean;
-  primeTimeAllowedTiers: string[];
-  primeTimeAdminOverride: boolean;
   // CRT-010: Court weekly cap
   courtWeeklyCapEnabled: boolean;
   courtWeeklyCap: string;
@@ -226,9 +222,6 @@ export function FacilityManagement() {
     rateLimitEnabled: false,
     rateLimitMaxActions: '10',
     rateLimitWindowSeconds: '60',
-    primeTimeRequiresTierEnabled: false,
-    primeTimeAllowedTiers: [],
-    primeTimeAdminOverride: true,
     courtWeeklyCapEnabled: false,
     courtWeeklyCap: '5',
     courtReleaseTimeEnabled: false,
@@ -299,13 +292,6 @@ export function FacilityManagement() {
   const [isAddingBlackout, setIsAddingBlackout] = useState(false);
   const [blackoutSaving, setBlackoutSaving] = useState(false);
 
-  // Tier state
-  const [tiers, setTiers] = useState<any[]>([]);
-  const [tiersLoading, setTiersLoading] = useState(false);
-  const [editingTier, setEditingTier] = useState<any | null>(null);
-  const [isAddingTier, setIsAddingTier] = useState(false);
-  const [tierSaving, setTierSaving] = useState(false);
-
   const { selectedFacilityId: currentFacilityId } = useAppContext();
 
   useEffect(() => {
@@ -314,7 +300,6 @@ export function FacilityManagement() {
       loadFacilityData().then(() => loadFacilityRules());
       loadCourts();
       loadBlackouts();
-      loadTiers();
     }
   }, [currentFacilityId]);
 
@@ -435,9 +420,6 @@ export function FacilityManagement() {
           rateLimitEnabled: defaultBookingRules.rateLimitEnabled,
           rateLimitMaxActions: defaultBookingRules.rateLimitMaxActions,
           rateLimitWindowSeconds: defaultBookingRules.rateLimitWindowSeconds,
-          primeTimeRequiresTierEnabled: defaultBookingRules.primeTimeRequiresTierEnabled,
-          primeTimeAllowedTiers: defaultBookingRules.primeTimeAllowedTiers,
-          primeTimeAdminOverride: defaultBookingRules.primeTimeAdminOverride,
           courtWeeklyCapEnabled: defaultBookingRules.courtWeeklyCapEnabled,
           courtWeeklyCap: defaultBookingRules.courtWeeklyCap,
           courtReleaseTimeEnabled: defaultBookingRules.courtReleaseTimeEnabled,
@@ -953,110 +935,6 @@ export function FacilityManagement() {
     thursday: 4, friday: 5, saturday: 6,
   };
 
-  // Tier management functions
-  const loadTiers = async () => {
-    if (!currentFacilityId) return;
-    try {
-      setTiersLoading(true);
-      const response = await tiersApi.getByFacility(currentFacilityId);
-      if (response.success && response.data?.tiers) {
-        setTiers(response.data.tiers);
-      }
-    } catch (error) {
-      console.error('Error loading tiers:', error);
-    } finally {
-      setTiersLoading(false);
-    }
-  };
-
-  const handleAddTier = () => {
-    setIsAddingTier(true);
-    setEditingTier({
-      tier_name: '',
-      tier_level: tiers.length + 1,
-      advance_booking_days: 7,
-      max_active_reservations: null,
-      max_reservations_per_week: null,
-      max_minutes_per_week: null,
-      prime_time_eligible: true,
-      prime_time_max_per_week: null,
-      is_default: tiers.length === 0,
-    });
-  };
-
-  const handleSaveTier = async () => {
-    if (!currentFacilityId || !editingTier) return;
-    if (!editingTier.tier_name?.trim()) {
-      toast.error('Tier name is required');
-      return;
-    }
-    try {
-      setTierSaving(true);
-      if (isAddingTier) {
-        const response = await tiersApi.create({
-          facilityId: currentFacilityId,
-          tierName: editingTier.tier_name,
-          tierLevel: editingTier.tier_level,
-          advanceBookingDays: editingTier.advance_booking_days,
-          maxActiveReservations: editingTier.max_active_reservations,
-          maxReservationsPerWeek: editingTier.max_reservations_per_week,
-          maxMinutesPerWeek: editingTier.max_minutes_per_week,
-          primeTimeEligible: editingTier.prime_time_eligible,
-          primeTimeMaxPerWeek: editingTier.prime_time_max_per_week,
-          isDefault: editingTier.is_default,
-        });
-        if (response.success) {
-          toast.success('Tier created');
-        } else {
-          toast.error(response.error || 'Failed to create tier');
-          return;
-        }
-      } else {
-        const response = await tiersApi.update(editingTier.id, {
-          tierName: editingTier.tier_name,
-          tierLevel: editingTier.tier_level,
-          advanceBookingDays: editingTier.advance_booking_days,
-          maxActiveReservations: editingTier.max_active_reservations,
-          maxReservationsPerWeek: editingTier.max_reservations_per_week,
-          maxMinutesPerWeek: editingTier.max_minutes_per_week,
-          primeTimeEligible: editingTier.prime_time_eligible,
-          primeTimeMaxPerWeek: editingTier.prime_time_max_per_week,
-          isDefault: editingTier.is_default,
-        });
-        if (response.success) {
-          toast.success('Tier updated');
-        } else {
-          toast.error(response.error || 'Failed to update tier');
-          return;
-        }
-      }
-      setEditingTier(null);
-      setIsAddingTier(false);
-      loadTiers();
-    } catch (error) {
-      console.error('Error saving tier:', error);
-      toast.error('Failed to save tier');
-    } finally {
-      setTierSaving(false);
-    }
-  };
-
-  const handleDeleteTier = async (tierId: string) => {
-    if (!confirm('Delete this tier? Members assigned to it will lose their tier.')) return;
-    try {
-      const response = await tiersApi.delete(tierId);
-      if (response.success) {
-        toast.success('Tier deleted');
-        loadTiers();
-      } else {
-        toast.error(response.error || 'Failed to delete tier');
-      }
-    } catch (error) {
-      console.error('Error deleting tier:', error);
-      toast.error('Failed to delete tier');
-    }
-  };
-
   const syncBookingRulesToEngine = async () => {
     if (!currentFacilityId) return;
     const rules = facilityData.bookingRules;
@@ -1204,19 +1082,8 @@ export function FacilityManagement() {
       ruleConfigs.push({ ruleCode: 'CRT-001', isEnabled: false });
     }
 
-    // CRT-003: Prime time tier restriction
-    if (rules.primeTimeRequiresTierEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'CRT-003',
-        isEnabled: true,
-        ruleConfig: {
-          allowed_tiers: rules.primeTimeAllowedTiers,
-          allow_admin_override: rules.primeTimeAdminOverride,
-        },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'CRT-003', isEnabled: false });
-    }
+    // CRT-003 removed (tier system removed)
+    ruleConfigs.push({ ruleCode: 'CRT-003', isEnabled: false });
 
     // CRT-010: Court weekly cap
     if (rules.courtWeeklyCapEnabled) {
@@ -1417,19 +1284,6 @@ export function FacilityManagement() {
             };
             if (crt002.effectiveConfig?.max_minutes_prime) {
               updated.bookingRules.peakHoursRestrictions.maxDurationHours = String(crt002.effectiveConfig.max_minutes_prime / 60);
-            }
-          }
-
-          const crt003 = ruleMap.get('CRT-003') as any;
-          if (crt003) {
-            updated.bookingRules.primeTimeRequiresTierEnabled = !!crt003.isEnabled;
-            if (crt003.effectiveConfig) {
-              if (crt003.effectiveConfig.allowed_tiers) {
-                updated.bookingRules.primeTimeAllowedTiers = crt003.effectiveConfig.allowed_tiers;
-              }
-              if (crt003.effectiveConfig.allow_admin_override !== undefined) {
-                updated.bookingRules.primeTimeAdminOverride = crt003.effectiveConfig.allow_admin_override;
-              }
             }
           }
 
@@ -2044,186 +1898,6 @@ export function FacilityManagement() {
                 )}
               </div>
 
-              {/* Membership Tiers */}
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5" />
-                        Membership Tiers
-                      </CardTitle>
-                      <CardDescription>Define membership levels with different booking privileges</CardDescription>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={handleAddTier} disabled={editingTier !== null}>
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Tier
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {tiersLoading ? (
-                    <div className="text-center py-4 text-gray-500 text-sm">Loading tiers...</div>
-                  ) : tiers.length === 0 && !editingTier ? (
-                    <div className="text-center py-4 text-gray-500 text-sm">
-                      No membership tiers configured. All members will have the same booking privileges.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {tiers.map((tier) => (
-                        <div
-                          key={tier.id}
-                          className="flex items-center justify-between px-4 py-3 border rounded-lg hover:bg-gray-50"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">Level {tier.tier_level}</Badge>
-                              <span className="font-medium text-sm">{tier.tier_name}</span>
-                              {tier.is_default && (
-                                <Badge className="bg-green-100 text-green-700 text-[10px]">Default</Badge>
-                              )}
-                            </div>
-                            <div className="hidden md:flex items-center gap-4 text-xs text-gray-500">
-                              <span>{tier.advance_booking_days}d advance</span>
-                              <span>{tier.max_active_reservations ?? 'No limit'} active</span>
-                              <span>{tier.max_reservations_per_week ?? 'No limit'}/wk</span>
-                              {tier.prime_time_eligible ? (
-                                <span className="text-green-600">Prime eligible</span>
-                              ) : (
-                                <span className="text-red-600">No prime</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              onClick={() => { setEditingTier({ ...tier }); setIsAddingTier(false); }}
-                              disabled={editingTier !== null}
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
-                              onClick={() => handleDeleteTier(tier.id)}
-                              disabled={editingTier !== null}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Tier Edit/Add Form */}
-                  {editingTier && (
-                    <div className="mt-4 p-4 border-2 border-green-200 bg-green-50 rounded-lg space-y-4">
-                      <h4 className="font-medium text-sm">{isAddingTier ? 'Add New Tier' : 'Edit Tier'}</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Tier Name</Label>
-                          <Input
-                            value={editingTier.tier_name}
-                            onChange={(e) => setEditingTier({ ...editingTier, tier_name: e.target.value })}
-                            placeholder="e.g., Gold"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Level (1=lowest)</Label>
-                          <Input
-                            type="number"
-                            value={editingTier.tier_level}
-                            onChange={(e) => setEditingTier({ ...editingTier, tier_level: parseInt(e.target.value) || 1 })}
-                            min="1"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Advance Booking (days)</Label>
-                          <Input
-                            type="number"
-                            value={editingTier.advance_booking_days}
-                            onChange={(e) => setEditingTier({ ...editingTier, advance_booking_days: parseInt(e.target.value) || 7 })}
-                            min="1"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Max Active Reservations</Label>
-                          <Input
-                            type="number"
-                            value={editingTier.max_active_reservations ?? ''}
-                            onChange={(e) => setEditingTier({ ...editingTier, max_active_reservations: e.target.value ? parseInt(e.target.value) : null })}
-                            placeholder="Unlimited"
-                            min="1"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Max Bookings/Week</Label>
-                          <Input
-                            type="number"
-                            value={editingTier.max_reservations_per_week ?? ''}
-                            onChange={(e) => setEditingTier({ ...editingTier, max_reservations_per_week: e.target.value ? parseInt(e.target.value) : null })}
-                            placeholder="Unlimited"
-                            min="1"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Max Hours/Week</Label>
-                          <Input
-                            type="number"
-                            value={editingTier.max_minutes_per_week ? editingTier.max_minutes_per_week / 60 : ''}
-                            onChange={(e) => setEditingTier({ ...editingTier, max_minutes_per_week: e.target.value ? parseFloat(e.target.value) * 60 : null })}
-                            placeholder="Unlimited"
-                            min="1"
-                            step="0.5"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={editingTier.prime_time_eligible}
-                            onCheckedChange={(checked: boolean) => setEditingTier({ ...editingTier, prime_time_eligible: checked })}
-                          />
-                          <Label className="text-xs">Prime Time Eligible</Label>
-                        </div>
-                        {editingTier.prime_time_eligible && (
-                          <div className="flex items-center gap-2">
-                            <Label className="text-xs">Prime/Week:</Label>
-                            <Input
-                              type="number"
-                              value={editingTier.prime_time_max_per_week ?? ''}
-                              onChange={(e) => setEditingTier({ ...editingTier, prime_time_max_per_week: e.target.value ? parseInt(e.target.value) : null })}
-                              placeholder="Unlimited"
-                              className="w-24"
-                              min="1"
-                            />
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={editingTier.is_default}
-                            onCheckedChange={(checked: boolean) => setEditingTier({ ...editingTier, is_default: checked })}
-                          />
-                          <Label className="text-xs">Default Tier</Label>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={handleSaveTier} disabled={tierSaving}>
-                          {tierSaving ? 'Saving...' : 'Save Tier'}
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => { setEditingTier(null); setIsAddingTier(false); }}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* General Rules */}
                 <Card className="lg:col-span-2">
@@ -2611,46 +2285,6 @@ export function FacilityManagement() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* CRT-003: Prime Time Tier Restriction */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Prime Time Tier Restriction</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.primeTimeRequiresTierEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('primeTimeRequiresTierEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        {facilityData.bookingRules.primeTimeRequiresTierEnabled && (
-                          <>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Allowed Tiers (comma-separated names)</Label>
-                              <Input
-                                value={facilityData.bookingRules.primeTimeAllowedTiers.join(', ')}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                  const tierNames = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
-                                  handleBookingRulesChange('primeTimeAllowedTiers', tierNames);
-                                }}
-                                placeholder="e.g. Premium, Gold"
-                                disabled={!isEditing}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.primeTimeAdminOverride}
-                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('primeTimeAdminOverride', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-xs text-gray-500">Admins can override</span>
-                            </div>
-                          </>
-                        )}
-                        <p className="text-xs text-gray-500">Restrict prime-time booking to specific membership tiers</p>
-                      </div>
-
                       {/* CRT-010: Court Weekly Cap */}
                       <div className="space-y-2 p-3 border rounded-lg">
                         <div className="flex justify-between items-center">

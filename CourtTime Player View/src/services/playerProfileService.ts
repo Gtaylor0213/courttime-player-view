@@ -82,16 +82,17 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfileWit
 
     const profile = result.rows[0];
 
-    // Get user's facility memberships
+    // Get user's facility memberships (derive admin status from facility_admins table)
     const membershipsResult = await query(
       `SELECT
         f.id as "facilityId",
         f.name as "facilityName",
         fm.membership_type as "membershipType",
         fm.status,
-        fm.is_facility_admin as "isFacilityAdmin"
+        CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin"
        FROM facility_memberships fm
        JOIN facilities f ON fm.facility_id = f.id
+       LEFT JOIN facility_admins fa ON fa.user_id = fm.user_id AND fa.facility_id = fm.facility_id AND fa.status = 'active'
        WHERE fm.user_id = $1 AND fm.status IN ('active', 'pending')
        ORDER BY fm.created_at DESC`,
       [userId]

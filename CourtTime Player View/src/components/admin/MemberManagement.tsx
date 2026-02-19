@@ -10,7 +10,7 @@ import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { membersApi, addressWhitelistApi, tiersApi, strikesApi } from '../../api/client';
+import { membersApi, addressWhitelistApi, strikesApi } from '../../api/client';
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,7 +39,6 @@ export function MemberManagement() {
   const [activeTab, setActiveTab] = useState('members');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterMembership, setFilterMembership] = useState<string>('all');
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,10 +47,6 @@ export function MemberManagement() {
   const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{id: string; address: string; accountsLimit: number}>>([]);
   const [newAddress, setNewAddress] = useState('');
   const [accountsPerAddress, setAccountsPerAddress] = useState(4);
-
-  // Tier management
-  const [facilityTiers, setFacilityTiers] = useState<any[]>([]);
-  const [memberTiers, setMemberTiers] = useState<Record<string, string>>({}); // userId -> tierId
 
   // Strike management
   const [strikeDialogUserId, setStrikeDialogUserId] = useState<string | null>(null);
@@ -72,7 +67,6 @@ export function MemberManagement() {
     if (currentFacilityId) {
       loadMembers();
       loadWhitelistAddresses();
-      loadFacilityTiers();
     }
   }, [currentFacilityId]);
 
@@ -88,9 +82,6 @@ export function MemberManagement() {
 
       if (response.success && response.data?.members) {
         setMembers(response.data.members);
-        if (facilityTiers.length > 0) {
-          loadMemberTiers(response.data.members);
-        }
       } else {
         toast.error(response.error || 'Failed to load members');
       }
@@ -113,60 +104,6 @@ export function MemberManagement() {
       }
     } catch (error) {
       console.error('Error loading whitelist addresses:', error);
-    }
-  };
-
-  const loadFacilityTiers = async () => {
-    if (!currentFacilityId) return;
-    try {
-      const response = await tiersApi.getByFacility(currentFacilityId);
-      if (response.success && response.data?.tiers) {
-        setFacilityTiers(response.data.tiers);
-      }
-    } catch (error) {
-      console.error('Error loading facility tiers:', error);
-    }
-  };
-
-  const loadMemberTiers = async (memberList: Member[]) => {
-    if (!currentFacilityId) return;
-    const tierMap: Record<string, string> = {};
-    for (const member of memberList) {
-      try {
-        const response = await tiersApi.getUserTier(member.userId, currentFacilityId);
-        if (response.success && response.data?.tiers?.length > 0) {
-          tierMap[member.userId] = response.data.tiers[0].tier_id;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    setMemberTiers(tierMap);
-  };
-
-  const handleTierChange = async (userId: string, tierId: string) => {
-    if (!currentFacilityId) return;
-    try {
-      if (tierId === 'none') {
-        await tiersApi.unassignUser(userId, currentFacilityId);
-        setMemberTiers(prev => {
-          const next = { ...prev };
-          delete next[userId];
-          return next;
-        });
-        toast.success('Tier removed');
-      } else {
-        await tiersApi.assignTier(tierId, {
-          userId,
-          facilityId: currentFacilityId,
-          assignedBy: user?.id,
-        });
-        setMemberTiers(prev => ({ ...prev, [userId]: tierId }));
-        toast.success('Tier assigned');
-      }
-    } catch (error) {
-      console.error('Error changing tier:', error);
-      toast.error('Failed to change tier');
     }
   };
 
@@ -397,8 +334,7 @@ export function MemberManagement() {
     const matchesSearch = member.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          member.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || member.status === filterStatus;
-    const matchesMembership = filterMembership === 'all' || member.membershipType === filterMembership;
-    return matchesSearch && matchesStatus && matchesMembership;
+    return matchesSearch && matchesStatus;
   });
 
   const getStatusColor = (status: string) => {
@@ -460,7 +396,7 @@ export function MemberManagement() {
               <CardTitle className="text-lg">Filter Members</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="search" className="text-sm">Search</Label>
                   <div className="relative">
@@ -486,20 +422,6 @@ export function MemberManagement() {
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="suspended">Suspended</SelectItem>
                       <SelectItem value="expired">Expired</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="filterMembership" className="text-sm">Membership Type</Label>
-                  <Select value={filterMembership} onValueChange={setFilterMembership}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="Full">Full</SelectItem>
-                      <SelectItem value="Social">Social</SelectItem>
-                      <SelectItem value="Junior">Junior</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -553,7 +475,7 @@ export function MemberManagement() {
                               <div className="text-xs text-gray-500 truncate">{member.email}</div>
                             </div>
                             <div className="hidden md:flex items-center gap-6 text-xs text-gray-600">
-                              <span className="w-16 text-center font-medium">{member.membershipType}</span>
+                              <span className="w-16 text-center font-medium">{member.isFacilityAdmin ? 'admin' : 'member'}</span>
                               <span className="w-20 text-center">{member.skillLevel || '—'}</span>
                               <span className="w-20 text-center">
                                 {new Date(member.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
@@ -564,22 +486,6 @@ export function MemberManagement() {
                                 ? `Suspended until ${new Date(member.suspendedUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
                                 : member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                             </Badge>
-                            {facilityTiers.length > 0 && (
-                              <Select
-                                value={memberTiers[member.userId] || 'none'}
-                                onValueChange={(value) => handleTierChange(member.userId, value)}
-                              >
-                                <SelectTrigger className="w-28 h-6 text-xs">
-                                  <SelectValue placeholder="No tier" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">No tier</SelectItem>
-                                  {facilityTiers.map((tier) => (
-                                    <SelectItem key={tier.id} value={tier.id}>{tier.tier_name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
                           </div>
                         </div>
                         <div className="flex gap-1 ml-3">

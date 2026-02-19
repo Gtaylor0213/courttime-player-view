@@ -28,7 +28,6 @@ import messagesRoutes from './routes/messages';
 import notificationRoutes from './routes/notifications';
 import developerRoutes from './routes/developer';
 // Rules engine routes
-import tiersRoutes from './routes/tiers';
 import strikesRoutes from './routes/strikes';
 import courtConfigRoutes from './routes/courtConfig';
 import rulesRoutes from './routes/rules';
@@ -108,7 +107,6 @@ app.use('/api/messages', messagesRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/developer', developerRoutes);
 // Rules engine routes
-app.use('/api/tiers', tiersRoutes);
 app.use('/api/strikes', strikesRoutes);
 app.use('/api/court-config', courtConfigRoutes);
 app.use('/api/rules', rulesRoutes);
@@ -173,7 +171,6 @@ async function startServer() {
       console.log(`   📍 Address Whitelist: /api/address-whitelist`);
       console.log(`   🔔 Notifications: /api/notifications`);
       console.log(`   💻 Developer Console: /api/developer`);
-      console.log(`   🏆 Membership Tiers: /api/tiers`);
       console.log(`   ⚠️  Strikes: /api/strikes`);
       console.log(`   ⏰ Court Config: /api/court-config`);
       console.log(`   📜 Booking Rules: /api/rules`);

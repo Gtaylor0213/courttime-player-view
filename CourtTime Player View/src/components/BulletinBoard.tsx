@@ -136,7 +136,7 @@ export function BulletinBoard() {
                 facilityName: facilityResponse.data.facility.name,
                 membershipType: 'Member',
                 status: 'active',
-                isFacilityAdmin: false
+                isFacilityAdmin: user.adminFacilities?.includes(facilityId) || false
               });
             }
           } catch (err) {

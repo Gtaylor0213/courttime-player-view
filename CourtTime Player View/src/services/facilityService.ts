@@ -357,9 +357,9 @@ export async function createFacilityWithAdmin(
 
     // 4. Create facility membership for super admin
     await client.query(
-      `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)
-       VALUES ($1, $2, 'admin', 'active', CURRENT_DATE)
-       ON CONFLICT (user_id, facility_id) DO NOTHING`,
+      `INSERT INTO facility_memberships (user_id, facility_id, membership_type, is_facility_admin, status, start_date)
+       VALUES ($1, $2, 'admin', true, 'active', CURRENT_DATE)
+       ON CONFLICT (user_id, facility_id) DO UPDATE SET is_facility_admin = true, membership_type = 'admin'`,
       [superAdminUserId, facilityId]
     );
 
@@ -900,8 +900,8 @@ export async function registerFacility(
 
     // 5. Create facility membership for super admin
     await client.query(
-      `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)
-       VALUES ($1, $2, 'admin', 'active', CURRENT_DATE)`,
+      `INSERT INTO facility_memberships (user_id, facility_id, membership_type, is_facility_admin, status, start_date)
+       VALUES ($1, $2, 'admin', true, 'active', CURRENT_DATE)`,
       [superAdminUserId, facilityId]
     );
 

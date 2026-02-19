@@ -265,7 +265,7 @@ export async function createBooking(bookingData: {
       var warnings = evaluation.warnings;
     }
 
-    // Check for time slot conflicts (basic availability)
+    // Check for direct time slot conflicts on this court
     const conflicts = await query(
       `SELECT id FROM bookings
        WHERE court_id = $1
@@ -283,6 +283,19 @@ export async function createBooking(bookingData: {
       return {
         success: false,
         error: 'Time slot is already booked'
+      };
+    }
+
+    // Check split court parent/child conflicts
+    const splitAvailability = await query(
+      `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
+      [bookingData.courtId, bookingData.bookingDate, bookingData.startTime, bookingData.endTime]
+    );
+
+    if (!splitAvailability.rows[0]?.available) {
+      return {
+        success: false,
+        error: 'A related parent or split court is already booked at this time'
       };
     }
 
@@ -384,7 +397,7 @@ export async function createBookingWithOverride(
       timestamp: new Date()
     });
 
-    // Check for time slot conflicts
+    // Check for direct time slot conflicts
     const conflicts = await query(
       `SELECT id FROM bookings
        WHERE court_id = $1
@@ -402,6 +415,19 @@ export async function createBookingWithOverride(
       return {
         success: false,
         error: 'Time slot is already booked'
+      };
+    }
+
+    // Check split court parent/child conflicts
+    const splitAvailability = await query(
+      `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
+      [bookingData.courtId, bookingData.bookingDate, bookingData.startTime, bookingData.endTime]
+    );
+
+    if (!splitAvailability.rows[0]?.available) {
+      return {
+        success: false,
+        error: 'A related parent or split court is already booked at this time'
       };
     }
 

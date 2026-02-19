@@ -161,7 +161,7 @@ export function CourtCalendarView() {
 
       try {
         setLoadingFacilities(true);
-        const facilitiesData: Array<{ id: string; name: string; type: string; courts: Array<{ id: string; name: string; type: string }>; operatingHours?: any; timezone?: string }> = [];
+        const facilitiesData: Array<{ id: string; name: string; type: string; courts: Array<{ id: string; name: string; type: string; parentCourtId?: string | null; isSplitCourt?: boolean }>; operatingHours?: any; timezone?: string }> = [];
 
         for (const facilityId of allFacilityIds) {
           // Fetch facility details
@@ -180,7 +180,9 @@ export function CourtCalendarView() {
                   .map((court: any) => ({
                     id: court.id,
                     name: court.name,
-                    type: court.courtType?.toLowerCase() || 'tennis'
+                    type: court.courtType?.toLowerCase() || 'tennis',
+                    parentCourtId: court.parentCourtId || null,
+                    isSplitCourt: court.isSplitCourt || false,
                   }))
               : [];
 
@@ -231,49 +233,90 @@ export function CourtCalendarView() {
         // Transform API bookings to match the format expected by the UI
         const transformedBookings: any = {};
 
-        response.data.bookings.forEach((booking: any) => {
-          const courtName = booking.courtName;
+        // Build court lookup maps for parent/child relationships
+        const allFacilityCourts = currentFacility?.courts || [];
+        const courtIdToName: Record<string, string> = {};
+        allFacilityCourts.forEach((c: any) => { courtIdToName[c.id] = c.name; });
+        const parentToChildren: Record<string, string[]> = {};
+        allFacilityCourts.forEach((c: any) => {
+          if (c.parentCourtId) {
+            if (!parentToChildren[c.parentCourtId]) parentToChildren[c.parentCourtId] = [];
+            parentToChildren[c.parentCourtId].push(c.name);
+          }
+        });
 
-          // Convert 24h time to 12h format for UI
-          const startTime = formatTimeTo12Hour(booking.startTime);
-          const endTime24 = booking.endTime;
-          console.log('  📍 Booking:', courtName, 'from', startTime, '- User:', booking.userName, '- Duration:', booking.durationMinutes, 'min');
-
-          if (!transformedBookings[courtName]) {
-            transformedBookings[courtName] = {};
+        // Helper to add slot entries for a court
+        const addSlotsForCourt = (targetCourtName: string, booking: any, isBlocked: boolean, blockedBy?: string) => {
+          if (!transformedBookings[targetCourtName]) {
+            transformedBookings[targetCourtName] = {};
           }
 
-          // Calculate how many 15-minute slots this booking spans
           const slotsToFill = Math.ceil(booking.durationMinutes / 15);
-
-          // Parse start time to calculate subsequent slots
           const [startHours, startMinutes] = booking.startTime.split(':').map(Number);
 
-          // Fill all slots that this booking occupies
           for (let i = 0; i < slotsToFill; i++) {
             const slotMinutes = startMinutes + (i * 15);
             const slotHours = startHours + Math.floor(slotMinutes / 60);
             const actualMinutes = slotMinutes % 60;
-
-            // Convert to 12h format
             const period = slotHours >= 12 ? 'PM' : 'AM';
             const displayHour = slotHours > 12 ? slotHours - 12 : slotHours === 0 ? 12 : slotHours;
             const slotTime = `${displayHour}:${actualMinutes.toString().padStart(2, '0')} ${period}`;
 
-            transformedBookings[courtName][slotTime] = {
-              player: booking.userName || 'Reserved',
-              duration: `${booking.durationMinutes}min`,
-              type: 'reservation',
-              bookingId: booking.id,
-              userId: booking.userId,
-              isFirstSlot: i === 0, // Mark first slot for display purposes
-              bookingType: booking.bookingType, // Match type (Singles, Doubles, Lesson, etc.)
-              notes: booking.notes, // Reservation notes
-              fullDetails: {
-                ...booking,
-                facilityName: currentFacility?.name
+            // Don't overwrite real bookings with blocked entries
+            if (transformedBookings[targetCourtName][slotTime]) continue;
+
+            if (isBlocked) {
+              transformedBookings[targetCourtName][slotTime] = {
+                player: `Blocked (${blockedBy} in use)`,
+                duration: `${booking.durationMinutes}min`,
+                type: 'blocked',
+                isFirstSlot: i === 0,
+                bookingType: 'blocked',
+              };
+            } else {
+              transformedBookings[targetCourtName][slotTime] = {
+                player: booking.userName || 'Reserved',
+                duration: `${booking.durationMinutes}min`,
+                type: 'reservation',
+                bookingId: booking.id,
+                userId: booking.userId,
+                isFirstSlot: i === 0,
+                bookingType: booking.bookingType,
+                notes: booking.notes,
+                fullDetails: {
+                  ...booking,
+                  facilityName: currentFacility?.name
+                }
+              };
+            }
+          }
+        };
+
+        response.data.bookings.forEach((booking: any) => {
+          const courtName = booking.courtName;
+          const startTime = formatTimeTo12Hour(booking.startTime);
+          console.log('  📍 Booking:', courtName, 'from', startTime, '- User:', booking.userName, '- Duration:', booking.durationMinutes, 'min');
+
+          // Add real booking slots
+          addSlotsForCourt(courtName, booking, false);
+
+          // Propagate blocks to related parent/child courts
+          const bookedCourt = allFacilityCourts.find((c: any) => c.name === courtName);
+          if (bookedCourt) {
+            // If child court is booked, block the parent
+            if (bookedCourt.parentCourtId) {
+              const parentName = courtIdToName[bookedCourt.parentCourtId];
+              if (parentName) {
+                addSlotsForCourt(parentName, booking, true, courtName);
               }
-            };
+            }
+            // If parent court is booked, block all children
+            const children = parentToChildren[bookedCourt.id];
+            if (children) {
+              children.forEach((childName: string) => {
+                addSlotsForCourt(childName, booking, true, courtName);
+              });
+            }
           }
         });
 
@@ -1203,16 +1246,19 @@ export function CourtCalendarView() {
                 const height = overlay.slotCount * SUB_SLOT_HEIGHT - 4;
                 const { booking } = overlay;
 
-                const colorClass = booking.bookingType
-                  ? getBookingTypeBadgeColor(booking.bookingType)
-                  : 'bg-blue-50 text-blue-900 border-blue-200';
+                const isBlocked = booking.type === 'blocked';
+                const colorClass = isBlocked
+                  ? 'bg-gray-100 text-gray-500 border-gray-300 border-dashed'
+                  : booking.bookingType
+                    ? getBookingTypeBadgeColor(booking.bookingType)
+                    : 'bg-blue-50 text-blue-900 border-blue-200';
 
                 return (
                   <div
                     key={`booking-${booking.bookingId || idx}`}
-                    className={`absolute rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-pointer pointer-events-auto overflow-hidden ${colorClass}`}
+                    className={`absolute rounded-lg border shadow-sm ${isBlocked ? 'opacity-70' : 'hover:shadow-md cursor-pointer'} transition-shadow pointer-events-auto overflow-hidden ${colorClass}`}
                     style={{ top, left, width, height }}
-                    onClick={() => handleBookingClick(overlay.courtName, allTimeSlots[overlay.startSlotIndex])}
+                    onClick={() => !isBlocked && handleBookingClick(overlay.courtName, allTimeSlots[overlay.startSlotIndex])}
                   >
                     <div className="px-2 py-1 h-full flex flex-col overflow-hidden">
                       <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>

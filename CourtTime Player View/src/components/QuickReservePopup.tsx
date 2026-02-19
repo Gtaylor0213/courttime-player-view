@@ -26,7 +26,7 @@ interface QuickReservePopupProps {
     id: string;
     name: string;
     type: string;
-    courts: Array<{ name: string; type: string }>;
+    courts: Array<{ id: string; name: string; type: string; parentCourtId?: string | null; isSplitCourt?: boolean }>;
   }>;
   selectedFacilityId: string;
 }
@@ -153,21 +153,13 @@ export function QuickReservePopup({
         if (response.success && response.data?.bookings) {
           // Transform bookings into a lookup object by court name and time
           const bookingsMap: any = {};
-          response.data.bookings.forEach((booking: any) => {
-            const courtName = booking.courtName;
 
-            // Convert 24h time to 12h format
-            const [hours24, minutes] = booking.startTime.split(':').map(Number);
-            const period = hours24 >= 12 ? 'PM' : 'AM';
-            const hours12 = hours24 % 12 || 12;
-            const startTime12h = `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
-
+          // Helper to add slots for a booking to a court name
+          const addBookingSlots = (courtName: string, hours24: number, minutes: number, durationMinutes: number) => {
             if (!bookingsMap[courtName]) {
               bookingsMap[courtName] = new Set();
             }
-
-            // Mark all time slots this booking occupies
-            const slotsToFill = Math.ceil(booking.durationMinutes / 15);
+            const slotsToFill = Math.ceil(durationMinutes / 15);
             for (let i = 0; i < slotsToFill; i++) {
               const slotMinutes = minutes + (i * 15);
               const slotHours24 = hours24 + Math.floor(slotMinutes / 60);
@@ -176,6 +168,53 @@ export function QuickReservePopup({
               const slotHours12 = slotHours24 % 12 || 12;
               const slotTime = `${slotHours12}:${actualMinutes.toString().padStart(2, '0')} ${slotPeriod}`;
               bookingsMap[courtName].add(slotTime);
+            }
+          };
+
+          // Build court lookup maps for parent/child relationships
+          const courts = currentFacility?.courts || [];
+          const courtById: Record<string, any> = {};
+          courts.forEach(c => { courtById[c.id] = c; });
+
+          // Map court ID -> court name for quick lookups
+          const courtIdToName: Record<string, string> = {};
+          courts.forEach(c => { courtIdToName[c.id] = c.name; });
+
+          // Find children for each parent court
+          const parentToChildren: Record<string, string[]> = {};
+          courts.forEach(c => {
+            if (c.parentCourtId) {
+              if (!parentToChildren[c.parentCourtId]) {
+                parentToChildren[c.parentCourtId] = [];
+              }
+              parentToChildren[c.parentCourtId].push(c.name);
+            }
+          });
+
+          response.data.bookings.forEach((booking: any) => {
+            const courtName = booking.courtName;
+            const [hours24, minutes] = booking.startTime.split(':').map(Number);
+
+            // Add booking slots to the booked court itself
+            addBookingSlots(courtName, hours24, minutes, booking.durationMinutes);
+
+            // Find this court's data to check relationships
+            const bookedCourt = courts.find(c => c.name === courtName);
+            if (bookedCourt) {
+              // If this is a child court, also block the parent court
+              if (bookedCourt.parentCourtId) {
+                const parentName = courtIdToName[bookedCourt.parentCourtId];
+                if (parentName) {
+                  addBookingSlots(parentName, hours24, minutes, booking.durationMinutes);
+                }
+              }
+              // If this is a parent court, also block all child courts
+              const children = parentToChildren[bookedCourt.id];
+              if (children) {
+                children.forEach(childName => {
+                  addBookingSlots(childName, hours24, minutes, booking.durationMinutes);
+                });
+              }
             }
           });
           setExistingBookings(bookingsMap);

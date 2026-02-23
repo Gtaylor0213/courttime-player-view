@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import { facilitiesApi } from '../api/client';
 import { RulesStep } from './facility-registration/RulesStep';
 import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG, RULE_METADATA } from './facility-registration/rule-defaults';
@@ -322,13 +323,38 @@ export function FacilityRegistration() {
     return lines.map(line => ({ streetAddress: line.trim() })).filter(addr => addr.streetAddress);
   };
 
+  // Parse Excel file into address objects
+  const parseExcel = (data: ArrayBuffer): Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }> => {
+    const workbook = XLSX.read(data);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    if (rows.length === 0) return [];
+
+    const headers = Object.keys(rows[0]);
+    const colMap = {
+      streetAddress: headers.find(h => /^(street|address|street.?address|full.?address)$/i.test(h.trim())) || headers[0],
+      city: headers.find(h => /^city$/i.test(h.trim())),
+      state: headers.find(h => /^state$/i.test(h.trim())),
+      zipCode: headers.find(h => /^(zip|zip.?code|postal)$/i.test(h.trim())),
+      householdName: headers.find(h => /^(household|name|household.?name)$/i.test(h.trim())),
+    };
+
+    return rows.map(row => ({
+      streetAddress: String(row[colMap.streetAddress] || '').trim(),
+      city: colMap.city ? String(row[colMap.city] || '').trim() || undefined : undefined,
+      state: colMap.state ? String(row[colMap.state] || '').trim() || undefined : undefined,
+      zipCode: colMap.zipCode ? String(row[colMap.zipCode] || '').trim() || undefined : undefined,
+      householdName: colMap.householdName ? String(row[colMap.householdName] || '').trim() || undefined : undefined,
+    })).filter(addr => addr.streetAddress);
+  };
+
   // Handle address whitelist file upload
   const handleAddressWhitelistChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-      if (fileExtension !== '.csv') {
-        toast.error('Please select a CSV file');
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (!['csv', 'xlsx', 'xls'].includes(ext || '')) {
+        toast.error('Please select a CSV or Excel (.xlsx, .xls) file');
         return;
       }
       setFormData(prev => ({
@@ -336,22 +362,40 @@ export function FacilityRegistration() {
         addressWhitelistFile: file,
         addressWhitelistFileName: file.name
       }));
-      // Parse CSV
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const text = reader.result as string;
-        const addresses = parseCSV(text);
-        setFormData(prev => ({
-          ...prev,
-          parsedAddresses: addresses
-        }));
-        if (addresses.length > 0) {
-          toast.success(`Parsed ${addresses.length} address${addresses.length !== 1 ? 'es' : ''} from file`);
-        } else {
-          toast.error('No addresses found in file');
-        }
-      };
-      reader.readAsText(file);
+
+      if (ext === 'csv') {
+        // Parse CSV as text
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const text = reader.result as string;
+          const addresses = parseCSV(text);
+          setFormData(prev => ({ ...prev, parsedAddresses: addresses }));
+          if (addresses.length > 0) {
+            toast.success(`Parsed ${addresses.length} address${addresses.length !== 1 ? 'es' : ''} from file`);
+          } else {
+            toast.error('No addresses found in file');
+          }
+        };
+        reader.readAsText(file);
+      } else {
+        // Parse Excel with xlsx
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          try {
+            const addresses = parseExcel(reader.result as ArrayBuffer);
+            setFormData(prev => ({ ...prev, parsedAddresses: addresses }));
+            if (addresses.length > 0) {
+              toast.success(`Parsed ${addresses.length} address${addresses.length !== 1 ? 'es' : ''} from file`);
+            } else {
+              toast.error('No addresses found in file');
+            }
+          } catch (error) {
+            console.error('Error parsing Excel:', error);
+            toast.error('Failed to read Excel file. Check the format and try again.');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
     }
   };
 
@@ -1324,10 +1368,10 @@ export function FacilityRegistration() {
             <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
               <Upload className="h-6 w-6 text-gray-400 mb-1" />
               <span className="text-sm text-gray-500">Upload Address List</span>
-              <span className="text-xs text-gray-400 mt-1">CSV file</span>
+              <span className="text-xs text-gray-400 mt-1">Excel or CSV file</span>
               <input
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 onChange={handleAddressWhitelistChange}
                 className="hidden"
               />

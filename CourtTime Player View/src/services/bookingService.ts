@@ -517,7 +517,7 @@ export async function cancelBooking(
       `SELECT
         b.id,
         b.facility_id as "facilityId",
-        b.booking_date as "bookingDate",
+        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
         b.start_time as "startTime",
         b.user_id as "userId"
       FROM bookings b

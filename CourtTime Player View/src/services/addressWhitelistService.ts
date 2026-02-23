@@ -153,7 +153,8 @@ export async function isAddressWhitelisted(
     const result = await query(
       `SELECT accounts_limit as "accountsLimit"
        FROM address_whitelist
-       WHERE facility_id = $1 AND address = $2`,
+       WHERE facility_id = $1
+         AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))`,
       [facilityId, address]
     );
 

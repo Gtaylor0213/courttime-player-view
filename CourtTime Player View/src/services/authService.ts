@@ -398,11 +398,15 @@ export async function addUserToFacility(
     let status: 'active' | 'pending' = 'pending';
 
     // Check if user's address is on the whitelist for auto-approval
+    // Match on the street portion only (before any comma) since whitelist may store
+    // full addresses like "123 Main St, Denver, CO 80202" while users.street_address
+    // stores only the street line "123 Main St"
     if (userResult.rows.length > 0 && userResult.rows[0].streetAddress) {
       const whitelistResult = await query(
         `SELECT accounts_limit as "accountsLimit"
          FROM address_whitelist
-         WHERE facility_id = $1 AND LOWER(address) = LOWER($2)`,
+         WHERE facility_id = $1
+           AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))`,
         [facilityId, userResult.rows[0].streetAddress]
       );
 

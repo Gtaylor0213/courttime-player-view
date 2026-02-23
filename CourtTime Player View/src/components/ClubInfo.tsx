@@ -25,7 +25,6 @@ interface FacilityData {
   email: string;
   website?: string;
   operatingHours: any;
-  amenities: string[];
   logoUrl?: string;
   memberCount?: number;
   courts: {
@@ -125,7 +124,6 @@ export function ClubInfo() {
           email: rawFacility.email || '',
           website: rawFacility.website || '',
           operatingHours: rawFacility.operatingHours || {},
-          amenities: rawFacility.amenities || [],
           logoUrl: rawFacility.logoUrl || '',
           memberCount: rawFacility.memberCount,
           courts: [],
@@ -379,48 +377,26 @@ export function ClubInfo() {
             </Card>
 
             {/* Courts */}
-            <Card>
+            <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Available Courts</CardTitle>
+                <CardTitle>Courts ({facility.courts?.length || 0})</CardTitle>
               </CardHeader>
               <CardContent>
                 {facility.courts && facility.courts.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {facility.courts.map((court) => (
-                      <div key={court.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium">{court.name}</p>
-                          <p className="text-sm text-gray-600">
-                            {court.surfaceType} • {court.isIndoor ? 'Indoor' : 'Outdoor'}
-                            {court.hasLights && ' • Lights'}
-                          </p>
-                        </div>
-                        <Badge variant="outline">{court.courtType}</Badge>
+                      <div key={court.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-center">
+                        <p className="font-medium text-sm">{court.name}</p>
+                        <Badge variant="outline" className="mt-1 text-[10px]">{court.courtType}</Badge>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {court.surfaceType} • {court.isIndoor ? 'Indoor' : 'Outdoor'}
+                          {court.hasLights && ' • Lights'}
+                        </p>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-500">No courts information available</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Amenities */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Amenities</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {facility.amenities && facility.amenities.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {facility.amenities.map((amenity, index) => (
-                      <Badge key={index} variant="secondary" className="px-3 py-1">
-                        {amenity}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No amenities listed</p>
                 )}
               </CardContent>
             </Card>

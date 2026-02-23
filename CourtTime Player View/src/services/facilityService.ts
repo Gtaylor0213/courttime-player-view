@@ -723,6 +723,13 @@ export interface FacilityRegistrationData {
   adminEmail?: string;
   adminPassword?: string;
   adminFullName?: string;
+  adminFirstName?: string;
+  adminLastName?: string;
+  adminPhone?: string;
+  adminStreetAddress?: string;
+  adminCity?: string;
+  adminState?: string;
+  adminZipCode?: string;
 
   // Facility Information
   facilityName: string;
@@ -822,17 +829,16 @@ export async function registerFacility(
       // Hash password
       const passwordHash = await bcrypt.hash(data.adminPassword, SALT_ROUNDS);
 
-      // Split full name
-      const nameParts = data.adminFullName.trim().split(/\s+/);
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
+      // Split full name (use explicit first/last if provided)
+      const firstName = data.adminFirstName || data.adminFullName!.trim().split(/\s+/)[0] || '';
+      const lastName = data.adminLastName || data.adminFullName!.trim().split(/\s+/).slice(1).join(' ') || '';
 
       // Create user
       userResult = await client.query(
-        `INSERT INTO users (email, password_hash, full_name, first_name, last_name, user_type, is_super_admin)
-         VALUES ($1, $2, $3, $4, $5, 'admin', true)
+        `INSERT INTO users (email, password_hash, full_name, first_name, last_name, phone, street_address, city, state, zip_code, user_type, is_super_admin)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'admin', true)
          RETURNING id, email, full_name as "fullName", first_name as "firstName", last_name as "lastName", user_type as "userType", is_super_admin as "isSuperAdmin", created_at as "createdAt"`,
-        [data.adminEmail.toLowerCase(), passwordHash, data.adminFullName, firstName, lastName]
+        [data.adminEmail.toLowerCase(), passwordHash, data.adminFullName, firstName, lastName, data.adminPhone || null, data.adminStreetAddress || null, data.adminCity || null, data.adminState || null, data.adminZipCode || null]
       );
 
       superAdminUserId = userResult.rows[0].id;

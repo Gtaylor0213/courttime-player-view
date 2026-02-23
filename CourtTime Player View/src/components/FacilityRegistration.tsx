@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import {
   ArrowLeft, ArrowRight, Building, MapPin, Clock, FileText,
   Plus, Trash2, Check, AlertCircle, Upload, Mail, User, Users,
-  Grid3X3, ShieldCheck
+  Grid3X3, ShieldCheck, Phone
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
@@ -67,10 +67,16 @@ export function FacilityRegistration() {
 
   const [formData, setFormData] = useState({
     // Step 1: Facility Administrator Account (if not logged in)
+    adminFirstName: '',
+    adminLastName: '',
     adminEmail: user?.email || '',
+    adminPhone: '',
     adminPassword: '',
     adminConfirmPassword: '',
-    adminFullName: user?.fullName || '',
+    adminStreetAddress: '',
+    adminCity: '',
+    adminState: '',
+    adminZipCode: '',
 
     // Step 2: Facility Information
     facilityName: '',
@@ -478,14 +484,20 @@ export function FacilityRegistration() {
 
     if (!user && step === 1) {
       // Validate Facility Administrator Account
-      if (!formData.adminFullName.trim()) stepErrors.adminFullName = 'Full name is required';
+      if (!formData.adminFirstName.trim()) stepErrors.adminFirstName = 'First name is required';
+      if (!formData.adminLastName.trim()) stepErrors.adminLastName = 'Last name is required';
       if (!formData.adminEmail.trim()) stepErrors.adminEmail = 'Email is required';
       else if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) stepErrors.adminEmail = 'Email is invalid';
+      if (!formData.adminPhone.trim()) stepErrors.adminPhone = 'Phone number is required';
       if (!formData.adminPassword) stepErrors.adminPassword = 'Password is required';
       else if (formData.adminPassword.length < 8) stepErrors.adminPassword = 'Password must be at least 8 characters';
       if (formData.adminPassword !== formData.adminConfirmPassword) {
         stepErrors.adminConfirmPassword = 'Passwords do not match';
       }
+      if (!formData.adminStreetAddress.trim()) stepErrors.adminStreetAddress = 'Street address is required';
+      if (!formData.adminCity.trim()) stepErrors.adminCity = 'City is required';
+      if (!formData.adminState) stepErrors.adminState = 'State is required';
+      if (!formData.adminZipCode.trim()) stepErrors.adminZipCode = 'ZIP code is required';
     }
 
     const facilityStep = user ? 1 : 2;
@@ -694,7 +706,14 @@ export function FacilityRegistration() {
         ...(user ? {} : {
           adminEmail: formData.adminEmail,
           adminPassword: formData.adminPassword,
-          adminFullName: formData.adminFullName,
+          adminFullName: `${formData.adminFirstName} ${formData.adminLastName}`.trim(),
+          adminFirstName: formData.adminFirstName,
+          adminLastName: formData.adminLastName,
+          adminPhone: formData.adminPhone,
+          adminStreetAddress: formData.adminStreetAddress,
+          adminCity: formData.adminCity,
+          adminState: formData.adminState,
+          adminZipCode: formData.adminZipCode,
         }),
 
         // Facility Information
@@ -947,59 +966,149 @@ export function FacilityRegistration() {
       </div>
 
       <div className="space-y-4">
-        <div>
-          <Label htmlFor="adminFullName">Full Name *</Label>
-          <Input
-            id="adminFullName"
-            value={formData.adminFullName}
-            onChange={(e) => handleInputChange('adminFullName', e.target.value)}
-            placeholder="John Smith"
-          />
-          {errors.adminFullName && (
-            <p className="text-sm text-red-600 mt-1">{errors.adminFullName}</p>
-          )}
+        {/* Name Fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="adminFirstName">First Name *</Label>
+            <Input
+              id="adminFirstName"
+              value={formData.adminFirstName}
+              onChange={(e) => handleInputChange('adminFirstName', e.target.value)}
+              className={errors.adminFirstName ? 'border-red-500' : ''}
+            />
+            {errors.adminFirstName && <p className="text-sm text-red-500 mt-1">{errors.adminFirstName}</p>}
+          </div>
+          <div>
+            <Label htmlFor="adminLastName">Last Name *</Label>
+            <Input
+              id="adminLastName"
+              value={formData.adminLastName}
+              onChange={(e) => handleInputChange('adminLastName', e.target.value)}
+              className={errors.adminLastName ? 'border-red-500' : ''}
+            />
+            {errors.adminLastName && <p className="text-sm text-red-500 mt-1">{errors.adminLastName}</p>}
+          </div>
         </div>
 
+        {/* Contact */}
         <div>
-          <Label htmlFor="adminEmail">Email Address *</Label>
+          <Label htmlFor="adminEmail" className="flex items-center gap-2">
+            <Mail className="h-4 w-4" />
+            Email Address *
+          </Label>
           <Input
             id="adminEmail"
             type="email"
             value={formData.adminEmail}
             onChange={(e) => handleInputChange('adminEmail', e.target.value)}
-            placeholder="admin@facility.com"
+            className={errors.adminEmail ? 'border-red-500' : ''}
           />
-          {errors.adminEmail && (
-            <p className="text-sm text-red-600 mt-1">{errors.adminEmail}</p>
-          )}
+          {errors.adminEmail && <p className="text-sm text-red-500 mt-1">{errors.adminEmail}</p>}
         </div>
 
         <div>
-          <Label htmlFor="adminPassword">Password *</Label>
+          <Label htmlFor="adminPhone" className="flex items-center gap-2">
+            <Phone className="h-4 w-4" />
+            Phone Number *
+          </Label>
           <Input
-            id="adminPassword"
-            type="password"
-            value={formData.adminPassword}
-            onChange={(e) => handleInputChange('adminPassword', e.target.value)}
-            placeholder="Minimum 8 characters"
+            id="adminPhone"
+            value={formData.adminPhone}
+            onChange={(e) => handleInputChange('adminPhone', e.target.value)}
+            placeholder="+1 (555) 123-4567"
+            className={errors.adminPhone ? 'border-red-500' : ''}
           />
-          {errors.adminPassword && (
-            <p className="text-sm text-red-600 mt-1">{errors.adminPassword}</p>
-          )}
+          {errors.adminPhone && <p className="text-sm text-red-500 mt-1">{errors.adminPhone}</p>}
         </div>
 
-        <div>
-          <Label htmlFor="adminConfirmPassword">Confirm Password *</Label>
-          <Input
-            id="adminConfirmPassword"
-            type="password"
-            value={formData.adminConfirmPassword}
-            onChange={(e) => handleInputChange('adminConfirmPassword', e.target.value)}
-            placeholder="Re-enter password"
-          />
-          {errors.adminConfirmPassword && (
-            <p className="text-sm text-red-600 mt-1">{errors.adminConfirmPassword}</p>
-          )}
+        {/* Password */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="adminPassword">Password *</Label>
+            <Input
+              id="adminPassword"
+              type="password"
+              value={formData.adminPassword}
+              onChange={(e) => handleInputChange('adminPassword', e.target.value)}
+              placeholder="Minimum 8 characters"
+              className={errors.adminPassword ? 'border-red-500' : ''}
+            />
+            {errors.adminPassword && <p className="text-sm text-red-500 mt-1">{errors.adminPassword}</p>}
+          </div>
+          <div>
+            <Label htmlFor="adminConfirmPassword">Confirm Password *</Label>
+            <Input
+              id="adminConfirmPassword"
+              type="password"
+              value={formData.adminConfirmPassword}
+              onChange={(e) => handleInputChange('adminConfirmPassword', e.target.value)}
+              placeholder="Re-enter password"
+              className={errors.adminConfirmPassword ? 'border-red-500' : ''}
+            />
+            {errors.adminConfirmPassword && <p className="text-sm text-red-500 mt-1">{errors.adminConfirmPassword}</p>}
+          </div>
+        </div>
+
+        {/* Address */}
+        <div className="space-y-4 pt-4 border-t">
+          <h3 className="text-lg font-medium flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Address Information
+          </h3>
+
+          <div>
+            <Label htmlFor="adminStreetAddress">Street Address *</Label>
+            <Input
+              id="adminStreetAddress"
+              value={formData.adminStreetAddress}
+              onChange={(e) => handleInputChange('adminStreetAddress', e.target.value)}
+              placeholder="123 Main Street"
+              className={errors.adminStreetAddress ? 'border-red-500' : ''}
+            />
+            {errors.adminStreetAddress && <p className="text-sm text-red-500 mt-1">{errors.adminStreetAddress}</p>}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="adminCity">City *</Label>
+              <Input
+                id="adminCity"
+                value={formData.adminCity}
+                onChange={(e) => handleInputChange('adminCity', e.target.value)}
+                placeholder="City"
+                className={errors.adminCity ? 'border-red-500' : ''}
+              />
+              {errors.adminCity && <p className="text-sm text-red-500 mt-1">{errors.adminCity}</p>}
+            </div>
+            <div>
+              <Label htmlFor="adminState">State *</Label>
+              <Select
+                value={formData.adminState}
+                onValueChange={(value) => handleInputChange('adminState', value)}
+              >
+                <SelectTrigger className={errors.adminState ? 'border-red-500' : ''}>
+                  <SelectValue placeholder="State" />
+                </SelectTrigger>
+                <SelectContent>
+                  {US_STATES.map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.adminState && <p className="text-sm text-red-500 mt-1">{errors.adminState}</p>}
+            </div>
+            <div>
+              <Label htmlFor="adminZipCode">ZIP Code *</Label>
+              <Input
+                id="adminZipCode"
+                value={formData.adminZipCode}
+                onChange={(e) => handleInputChange('adminZipCode', e.target.value)}
+                placeholder="12345"
+                className={errors.adminZipCode ? 'border-red-500' : ''}
+              />
+              {errors.adminZipCode && <p className="text-sm text-red-500 mt-1">{errors.adminZipCode}</p>}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1805,6 +1914,20 @@ export function FacilityRegistration() {
           Please review your facility information before submitting.
         </p>
       </div>
+
+      {!user && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Administrator Account</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div><span className="font-medium">Name:</span> {formData.adminFirstName} {formData.adminLastName}</div>
+            <div><span className="font-medium">Email:</span> {formData.adminEmail}</div>
+            <div><span className="font-medium">Phone:</span> {formData.adminPhone}</div>
+            <div><span className="font-medium">Address:</span> {formData.adminStreetAddress}, {formData.adminCity}, {formData.adminState} {formData.adminZipCode}</div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

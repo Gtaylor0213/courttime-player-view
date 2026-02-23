@@ -20,6 +20,9 @@ export interface MemberWithProfile {
   skillLevel?: string;
   phone?: string;
   streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   createdAt: string;
 }
 
@@ -53,6 +56,9 @@ export async function getFacilityMembers(facilityId: string, searchTerm?: string
         u.full_name as "fullName",
         u.phone,
         u.street_address as "streetAddress",
+        u.city,
+        u.state,
+        u.zip_code as "zipCode",
         fm.id as "membershipId",
         fm.membership_type as "membershipType",
         fm.status,
@@ -101,6 +107,10 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
         u.email,
         u.full_name as "fullName",
         u.phone,
+        u.street_address as "streetAddress",
+        u.city,
+        u.state,
+        u.zip_code as "zipCode",
         fm.id as "membershipId",
         fm.membership_type as "membershipType",
         fm.status,

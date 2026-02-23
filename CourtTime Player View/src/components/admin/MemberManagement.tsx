@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle, Clock } from 'lucide-react';
+import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle, Clock, MapPin, Phone, User } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
@@ -30,6 +30,10 @@ interface Member {
   suspendedUntil?: string;
   skillLevel?: string;
   phone?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   createdAt: string;
 }
 
@@ -55,6 +59,9 @@ export function MemberManagement() {
   const [strikesLoading, setStrikesLoading] = useState(false);
   const [newStrikeType, setNewStrikeType] = useState<string>('manual');
   const [newStrikeReason, setNewStrikeReason] = useState('');
+
+  // Member detail dialog
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
   // Suspension dialog
   const [suspendDialogUserId, setSuspendDialogUserId] = useState<string | null>(null);
@@ -454,7 +461,8 @@ export function MemberManagement() {
                     filteredMembers.map((member) => (
                       <div
                         key={member.userId}
-                        className="flex items-center justify-between px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                        className="flex items-center justify-between px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => setSelectedMember(member)}
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <Avatar className="h-8 w-8 flex-shrink-0">
@@ -487,7 +495,7 @@ export function MemberManagement() {
                             </Badge>
                           </div>
                         </div>
-                        <div className="flex gap-1 ml-3">
+                        <div className="flex gap-1 ml-3" onClick={(e) => e.stopPropagation()}>
                           {member.status === 'pending' && (
                             <Button
                               variant="outline"
@@ -840,6 +848,169 @@ export function MemberManagement() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Member Detail Dialog */}
+      <Dialog open={selectedMember !== null} onOpenChange={(open) => { if (!open) setSelectedMember(null); }}>
+        <DialogContent className="max-w-lg">
+          {selectedMember && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <Avatar className="h-10 w-10">
+                    <AvatarFallback>{getInitials(selectedMember.fullName)}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {selectedMember.fullName}
+                      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
+                        selectedMember.isFacilityAdmin
+                          ? 'text-green-600 border-green-600'
+                          : 'text-gray-500 border-gray-300'
+                      }`}>
+                        {selectedMember.isFacilityAdmin ? 'Admin' : 'Regular'}
+                      </Badge>
+                      <Badge className={`${getStatusColor(selectedMember.status)} text-[10px] px-1.5 py-0`}>
+                        {selectedMember.status.charAt(0).toUpperCase() + selectedMember.status.slice(1)}
+                      </Badge>
+                    </div>
+                  </div>
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4 pt-2">
+                {/* Contact Info */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-gray-700">Contact Information</h4>
+                  <div className="grid gap-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                      <span>{selectedMember.email}</span>
+                    </div>
+                    {selectedMember.phone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        <span>{selectedMember.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Address */}
+                {selectedMember.streetAddress && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-gray-700">Address</h4>
+                    <div className="flex items-start gap-2 text-sm">
+                      <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div>{selectedMember.streetAddress}</div>
+                        {(selectedMember.city || selectedMember.state || selectedMember.zipCode) && (
+                          <div>
+                            {[selectedMember.city, selectedMember.state].filter(Boolean).join(', ')}
+                            {selectedMember.zipCode && ` ${selectedMember.zipCode}`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Membership Details */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-gray-700">Membership Details</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-gray-500">Member Since</span>
+                      <div className="font-medium">
+                        {new Date(selectedMember.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
+                    {selectedMember.skillLevel && (
+                      <div>
+                        <span className="text-gray-500">Skill Level</span>
+                        <div className="font-medium">{selectedMember.skillLevel}</div>
+                      </div>
+                    )}
+                    {selectedMember.suspendedUntil && selectedMember.status === 'suspended' && (
+                      <div>
+                        <span className="text-gray-500">Suspended Until</span>
+                        <div className="font-medium text-red-600">
+                          {new Date(selectedMember.suspendedUntil).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-wrap gap-2 pt-3 border-t">
+                  {selectedMember.status === 'pending' && (
+                    <Button
+                      size="sm"
+                      onClick={() => { handleUpdateStatus(selectedMember.userId, 'active'); setSelectedMember(null); }}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                  )}
+                  {selectedMember.status === 'active' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSuspendDialogUserId(selectedMember.userId);
+                        setSuspendDialogName(selectedMember.fullName);
+                        setSuspendDuration('7d');
+                        setSelectedMember(null);
+                      }}
+                      className="text-orange-600 hover:text-orange-700"
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Suspend
+                    </Button>
+                  )}
+                  {selectedMember.status === 'suspended' && (
+                    <Button
+                      size="sm"
+                      onClick={() => { handleUpdateStatus(selectedMember.userId, 'active'); setSelectedMember(null); }}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Reactivate
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { handleToggleAdmin(selectedMember.userId, selectedMember.isFacilityAdmin); setSelectedMember(null); }}
+                  >
+                    {selectedMember.isFacilityAdmin ? <ShieldOff className="h-4 w-4 mr-1" /> : <Shield className="h-4 w-4 mr-1" />}
+                    {selectedMember.isFacilityAdmin ? 'Remove Admin' : 'Make Admin'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { openStrikeDialog(selectedMember.userId, selectedMember.fullName); setSelectedMember(null); }}
+                    className="text-amber-600 hover:text-amber-700"
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-1" />
+                    Strikes
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { handleRemoveMember(selectedMember.userId, selectedMember.fullName); setSelectedMember(null); }}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>

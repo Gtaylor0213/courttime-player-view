@@ -527,14 +527,15 @@ export const adminApi = {
     city?: string;
     state?: string;
     zipCode?: string;
-    address?: string; // Legacy field
+    address?: string;
     phone?: string;
     email?: string;
     description?: string;
-    amenities?: string[];
     operatingHours?: any;
     timezone?: string;
     logoUrl?: string;
+    primaryContact?: { name: string; email: string; phone: string };
+    secondaryContacts?: Array<{ name: string; email: string; phone: string }>;
   }) => {
     return apiRequest(`/api/admin/facilities/${facilityId}`, {
       method: 'PATCH',

@@ -218,8 +218,8 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
         zip_code as "zipCode",
         phone,
         email,
+        contact_name as "contactName",
         description,
-        amenities,
         operating_hours as "operatingHours",
         timezone,
         logo_url as "logoUrl",
@@ -233,7 +233,31 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
       return null;
     }
 
-    return result.rows[0];
+    const facility = result.rows[0];
+
+    // Fetch contacts from facility_contacts table
+    try {
+      const contactsResult = await query(`
+        SELECT name, email, phone, is_primary as "isPrimary"
+        FROM facility_contacts
+        WHERE facility_id = $1 AND is_active = true
+        ORDER BY is_primary DESC, created_at ASC
+      `, [facilityId]);
+
+      const primary = contactsResult.rows.find((c: any) => c.isPrimary);
+      const secondary = contactsResult.rows.filter((c: any) => !c.isPrimary);
+
+      if (primary) {
+        facility.primaryContact = { name: primary.name, email: primary.email, phone: primary.phone };
+      }
+      if (secondary.length > 0) {
+        facility.secondaryContacts = secondary.map((c: any) => ({ name: c.name, email: c.email, phone: c.phone }));
+      }
+    } catch (contactError) {
+      console.error('Error fetching facility contacts:', contactError);
+    }
+
+    return facility;
   } catch (error) {
     console.error('Get facility by ID error:', error);
     return null;

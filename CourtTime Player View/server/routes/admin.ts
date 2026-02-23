@@ -146,10 +146,11 @@ router.patch('/facilities/:facilityId', async (req, res) => {
       phone,
       email,
       description,
-      amenities,
       operatingHours,
       timezone,
-      logoUrl
+      logoUrl,
+      primaryContact,
+      secondaryContacts
     } = req.body;
 
     const result = await query(`
@@ -161,16 +162,15 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         phone = COALESCE($4, phone),
         email = COALESCE($5, email),
         description = COALESCE($6, description),
-        amenities = COALESCE($7, amenities),
-        operating_hours = COALESCE($8, operating_hours),
-        street_address = COALESCE($9, street_address),
-        city = COALESCE($10, city),
-        state = COALESCE($11, state),
-        zip_code = COALESCE($12, zip_code),
-        logo_url = COALESCE($13, logo_url),
-        timezone = COALESCE($14, timezone),
+        operating_hours = COALESCE($7, operating_hours),
+        street_address = COALESCE($8, street_address),
+        city = COALESCE($9, city),
+        state = COALESCE($10, state),
+        zip_code = COALESCE($11, zip_code),
+        logo_url = COALESCE($12, logo_url),
+        timezone = COALESCE($13, timezone),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $15
+      WHERE id = $14
       RETURNING
         id,
         name,
@@ -183,19 +183,58 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         phone,
         email,
         description,
-        amenities,
         operating_hours as "operatingHours",
         timezone,
         logo_url as "logoUrl",
         created_at as "createdAt",
         updated_at as "updatedAt"
-    `, [name, type, address, phone, email, description, amenities, operatingHours, streetAddress, city, state, zipCode, logoUrl, timezone, facilityId]);
+    `, [name, type, address, phone, email, description, operatingHours, streetAddress, city, state, zipCode, logoUrl, timezone, facilityId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Facility not found'
       });
+    }
+
+    // Save contacts to facility_contacts table
+    if (primaryContact) {
+      try {
+        const existing = await query(
+          `SELECT id FROM facility_contacts WHERE facility_id = $1 AND is_primary = true LIMIT 1`,
+          [facilityId]
+        );
+        if (existing.rows.length > 0) {
+          await query(
+            `UPDATE facility_contacts SET name = $1, email = $2, phone = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
+            [primaryContact.name, primaryContact.email, primaryContact.phone, existing.rows[0].id]
+          );
+        } else {
+          await query(
+            `INSERT INTO facility_contacts (facility_id, name, email, phone, is_primary, role, is_active) VALUES ($1, $2, $3, $4, true, 'Primary Contact', true)`,
+            [facilityId, primaryContact.name, primaryContact.email, primaryContact.phone]
+          );
+        }
+      } catch (contactErr) {
+        console.error('Error saving primary contact:', contactErr);
+      }
+    }
+
+    if (secondaryContacts && Array.isArray(secondaryContacts)) {
+      try {
+        // Remove old secondary contacts and replace
+        await query(`DELETE FROM facility_contacts WHERE facility_id = $1 AND is_primary = false`, [facilityId]);
+        for (const contact of secondaryContacts) {
+          if (contact.name || contact.email || contact.phone) {
+            await query(
+              `INSERT INTO facility_contacts (facility_id, name, email, phone, is_primary, is_active) VALUES ($1, $2, $3, $4, false, true)`,
+              [facilityId, contact.name, contact.email, contact.phone]
+            );
+          }
+        }
+      } catch (secErr) {
+        console.error('Error saving secondary contacts:', secErr);
+      }
     }
 
     res.json({

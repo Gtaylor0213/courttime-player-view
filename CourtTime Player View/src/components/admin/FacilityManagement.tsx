@@ -127,7 +127,6 @@ interface FacilityData {
   phone: string;
   email: string;
   description: string;
-  amenities: string[];
   operatingHours: Record<string, { open: string; close: string; closed: boolean }>;
   timezone: string;
   logoUrl: string;
@@ -255,7 +254,6 @@ export function FacilityManagement() {
     phone: '',
     email: '',
     description: '',
-    amenities: [],
     operatingHours: defaultOperatingHours,
     timezone: 'America/New_York',
     logoUrl: '',
@@ -443,7 +441,6 @@ export function FacilityManagement() {
           phone: facility.phone || '',
           email: facility.email || '',
           description: facility.description || '',
-          amenities: facility.amenities || [],
           operatingHours: parsedOperatingHours,
           timezone: facility.timezone || 'America/New_York',
           logoUrl: facility.logoUrl || '',
@@ -1850,29 +1847,6 @@ export function FacilityManagement() {
                   </CardContent>
                 </Card>
 
-                {/* Amenities */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Amenities</CardTitle>
-                    <CardDescription>Available facilities and features</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {facilityData.amenities && facilityData.amenities.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {facilityData.amenities.map((amenity: string, index: number) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
-                          >
-                            {amenity}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500">No amenities listed</p>
-                    )}
-                  </CardContent>
-                </Card>
               </div>
             </TabsContent>
 

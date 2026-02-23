@@ -99,6 +99,7 @@ export function FacilityRegistration() {
     addressWhitelistFile: null as File | null,
     addressWhitelistFileName: '',
     parsedAddresses: [] as Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>,
+    accountsPerAddress: 4,
 
     // Operating Hours
     operatingHours: {
@@ -750,6 +751,7 @@ export function FacilityRegistration() {
 
         // Address Whitelist
         hoaAddresses: formData.parsedAddresses.length > 0 ? formData.parsedAddresses : undefined,
+        accountsPerAddress: formData.accountsPerAddress,
 
         // Existing user ID (if already logged in)
         existingUserId: user?.id,
@@ -1331,6 +1333,18 @@ export function FacilityRegistration() {
               />
             </label>
           )}
+          <div className="flex items-center gap-3 mt-3">
+            <Label htmlFor="accountsPerAddress" className="text-sm whitespace-nowrap">Max accounts per address:</Label>
+            <Input
+              id="accountsPerAddress"
+              type="number"
+              min="1"
+              max="20"
+              value={formData.accountsPerAddress}
+              onChange={(e) => setFormData(prev => ({ ...prev, accountsPerAddress: parseInt(e.target.value) || 4 }))}
+              className="w-20"
+            />
+          </div>
           <p className="text-xs text-gray-500 mt-2">
             The file should contain one address per row. Members will be verified against this list during registration.
           </p>

@@ -12,7 +12,7 @@ import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
-import { facilitiesApi, adminApi, courtConfigApi, rulesApi } from '../../api/client';
+import { facilitiesApi, adminApi, courtConfigApi, rulesApi, addressWhitelistApi } from '../../api/client';
 import { toast } from 'sonner';
 
 // US State abbreviations
@@ -141,8 +141,6 @@ interface FacilityData {
   // Secondary Contacts
   secondaryContacts: FacilityContact[];
   // Address Whitelist
-  addressWhitelistFile: File | null;
-  addressWhitelistFileName: string;
   // Booking Rules
   bookingRules: BookingRules;
 }
@@ -265,8 +263,6 @@ export function FacilityManagement() {
       phone: '',
     },
     secondaryContacts: [],
-    addressWhitelistFile: null,
-    addressWhitelistFileName: '',
     bookingRules: defaultBookingRules,
   });
 
@@ -290,6 +286,11 @@ export function FacilityManagement() {
   const [isAddingBlackout, setIsAddingBlackout] = useState(false);
   const [blackoutSaving, setBlackoutSaving] = useState(false);
 
+  // Address whitelist state
+  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{id: string; address: string; accountsLimit: number}>>([]);
+  const [newWhitelistAddress, setNewWhitelistAddress] = useState('');
+  const [whitelistAccountsLimit, setWhitelistAccountsLimit] = useState(4);
+
   const { selectedFacilityId: currentFacilityId } = useAppContext();
 
   useEffect(() => {
@@ -298,6 +299,7 @@ export function FacilityManagement() {
       loadFacilityData().then(() => loadFacilityRules());
       loadCourts();
       loadBlackouts();
+      loadWhitelistAddresses();
     }
   }, [currentFacilityId]);
 
@@ -455,8 +457,6 @@ export function FacilityManagement() {
             id: `contact-${i}`,
             ...c,
           })),
-          addressWhitelistFile: null,
-          addressWhitelistFileName: facility.addressWhitelistFileName || '',
           bookingRules,
         };
         setFacilityData(data);
@@ -674,30 +674,67 @@ export function FacilityManagement() {
     });
   };
 
-  // Handle address whitelist file upload
-  const handleAddressWhitelistChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const validTypes = ['.csv', '.xlsx', '.xls'];
-      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-      if (!validTypes.includes(fileExtension)) {
-        toast.error('Please select a CSV or Excel file');
-        return;
+  // Address whitelist CRUD
+  const loadWhitelistAddresses = async () => {
+    if (!currentFacilityId) return;
+    try {
+      const response = await addressWhitelistApi.getAll(currentFacilityId);
+      if (response.success && response.data?.addresses) {
+        setWhitelistAddresses(response.data.addresses);
       }
-      setFacilityData(prev => ({
-        ...prev,
-        addressWhitelistFile: file,
-        addressWhitelistFileName: file.name
-      }));
+    } catch (error) {
+      console.error('Error loading whitelist addresses:', error);
     }
   };
 
-  const removeAddressWhitelist = () => {
-    setFacilityData(prev => ({
-      ...prev,
-      addressWhitelistFile: null,
-      addressWhitelistFileName: ''
-    }));
+  const handleAddWhitelistAddress = async () => {
+    if (!currentFacilityId || !newWhitelistAddress.trim()) {
+      toast.error('Please enter an address');
+      return;
+    }
+    try {
+      const response = await addressWhitelistApi.add(currentFacilityId, newWhitelistAddress.trim(), whitelistAccountsLimit);
+      if (response.success) {
+        setNewWhitelistAddress('');
+        toast.success('Address added to whitelist');
+        loadWhitelistAddresses();
+      } else {
+        toast.error(response.error || 'Failed to add address');
+      }
+    } catch (error) {
+      console.error('Error adding whitelist address:', error);
+      toast.error('Failed to add address');
+    }
+  };
+
+  const handleRemoveWhitelistAddress = async (addressId: string) => {
+    if (!currentFacilityId) return;
+    try {
+      const response = await addressWhitelistApi.remove(currentFacilityId, addressId);
+      if (response.success) {
+        toast.success('Address removed');
+        loadWhitelistAddresses();
+      } else {
+        toast.error(response.error || 'Failed to remove address');
+      }
+    } catch (error) {
+      console.error('Error removing whitelist address:', error);
+      toast.error('Failed to remove address');
+    }
+  };
+
+  const handleUpdateWhitelistLimit = async (addressId: string, newLimit: number) => {
+    if (!currentFacilityId) return;
+    try {
+      const response = await addressWhitelistApi.updateLimit(currentFacilityId, addressId, newLimit);
+      if (response.success) {
+        setWhitelistAddresses(prev => prev.map(a => a.id === addressId ? { ...a, accountsLimit: newLimit } : a));
+      } else {
+        toast.error(response.error || 'Failed to update limit');
+      }
+    } catch (error) {
+      console.error('Error updating whitelist limit:', error);
+    }
   };
 
   // Court management functions
@@ -1802,48 +1839,75 @@ export function FacilityManagement() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
+                      <Home className="h-5 w-5" />
                       Address Whitelist
                     </CardTitle>
-                    <CardDescription>Upload a list of approved addresses (CSV or Excel)</CardDescription>
+                    <CardDescription>Manage approved addresses for membership verification</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {facilityData.addressWhitelistFileName ? (
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm">{facilityData.addressWhitelistFileName}</span>
-                        {isEditing && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={removeAddressWhitelist}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 text-sm">No address whitelist uploaded</p>
-                    )}
-                    {isEditing && !facilityData.addressWhitelistFileName && (
-                      <div>
-                        <input
-                          type="file"
-                          accept=".csv,.xlsx,.xls"
-                          onChange={handleAddressWhitelistChange}
-                          className="hidden"
-                          id="addressWhitelist"
+                    {/* Add new address */}
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Enter address..."
+                        value={newWhitelistAddress}
+                        onChange={(e) => setNewWhitelistAddress(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
+                        className="flex-1"
+                      />
+                      <div className="flex items-center gap-1">
+                        <Label className="text-xs whitespace-nowrap">Limit:</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={whitelistAccountsLimit}
+                          onChange={(e) => setWhitelistAccountsLimit(parseInt(e.target.value) || 4)}
+                          className="w-16"
                         />
-                        <label htmlFor="addressWhitelist">
-                          <Button variant="outline" asChild className="cursor-pointer">
-                            <span>
-                              <Upload className="h-4 w-4 mr-2" />
-                              Upload Whitelist
-                            </span>
-                          </Button>
-                        </label>
+                      </div>
+                      <Button onClick={handleAddWhitelistAddress} size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+
+                    {/* Address list */}
+                    {whitelistAddresses.length === 0 ? (
+                      <p className="text-gray-500 text-sm py-2">No addresses in whitelist. Add addresses to enable membership verification.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {whitelistAddresses.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <Home className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                              <span className="text-sm truncate">{item.address}</span>
+                            </div>
+                            <div className="flex items-center gap-2 ml-2">
+                              <Label className="text-xs whitespace-nowrap">Max:</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                max="20"
+                                value={item.accountsLimit}
+                                onChange={(e) => handleUpdateWhitelistLimit(item.id, parseInt(e.target.value) || 1)}
+                                className="w-14 h-7 text-xs"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveWhitelistAddress(item.id)}
+                                className="text-red-600 hover:text-red-700 h-7 w-7 p-0"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
+                    <p className="text-xs text-gray-500">
+                      {whitelistAddresses.length} address{whitelistAddresses.length !== 1 ? 'es' : ''} whitelisted
+                    </p>
                   </CardContent>
                 </Card>
 

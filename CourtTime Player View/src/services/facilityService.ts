@@ -789,6 +789,7 @@ export interface FacilityRegistrationData {
 
   // Address Whitelist
   hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>;
+  accountsPerAddress?: number;
 }
 
 /**
@@ -1144,23 +1145,23 @@ export async function registerFacility(
       }
     }
 
-    // 10. Insert HOA addresses from whitelist
+    // 10. Insert addresses into address_whitelist
     if (data.hoaAddresses && data.hoaAddresses.length > 0) {
+      const defaultLimit = data.accountsPerAddress || 4;
       for (const addr of data.hoaAddresses) {
         if (addr.streetAddress?.trim()) {
+          // Build full address string for the whitelist table
+          const parts = [addr.streetAddress.trim()];
+          if (addr.city?.trim()) parts.push(addr.city.trim());
+          if (addr.state?.trim()) parts.push(addr.state.trim());
+          if (addr.zipCode?.trim()) parts.push(addr.zipCode.trim());
+          const fullAddress = parts.join(', ');
+
           await client.query(
-            `INSERT INTO hoa_addresses (facility_id, street_address, city, state, zip_code, household_name, uploaded_by, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-             ON CONFLICT (facility_id, street_address) DO NOTHING`,
-            [
-              facilityId,
-              addr.streetAddress.trim(),
-              addr.city?.trim() || null,
-              addr.state?.trim() || null,
-              addr.zipCode?.trim() || null,
-              addr.householdName?.trim() || null,
-              superAdminUserId
-            ]
+            `INSERT INTO address_whitelist (facility_id, address, accounts_limit)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (facility_id, address) DO NOTHING`,
+            [facilityId, fullAddress, defaultLimit]
           );
         }
       }

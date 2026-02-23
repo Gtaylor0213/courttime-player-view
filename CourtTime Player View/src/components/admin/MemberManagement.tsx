@@ -475,7 +475,6 @@ export function MemberManagement() {
                               <div className="text-xs text-gray-500 truncate">{member.email}</div>
                             </div>
                             <div className="hidden md:flex items-center gap-6 text-xs text-gray-600">
-                              <span className="w-16 text-center font-medium">{member.isFacilityAdmin ? 'admin' : 'member'}</span>
                               <span className="w-20 text-center">{member.skillLevel || '—'}</span>
                               <span className="w-20 text-center">
                                 {new Date(member.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}

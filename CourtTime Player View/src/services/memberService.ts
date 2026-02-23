@@ -242,6 +242,7 @@ export async function setMemberAsAdmin(
   isAdmin: boolean
 ): Promise<boolean> {
   try {
+    // Update facility_memberships flag
     const result = await query(
       `UPDATE facility_memberships
        SET is_facility_admin = $1
@@ -249,7 +250,24 @@ export async function setMemberAsAdmin(
       [isAdmin, facilityId, userId]
     );
 
-    return result.rowCount > 0;
+    if (result.rowCount === 0) return false;
+
+    // Sync facility_admins table (source of truth)
+    if (isAdmin) {
+      await query(
+        `INSERT INTO facility_admins (user_id, facility_id, status, permissions)
+         VALUES ($1, $2, 'active', '{"manage_courts": true, "manage_bookings": true, "manage_admins": true, "manage_bulletin": true, "manage_rules": true}'::jsonb)
+         ON CONFLICT (user_id, facility_id) DO UPDATE SET status = 'active'`,
+        [userId, facilityId]
+      );
+    } else {
+      await query(
+        `DELETE FROM facility_admins WHERE user_id = $1 AND facility_id = $2`,
+        [userId, facilityId]
+      );
+    }
+
+    return true;
   } catch (error) {
     console.error('Set member as admin error:', error);
     throw new Error('Failed to update admin status');

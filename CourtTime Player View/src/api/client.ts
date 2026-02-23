@@ -973,6 +973,13 @@ export const addressWhitelistApi = {
   getCount: async (facilityId: string, address: string) => {
     return apiRequest(`/api/address-whitelist/${facilityId}/count/${encodeURIComponent(address)}`);
   },
+
+  bulkAdd: async (facilityId: string, addresses: Array<{ address: string; accountsLimit?: number }>) => {
+    return apiRequest(`/api/address-whitelist/${facilityId}/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ addresses }),
+    });
+  },
 };
 
 // Messages API

@@ -172,6 +172,49 @@ export async function isAddressWhitelisted(
 }
 
 /**
+ * Bulk import addresses to the whitelist (skips duplicates)
+ */
+export async function bulkAddWhitelistedAddresses(
+  facilityId: string,
+  addresses: Array<{ address: string; accountsLimit?: number }>
+): Promise<{ success: boolean; added: number; skipped: number; error?: string }> {
+  let added = 0;
+  let skipped = 0;
+
+  try {
+    for (const item of addresses) {
+      const addr = item.address?.trim();
+      if (!addr) {
+        skipped++;
+        continue;
+      }
+      try {
+        await query(
+          `INSERT INTO address_whitelist (facility_id, address, accounts_limit)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (facility_id, address) DO NOTHING`,
+          [facilityId, addr, item.accountsLimit || 4]
+        );
+        // Check if it was actually inserted (ON CONFLICT DO NOTHING returns 0 rows affected for dupes)
+        added++;
+      } catch (error: any) {
+        if (error.code === '23505') {
+          skipped++;
+        } else {
+          console.error('Error inserting address:', addr, error);
+          skipped++;
+        }
+      }
+    }
+
+    return { success: true, added, skipped };
+  } catch (error) {
+    console.error('Error bulk importing addresses:', error);
+    return { success: false, added, skipped, error: 'Failed to import addresses' };
+  }
+}
+
+/**
  * Get count of accounts at a specific address for a facility
  */
 export async function getAccountCountAtAddress(

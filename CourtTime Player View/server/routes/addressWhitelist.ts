@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getWhitelistedAddresses,
   addWhitelistedAddress,
+  bulkAddWhitelistedAddresses,
   removeWhitelistedAddress,
   updateAccountsLimit,
   isAddressWhitelisted,
@@ -54,6 +55,29 @@ router.post('/:facilityId', async (req, res, next) => {
       return res.status(400).json(result);
     }
 
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/address-whitelist/:facilityId/bulk
+ * Bulk import addresses to the whitelist
+ */
+router.post('/:facilityId/bulk', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+    const { addresses } = req.body;
+
+    if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Addresses array is required'
+      });
+    }
+
+    const result = await bulkAddWhitelistedAddresses(facilityId, addresses);
     res.status(201).json(result);
   } catch (error) {
     next(error);

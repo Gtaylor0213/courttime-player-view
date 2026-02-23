@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { facilitiesApi, adminApi, courtConfigApi, rulesApi, addressWhitelistApi } from '../../api/client';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 // US State abbreviations
 const US_STATES = [
@@ -290,6 +291,8 @@ export function FacilityManagement() {
   const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{id: string; address: string; accountsLimit: number}>>([]);
   const [newWhitelistAddress, setNewWhitelistAddress] = useState('');
   const [whitelistAccountsLimit, setWhitelistAccountsLimit] = useState(4);
+  const [whitelistUploading, setWhitelistUploading] = useState(false);
+  const whitelistFileRef = React.useRef<HTMLInputElement>(null);
 
   const { selectedFacilityId: currentFacilityId } = useAppContext();
 
@@ -734,6 +737,73 @@ export function FacilityManagement() {
       }
     } catch (error) {
       console.error('Error updating whitelist limit:', error);
+    }
+  };
+
+  const handleWhitelistFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentFacilityId) return;
+
+    const ext = file.name.toLowerCase().split('.').pop();
+    if (!['xlsx', 'xls', 'csv'].includes(ext || '')) {
+      toast.error('Please upload an Excel (.xlsx, .xls) or CSV file');
+      if (whitelistFileRef.current) whitelistFileRef.current.value = '';
+      return;
+    }
+
+    setWhitelistUploading(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      if (rows.length === 0) {
+        toast.error('File is empty or has no data rows');
+        return;
+      }
+
+      // Try to find the address column (flexible matching)
+      const headers = Object.keys(rows[0]);
+      const addressCol = headers.find(h =>
+        /^(address|street|street.?address|full.?address|home.?address)$/i.test(h.trim())
+      ) || headers[0]; // Fall back to first column
+
+      const limitCol = headers.find(h =>
+        /^(limit|accounts?.?limit|max|max.?accounts?)$/i.test(h.trim())
+      );
+
+      const addresses: Array<{ address: string; accountsLimit?: number }> = [];
+      for (const row of rows) {
+        const addr = String(row[addressCol] || '').trim();
+        if (addr) {
+          const limit = limitCol ? parseInt(String(row[limitCol])) : undefined;
+          addresses.push({
+            address: addr,
+            accountsLimit: limit && !isNaN(limit) && limit > 0 ? limit : whitelistAccountsLimit
+          });
+        }
+      }
+
+      if (addresses.length === 0) {
+        toast.error('No valid addresses found in file');
+        return;
+      }
+
+      const response = await addressWhitelistApi.bulkAdd(currentFacilityId, addresses);
+      if (response.success) {
+        const result = response.data || response;
+        toast.success(`Imported ${result.added} address${result.added !== 1 ? 'es' : ''}${result.skipped > 0 ? ` (${result.skipped} skipped/duplicates)` : ''}`);
+        loadWhitelistAddresses();
+      } else {
+        toast.error(response.error || 'Failed to import addresses');
+      }
+    } catch (error) {
+      console.error('Error processing file:', error);
+      toast.error('Failed to read file. Check the format and try again.');
+    } finally {
+      setWhitelistUploading(false);
+      if (whitelistFileRef.current) whitelistFileRef.current.value = '';
     }
   };
 
@@ -1869,6 +1939,29 @@ export function FacilityManagement() {
                         <Plus className="h-4 w-4 mr-1" />
                         Add
                       </Button>
+                    </div>
+
+                    {/* File upload */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={whitelistFileRef}
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        onChange={handleWhitelistFileUpload}
+                        className="hidden"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => whitelistFileRef.current?.click()}
+                        disabled={whitelistUploading}
+                      >
+                        <Upload className="h-4 w-4 mr-1" />
+                        {whitelistUploading ? 'Importing...' : 'Import from Excel/CSV'}
+                      </Button>
+                      <span className="text-xs text-gray-500">
+                        File should have an "Address" column. Optional "Limit" column for per-address limits.
+                      </span>
                     </div>
 
                     {/* Address list */}

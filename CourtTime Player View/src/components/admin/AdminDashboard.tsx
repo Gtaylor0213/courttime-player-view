@@ -277,7 +277,7 @@ export function AdminDashboard() {
   const totalStatusCount = analyticsData.statusBreakdown.reduce((sum, s) => sum + Number(s.count), 0);
 
   return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-medium text-gray-900">Admin Dashboard</h1>

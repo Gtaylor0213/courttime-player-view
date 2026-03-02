@@ -1094,7 +1094,7 @@ export function CourtCalendarView() {
         <div className="flex-1 min-h-0 flex flex-col px-4 py-2">
         {courts.length === 0 ? (
           <div
-            className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center text-gray-500 h-full"
+            className="bg-white rounded-lg shadow-lg border border-gray-200 p-4 md:p-8 text-center text-gray-500 h-full"
           >
             <p>No {selectedCourtType} courts available at this facility.</p>
             <Button

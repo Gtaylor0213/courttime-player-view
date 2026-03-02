@@ -382,7 +382,7 @@ export function BulletinBoard() {
             <div className="space-y-4">
               {/* Empty State */}
               {filteredPosts.length === 0 && (
-                <Card className="p-8 text-center">
+                <Card className="p-4 md:p-8 text-center">
                   <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No posts yet</h3>
                   <p className="text-sm text-gray-500">

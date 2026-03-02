@@ -394,7 +394,7 @@ export function CourtManagement() {
   const isFormOpen = editingCourt !== null || bulkAddMode;
 
   return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex justify-between items-center mb-8">

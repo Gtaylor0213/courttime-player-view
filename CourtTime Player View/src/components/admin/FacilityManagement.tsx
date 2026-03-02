@@ -1475,7 +1475,7 @@ export function FacilityManagement() {
   }
 
   return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <div className="flex items-center justify-between mb-6">

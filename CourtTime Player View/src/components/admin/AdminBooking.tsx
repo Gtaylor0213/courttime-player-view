@@ -718,7 +718,7 @@ export function AdminBooking() {
   const selectedMember = members.find(m => m.userId === selectedMemberId);
 
   return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-8">
             <h1 className="text-2xl font-medium text-gray-900 flex items-center gap-2">

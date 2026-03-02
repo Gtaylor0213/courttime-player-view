@@ -1479,13 +1479,15 @@ export function FacilityManagement() {
         <div className="max-w-7xl mx-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-              <h1 className="text-2xl font-medium text-gray-900">Facility Management</h1>
-              <TabsList className="flex overflow-x-auto">
-                <TabsTrigger value="details" className="px-4 shrink-0">Facility Details</TabsTrigger>
-                <TabsTrigger value="rules" className="px-4 shrink-0">Booking Rules</TabsTrigger>
-                <TabsTrigger value="courts" className="px-4 shrink-0">Court Management</TabsTrigger>
-                <TabsTrigger value="billing" className="px-4 shrink-0">Billing & Payment</TabsTrigger>
-              </TabsList>
+              <h1 className="text-2xl font-medium text-gray-900 shrink-0">Facility Management</h1>
+              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                <TabsList>
+                  <TabsTrigger value="details" className="px-4">Facility Details</TabsTrigger>
+                  <TabsTrigger value="rules" className="px-4">Booking Rules</TabsTrigger>
+                  <TabsTrigger value="courts" className="px-4">Court Management</TabsTrigger>
+                  <TabsTrigger value="billing" className="px-4">Billing & Payment</TabsTrigger>
+                </TabsList>
+              </div>
             </div>
 
             {/* Facility Details Tab */}

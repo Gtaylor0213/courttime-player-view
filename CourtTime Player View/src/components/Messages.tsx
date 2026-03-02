@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Search, MessageCircle, Users, X, Plus, UserPlus } from 'lucide-react';
+import { Send, Search, MessageCircle, Users, X, Plus, UserPlus, ChevronLeft } from 'lucide-react';
+import { cn } from './ui/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { messagesApi, membersApi } from '../api/client';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -348,16 +349,19 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center bg-white rounded-lg border" style={{ height: 'calc(100vh - 160px)' }}>
+      <div className="flex items-center justify-center bg-white rounded-lg border" style={{ height: 'calc(100dvh - 160px)' }}>
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="flex bg-white rounded-lg border overflow-hidden" style={{ height: 'calc(100vh - 160px)' }}>
+    <div className="flex bg-white rounded-lg border overflow-hidden" style={{ height: 'calc(100dvh - 160px)' }}>
       {/* Conversations List */}
-      <div className="w-80 border-r flex flex-col h-full">
+      <div className={cn(
+        'w-full md:w-80 border-r flex flex-col h-full',
+        (selectedConversation || newConversationUser) ? 'hidden md:flex' : 'flex'
+      )}>
         <div className="flex-shrink-0 p-4 border-b">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold">Messages</h2>
@@ -437,12 +441,23 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
+      <div className={cn(
+        'flex-1 flex flex-col min-h-0 h-full overflow-hidden',
+        (!selectedConversation && !newConversationUser) ? 'hidden md:flex' : 'flex'
+      )}>
         {selectedConv || newConversationUser ? (
           <div className="flex flex-col h-full">
             {/* Chat Header - Fixed */}
             <div className="flex-shrink-0 p-4 border-b flex items-center justify-between bg-white">
               <div className="flex items-center gap-3">
+                {/* Mobile back button */}
+                <button
+                  onClick={() => { setSelectedConversation(null); setNewConversationUser(null); }}
+                  className="md:hidden p-2 -ml-2 mr-1 rounded-md hover:bg-gray-100"
+                  aria-label="Back to conversations"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
                 <Avatar>
                   <AvatarFallback className="bg-green-100 text-green-700">
                     {getInitials(selectedConv?.otherUser.name || newConversationUser?.name)}
@@ -462,7 +477,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                   setSelectedConversation(null);
                   setNewConversationUser(null);
                 }}
-                className="lg:hidden"
+                className="hidden"
               >
                 <X className="h-4 w-4" />
               </Button>

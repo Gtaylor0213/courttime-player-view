@@ -1750,7 +1750,7 @@ export function FacilityRegistration() {
             Address Whitelist
           </CardTitle>
           <CardDescription>
-            Upload a list of approved addresses for membership verification (optional)
+            Upload a list of approved addresses and last names for membership verification (optional)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1773,8 +1773,8 @@ export function FacilityRegistration() {
           ) : (
             <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
               <Upload className="h-6 w-6 text-gray-400 mb-1" />
-              <span className="text-sm text-gray-500">Upload Address List</span>
-              <span className="text-xs text-gray-400 mt-1">Excel or CSV file</span>
+              <span className="text-sm text-gray-500">Upload Address &amp; Last Name List</span>
+              <span className="text-xs text-gray-400 mt-1">Excel or CSV file with Address and Last Name columns</span>
               <input
                 type="file"
                 accept=".csv,.xlsx,.xls"
@@ -1796,7 +1796,7 @@ export function FacilityRegistration() {
             />
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            The file should contain one address per row. Members will be verified against this list during registration.
+            The file should have "Address" and "Last Name" columns (one entry per row). Members will be auto-approved when their address and last name match an entry on this list.
           </p>
         </CardContent>
       </Card>

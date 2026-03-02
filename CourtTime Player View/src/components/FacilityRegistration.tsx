@@ -106,7 +106,7 @@ export function FacilityRegistration() {
     // Address Whitelist
     addressWhitelistFile: null as File | null,
     addressWhitelistFileName: '',
-    parsedAddresses: [] as Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>,
+    parsedAddresses: [] as Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }>,
     accountsPerAddress: 4,
 
     // Operating Hours
@@ -363,7 +363,7 @@ export function FacilityRegistration() {
   };
 
   // Parse CSV text into address objects
-  const parseCSV = (text: string): Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }> => {
+  const parseCSV = (text: string): Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }> => {
     const lines = text.split(/\r?\n/).filter(line => line.trim());
     if (lines.length === 0) return [];
 
@@ -378,7 +378,8 @@ export function FacilityRegistration() {
         city: headers.findIndex(h => h === 'city'),
         state: headers.findIndex(h => h === 'state'),
         zipCode: headers.findIndex(h => h.includes('zip') || h.includes('postal')),
-        householdName: headers.findIndex(h => h.includes('household') || h.includes('name')),
+        lastName: headers.findIndex(h => /^(lastname|surname|familyname)$/.test(h)),
+        householdName: headers.findIndex(h => h.includes('household')),
       };
 
       return lines.slice(1).map(line => {
@@ -388,6 +389,7 @@ export function FacilityRegistration() {
           city: colMap.city >= 0 ? cols[colMap.city] : undefined,
           state: colMap.state >= 0 ? cols[colMap.state] : undefined,
           zipCode: colMap.zipCode >= 0 ? cols[colMap.zipCode] : undefined,
+          lastName: colMap.lastName >= 0 ? cols[colMap.lastName] : undefined,
           householdName: colMap.householdName >= 0 ? cols[colMap.householdName] : undefined,
         };
       }).filter(addr => addr.streetAddress);
@@ -398,7 +400,7 @@ export function FacilityRegistration() {
   };
 
   // Parse Excel file into address objects
-  const parseExcel = (data: ArrayBuffer): Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }> => {
+  const parseExcel = (data: ArrayBuffer): Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }> => {
     const workbook = XLSX.read(data);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
@@ -410,7 +412,8 @@ export function FacilityRegistration() {
       city: headers.find(h => /^city$/i.test(h.trim())),
       state: headers.find(h => /^state$/i.test(h.trim())),
       zipCode: headers.find(h => /^(zip|zip.?code|postal)$/i.test(h.trim())),
-      householdName: headers.find(h => /^(household|name|household.?name)$/i.test(h.trim())),
+      lastName: headers.find(h => /^(last.?name|lastname|surname|family.?name)$/i.test(h.trim())),
+      householdName: headers.find(h => /^(household|household.?name)$/i.test(h.trim())),
     };
 
     return rows.map(row => ({
@@ -418,6 +421,7 @@ export function FacilityRegistration() {
       city: colMap.city ? String(row[colMap.city] || '').trim() || undefined : undefined,
       state: colMap.state ? String(row[colMap.state] || '').trim() || undefined : undefined,
       zipCode: colMap.zipCode ? String(row[colMap.zipCode] || '').trim() || undefined : undefined,
+      lastName: colMap.lastName ? String(row[colMap.lastName] || '').trim() || undefined : undefined,
       householdName: colMap.householdName ? String(row[colMap.householdName] || '').trim() || undefined : undefined,
     })).filter(addr => addr.streetAddress);
   };

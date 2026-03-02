@@ -389,37 +389,42 @@ export async function addUserToFacility(
   membershipType: string = 'Full'
 ): Promise<boolean> {
   try {
-    // Get user's address to check against whitelist
+    // Get user's address and last name to check against whitelist
     const userResult = await query(
-      `SELECT street_address as "streetAddress" FROM users WHERE id = $1`,
+      `SELECT street_address as "streetAddress", last_name as "lastName" FROM users WHERE id = $1`,
       [userId]
     );
 
     let status: 'active' | 'pending' = 'pending';
 
-    // Check if user's address is on the whitelist for auto-approval
+    // Check if user's (address + last name) is on the whitelist for auto-approval
     // Match on the street portion only (before any comma) since whitelist may store
     // full addresses like "123 Main St, Denver, CO 80202" while users.street_address
     // stores only the street line "123 Main St"
     if (userResult.rows.length > 0 && userResult.rows[0].streetAddress) {
+      const userAddress = userResult.rows[0].streetAddress;
+      const userLastName = userResult.rows[0].lastName || '';
+
       const whitelistResult = await query(
         `SELECT accounts_limit as "accountsLimit"
          FROM address_whitelist
          WHERE facility_id = $1
-           AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))`,
-        [facilityId, userResult.rows[0].streetAddress]
+           AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))
+           AND LOWER(TRIM(COALESCE(last_name, ''))) = LOWER(TRIM($3))`,
+        [facilityId, userAddress, userLastName]
       );
 
       if (whitelistResult.rows.length > 0) {
-        // Check if account limit hasn't been exceeded
+        // Check if account limit hasn't been exceeded for this address + last name combo
         const countResult = await query(
           `SELECT COUNT(DISTINCT u.id) as count
            FROM users u
            JOIN facility_memberships fm ON u.id = fm.user_id
            WHERE fm.facility_id = $1
-             AND LOWER(u.street_address) = LOWER($2)
+             AND LOWER(TRIM(u.street_address)) = LOWER(TRIM($2))
+             AND LOWER(TRIM(COALESCE(u.last_name, ''))) = LOWER(TRIM($3))
              AND fm.status IN ('active', 'pending')`,
-          [facilityId, userResult.rows[0].streetAddress]
+          [facilityId, userAddress, userLastName]
         );
 
         const currentCount = parseInt(countResult.rows[0].count) || 0;

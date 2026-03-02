@@ -36,7 +36,7 @@ router.get('/:facilityId', async (req, res, next) => {
 router.post('/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
-    const { address, accountsLimit } = req.body;
+    const { address, accountsLimit, lastName } = req.body;
 
     if (!address) {
       return res.status(400).json({
@@ -48,7 +48,8 @@ router.post('/:facilityId', async (req, res, next) => {
     const result = await addWhitelistedAddress(
       facilityId,
       address,
-      accountsLimit || 4
+      accountsLimit || 4,
+      lastName || ''
     );
 
     if (!result.success) {
@@ -140,7 +141,8 @@ router.get('/:facilityId/check/:address', async (req, res, next) => {
   try {
     const { facilityId, address } = req.params;
 
-    const result = await isAddressWhitelisted(facilityId, decodeURIComponent(address));
+    const lastName = (req.query.lastName as string) || '';
+    const result = await isAddressWhitelisted(facilityId, decodeURIComponent(address), lastName);
 
     res.json({
       success: true,
@@ -159,7 +161,8 @@ router.get('/:facilityId/count/:address', async (req, res, next) => {
   try {
     const { facilityId, address } = req.params;
 
-    const count = await getAccountCountAtAddress(facilityId, decodeURIComponent(address));
+    const lastName = (req.query.lastName as string) || '';
+    const count = await getAccountCountAtAddress(facilityId, decodeURIComponent(address), lastName);
 
     res.json({
       success: true,

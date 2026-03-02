@@ -501,7 +501,7 @@ export function MemberManagement() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleUpdateStatus(member.userId, 'active')}
-                              className="text-green-600 hover:text-green-700 h-7 w-7 p-0"
+                              className="text-green-600 hover:text-green-700 h-9 w-9 md:h-7 md:w-7 p-0"
                               title="Approve member"
                             >
                               <CheckCircle className="h-3.5 w-3.5" />
@@ -516,7 +516,7 @@ export function MemberManagement() {
                                 setSuspendDialogName(member.fullName);
                                 setSuspendDuration('7d');
                               }}
-                              className="text-orange-600 hover:text-orange-700 h-7 w-7 p-0"
+                              className="text-orange-600 hover:text-orange-700 h-9 w-9 md:h-7 md:w-7 p-0"
                               title="Suspend member"
                             >
                               <XCircle className="h-3.5 w-3.5" />
@@ -527,7 +527,7 @@ export function MemberManagement() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleUpdateStatus(member.userId, 'active')}
-                              className="text-green-600 hover:text-green-700 h-7 w-7 p-0"
+                              className="text-green-600 hover:text-green-700 h-9 w-9 md:h-7 md:w-7 p-0"
                               title="Reactivate member"
                             >
                               <CheckCircle className="h-3.5 w-3.5" />
@@ -537,7 +537,7 @@ export function MemberManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleToggleAdmin(member.userId, member.isFacilityAdmin)}
-                            className={`${member.isFacilityAdmin ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'} h-7 w-7 p-0`}
+                            className={`${member.isFacilityAdmin ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'} h-9 w-9 md:h-7 md:w-7 p-0`}
                             title={member.isFacilityAdmin ? 'Remove admin' : 'Make admin'}
                           >
                             {member.isFacilityAdmin ? <ShieldOff className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
@@ -546,7 +546,7 @@ export function MemberManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => openStrikeDialog(member.userId, member.fullName)}
-                            className="text-amber-600 hover:text-amber-700 h-7 w-7 p-0"
+                            className="text-amber-600 hover:text-amber-700 h-9 w-9 md:h-7 md:w-7 p-0"
                             title="Manage strikes"
                           >
                             <AlertTriangle className="h-3.5 w-3.5" />
@@ -555,7 +555,7 @@ export function MemberManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleRemoveMember(member.userId, member.fullName)}
-                            className="text-red-600 hover:text-red-700 h-7 w-7 p-0"
+                            className="text-red-600 hover:text-red-700 h-9 w-9 md:h-7 md:w-7 p-0"
                             title="Remove member"
                           >
                             <Trash2 className="h-3.5 w-3.5" />

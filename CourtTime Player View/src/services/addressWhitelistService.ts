@@ -4,6 +4,7 @@ export interface AddressWhitelist {
   id: string;
   facilityId: string;
   address: string;
+  lastName: string;
   accountsLimit: number;
   createdAt: string;
   updatedAt: string;
@@ -19,12 +20,13 @@ export async function getWhitelistedAddresses(facilityId: string): Promise<Addre
         id,
         facility_id as "facilityId",
         address,
+        COALESCE(last_name, '') as "lastName",
         accounts_limit as "accountsLimit",
         created_at as "createdAt",
         updated_at as "updatedAt"
       FROM address_whitelist
       WHERE facility_id = $1
-      ORDER BY address ASC`,
+      ORDER BY address ASC, last_name ASC`,
       [facilityId]
     );
 
@@ -41,20 +43,22 @@ export async function getWhitelistedAddresses(facilityId: string): Promise<Addre
 export async function addWhitelistedAddress(
   facilityId: string,
   address: string,
-  accountsLimit: number = 4
+  accountsLimit: number = 4,
+  lastName: string = ''
 ): Promise<{ success: boolean; address?: AddressWhitelist; error?: string }> {
   try {
     const result = await query(
-      `INSERT INTO address_whitelist (facility_id, address, accounts_limit)
-       VALUES ($1, $2, $3)
+      `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit)
+       VALUES ($1, $2, $3, $4)
        RETURNING
          id,
          facility_id as "facilityId",
          address,
+         COALESCE(last_name, '') as "lastName",
          accounts_limit as "accountsLimit",
          created_at as "createdAt",
          updated_at as "updatedAt"`,
-      [facilityId, address, accountsLimit]
+      [facilityId, address, lastName.trim(), accountsLimit]
     );
 
     return {
@@ -147,15 +151,17 @@ export async function updateAccountsLimit(
  */
 export async function isAddressWhitelisted(
   facilityId: string,
-  address: string
+  address: string,
+  lastName: string = ''
 ): Promise<{ isWhitelisted: boolean; accountsLimit?: number }> {
   try {
     const result = await query(
       `SELECT accounts_limit as "accountsLimit"
        FROM address_whitelist
        WHERE facility_id = $1
-         AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))`,
-      [facilityId, address]
+         AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))
+         AND LOWER(TRIM(COALESCE(last_name, ''))) = LOWER(TRIM($3))`,
+      [facilityId, address, lastName]
     );
 
     if (result.rows.length > 0) {
@@ -177,7 +183,7 @@ export async function isAddressWhitelisted(
  */
 export async function bulkAddWhitelistedAddresses(
   facilityId: string,
-  addresses: Array<{ address: string; accountsLimit?: number }>
+  addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }>
 ): Promise<{ success: boolean; added: number; skipped: number; error?: string }> {
   let added = 0;
   let skipped = 0;
@@ -190,14 +196,17 @@ export async function bulkAddWhitelistedAddresses(
         continue;
       }
       try {
-        await query(
-          `INSERT INTO address_whitelist (facility_id, address, accounts_limit)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (facility_id, address) DO NOTHING`,
-          [facilityId, addr, item.accountsLimit || 4]
+        const result = await query(
+          `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT DO NOTHING`,
+          [facilityId, addr, (item.lastName || '').trim(), item.accountsLimit || 4]
         );
-        // Check if it was actually inserted (ON CONFLICT DO NOTHING returns 0 rows affected for dupes)
-        added++;
+        if (result.rowCount && result.rowCount > 0) {
+          added++;
+        } else {
+          skipped++;
+        }
       } catch (error: any) {
         if (error.code === '23505') {
           skipped++;
@@ -220,17 +229,19 @@ export async function bulkAddWhitelistedAddresses(
  */
 export async function getAccountCountAtAddress(
   facilityId: string,
-  address: string
+  address: string,
+  lastName: string = ''
 ): Promise<number> {
   try {
     const result = await query(
       `SELECT COUNT(DISTINCT u.id) as count
        FROM users u
-       JOIN facility_members fm ON u.id = fm.user_id
+       JOIN facility_memberships fm ON u.id = fm.user_id
        WHERE fm.facility_id = $1
-         AND u.street_address = $2
+         AND LOWER(TRIM(u.street_address)) = LOWER(TRIM($2))
+         AND LOWER(TRIM(COALESCE(u.last_name, ''))) = LOWER(TRIM($3))
          AND fm.status != 'expired'`,
-      [facilityId, address]
+      [facilityId, address, lastName]
     );
 
     return parseInt(result.rows[0].count) || 0;

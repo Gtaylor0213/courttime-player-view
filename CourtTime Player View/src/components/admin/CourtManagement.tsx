@@ -704,11 +704,12 @@ export function CourtManagement() {
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b">
-                                  <th className="text-left p-2">Day</th>
+                          <div className="relative">
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="text-left p-2">Day</th>
                                   <th className="text-center p-2">Open</th>
                                   <th className="text-center p-2">Open Time</th>
                                   <th className="text-center p-2">Close Time</th>
@@ -765,7 +766,9 @@ export function CourtManagement() {
                                   </tr>
                                 ))}
                               </tbody>
-                            </table>
+                              </table>
+                            </div>
+                            <div className="absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-white pointer-events-none md:hidden" />
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
@@ -843,7 +846,7 @@ export function CourtManagement() {
                   </span>
                   <div className="flex items-center gap-3 flex-wrap flex-1">
                     <Select value={bulkEditForm.courtType} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, courtType: v })}>
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-full sm:w-[140px]">
                         <SelectValue placeholder="Court Type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -853,7 +856,7 @@ export function CourtManagement() {
                       </SelectContent>
                     </Select>
                     <Select value={bulkEditForm.surfaceType} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, surfaceType: v })}>
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-full sm:w-[140px]">
                         <SelectValue placeholder="Surface" />
                       </SelectTrigger>
                       <SelectContent>
@@ -863,7 +866,7 @@ export function CourtManagement() {
                       </SelectContent>
                     </Select>
                     <Select value={bulkEditForm.status} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, status: v })}>
-                      <SelectTrigger className="w-[130px]">
+                      <SelectTrigger className="w-full sm:w-[130px]">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -873,7 +876,7 @@ export function CourtManagement() {
                       </SelectContent>
                     </Select>
                     <Select value={bulkEditForm.isIndoor} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, isIndoor: v })}>
-                      <SelectTrigger className="w-[120px]">
+                      <SelectTrigger className="w-full sm:w-[120px]">
                         <SelectValue placeholder="Indoor" />
                       </SelectTrigger>
                       <SelectContent>
@@ -882,7 +885,7 @@ export function CourtManagement() {
                       </SelectContent>
                     </Select>
                     <Select value={bulkEditForm.hasLights} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, hasLights: v })}>
-                      <SelectTrigger className="w-[120px]">
+                      <SelectTrigger className="w-full sm:w-[120px]">
                         <SelectValue placeholder="Lights" />
                       </SelectTrigger>
                       <SelectContent>

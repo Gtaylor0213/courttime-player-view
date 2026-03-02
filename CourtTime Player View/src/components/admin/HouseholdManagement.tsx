@@ -508,7 +508,7 @@ export function HouseholdManagement() {
                             variant="outline"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleOpenEdit(household); }}
-                            className="h-7 w-7 p-0"
+                            className="h-9 w-9 md:h-7 md:w-7 p-0"
                             title="Edit settings"
                           >
                             <Settings className="h-3.5 w-3.5" />
@@ -517,7 +517,7 @@ export function HouseholdManagement() {
                             variant="outline"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleOpenAddMember(household.id); }}
-                            className="h-7 w-7 p-0 text-green-600 hover:text-green-700"
+                            className="h-9 w-9 md:h-7 md:w-7 p-0 text-green-600 hover:text-green-700"
                             title="Add member"
                           >
                             <UserPlus className="h-3.5 w-3.5" />
@@ -526,7 +526,7 @@ export function HouseholdManagement() {
                             variant="outline"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleDelete(household.id, household.street_address); }}
-                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                            className="h-9 w-9 md:h-7 md:w-7 p-0 text-red-600 hover:text-red-700"
                             title="Delete household"
                           >
                             <Trash2 className="h-3.5 w-3.5" />

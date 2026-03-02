@@ -946,10 +946,10 @@ export const addressWhitelistApi = {
     return apiRequest(`/api/address-whitelist/${facilityId}`);
   },
 
-  add: async (facilityId: string, address: string, accountsLimit?: number) => {
+  add: async (facilityId: string, address: string, accountsLimit?: number, lastName?: string) => {
     return apiRequest(`/api/address-whitelist/${facilityId}`, {
       method: 'POST',
-      body: JSON.stringify({ address, accountsLimit }),
+      body: JSON.stringify({ address, accountsLimit, lastName }),
     });
   },
 
@@ -966,15 +966,17 @@ export const addressWhitelistApi = {
     });
   },
 
-  check: async (facilityId: string, address: string) => {
-    return apiRequest(`/api/address-whitelist/${facilityId}/check/${encodeURIComponent(address)}`);
+  check: async (facilityId: string, address: string, lastName?: string) => {
+    const qs = lastName ? `?lastName=${encodeURIComponent(lastName)}` : '';
+    return apiRequest(`/api/address-whitelist/${facilityId}/check/${encodeURIComponent(address)}${qs}`);
   },
 
-  getCount: async (facilityId: string, address: string) => {
-    return apiRequest(`/api/address-whitelist/${facilityId}/count/${encodeURIComponent(address)}`);
+  getCount: async (facilityId: string, address: string, lastName?: string) => {
+    const qs = lastName ? `?lastName=${encodeURIComponent(lastName)}` : '';
+    return apiRequest(`/api/address-whitelist/${facilityId}/count/${encodeURIComponent(address)}${qs}`);
   },
 
-  bulkAdd: async (facilityId: string, addresses: Array<{ address: string; accountsLimit?: number }>) => {
+  bulkAdd: async (facilityId: string, addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }>) => {
     return apiRequest(`/api/address-whitelist/${facilityId}/bulk`, {
       method: 'POST',
       body: JSON.stringify({ addresses }),

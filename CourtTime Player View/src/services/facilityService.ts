@@ -796,7 +796,7 @@ export interface FacilityRegistrationData {
   adminInvites?: string[];
 
   // Address Whitelist
-  hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>;
+  hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }>;
   accountsPerAddress?: number;
 
   // Payment
@@ -1172,10 +1172,10 @@ export async function registerFacility(
           const fullAddress = parts.join(', ');
 
           await client.query(
-            `INSERT INTO address_whitelist (facility_id, address, accounts_limit)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (facility_id, address) DO NOTHING`,
-            [facilityId, fullAddress, defaultLimit]
+            `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT DO NOTHING`,
+            [facilityId, fullAddress, addr.lastName?.trim() || '', defaultLimit]
           );
         }
       }

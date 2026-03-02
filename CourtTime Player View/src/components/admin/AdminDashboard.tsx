@@ -294,11 +294,12 @@ export function AdminDashboard() {
           <Card className="mb-6">
             <CardContent className="p-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex gap-2">
+                <div className="flex gap-2 overflow-x-auto pb-1 -mb-1">
                   <Button
                     variant={activeTab === 'overview' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('overview')}
+                    className="shrink-0"
                   >
                     <BarChart3 className="h-4 w-4 mr-1" />
                     Overview
@@ -307,6 +308,7 @@ export function AdminDashboard() {
                     variant={activeTab === 'courts' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('courts')}
+                    className="shrink-0"
                   >
                     <PieChart className="h-4 w-4 mr-1" />
                     Courts
@@ -315,6 +317,7 @@ export function AdminDashboard() {
                     variant={activeTab === 'times' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('times')}
+                    className="shrink-0"
                   >
                     <Clock className="h-4 w-4 mr-1" />
                     Time Analysis
@@ -323,6 +326,7 @@ export function AdminDashboard() {
                     variant={activeTab === 'members' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('members')}
+                    className="shrink-0"
                   >
                     <Users className="h-4 w-4 mr-1" />
                     Members

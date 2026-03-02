@@ -521,11 +521,7 @@ export function CourtCalendarView() {
     if (displayedCourtsCount !== null && displayedCourtsCount > 0) {
       return filteredCourts.slice(0, displayedCourtsCount);
     }
-    // On mobile, default to showing 2 courts for better usability
-    if (isMobile && filteredCourts.length > 2) {
-      return filteredCourts.slice(0, 2);
-    }
-    // Desktop shows all courts
+    // Show all courts — the calendar container scrolls horizontally
     return filteredCourts;
   }, [filteredCourts, displayedCourtsCount, isMobile]);
 
@@ -1021,13 +1017,19 @@ export function CourtCalendarView() {
                 )}
               </div>
 
-              {/* Right side: Notification Bell */}
-              <NotificationBell />
+              {/* Right side: Notification Bell — desktop only */}
+              <div className="hidden md:block">
+                <NotificationBell />
+              </div>
             </div>
 
             {/* Bottom Row: Facility info, Quick Reserve, Date Navigation */}
             <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
               <div className="flex items-center gap-3">
+                {/* Bell on mobile — moved here for better fit */}
+                <div className="md:hidden">
+                  <NotificationBell />
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-600">Facility:</span>
                   <span className="text-sm font-semibold text-gray-900">{currentFacility?.name || 'Loading...'}</span>

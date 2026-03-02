@@ -4,11 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle, Clock, MapPin, Phone, User } from 'lucide-react';
+import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle, Clock, MapPin, Phone, User, MoreVertical } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { membersApi, addressWhitelistApi, strikesApi } from '../../api/client';
 import { Switch } from '../ui/switch';
@@ -495,13 +496,14 @@ export function MemberManagement() {
                             </Badge>
                           </div>
                         </div>
-                        <div className="flex gap-1 ml-3" onClick={(e) => e.stopPropagation()}>
+                        {/* Desktop action buttons */}
+                        <div className="hidden md:flex gap-1 ml-3" onClick={(e) => e.stopPropagation()}>
                           {member.status === 'pending' && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleUpdateStatus(member.userId, 'active')}
-                              className="text-green-600 hover:text-green-700 h-9 w-9 md:h-7 md:w-7 p-0"
+                              className="text-green-600 hover:text-green-700 h-7 w-7 p-0"
                               title="Approve member"
                             >
                               <CheckCircle className="h-3.5 w-3.5" />
@@ -516,7 +518,7 @@ export function MemberManagement() {
                                 setSuspendDialogName(member.fullName);
                                 setSuspendDuration('7d');
                               }}
-                              className="text-orange-600 hover:text-orange-700 h-9 w-9 md:h-7 md:w-7 p-0"
+                              className="text-orange-600 hover:text-orange-700 h-7 w-7 p-0"
                               title="Suspend member"
                             >
                               <XCircle className="h-3.5 w-3.5" />
@@ -527,7 +529,7 @@ export function MemberManagement() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleUpdateStatus(member.userId, 'active')}
-                              className="text-green-600 hover:text-green-700 h-9 w-9 md:h-7 md:w-7 p-0"
+                              className="text-green-600 hover:text-green-700 h-7 w-7 p-0"
                               title="Reactivate member"
                             >
                               <CheckCircle className="h-3.5 w-3.5" />
@@ -537,7 +539,7 @@ export function MemberManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleToggleAdmin(member.userId, member.isFacilityAdmin)}
-                            className={`${member.isFacilityAdmin ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'} h-9 w-9 md:h-7 md:w-7 p-0`}
+                            className={`${member.isFacilityAdmin ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'} h-7 w-7 p-0`}
                             title={member.isFacilityAdmin ? 'Remove admin' : 'Make admin'}
                           >
                             {member.isFacilityAdmin ? <ShieldOff className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
@@ -546,7 +548,7 @@ export function MemberManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => openStrikeDialog(member.userId, member.fullName)}
-                            className="text-amber-600 hover:text-amber-700 h-9 w-9 md:h-7 md:w-7 p-0"
+                            className="text-amber-600 hover:text-amber-700 h-7 w-7 p-0"
                             title="Manage strikes"
                           >
                             <AlertTriangle className="h-3.5 w-3.5" />
@@ -555,11 +557,58 @@ export function MemberManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleRemoveMember(member.userId, member.fullName)}
-                            className="text-red-600 hover:text-red-700 h-9 w-9 md:h-7 md:w-7 p-0"
+                            className="text-red-600 hover:text-red-700 h-7 w-7 p-0"
                             title="Remove member"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
+                        </div>
+                        {/* Mobile action dropdown */}
+                        <div className="md:hidden ml-3" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-9 w-9 p-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {member.status === 'pending' && (
+                                <DropdownMenuItem onClick={() => handleUpdateStatus(member.userId, 'active')} className="text-green-600">
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Approve
+                                </DropdownMenuItem>
+                              )}
+                              {member.status === 'active' && (
+                                <DropdownMenuItem onClick={() => {
+                                  setSuspendDialogUserId(member.userId);
+                                  setSuspendDialogName(member.fullName);
+                                  setSuspendDuration('7d');
+                                }} className="text-orange-600">
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                  Suspend
+                                </DropdownMenuItem>
+                              )}
+                              {member.status === 'suspended' && (
+                                <DropdownMenuItem onClick={() => handleUpdateStatus(member.userId, 'active')} className="text-green-600">
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Reactivate
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => handleToggleAdmin(member.userId, member.isFacilityAdmin)}>
+                                {member.isFacilityAdmin ? <ShieldOff className="h-4 w-4 mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
+                                {member.isFacilityAdmin ? 'Remove Admin' : 'Make Admin'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openStrikeDialog(member.userId, member.fullName)} className="text-amber-600">
+                                <AlertTriangle className="h-4 w-4 mr-2" />
+                                Manage Strikes
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleRemoveMember(member.userId, member.fullName)} className="text-red-600">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     ))

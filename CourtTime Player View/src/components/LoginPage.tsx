@@ -74,7 +74,7 @@ export function LoginPage() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="text-center mb-8 lg:hidden">
-            <img src={logoImage} alt="CourtTime" className="h-48 w-auto mx-auto mb-2" />
+            <img src={logoImage} alt="CourtTime" className="h-32 w-auto mx-auto mb-2 object-contain" />
             <p className="text-muted-foreground">Book courts with ease</p>
           </div>
 

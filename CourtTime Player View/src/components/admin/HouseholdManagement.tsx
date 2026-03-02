@@ -671,7 +671,7 @@ export function HouseholdManagement() {
                 placeholder="123 Main Street"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label>City</Label>
                 <Input
@@ -705,7 +705,7 @@ export function HouseholdManagement() {
                 placeholder="e.g., The Smith Family"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3 pt-2 border-t">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t">
               <div className="space-y-2">
                 <Label className="text-xs">Max Members</Label>
                 <Input
@@ -765,7 +765,7 @@ export function HouseholdManagement() {
                 placeholder="e.g., The Smith Family"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label className="text-xs">Max Members</Label>
                 <Input

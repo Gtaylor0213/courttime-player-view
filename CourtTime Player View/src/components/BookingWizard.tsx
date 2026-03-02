@@ -520,7 +520,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             <div className="space-y-3 p-3 bg-gray-50 rounded-md border border-gray-200">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Select Days of the Week</Label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
                     <div key={day} className="flex items-center gap-2">
                       <Checkbox

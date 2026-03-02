@@ -698,7 +698,7 @@ export function MemberManagement() {
             {/* Issue New Strike */}
             <div className="p-4 border rounded-lg bg-amber-50 space-y-3">
               <h4 className="font-medium text-sm">Issue New Strike</h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Strike Type</Label>
                   <Select value={newStrikeType} onValueChange={setNewStrikeType}>

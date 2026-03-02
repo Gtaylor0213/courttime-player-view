@@ -71,7 +71,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
       <DropdownMenuTrigger asChild>
         {children}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-96 max-h-96 overflow-y-auto">
+      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] max-w-96 max-h-96 overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <DropdownMenuLabel className="text-base font-medium p-0">
             Notifications

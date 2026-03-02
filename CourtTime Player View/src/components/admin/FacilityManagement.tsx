@@ -289,8 +289,9 @@ export function FacilityManagement() {
   const [blackoutSaving, setBlackoutSaving] = useState(false);
 
   // Address whitelist state
-  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{id: string; address: string; accountsLimit: number}>>([]);
+  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{id: string; address: string; lastName: string; accountsLimit: number}>>([]);
   const [newWhitelistAddress, setNewWhitelistAddress] = useState('');
+  const [newWhitelistLastName, setNewWhitelistLastName] = useState('');
   const [whitelistAccountsLimit, setWhitelistAccountsLimit] = useState(4);
   const [whitelistUploading, setWhitelistUploading] = useState(false);
   const whitelistFileRef = React.useRef<HTMLInputElement>(null);
@@ -697,9 +698,10 @@ export function FacilityManagement() {
       return;
     }
     try {
-      const response = await addressWhitelistApi.add(currentFacilityId, newWhitelistAddress.trim(), whitelistAccountsLimit);
+      const response = await addressWhitelistApi.add(currentFacilityId, newWhitelistAddress.trim(), whitelistAccountsLimit, newWhitelistLastName.trim());
       if (response.success) {
         setNewWhitelistAddress('');
+        setNewWhitelistLastName('');
         toast.success('Address added to whitelist');
         loadWhitelistAddresses();
       } else {
@@ -764,23 +766,29 @@ export function FacilityManagement() {
         return;
       }
 
-      // Try to find the address column (flexible matching)
+      // Try to find columns (flexible matching)
       const headers = Object.keys(rows[0]);
       const addressCol = headers.find(h =>
         /^(address|street|street.?address|full.?address|home.?address)$/i.test(h.trim())
       ) || headers[0]; // Fall back to first column
 
+      const lastNameCol = headers.find(h =>
+        /^(last.?name|lastname|surname|family.?name)$/i.test(h.trim())
+      );
+
       const limitCol = headers.find(h =>
         /^(limit|accounts?.?limit|max|max.?accounts?)$/i.test(h.trim())
       );
 
-      const addresses: Array<{ address: string; accountsLimit?: number }> = [];
+      const addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }> = [];
       for (const row of rows) {
         const addr = String(row[addressCol] || '').trim();
         if (addr) {
           const limit = limitCol ? parseInt(String(row[limitCol])) : undefined;
+          const lastName = lastNameCol ? String(row[lastNameCol] || '').trim() : '';
           addresses.push({
             address: addr,
+            lastName,
             accountsLimit: limit && !isNaN(limit) && limit > 0 ? limit : whitelistAccountsLimit
           });
         }
@@ -1652,7 +1660,7 @@ export function FacilityManagement() {
                         placeholder="123 Main Street"
                       />
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="city">City</Label>
                         <Input
@@ -1926,6 +1934,13 @@ export function FacilityManagement() {
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
                         className="flex-1"
                       />
+                      <Input
+                        placeholder="Last name..."
+                        value={newWhitelistLastName}
+                        onChange={(e) => setNewWhitelistLastName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
+                        className="w-40"
+                      />
                       <div className="flex items-center gap-1">
                         <Label className="text-xs whitespace-nowrap">Limit:</Label>
                         <Input
@@ -1962,7 +1977,7 @@ export function FacilityManagement() {
                         {whitelistUploading ? 'Importing...' : 'Import from Excel/CSV'}
                       </Button>
                       <span className="text-xs text-gray-500">
-                        File should have an "Address" column. Optional "Limit" column for per-address limits.
+                        File should have "Address" and "Last Name" columns. Optional "Limit" column for per-address limits.
                       </span>
                     </div>
 
@@ -1975,7 +1990,10 @@ export function FacilityManagement() {
                           <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <Home className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                              <span className="text-sm truncate">{item.address}</span>
+                              <span className="text-sm truncate">
+                                {item.address}
+                                {item.lastName && <span className="text-gray-500"> — {item.lastName}</span>}
+                              </span>
                             </div>
                             <div className="flex items-center gap-2 ml-2">
                               <Label className="text-xs whitespace-nowrap">Max:</Label>

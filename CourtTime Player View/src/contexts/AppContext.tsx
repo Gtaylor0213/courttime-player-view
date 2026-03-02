@@ -4,6 +4,8 @@ import { useAuth } from './AuthContext';
 interface AppContextType {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
   selectedFacilityId: string;
   setSelectedFacilityId: (id: string) => void;
 }
@@ -21,6 +23,7 @@ export function useAppContext() {
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string>('sunrise-valley');
 
   // Auto-select first facility when user logs in or changes (prefer member, then admin)
@@ -40,6 +43,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{
       sidebarCollapsed,
       toggleSidebar,
+      sidebarOpen,
+      setSidebarOpen,
       selectedFacilityId,
       setSelectedFacilityId,
     }}>

@@ -3,6 +3,9 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
+import { Menu } from 'lucide-react';
+import { cn } from './ui/utils';
+import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/admin/facilities')) return 'facility-management';
@@ -25,7 +28,7 @@ function getCurrentPage(pathname: string): string {
 
 export function AuthenticatedLayout() {
   const { user, logout: authLogout } = useAuth();
-  const { sidebarCollapsed, toggleSidebar } = useAppContext();
+  const { sidebarCollapsed, toggleSidebar, setSidebarOpen } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -45,7 +48,21 @@ export function AuthenticatedLayout() {
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={toggleSidebar}
       />
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 ease-in-out`}>
+      <div className={cn(
+        'transition-all duration-300 ease-in-out',
+        sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
+      )}>
+        {/* Mobile header bar */}
+        <div className="sticky top-0 z-30 flex items-center h-14 px-4 bg-white border-b md:hidden">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-2 rounded-md hover:bg-gray-100"
+            aria-label="Open menu"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          <img src={logoImage} alt="CourtTime" className="h-8 w-auto ml-3" />
+        </div>
         <Outlet />
       </div>
     </div>

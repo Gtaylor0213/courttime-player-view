@@ -711,7 +711,7 @@ export function MemberManagement() {
 
       {/* Address Whitelist Dialog */}
       <Dialog open={showAddressDialog} onOpenChange={setShowAddressDialog}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Address Whitelist Management</DialogTitle>
             <DialogDescription>

@@ -737,14 +737,14 @@ export function UserRegistration() {
       {/* Registration Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card>
-          <div className="flex">
-            {/* Vertical Progress Steps - Inside Card Left Side */}
-            <div className="w-48 border-r bg-gray-50 p-4">
-              <div className="flex flex-col items-center gap-5 pt-3">
+          <div className="flex flex-col md:flex-row">
+            {/* Progress Steps - Horizontal on mobile, Vertical sidebar on desktop */}
+            <div className="w-full md:w-48 md:border-r border-b md:border-b-0 bg-gray-50 p-4">
+              <div className="flex flex-row md:flex-col items-center justify-center gap-3 md:gap-5 md:pt-3">
                 {/* Step 1 */}
                 <div className="flex flex-col items-center text-center">
                   <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium border-2 transition-all duration-200 mb-2 ${
+                    className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-base md:text-lg font-medium border-2 transition-all duration-200 md:mb-2 ${
                       1 <= currentStep
                         ? 'bg-green-600 text-white border-green-600'
                         : 'bg-white text-gray-400 border-gray-300'
@@ -752,13 +752,13 @@ export function UserRegistration() {
                   >
                     1
                   </div>
-                  <p className={`text-sm font-medium ${currentStep >= 1 ? 'text-green-600' : 'text-gray-500'}`}>
+                  <p className={`text-xs md:text-sm font-medium hidden md:block ${currentStep >= 1 ? 'text-green-600' : 'text-gray-500'}`}>
                     Personal Information
                   </p>
                 </div>
 
-                {/* Vertical Progress Line */}
-                <div className="flex justify-center">
+                {/* Progress Line - Horizontal on mobile, Vertical on desktop */}
+                <div className="hidden md:flex justify-center">
                   <div className="w-0.5 h-12 bg-gray-200">
                     <div
                       className="w-full bg-green-600 transition-all duration-300"
@@ -766,11 +766,19 @@ export function UserRegistration() {
                     />
                   </div>
                 </div>
+                <div className="flex md:hidden items-center">
+                  <div className="h-0.5 w-12 bg-gray-200">
+                    <div
+                      className="h-full bg-green-600 transition-all duration-300"
+                      style={{ width: `${currentStep >= 2 ? '100' : '0'}%` }}
+                    />
+                  </div>
+                </div>
 
                 {/* Step 2 */}
                 <div className="flex flex-col items-center text-center">
                   <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium border-2 transition-all duration-200 mb-2 ${
+                    className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-base md:text-lg font-medium border-2 transition-all duration-200 md:mb-2 ${
                       2 <= currentStep
                         ? 'bg-green-600 text-white border-green-600'
                         : 'bg-white text-gray-400 border-gray-300'
@@ -778,7 +786,7 @@ export function UserRegistration() {
                   >
                     2
                   </div>
-                  <p className={`text-sm font-medium ${currentStep >= 2 ? 'text-green-600' : 'text-gray-500'}`}>
+                  <p className={`text-xs md:text-sm font-medium hidden md:block ${currentStep >= 2 ? 'text-green-600' : 'text-gray-500'}`}>
                     Facilities & Notifications
                   </p>
                 </div>

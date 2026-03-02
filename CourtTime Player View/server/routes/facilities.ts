@@ -169,7 +169,14 @@ router.post('/register', async (req, res, next) => {
       hoaAddresses,
 
       // Existing user ID (if already logged in)
-      existingUserId
+      existingUserId,
+
+      // Payment
+      paymentSessionId,
+      promoCode,
+      paymentAmountCents,
+      paymentWaived,
+      customPricing,
     } = req.body;
 
     // Validation
@@ -242,7 +249,14 @@ router.post('/register', async (req, res, next) => {
         splitConfig: court.splitConfig
       })),
       adminInvites: adminInvites?.map((invite: any) => invite.email || invite).filter(Boolean),
-      hoaAddresses: hoaAddresses || undefined
+      hoaAddresses: hoaAddresses || undefined,
+
+      // Payment
+      paymentSessionId: paymentSessionId || undefined,
+      promoCode: promoCode || undefined,
+      paymentAmountCents: paymentAmountCents != null ? parseInt(paymentAmountCents) : 37500,
+      paymentWaived: paymentWaived || false,
+      customPricing: customPricing || false,
     };
 
     // Register facility

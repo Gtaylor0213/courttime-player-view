@@ -38,6 +38,7 @@
             "react-hook-form": "^7.55.0",
             "react-router-dom": "^6.30.3",
             "sonner": "^2.0.3",
+            "stripe": "^20.4.0",
             "tailwind-merge": "*",
             "tailwindcss": "^4.1.18",
             "tsx": "^4.20.6",

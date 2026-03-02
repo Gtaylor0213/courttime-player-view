@@ -15,6 +15,7 @@ import { useAppContext } from '../../contexts/AppContext';
 import { facilitiesApi, adminApi, courtConfigApi, rulesApi, addressWhitelistApi } from '../../api/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { BillingTab } from './BillingTab';
 
 // US State abbreviations
 const US_STATES = [
@@ -1475,6 +1476,7 @@ export function FacilityManagement() {
                 <TabsTrigger value="details" className="px-4">Facility Details</TabsTrigger>
                 <TabsTrigger value="rules" className="px-4">Booking Rules</TabsTrigger>
                 <TabsTrigger value="courts" className="px-4">Court Management</TabsTrigger>
+                <TabsTrigger value="billing" className="px-4">Billing & Payment</TabsTrigger>
               </TabsList>
             </div>
 
@@ -3354,6 +3356,11 @@ export function FacilityManagement() {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Billing & Payment Tab */}
+            <TabsContent value="billing" className="space-y-6">
+              {currentFacilityId && <BillingTab facilityId={currentFacilityId} />}
             </TabsContent>
           </Tabs>
         </div>

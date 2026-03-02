@@ -1152,3 +1152,42 @@ export const householdsApi = {
     });
   },
 };
+
+// Payments API
+export const paymentsApi = {
+  validatePromo: async (code: string) => {
+    return apiRequest('/api/payments/validate-promo', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  },
+
+  createCheckoutSession: async (data: {
+    facilityName: string;
+    courtCount: number;
+    amountCents?: number;
+    promoCode?: string;
+    successUrl: string;
+    cancelUrl: string;
+  }) => {
+    return apiRequest('/api/payments/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  verifySession: async (sessionId: string) => {
+    return apiRequest('/api/payments/verify-session', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    });
+  },
+
+  getSubscription: async (facilityId: string) => {
+    return apiRequest(`/api/payments/subscription/${facilityId}`);
+  },
+
+  getPaymentHistory: async (facilityId: string) => {
+    return apiRequest(`/api/payments/history/${facilityId}`);
+  },
+};

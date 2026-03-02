@@ -1,6 +1,7 @@
 import { query, transaction } from '../database/connection';
 import { Facility, Court } from '../types/database';
 import type { PoolClient } from 'pg';
+import { recordPayment } from './paymentService';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -797,6 +798,13 @@ export interface FacilityRegistrationData {
   // Address Whitelist
   hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string }>;
   accountsPerAddress?: number;
+
+  // Payment
+  paymentSessionId?: string;
+  promoCode?: string;
+  paymentAmountCents?: number;
+  paymentWaived?: boolean;
+  customPricing?: boolean;
 }
 
 /**
@@ -1172,6 +1180,22 @@ export async function registerFacility(
         }
       }
     }
+
+    // 11. Record payment
+    const paymentStatus = data.customPricing
+      ? 'custom_pending'
+      : data.paymentWaived
+        ? 'waived'
+        : 'active';
+
+    await recordPayment(client, facilityId, {
+      stripeSessionId: data.paymentSessionId,
+      amountCents: data.paymentAmountCents ?? 37500,
+      status: paymentStatus,
+      promoCode: data.promoCode,
+      courtCount: data.courts.length,
+      paymentMethodType: data.paymentWaived ? 'promo_code' : data.customPricing ? 'custom' : 'card',
+    });
 
     // Get user data with memberFacilities
     const userData = userResult ? userResult.rows[0] : null;

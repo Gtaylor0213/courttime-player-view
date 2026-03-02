@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
+import { Badge } from './ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -12,13 +13,13 @@ import { Alert, AlertDescription } from './ui/alert';
 import {
   ArrowLeft, ArrowRight, Building, MapPin, Clock, FileText,
   Plus, Trash2, Check, AlertCircle, Upload, Mail, User, Users,
-  Grid3X3, ShieldCheck, Phone
+  Grid3X3, ShieldCheck, Phone, CreditCard, Tag
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
-import { facilitiesApi } from '../api/client';
+import { facilitiesApi, paymentsApi } from '../api/client';
 import { RulesStep } from './facility-registration/RulesStep';
 import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG, RULE_METADATA } from './facility-registration/rule-defaults';
 
@@ -143,7 +144,74 @@ export function FacilityRegistration() {
     hasLights: false,
   });
 
-  const totalSteps = user ? 5 : 6; // 6 steps if creating admin account, 5 if already logged in
+  // Payment state
+  const [promoCode, setPromoCode] = useState('');
+  const [promoValidation, setPromoValidation] = useState<{
+    valid: boolean;
+    promoCodeId?: string;
+    discountType?: string;
+    finalAmountCents?: number;
+    message?: string;
+  } | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
+  const [paymentComplete, setPaymentComplete] = useState(false);
+  const [paymentWaived, setPaymentWaived] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  const totalSteps = user ? 6 : 7; // +1 for Payment step
+
+  // Handle return from Stripe Checkout redirect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+    const sessionId = urlParams.get('session_id');
+
+    if (paymentStatus === 'success' && sessionId) {
+      // Restore form data from sessionStorage
+      const savedData = sessionStorage.getItem('facilityRegistrationData');
+      const savedStep = sessionStorage.getItem('facilityRegistrationStep');
+      const savedPromo = sessionStorage.getItem('facilityRegistrationPromo');
+
+      if (savedData) {
+        try { setFormData(JSON.parse(savedData)); } catch {}
+      }
+      if (savedStep) {
+        setCurrentStep(parseInt(savedStep));
+      }
+      if (savedPromo) {
+        setPromoCode(savedPromo);
+      }
+
+      // Verify the session with the backend
+      paymentsApi.verifySession(sessionId).then(result => {
+        if (result.success && result.data?.verified) {
+          setPaymentSessionId(sessionId);
+          setPaymentComplete(true);
+          toast.success('Payment successful!');
+        } else {
+          toast.error('Payment verification failed. Please try again.');
+        }
+      });
+
+      // Clean URL and sessionStorage
+      window.history.replaceState({}, '', window.location.pathname);
+      sessionStorage.removeItem('facilityRegistrationData');
+      sessionStorage.removeItem('facilityRegistrationStep');
+      sessionStorage.removeItem('facilityRegistrationPromo');
+    } else if (paymentStatus === 'cancelled') {
+      const savedData = sessionStorage.getItem('facilityRegistrationData');
+      const savedStep = sessionStorage.getItem('facilityRegistrationStep');
+      if (savedData) { try { setFormData(JSON.parse(savedData)); } catch {} }
+      if (savedStep) { setCurrentStep(parseInt(savedStep)); }
+
+      toast.info('Payment was cancelled. You can try again.');
+      window.history.replaceState({}, '', window.location.pathname);
+      sessionStorage.removeItem('facilityRegistrationData');
+      sessionStorage.removeItem('facilityRegistrationStep');
+      sessionStorage.removeItem('facilityRegistrationPromo');
+    }
+  }, []);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -818,6 +886,13 @@ export function FacilityRegistration() {
 
         // Existing user ID (if already logged in)
         existingUserId: user?.id,
+
+        // Payment info
+        paymentSessionId: paymentSessionId || undefined,
+        promoCode: paymentWaived ? promoCode : undefined,
+        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : 37500),
+        paymentWaived,
+        customPricing: formData.courts.length > 8,
       };
 
       // Call the API to register the facility
@@ -863,7 +938,7 @@ export function FacilityRegistration() {
   // Get step label based on step number and user status
   const getStepLabel = (stepNumber: number): string => {
     if (!user) {
-      // Not logged in - 6 steps
+      // Not logged in - 7 steps
       switch (stepNumber) {
         case 1: return 'Your Account';
         case 2: return 'Facility Info';
@@ -871,16 +946,18 @@ export function FacilityRegistration() {
         case 4: return 'Rules';
         case 5: return 'Admins';
         case 6: return 'Review';
+        case 7: return 'Payment';
         default: return '';
       }
     } else {
-      // Logged in - 5 steps
+      // Logged in - 6 steps
       switch (stepNumber) {
         case 1: return 'Facility Info';
         case 2: return 'Courts';
         case 3: return 'Rules';
         case 4: return 'Admins';
         case 5: return 'Review';
+        case 6: return 'Payment';
         default: return '';
       }
     }
@@ -952,6 +1029,222 @@ export function FacilityRegistration() {
         <p className="text-xs text-center" style={{ color: '#6b7280' }}>
           Click any step above to navigate. All required fields must be completed before registration.
         </p>
+      </div>
+    );
+  };
+
+  // Payment handlers
+  const handleValidatePromo = async () => {
+    if (!promoCode.trim()) return;
+    setIsValidatingPromo(true);
+    try {
+      const result = await paymentsApi.validatePromo(promoCode.trim());
+      if (result.success && result.data) {
+        setPromoValidation(result.data);
+        if (result.data.valid && result.data.finalAmountCents === 0) {
+          setPaymentWaived(true);
+        }
+      } else {
+        setPromoValidation({ valid: false, message: result.error || 'Invalid promo code' });
+      }
+    } catch {
+      setPromoValidation({ valid: false, message: 'Error validating promo code' });
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
+  const handleClearPromo = () => {
+    setPromoCode('');
+    setPromoValidation(null);
+    setPaymentWaived(false);
+  };
+
+  const handlePayWithStripe = async () => {
+    setIsProcessingPayment(true);
+    try {
+      const currentUrl = window.location.origin + window.location.pathname;
+      const finalAmount = promoValidation?.valid ? (promoValidation.finalAmountCents ?? 37500) : 37500;
+
+      const result = await paymentsApi.createCheckoutSession({
+        facilityName: formData.facilityName,
+        courtCount: formData.courts.length,
+        amountCents: finalAmount,
+        promoCode: promoValidation?.valid ? promoCode : undefined,
+        successUrl: `${currentUrl}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${currentUrl}?payment=cancelled`,
+      });
+
+      if (result.success && result.data) {
+        if (result.data.waived) {
+          setPaymentWaived(true);
+        } else if (result.data.sessionUrl) {
+          // Save form data before redirecting to Stripe
+          sessionStorage.setItem('facilityRegistrationData', JSON.stringify(formData));
+          sessionStorage.setItem('facilityRegistrationStep', String(currentStep));
+          sessionStorage.setItem('facilityRegistrationPromo', promoCode);
+          window.location.href = result.data.sessionUrl;
+        } else {
+          // Dev mode — no Stripe keys, auto-complete payment
+          setPaymentSessionId(result.data.sessionId || 'dev_auto');
+          setPaymentComplete(true);
+          toast.success('Payment completed (dev mode)');
+        }
+      } else {
+        toast.error(result.error || 'Failed to start payment');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Payment error');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const renderPaymentStep = () => {
+    const courtCount = formData.courts.length;
+    const isCustomPricing = courtCount > 8;
+    const baseAmountCents = 37500;
+    const finalAmountCents = promoValidation?.valid
+      ? (promoValidation.finalAmountCents ?? 0)
+      : baseAmountCents;
+    const isPaymentRequired = !isCustomPricing && finalAmountCents > 0 && !paymentComplete && !paymentWaived;
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-lg font-semibold mb-1">Payment</h3>
+          <p className="text-sm text-gray-500">Complete payment to activate your facility</p>
+        </div>
+
+        {isCustomPricing ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Custom Pricing
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Your facility has <strong>{courtCount} courts</strong>. Facilities with 9 or more courts
+                  qualify for custom pricing. Our team will contact you to set up your plan.
+                  You can complete registration now and payment will be arranged separately.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Facility Registration Fee
+              </CardTitle>
+              <CardDescription>Annual subscription for up to 8 courts</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Pricing summary */}
+              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Annual Fee ({courtCount} court{courtCount !== 1 ? 's' : ''})</span>
+                  <span className="font-medium">${(baseAmountCents / 100).toFixed(2)}</span>
+                </div>
+                {promoValidation?.valid && (
+                  <div className="flex justify-between items-center text-green-600">
+                    <span className="flex items-center gap-1">
+                      <Tag className="h-3 w-3" />
+                      Promo: {promoCode}
+                    </span>
+                    <span>-${((baseAmountCents - finalAmountCents) / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                <Separator />
+                <div className="flex justify-between items-center text-lg font-bold">
+                  <span>Total</span>
+                  {finalAmountCents === 0 ? (
+                    <span className="text-green-600">$0.00 (Free)</span>
+                  ) : (
+                    <span>${(finalAmountCents / 100).toFixed(2)}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Promo code input */}
+              {!paymentComplete && !paymentWaived && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1">
+                    <Tag className="h-3.5 w-3.5" />
+                    Promo Code
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={promoCode}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.toUpperCase());
+                        if (promoValidation) setPromoValidation(null);
+                      }}
+                      placeholder="Enter promo code"
+                      disabled={paymentComplete || paymentWaived}
+                    />
+                    {promoValidation?.valid ? (
+                      <Button type="button" variant="outline" onClick={handleClearPromo}>
+                        Clear
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleValidatePromo}
+                        disabled={!promoCode.trim() || isValidatingPromo}
+                      >
+                        {isValidatingPromo ? 'Checking...' : 'Apply'}
+                      </Button>
+                    )}
+                  </div>
+                  {promoValidation && (
+                    <p className={`text-sm ${promoValidation.valid ? 'text-green-600' : 'text-red-600'}`}>
+                      {promoValidation.message}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Payment status messages */}
+              {paymentComplete && (
+                <Alert className="border-green-200 bg-green-50">
+                  <Check className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-700">
+                    Payment successful! Click "Complete Registration" to finish setting up your facility.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {paymentWaived && (
+                <Alert className="border-green-200 bg-green-50">
+                  <Check className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-700">
+                    Promo code applied! No payment required. Click "Complete Registration" to finish.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Pay button */}
+              {isPaymentRequired && (
+                <Button
+                  type="button"
+                  className="w-full"
+                  size="lg"
+                  onClick={handlePayWithStripe}
+                  disabled={isProcessingPayment}
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  {isProcessingPayment ? 'Processing...' : `Pay $${(finalAmountCents / 100).toFixed(2)}`}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   };
@@ -2102,6 +2395,7 @@ export function FacilityRegistration() {
             {(user ? currentStep === 3 : currentStep === 4) && renderRulesStep()}
             {(user ? currentStep === 4 : currentStep === 5) && renderStep5Admins()}
             {(user ? currentStep === 5 : currentStep === 6) && renderStep6Review()}
+            {(user ? currentStep === 6 : currentStep === 7) && renderPaymentStep()}
           </div>
 
           <div className="flex justify-between mt-8">
@@ -2124,7 +2418,11 @@ export function FacilityRegistration() {
               <Button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || (
+                  formData.courts.length <= 8 &&
+                  !paymentComplete &&
+                  !paymentWaived
+                )}
               >
                 {isSubmitting ? 'Submitting...' : 'Complete Registration'}
               </Button>

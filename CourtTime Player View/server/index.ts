@@ -32,6 +32,7 @@ import strikesRoutes from './routes/strikes';
 import courtConfigRoutes from './routes/courtConfig';
 import rulesRoutes from './routes/rules';
 import householdsRoutes from './routes/households';
+import paymentRoutes from './routes/payments';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -111,6 +112,7 @@ app.use('/api/strikes', strikesRoutes);
 app.use('/api/court-config', courtConfigRoutes);
 app.use('/api/rules', rulesRoutes);
 app.use('/api/households', householdsRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

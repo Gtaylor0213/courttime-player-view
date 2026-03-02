@@ -123,6 +123,12 @@ export function CourtCalendarView() {
   // Computed court column width based on zoom
   const effectiveCourtWidth = Math.round(COURT_COL_WIDTH * zoomLevel / 100);
 
+  // Responsive dimensions for mobile touch targets
+  const effectiveSubSlotHeight = isMobile ? 40 : SUB_SLOT_HEIGHT;
+  const effectiveRowHeight = isMobile ? 80 : ROW_HEIGHT;
+  const effectiveTimeColWidth = isMobile ? 56 : TIME_COL_WIDTH;
+  const effectiveHeaderHeight = isMobile ? 48 : HEADER_HEIGHT;
+
   // Prime-time config per court: courtId -> schedule array
   const [primeTimeConfigs, setPrimeTimeConfigs] = useState<Record<string, any[]>>({});
 
@@ -471,14 +477,14 @@ export function CourtCalendarView() {
 
     if (hours < startHour || hours > endHour) return null;
 
-    // Each hour = 2 visible rows × ROW_HEIGHT = 4 sub-slots × SUB_SLOT_HEIGHT
+    // Each hour = 2 visible rows × effectiveRowHeight = 4 sub-slots × effectiveSubSlotHeight
     const hoursFromStart = hours - startHour;
     const minuteFraction = minutes / 60;
     const totalHours = hoursFromStart + minuteFraction;
-    const position = totalHours * 2 * ROW_HEIGHT;
+    const position = totalHours * 2 * effectiveRowHeight;
 
     return position;
-  }, [currentTime, selectedDate, isToday, startHour, endHour, facilityTimezone]);
+  }, [currentTime, selectedDate, isToday, startHour, endHour, facilityTimezone, effectiveRowHeight]);
 
   // Helper function to check if a time slot is in the past
   const isPastTime = useCallback((timeSlot: string) => {
@@ -911,9 +917,9 @@ export function CourtCalendarView() {
         {/* Controls - Sticky Header */}
         {memberFacilities.length === 0 ? (
           // Show "no membership" message when user has no facilities
-          <div className="px-6 py-6">
+          <div className="px-3 md:px-6 py-6">
           <Card>
-            <CardContent className="p-8">
+            <CardContent className="p-4 md:p-8">
               <div className="text-center space-y-4">
                 <div className="flex justify-center">
                   <Calendar className="h-16 w-16 text-gray-300" />
@@ -936,13 +942,13 @@ export function CourtCalendarView() {
           <>
         {/* Controls Header */}
         <div className="flex-shrink-0 z-40 bg-white border-b border-gray-200 shadow-sm">
-          <div className="px-4 py-2">
+          <div className="px-3 md:px-4 py-2">
             {/* Top Row: Facility Name, Court Type Filter, Courts, Zoom, Bell */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <h3 className="text-lg font-medium">{currentFacility?.name}</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
+              <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                <h3 className="text-base md:text-lg font-medium w-full md:w-auto">{currentFacility?.name}</h3>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600">Court Type:</span>
+                  <span className="text-sm font-medium text-gray-600 hidden md:inline">Court Type:</span>
                   <div className="flex gap-1">
                     <Button
                       variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
@@ -963,7 +969,7 @@ export function CourtCalendarView() {
 
                 {/* Court Display Count */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600">Courts:</span>
+                  <span className="text-sm font-medium text-gray-600 hidden md:inline">Courts:</span>
                   <Select
                     value={displayedCourtsCount?.toString() || 'all'}
                     onValueChange={(v) => setDisplayedCourtsCount(v === 'all' ? null : parseInt(v))}
@@ -980,13 +986,13 @@ export function CourtCalendarView() {
                   </Select>
                 </div>
 
-                {/* Zoom Controls */}
-                <div className="flex items-center gap-1.5">
+                {/* Zoom Controls - hidden on mobile */}
+                <div className="hidden md:flex items-center gap-1.5">
                   <span className="text-sm font-medium text-gray-600">Zoom:</span>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 w-7 p-0"
+                    className="h-9 w-9 md:h-7 md:w-7 p-0"
                     onClick={() => setZoomLevel(prev => Math.max(50, prev - 10))}
                     disabled={zoomLevel <= 50}
                   >
@@ -996,7 +1002,7 @@ export function CourtCalendarView() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 w-7 p-0"
+                    className="h-9 w-9 md:h-7 md:w-7 p-0"
                     onClick={() => setZoomLevel(prev => Math.min(150, prev + 10))}
                     disabled={zoomLevel >= 150}
                   >
@@ -1029,11 +1035,11 @@ export function CourtCalendarView() {
                   {/* Info Popover */}
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full">
+                      <Button variant="ghost" size="sm" className="h-9 w-9 md:h-6 md:w-6 p-0 rounded-full">
                         <Info className="h-4 w-4 text-gray-500" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80">
+                    <PopoverContent className="w-[calc(100vw-2rem)] max-w-80">
                       <p className="text-sm text-gray-700">
                         Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
                       </p>
@@ -1058,7 +1064,7 @@ export function CourtCalendarView() {
                 </Button>
                 <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
                   <PopoverTrigger asChild>
-                    <Button variant="ghost" className="text-center min-w-[200px] font-medium hover:bg-gray-100">
+                    <Button variant="ghost" className="text-center min-w-0 md:min-w-[200px] font-medium hover:bg-gray-100 text-sm">
                       {formatDate(selectedDate)}
                     </Button>
                   </PopoverTrigger>
@@ -1105,13 +1111,13 @@ export function CourtCalendarView() {
             ref={calendarScrollRef}
             className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0"
           >
-            <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: TIME_COL_WIDTH + courts.length * effectiveCourtWidth }}>
+            <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: effectiveTimeColWidth + courts.length * effectiveCourtWidth }}>
               <thead>
                 <tr>
                   {/* Corner cell: sticky in both directions */}
                   <th
                     className="sticky top-0 left-0 z-40 bg-gray-100 border-r border-b-2 border-gray-300"
-                    style={{ width: TIME_COL_WIDTH, minWidth: TIME_COL_WIDTH, height: HEADER_HEIGHT, textAlign: 'center', verticalAlign: 'middle' }}
+                    style={{ width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth, height: effectiveHeaderHeight, textAlign: 'center', verticalAlign: 'middle' }}
                   >
                     <span className="font-semibold text-xs text-gray-700">Time (EST)</span>
                   </th>
@@ -1120,7 +1126,7 @@ export function CourtCalendarView() {
                     <th
                       key={index}
                       className="sticky top-0 z-30 bg-white border-r border-b-2 border-gray-300 last:border-r-0 p-3 text-left font-normal"
-                      style={{ width: effectiveCourtWidth, minWidth: effectiveCourtWidth, height: HEADER_HEIGHT, verticalAlign: 'middle' }}
+                      style={{ width: effectiveCourtWidth, minWidth: effectiveCourtWidth, height: effectiveHeaderHeight, verticalAlign: 'middle' }}
                     >
                       <div className="font-semibold text-sm text-gray-900">{court.name}</div>
                       <div className="text-xs text-gray-500 mt-0.5 capitalize">{court.type}</div>
@@ -1135,12 +1141,12 @@ export function CourtCalendarView() {
                   const bottomTime = allTimeSlots[visibleIdx * 2 + 1];
 
                   return (
-                    <tr key={visibleIdx} style={{ height: ROW_HEIGHT }}>
+                    <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
                       {/* Sticky time label */}
                       <td
                         className="sticky left-0 z-10 bg-gray-50 border-r border-gray-200 px-2"
                         style={{
-                          width: TIME_COL_WIDTH, minWidth: TIME_COL_WIDTH,
+                          width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth,
                           textAlign: 'right', verticalAlign: 'top', paddingTop: 4,
                           borderBottom: isHourMark ? '1px solid #d1d5db' : '1px solid #f3f4f6',
                         }}
@@ -1167,7 +1173,7 @@ export function CourtCalendarView() {
                             className="relative border-r border-gray-200 last:border-r-0 p-0"
                             style={{
                               width: effectiveCourtWidth, minWidth: effectiveCourtWidth,
-                              height: ROW_HEIGHT, verticalAlign: 'top',
+                              height: effectiveRowHeight, verticalAlign: 'top',
                               borderBottom: isHourMark ? '1px solid #d1d5db' : '1px solid #f3f4f6',
                             }}
                           >
@@ -1180,7 +1186,7 @@ export function CourtCalendarView() {
                                 ${topSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
                                 ${dragState.isDragging && !topBooking ? 'select-none' : ''}
                               `}
-                              style={{ height: SUB_SLOT_HEIGHT }}
+                              style={{ height: effectiveSubSlotHeight }}
                               onClick={() => {
                                 if (dragJustFinishedRef.current) return;
                                 if (topPast && !topBooking) return;
@@ -1194,7 +1200,7 @@ export function CourtCalendarView() {
                             {/* 15-min midpoint line */}
                             <div
                               className="absolute left-1 right-1 border-b border-dashed border-gray-200 pointer-events-none"
-                              style={{ top: SUB_SLOT_HEIGHT }}
+                              style={{ top: effectiveSubSlotHeight }}
                             />
 
                             {/* Bottom half (second 15 min) */}
@@ -1207,7 +1213,7 @@ export function CourtCalendarView() {
                                   ${bottomSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
                                   ${dragState.isDragging && !bottomBooking ? 'select-none' : ''}
                                 `}
-                                style={{ top: SUB_SLOT_HEIGHT, height: SUB_SLOT_HEIGHT }}
+                                style={{ top: effectiveSubSlotHeight, height: effectiveSubSlotHeight }}
                                 onClick={() => {
                                   if (dragJustFinishedRef.current) return;
                                   if (bottomPast && !bottomBooking) return;
@@ -1233,17 +1239,17 @@ export function CourtCalendarView() {
                 position: 'absolute',
                 top: 0,
                 left: 0,
-                width: TIME_COL_WIDTH + courts.length * effectiveCourtWidth,
-                height: HEADER_HEIGHT + visibleTimeSlots.length * ROW_HEIGHT,
+                width: effectiveTimeColWidth + courts.length * effectiveCourtWidth,
+                height: effectiveHeaderHeight + visibleTimeSlots.length * effectiveRowHeight,
                 zIndex: 5,
                 pointerEvents: 'none',
               }}
             >
               {bookingOverlays.map((overlay, idx) => {
-                const top = HEADER_HEIGHT + overlay.startSlotIndex * SUB_SLOT_HEIGHT + 2;
-                const left = TIME_COL_WIDTH + overlay.courtIndex * effectiveCourtWidth + 4;
+                const top = effectiveHeaderHeight + overlay.startSlotIndex * effectiveSubSlotHeight + 2;
+                const left = effectiveTimeColWidth + overlay.courtIndex * effectiveCourtWidth + 4;
                 const width = effectiveCourtWidth - 8;
-                const height = overlay.slotCount * SUB_SLOT_HEIGHT - 4;
+                const height = overlay.slotCount * effectiveSubSlotHeight - 4;
                 const { booking } = overlay;
 
                 const isBlocked = booking.type === 'blocked';
@@ -1272,7 +1278,7 @@ export function CourtCalendarView() {
                           )}
                         </div>
                       )}
-                      {booking.notes && height > SUB_SLOT_HEIGHT * 3 && (
+                      {booking.notes && height > effectiveSubSlotHeight * 3 && (
                         <div className="text-[9px] mt-1 truncate italic opacity-70">
                           {booking.notes.length > 30 ? `${booking.notes.substring(0, 30)}...` : booking.notes}
                         </div>
@@ -1289,7 +1295,7 @@ export function CourtCalendarView() {
                 className="pointer-events-none"
                 style={{
                   position: 'absolute',
-                  top: `${currentTimeLinePosition + HEADER_HEIGHT}px`,
+                  top: `${currentTimeLinePosition + effectiveHeaderHeight}px`,
                   left: 0,
                   right: 0,
                   zIndex: 20,
@@ -1309,7 +1315,7 @@ export function CourtCalendarView() {
                 <div
                   className="absolute bg-red-600"
                   style={{
-                    left: `${TIME_COL_WIDTH}px`,
+                    left: `${effectiveTimeColWidth}px`,
                     right: 0,
                     top: '50%',
                     height: '2px',
@@ -1321,7 +1327,7 @@ export function CourtCalendarView() {
                 <div
                   className="absolute w-3 h-3 bg-red-600 rounded-full border-2 border-white shadow-md"
                   style={{
-                    left: `${TIME_COL_WIDTH - 6}px`,
+                    left: `${effectiveTimeColWidth - 6}px`,
                     top: '50%',
                     transform: 'translateY(-50%)'
                   }}

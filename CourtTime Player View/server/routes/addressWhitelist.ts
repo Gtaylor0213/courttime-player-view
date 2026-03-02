@@ -6,7 +6,8 @@ import {
   removeWhitelistedAddress,
   updateAccountsLimit,
   isAddressWhitelisted,
-  getAccountCountAtAddress
+  getAccountCountAtAddress,
+  getWhitelistWithMembers
 } from '../../src/services/addressWhitelistService';
 
 const router = express.Router();
@@ -23,6 +24,24 @@ router.get('/:facilityId', async (req, res, next) => {
     res.json({
       success: true,
       addresses
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/address-whitelist/:facilityId/with-members
+ * Get whitelist entries grouped with their matched member accounts
+ */
+router.get('/:facilityId/with-members', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+    const entries = await getWhitelistWithMembers(facilityId);
+
+    res.json({
+      success: true,
+      data: entries
     });
   } catch (error) {
     next(error);

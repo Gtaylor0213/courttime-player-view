@@ -250,3 +250,65 @@ export async function getAccountCountAtAddress(
     return 0;
   }
 }
+
+/**
+ * Get all whitelist entries with their matched member accounts
+ */
+export async function getWhitelistWithMembers(facilityId: string) {
+  try {
+    const result = await query(
+      `SELECT
+        aw.id as "whitelistId",
+        aw.address,
+        COALESCE(aw.last_name, '') as "lastName",
+        aw.accounts_limit as "accountsLimit",
+        u.id as "userId",
+        u.first_name as "firstName",
+        u.last_name as "userLastName",
+        u.email,
+        u.full_name as "fullName",
+        fm.status as "membershipStatus",
+        fm.membership_type as "membershipType"
+      FROM address_whitelist aw
+      LEFT JOIN users u ON
+        LOWER(TRIM(SPLIT_PART(aw.address, ',', 1))) = LOWER(TRIM(COALESCE(u.street_address, '')))
+        AND LOWER(TRIM(COALESCE(aw.last_name, ''))) = LOWER(TRIM(COALESCE(u.last_name, '')))
+      LEFT JOIN facility_memberships fm ON
+        fm.user_id = u.id AND fm.facility_id = aw.facility_id
+        AND fm.status IN ('active', 'pending', 'suspended')
+      WHERE aw.facility_id = $1
+      ORDER BY aw.address ASC, aw.last_name ASC, u.last_name ASC, u.first_name ASC`,
+      [facilityId]
+    );
+
+    // Group rows by whitelist entry
+    const entriesMap = new Map<string, any>();
+    for (const row of result.rows) {
+      if (!entriesMap.has(row.whitelistId)) {
+        entriesMap.set(row.whitelistId, {
+          id: row.whitelistId,
+          address: row.address,
+          lastName: row.lastName,
+          accountsLimit: row.accountsLimit,
+          members: [],
+        });
+      }
+      if (row.userId && row.membershipStatus) {
+        entriesMap.get(row.whitelistId).members.push({
+          userId: row.userId,
+          firstName: row.firstName,
+          lastName: row.userLastName,
+          fullName: row.fullName,
+          email: row.email,
+          status: row.membershipStatus,
+          membershipType: row.membershipType,
+        });
+      }
+    }
+
+    return Array.from(entriesMap.values());
+  } catch (error) {
+    console.error('Error getting whitelist with members:', error);
+    throw error;
+  }
+}

@@ -946,6 +946,10 @@ export const addressWhitelistApi = {
     return apiRequest(`/api/address-whitelist/${facilityId}`);
   },
 
+  getWithMembers: async (facilityId: string) => {
+    return apiRequest(`/api/address-whitelist/${facilityId}/with-members`);
+  },
+
   add: async (facilityId: string, address: string, accountsLimit?: number, lastName?: string) => {
     return apiRequest(`/api/address-whitelist/${facilityId}`, {
       method: 'POST',

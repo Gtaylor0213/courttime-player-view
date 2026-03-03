@@ -295,6 +295,57 @@ export async function recordPayment(
 }
 
 /**
+ * Create a Stripe Customer Portal session so the facility admin can manage billing
+ */
+export async function createPortalSession(facilityId: string, returnUrl: string): Promise<{
+  url?: string;
+  error?: string;
+}> {
+  const stripe = getStripe();
+  if (!stripe) {
+    return { error: 'Stripe is not configured' };
+  }
+
+  const sub = await getSubscriptionByFacilityId(facilityId);
+  if (!sub) {
+    return { error: 'No subscription found' };
+  }
+
+  let customerId = sub.stripeCustomerId;
+
+  // If no customer ID stored, retrieve it from the checkout session
+  if (!customerId && sub.stripeCheckoutSessionId) {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sub.stripeCheckoutSessionId);
+      customerId = session.customer as string;
+      if (customerId) {
+        await query(
+          'UPDATE facility_subscriptions SET stripe_customer_id = $1 WHERE facility_id = $2',
+          [customerId, facilityId]
+        );
+      }
+    } catch (err: any) {
+      console.error('Failed to retrieve checkout session:', err.message);
+    }
+  }
+
+  if (!customerId) {
+    return { error: 'No Stripe customer found for this facility' };
+  }
+
+  try {
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl,
+    });
+    return { url: portalSession.url };
+  } catch (err: any) {
+    console.error('Stripe portal session error:', err);
+    return { error: err.message };
+  }
+}
+
+/**
  * Get subscription info for a facility
  */
 export async function getSubscriptionByFacilityId(facilityId: string) {

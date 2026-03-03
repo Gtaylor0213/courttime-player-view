@@ -3,6 +3,7 @@ import {
   validatePromoCode,
   createCheckoutSession,
   verifyCheckoutSession,
+  createPortalSession,
   getSubscriptionByFacilityId,
   getPaymentHistory,
 } from '../../src/services/paymentService';
@@ -71,6 +72,28 @@ router.post('/verify-session', async (req, res, next) => {
 
     const result = await verifyCheckoutSession(sessionId);
     res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/payments/portal-session
+ * Create a Stripe Customer Portal session for managing billing
+ */
+router.post('/portal-session', async (req, res, next) => {
+  try {
+    const { facilityId, returnUrl } = req.body;
+    if (!facilityId || !returnUrl) {
+      return res.status(400).json({ success: false, error: 'Facility ID and return URL are required' });
+    }
+
+    const result = await createPortalSession(facilityId, returnUrl);
+    if (result.error) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: { url: result.url } });
   } catch (error) {
     next(error);
   }

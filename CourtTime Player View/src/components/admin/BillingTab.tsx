@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
-import { CreditCard, Calendar, AlertCircle, Check, Clock } from 'lucide-react';
+import { CreditCard, Calendar, AlertCircle, Check, Clock, ExternalLink } from 'lucide-react';
 import { paymentsApi } from '../../api/client';
+import { toast } from 'sonner';
 
 interface BillingTabProps {
   facilityId: string;
@@ -14,6 +16,7 @@ export function BillingTab({ facilityId }: BillingTabProps) {
   const [subscription, setSubscription] = useState<any>(null);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openingPortal, setOpeningPortal] = useState(false);
 
   useEffect(() => {
     async function loadBillingData() {
@@ -54,6 +57,25 @@ export function BillingTab({ facilityId }: BillingTabProps) {
       </Alert>
     );
   }
+
+  const handleManageSubscription = async () => {
+    try {
+      setOpeningPortal(true);
+      const returnUrl = window.location.href;
+      const result = await paymentsApi.createPortalSession(facilityId, returnUrl);
+      const data = result.data?.data || result.data;
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error(result.error || data?.error || 'Unable to open billing portal');
+      }
+    } catch (error: any) {
+      console.error('Portal session error:', error);
+      toast.error('Failed to open billing portal');
+    } finally {
+      setOpeningPortal(false);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -153,6 +175,20 @@ export function BillingTab({ facilityId }: BillingTabProps) {
                 Custom pricing is being arranged for your facility. Our team will contact you to set up your plan.
               </AlertDescription>
             </Alert>
+          )}
+
+          {subscription.stripeCheckoutSessionId && !subscription.stripeCheckoutSessionId.startsWith('dev_') && (
+            <>
+              <Separator />
+              <Button
+                onClick={handleManageSubscription}
+                disabled={openingPortal}
+                className="w-full"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                {openingPortal ? 'Opening...' : 'Manage Subscription'}
+              </Button>
+            </>
           )}
         </CardContent>
       </Card>

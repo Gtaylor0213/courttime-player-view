@@ -1210,4 +1210,11 @@ export const paymentsApi = {
   getPaymentHistory: async (facilityId: string) => {
     return apiRequest(`/api/payments/history/${facilityId}`);
   },
+
+  createPortalSession: async (facilityId: string, returnUrl: string) => {
+    return apiRequest('/api/payments/portal-session', {
+      method: 'POST',
+      body: JSON.stringify({ facilityId, returnUrl }),
+    });
+  },
 };

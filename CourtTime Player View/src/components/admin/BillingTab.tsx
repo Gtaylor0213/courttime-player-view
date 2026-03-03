@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
-import { CreditCard, Calendar, AlertCircle, Check, Clock, ExternalLink } from 'lucide-react';
+import { CreditCard, Calendar, AlertCircle, Check, Clock, ExternalLink, XCircle } from 'lucide-react';
 import { paymentsApi } from '../../api/client';
 import { toast } from 'sonner';
 
@@ -17,6 +17,8 @@ export function BillingTab({ facilityId }: BillingTabProps) {
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   useEffect(() => {
     async function loadBillingData() {
@@ -77,10 +79,35 @@ export function BillingTab({ facilityId }: BillingTabProps) {
     }
   };
 
+  const handleCancelSubscription = async () => {
+    try {
+      setCancellingSubscription(true);
+      const result = await paymentsApi.cancelSubscription(facilityId);
+      if (result.success) {
+        toast.success('Subscription will be cancelled at end of billing period');
+        setSubscription({ ...subscription, cancelAtPeriodEnd: true });
+        setShowCancelConfirm(false);
+      } else {
+        toast.error(result.error || 'Failed to cancel subscription');
+      }
+    } catch (error: any) {
+      console.error('Cancel subscription error:', error);
+      toast.error('Failed to cancel subscription');
+    } finally {
+      setCancellingSubscription(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
         return <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>;
+      case 'trialing':
+        return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Trial</Badge>;
+      case 'past_due':
+        return <Badge className="bg-red-100 text-red-800 border-red-200">Past Due</Badge>;
+      case 'cancelled':
+        return <Badge className="bg-gray-100 text-gray-600 border-gray-200">Cancelled</Badge>;
       case 'waived':
         return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Waived</Badge>;
       case 'custom_pending':
@@ -103,8 +130,33 @@ export function BillingTab({ facilityId }: BillingTabProps) {
     return `$${(cents / 100).toFixed(2)}`;
   };
 
+  // Use current_period_end from Stripe if available, fallback to billing_period_end
+  const renewalDate = subscription.currentPeriodEnd || subscription.billingPeriodEnd;
+  const periodStart = subscription.currentPeriodStart || subscription.billingPeriodStart;
+
   return (
     <div className="space-y-6">
+      {/* Cancel at period end warning */}
+      {subscription.cancelAtPeriodEnd && (
+        <Alert className="border-amber-200 bg-amber-50">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800">
+            Your subscription is set to cancel at the end of the current billing period
+            {renewalDate ? ` (${formatDate(renewalDate)})` : ''}. No further charges will be made.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Past due warning */}
+      {subscription.status === 'past_due' && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            Your payment is past due. Please update your payment method to keep your facility active.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Subscription Status */}
       <Card>
         <CardHeader>
@@ -136,7 +188,7 @@ export function BillingTab({ facilityId }: BillingTabProps) {
             </div>
           </div>
 
-          {subscription.billingPeriodStart && subscription.billingPeriodEnd && (
+          {periodStart && renewalDate && (
             <>
               <Separator />
               <div className="grid grid-cols-2 gap-4">
@@ -145,14 +197,14 @@ export function BillingTab({ facilityId }: BillingTabProps) {
                     <Calendar className="h-3.5 w-3.5" />
                     Billing Start
                   </p>
-                  <p className="font-medium">{formatDate(subscription.billingPeriodStart)}</p>
+                  <p className="font-medium">{formatDate(periodStart)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 flex items-center gap-1">
                     <Calendar className="h-3.5 w-3.5" />
-                    Renewal Date
+                    {subscription.cancelAtPeriodEnd ? 'Ends On' : 'Renewal Date'}
                   </p>
-                  <p className="font-medium">{formatDate(subscription.billingPeriodEnd)}</p>
+                  <p className="font-medium">{formatDate(renewalDate)}</p>
                 </div>
               </div>
             </>
@@ -178,14 +230,60 @@ export function BillingTab({ facilityId }: BillingTabProps) {
           )}
 
           <Separator />
-          <Button
-            onClick={handleManageSubscription}
-            disabled={openingPortal}
-            className="w-full"
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            {openingPortal ? 'Opening...' : 'Manage Subscription'}
-          </Button>
+          <div className="space-y-2">
+            <Button
+              onClick={handleManageSubscription}
+              disabled={openingPortal}
+              className="w-full"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              {openingPortal ? 'Opening...' : 'Manage Subscription'}
+            </Button>
+
+            {/* Cancel button — only show for active/trialing subscriptions that aren't already cancelling */}
+            {(subscription.status === 'active' || subscription.status === 'trialing') && !subscription.cancelAtPeriodEnd && (
+              <>
+                {!showCancelConfirm ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCancelConfirm(true)}
+                    className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Cancel Subscription
+                  </Button>
+                ) : (
+                  <div className="border border-red-200 rounded-lg p-4 bg-red-50 space-y-3">
+                    <p className="text-sm text-red-800 font-medium">
+                      Are you sure you want to cancel your subscription?
+                    </p>
+                    <p className="text-xs text-red-700">
+                      Your facility will remain active until the end of the current billing period
+                      {renewalDate ? ` (${formatDate(renewalDate)})` : ''}. After that, your facility will be suspended.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowCancelConfirm(false)}
+                        className="flex-1"
+                      >
+                        Keep Subscription
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleCancelSubscription}
+                        disabled={cancellingSubscription}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        {cancellingSubscription ? 'Cancelling...' : 'Confirm Cancel'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -219,6 +317,8 @@ export function BillingTab({ facilityId }: BillingTabProps) {
                       </Badge>
                     ) : payment.status === 'pending' ? (
                       <Badge className="bg-yellow-100 text-yellow-800 text-xs">Pending</Badge>
+                    ) : payment.status === 'failed' ? (
+                      <Badge className="bg-red-100 text-red-800 text-xs">Failed</Badge>
                     ) : (
                       <Badge variant="outline" className="text-xs">{payment.status}</Badge>
                     )}

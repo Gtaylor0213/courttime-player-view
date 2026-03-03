@@ -26,7 +26,7 @@ import adminRoutes from './routes/admin';
 import addressWhitelistRoutes from './routes/addressWhitelist';
 import messagesRoutes from './routes/messages';
 import notificationRoutes from './routes/notifications';
-import developerRoutes from './routes/developer';
+import supportRoutes from './routes/support';
 // Rules engine routes
 import strikesRoutes from './routes/strikes';
 import courtConfigRoutes from './routes/courtConfig';
@@ -106,7 +106,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/address-whitelist', addressWhitelistRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/developer', developerRoutes);
+app.use('/api/developer', supportRoutes);
 // Rules engine routes
 app.use('/api/strikes', strikesRoutes);
 app.use('/api/court-config', courtConfigRoutes);

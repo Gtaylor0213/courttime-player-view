@@ -909,28 +909,35 @@ export function FacilityRegistration() {
 
       // Auto-login the new user
       const backendResponse = result.data as any;
-      if (backendResponse.user) {
-        // Save user data to localStorage for auto-login
+      const facilityId = backendResponse.facility?.id;
+      if (backendResponse.user && facilityId) {
+        // Build user data with facility associations
         const userData = {
           ...backendResponse.user,
           userType: 'admin',
-          memberFacilities: [backendResponse.facility.id],
+          memberFacilities: [facilityId],
+          adminFacilities: [facilityId],
         };
-        const token = 'token-' + userData.id;
+        // Generate a proper session token
+        const tokenBytes = new Uint8Array(32);
+        crypto.getRandomValues(tokenBytes);
+        const token = Array.from(tokenBytes, b => b.toString(16).padStart(2, '0')).join('');
 
         localStorage.setItem('auth_user', JSON.stringify(userData));
         localStorage.setItem('auth_token', token);
 
-        toast.success('Facility registered successfully! You are now logged in as the facility admin.');
+        toast.success('Facility registered successfully! Logging you in...');
+
+        // Navigate to the admin dashboard
+        setTimeout(() => {
+          window.location.href = '/calendar';
+        }, 1000);
       } else {
         toast.success('Facility registered successfully!');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1500);
       }
-
-      // Navigate to the app after a short delay
-      setTimeout(() => {
-        // Force a page reload to re-initialize auth state with the new user
-        window.location.reload();
-      }, 1500);
 
     } catch (error: any) {
       console.error('Registration error:', error);

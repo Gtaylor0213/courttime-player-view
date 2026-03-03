@@ -75,7 +75,70 @@ export async function validatePromoCode(code: string): Promise<{
 }
 
 /**
- * Create a Stripe Checkout Session for facility payment
+ * Get or create a Stripe Coupon for a promo code discount.
+ * - Internal promos (is_internal=true): 100% off forever coupon
+ * - Percent discount: one-time percent-off coupon
+ * - Fixed discount: one-time amount-off coupon
+ */
+async function getOrCreateCoupon(stripe: Stripe, promoCode: string): Promise<string | null> {
+  // Look up promo details from DB
+  const result = await query(
+    `SELECT discount_type, discount_value, is_internal FROM promo_codes WHERE LOWER(TRIM(code)) = LOWER(TRIM($1))`,
+    [promoCode]
+  );
+  if (result.rows.length === 0) return null;
+
+  const promo = result.rows[0];
+  const couponId = `promo_${promoCode.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+
+  // Try to retrieve existing coupon first
+  try {
+    await stripe.coupons.retrieve(couponId);
+    return couponId; // Already exists
+  } catch {
+    // Coupon doesn't exist, create it
+  }
+
+  if (promo.is_internal || promo.discount_type === 'full') {
+    // Internal promo or full waiver — 100% off forever
+    const duration = promo.is_internal ? 'forever' as const : 'once' as const;
+    await stripe.coupons.create({
+      id: couponId,
+      percent_off: 100,
+      duration,
+      name: `Promo: ${promoCode}`,
+    });
+    return couponId;
+  }
+
+  if (promo.discount_type === 'percent') {
+    await stripe.coupons.create({
+      id: couponId,
+      percent_off: Number(promo.discount_value),
+      duration: 'once',
+      name: `Promo: ${promoCode} (${promo.discount_value}% off)`,
+    });
+    return couponId;
+  }
+
+  if (promo.discount_type === 'fixed') {
+    await stripe.coupons.create({
+      id: couponId,
+      amount_off: Math.round(Number(promo.discount_value) * 100),
+      currency: 'usd',
+      duration: 'once',
+      name: `Promo: ${promoCode} ($${promo.discount_value} off)`,
+    });
+    return couponId;
+  }
+
+  return null;
+}
+
+/**
+ * Create a Stripe Checkout Session for facility subscription.
+ * Uses mode: 'subscription' with a pre-created Stripe Price (STRIPE_PRICE_ID env var).
+ * Promo codes are mapped to Stripe trials or coupons.
  */
 export async function createCheckoutSession(params: {
   facilityName: string;
@@ -105,45 +168,16 @@ export async function createCheckoutSession(params: {
     };
   }
 
+  const priceId = process.env.STRIPE_PRICE_ID;
+  if (!priceId) {
+    return { amountCents: params.amountCents, waived: false, error: 'STRIPE_PRICE_ID not configured' };
+  }
+
   try {
-    // If promo makes it free, use setup mode to collect card for renewal
-    if (params.amountCents <= 0) {
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        mode: 'setup',
-        metadata: {
-          facilityName: params.facilityName,
-          courtCount: String(params.courtCount),
-          promoCode: params.promoCode || '',
-          setupForRenewal: 'true',
-        },
-        success_url: params.successUrl,
-        cancel_url: params.cancelUrl,
-      });
-
-      return {
-        sessionId: session.id,
-        sessionUrl: session.url || undefined,
-        amountCents: 0,
-        waived: true,
-      };
-    }
-
-    // Normal payment flow
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
-      mode: 'payment',
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          unit_amount: params.amountCents,
-          product_data: {
-            name: `CourtTime Facility Registration — Annual (${params.courtCount} court${params.courtCount !== 1 ? 's' : ''})`,
-            description: `Annual subscription for ${params.facilityName}`,
-          },
-        },
-        quantity: 1,
-      }],
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
       metadata: {
         facilityName: params.facilityName,
         courtCount: String(params.courtCount),
@@ -151,13 +185,48 @@ export async function createCheckoutSession(params: {
       },
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
-    });
+    };
+
+    // Handle promo codes
+    if (params.promoCode && params.amountCents <= 0) {
+      // Check if this is an internal promo (forever free) or standard full waiver (1yr trial)
+      const promoResult = await query(
+        `SELECT is_internal FROM promo_codes WHERE LOWER(TRIM(code)) = LOWER(TRIM($1))`,
+        [params.promoCode]
+      );
+      const isInternal = promoResult.rows[0]?.is_internal;
+
+      if (isInternal) {
+        // Internal promo — use 100%-off forever coupon
+        const couponId = await getOrCreateCoupon(stripe, params.promoCode);
+        if (couponId) {
+          sessionParams.discounts = [{ coupon: couponId }];
+        }
+      } else {
+        // Standard full waiver — 1 year free trial, then $375/yr auto-renewal
+        sessionParams.subscription_data = {
+          trial_period_days: 365,
+          metadata: {
+            facilityName: params.facilityName,
+            promoCode: params.promoCode,
+          },
+        };
+      }
+    } else if (params.promoCode && params.amountCents > 0 && params.amountCents < STANDARD_AMOUNT_CENTS) {
+      // Partial discount — create one-time coupon
+      const couponId = await getOrCreateCoupon(stripe, params.promoCode);
+      if (couponId) {
+        sessionParams.discounts = [{ coupon: couponId }];
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     return {
       sessionId: session.id,
       sessionUrl: session.url || undefined,
       amountCents: params.amountCents,
-      waived: false,
+      waived: params.amountCents <= 0,
     };
   } catch (error: any) {
     console.error('Stripe checkout session error:', error);
@@ -187,7 +256,16 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    // Setup mode (promo code — card collected for renewal)
+    // Subscription mode — checkout complete when subscription is created
+    if (session.mode === 'subscription' && session.status === 'complete') {
+      return {
+        verified: true,
+        paymentStatus: session.payment_status === 'paid' ? 'paid' : 'subscription_active',
+        amountPaid: session.amount_total || 0,
+      };
+    }
+
+    // Setup mode (legacy — promo code card collection)
     if (session.mode === 'setup' && session.status === 'complete') {
       return {
         verified: true,
@@ -196,7 +274,7 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
       };
     }
 
-    // Payment mode
+    // Payment mode (legacy)
     if (session.payment_status === 'paid') {
       return {
         verified: true,
@@ -352,10 +430,15 @@ export async function getSubscriptionByFacilityId(facilityId: string) {
   const result = await query(
     `SELECT id, facility_id as "facilityId", stripe_customer_id as "stripeCustomerId",
             stripe_checkout_session_id as "stripeCheckoutSessionId",
+            stripe_subscription_id as "stripeSubscriptionId",
+            stripe_price_id as "stripePriceId",
             plan_type as "planType", status, amount_cents as "amountCents",
             currency, promo_code_used as "promoCodeUsed", court_count as "courtCount",
+            cancel_at_period_end as "cancelAtPeriodEnd",
             billing_period_start as "billingPeriodStart",
             billing_period_end as "billingPeriodEnd",
+            current_period_start as "currentPeriodStart",
+            current_period_end as "currentPeriodEnd",
             created_at as "createdAt", updated_at as "updatedAt"
      FROM facility_subscriptions
      WHERE facility_id = $1`,
@@ -381,4 +464,44 @@ export async function getPaymentHistory(facilityId: string) {
     [facilityId]
   );
   return result.rows;
+}
+
+/**
+ * Cancel a facility's Stripe subscription at the end of the current billing period.
+ * Does NOT immediately terminate — facility stays active until period end.
+ */
+export async function cancelSubscription(facilityId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const stripe = getStripe();
+  if (!stripe) {
+    return { success: false, error: 'Stripe is not configured' };
+  }
+
+  const sub = await getSubscriptionByFacilityId(facilityId);
+  if (!sub) {
+    return { success: false, error: 'No subscription found' };
+  }
+
+  if (!sub.stripeSubscriptionId) {
+    return { success: false, error: 'No Stripe subscription linked to this facility' };
+  }
+
+  try {
+    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    // Update local DB
+    await query(
+      `UPDATE facility_subscriptions SET cancel_at_period_end = true, updated_at = CURRENT_TIMESTAMP WHERE facility_id = $1`,
+      [facilityId]
+    );
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Cancel subscription error:', error);
+    return { success: false, error: error.message };
+  }
 }

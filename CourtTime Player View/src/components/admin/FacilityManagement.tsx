@@ -861,27 +861,42 @@ export function FacilityManagement() {
 
     try {
       setCourtSaving(true);
-      const response = await adminApi.updateCourt(editingCourt.id, {
-        name: editingCourt.name,
-        courtNumber: editingCourt.courtNumber,
-        surfaceType: editingCourt.surfaceType,
-        courtType: editingCourt.courtType,
-        isIndoor: editingCourt.isIndoor,
-        hasLights: editingCourt.hasLights,
-        status: editingCourt.status,
-      });
+
+      let response;
+      if (isAddingNewCourt || !editingCourt.id) {
+        // Create new court
+        response = await adminApi.createCourt(currentFacilityId, {
+          name: editingCourt.name || `Court ${editingCourt.courtNumber}`,
+          courtNumber: editingCourt.courtNumber,
+          surfaceType: editingCourt.surfaceType,
+          courtType: editingCourt.courtType,
+          isIndoor: editingCourt.isIndoor,
+          hasLights: editingCourt.hasLights,
+        });
+      } else {
+        // Update existing court
+        response = await adminApi.updateCourt(editingCourt.id, {
+          name: editingCourt.name,
+          courtNumber: editingCourt.courtNumber,
+          surfaceType: editingCourt.surfaceType,
+          courtType: editingCourt.courtType,
+          isIndoor: editingCourt.isIndoor,
+          hasLights: editingCourt.hasLights,
+          status: editingCourt.status,
+        });
+      }
 
       if (response.success) {
-        toast.success('Court updated successfully');
+        toast.success(isAddingNewCourt ? 'Court created successfully' : 'Court updated successfully');
         setEditingCourt(null);
         setIsAddingNewCourt(false);
         await loadCourts();
       } else {
-        toast.error(response.error || 'Failed to update court');
+        toast.error(response.error || 'Failed to save court');
       }
     } catch (error: any) {
       console.error('Error saving court:', error);
-      toast.error('Failed to update court');
+      toast.error('Failed to save court');
     } finally {
       setCourtSaving(false);
     }

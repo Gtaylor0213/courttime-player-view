@@ -31,6 +31,17 @@ async function apiRequest<T = any>(
       },
     });
 
+    // Guard against non-JSON responses (e.g. HTML 404 pages)
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error(`API returned non-JSON (${response.status}):`, text.slice(0, 200));
+      return {
+        success: false,
+        error: `Server error (${response.status}). Please try again.`,
+      };
+    }
+
     const data = await response.json();
 
     if (!response.ok) {

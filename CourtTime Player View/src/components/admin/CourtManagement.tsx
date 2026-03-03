@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Edit, Trash2, Save, X, Settings, Layers, CheckSquare } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Settings, Layers, CheckSquare, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '../ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
@@ -115,9 +116,19 @@ export function CourtManagement() {
     }
   };
 
+  // --- Court Limit ---
+  const MAX_STANDARD_COURTS = 8;
+  const activeCourts = courts.filter(c => c.status !== 'closed');
+  const atCourtLimit = activeCourts.length >= MAX_STANDARD_COURTS;
+  const [showLimitAlert, setShowLimitAlert] = useState(false);
+
   // --- Single Add/Edit ---
 
   const handleAddNew = () => {
+    if (atCourtLimit) {
+      setShowLimitAlert(true);
+      return;
+    }
     const maxNumber = courts.length > 0 ? Math.max(...courts.map(c => c.courtNumber)) : 0;
     setEditingCourt({
       id: '',
@@ -131,6 +142,7 @@ export function CourtManagement() {
     });
     setIsAddingNew(true);
     setBulkAddMode(false);
+    setShowLimitAlert(false);
   };
 
   const handleEdit = (court: Court) => {
@@ -210,15 +222,25 @@ export function CourtManagement() {
   // --- Bulk Add ---
 
   const handleBulkAddToggle = () => {
+    if (atCourtLimit) {
+      setShowLimitAlert(true);
+      return;
+    }
     setBulkAddMode(true);
     setEditingCourt(null);
     setIsAddingNew(false);
+    setShowLimitAlert(false);
     const maxNumber = courts.length > 0 ? Math.max(...courts.map(c => c.courtNumber)) : 0;
     setBulkAddForm(prev => ({ ...prev, startingNumber: maxNumber + 1 }));
   };
 
   const handleBulkAdd = async () => {
     if (!currentFacilityId) return;
+    const remaining = MAX_STANDARD_COURTS - activeCourts.length;
+    if (bulkAddForm.count > remaining) {
+      toast.error(`You can only add ${remaining} more court${remaining !== 1 ? 's' : ''} on your current plan. Contact us for custom pricing to add more.`);
+      return;
+    }
 
     try {
       setBulkAdding(true);
@@ -400,8 +422,10 @@ export function CourtManagement() {
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="text-2xl font-medium text-gray-900">Court Management</h1>
-              {selectedCourts.size > 0 && (
+              {selectedCourts.size > 0 ? (
                 <p className="text-sm text-green-600 mt-1">{selectedCourts.size} court{selectedCourts.size !== 1 ? 's' : ''} selected</p>
+              ) : (
+                <p className="text-sm text-gray-500 mt-1">{activeCourts.length}/{MAX_STANDARD_COURTS} courts</p>
               )}
             </div>
             <div className="flex gap-2">
@@ -425,6 +449,22 @@ export function CourtManagement() {
               </Button>
             </div>
           </div>
+
+          {/* Court Limit Alert */}
+          {showLimitAlert && (
+            <Alert className="mb-6 border-yellow-200 bg-yellow-50">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                Your current plan supports up to {MAX_STANDARD_COURTS} courts. You have {activeCourts.length} active court{activeCourts.length !== 1 ? 's' : ''}.
+                To add more courts, please contact us at{' '}
+                <a href="mailto:support@courttimeapp.com" className="font-medium underline">support@courttimeapp.com</a>{' '}
+                for custom subscription pricing.
+                <Button variant="ghost" size="sm" className="ml-2 h-6 px-2 text-yellow-800" onClick={() => setShowLimitAlert(false)}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Single Add/Edit Form */}
           {editingCourt && (

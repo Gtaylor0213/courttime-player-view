@@ -172,6 +172,7 @@ export function FacilityRegistration() {
       const savedData = sessionStorage.getItem('facilityRegistrationData');
       const savedStep = sessionStorage.getItem('facilityRegistrationStep');
       const savedPromo = sessionStorage.getItem('facilityRegistrationPromo');
+      const wasWaived = sessionStorage.getItem('facilityRegistrationWaived') === 'true';
 
       if (savedData) {
         try { setFormData(JSON.parse(savedData)); } catch {}
@@ -182,6 +183,9 @@ export function FacilityRegistration() {
       if (savedPromo) {
         setPromoCode(savedPromo);
       }
+      if (wasWaived) {
+        setPaymentWaived(true);
+      }
 
       // Verify the session with the backend
       paymentsApi.verifySession(sessionId).then(result => {
@@ -189,7 +193,7 @@ export function FacilityRegistration() {
         if (result.success && verification?.verified) {
           setPaymentSessionId(sessionId);
           setPaymentComplete(true);
-          toast.success('Payment successful!');
+          toast.success(wasWaived ? 'Card saved! Your first year is free.' : 'Payment successful!');
         } else {
           toast.error('Payment verification failed. Please try again.');
         }
@@ -200,6 +204,7 @@ export function FacilityRegistration() {
       sessionStorage.removeItem('facilityRegistrationData');
       sessionStorage.removeItem('facilityRegistrationStep');
       sessionStorage.removeItem('facilityRegistrationPromo');
+      sessionStorage.removeItem('facilityRegistrationWaived');
     } else if (paymentStatus === 'cancelled') {
       const savedData = sessionStorage.getItem('facilityRegistrationData');
       const savedStep = sessionStorage.getItem('facilityRegistrationStep');
@@ -211,6 +216,7 @@ export function FacilityRegistration() {
       sessionStorage.removeItem('facilityRegistrationData');
       sessionStorage.removeItem('facilityRegistrationStep');
       sessionStorage.removeItem('facilityRegistrationPromo');
+      sessionStorage.removeItem('facilityRegistrationWaived');
     }
   }, []);
 
@@ -1055,9 +1061,6 @@ export function FacilityRegistration() {
         // Unwrap apiRequest double-wrap
         const promo = result.data?.data || result.data;
         setPromoValidation(promo);
-        if (promo.valid && promo.finalAmountCents === 0) {
-          setPaymentWaived(true);
-        }
       } else {
         setPromoValidation({ valid: false, message: result.error || 'Invalid promo code' });
       }
@@ -1092,14 +1095,19 @@ export function FacilityRegistration() {
       if (result.success && result.data) {
         // Unwrap apiRequest double-wrap: server returns { data: { sessionUrl, ... } }
         const payment = result.data?.data || result.data;
-        if (payment.waived) {
-          setPaymentWaived(true);
-        } else if (payment.sessionUrl) {
-          // Save form data before redirecting to Stripe
+        if (payment.sessionUrl) {
+          // Redirect to Stripe (payment mode or setup mode for promo)
           sessionStorage.setItem('facilityRegistrationData', JSON.stringify(formData));
           sessionStorage.setItem('facilityRegistrationStep', String(currentStep));
           sessionStorage.setItem('facilityRegistrationPromo', promoCode);
+          if (payment.waived) {
+            sessionStorage.setItem('facilityRegistrationWaived', 'true');
+          }
           window.location.href = payment.sessionUrl;
+        } else if (payment.waived) {
+          // Dev mode — no Stripe, promo fully waives
+          setPaymentWaived(true);
+          setPaymentComplete(true);
         } else {
           // Dev mode — no Stripe keys, auto-complete payment
           setPaymentSessionId(payment.sessionId || 'dev_auto');
@@ -1123,7 +1131,8 @@ export function FacilityRegistration() {
     const finalAmountCents = promoValidation?.valid
       ? (promoValidation.finalAmountCents ?? 0)
       : baseAmountCents;
-    const isPaymentRequired = !isCustomPricing && finalAmountCents > 0 && !paymentComplete && !paymentWaived;
+    const isPromoFree = promoValidation?.valid && finalAmountCents === 0;
+    const isPaymentRequired = !isCustomPricing && !paymentComplete && !paymentWaived;
 
     return (
       <div className="space-y-6">
@@ -1240,7 +1249,7 @@ export function FacilityRegistration() {
                 <Alert className="border-green-200 bg-green-50">
                   <Check className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-700">
-                    Promo code applied! No payment required. Click "Complete Registration" to finish.
+                    Promo code applied! Your first year is free. Your card will be charged $375.00/year at renewal. Click "Complete Registration" to finish.
                   </AlertDescription>
                 </Alert>
               )}
@@ -1255,7 +1264,11 @@ export function FacilityRegistration() {
                   disabled={isProcessingPayment}
                 >
                   <CreditCard className="h-4 w-4 mr-2" />
-                  {isProcessingPayment ? 'Processing...' : `Pay $${(finalAmountCents / 100).toFixed(2)}`}
+                  {isProcessingPayment
+                    ? 'Processing...'
+                    : isPromoFree
+                      ? 'Save Card for Annual Renewal'
+                      : `Pay $${(finalAmountCents / 100).toFixed(2)}`}
                 </Button>
               )}
             </CardContent>

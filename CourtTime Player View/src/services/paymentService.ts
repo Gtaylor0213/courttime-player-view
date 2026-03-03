@@ -69,7 +69,7 @@ export async function validatePromoCode(code: string): Promise<{
     discountValue: Number(promo.discount_value),
     finalAmountCents,
     message: finalAmountCents === 0
-      ? 'Promo code applied — registration is free!'
+      ? 'Promo code applied — first year free! Card required for annual renewal ($375/year).'
       : `Promo code applied — total: $${(finalAmountCents / 100).toFixed(2)}`,
   };
 }
@@ -91,11 +91,6 @@ export async function createCheckoutSession(params: {
   waived: boolean;
   error?: string;
 }> {
-  // If amount is $0, payment is waived
-  if (params.amountCents <= 0) {
-    return { amountCents: 0, waived: true };
-  }
-
   const stripe = getStripe();
 
   // Dev mode — no Stripe keys
@@ -106,11 +101,35 @@ export async function createCheckoutSession(params: {
       sessionId: devSessionId,
       sessionUrl: null as any,
       amountCents: params.amountCents,
-      waived: false,
+      waived: params.amountCents <= 0,
     };
   }
 
   try {
+    // If promo makes it free, use setup mode to collect card for renewal
+    if (params.amountCents <= 0) {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'setup',
+        metadata: {
+          facilityName: params.facilityName,
+          courtCount: String(params.courtCount),
+          promoCode: params.promoCode || '',
+          setupForRenewal: 'true',
+        },
+        success_url: params.successUrl,
+        cancel_url: params.cancelUrl,
+      });
+
+      return {
+        sessionId: session.id,
+        sessionUrl: session.url || undefined,
+        amountCents: 0,
+        waived: true,
+      };
+    }
+
+    // Normal payment flow
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -167,6 +186,17 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    // Setup mode (promo code — card collected for renewal)
+    if (session.mode === 'setup' && session.status === 'complete') {
+      return {
+        verified: true,
+        paymentStatus: 'setup_complete',
+        amountPaid: 0,
+      };
+    }
+
+    // Payment mode
     if (session.payment_status === 'paid') {
       return {
         verified: true,
@@ -174,7 +204,8 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
         amountPaid: session.amount_total || STANDARD_AMOUNT_CENTS,
       };
     }
-    return { verified: false, paymentStatus: session.payment_status, error: 'Payment not completed' };
+
+    return { verified: false, paymentStatus: session.payment_status || session.status, error: 'Payment not completed' };
   } catch (error: any) {
     console.error('Stripe session verification error:', error);
     return { verified: false, error: error.message };

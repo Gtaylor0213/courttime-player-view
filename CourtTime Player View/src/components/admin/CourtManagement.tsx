@@ -157,7 +157,7 @@ export function CourtManagement() {
       setSaving(true);
 
       let response;
-      if (isAddingNew) {
+      if (isAddingNew || !editingCourt.id) {
         // Create new court
         response = await adminApi.createCourt(currentFacilityId, {
           name: editingCourt.name || `Court ${editingCourt.courtNumber}`,

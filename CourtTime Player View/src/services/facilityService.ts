@@ -224,6 +224,7 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
         operating_hours as "operatingHours",
         timezone,
         logo_url as "logoUrl",
+        general_rules as "generalRules",
         created_at as "createdAt",
         updated_at as "updatedAt"
       FROM facilities
@@ -256,6 +257,52 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
       }
     } catch (contactError) {
       console.error('Error fetching facility contacts:', contactError);
+    }
+
+    // Fetch legacy booking rules from facility_rules table
+    try {
+      const rulesResult = await query(`
+        SELECT rule_type as "ruleType", rule_config as "ruleConfig"
+        FROM facility_rules
+        WHERE facility_id = $1
+      `, [facilityId]);
+
+      for (const rule of rulesResult.rows) {
+        const config = typeof rule.ruleConfig === 'string' ? JSON.parse(rule.ruleConfig) : rule.ruleConfig;
+        if (rule.ruleType === 'booking_limit') {
+          facility.restrictionType = config.restriction_type || 'account';
+          facility.maxBookingsPerWeek = config.max_bookings_per_week;
+          facility.maxBookingDurationHours = config.max_duration_hours;
+          facility.advanceBookingDays = config.advance_booking_days;
+          facility.cancellationNoticeHours = config.cancellation_notice_hours;
+          facility.restrictionsApplyToAdmins = config.applies_to_admins !== false;
+        } else if (rule.ruleType === 'admin_booking_limit') {
+          facility.adminRestrictions = {
+            maxBookingsPerWeek: config.max_bookings_per_week,
+            maxBookingDurationHours: config.max_duration_hours,
+            advanceBookingDays: config.advance_booking_days,
+            cancellationNoticeHours: config.cancellation_notice_hours,
+          };
+        } else if (rule.ruleType === 'peak_hours') {
+          facility.peakHoursPolicy = {
+            enabled: true,
+            applyToAdmins: config.apply_to_admins !== false,
+            timeSlots: config.time_slots || {},
+            maxBookingsPerWeek: config.max_bookings_per_week,
+            maxDurationHours: config.max_duration_hours,
+          };
+        } else if (rule.ruleType === 'weekend_policy') {
+          facility.weekendPolicy = {
+            enabled: true,
+            applyToAdmins: config.apply_to_admins !== false,
+            maxBookingsPerWeekend: config.max_bookings_per_weekend,
+            maxDurationHours: config.max_duration_hours,
+            advanceBookingDays: config.advance_booking_days,
+          };
+        }
+      }
+    } catch (rulesError) {
+      console.error('Error fetching facility rules:', rulesError);
     }
 
     return facility;

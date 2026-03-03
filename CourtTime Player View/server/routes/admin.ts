@@ -150,8 +150,12 @@ router.patch('/facilities/:facilityId', async (req, res) => {
       timezone,
       logoUrl,
       primaryContact,
-      secondaryContacts
+      secondaryContacts,
+      bookingRules
     } = req.body;
+
+    // Extract generalRules from bookingRules if provided
+    const generalRules = bookingRules?.generalRules ?? null;
 
     const result = await query(`
       UPDATE facilities
@@ -169,8 +173,9 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         zip_code = COALESCE($11, zip_code),
         logo_url = COALESCE($12, logo_url),
         timezone = COALESCE($13, timezone),
+        general_rules = COALESCE($14, general_rules),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $14
+      WHERE id = $15
       RETURNING
         id,
         name,
@@ -186,9 +191,10 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         operating_hours as "operatingHours",
         timezone,
         logo_url as "logoUrl",
+        general_rules as "generalRules",
         created_at as "createdAt",
         updated_at as "updatedAt"
-    `, [name, type, address, phone, email, description, operatingHours, streetAddress, city, state, zipCode, logoUrl, timezone, facilityId]);
+    `, [name, type, address, phone, email, description, operatingHours, streetAddress, city, state, zipCode, logoUrl, timezone, generalRules, facilityId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -234,6 +240,91 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         }
       } catch (secErr) {
         console.error('Error saving secondary contacts:', secErr);
+      }
+    }
+
+    // Save booking rules to facility_rules table (legacy storage for restriction type, peak hours, weekend policy)
+    if (bookingRules) {
+      try {
+        // Upsert default booking limits
+        const bookingLimitConfig = JSON.stringify({
+          restriction_type: bookingRules.restrictionType || 'account',
+          max_bookings_per_week: bookingRules.maxBookingsPerWeekUnlimited ? -1 : parseInt(bookingRules.maxBookingsPerWeek) || 3,
+          max_duration_hours: bookingRules.maxBookingDurationUnlimited ? -1 : parseFloat(bookingRules.maxBookingDurationHours) || 2,
+          advance_booking_days: bookingRules.advanceBookingDaysUnlimited ? -1 : parseInt(bookingRules.advanceBookingDays) || 14,
+          cancellation_notice_hours: bookingRules.cancellationNoticeUnlimited ? 0 : parseInt(bookingRules.cancellationNoticeHours) || 24,
+          applies_to_admins: bookingRules.restrictionsApplyToAdmins !== false,
+        });
+
+        const existingLimit = await query(
+          `SELECT id FROM facility_rules WHERE facility_id = $1 AND rule_type = 'booking_limit' LIMIT 1`,
+          [facilityId]
+        );
+        if (existingLimit.rows.length > 0) {
+          await query(`UPDATE facility_rules SET rule_config = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+            [bookingLimitConfig, existingLimit.rows[0].id]);
+        } else {
+          await query(
+            `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config)
+             VALUES ($1, 'booking_limit', 'Default Booking Limits', 'Default booking limits', $2)`,
+            [facilityId, bookingLimitConfig]
+          );
+        }
+
+        // Upsert peak hours policy
+        if (bookingRules.hasPeakHours) {
+          const peakConfig = JSON.stringify({
+            apply_to_admins: bookingRules.peakHoursApplyToAdmins !== false,
+            time_slots: bookingRules.peakHoursSlots || {},
+            max_bookings_per_week: bookingRules.peakHoursRestrictions?.maxBookingsUnlimited ? -1 : parseInt(bookingRules.peakHoursRestrictions?.maxBookingsPerWeek) || 2,
+            max_duration_hours: bookingRules.peakHoursRestrictions?.maxDurationUnlimited ? -1 : parseFloat(bookingRules.peakHoursRestrictions?.maxDurationHours) || 1.5,
+          });
+          const existingPeak = await query(
+            `SELECT id FROM facility_rules WHERE facility_id = $1 AND rule_type = 'peak_hours' LIMIT 1`,
+            [facilityId]
+          );
+          if (existingPeak.rows.length > 0) {
+            await query(`UPDATE facility_rules SET rule_config = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+              [peakConfig, existingPeak.rows[0].id]);
+          } else {
+            await query(
+              `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config)
+               VALUES ($1, 'peak_hours', 'Peak Hours Policy', 'Peak hours restrictions', $2)`,
+              [facilityId, peakConfig]
+            );
+          }
+        } else {
+          // Remove peak hours rule if disabled
+          await query(`DELETE FROM facility_rules WHERE facility_id = $1 AND rule_type = 'peak_hours'`, [facilityId]);
+        }
+
+        // Upsert weekend policy
+        if (bookingRules.hasWeekendPolicy) {
+          const weekendConfig = JSON.stringify({
+            apply_to_admins: bookingRules.weekendPolicyApplyToAdmins !== false,
+            max_bookings_per_weekend: bookingRules.weekendPolicy?.maxBookingsUnlimited ? -1 : parseInt(bookingRules.weekendPolicy?.maxBookingsPerWeekend) || 2,
+            max_duration_hours: bookingRules.weekendPolicy?.maxDurationUnlimited ? -1 : parseFloat(bookingRules.weekendPolicy?.maxDurationHours) || 2,
+            advance_booking_days: bookingRules.weekendPolicy?.advanceBookingUnlimited ? -1 : parseInt(bookingRules.weekendPolicy?.advanceBookingDays) || 7,
+          });
+          const existingWeekend = await query(
+            `SELECT id FROM facility_rules WHERE facility_id = $1 AND rule_type = 'weekend_policy' LIMIT 1`,
+            [facilityId]
+          );
+          if (existingWeekend.rows.length > 0) {
+            await query(`UPDATE facility_rules SET rule_config = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+              [weekendConfig, existingWeekend.rows[0].id]);
+          } else {
+            await query(
+              `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config)
+               VALUES ($1, 'weekend_policy', 'Weekend Policy', 'Weekend booking restrictions', $2)`,
+              [facilityId, weekendConfig]
+            );
+          }
+        } else {
+          await query(`DELETE FROM facility_rules WHERE facility_id = $1 AND rule_type = 'weekend_policy'`, [facilityId]);
+        }
+      } catch (rulesErr) {
+        console.error('Error saving facility rules:', rulesErr);
       }
     }
 

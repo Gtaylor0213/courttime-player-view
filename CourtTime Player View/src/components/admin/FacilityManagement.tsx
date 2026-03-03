@@ -1383,6 +1383,27 @@ export function FacilityManagement() {
             }
           }
 
+          // CRT-001: Prime time windows — restore hasPeakHours and peakHoursSlots
+          const crt001 = ruleMap.get('CRT-001') as any;
+          if (crt001 && crt001.facilityConfig && crt001.isEnabled) {
+            updated.bookingRules.hasPeakHours = true;
+            if (crt001.effectiveConfig?.prime_windows && Array.isArray(crt001.effectiveConfig.prime_windows)) {
+              const numberToDay: Record<number, string> = {
+                0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday',
+                4: 'thursday', 5: 'friday', 6: 'saturday',
+              };
+              const slots: Record<string, Array<{ startTime: string; endTime: string }>> = {};
+              for (const w of crt001.effectiveConfig.prime_windows) {
+                const dayName = numberToDay[w.day_of_week];
+                if (dayName) {
+                  if (!slots[dayName]) slots[dayName] = [];
+                  slots[dayName].push({ startTime: w.start_time, endTime: w.end_time });
+                }
+              }
+              updated.bookingRules.peakHoursSlots = slots;
+            }
+          }
+
           const acc011 = ruleMap.get('ACC-011') as any;
           if (acc011) {
             updated.bookingRules.rateLimitEnabled = !!acc011.isEnabled;

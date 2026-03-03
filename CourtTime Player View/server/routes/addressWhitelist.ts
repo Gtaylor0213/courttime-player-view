@@ -41,7 +41,7 @@ router.get('/:facilityId/with-members', async (req, res, next) => {
 
     res.json({
       success: true,
-      data: entries
+      entries
     });
   } catch (error) {
     next(error);

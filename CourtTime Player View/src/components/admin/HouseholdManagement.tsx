@@ -48,8 +48,8 @@ export function HouseholdManagement() {
     try {
       setLoading(true);
       const response = await addressWhitelistApi.getWithMembers(currentFacilityId);
-      if (response.success && response.data) {
-        setHouseholds(response.data);
+      if (response.success && response.data?.entries) {
+        setHouseholds(Array.isArray(response.data.entries) ? response.data.entries : []);
       } else {
         setHouseholds([]);
       }

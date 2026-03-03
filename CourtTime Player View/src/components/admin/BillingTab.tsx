@@ -22,8 +22,11 @@ export function BillingTab({ facilityId }: BillingTabProps) {
           paymentsApi.getSubscription(facilityId),
           paymentsApi.getPaymentHistory(facilityId),
         ]);
-        if (subResult.success) setSubscription(subResult.data);
-        if (historyResult.success) setPaymentHistory(historyResult.data || []);
+        if (subResult.success) setSubscription(subResult.data?.data || subResult.data);
+        if (historyResult.success) {
+          const history = historyResult.data?.data || historyResult.data;
+          setPaymentHistory(Array.isArray(history) ? history : []);
+        }
       } catch (error) {
         console.error('Failed to load billing data:', error);
       } finally {

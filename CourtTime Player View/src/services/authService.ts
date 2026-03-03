@@ -9,6 +9,53 @@ const SALT_ROUNDS = 10;
  * Handles user authentication and registration
  */
 
+/**
+ * Accept any pending admin invitations for this email.
+ * Called after login or registration so invited admins are
+ * automatically linked to their facility.
+ */
+async function acceptPendingInvitations(userId: string, email: string): Promise<string[]> {
+  try {
+    const pendingResult = await query(
+      `SELECT id, facility_id as "facilityId"
+       FROM facility_admins
+       WHERE LOWER(invitation_email) = LOWER($1)
+         AND status = 'pending'
+         AND user_id IS NULL`,
+      [email]
+    );
+
+    if (pendingResult.rows.length === 0) return [];
+
+    const accepted: string[] = [];
+
+    for (const invitation of pendingResult.rows) {
+      await query(
+        `UPDATE facility_admins
+         SET user_id = $1, status = 'active', invitation_accepted_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [userId, invitation.id]
+      );
+
+      await query(
+        `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)
+         VALUES ($1, $2, 'admin', 'active', CURRENT_DATE)
+         ON CONFLICT (user_id, facility_id) DO UPDATE SET
+           membership_type = 'admin', status = 'active'`,
+        [userId, invitation.facilityId]
+      );
+
+      accepted.push(invitation.facilityId);
+      console.log(`Auto-accepted admin invitation for ${email} → facility ${invitation.facilityId}`);
+    }
+
+    return accepted;
+  } catch (error) {
+    console.error('Error accepting pending invitations:', error);
+    return [];
+  }
+}
+
 export interface LoginResult {
   success: boolean;
   user?: User & { memberFacilities?: string[] };
@@ -150,6 +197,13 @@ export async function registerUser(
       return user;
     });
 
+    // Accept any pending admin invitations for this email
+    const acceptedFacilities = await acceptPendingInvitations(result.id, email);
+    if (acceptedFacilities.length > 0) {
+      (result as any).adminFacilities = acceptedFacilities;
+      (result as any).memberFacilities = acceptedFacilities;
+    }
+
     return {
       success: true,
       user: result,
@@ -245,7 +299,17 @@ export async function loginUser(email: string, password: string): Promise<LoginR
       [user.id]
     );
 
-    const adminFacilities = adminResult.rows.map(row => row.facilityId);
+    let adminFacilities = adminResult.rows.map(row => row.facilityId);
+
+    // Accept any pending admin invitations for this email
+    const newlyAccepted = await acceptPendingInvitations(user.id, email);
+    if (newlyAccepted.length > 0) {
+      adminFacilities = [...new Set([...adminFacilities, ...newlyAccepted])];
+      // Also add to memberFacilities if not already there
+      for (const fid of newlyAccepted) {
+        if (!memberFacilities.includes(fid)) memberFacilities.push(fid);
+      }
+    }
 
     // Remove password hash from response
     delete user.passwordHash;

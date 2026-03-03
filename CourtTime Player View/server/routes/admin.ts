@@ -9,6 +9,7 @@ import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
 import { createCourt, createCourtsBulk, updateCourtsBulk } from '../../src/services/courtService';
+import { inviteAdmin, getFacilityAdmins, removeAdmin } from '../../src/services/adminService';
 
 const router = express.Router();
 
@@ -1038,6 +1039,63 @@ router.post('/email-templates/:facilityId/:templateType/preview', async (req, re
   } catch (error: any) {
     console.error('Error previewing email template:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =====================================================
+// ADMIN MANAGEMENT
+// =====================================================
+
+/**
+ * GET /api/admin/admins/:facilityId
+ * Get all admins for a facility
+ */
+router.get('/admins/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const admins = await getFacilityAdmins(facilityId);
+    res.json({ success: true, data: admins });
+  } catch (error: any) {
+    console.error('Error fetching facility admins:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/admins/:facilityId/invite
+ * Invite a new admin to a facility via email
+ */
+router.post('/admins/:facilityId/invite', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { email, invitedBy } = req.body;
+
+    if (!email || !invitedBy) {
+      return res.status(400).json({ success: false, error: 'Email and invitedBy are required' });
+    }
+
+    const invitation = await inviteAdmin(facilityId, email, invitedBy);
+    res.json({ success: true, data: invitation });
+  } catch (error: any) {
+    console.error('Error inviting admin:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/admins/:adminId
+ * Remove an admin from a facility
+ */
+router.delete('/admins/:adminId', async (req, res) => {
+  try {
+    const { adminId } = req.params;
+    const { removedBy } = req.body;
+
+    await removeAdmin(adminId, removedBy);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error removing admin:', error);
+    res.status(400).json({ success: false, error: error.message });
   }
 });
 

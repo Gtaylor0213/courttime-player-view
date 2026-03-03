@@ -223,6 +223,7 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
         description,
         operating_hours as "operatingHours",
         timezone,
+        status,
         logo_url as "logoUrl",
         general_rules as "generalRules",
         created_at as "createdAt",

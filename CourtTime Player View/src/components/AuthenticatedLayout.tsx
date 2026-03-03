@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Menu } from 'lucide-react';
+import { Menu, AlertTriangle } from 'lucide-react';
 import { cn } from './ui/utils';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -63,6 +63,24 @@ export function AuthenticatedLayout() {
           </button>
           <img src={logoImage} alt="CourtTime" className="h-8 w-auto ml-3" />
         </div>
+        {/* Suspended membership banner */}
+        {user?.suspendedFacilities && user.suspendedFacilities.length > 0 && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800">
+                <p className="font-medium">Membership Suspended</p>
+                {user.suspendedFacilities.map((sf) => (
+                  <p key={sf.facilityId} className="mt-1">
+                    Your membership at <strong>{sf.facilityName}</strong> is suspended
+                    {sf.suspendedUntil ? ` until ${new Date(sf.suspendedUntil).toLocaleDateString()}` : ''}.
+                    Contact the facility for assistance.
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         <Outlet />
       </div>
     </div>

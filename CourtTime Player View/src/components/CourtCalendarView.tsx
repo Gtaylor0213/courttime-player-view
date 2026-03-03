@@ -13,7 +13,7 @@ import { ReservationDetailsModal } from './ReservationDetailsModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, usersApi, bookingApi, courtConfigApi } from '../api/client';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
 
 // Layout constants
@@ -167,7 +167,7 @@ export function CourtCalendarView() {
 
       try {
         setLoadingFacilities(true);
-        const facilitiesData: Array<{ id: string; name: string; type: string; courts: Array<{ id: string; name: string; type: string; parentCourtId?: string | null; isSplitCourt?: boolean }>; operatingHours?: any; timezone?: string }> = [];
+        const facilitiesData: Array<{ id: string; name: string; type: string; status?: string; courts: Array<{ id: string; name: string; type: string; parentCourtId?: string | null; isSplitCourt?: boolean }>; operatingHours?: any; timezone?: string }> = [];
 
         for (const facilityId of allFacilityIds) {
           // Fetch facility details
@@ -196,6 +196,7 @@ export function CourtCalendarView() {
               id: facility.id,
               name: facility.name,
               type: facility.type || facility.facilityType || 'Tennis Facility',
+              status: facility.status || 'active',
               courts,
               operatingHours: facility.operatingHours,
               timezone: facility.timezone || 'America/New_York',
@@ -936,6 +937,22 @@ export function CourtCalendarView() {
           </div>
         ) : (
           <>
+        {/* Facility Status Banner */}
+        {currentFacility?.status && currentFacility.status !== 'active' && (
+          <div className={`flex-shrink-0 px-4 py-3 flex items-center gap-3 ${
+            currentFacility.status === 'suspended' ? 'bg-amber-50 border-b border-amber-200 text-amber-800' :
+            currentFacility.status === 'closed' ? 'bg-red-50 border-b border-red-200 text-red-800' :
+            'bg-blue-50 border-b border-blue-200 text-blue-800'
+          }`}>
+            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+            <span className="text-sm font-medium">
+              {currentFacility.status === 'suspended' && `${currentFacility.name} is temporarily suspended. Reservations are not available at this time.`}
+              {currentFacility.status === 'closed' && `${currentFacility.name} is permanently closed. Reservations are no longer available.`}
+              {currentFacility.status === 'pending' && `${currentFacility.name} is still being set up. Reservations are not yet available.`}
+            </span>
+          </div>
+        )}
+
         {/* Controls Header */}
         <div className="flex-shrink-0 z-40 bg-gray-50 border-b border-gray-200">
           <div className="px-3 md:px-4 py-2">

@@ -218,13 +218,24 @@ export async function loginUser(email: string, password: string): Promise<LoginR
 
     // Get user's facility memberships
     const membershipsResult = await query(
-      `SELECT facility_id as "facilityId"
-       FROM facility_memberships
-       WHERE user_id = $1 AND status = 'active'`,
+      `SELECT fm.facility_id as "facilityId", fm.status, fm.suspended_until as "suspendedUntil", f.name as "facilityName"
+       FROM facility_memberships fm
+       JOIN facilities f ON fm.facility_id = f.id
+       WHERE fm.user_id = $1`,
       [user.id]
     );
 
-    const memberFacilities = membershipsResult.rows.map(row => row.facilityId);
+    const memberFacilities = membershipsResult.rows
+      .filter(row => row.status === 'active')
+      .map(row => row.facilityId);
+
+    const suspendedFacilities = membershipsResult.rows
+      .filter(row => row.status === 'suspended')
+      .map(row => ({
+        facilityId: row.facilityId,
+        facilityName: row.facilityName,
+        suspendedUntil: row.suspendedUntil
+      }));
 
     // Get facilities where user is an admin
     const adminResult = await query(
@@ -244,7 +255,8 @@ export async function loginUser(email: string, password: string): Promise<LoginR
       user: {
         ...user,
         memberFacilities,
-        adminFacilities
+        adminFacilities,
+        suspendedFacilities
       },
       message: 'Login successful'
     };
@@ -302,7 +314,7 @@ export async function getUserById(userId: string): Promise<User | null> {
 /**
  * Get user with memberships
  */
-export async function getUserWithMemberships(userId: string): Promise<(User & { memberFacilities: string[]; adminFacilities: string[] }) | null> {
+export async function getUserWithMemberships(userId: string): Promise<(User & { memberFacilities: string[]; adminFacilities: string[]; suspendedFacilities?: any[] }) | null> {
   try {
     const user = await getUserById(userId);
 
@@ -312,13 +324,24 @@ export async function getUserWithMemberships(userId: string): Promise<(User & { 
 
     // Get user's facility memberships
     const membershipsResult = await query(
-      `SELECT facility_id as "facilityId"
-       FROM facility_memberships
-       WHERE user_id = $1 AND status = 'active'`,
+      `SELECT fm.facility_id as "facilityId", fm.status, fm.suspended_until as "suspendedUntil", f.name as "facilityName"
+       FROM facility_memberships fm
+       JOIN facilities f ON fm.facility_id = f.id
+       WHERE fm.user_id = $1`,
       [userId]
     );
 
-    const memberFacilities = membershipsResult.rows.map(row => row.facilityId);
+    const memberFacilities = membershipsResult.rows
+      .filter(row => row.status === 'active')
+      .map(row => row.facilityId);
+
+    const suspendedFacilities = membershipsResult.rows
+      .filter(row => row.status === 'suspended')
+      .map(row => ({
+        facilityId: row.facilityId,
+        facilityName: row.facilityName,
+        suspendedUntil: row.suspendedUntil
+      }));
 
     // Get facilities where user is an admin
     const adminResult = await query(
@@ -333,7 +356,8 @@ export async function getUserWithMemberships(userId: string): Promise<(User & { 
     return {
       ...user,
       memberFacilities,
-      adminFacilities
+      adminFacilities,
+      suspendedFacilities
     };
   } catch (error) {
     console.error('Get user with memberships error:', error);

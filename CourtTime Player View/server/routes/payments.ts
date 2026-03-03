@@ -44,7 +44,7 @@ router.post('/create-checkout-session', async (req, res, next) => {
     const result = await createCheckoutSession({
       facilityName,
       courtCount,
-      amountCents: amountCents ?? 37500,
+      amountCents: amountCents ?? 40406,
       promoCode,
       successUrl,
       cancelUrl,

@@ -266,7 +266,7 @@ router.post('/register', async (req, res, next) => {
       // Payment
       paymentSessionId: paymentSessionId || undefined,
       promoCode: promoCode || undefined,
-      paymentAmountCents: paymentAmountCents != null ? parseInt(paymentAmountCents) : 37500,
+      paymentAmountCents: paymentAmountCents != null ? parseInt(paymentAmountCents) : 40406,
       paymentWaived: paymentWaived || false,
       customPricing: customPricing || false,
     };

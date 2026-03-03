@@ -1265,7 +1265,7 @@ export async function registerFacility(
 
     await recordPayment(client, facilityId, {
       stripeSessionId: data.paymentSessionId,
-      amountCents: data.paymentAmountCents ?? 37500,
+      amountCents: data.paymentAmountCents ?? 40406,
       status: paymentStatus,
       promoCode: data.promoCode,
       courtCount: data.courts.length,

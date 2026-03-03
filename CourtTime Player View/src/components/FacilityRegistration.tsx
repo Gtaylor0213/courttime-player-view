@@ -1012,7 +1012,7 @@ export function FacilityRegistration() {
         // Payment info
         paymentSessionId: paymentSessionId || undefined,
         promoCode: paymentWaived ? promoCode : undefined,
-        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : 37500),
+        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : 40406),
         paymentWaived,
         customPricing: formData.courts.length > 8,
       };
@@ -1192,7 +1192,7 @@ export function FacilityRegistration() {
     setIsProcessingPayment(true);
     try {
       const currentUrl = window.location.origin + window.location.pathname;
-      const finalAmount = promoValidation?.valid ? (promoValidation.finalAmountCents ?? 37500) : 37500;
+      const finalAmount = promoValidation?.valid ? (promoValidation.finalAmountCents ?? 40406) : 40406;
 
       const result = await paymentsApi.createCheckoutSession({
         facilityName: formData.facilityName,
@@ -1238,7 +1238,7 @@ export function FacilityRegistration() {
   const renderPaymentStep = () => {
     const courtCount = formData.courts.length;
     const isCustomPricing = courtCount > 8;
-    const baseAmountCents = 37500;
+    const baseAmountCents = 40406;
     const finalAmountCents = promoValidation?.valid
       ? (promoValidation.finalAmountCents ?? 0)
       : baseAmountCents;
@@ -1360,7 +1360,7 @@ export function FacilityRegistration() {
                 <Alert className="border-green-200 bg-green-50">
                   <Check className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-700">
-                    Promo code applied! Your first year is free. Your card will be charged $375.00/year at renewal. Click "Complete Registration" to finish.
+                    Promo code applied! Your first year is free. Your card will be charged $404.06/year at renewal. Click "Complete Registration" to finish.
                   </AlertDescription>
                 </Alert>
               )}

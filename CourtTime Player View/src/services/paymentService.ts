@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { query } from '../database/connection';
 import type { PoolClient } from 'pg';
 
-const STANDARD_AMOUNT_CENTS = 37500; // $375.00
+const STANDARD_AMOUNT_CENTS = 40406; // $404.06 ($375 + fees)
 
 /**
  * Get Stripe instance (returns null if no key configured — dev mode)
@@ -69,7 +69,7 @@ export async function validatePromoCode(code: string): Promise<{
     discountValue: Number(promo.discount_value),
     finalAmountCents,
     message: finalAmountCents === 0
-      ? 'Promo code applied — first year free! Card required for annual renewal ($375/year).'
+      ? 'Promo code applied — first year free! Card required for annual renewal ($404.06/year).'
       : `Promo code applied — total: $${(finalAmountCents / 100).toFixed(2)}`,
   };
 }
@@ -203,7 +203,7 @@ export async function createCheckoutSession(params: {
           sessionParams.discounts = [{ coupon: couponId }];
         }
       } else {
-        // Standard full waiver — 1 year free trial, then $375/yr auto-renewal
+        // Standard full waiver — 1 year free trial, then $404.06/yr auto-renewal
         sessionParams.subscription_data = {
           trial_period_days: 365,
           metadata: {

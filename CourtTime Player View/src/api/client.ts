@@ -1225,4 +1225,11 @@ export const paymentsApi = {
       body: JSON.stringify({ facilityId, returnUrl }),
     });
   },
+
+  cancelSubscription: async (facilityId: string) => {
+    return apiRequest('/api/payments/cancel-subscription', {
+      method: 'POST',
+      body: JSON.stringify({ facilityId }),
+    });
+  },
 };

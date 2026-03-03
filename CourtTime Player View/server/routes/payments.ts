@@ -6,6 +6,7 @@ import {
   createPortalSession,
   getSubscriptionByFacilityId,
   getPaymentHistory,
+  cancelSubscription,
 } from '../../src/services/paymentService';
 
 const router = express.Router();
@@ -122,6 +123,28 @@ router.get('/history/:facilityId', async (req, res, next) => {
     const { facilityId } = req.params;
     const history = await getPaymentHistory(facilityId);
     res.json({ success: true, data: history });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/payments/cancel-subscription
+ * Cancel a facility's subscription at end of current billing period
+ */
+router.post('/cancel-subscription', async (req, res, next) => {
+  try {
+    const { facilityId } = req.body;
+    if (!facilityId) {
+      return res.status(400).json({ success: false, error: 'Facility ID is required' });
+    }
+
+    const result = await cancelSubscription(facilityId);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: { message: 'Subscription will be cancelled at end of billing period' } });
   } catch (error) {
     next(error);
   }

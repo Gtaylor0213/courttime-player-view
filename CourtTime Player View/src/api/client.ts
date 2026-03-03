@@ -605,6 +605,9 @@ export const adminApi = {
     hasLights?: boolean;
     status?: string;
   }) => {
+    if (!courtId) {
+      return { success: false, error: 'Court ID is required' };
+    }
     return apiRequest(`/api/admin/courts/${courtId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),

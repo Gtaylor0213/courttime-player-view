@@ -33,12 +33,16 @@ import courtConfigRoutes from './routes/courtConfig';
 import rulesRoutes from './routes/rules';
 import householdsRoutes from './routes/households';
 import paymentRoutes from './routes/payments';
+import webhookRoutes from './routes/webhook';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Trust the first proxy (Render runs behind a reverse proxy)
 app.set('trust proxy', 1);
+
+// Stripe webhook must be mounted BEFORE express.json() — needs raw body for signature verification
+app.use('/api/webhooks', webhookRoutes);
 
 // Middleware
 app.use(cors());

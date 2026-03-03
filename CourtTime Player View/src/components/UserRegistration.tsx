@@ -5,11 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Switch } from './ui/switch';
-import { Separator } from './ui/separator';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription } from './ui/alert';
-import { ArrowLeft, User, Mail, Phone, Bell, Building, Check, AlertCircle, Camera, Search, MapPin, Users } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, Building, Check, AlertCircle, Camera, Search, MapPin, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi } from '../api/client';
@@ -49,15 +47,6 @@ export function UserRegistration() {
     skillLevel: '',
     ustaRating: '',
     bio: '',
-
-    // Notification Preferences
-    notificationPreferences: {
-      emailBookingConfirmations: true,
-      smsReminders: true,
-      promotionalEmails: false,
-      weeklyDigest: true,
-      maintenanceUpdates: true
-    }
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -75,16 +64,6 @@ export function UserRegistration() {
         [field]: ''
       }));
     }
-  };
-
-  const handleNotificationChange = (field: string, value: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      notificationPreferences: {
-        ...prev.notificationPreferences,
-        [field]: value
-      }
-    }));
   };
 
   const handleFacilitySearch = async (query: string) => {
@@ -203,7 +182,6 @@ export function UserRegistration() {
           bio: formData.bio,
           profilePicture: formData.profilePicture,
           selectedFacilities: selectedFacilities.map(f => f.id),
-          notificationPreferences: formData.notificationPreferences
         }
       );
 
@@ -635,80 +613,6 @@ export function UserRegistration() {
               )}
             </div>
 
-            <Separator />
-
-            {/* Notification Preferences */}
-            <div>
-              <h3 className="flex items-center gap-2 mb-4">
-                <Bell className="h-5 w-5" />
-                Notification Preferences
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Choose how you'd like to receive updates and notifications
-              </p>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="emailBooking">Email Booking Confirmations</Label>
-                    <p className="text-sm text-gray-500">Receive email confirmations for new bookings</p>
-                  </div>
-                  <Switch
-                    id="emailBooking"
-                    checked={formData.notificationPreferences.emailBookingConfirmations}
-                    onCheckedChange={(checked) => handleNotificationChange('emailBookingConfirmations', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="smsReminders">SMS Reminders</Label>
-                    <p className="text-sm text-gray-500">Get text reminders before your court time</p>
-                  </div>
-                  <Switch
-                    id="smsReminders"
-                    checked={formData.notificationPreferences.smsReminders}
-                    onCheckedChange={(checked) => handleNotificationChange('smsReminders', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="promotionalEmails">Promotional Emails</Label>
-                    <p className="text-sm text-gray-500">Receive offers and promotions from facilities</p>
-                  </div>
-                  <Switch
-                    id="promotionalEmails"
-                    checked={formData.notificationPreferences.promotionalEmails}
-                    onCheckedChange={(checked) => handleNotificationChange('promotionalEmails', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="weeklyDigest">Weekly Activity Digest</Label>
-                    <p className="text-sm text-gray-500">Summary of your weekly court activity</p>
-                  </div>
-                  <Switch
-                    id="weeklyDigest"
-                    checked={formData.notificationPreferences.weeklyDigest}
-                    onCheckedChange={(checked) => handleNotificationChange('weeklyDigest', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="maintenanceUpdates">Maintenance Updates</Label>
-                    <p className="text-sm text-gray-500">Notifications about court closures and maintenance</p>
-                  </div>
-                  <Switch
-                    id="maintenanceUpdates"
-                    checked={formData.notificationPreferences.maintenanceUpdates}
-                    onCheckedChange={(checked) => handleNotificationChange('maintenanceUpdates', checked)}
-                  />
-                </div>
-              </div>
-            </div>
           </div>
         );
 
@@ -787,7 +691,7 @@ export function UserRegistration() {
                     2
                   </div>
                   <p className={`text-xs md:text-sm font-medium hidden md:block ${currentStep >= 2 ? 'text-green-600' : 'text-gray-500'}`}>
-                    Facilities & Notifications
+                    Facilities
                   </p>
                 </div>
               </div>
@@ -798,11 +702,11 @@ export function UserRegistration() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
-                  {currentStep === 1 ? 'Personal Information' : 'Facilities & Notifications'}
+                  {currentStep === 1 ? 'Personal Information' : 'Facilities'}
                 </CardTitle>
                 <CardDescription>
                   {currentStep === 1 && 'Enter your personal information and address to create your account'}
-                  {currentStep === 2 && 'Optional facility membership requests and notification preferences'}
+                  {currentStep === 2 && 'Optional facility membership requests'}
                 </CardDescription>
               </CardHeader>
               <CardContent>

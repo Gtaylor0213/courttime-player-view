@@ -418,34 +418,30 @@ export function PlayerProfile() {
 
   return (
     <>
-        <header className="bg-white border-b border-gray-200">
-          <div className="px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <h1 className="text-2xl font-medium">Player Profile</h1>
+        <div className="max-w-4xl mx-auto p-4 md:p-8">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-medium text-gray-900">Player Profile</h1>
 
-              <div className="flex items-center gap-4">
-                <NotificationBell />
-                {isEditing ? (
-                  <>
-                    <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={saving}>
-                      <Save className="h-4 w-4 mr-2" />
-                      {saving ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                  </>
-                ) : (
-                  <Button onClick={() => setIsEditing(true)}>
-                    Edit Profile
+            <div className="flex items-center gap-4">
+              <NotificationBell />
+              {isEditing ? (
+                <>
+                  <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
+                    Cancel
                   </Button>
-                )}
-              </div>
+                  <Button onClick={handleSave} disabled={saving}>
+                    <Save className="h-4 w-4 mr-2" />
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={() => setIsEditing(true)}>
+                  Edit Profile
+                </Button>
+              )}
             </div>
           </div>
-        </header>
-
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Profile Picture & Basic Info */}
             <div className="lg:col-span-1">

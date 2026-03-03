@@ -549,14 +549,14 @@ export function MemberManagement() {
                         onClick={() => setSelectedMember(member)}
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <Avatar className="h-8 w-8 flex-shrink-0">
+                          <Avatar className="h-8 w-8 flex-shrink-0 hidden md:flex">
                             <AvatarFallback className="text-xs">{getInitials(member.fullName)}</AvatarFallback>
                           </Avatar>
-                          <div className="flex items-center gap-6 flex-1 min-w-0">
-                            <div className="min-w-[180px]">
+                          <div className="flex items-center gap-2 md:gap-6 flex-1 min-w-0">
+                            <div className="min-w-0 flex-1 md:flex-none md:min-w-[180px]">
                               <div className="font-medium text-sm flex items-center gap-2">
                                 <span className="truncate">{member.fullName}</span>
-                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 flex-shrink-0 ${
                                   member.isFacilityAdmin
                                     ? 'text-green-600 border-green-600'
                                     : 'text-gray-500 border-gray-300'
@@ -572,7 +572,7 @@ export function MemberManagement() {
                                 {new Date(member.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
                               </span>
                             </div>
-                            <Badge className={`${getStatusColor(member.status)} text-xs px-2 py-0`}>
+                            <Badge className={`${getStatusColor(member.status)} text-xs px-2 py-0 flex-shrink-0`}>
                               {member.status === 'suspended' && member.suspendedUntil
                                 ? `Suspended until ${new Date(member.suspendedUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
                                 : member.status.charAt(0).toUpperCase() + member.status.slice(1)}

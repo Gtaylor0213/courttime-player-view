@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Building2, Users, CalendarDays, UserCheck, ArrowRight } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Building2, Users, CalendarDays, UserCheck, ArrowRight, Search } from 'lucide-react';
+import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -13,6 +14,7 @@ interface SupportDashboardProps {
 export function SupportDashboard({ onNavigate }: SupportDashboardProps) {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [facilitySearch, setFacilitySearch] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -66,9 +68,31 @@ export function SupportDashboard({ onNavigate }: SupportDashboardProps) {
 
       {/* Facility cards */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Facilities</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-gray-900">Facilities</h2>
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search facilities..."
+              value={facilitySearch}
+              onChange={(e) => setFacilitySearch(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {stats.facilities.map((f: any) => (
+          {stats.facilities
+            .filter((f: any) => {
+              if (!facilitySearch.trim()) return true;
+              const q = facilitySearch.toLowerCase();
+              return (
+                f.name?.toLowerCase().includes(q) ||
+                f.city?.toLowerCase().includes(q) ||
+                f.state?.toLowerCase().includes(q) ||
+                f.id?.toLowerCase().includes(q)
+              );
+            })
+            .map((f: any) => (
             <Card key={f.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
@@ -124,6 +148,12 @@ export function SupportDashboard({ onNavigate }: SupportDashboardProps) {
               </CardContent>
             </Card>
           ))}
+          {facilitySearch.trim() && stats.facilities.filter((f: any) => {
+            const q = facilitySearch.toLowerCase();
+            return f.name?.toLowerCase().includes(q) || f.city?.toLowerCase().includes(q) || f.state?.toLowerCase().includes(q) || f.id?.toLowerCase().includes(q);
+          }).length === 0 && (
+            <p className="text-sm text-gray-400 col-span-full text-center py-6">No facilities match "{facilitySearch}"</p>
+          )}
         </div>
       </div>
     </div>

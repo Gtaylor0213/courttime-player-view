@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Search, X } from 'lucide-react';
 import { getFacilities, getFacility, updateFacility } from '../../api/supportClient';
 import { toast } from 'sonner';
 
 interface Props {
   selectedFacilityId: string | null;
-  onSelectFacility: (id: string) => void;
+  onSelectFacility: (id: string | null) => void;
 }
 
 export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility }: Props) {
@@ -19,6 +21,7 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState<any>({});
+  const [facilitySearch, setFacilitySearch] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -73,26 +76,80 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-gray-900">Facility Management</h1>
 
-      {/* Facility selector */}
-      <Select value={selectedFacilityId || ''} onValueChange={onSelectFacility}>
-        <SelectTrigger className="w-full max-w-xs">
-          <SelectValue placeholder="Select a facility..." />
-        </SelectTrigger>
-        <SelectContent>
-          {facilities.map((f: any) => (
-            <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Facility selector with search */}
+      {!selectedFacilityId ? (
+        <div className="space-y-3">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search facilities by name or location..."
+              value={facilitySearch}
+              onChange={(e) => setFacilitySearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {facilities
+                .filter((f: any) => {
+                  if (!facilitySearch.trim()) return true;
+                  const q = facilitySearch.toLowerCase();
+                  return (
+                    f.name?.toLowerCase().includes(q) ||
+                    f.city?.toLowerCase().includes(q) ||
+                    f.state?.toLowerCase().includes(q) ||
+                    f.id?.toLowerCase().includes(q)
+                  );
+                })
+                .map((f: any) => (
+                  <Card
+                    key={f.id}
+                    className="cursor-pointer hover:border-indigo-400 hover:shadow-sm transition-all"
+                    onClick={() => { onSelectFacility(f.id); setFacilitySearch(''); }}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{f.name}</p>
+                          {(f.city || f.state) && (
+                            <p className="text-xs text-gray-500">{[f.city, f.state].filter(Boolean).join(', ')}</p>
+                          )}
+                        </div>
+                        <Badge variant={f.status === 'active' ? 'default' : 'secondary'} className="text-xs ml-2">
+                          {f.status || 'active'}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              {facilitySearch.trim() && facilities.filter((f: any) => {
+                const q = facilitySearch.toLowerCase();
+                return f.name?.toLowerCase().includes(q) || f.city?.toLowerCase().includes(q) || f.state?.toLowerCase().includes(q) || f.id?.toLowerCase().includes(q);
+              }).length === 0 && (
+                <p className="text-sm text-gray-400 col-span-full text-center py-6">No facilities match "{facilitySearch}"</p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-sm py-1 px-3">
+            {facility?.name || selectedFacilityId}
+          </Badge>
+          <Button variant="ghost" size="sm" onClick={() => { onSelectFacility(null); setFacility(null); }}>
+            <X className="h-4 w-4 mr-1" /> Change
+          </Button>
+        </div>
+      )}
 
       {loading && selectedFacilityId && (
         <div className="flex justify-center py-10">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
         </div>
-      )}
-
-      {!selectedFacilityId && !loading && (
-        <p className="text-sm text-gray-400 text-center py-10">Select a facility to manage.</p>
       )}
 
       {facility && !loading && (

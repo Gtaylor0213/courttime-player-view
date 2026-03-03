@@ -185,7 +185,8 @@ export function FacilityRegistration() {
 
       // Verify the session with the backend
       paymentsApi.verifySession(sessionId).then(result => {
-        if (result.success && result.data?.verified) {
+        const verification = result.data?.data || result.data;
+        if (result.success && verification?.verified) {
           setPaymentSessionId(sessionId);
           setPaymentComplete(true);
           toast.success('Payment successful!');
@@ -1044,8 +1045,10 @@ export function FacilityRegistration() {
     try {
       const result = await paymentsApi.validatePromo(promoCode.trim());
       if (result.success && result.data) {
-        setPromoValidation(result.data);
-        if (result.data.valid && result.data.finalAmountCents === 0) {
+        // Unwrap apiRequest double-wrap
+        const promo = result.data?.data || result.data;
+        setPromoValidation(promo);
+        if (promo.valid && promo.finalAmountCents === 0) {
           setPaymentWaived(true);
         }
       } else {
@@ -1080,17 +1083,19 @@ export function FacilityRegistration() {
       });
 
       if (result.success && result.data) {
-        if (result.data.waived) {
+        // Unwrap apiRequest double-wrap: server returns { data: { sessionUrl, ... } }
+        const payment = result.data?.data || result.data;
+        if (payment.waived) {
           setPaymentWaived(true);
-        } else if (result.data.sessionUrl) {
+        } else if (payment.sessionUrl) {
           // Save form data before redirecting to Stripe
           sessionStorage.setItem('facilityRegistrationData', JSON.stringify(formData));
           sessionStorage.setItem('facilityRegistrationStep', String(currentStep));
           sessionStorage.setItem('facilityRegistrationPromo', promoCode);
-          window.location.href = result.data.sessionUrl;
+          window.location.href = payment.sessionUrl;
         } else {
           // Dev mode — no Stripe keys, auto-complete payment
-          setPaymentSessionId(result.data.sessionId || 'dev_auto');
+          setPaymentSessionId(payment.sessionId || 'dev_auto');
           setPaymentComplete(true);
           toast.success('Payment completed (dev mode)');
         }

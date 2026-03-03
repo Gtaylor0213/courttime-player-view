@@ -177,19 +177,15 @@ export function BillingTab({ facilityId }: BillingTabProps) {
             </Alert>
           )}
 
-          {subscription.stripeCheckoutSessionId && !subscription.stripeCheckoutSessionId.startsWith('dev_') && (
-            <>
-              <Separator />
-              <Button
-                onClick={handleManageSubscription}
-                disabled={openingPortal}
-                className="w-full"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                {openingPortal ? 'Opening...' : 'Manage Subscription'}
-              </Button>
-            </>
-          )}
+          <Separator />
+          <Button
+            onClick={handleManageSubscription}
+            disabled={openingPortal}
+            className="w-full"
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            {openingPortal ? 'Opening...' : 'Manage Subscription'}
+          </Button>
         </CardContent>
       </Card>
 

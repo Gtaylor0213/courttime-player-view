@@ -67,6 +67,129 @@ export class RulesEngine {
       // Build context (fetch user, court, facility, existing bookings, etc.)
       const context = await buildRuleContext(request);
 
+      // === Pre-rule hard blocks (facility, membership, court status) ===
+
+      // Block if facility is not active
+      const facilityStatus = context.facility.status || 'active';
+      if (facilityStatus === 'suspended' || facilityStatus === 'closed') {
+        const statusLabel = facilityStatus === 'suspended' ? 'temporarily suspended' : 'permanently closed';
+        return {
+          allowed: false,
+          results: [],
+          blockers: [{
+            ruleCode: 'SYS-FACILITY',
+            ruleName: 'Facility Status',
+            passed: false,
+            severity: 'error',
+            message: `${context.facility.name} is ${statusLabel} and is not accepting reservations at this time.`
+          }],
+          warnings: [],
+          isPrimeTime: false
+        };
+      }
+      if (facilityStatus === 'pending') {
+        return {
+          allowed: false,
+          results: [],
+          blockers: [{
+            ruleCode: 'SYS-FACILITY',
+            ruleName: 'Facility Status',
+            passed: false,
+            severity: 'error',
+            message: `${context.facility.name} is still being set up and is not yet accepting reservations.`
+          }],
+          warnings: [],
+          isPrimeTime: false
+        };
+      }
+
+      // Block if member is suspended or expired
+      const memberStatus = context.user.membershipStatus;
+      if (memberStatus === 'suspended') {
+        const suspendedUntil = context.user.suspendedUntil;
+        const untilMsg = suspendedUntil
+          ? ` until ${new Date(suspendedUntil).toLocaleDateString()}`
+          : '';
+        return {
+          allowed: false,
+          results: [],
+          blockers: [{
+            ruleCode: 'SYS-MEMBER',
+            ruleName: 'Membership Status',
+            passed: false,
+            severity: 'error',
+            message: `Your membership at ${context.facility.name} is suspended${untilMsg}. Please contact the facility for assistance.`
+          }],
+          warnings: [],
+          isPrimeTime: false
+        };
+      }
+      if (memberStatus === 'expired') {
+        return {
+          allowed: false,
+          results: [],
+          blockers: [{
+            ruleCode: 'SYS-MEMBER',
+            ruleName: 'Membership Status',
+            passed: false,
+            severity: 'error',
+            message: `Your membership at ${context.facility.name} has expired. Please renew your membership to make reservations.`
+          }],
+          warnings: [],
+          isPrimeTime: false
+        };
+      }
+      if (memberStatus === 'pending') {
+        return {
+          allowed: false,
+          results: [],
+          blockers: [{
+            ruleCode: 'SYS-MEMBER',
+            ruleName: 'Membership Status',
+            passed: false,
+            severity: 'error',
+            message: `Your membership at ${context.facility.name} is pending approval. You cannot make reservations until your membership is approved.`
+          }],
+          warnings: [],
+          isPrimeTime: false
+        };
+      }
+
+      // Block if court is in maintenance or closed
+      const courtStatus = context.court.status;
+      if (courtStatus === 'maintenance') {
+        return {
+          allowed: false,
+          results: [],
+          blockers: [{
+            ruleCode: 'SYS-COURT',
+            ruleName: 'Court Status',
+            passed: false,
+            severity: 'error',
+            message: `${context.court.name} is currently under maintenance and not available for booking.`
+          }],
+          warnings: [],
+          isPrimeTime: false
+        };
+      }
+      if (courtStatus === 'closed') {
+        return {
+          allowed: false,
+          results: [],
+          blockers: [{
+            ruleCode: 'SYS-COURT',
+            ruleName: 'Court Status',
+            passed: false,
+            severity: 'error',
+            message: `${context.court.name} is closed and not available for booking.`
+          }],
+          warnings: [],
+          isPrimeTime: false
+        };
+      }
+
+      // === End pre-rule hard blocks ===
+
       // Get applicable rules for this facility/court/tier
       const rules = this.getApplicableRules(context);
 

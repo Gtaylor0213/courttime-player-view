@@ -41,6 +41,8 @@ export interface UserWithTier {
   zipCode?: string;
   tier?: MembershipTier;
   isFacilityAdmin?: boolean;
+  membershipStatus?: 'active' | 'pending' | 'expired' | 'suspended';
+  suspendedUntil?: Date | null;
 }
 
 export interface MembershipTier {
@@ -155,6 +157,7 @@ export interface FacilityWithRules {
   name: string;
   operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
   timezone?: string;
+  status?: 'active' | 'pending' | 'suspended' | 'closed';
   rules: FacilityRuleConfig[];
   defaultTier?: MembershipTier;
 }

@@ -136,6 +136,8 @@ async function fetchUserWithTier(userId: string, facilityId: string): Promise<Us
       u.state,
       u.zip_code as "zipCode",
       fm.is_facility_admin as "isFacilityAdmin",
+      fm.status as "membershipStatus",
+      fm.suspended_until as "suspendedUntil",
       mt.id as "tierId",
       mt.tier_name as "tierName",
       mt.tier_level as "tierLevel",
@@ -183,6 +185,22 @@ async function fetchUserWithTier(userId: string, facilityId: string): Promise<Us
     tier = await fetchDefaultTier(facilityId);
   }
 
+  // Auto-reactivate expired suspensions
+  let membershipStatus = row.membershipStatus || undefined;
+  let suspendedUntil = row.suspendedUntil || null;
+
+  if (membershipStatus === 'suspended' && suspendedUntil && new Date(suspendedUntil) <= new Date()) {
+    membershipStatus = 'active';
+    suspendedUntil = null;
+    // Update DB in background (fire-and-forget)
+    query(
+      `UPDATE facility_memberships SET status = 'active', suspended_until = NULL
+       WHERE user_id = $1 AND facility_id = $2 AND status = 'suspended'
+         AND suspended_until IS NOT NULL AND suspended_until <= NOW()`,
+      [userId, facilityId]
+    ).catch(err => console.error('Failed to auto-reactivate member:', err));
+  }
+
   return {
     id: row.id,
     email: row.email,
@@ -192,7 +210,9 @@ async function fetchUserWithTier(userId: string, facilityId: string): Promise<Us
     state: row.state,
     zipCode: row.zipCode,
     tier,
-    isFacilityAdmin: row.isFacilityAdmin || false
+    isFacilityAdmin: row.isFacilityAdmin || false,
+    membershipStatus,
+    suspendedUntil
   };
 }
 
@@ -310,7 +330,8 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
       id,
       name,
       operating_hours as "operatingHours",
-      timezone
+      timezone,
+      status
     FROM facilities
     WHERE id = $1`,
     [facilityId]
@@ -351,6 +372,8 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
     id: facility.id,
     name: facility.name,
     operatingHours: facility.operatingHours,
+    timezone: facility.timezone,
+    status: facility.status || 'active',
     rules: rulesResult.rows as FacilityRuleConfig[],
     defaultTier
   };

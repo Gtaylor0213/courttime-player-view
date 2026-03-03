@@ -899,6 +899,36 @@ export async function checkInBooking(
   bookingId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Verify booking exists, is confirmed, and facility/court/member are all active
+    const bookingCheck = await query(
+      `SELECT b.id, b.user_id, b.facility_id, b.court_id,
+              f.status as facility_status, f.name as facility_name,
+              c.status as court_status, c.name as court_name,
+              fm.status as member_status
+       FROM bookings b
+       JOIN facilities f ON b.facility_id = f.id
+       JOIN courts c ON b.court_id = c.id
+       LEFT JOIN facility_memberships fm ON b.user_id = fm.user_id AND b.facility_id = fm.facility_id
+       WHERE b.id = $1 AND b.status = 'confirmed'`,
+      [bookingId]
+    );
+
+    if (bookingCheck.rows.length === 0) {
+      return { success: false, error: 'Booking not found or not confirmed' };
+    }
+
+    const booking = bookingCheck.rows[0];
+
+    if (booking.facility_status === 'suspended' || booking.facility_status === 'closed') {
+      return { success: false, error: `${booking.facility_name} is currently ${booking.facility_status} and check-ins are not available.` };
+    }
+    if (booking.court_status === 'maintenance' || booking.court_status === 'closed') {
+      return { success: false, error: `${booking.court_name} is currently ${booking.court_status === 'maintenance' ? 'under maintenance' : 'closed'}.` };
+    }
+    if (booking.member_status === 'suspended') {
+      return { success: false, error: 'Your membership is currently suspended. Please contact the facility.' };
+    }
+
     const result = await query(
       `UPDATE bookings
        SET checked_in = true, checked_in_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP

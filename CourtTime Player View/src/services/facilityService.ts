@@ -846,6 +846,12 @@ export interface FacilityRegistrationData {
   hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }>;
   accountsPerAddress?: number;
 
+  // Admin profile fields (for both new and existing users)
+  adminProfilePicture?: string;
+  adminSkillLevel?: string;
+  adminUstaRating?: string;
+  adminBio?: string;
+
   // Payment
   paymentSessionId?: string;
   promoCode?: string;
@@ -990,6 +996,27 @@ export async function registerFacility(
        VALUES ($1, $2, 'admin', true, 'active', CURRENT_DATE)`,
       [superAdminUserId, facilityId]
     );
+
+    // 5b. Upsert player profile fields if provided
+    if (data.adminProfilePicture || data.adminSkillLevel || data.adminUstaRating || data.adminBio) {
+      await client.query(
+        `INSERT INTO player_profiles (user_id, profile_image_url, skill_level, ntrp_rating, bio)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id) DO UPDATE SET
+           profile_image_url = COALESCE(EXCLUDED.profile_image_url, player_profiles.profile_image_url),
+           skill_level = COALESCE(EXCLUDED.skill_level, player_profiles.skill_level),
+           ntrp_rating = COALESCE(EXCLUDED.ntrp_rating, player_profiles.ntrp_rating),
+           bio = COALESCE(EXCLUDED.bio, player_profiles.bio),
+           updated_at = CURRENT_TIMESTAMP`,
+        [
+          superAdminUserId,
+          data.adminProfilePicture || null,
+          data.adminSkillLevel || null,
+          data.adminUstaRating || null,
+          data.adminBio || null,
+        ]
+      );
+    }
 
     // 6. Create facility rules
     // Main booking limit rule (for regular members)

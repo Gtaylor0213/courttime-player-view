@@ -171,6 +171,12 @@ router.post('/register', async (req, res, next) => {
       // Existing user ID (if already logged in)
       existingUserId,
 
+      // Admin profile fields
+      adminProfilePicture,
+      adminSkillLevel,
+      adminUstaRating,
+      adminBio,
+
       // Payment
       paymentSessionId,
       promoCode,
@@ -250,6 +256,12 @@ router.post('/register', async (req, res, next) => {
       })),
       adminInvites: adminInvites?.map((invite: any) => invite.email || invite).filter(Boolean),
       hoaAddresses: hoaAddresses || undefined,
+
+      // Admin profile fields
+      adminProfilePicture: adminProfilePicture || undefined,
+      adminSkillLevel: adminSkillLevel || undefined,
+      adminUstaRating: adminUstaRating || undefined,
+      adminBio: adminBio || undefined,
 
       // Payment
       paymentSessionId: paymentSessionId || undefined,

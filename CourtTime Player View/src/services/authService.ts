@@ -187,7 +187,10 @@ export async function loginUser(email: string, password: string): Promise<LoginR
         u.user_type as "userType",
         u.created_at as "createdAt",
         u.updated_at as "updatedAt",
-        pp.profile_image_url as "profileImageUrl"
+        pp.profile_image_url as "profileImageUrl",
+        pp.skill_level as "skillLevel",
+        pp.bio,
+        pp.ntrp_rating as "ustaRating"
        FROM users u
        LEFT JOIN player_profiles pp ON u.id = pp.user_id
        WHERE u.email = $1`,
@@ -277,7 +280,8 @@ export async function getUserById(userId: string): Promise<User | null> {
         u.updated_at as "updatedAt",
         pp.skill_level as "skillLevel",
         pp.bio,
-        pp.profile_image_url as "profileImageUrl"
+        pp.profile_image_url as "profileImageUrl",
+        pp.ntrp_rating as "ustaRating"
        FROM users u
        LEFT JOIN player_profiles pp ON u.id = pp.user_id
        WHERE u.id = $1`,

@@ -13,8 +13,9 @@ import { Alert, AlertDescription } from './ui/alert';
 import {
   ArrowLeft, ArrowRight, Building, MapPin, Clock, FileText,
   Plus, Trash2, Check, AlertCircle, Upload, Mail, User, Users,
-  Grid3X3, ShieldCheck, Phone, CreditCard, Tag
+  Grid3X3, ShieldCheck, Phone, CreditCard, Tag, LogIn, UserPlus, Camera
 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { toast } from 'sonner';
@@ -64,7 +65,15 @@ export function FacilityRegistration() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { register, user } = useAuth();
+  const { register, user, login } = useAuth();
+
+  // Step 1 mode: choose between creating new account or logging in
+  const [step1Mode, setStep1Mode] = useState<'choose' | 'create' | 'login' | 'loggedIn'>('choose');
+  const [loggedInDuringRegistration, setLoggedInDuringRegistration] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [formData, setFormData] = useState({
     // Step 1: Facility Administrator Account (if not logged in)
@@ -78,6 +87,12 @@ export function FacilityRegistration() {
     adminCity: '',
     adminState: '',
     adminZipCode: '',
+
+    // Admin profile fields (available for both create and login paths)
+    adminProfilePicture: '',
+    adminSkillLevel: '',
+    adminUstaRating: '',
+    adminBio: '',
 
     // Step 2: Facility Information
     facilityName: '',
@@ -159,7 +174,10 @@ export function FacilityRegistration() {
   const [paymentWaived, setPaymentWaived] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
-  const totalSteps = user ? 6 : 7; // +1 for Payment step
+  // Pre-authenticated = user was already logged in before visiting registration (skip Step 1)
+  // loggedInDuringRegistration = user logged in via Step 1 login form (still shows Step 1)
+  const preAuthenticated = !!user && !loggedInDuringRegistration;
+  const totalSteps = preAuthenticated ? 6 : 7; // +1 for Payment step
 
   // Handle return from Stripe Checkout redirect
   useEffect(() => {
@@ -369,6 +387,76 @@ export function FacilityRegistration() {
     }));
   };
 
+  // Handle admin profile picture upload
+  const handleAdminProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        handleInputChange('adminProfilePicture', reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle login during facility registration
+  const handleRegistrationLogin = async () => {
+    if (!loginEmail.trim() || !loginPassword) {
+      setLoginError('Please enter both email and password');
+      return;
+    }
+    setIsLoggingIn(true);
+    setLoginError('');
+    try {
+      const success = await login(loginEmail, loginPassword);
+      if (success) {
+        setLoggedInDuringRegistration(true);
+        setStep1Mode('loggedIn');
+        toast.success('Logged in successfully!');
+      } else {
+        setLoginError('Invalid email or password');
+      }
+    } catch (error: any) {
+      setLoginError(error.message || 'Login failed');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // Pre-fill formData after login during registration
+  useEffect(() => {
+    if (user && loggedInDuringRegistration) {
+      setFormData(prev => ({
+        ...prev,
+        adminEmail: user.email || prev.adminEmail,
+        adminFirstName: user.firstName || prev.adminFirstName,
+        adminLastName: user.lastName || prev.adminLastName,
+        adminPhone: user.phone || prev.adminPhone,
+        adminStreetAddress: user.streetAddress || prev.adminStreetAddress,
+        adminCity: user.city || prev.adminCity,
+        adminState: user.state || prev.adminState,
+        adminZipCode: user.zipCode || prev.adminZipCode,
+        adminProfilePicture: user.profileImageUrl || prev.adminProfilePicture,
+        adminSkillLevel: user.skillLevel || prev.adminSkillLevel,
+        adminUstaRating: user.ustaRating || prev.adminUstaRating,
+        adminBio: user.bio || prev.adminBio,
+        primaryContact: {
+          name: user.fullName || prev.primaryContact.name,
+          email: user.email || prev.primaryContact.email,
+          phone: user.phone || prev.primaryContact.phone,
+        },
+      }));
+    }
+  }, [user, loggedInDuringRegistration]);
+
   // Parse CSV text into address objects
   const parseCSV = (text: string): Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }> => {
     const lines = text.split(/\r?\n/).filter(line => line.trim());
@@ -561,25 +649,31 @@ export function FacilityRegistration() {
   const getStepErrors = (step: number): Record<string, string> => {
     const stepErrors: Record<string, string> = {};
 
-    if (!user && step === 1) {
-      // Validate Facility Administrator Account
-      if (!formData.adminFirstName.trim()) stepErrors.adminFirstName = 'First name is required';
-      if (!formData.adminLastName.trim()) stepErrors.adminLastName = 'Last name is required';
-      if (!formData.adminEmail.trim()) stepErrors.adminEmail = 'Email is required';
-      else if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) stepErrors.adminEmail = 'Email is invalid';
-      if (!formData.adminPhone.trim()) stepErrors.adminPhone = 'Phone number is required';
-      if (!formData.adminPassword) stepErrors.adminPassword = 'Password is required';
-      else if (formData.adminPassword.length < 8) stepErrors.adminPassword = 'Password must be at least 8 characters';
-      if (formData.adminPassword !== formData.adminConfirmPassword) {
-        stepErrors.adminConfirmPassword = 'Passwords do not match';
+    if (!preAuthenticated && step === 1) {
+      // Validate Step 1 based on mode
+      if (step1Mode === 'choose' || step1Mode === 'login') {
+        stepErrors.step1Mode = 'Please create an account or log in to continue';
+      } else if (step1Mode === 'create') {
+        // Validate new account creation fields
+        if (!formData.adminFirstName.trim()) stepErrors.adminFirstName = 'First name is required';
+        if (!formData.adminLastName.trim()) stepErrors.adminLastName = 'Last name is required';
+        if (!formData.adminEmail.trim()) stepErrors.adminEmail = 'Email is required';
+        else if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) stepErrors.adminEmail = 'Email is invalid';
+        if (!formData.adminPhone.trim()) stepErrors.adminPhone = 'Phone number is required';
+        if (!formData.adminPassword) stepErrors.adminPassword = 'Password is required';
+        else if (formData.adminPassword.length < 8) stepErrors.adminPassword = 'Password must be at least 8 characters';
+        if (formData.adminPassword !== formData.adminConfirmPassword) {
+          stepErrors.adminConfirmPassword = 'Passwords do not match';
+        }
+        if (!formData.adminStreetAddress.trim()) stepErrors.adminStreetAddress = 'Street address is required';
+        if (!formData.adminCity.trim()) stepErrors.adminCity = 'City is required';
+        if (!formData.adminState) stepErrors.adminState = 'State is required';
+        if (!formData.adminZipCode.trim()) stepErrors.adminZipCode = 'ZIP code is required';
       }
-      if (!formData.adminStreetAddress.trim()) stepErrors.adminStreetAddress = 'Street address is required';
-      if (!formData.adminCity.trim()) stepErrors.adminCity = 'City is required';
-      if (!formData.adminState) stepErrors.adminState = 'State is required';
-      if (!formData.adminZipCode.trim()) stepErrors.adminZipCode = 'ZIP code is required';
+      // 'loggedIn' mode: no required fields (all profile completion is optional)
     }
 
-    const facilityStep = user ? 1 : 2;
+    const facilityStep = preAuthenticated ? 1 : 2;
     if (step === facilityStep) {
       // Validate Facility Information
       if (!formData.facilityName.trim()) stepErrors.facilityName = 'Facility name is required';
@@ -598,7 +692,7 @@ export function FacilityRegistration() {
       if (!formData.primaryContact.phone.trim()) stepErrors.primaryContactPhone = 'Primary contact phone is required';
     }
 
-    const courtsStep = user ? 2 : 3;
+    const courtsStep = preAuthenticated ? 2 : 3;
     if (step === courtsStep) {
       // Validate Courts
       if (formData.courts.length === 0) {
@@ -606,7 +700,7 @@ export function FacilityRegistration() {
       }
     }
 
-    const rulesStep = user ? 3 : 4;
+    const rulesStep = preAuthenticated ? 3 : 4;
     if (step === rulesStep) {
       if (!formData.rulesConfig.generalRules.trim()) stepErrors.generalRules = 'General rules are required';
       if (!formData.rulesConfig.restrictionType) stepErrors.restrictionType = 'Please select how restrictions apply';
@@ -651,6 +745,17 @@ export function FacilityRegistration() {
   };
 
   const handleNext = () => {
+    // Block Next on step 1 if not in a valid completed state
+    if (!preAuthenticated && currentStep === 1) {
+      if (step1Mode === 'choose') {
+        toast.error('Please choose to create a new account or log in to an existing one');
+        return;
+      }
+      if (step1Mode === 'login') {
+        toast.error('Please complete the login to continue');
+        return;
+      }
+    }
     setCurrentStep(prev => Math.min(prev + 1, totalSteps));
   };
 
@@ -781,7 +886,7 @@ export function FacilityRegistration() {
     try {
       // Prepare registration data
       const registrationData = {
-        // Facility Administrator Account (if creating new user)
+        // Facility Administrator Account (if creating new user — not logged in)
         ...(user ? {} : {
           adminEmail: formData.adminEmail,
           adminPassword: formData.adminPassword,
@@ -794,6 +899,12 @@ export function FacilityRegistration() {
           adminState: formData.adminState,
           adminZipCode: formData.adminZipCode,
         }),
+
+        // Admin profile fields (for both new and existing users)
+        ...(formData.adminProfilePicture && { adminProfilePicture: formData.adminProfilePicture }),
+        ...(formData.adminSkillLevel && { adminSkillLevel: formData.adminSkillLevel }),
+        ...(formData.adminUstaRating && { adminUstaRating: formData.adminUstaRating }),
+        ...(formData.adminBio && { adminBio: formData.adminBio }),
 
         // Facility Information
         facilityName: formData.facilityName,
@@ -955,8 +1066,8 @@ export function FacilityRegistration() {
 
   // Get step label based on step number and user status
   const getStepLabel = (stepNumber: number): string => {
-    if (!user) {
-      // Not logged in - 7 steps
+    if (!preAuthenticated) {
+      // Not pre-authenticated - 7 steps (includes account step)
       switch (stepNumber) {
         case 1: return 'Your Account';
         case 2: return 'Facility Info';
@@ -968,7 +1079,7 @@ export function FacilityRegistration() {
         default: return '';
       }
     } else {
-      // Logged in - 6 steps
+      // Pre-authenticated - 6 steps (skip account step)
       switch (stepNumber) {
         case 1: return 'Facility Info';
         case 2: return 'Courts';
@@ -1278,163 +1389,497 @@ export function FacilityRegistration() {
     );
   };
 
-  const renderStep1AdminAccount = () => (
-    <div className="space-y-6">
+  // Shared profile fields section used in both "create" and "loggedIn" modes
+  const renderProfileFields = () => (
+    <div className="space-y-4 pt-4 border-t">
+      <h3 className="text-lg font-medium">Player Profile (Optional)</h3>
+      <p className="text-sm text-gray-500">These fields are optional and can be updated later in your profile settings.</p>
+
+      {/* Profile Picture */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Create Facility Administrator Account</h3>
-        <p className="text-sm text-gray-600 mb-6">
-          As the facility creator, you will be the primary administrator with full access to manage your facility.
-        </p>
+        <Label>Profile Picture</Label>
+        <div className="flex items-center gap-4 mt-2">
+          <Avatar className="h-16 w-16">
+            {formData.adminProfilePicture ? (
+              <AvatarImage src={formData.adminProfilePicture} alt="Profile" />
+            ) : null}
+            <AvatarFallback className="text-lg">
+              {(formData.adminFirstName || user?.firstName || '?')[0]?.toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => document.getElementById('adminProfilePicInput')?.click()}
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              {formData.adminProfilePicture ? 'Change' : 'Upload'}
+            </Button>
+            {formData.adminProfilePicture && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleInputChange('adminProfilePicture', '')}
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+          <input
+            id="adminProfilePicInput"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAdminProfilePictureChange}
+          />
+        </div>
       </div>
 
-      <div className="space-y-4">
-        {/* Name Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="adminFirstName">First Name *</Label>
-            <Input
-              id="adminFirstName"
-              value={formData.adminFirstName}
-              onChange={(e) => handleInputChange('adminFirstName', e.target.value)}
-              className={errors.adminFirstName ? 'border-red-500' : ''}
-            />
-            {errors.adminFirstName && <p className="text-sm text-red-500 mt-1">{errors.adminFirstName}</p>}
-          </div>
-          <div>
-            <Label htmlFor="adminLastName">Last Name *</Label>
-            <Input
-              id="adminLastName"
-              value={formData.adminLastName}
-              onChange={(e) => handleInputChange('adminLastName', e.target.value)}
-              className={errors.adminLastName ? 'border-red-500' : ''}
-            />
-            {errors.adminLastName && <p className="text-sm text-red-500 mt-1">{errors.adminLastName}</p>}
-          </div>
-        </div>
-
-        {/* Contact */}
+      {/* Skill Level & USTA Rating */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="adminEmail" className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            Email Address *
-          </Label>
-          <Input
-            id="adminEmail"
-            type="email"
-            value={formData.adminEmail}
-            onChange={(e) => handleInputChange('adminEmail', e.target.value)}
-            className={errors.adminEmail ? 'border-red-500' : ''}
-          />
-          {errors.adminEmail && <p className="text-sm text-red-500 mt-1">{errors.adminEmail}</p>}
+          <Label htmlFor="adminSkillLevel">Skill Level</Label>
+          <Select
+            value={formData.adminSkillLevel}
+            onValueChange={(value) => handleInputChange('adminSkillLevel', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select skill level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Beginner">Beginner</SelectItem>
+              <SelectItem value="Intermediate">Intermediate</SelectItem>
+              <SelectItem value="Advanced">Advanced</SelectItem>
+              <SelectItem value="Expert">Expert</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-
         <div>
-          <Label htmlFor="adminPhone" className="flex items-center gap-2">
-            <Phone className="h-4 w-4" />
-            Phone Number *
-          </Label>
-          <Input
-            id="adminPhone"
-            value={formData.adminPhone}
-            onChange={(e) => handleInputChange('adminPhone', e.target.value)}
-            placeholder="+1 (555) 123-4567"
-            className={errors.adminPhone ? 'border-red-500' : ''}
-          />
-          {errors.adminPhone && <p className="text-sm text-red-500 mt-1">{errors.adminPhone}</p>}
+          <Label htmlFor="adminUstaRating">USTA/NTRP Rating</Label>
+          <Select
+            value={formData.adminUstaRating}
+            onValueChange={(value) => handleInputChange('adminUstaRating', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select rating" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2.0">2.0</SelectItem>
+              <SelectItem value="2.5">2.5</SelectItem>
+              <SelectItem value="3.0">3.0</SelectItem>
+              <SelectItem value="3.5">3.5</SelectItem>
+              <SelectItem value="4.0">4.0</SelectItem>
+              <SelectItem value="4.5">4.5</SelectItem>
+              <SelectItem value="5.0">5.0</SelectItem>
+              <SelectItem value="5.5">5.5</SelectItem>
+              <SelectItem value="6.0">6.0</SelectItem>
+              <SelectItem value="6.5">6.5</SelectItem>
+              <SelectItem value="7.0">7.0</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+      </div>
 
-        {/* Password */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="adminPassword">Password *</Label>
-            <Input
-              id="adminPassword"
-              type="password"
-              value={formData.adminPassword}
-              onChange={(e) => handleInputChange('adminPassword', e.target.value)}
-              placeholder="Minimum 8 characters"
-              className={errors.adminPassword ? 'border-red-500' : ''}
-            />
-            {errors.adminPassword && <p className="text-sm text-red-500 mt-1">{errors.adminPassword}</p>}
-          </div>
-          <div>
-            <Label htmlFor="adminConfirmPassword">Confirm Password *</Label>
-            <Input
-              id="adminConfirmPassword"
-              type="password"
-              value={formData.adminConfirmPassword}
-              onChange={(e) => handleInputChange('adminConfirmPassword', e.target.value)}
-              placeholder="Re-enter password"
-              className={errors.adminConfirmPassword ? 'border-red-500' : ''}
-            />
-            {errors.adminConfirmPassword && <p className="text-sm text-red-500 mt-1">{errors.adminConfirmPassword}</p>}
-          </div>
-        </div>
-
-        {/* Address */}
-        <div className="space-y-4 pt-4 border-t">
-          <h3 className="text-lg font-medium flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Address Information
-          </h3>
-
-          <div>
-            <Label htmlFor="adminStreetAddress">Street Address *</Label>
-            <Input
-              id="adminStreetAddress"
-              value={formData.adminStreetAddress}
-              onChange={(e) => handleInputChange('adminStreetAddress', e.target.value)}
-              placeholder="123 Main Street"
-              className={errors.adminStreetAddress ? 'border-red-500' : ''}
-            />
-            {errors.adminStreetAddress && <p className="text-sm text-red-500 mt-1">{errors.adminStreetAddress}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="adminCity">City *</Label>
-              <Input
-                id="adminCity"
-                value={formData.adminCity}
-                onChange={(e) => handleInputChange('adminCity', e.target.value)}
-                placeholder="City"
-                className={errors.adminCity ? 'border-red-500' : ''}
-              />
-              {errors.adminCity && <p className="text-sm text-red-500 mt-1">{errors.adminCity}</p>}
-            </div>
-            <div>
-              <Label htmlFor="adminState">State *</Label>
-              <Select
-                value={formData.adminState}
-                onValueChange={(value) => handleInputChange('adminState', value)}
-              >
-                <SelectTrigger className={errors.adminState ? 'border-red-500' : ''}>
-                  <SelectValue placeholder="State" />
-                </SelectTrigger>
-                <SelectContent>
-                  {US_STATES.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.adminState && <p className="text-sm text-red-500 mt-1">{errors.adminState}</p>}
-            </div>
-            <div>
-              <Label htmlFor="adminZipCode">ZIP Code *</Label>
-              <Input
-                id="adminZipCode"
-                value={formData.adminZipCode}
-                onChange={(e) => handleInputChange('adminZipCode', e.target.value)}
-                placeholder="12345"
-                className={errors.adminZipCode ? 'border-red-500' : ''}
-              />
-              {errors.adminZipCode && <p className="text-sm text-red-500 mt-1">{errors.adminZipCode}</p>}
-            </div>
-          </div>
-        </div>
+      {/* Bio */}
+      <div>
+        <Label htmlFor="adminBio">Bio</Label>
+        <Textarea
+          id="adminBio"
+          value={formData.adminBio}
+          onChange={(e) => {
+            if (e.target.value.length <= 500) {
+              handleInputChange('adminBio', e.target.value);
+            }
+          }}
+          placeholder="Tell us a little about yourself..."
+          rows={3}
+        />
+        <p className="text-xs text-gray-400 mt-1">{formData.adminBio.length}/500 characters</p>
       </div>
     </div>
   );
+
+  const renderStep1AdminAccount = () => {
+    // Choose mode — two clickable cards
+    if (step1Mode === 'choose') {
+      return (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Facility Administrator Account</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              As the facility creator, you will be the primary administrator. Choose how you'd like to set up your account.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card
+              className="cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
+              onClick={() => setStep1Mode('create')}
+            >
+              <CardContent className="flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+                  <UserPlus className="h-8 w-8 text-blue-600" />
+                </div>
+                <h4 className="text-lg font-semibold mb-2">Create New Account</h4>
+                <p className="text-sm text-gray-500">
+                  New to CourtTime? Create a fresh administrator account.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card
+              className="cursor-pointer hover:border-green-500 hover:shadow-md transition-all"
+              onClick={() => setStep1Mode('login')}
+            >
+              <CardContent className="flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mb-4">
+                  <LogIn className="h-8 w-8 text-green-600" />
+                </div>
+                <h4 className="text-lg font-semibold mb-2">Login to Existing Account</h4>
+                <p className="text-sm text-gray-500">
+                  Already have a CourtTime account? Log in to use it.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    // Login mode — email + password form
+    if (step1Mode === 'login') {
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { setStep1Mode('choose'); setLoginError(''); }}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back to options
+            </Button>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Login to Your Account</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Enter your existing CourtTime credentials to continue.
+            </p>
+          </div>
+
+          <div className="max-w-md space-y-4">
+            <div>
+              <Label htmlFor="loginEmail" className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Email Address
+              </Label>
+              <Input
+                id="loginEmail"
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="your@email.com"
+                onKeyDown={(e) => e.key === 'Enter' && handleRegistrationLogin()}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="loginPasswordField">Password</Label>
+              <Input
+                id="loginPasswordField"
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="Enter your password"
+                onKeyDown={(e) => e.key === 'Enter' && handleRegistrationLogin()}
+              />
+            </div>
+
+            {loginError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{loginError}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              onClick={handleRegistrationLogin}
+              disabled={isLoggingIn}
+              className="w-full"
+            >
+              {isLoggingIn ? 'Logging in...' : 'Log In'}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Logged-in mode — confirmation card + profile completion
+    if (step1Mode === 'loggedIn' && user) {
+      return (
+        <div className="space-y-6">
+          {/* Logged in confirmation */}
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                <Check className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-medium text-green-800">Logged in as {user.fullName}</p>
+                <p className="text-sm text-green-600">{user.email}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <p className="text-sm text-gray-600">
+            You can optionally update your profile information below, or click Next to continue.
+          </p>
+
+          {/* Optional profile fields pre-filled from user data */}
+          <div className="space-y-4">
+            {/* Phone & Address (editable) */}
+            <div>
+              <Label htmlFor="adminPhoneLoggedIn" className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                Phone Number
+              </Label>
+              <Input
+                id="adminPhoneLoggedIn"
+                value={formData.adminPhone}
+                onChange={(e) => handleInputChange('adminPhone', e.target.value)}
+                placeholder="+1 (555) 123-4567"
+              />
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Address Information
+              </h3>
+
+              <div>
+                <Label htmlFor="adminStreetAddressLoggedIn">Street Address</Label>
+                <Input
+                  id="adminStreetAddressLoggedIn"
+                  value={formData.adminStreetAddress}
+                  onChange={(e) => handleInputChange('adminStreetAddress', e.target.value)}
+                  placeholder="123 Main Street"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="adminCityLoggedIn">City</Label>
+                  <Input
+                    id="adminCityLoggedIn"
+                    value={formData.adminCity}
+                    onChange={(e) => handleInputChange('adminCity', e.target.value)}
+                    placeholder="City"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="adminStateLoggedIn">State</Label>
+                  <Select
+                    value={formData.adminState}
+                    onValueChange={(value) => handleInputChange('adminState', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="State" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {US_STATES.map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="adminZipCodeLoggedIn">ZIP Code</Label>
+                  <Input
+                    id="adminZipCodeLoggedIn"
+                    value={formData.adminZipCode}
+                    onChange={(e) => handleInputChange('adminZipCode', e.target.value)}
+                    placeholder="12345"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {renderProfileFields()}
+          </div>
+        </div>
+      );
+    }
+
+    // Create mode — original form + new profile fields
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setStep1Mode('choose')}>
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back to options
+          </Button>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Create Facility Administrator Account</h3>
+          <p className="text-sm text-gray-600 mb-6">
+            As the facility creator, you will be the primary administrator with full access to manage your facility.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          {/* Name Fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="adminFirstName">First Name *</Label>
+              <Input
+                id="adminFirstName"
+                value={formData.adminFirstName}
+                onChange={(e) => handleInputChange('adminFirstName', e.target.value)}
+                className={errors.adminFirstName ? 'border-red-500' : ''}
+              />
+              {errors.adminFirstName && <p className="text-sm text-red-500 mt-1">{errors.adminFirstName}</p>}
+            </div>
+            <div>
+              <Label htmlFor="adminLastName">Last Name *</Label>
+              <Input
+                id="adminLastName"
+                value={formData.adminLastName}
+                onChange={(e) => handleInputChange('adminLastName', e.target.value)}
+                className={errors.adminLastName ? 'border-red-500' : ''}
+              />
+              {errors.adminLastName && <p className="text-sm text-red-500 mt-1">{errors.adminLastName}</p>}
+            </div>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <Label htmlFor="adminEmail" className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Email Address *
+            </Label>
+            <Input
+              id="adminEmail"
+              type="email"
+              value={formData.adminEmail}
+              onChange={(e) => handleInputChange('adminEmail', e.target.value)}
+              className={errors.adminEmail ? 'border-red-500' : ''}
+            />
+            {errors.adminEmail && <p className="text-sm text-red-500 mt-1">{errors.adminEmail}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="adminPhone" className="flex items-center gap-2">
+              <Phone className="h-4 w-4" />
+              Phone Number *
+            </Label>
+            <Input
+              id="adminPhone"
+              value={formData.adminPhone}
+              onChange={(e) => handleInputChange('adminPhone', e.target.value)}
+              placeholder="+1 (555) 123-4567"
+              className={errors.adminPhone ? 'border-red-500' : ''}
+            />
+            {errors.adminPhone && <p className="text-sm text-red-500 mt-1">{errors.adminPhone}</p>}
+          </div>
+
+          {/* Password */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="adminPassword">Password *</Label>
+              <Input
+                id="adminPassword"
+                type="password"
+                value={formData.adminPassword}
+                onChange={(e) => handleInputChange('adminPassword', e.target.value)}
+                placeholder="Minimum 8 characters"
+                className={errors.adminPassword ? 'border-red-500' : ''}
+              />
+              {errors.adminPassword && <p className="text-sm text-red-500 mt-1">{errors.adminPassword}</p>}
+            </div>
+            <div>
+              <Label htmlFor="adminConfirmPassword">Confirm Password *</Label>
+              <Input
+                id="adminConfirmPassword"
+                type="password"
+                value={formData.adminConfirmPassword}
+                onChange={(e) => handleInputChange('adminConfirmPassword', e.target.value)}
+                placeholder="Re-enter password"
+                className={errors.adminConfirmPassword ? 'border-red-500' : ''}
+              />
+              {errors.adminConfirmPassword && <p className="text-sm text-red-500 mt-1">{errors.adminConfirmPassword}</p>}
+            </div>
+          </div>
+
+          {/* Address */}
+          <div className="space-y-4 pt-4 border-t">
+            <h3 className="text-lg font-medium flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Address Information
+            </h3>
+
+            <div>
+              <Label htmlFor="adminStreetAddress">Street Address *</Label>
+              <Input
+                id="adminStreetAddress"
+                value={formData.adminStreetAddress}
+                onChange={(e) => handleInputChange('adminStreetAddress', e.target.value)}
+                placeholder="123 Main Street"
+                className={errors.adminStreetAddress ? 'border-red-500' : ''}
+              />
+              {errors.adminStreetAddress && <p className="text-sm text-red-500 mt-1">{errors.adminStreetAddress}</p>}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="adminCity">City *</Label>
+                <Input
+                  id="adminCity"
+                  value={formData.adminCity}
+                  onChange={(e) => handleInputChange('adminCity', e.target.value)}
+                  placeholder="City"
+                  className={errors.adminCity ? 'border-red-500' : ''}
+                />
+                {errors.adminCity && <p className="text-sm text-red-500 mt-1">{errors.adminCity}</p>}
+              </div>
+              <div>
+                <Label htmlFor="adminState">State *</Label>
+                <Select
+                  value={formData.adminState}
+                  onValueChange={(value) => handleInputChange('adminState', value)}
+                >
+                  <SelectTrigger className={errors.adminState ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="State" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {US_STATES.map(s => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.adminState && <p className="text-sm text-red-500 mt-1">{errors.adminState}</p>}
+              </div>
+              <div>
+                <Label htmlFor="adminZipCode">ZIP Code *</Label>
+                <Input
+                  id="adminZipCode"
+                  value={formData.adminZipCode}
+                  onChange={(e) => handleInputChange('adminZipCode', e.target.value)}
+                  placeholder="12345"
+                  className={errors.adminZipCode ? 'border-red-500' : ''}
+                />
+                {errors.adminZipCode && <p className="text-sm text-red-500 mt-1">{errors.adminZipCode}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Profile fields */}
+          {renderProfileFields()}
+        </div>
+      </div>
+    );
+  };
 
   const renderStep2FacilityInfo = () => (
     <div className="space-y-6">
@@ -2237,16 +2682,34 @@ export function FacilityRegistration() {
         </p>
       </div>
 
-      {!user && (
+      {!preAuthenticated && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Administrator Account</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              Administrator Account
+              {loggedInDuringRegistration && (
+                <Badge variant="secondary" className="text-xs">Existing Account</Badge>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div><span className="font-medium">Name:</span> {formData.adminFirstName} {formData.adminLastName}</div>
-            <div><span className="font-medium">Email:</span> {formData.adminEmail}</div>
-            <div><span className="font-medium">Phone:</span> {formData.adminPhone}</div>
-            <div><span className="font-medium">Address:</span> {formData.adminStreetAddress}, {formData.adminCity}, {formData.adminState} {formData.adminZipCode}</div>
+            {loggedInDuringRegistration && user ? (
+              <>
+                <div><span className="font-medium">Name:</span> {user.fullName}</div>
+                <div><span className="font-medium">Email:</span> {user.email}</div>
+                {user.phone && <div><span className="font-medium">Phone:</span> {user.phone}</div>}
+              </>
+            ) : (
+              <>
+                <div><span className="font-medium">Name:</span> {formData.adminFirstName} {formData.adminLastName}</div>
+                <div><span className="font-medium">Email:</span> {formData.adminEmail}</div>
+                <div><span className="font-medium">Phone:</span> {formData.adminPhone}</div>
+                <div><span className="font-medium">Address:</span> {formData.adminStreetAddress}, {formData.adminCity}, {formData.adminState} {formData.adminZipCode}</div>
+              </>
+            )}
+            {formData.adminSkillLevel && <div><span className="font-medium">Skill Level:</span> {formData.adminSkillLevel}</div>}
+            {formData.adminUstaRating && <div><span className="font-medium">USTA Rating:</span> {formData.adminUstaRating}</div>}
+            {formData.adminBio && <div><span className="font-medium">Bio:</span> {formData.adminBio}</div>}
           </CardContent>
         </Card>
       )}
@@ -2418,13 +2881,13 @@ export function FacilityRegistration() {
           {renderProgressBar()}
 
           <div className="mt-8">
-            {!user && currentStep === 1 && renderStep1AdminAccount()}
-            {(user ? currentStep === 1 : currentStep === 2) && renderStep2FacilityInfo()}
-            {(user ? currentStep === 2 : currentStep === 3) && renderStep4Courts()}
-            {(user ? currentStep === 3 : currentStep === 4) && renderRulesStep()}
-            {(user ? currentStep === 4 : currentStep === 5) && renderStep5Admins()}
-            {(user ? currentStep === 5 : currentStep === 6) && renderStep6Review()}
-            {(user ? currentStep === 6 : currentStep === 7) && renderPaymentStep()}
+            {!preAuthenticated && currentStep === 1 && renderStep1AdminAccount()}
+            {(preAuthenticated ? currentStep === 1 : currentStep === 2) && renderStep2FacilityInfo()}
+            {(preAuthenticated ? currentStep === 2 : currentStep === 3) && renderStep4Courts()}
+            {(preAuthenticated ? currentStep === 3 : currentStep === 4) && renderRulesStep()}
+            {(preAuthenticated ? currentStep === 4 : currentStep === 5) && renderStep5Admins()}
+            {(preAuthenticated ? currentStep === 5 : currentStep === 6) && renderStep6Review()}
+            {(preAuthenticated ? currentStep === 6 : currentStep === 7) && renderPaymentStep()}
           </div>
 
           <div className="flex justify-between mt-8">

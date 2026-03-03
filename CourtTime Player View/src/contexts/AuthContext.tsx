@@ -12,7 +12,14 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   userType: 'player' | 'admin';
+  phone?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   memberFacilities?: string[]; // Array of facility IDs user belongs to
   adminFacilities?: string[]; // Array of facility IDs user is admin of
   profileImageUrl?: string; // Profile image (base64 or URL)

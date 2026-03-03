@@ -257,6 +257,12 @@ export const facilitiesApi = {
       ruleConfig: Record<string, any>;
     }>;
 
+    // Admin profile fields
+    adminProfilePicture?: string;
+    adminSkillLevel?: string;
+    adminUstaRating?: string;
+    adminBio?: string;
+
     // Existing user ID (if already logged in)
     existingUserId?: string;
   }) => {

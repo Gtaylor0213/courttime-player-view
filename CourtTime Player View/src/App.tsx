@@ -33,8 +33,8 @@ import { MemberManagement } from './components/admin/MemberManagement';
 import { HouseholdManagement } from './components/admin/HouseholdManagement';
 import { AdminCommunication } from './components/admin/AdminCommunication';
 
-// Developer
-import { DeveloperConsole } from './components/developer';
+// Support Console
+import { SupportConsole } from './components/developer';
 
 export default function App() {
   return (
@@ -50,8 +50,8 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
-            {/* Developer route - bypasses auth */}
-            <Route path="/developer/*" element={<DeveloperConsole />} />
+            {/* Support Console route - bypasses auth */}
+            <Route path="/developer/*" element={<SupportConsole />} />
 
             {/* Protected routes with sidebar layout */}
             <Route element={

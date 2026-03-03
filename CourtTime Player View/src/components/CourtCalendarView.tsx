@@ -937,7 +937,7 @@ export function CourtCalendarView() {
         ) : (
           <>
         {/* Controls Header */}
-        <div className="flex-shrink-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+        <div className="flex-shrink-0 z-40 bg-gray-50 border-b border-gray-200">
           <div className="px-3 md:px-4 py-2">
             {/* Top Row: Facility Name, Court Type Filter, Courts, Zoom, Bell */}
             <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">

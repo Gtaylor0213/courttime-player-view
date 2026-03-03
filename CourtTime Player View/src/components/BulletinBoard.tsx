@@ -274,11 +274,12 @@ export function BulletinBoard() {
 
   return (
     <>
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 p-6">
-          <div className="flex items-center justify-between">
+        {/* Content */}
+        <div className="p-4 md:p-8 max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-medium">Bulletin Board</h1>
+              <h1 className="text-2xl font-medium text-gray-900">Bulletin Board</h1>
               <p className="text-sm text-gray-600">
                 {hasNoFacilities
                   ? 'Join a facility to see events and announcements'
@@ -297,10 +298,6 @@ export function BulletinBoard() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 max-w-7xl mx-auto">
           {/* No Facility Alert */}
           {hasNoFacilities && (
             <Card className="mb-6 border-green-200 bg-green-50">

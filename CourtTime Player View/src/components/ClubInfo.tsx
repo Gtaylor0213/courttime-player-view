@@ -190,16 +190,13 @@ export function ClubInfo() {
 
   return (
     <>
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-medium">Club Information</h1>
+        {/* Content */}
+        <div className="p-4 md:p-8 max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-medium text-gray-900">Club Information</h1>
             <NotificationBell />
           </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 max-w-6xl mx-auto">
           {/* Non-Member Notice */}
           {!isMember && (
             <Card className="mb-6 border-green-200 bg-green-50">

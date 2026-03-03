@@ -97,14 +97,16 @@ router.delete('/:postId', async (req, res, next) => {
     const { postId } = req.params;
     const { authorId } = req.query;
 
-    if (!authorId) {
+    const isAdmin = req.query.isAdmin === 'true';
+
+    if (!isAdmin && !authorId) {
       return res.status(400).json({
         success: false,
         error: 'authorId is required'
       });
     }
 
-    const success = await deleteBulletinPost(postId, authorId as string);
+    const success = await deleteBulletinPost(postId, authorId as string, isAdmin);
 
     if (success) {
       res.json({

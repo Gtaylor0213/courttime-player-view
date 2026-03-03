@@ -16,6 +16,8 @@ export interface BulletinPost {
   isPinned: boolean;
   isAdminPost: boolean;
   postedDate: string;
+  expiresAt: string | null;
+  status: string;
   createdAt: string;
 }
 
@@ -26,6 +28,7 @@ export interface CreateBulletinPost {
   content: string;
   category: string;
   isAdminPost?: boolean;
+  expiresInDays?: number;
 }
 
 /**
@@ -33,6 +36,14 @@ export interface CreateBulletinPost {
  */
 export async function getFacilityBulletinPosts(facilityId: string): Promise<BulletinPost[]> {
   try {
+    // Lazy expiration: mark expired posts before fetching
+    await query(
+      `UPDATE bulletin_posts SET status = 'expired'
+       WHERE facility_id = $1 AND expires_at IS NOT NULL
+         AND expires_at < CURRENT_TIMESTAMP AND status = 'active'`,
+      [facilityId]
+    );
+
     const result = await query(
       `SELECT
         bp.id,
@@ -45,10 +56,12 @@ export async function getFacilityBulletinPosts(facilityId: string): Promise<Bull
         bp.is_pinned as "isPinned",
         bp.is_admin_post as "isAdminPost",
         bp.posted_date as "postedDate",
+        bp.expires_at as "expiresAt",
+        bp.status,
         bp.created_at as "createdAt"
        FROM bulletin_posts bp
        JOIN users u ON bp.author_id = u.id
-       WHERE bp.facility_id = $1
+       WHERE bp.facility_id = $1 AND (bp.status = 'active' OR bp.status IS NULL)
        ORDER BY bp.is_pinned DESC, bp.posted_date DESC
        LIMIT 50`,
       [facilityId]
@@ -66,6 +79,10 @@ export async function getFacilityBulletinPosts(facilityId: string): Promise<Bull
  */
 export async function createBulletinPost(data: CreateBulletinPost): Promise<string> {
   try {
+    const expiresAt = data.expiresInDays
+      ? `CURRENT_TIMESTAMP + INTERVAL '${parseInt(String(data.expiresInDays))} days'`
+      : 'NULL';
+
     const result = await query(
       `INSERT INTO bulletin_posts (
         facility_id,
@@ -73,8 +90,10 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
         title,
         content,
         category,
-        is_admin_post
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        is_admin_post,
+        expires_at,
+        status
+      ) VALUES ($1, $2, $3, $4, $5, $6, ${expiresAt}, 'active')
       RETURNING id`,
       [
         data.facilityId,
@@ -144,13 +163,11 @@ export async function updateBulletinPost(
 /**
  * Delete a bulletin post
  */
-export async function deleteBulletinPost(postId: string, authorId: string): Promise<boolean> {
+export async function deleteBulletinPost(postId: string, authorId: string, isAdmin?: boolean): Promise<boolean> {
   try {
-    const result = await query(
-      `DELETE FROM bulletin_posts
-       WHERE id = $1 AND author_id = $2`,
-      [postId, authorId]
-    );
+    const result = isAdmin
+      ? await query(`DELETE FROM bulletin_posts WHERE id = $1`, [postId])
+      : await query(`DELETE FROM bulletin_posts WHERE id = $1 AND author_id = $2`, [postId, authorId]);
 
     return result.rowCount > 0;
   } catch (error) {

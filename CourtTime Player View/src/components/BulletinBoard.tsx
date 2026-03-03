@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
-import { Calendar, Clock, Users, MapPin, Tag, Pin, AlertCircle, Plus, X } from 'lucide-react';
+import { Calendar, Clock, Users, MapPin, Tag, Pin, AlertCircle, Plus, X, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -72,7 +72,8 @@ export function BulletinBoard() {
     eventTime: '',
     location: '',
     maxParticipants: '',
-    facilityId: ''
+    facilityId: '',
+    expiresInDays: '' as string,
   });
 
   // Check if user is admin of any facility
@@ -204,7 +205,8 @@ export function BulletinBoard() {
         title: newPost.title,
         content: newPost.description,
         category: newPost.type,
-        isAdminPost: true
+        isAdminPost: true,
+        ...(newPost.expiresInDays ? { expiresInDays: parseInt(newPost.expiresInDays) } : {}),
       });
 
       if (response.success) {
@@ -218,7 +220,8 @@ export function BulletinBoard() {
           eventTime: '',
           location: '',
           maxParticipants: '',
-          facilityId: ''
+          facilityId: '',
+          expiresInDays: '',
         });
         // Reload posts
         loadData();
@@ -243,6 +246,25 @@ export function BulletinBoard() {
 
     setNewPost(prev => ({ ...prev, facilityId: defaultFacility }));
     setShowCreateModal(true);
+  };
+
+  const handleDeletePost = async (postId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this post?')) return;
+
+    try {
+      const response = await bulletinBoardApi.delete(postId, user?.id || '', true);
+      if (response.success) {
+        toast.success('Post deleted');
+        setSelectedPost(null);
+        loadData();
+      } else {
+        toast.error(response.error || 'Failed to delete post');
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      toast.error('Failed to delete post');
+    }
   };
 
   // Filter by type
@@ -451,9 +473,20 @@ export function BulletinBoard() {
                             <span className="text-xs text-gray-500">
                               Posted by {post.authorName}
                             </span>
-                            <span className="text-xs text-gray-400">
-                              {new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              {isAdmin && (
+                                <button
+                                  onClick={(e) => handleDeletePost(post.id, e)}
+                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                  title="Delete post"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                              <span className="text-xs text-gray-400">
+                                {new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </Card>
@@ -572,6 +605,16 @@ export function BulletinBoard() {
                   <Button variant="outline" className="flex-1" onClick={() => toast.info('Share feature coming soon')}>
                     Share
                   </Button>
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => handleDeletePost(selectedPost.id)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -737,6 +780,27 @@ export function BulletinBoard() {
                     </div>
                   </>
                 )}
+
+                {/* Auto-Expiration */}
+                <div className="space-y-2">
+                  <Label htmlFor="expiresInDays">Auto-expire after</Label>
+                  <Select
+                    value={newPost.expiresInDays || 'never'}
+                    onValueChange={(value) => setNewPost(prev => ({ ...prev, expiresInDays: value === 'never' ? '' : value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="never">Never</SelectItem>
+                      <SelectItem value="7">7 days</SelectItem>
+                      <SelectItem value="14">14 days</SelectItem>
+                      <SelectItem value="30">30 days</SelectItem>
+                      <SelectItem value="60">60 days</SelectItem>
+                      <SelectItem value="90">90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-4">

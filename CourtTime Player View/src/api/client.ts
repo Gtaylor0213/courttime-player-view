@@ -434,6 +434,7 @@ export const bulletinBoardApi = {
     content: string;
     category: string;
     isAdminPost?: boolean;
+    expiresInDays?: number;
   }) => {
     return apiRequest('/api/bulletin-board', {
       method: 'POST',
@@ -452,8 +453,9 @@ export const bulletinBoardApi = {
     });
   },
 
-  delete: async (postId: string, authorId: string) => {
-    return apiRequest(`/api/bulletin-board/${postId}?authorId=${authorId}`, {
+  delete: async (postId: string, authorId: string, isAdmin?: boolean) => {
+    const params = isAdmin ? `isAdmin=true` : `authorId=${authorId}`;
+    return apiRequest(`/api/bulletin-board/${postId}?${params}`, {
       method: 'DELETE',
     });
   },

@@ -1014,7 +1014,7 @@ export function FacilityRegistration() {
         promoCode: paymentWaived ? promoCode : undefined,
         paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : 40406),
         paymentWaived,
-        customPricing: formData.courts.length > 8,
+        customPricing: formData.courts.length > 10,
       };
 
       // Call the API to register the facility
@@ -1237,7 +1237,7 @@ export function FacilityRegistration() {
 
   const renderPaymentStep = () => {
     const courtCount = formData.courts.length;
-    const isCustomPricing = courtCount > 8;
+    const isCustomPricing = courtCount > 10;
     const baseAmountCents = 40406;
     const finalAmountCents = promoValidation?.valid
       ? (promoValidation.finalAmountCents ?? 0)
@@ -1278,7 +1278,7 @@ export function FacilityRegistration() {
                 <CreditCard className="h-5 w-5" />
                 Facility Registration Fee
               </CardTitle>
-              <CardDescription>Annual subscription for up to 8 courts</CardDescription>
+              <CardDescription>Annual subscription for up to 10 courts</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Pricing summary */}
@@ -2911,7 +2911,7 @@ export function FacilityRegistration() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting || (
-                  formData.courts.length <= 8 &&
+                  formData.courts.length <= 10 &&
                   !paymentComplete &&
                   !paymentWaived
                 )}

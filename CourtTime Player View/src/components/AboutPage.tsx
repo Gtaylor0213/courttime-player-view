@@ -24,7 +24,6 @@ export function AboutPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logoImage} alt="CourtTime" className="h-10 w-auto" />
-            <span className="text-xl font-bold text-gray-900">CourtTime</span>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" onClick={() => navigate('/login')}>

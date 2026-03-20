@@ -22,10 +22,11 @@ export async function validatePromoCode(code: string): Promise<{
   discountType?: string;
   discountValue?: number;
   finalAmountCents?: number;
+  trialMonths?: number;
   message?: string;
 }> {
   const result = await query(
-    `SELECT id, code, discount_type, discount_value, max_uses, current_uses, is_active, valid_from, valid_until
+    `SELECT id, code, discount_type, discount_value, max_uses, current_uses, is_active, valid_from, valid_until, trial_months
      FROM promo_codes
      WHERE LOWER(TRIM(code)) = LOWER(TRIM($1))`,
     [code]
@@ -62,15 +63,26 @@ export async function validatePromoCode(code: string): Promise<{
     finalAmountCents = Math.max(0, STANDARD_AMOUNT_CENTS - Math.round(promo.discount_value * 100));
   }
 
+  // Build message based on trial months or discount
+  let message: string;
+  const trialMonths = promo.trial_months ? Number(promo.trial_months) : undefined;
+
+  if (trialMonths) {
+    message = `Promo code applied — ${trialMonths} month${trialMonths > 1 ? 's' : ''} free trial! Card required for annual renewal ($404.06/year).`;
+  } else if (finalAmountCents === 0) {
+    message = 'Promo code applied — first year free! Card required for annual renewal ($404.06/year).';
+  } else {
+    message = `Promo code applied — total: $${(finalAmountCents / 100).toFixed(2)}`;
+  }
+
   return {
     valid: true,
     promoCodeId: promo.id,
     discountType: promo.discount_type,
     discountValue: Number(promo.discount_value),
     finalAmountCents,
-    message: finalAmountCents === 0
-      ? 'Promo code applied — first year free! Card required for annual renewal ($404.06/year).'
-      : `Promo code applied — total: $${(finalAmountCents / 100).toFixed(2)}`,
+    trialMonths,
+    message,
   };
 }
 
@@ -189,12 +201,13 @@ export async function createCheckoutSession(params: {
 
     // Handle promo codes
     if (params.promoCode && params.amountCents <= 0) {
-      // Check if this is an internal promo (forever free) or standard full waiver (1yr trial)
+      // Look up promo details
       const promoResult = await query(
-        `SELECT is_internal FROM promo_codes WHERE LOWER(TRIM(code)) = LOWER(TRIM($1))`,
+        `SELECT is_internal, trial_months FROM promo_codes WHERE LOWER(TRIM(code)) = LOWER(TRIM($1))`,
         [params.promoCode]
       );
       const isInternal = promoResult.rows[0]?.is_internal;
+      const trialMonths = promoResult.rows[0]?.trial_months ? Number(promoResult.rows[0].trial_months) : null;
 
       if (isInternal) {
         // Internal promo — use 100%-off forever coupon
@@ -202,6 +215,16 @@ export async function createCheckoutSession(params: {
         if (couponId) {
           sessionParams.discounts = [{ coupon: couponId }];
         }
+      } else if (trialMonths) {
+        // Monthly trial promo — convert months to days (approximate: 30 days per month)
+        sessionParams.subscription_data = {
+          trial_period_days: trialMonths * 30,
+          metadata: {
+            facilityName: params.facilityName,
+            promoCode: params.promoCode,
+            trialMonths: String(trialMonths),
+          },
+        };
       } else {
         // Standard full waiver — 1 year free trial, then $404.06/yr auto-renewal
         sessionParams.subscription_data = {

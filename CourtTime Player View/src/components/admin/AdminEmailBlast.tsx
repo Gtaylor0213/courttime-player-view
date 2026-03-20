@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Mail, Send, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { adminApi, membersApi } from '../../api/client';
+import { adminApi, membersApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
@@ -24,6 +24,7 @@ export function AdminEmailBlast() {
   const { selectedFacilityId } = useAppContext();
 
   const [members, setMembers] = useState<Member[]>([]);
+  const [facilityName, setFacilityName] = useState('');
   const [loading, setLoading] = useState(true);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -35,9 +36,21 @@ export function AdminEmailBlast() {
   useEffect(() => {
     if (selectedFacilityId) {
       loadMembers();
+      loadFacilityName();
       setSendResult(null);
     }
   }, [selectedFacilityId]);
+
+  const loadFacilityName = async () => {
+    try {
+      const response = await facilitiesApi.getById(selectedFacilityId);
+      if (response.success && response.facility) {
+        setFacilityName(response.facility.name || response.facility.facilityName || '');
+      }
+    } catch {
+      // Non-critical, preview will just show empty
+    }
+  };
 
   const loadMembers = async () => {
     try {
@@ -207,7 +220,7 @@ export function AdminEmailBlast() {
                 <p className="text-xs text-gray-500 mb-2">Email Preview:</p>
                 <div className="bg-white rounded-lg border overflow-hidden">
                   <div className="bg-green-600 px-6 py-4">
-                    <h3 className="text-white font-semibold text-lg">Your Facility</h3>
+                    <h3 className="text-white font-semibold text-lg">{facilityName || 'Your Facility'}</h3>
                   </div>
                   <div className="p-6 border-t-0">
                     <p className="text-gray-700 mb-2">Hi [Member Name],</p>

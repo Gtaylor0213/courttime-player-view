@@ -13,6 +13,7 @@ import { UserRegistration } from './components/UserRegistration';
 import { FacilityRegistration } from './components/FacilityRegistration';
 import { ForgotPassword } from './components/ForgotPassword';
 import { ResetPassword } from './components/ResetPassword';
+import { AboutPage } from './components/AboutPage';
 
 // Player pages
 import { CourtCalendarView } from './components/CourtCalendarView';
@@ -44,6 +45,7 @@ export default function App() {
         <AppProvider>
           <Routes>
             {/* Public routes */}
+            <Route path="/about" element={<AboutPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<UserRegistration />} />
             <Route path="/register/facility" element={<FacilityRegistration />} />

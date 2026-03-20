@@ -329,6 +329,9 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
         is_indoor as "isIndoor",
         has_lights as "hasLights",
         status,
+        parent_court_id as "parentCourtId",
+        split_configuration as "splitConfiguration",
+        is_split_court as "isSplitCourt",
         created_at as "createdAt",
         updated_at as "updatedAt"
       FROM courts

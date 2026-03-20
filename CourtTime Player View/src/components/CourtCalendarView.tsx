@@ -1179,6 +1179,8 @@ export function CourtCalendarView() {
                       {courts.map((court, courtIndex) => {
                         const topBooking = bookings[court.name as keyof typeof bookings]?.[topTime];
                         const bottomBooking = bottomTime ? bookings[court.name as keyof typeof bookings]?.[bottomTime] : null;
+                        const topBlocked = topBooking?.type === 'blocked';
+                        const bottomBlocked = bottomBooking?.type === 'blocked';
                         const topPast = isPastTime(topTime);
                         const bottomPast = bottomTime ? isPastTime(bottomTime) : false;
                         const topSelected = dragState.selectedCells.has(`${court.name}|${topTime}`);
@@ -1199,21 +1201,22 @@ export function CourtCalendarView() {
                             {/* Top half (first 15 min) */}
                             <div
                               className={`absolute top-0 left-0 right-0
+                                ${topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
                                 ${topPast && !topBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
-                                ${!topPast && !topBooking ? `cursor-pointer ${topPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
-                                ${topBooking ? 'cursor-pointer' : ''}
+                                ${!topPast && !topBooking && !topBlocked ? `cursor-pointer ${topPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
+                                ${topBooking && !topBlocked ? 'cursor-pointer' : ''}
                                 ${topSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
                                 ${dragState.isDragging && !topBooking ? 'select-none' : ''}
                               `}
                               style={{ height: effectiveSubSlotHeight }}
                               onClick={() => {
                                 if (dragJustFinishedRef.current) return;
-                                if (topPast && !topBooking) return;
+                                if (topBlocked || (topPast && !topBooking)) return;
                                 if (topBooking) handleBookingClick(court.name, topTime);
                                 else handleEmptySlotClick(court.name, topTime);
                               }}
-                              onMouseDown={(e) => !topBooking && !topPast && handleMouseDown(court.name, topTime, e)}
-                              onMouseEnter={() => !topPast && handleMouseEnter(court.name, topTime)}
+                              onMouseDown={(e) => !topBooking && !topPast && !topBlocked && handleMouseDown(court.name, topTime, e)}
+                              onMouseEnter={() => !topPast && !topBlocked && handleMouseEnter(court.name, topTime)}
                             />
 
                             {/* 15-min midpoint line */}
@@ -1226,21 +1229,22 @@ export function CourtCalendarView() {
                             {bottomTime && (
                               <div
                                 className={`absolute left-0 right-0
+                                  ${bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
                                   ${bottomPast && !bottomBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
-                                  ${!bottomPast && !bottomBooking ? `cursor-pointer ${bottomPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
-                                  ${bottomBooking ? 'cursor-pointer' : ''}
+                                  ${!bottomPast && !bottomBooking && !bottomBlocked ? `cursor-pointer ${bottomPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
+                                  ${bottomBooking && !bottomBlocked ? 'cursor-pointer' : ''}
                                   ${bottomSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
                                   ${dragState.isDragging && !bottomBooking ? 'select-none' : ''}
                                 `}
                                 style={{ top: effectiveSubSlotHeight, height: effectiveSubSlotHeight }}
                                 onClick={() => {
                                   if (dragJustFinishedRef.current) return;
-                                  if (bottomPast && !bottomBooking) return;
+                                  if (bottomBlocked || (bottomPast && !bottomBooking)) return;
                                   if (bottomBooking) handleBookingClick(court.name, bottomTime);
                                   else handleEmptySlotClick(court.name, bottomTime);
                                 }}
-                                onMouseDown={(e) => !bottomBooking && !bottomPast && handleMouseDown(court.name, bottomTime, e)}
-                                onMouseEnter={() => !bottomPast && handleMouseEnter(court.name, bottomTime)}
+                                onMouseDown={(e) => !bottomBooking && !bottomPast && !bottomBlocked && handleMouseDown(court.name, bottomTime, e)}
+                                onMouseEnter={() => !bottomPast && !bottomBlocked && handleMouseEnter(court.name, bottomTime)}
                               />
                             )}
                           </td>

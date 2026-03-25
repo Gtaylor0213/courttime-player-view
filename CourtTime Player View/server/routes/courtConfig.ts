@@ -34,9 +34,9 @@ router.get('/:courtId/schedule', async (req, res, next) => {
         is_open: i !== 0, // Closed on Sunday by default
         open_time: '06:00',
         close_time: '22:00',
-        prime_time_start: '17:00',
-        prime_time_end: '20:00',
-        prime_time_max_duration: 90,
+        prime_time_start: null,
+        prime_time_end: null,
+        prime_time_max_duration: null,
         slot_duration: 30,
         buffer_minutes: 0
       }));

@@ -135,7 +135,10 @@ async function fetchUserWithTier(userId: string, facilityId: string): Promise<Us
       u.city,
       u.state,
       u.zip_code as "zipCode",
-      fm.is_facility_admin as "isFacilityAdmin",
+      COALESCE(fm.is_facility_admin, false) OR EXISTS(
+        SELECT 1 FROM facility_admins fa
+        WHERE fa.user_id = u.id AND fa.facility_id = $2 AND fa.status = 'active'
+      ) as "isFacilityAdmin",
       fm.status as "membershipStatus",
       fm.suspended_until as "suspendedUntil",
       mt.id as "tierId",

@@ -190,6 +190,17 @@ export class RulesEngine {
 
       // === End pre-rule hard blocks ===
 
+      // Facility admins bypass all booking rules automatically
+      if (context.user.isFacilityAdmin) {
+        return {
+          allowed: true,
+          results: [],
+          blockers: [],
+          warnings: [],
+          isPrimeTime: context.isPrimeTime
+        };
+      }
+
       // Get applicable rules for this facility/court/tier
       const rules = this.getApplicableRules(context);
 

@@ -101,6 +101,12 @@ interface BookingRules {
   rateLimitEnabled: boolean;
   rateLimitMaxActions: string;
   rateLimitWindowSeconds: string;
+  // CRT-007: Buffer time between reservations
+  bufferTimeEnabled: boolean;
+  bufferTimeMinutes: string;
+  // CRT-008: Allowed booking types
+  allowedBookingTypesEnabled: boolean;
+  allowedBookingTypes: string[];
   // CRT-010: Court weekly cap
   courtWeeklyCapEnabled: boolean;
   courtWeeklyCap: string;
@@ -108,6 +114,9 @@ interface BookingRules {
   courtReleaseTimeEnabled: boolean;
   courtReleaseTime: string;
   courtReleaseDaysAhead: string;
+  // CRT-012: Court cancellation deadline
+  courtCancellationDeadlineEnabled: boolean;
+  courtCancellationDeadlineMinutes: string;
   // HH-001: Max members per address
   householdMaxMembersEnabled: boolean;
   householdMaxMembers: string;
@@ -221,11 +230,17 @@ export function FacilityManagement() {
     rateLimitEnabled: false,
     rateLimitMaxActions: '10',
     rateLimitWindowSeconds: '60',
+    bufferTimeEnabled: false,
+    bufferTimeMinutes: '15',
+    allowedBookingTypesEnabled: false,
+    allowedBookingTypes: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'],
     courtWeeklyCapEnabled: false,
     courtWeeklyCap: '5',
     courtReleaseTimeEnabled: false,
     courtReleaseTime: '07:00',
     courtReleaseDaysAhead: '7',
+    courtCancellationDeadlineEnabled: false,
+    courtCancellationDeadlineMinutes: '60',
     householdMaxMembersEnabled: false,
     householdMaxMembers: '6',
     householdMaxActiveEnabled: false,
@@ -1213,6 +1228,28 @@ export function FacilityManagement() {
     // CRT-003 removed (tier system removed)
     ruleConfigs.push({ ruleCode: 'CRT-003', isEnabled: false });
 
+    // CRT-007: Buffer time between reservations
+    if (rules.bufferTimeEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'CRT-007',
+        isEnabled: true,
+        ruleConfig: { buffer_minutes: parseInt(rules.bufferTimeMinutes) || 15 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'CRT-007', isEnabled: false });
+    }
+
+    // CRT-008: Allowed booking types
+    if (rules.allowedBookingTypesEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'CRT-008',
+        isEnabled: true,
+        ruleConfig: { allowed_types: rules.allowedBookingTypes },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'CRT-008', isEnabled: false });
+    }
+
     // CRT-010: Court weekly cap
     if (rules.courtWeeklyCapEnabled) {
       ruleConfigs.push({
@@ -1236,6 +1273,17 @@ export function FacilityManagement() {
       });
     } else {
       ruleConfigs.push({ ruleCode: 'CRT-011', isEnabled: false });
+    }
+
+    // CRT-012: Court-specific cancellation deadline
+    if (rules.courtCancellationDeadlineEnabled) {
+      ruleConfigs.push({
+        ruleCode: 'CRT-012',
+        isEnabled: true,
+        ruleConfig: { cancel_cutoff_minutes: parseInt(rules.courtCancellationDeadlineMinutes) || 60 },
+      });
+    } else {
+      ruleConfigs.push({ ruleCode: 'CRT-012', isEnabled: false });
     }
 
     // HH-001: Max members per address
@@ -1436,6 +1484,22 @@ export function FacilityManagement() {
             }
           }
 
+          const crt007 = ruleMap.get('CRT-007') as any;
+          if (crt007) {
+            updated.bookingRules.bufferTimeEnabled = !!crt007.isEnabled;
+            if (crt007.effectiveConfig?.buffer_minutes) {
+              updated.bookingRules.bufferTimeMinutes = String(crt007.effectiveConfig.buffer_minutes);
+            }
+          }
+
+          const crt008 = ruleMap.get('CRT-008') as any;
+          if (crt008) {
+            updated.bookingRules.allowedBookingTypesEnabled = !!crt008.isEnabled;
+            if (crt008.effectiveConfig?.allowed_types && Array.isArray(crt008.effectiveConfig.allowed_types)) {
+              updated.bookingRules.allowedBookingTypes = crt008.effectiveConfig.allowed_types;
+            }
+          }
+
           const crt010 = ruleMap.get('CRT-010') as any;
           if (crt010) {
             updated.bookingRules.courtWeeklyCapEnabled = !!crt010.isEnabled;
@@ -1454,6 +1518,14 @@ export function FacilityManagement() {
               if (crt011.effectiveConfig.days_ahead) {
                 updated.bookingRules.courtReleaseDaysAhead = String(crt011.effectiveConfig.days_ahead);
               }
+            }
+          }
+
+          const crt012 = ruleMap.get('CRT-012') as any;
+          if (crt012) {
+            updated.bookingRules.courtCancellationDeadlineEnabled = !!crt012.isEnabled;
+            if (crt012.effectiveConfig?.cancel_cutoff_minutes) {
+              updated.bookingRules.courtCancellationDeadlineMinutes = String(crt012.effectiveConfig.cancel_cutoff_minutes);
             }
           }
 
@@ -2474,6 +2546,91 @@ export function FacilityManagement() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* CRT-007: Buffer Time Between Reservations */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Buffer Time Between Reservations</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.bufferTimeEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('bufferTimeEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          value={facilityData.bookingRules.bufferTimeMinutes}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('bufferTimeMinutes', e.target.value)}
+                          disabled={!isEditing || !facilityData.bookingRules.bufferTimeEnabled}
+                          min="0"
+                          step="5"
+                        />
+                        <p className="text-xs text-gray-500">Minutes of gap required between back-to-back reservations</p>
+                      </div>
+
+                      {/* CRT-012: Court Cancellation Deadline */}
+                      <div className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <Label>Court Cancellation Deadline</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.courtCancellationDeadlineEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('courtCancellationDeadlineEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          value={facilityData.bookingRules.courtCancellationDeadlineMinutes}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtCancellationDeadlineMinutes', e.target.value)}
+                          disabled={!isEditing || !facilityData.bookingRules.courtCancellationDeadlineEnabled}
+                          min="0"
+                        />
+                        <p className="text-xs text-gray-500">Minutes before start time that cancellation is no longer allowed</p>
+                      </div>
+
+                      {/* CRT-008: Allowed Booking Types */}
+                      <div className="space-y-2 p-3 border rounded-lg md:col-span-2">
+                        <div className="flex justify-between items-center">
+                          <Label>Restrict Booking Types</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={facilityData.bookingRules.allowedBookingTypesEnabled}
+                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('allowedBookingTypesEnabled', checked)}
+                              disabled={!isEditing}
+                            />
+                            <span className="text-sm text-gray-500">Enabled</span>
+                          </div>
+                        </div>
+                        {facilityData.bookingRules.allowedBookingTypesEnabled && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'].map(type => (
+                              <label key={type} className="flex items-center gap-1.5 text-sm">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded"
+                                  checked={facilityData.bookingRules.allowedBookingTypes.includes(type)}
+                                  disabled={!isEditing}
+                                  onChange={(e) => {
+                                    const current = facilityData.bookingRules.allowedBookingTypes;
+                                    const updated = e.target.checked
+                                      ? [...current, type]
+                                      : current.filter(t => t !== type);
+                                    handleBookingRulesChange('allowedBookingTypes', updated);
+                                  }}
+                                />
+                                <span className="capitalize">{type.replace('_', ' ')}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500">Limit which booking types are available at this facility</p>
+                      </div>
+
                       {/* CRT-010: Court Weekly Cap */}
                       <div className="space-y-2 p-3 border rounded-lg">
                         <div className="flex justify-between items-center">

@@ -27,19 +27,30 @@ router.get('/:courtId/schedule', async (req, res, next) => {
       [courtId]
     );
 
-    // If no config exists, return defaults
+    // If no config exists, derive defaults from facility operating hours
     if (result.rows.length === 0) {
-      const defaults = Array.from({ length: 7 }, (_, i) => ({
-        day_of_week: i,
-        is_open: i !== 0, // Closed on Sunday by default
-        open_time: '06:00',
-        close_time: '22:00',
-        prime_time_start: null,
-        prime_time_end: null,
-        prime_time_max_duration: null,
-        slot_duration: 30,
-        buffer_minutes: 0
-      }));
+      // Look up the facility for this court
+      const courtResult = await query(
+        `SELECT c.facility_id, f.operating_hours FROM courts c JOIN facilities f ON c.facility_id = f.id WHERE c.id = $1`,
+        [courtId]
+      );
+      const opHours = courtResult.rows[0]?.operating_hours || {};
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+      const defaults = Array.from({ length: 7 }, (_, i) => {
+        const dayConfig = opHours[dayNames[i]];
+        return {
+          day_of_week: i,
+          is_open: dayConfig ? !dayConfig.closed : true,
+          open_time: dayConfig?.open || '08:00',
+          close_time: dayConfig?.close || '20:00',
+          prime_time_start: null,
+          prime_time_end: null,
+          prime_time_max_duration: null,
+          slot_duration: 30,
+          buffer_minutes: 0
+        };
+      });
 
       return res.json({
         success: true,

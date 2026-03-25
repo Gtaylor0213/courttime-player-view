@@ -473,16 +473,38 @@ router.get('/upcoming/:userId', async (req, res, next) => {
 
     const result = await pool.query(query, params);
 
+    // Look up facility cancellation notice configs (ACC-008)
+    const facilityIds = [...new Set(result.rows.map((b: any) => b.facility_id))];
+    const cancelCutoffs: Record<string, number> = {}; // facilityId -> cutoff in hours
+    for (const fId of facilityIds) {
+      try {
+        const ruleResult = await pool.query(
+          `SELECT frc.rule_config, frc.is_enabled
+           FROM facility_rule_configs frc
+           JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
+           WHERE frc.facility_id = $1 AND brd.rule_code = 'ACC-008'`,
+          [fId]
+        );
+        if (ruleResult.rows.length > 0 && ruleResult.rows[0].is_enabled) {
+          const cutoffMinutes = ruleResult.rows[0].rule_config?.late_cancel_cutoff_minutes;
+          if (cutoffMinutes != null) {
+            cancelCutoffs[fId] = cutoffMinutes / 60;
+          }
+        }
+      } catch { /* use default */ }
+    }
+
     // Get cancellation deadline info
-    const bookingsWithInfo = result.rows.map(b => {
+    const bookingsWithInfo = result.rows.map((b: any) => {
       const startDateTime = new Date(`${b.booking_date}T${b.start_time}`);
       const now = new Date();
       const hoursUntilStart = (startDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+      const cutoffHours = cancelCutoffs[b.facility_id] ?? 24;
 
       return {
         ...b,
         hoursUntilStart: Math.round(hoursUntilStart * 10) / 10,
-        canCancelWithoutPenalty: hoursUntilStart >= 24, // Default 24 hour cancellation window
+        canCancelWithoutPenalty: hoursUntilStart >= cutoffHours,
         checkInAvailable: hoursUntilStart <= 0.5 && hoursUntilStart >= -0.5 // 30 min window
       };
     });

@@ -427,7 +427,8 @@ export class RulesEngine {
       const minutesBeforeStart = minutesBetween(now, bookingStart);
 
       // Determine cutoff (court-specific or account-level)
-      let cutoffMinutes = 240; // Default 4 hours
+      // Default to 0 (no penalty) if no cancellation rule is configured
+      let cutoffMinutes = 0;
       let penaltyType = 'strike';
 
       if (courtCancelRule && courtCancelRule.ruleConfig) {

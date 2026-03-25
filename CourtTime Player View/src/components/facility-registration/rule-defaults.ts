@@ -221,6 +221,22 @@ export const RULE_METADATA: RuleMeta[] = [
     ],
   },
   {
+    code: 'CRT-007',
+    name: 'Buffer Time Between Reservations',
+    description: 'Requires a gap between back-to-back reservations to allow for court transitions.',
+    category: 'court',
+    fields: [
+      { key: 'buffer_minutes', label: 'Buffer', type: 'number', min: 0, max: 60, step: 5, suffix: 'minutes' },
+    ],
+  },
+  {
+    code: 'CRT-008',
+    name: 'Allowed Booking Types',
+    description: 'Restrict which booking types (singles, doubles, lessons, etc.) are available at this facility.',
+    category: 'court',
+    fields: [],
+  },
+  {
     code: 'CRT-010',
     name: 'Court-Specific Weekly Cap',
     description: 'Limits how many times a member can book the same court per week.',
@@ -237,6 +253,15 @@ export const RULE_METADATA: RuleMeta[] = [
     fields: [
       { key: 'release_time_local', label: 'Release Time', type: 'time' },
       { key: 'days_ahead', label: 'Days Ahead', type: 'number', min: 1, max: 30, suffix: 'days' },
+    ],
+  },
+  {
+    code: 'CRT-012',
+    name: 'Court Cancellation Deadline',
+    description: 'Prevents cancellation within a set time before the booking starts.',
+    category: 'court',
+    fields: [
+      { key: 'cancel_cutoff_minutes', label: 'Deadline', type: 'number', min: 0, max: 1440, suffix: 'minutes before start' },
     ],
   },
 
@@ -286,8 +311,11 @@ export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
   'CRT-002': { enabled: true, config: { max_minutes_prime: 60 } },
   'CRT-003': { enabled: false, config: { allowed_tiers: [], allow_admin_override: true } },
   'CRT-005': { enabled: true, config: { slot_minutes: 30, min_duration_minutes: 30, max_duration_minutes: 120 } },
+  'CRT-007': { enabled: false, config: { buffer_minutes: 15 } },
+  'CRT-008': { enabled: false, config: { allowed_types: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'] } },
   'CRT-010': { enabled: false, config: { max_per_week_per_account: 3, window_type: 'calendar_week' } },
   'CRT-011': { enabled: false, config: { release_time_local: '07:00', days_ahead: 3 } },
+  'CRT-012': { enabled: false, config: { cancel_cutoff_minutes: 60 } },
   'HH-001': { enabled: false, config: { max_members: 6, verification_method: 'admin_approval' } },
   'HH-002': { enabled: false, config: { max_active_household: 4 } },
   'HH-003': { enabled: false, config: { max_prime_per_week_household: 3, window_type: 'calendar_week' } },
@@ -298,7 +326,7 @@ export const DEFAULT_RULES_CONFIG: RulesConfig = {
   restrictionType: 'account',
   rules: { ...DEFAULT_RULE_CONFIGS },
 
-  restrictionsApplyToAdmins: true,
+  restrictionsApplyToAdmins: false,
   adminRestrictions: {
     maxBookingsPerWeek: '10',
     maxBookingsUnlimited: true,

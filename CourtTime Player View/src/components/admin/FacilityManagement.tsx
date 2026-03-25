@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users, FileText, Upload, Settings, Shield, AlertTriangle, Zap, Home } from 'lucide-react';
+import { Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users, FileText, Upload, Settings, Shield, AlertTriangle, Zap, Home, Info } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
@@ -186,7 +186,7 @@ export function FacilityManagement() {
     advanceBookingDaysUnlimited: false,
     cancellationNoticeHours: '24',
     cancellationNoticeUnlimited: false,
-    restrictionsApplyToAdmins: true,
+    restrictionsApplyToAdmins: false,
     adminMaxBookingsPerWeek: '10',
     adminMaxBookingsUnlimited: true,
     adminMaxBookingDurationHours: '4',
@@ -2784,107 +2784,19 @@ export function FacilityManagement() {
                 {/* Admin Restrictions */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Admin Restrictions</CardTitle>
-                    <CardDescription>Limits applied to facility administrators</CardDescription>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      Admin Booking Policy
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <Label>Same restrictions as users</Label>
-                      <Switch
-                        checked={facilityData.bookingRules.restrictionsApplyToAdmins}
-                        onCheckedChange={(checked: boolean) => handleBookingRulesChange('restrictionsApplyToAdmins', checked)}
-                        disabled={!isEditing}
-                      />
+                  <CardContent>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+                      <Info className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-green-800">
+                        <p className="font-medium">Facility admins automatically bypass all booking rules.</p>
+                        <p className="mt-1 text-green-700">Admins can book at any time, exceed limits, and ignore restrictions. System-level checks (closed courts, maintenance, suspended accounts) still apply.</p>
+                      </div>
                     </div>
-
-                    {!facilityData.bookingRules.restrictionsApplyToAdmins && (
-                      <>
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label>Max Bookings Per Week</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.adminMaxBookingsUnlimited}
-                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('adminMaxBookingsUnlimited', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-sm text-gray-500">Unlimited</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.adminMaxBookingsPerWeek}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('adminMaxBookingsPerWeek', e.target.value)}
-                            disabled={!isEditing || facilityData.bookingRules.adminMaxBookingsUnlimited}
-                            min="1"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label>Max Booking Duration (hours)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.adminMaxDurationUnlimited}
-                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('adminMaxDurationUnlimited', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-sm text-gray-500">Unlimited</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.adminMaxBookingDurationHours}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('adminMaxBookingDurationHours', e.target.value)}
-                            disabled={!isEditing || facilityData.bookingRules.adminMaxDurationUnlimited}
-                            min="0.5"
-                            step="0.5"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label>Advance Booking (days)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.adminAdvanceBookingUnlimited}
-                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('adminAdvanceBookingUnlimited', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-sm text-gray-500">Unlimited</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.adminAdvanceBookingDays}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('adminAdvanceBookingDays', e.target.value)}
-                            disabled={!isEditing || facilityData.bookingRules.adminAdvanceBookingUnlimited}
-                            min="1"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label>Cancellation Notice (hours)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.adminCancellationUnlimited}
-                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('adminCancellationUnlimited', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-sm text-gray-500">No notice required</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.adminCancellationNoticeHours}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('adminCancellationNoticeHours', e.target.value)}
-                            disabled={!isEditing || facilityData.bookingRules.adminCancellationUnlimited}
-                            min="0"
-                          />
-                        </div>
-                      </>
-                    )}
                   </CardContent>
                 </Card>
 

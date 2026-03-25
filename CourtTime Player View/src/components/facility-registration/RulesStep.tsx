@@ -242,138 +242,14 @@ export function RulesStep({
         <CardHeader className="pb-2">
           <CardTitle className="text-lg flex items-center gap-2">
             <ShieldCheck className="h-5 w-5" />
-            Admin Overrides
+            Admin Booking Policy
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <InstructionCard
             icon={Info}
-            text="By default, admins follow the same rules as regular members. You can give admins more generous limits here."
+            text="Facility admins automatically bypass all booking rules. Admins can book at any time, exceed limits, and ignore restrictions. System-level checks (closed courts, maintenance, suspended accounts) still apply."
           />
-          <div className="flex items-center gap-3">
-            <Switch
-              checked={rulesConfig.restrictionsApplyToAdmins}
-              onCheckedChange={(checked) => onRulesChange({ restrictionsApplyToAdmins: checked })}
-            />
-            <Label>Same restrictions apply to admins</Label>
-          </div>
-
-          {!rulesConfig.restrictionsApplyToAdmins && (
-            <div className="space-y-3 pl-4 border-l-2 border-gray-200">
-              {/* Admin booking limits */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-sm">Max Bookings Per Week</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Switch
-                      checked={rulesConfig.adminRestrictions.maxBookingsUnlimited}
-                      onCheckedChange={(checked) =>
-                        onRulesChange({
-                          adminRestrictions: { ...rulesConfig.adminRestrictions, maxBookingsUnlimited: checked }
-                        })
-                      }
-                    />
-                    <span className="text-xs text-gray-500">Unlimited</span>
-                    {!rulesConfig.adminRestrictions.maxBookingsUnlimited && (
-                      <Input
-                        type="number"
-                        className="w-20 h-8 text-sm"
-                        min={1}
-                        value={rulesConfig.adminRestrictions.maxBookingsPerWeek}
-                        onChange={(e) =>
-                          onRulesChange({
-                            adminRestrictions: { ...rulesConfig.adminRestrictions, maxBookingsPerWeek: e.target.value }
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm">Max Duration (hours)</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Switch
-                      checked={rulesConfig.adminRestrictions.maxDurationUnlimited}
-                      onCheckedChange={(checked) =>
-                        onRulesChange({
-                          adminRestrictions: { ...rulesConfig.adminRestrictions, maxDurationUnlimited: checked }
-                        })
-                      }
-                    />
-                    <span className="text-xs text-gray-500">Unlimited</span>
-                    {!rulesConfig.adminRestrictions.maxDurationUnlimited && (
-                      <Input
-                        type="number"
-                        className="w-20 h-8 text-sm"
-                        min={0.5}
-                        step={0.5}
-                        value={rulesConfig.adminRestrictions.maxDurationHours}
-                        onChange={(e) =>
-                          onRulesChange({
-                            adminRestrictions: { ...rulesConfig.adminRestrictions, maxDurationHours: e.target.value }
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm">Advance Booking (days)</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Switch
-                      checked={rulesConfig.adminRestrictions.advanceBookingUnlimited}
-                      onCheckedChange={(checked) =>
-                        onRulesChange({
-                          adminRestrictions: { ...rulesConfig.adminRestrictions, advanceBookingUnlimited: checked }
-                        })
-                      }
-                    />
-                    <span className="text-xs text-gray-500">Unlimited</span>
-                    {!rulesConfig.adminRestrictions.advanceBookingUnlimited && (
-                      <Input
-                        type="number"
-                        className="w-20 h-8 text-sm"
-                        min={1}
-                        value={rulesConfig.adminRestrictions.advanceBookingDays}
-                        onChange={(e) =>
-                          onRulesChange({
-                            adminRestrictions: { ...rulesConfig.adminRestrictions, advanceBookingDays: e.target.value }
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm">Cancellation Notice (hours)</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Switch
-                      checked={rulesConfig.adminRestrictions.cancellationUnlimited}
-                      onCheckedChange={(checked) =>
-                        onRulesChange({
-                          adminRestrictions: { ...rulesConfig.adminRestrictions, cancellationUnlimited: checked }
-                        })
-                      }
-                    />
-                    <span className="text-xs text-gray-500">Unlimited</span>
-                    {!rulesConfig.adminRestrictions.cancellationUnlimited && (
-                      <Input
-                        type="number"
-                        className="w-20 h-8 text-sm"
-                        min={0}
-                        value={rulesConfig.adminRestrictions.cancellationNoticeHours}
-                        onChange={(e) =>
-                          onRulesChange({
-                            adminRestrictions: { ...rulesConfig.adminRestrictions, cancellationNoticeHours: e.target.value }
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 

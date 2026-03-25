@@ -1,4 +1,5 @@
 import { query } from '../database/connection';
+import { notificationService } from './notificationService';
 
 /**
  * Player Profile Service
@@ -243,6 +244,41 @@ export async function requestFacilityMembership(
          membership_type = $3`,
       [userId, facilityId, membershipType]
     );
+
+    // Notify facility admins about the new membership request
+    try {
+      const userResult = await query(
+        `SELECT full_name, email FROM users WHERE id = $1`,
+        [userId]
+      );
+      const userName = userResult.rows[0]?.full_name || 'A user';
+      const userEmail = userResult.rows[0]?.email || '';
+
+      const facilityResult = await query(
+        `SELECT name FROM facilities WHERE id = $1`,
+        [facilityId]
+      );
+      const facilityName = facilityResult.rows[0]?.name || 'your facility';
+
+      // Get all active admins for this facility
+      const admins = await query(
+        `SELECT DISTINCT user_id FROM facility_admins
+         WHERE facility_id = $1 AND status = 'active' AND user_id IS NOT NULL`,
+        [facilityId]
+      );
+
+      for (const admin of admins.rows) {
+        await notificationService.createNotification(
+          admin.user_id,
+          'New Membership Request',
+          `${userName} (${userEmail}) has requested to join ${facilityName}.`,
+          'membership_request',
+          { actionUrl: `/admin?tab=members` }
+        );
+      }
+    } catch (notifError) {
+      console.error('Failed to send admin notifications for membership request:', notifError);
+    }
 
     return true;
   } catch (error) {

@@ -91,13 +91,15 @@ const ACC002: RuleEvaluator = {
     }).length;
 
     if (weeklyCount >= maxPerWeek) {
+      const nextEligible = window.endDate;
+      nextEligible.setDate(nextEligible.getDate() + 1);
       return {
         ruleCode: 'ACC-002',
         ruleName: 'Max Reservations Per Week',
         passed: false,
         severity: 'error',
-        message: `Weekly booking limit reached (${weeklyCount}/${maxPerWeek}).`,
-        details: { current: weeklyCount, max: maxPerWeek }
+        message: `Weekly booking limit reached (${weeklyCount}/${maxPerWeek}). Next eligible: ${formatDate(nextEligible)}.`,
+        details: { current: weeklyCount, max: maxPerWeek, nextEligibleDate: formatDate(nextEligible) }
       };
     }
 

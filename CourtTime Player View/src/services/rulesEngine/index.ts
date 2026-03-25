@@ -286,10 +286,14 @@ export class RulesEngine {
 
       // Interpolate failure message if rule failed
       if (!result.passed && rule.failureMessageTemplate) {
-        result.message = this.interpolateMessage(
+        const interpolated = this.interpolateMessage(
           rule.failureMessageTemplate,
           result.details || {}
         );
+        // Only use the template if all placeholders were resolved
+        if (!interpolated.includes('{')) {
+          result.message = interpolated;
+        }
       }
 
       return result;

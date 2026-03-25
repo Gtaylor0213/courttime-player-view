@@ -188,10 +188,10 @@ export async function createCheckoutSession(params: {
     };
   }
 
-  const priceId = process.env.STRIPE_PRICE_ID;
-  if (!priceId) {
-    return { amountCents: params.amountCents, waived: false, error: 'STRIPE_PRICE_ID not configured' };
-  }
+  // Select price ID based on court count tier
+  const starterPriceId = process.env.STRIPE_PRICE_ID_STARTER || 'price_1TExHxCFoJfVR2i4Qu020FtL';
+  const standardPriceId = process.env.STRIPE_PRICE_ID_STANDARD || process.env.STRIPE_PRICE_ID || 'price_1T5RUECFoJfVR2i4WMH6bzuI';
+  const priceId = params.courtCount <= 4 ? starterPriceId : standardPriceId;
 
   try {
     const sessionParams: Stripe.Checkout.SessionCreateParams = {

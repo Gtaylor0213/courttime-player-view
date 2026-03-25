@@ -1012,7 +1012,7 @@ export function FacilityRegistration() {
         // Payment info
         paymentSessionId: paymentSessionId || undefined,
         promoCode: paymentWaived ? promoCode : undefined,
-        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : 40406),
+        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : getBaseAmountCents(formData.courts.length)),
         paymentWaived,
         customPricing: formData.courts.length > 10,
       };
@@ -1192,7 +1192,8 @@ export function FacilityRegistration() {
     setIsProcessingPayment(true);
     try {
       const currentUrl = window.location.origin + window.location.pathname;
-      const finalAmount = promoValidation?.valid ? (promoValidation.finalAmountCents ?? 40406) : 40406;
+      const tierAmount = getBaseAmountCents(formData.courts.length);
+      const finalAmount = promoValidation?.valid ? (promoValidation.finalAmountCents ?? tierAmount) : tierAmount;
 
       const result = await paymentsApi.createCheckoutSession({
         facilityName: formData.facilityName,
@@ -1235,10 +1236,16 @@ export function FacilityRegistration() {
     }
   };
 
+  const getBaseAmountCents = (count: number) => {
+    if (count <= 4) return 20400;   // $204
+    if (count <= 10) return 40400;  // $404
+    return 0;                        // custom
+  };
+
   const renderPaymentStep = () => {
     const courtCount = formData.courts.length;
     const isCustomPricing = courtCount > 10;
-    const baseAmountCents = 40406;
+    const baseAmountCents = getBaseAmountCents(courtCount);
     const finalAmountCents = promoValidation?.valid
       ? (promoValidation.finalAmountCents ?? 0)
       : baseAmountCents;
@@ -1264,7 +1271,7 @@ export function FacilityRegistration() {
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Your facility has <strong>{courtCount} courts</strong>. Facilities with 9 or more courts
+                  Your facility has <strong>{courtCount} courts</strong>. Facilities with 11 or more courts
                   qualify for custom pricing. Our team will contact you to set up your plan.
                   You can complete registration now and payment will be arranged separately.
                 </AlertDescription>
@@ -1278,7 +1285,7 @@ export function FacilityRegistration() {
                 <CreditCard className="h-5 w-5" />
                 Facility Registration Fee
               </CardTitle>
-              <CardDescription>Annual subscription for up to 10 courts</CardDescription>
+              <CardDescription>Annual subscription — {courtCount <= 4 ? '1-4 courts' : '5-10 courts'}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Pricing summary */}

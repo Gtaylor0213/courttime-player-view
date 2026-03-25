@@ -159,39 +159,67 @@ export function AboutPage() {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-4">Simple, Transparent Pricing</h2>
           <p className="text-gray-600 mb-12 max-w-2xl mx-auto">
-            One plan that covers everything your facility needs.
+            Plans that scale with your facility.
           </p>
-          <Card className="max-w-md mx-auto border-2 border-green-200 shadow-lg">
-            <CardContent className="pt-8 pb-8">
-              <div className="text-sm font-semibold text-green-600 uppercase tracking-wide mb-2">
-                Standard Plan
-              </div>
-              <div className="text-5xl font-bold mb-2">
-                $404.06
-              </div>
-              <div className="text-gray-500 mb-6">per year</div>
-              <div className="text-left space-y-3 mb-8">
-                <PricingFeature text="Up to 10 courts included" />
-                <PricingFeature text="Unlimited members and bookings" />
-                <PricingFeature text="Full admin dashboard" />
-                <PricingFeature text="Custom booking rules and policies" />
-                <PricingFeature text="Member communication tools" />
-                <PricingFeature text="Email notifications" />
-                <PricingFeature text="Bulletin board" />
-                <PricingFeature text="Household & family accounts" />
-              </div>
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={() => navigate('/register/facility')}
-              >
-                Get Started
-              </Button>
-              <p className="text-xs text-gray-500 mt-3">
-                Need more than 10 courts? Contact us for custom pricing.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            <Card className="border-2 border-gray-200 shadow-lg">
+              <CardContent className="pt-8 pb-8">
+                <div className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Starter
+                </div>
+                <div className="text-5xl font-bold mb-2">
+                  $204
+                </div>
+                <div className="text-gray-500 mb-6">per year</div>
+                <div className="text-left space-y-3 mb-8">
+                  <PricingFeature text="1-4 courts" />
+                  <PricingFeature text="Unlimited members and bookings" />
+                  <PricingFeature text="Full admin dashboard" />
+                  <PricingFeature text="Custom booking rules and policies" />
+                  <PricingFeature text="Email notifications" />
+                  <PricingFeature text="Bulletin board" />
+                </div>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={() => navigate('/register/facility')}
+                >
+                  Get Started
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-2 border-green-200 shadow-lg">
+              <CardContent className="pt-8 pb-8">
+                <div className="text-sm font-semibold text-green-600 uppercase tracking-wide mb-2">
+                  Standard
+                </div>
+                <div className="text-5xl font-bold mb-2">
+                  $404
+                </div>
+                <div className="text-gray-500 mb-6">per year</div>
+                <div className="text-left space-y-3 mb-8">
+                  <PricingFeature text="5-10 courts" />
+                  <PricingFeature text="Unlimited members and bookings" />
+                  <PricingFeature text="Full admin dashboard" />
+                  <PricingFeature text="Custom booking rules and policies" />
+                  <PricingFeature text="Member communication tools" />
+                  <PricingFeature text="Email notifications" />
+                  <PricingFeature text="Bulletin board" />
+                  <PricingFeature text="Household & family accounts" />
+                </div>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={() => navigate('/register/facility')}
+                >
+                  Get Started
+                </Button>
+                <p className="text-xs text-gray-500 mt-3">
+                  Need 11+ courts? Contact us for custom pricing.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 

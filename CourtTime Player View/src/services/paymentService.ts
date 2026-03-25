@@ -2,7 +2,13 @@ import Stripe from 'stripe';
 import { query } from '../database/connection';
 import type { PoolClient } from 'pg';
 
-const STANDARD_AMOUNT_CENTS = 40406; // $404.06 ($375 + fees)
+// Pricing tiers by court count
+function getAmountForCourts(courtCount: number): number {
+  if (courtCount <= 4) return 20400;   // 1-4 courts: $204
+  if (courtCount <= 10) return 40400;  // 5-10 courts: $404
+  return 0;                             // 11+: custom pricing
+}
+const STANDARD_AMOUNT_CENTS = 40400; // default for backward compat
 
 /**
  * Get Stripe instance (returns null if no key configured — dev mode)
@@ -16,7 +22,7 @@ function getStripe(): Stripe | null {
 /**
  * Validate a promo code
  */
-export async function validatePromoCode(code: string): Promise<{
+export async function validatePromoCode(code: string, courtCount?: number): Promise<{
   valid: boolean;
   promoCodeId?: string;
   discountType?: string;
@@ -53,24 +59,26 @@ export async function validatePromoCode(code: string): Promise<{
     return { valid: false, message: 'This promo code has reached its usage limit' };
   }
 
-  // Calculate final amount
-  let finalAmountCents = STANDARD_AMOUNT_CENTS;
+  // Calculate final amount based on court count tier
+  const baseAmount = courtCount ? getAmountForCourts(courtCount) : STANDARD_AMOUNT_CENTS;
+  let finalAmountCents = baseAmount;
   if (promo.discount_type === 'full') {
     finalAmountCents = 0;
   } else if (promo.discount_type === 'percent') {
-    finalAmountCents = Math.round(STANDARD_AMOUNT_CENTS * (1 - promo.discount_value / 100));
+    finalAmountCents = Math.round(baseAmount * (1 - promo.discount_value / 100));
   } else if (promo.discount_type === 'fixed') {
-    finalAmountCents = Math.max(0, STANDARD_AMOUNT_CENTS - Math.round(promo.discount_value * 100));
+    finalAmountCents = Math.max(0, baseAmount - Math.round(promo.discount_value * 100));
   }
 
   // Build message based on trial months or discount
   let message: string;
   const trialMonths = promo.trial_months ? Number(promo.trial_months) : undefined;
+  const renewalPrice = `$${(baseAmount / 100).toFixed(2)}/year`;
 
   if (trialMonths) {
-    message = `Promo code applied — ${trialMonths} month${trialMonths > 1 ? 's' : ''} free trial! Card required for annual renewal ($404.06/year).`;
+    message = `Promo code applied — ${trialMonths} month${trialMonths > 1 ? 's' : ''} free trial! Card required for annual renewal (${renewalPrice}).`;
   } else if (finalAmountCents === 0) {
-    message = 'Promo code applied — first year free! Card required for annual renewal ($404.06/year).';
+    message = `Promo code applied — first year free! Card required for annual renewal (${renewalPrice}).`;
   } else {
     message = `Promo code applied — total: $${(finalAmountCents / 100).toFixed(2)}`;
   }

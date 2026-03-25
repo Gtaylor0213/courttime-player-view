@@ -5,7 +5,8 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users, FileText, Upload, Settings, Shield, AlertTriangle, Zap, Home, Info } from 'lucide-react';
+import { Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users, FileText, Upload, Settings, Shield, AlertTriangle, Zap, Home, Info, Calendar } from 'lucide-react';
+import { RULE_METADATA, CATEGORIES, getRulesByCategory, RuleMeta } from '../facility-registration/rule-defaults';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
@@ -1561,6 +1562,192 @@ export function FacilityManagement() {
     }
   };
 
+  // ── Rule-to-state mapping for metadata-driven rule cards ──
+  const RULE_STATE_MAP: Record<string, {
+    enabledField: string;
+    invertEnabled?: boolean; // true = "unlimited" toggle (enabled in UI = disabled rule)
+    configMap: Record<string, { field: string; fromDb?: (v: any) => any; toDb?: (v: any) => any }>;
+  }> = {
+    'ACC-001': { enabledField: 'maxActiveReservationsEnabled', configMap: { max_active_reservations: { field: 'maxActiveReservations' } } },
+    'ACC-002': { enabledField: 'maxBookingsPerWeekUnlimited', invertEnabled: true, configMap: { max_per_week: { field: 'maxBookingsPerWeek' } } },
+    'ACC-003': { enabledField: 'maxHoursPerWeekEnabled', configMap: { max_minutes_per_week: { field: 'maxHoursPerWeek', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
+    'ACC-004': { enabledField: 'noOverlappingReservations', configMap: {} },
+    'ACC-005': { enabledField: 'advanceBookingDaysUnlimited', invertEnabled: true, configMap: { max_days_ahead: { field: 'advanceBookingDays' } } },
+    'ACC-006': { enabledField: 'minimumLeadTimeEnabled', configMap: { min_minutes_before_start: { field: 'minimumLeadTimeMinutes' } } },
+    'ACC-007': { enabledField: 'cancellationCooldownEnabled', configMap: { cooldown_minutes: { field: 'cancellationCooldownMinutes' } } },
+    'ACC-008': { enabledField: 'cancellationNoticeUnlimited', invertEnabled: true, configMap: { late_cancel_cutoff_minutes: { field: 'cancellationNoticeHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
+    'ACC-009': { enabledField: 'strikeSystemEnabled', configMap: { strike_threshold: { field: 'strikeThreshold' }, strike_window_days: { field: 'strikeWindowDays' }, lockout_days: { field: 'strikeLockoutDays' } } },
+    'ACC-010': { enabledField: 'peakHoursRestrictions.maxBookingsUnlimited', invertEnabled: true, configMap: { max_prime_per_week: { field: 'peakHoursRestrictions.maxBookingsPerWeek' } } },
+    'ACC-011': { enabledField: 'rateLimitEnabled', configMap: { max_actions: { field: 'rateLimitMaxActions' }, window_seconds: { field: 'rateLimitWindowSeconds' } } },
+    'CRT-002': { enabledField: 'peakHoursRestrictions.maxDurationUnlimited', invertEnabled: true, configMap: { max_minutes_prime: { field: 'peakHoursRestrictions.maxDurationHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
+    'CRT-005': { enabledField: 'maxBookingDurationUnlimited', invertEnabled: true, configMap: { max_duration_minutes: { field: 'maxBookingDurationHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
+    'CRT-007': { enabledField: 'bufferTimeEnabled', configMap: { buffer_minutes: { field: 'bufferTimeMinutes' } } },
+    'CRT-008': { enabledField: 'allowedBookingTypesEnabled', configMap: {} },
+    'CRT-010': { enabledField: 'courtWeeklyCapEnabled', configMap: { max_per_week_per_account: { field: 'courtWeeklyCap' } } },
+    'CRT-011': { enabledField: 'courtReleaseTimeEnabled', configMap: { release_time_local: { field: 'courtReleaseTime' }, days_ahead: { field: 'courtReleaseDaysAhead' } } },
+    'CRT-012': { enabledField: 'courtCancellationDeadlineEnabled', configMap: { cancel_cutoff_minutes: { field: 'courtCancellationDeadlineMinutes' } } },
+    'HH-001': { enabledField: 'householdMaxMembersEnabled', configMap: { max_members: { field: 'householdMaxMembers' } } },
+    'HH-002': { enabledField: 'householdMaxActiveEnabled', configMap: { max_active_household: { field: 'householdMaxActive' } } },
+    'HH-003': { enabledField: 'householdPrimeCapEnabled', configMap: { max_prime_per_week_household: { field: 'householdPrimeCap' } } },
+  };
+
+  // Helper to get nested field value
+  const getNestedValue = (obj: any, path: string): any => {
+    return path.split('.').reduce((o, k) => o?.[k], obj);
+  };
+
+  const getRuleEnabled = (code: string): boolean => {
+    const map = RULE_STATE_MAP[code];
+    if (!map) return false;
+    const val = getNestedValue(facilityData.bookingRules, map.enabledField);
+    return map.invertEnabled ? !val : !!val;
+  };
+
+  const setRuleEnabled = (code: string, enabled: boolean) => {
+    const map = RULE_STATE_MAP[code];
+    if (!map) return;
+    const val = map.invertEnabled ? !enabled : enabled;
+    if (map.enabledField.includes('.')) {
+      const [parent, child] = map.enabledField.split('.');
+      setFacilityData(prev => ({
+        ...prev,
+        bookingRules: {
+          ...prev.bookingRules,
+          [parent]: { ...(prev.bookingRules as any)[parent], [child]: val },
+        },
+      }));
+    } else {
+      handleBookingRulesChange(map.enabledField, val);
+    }
+  };
+
+  const getRuleConfigValue = (code: string, configKey: string): any => {
+    const map = RULE_STATE_MAP[code];
+    if (!map) return '';
+    const fieldInfo = map.configMap[configKey];
+    if (!fieldInfo) return '';
+    const raw = getNestedValue(facilityData.bookingRules, fieldInfo.field);
+    return fieldInfo.fromDb ? fieldInfo.fromDb(Number(raw) || 0) : (raw ?? '');
+  };
+
+  const setRuleConfigValue = (code: string, configKey: string, value: any) => {
+    const map = RULE_STATE_MAP[code];
+    if (!map) return;
+    const fieldInfo = map.configMap[configKey];
+    if (!fieldInfo) return;
+    const dbVal = fieldInfo.toDb ? fieldInfo.toDb(Number(value) || 0) : value;
+    if (fieldInfo.field.includes('.')) {
+      const [parent, child] = fieldInfo.field.split('.');
+      setFacilityData(prev => ({
+        ...prev,
+        bookingRules: {
+          ...prev.bookingRules,
+          [parent]: { ...(prev.bookingRules as any)[parent], [child]: String(dbVal) },
+        },
+      }));
+    } else {
+      handleBookingRulesChange(fieldInfo.field, String(dbVal));
+    }
+  };
+
+  // Render an InstructionCard
+  const renderInstructionCard = (text: string) => (
+    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3 mb-4">
+      <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+      <p className="text-sm text-green-800">{text}</p>
+    </div>
+  );
+
+  // Render a single rule card matching the registration style
+  const renderRuleCard = (meta: RuleMeta) => {
+    const enabled = getRuleEnabled(meta.code);
+    return (
+      <div key={meta.code} className="p-3 border rounded-lg space-y-2">
+        <div className="flex justify-between items-center">
+          <div className="flex-1 mr-3">
+            <Label className="font-medium text-sm">{meta.name}</Label>
+            <p className="text-xs text-gray-500 mt-0.5">{meta.description}</p>
+          </div>
+          <Switch
+            checked={enabled}
+            onCheckedChange={(checked: boolean) => setRuleEnabled(meta.code, checked)}
+            disabled={!isEditing}
+          />
+        </div>
+        {enabled && meta.fields.length > 0 && (
+          <div className="flex flex-wrap gap-3 pt-1">
+            {meta.fields.map((field) => (
+              <div key={field.key} className="flex items-center gap-2">
+                <Label className="text-xs text-gray-600 whitespace-nowrap">{field.label}:</Label>
+                {field.type === 'time' ? (
+                  <Input
+                    type="time"
+                    className="w-28 h-8 text-sm"
+                    value={getRuleConfigValue(meta.code, field.key) || ''}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRuleConfigValue(meta.code, field.key, e.target.value)}
+                    disabled={!isEditing}
+                  />
+                ) : field.type === 'select' ? (
+                  <select
+                    className="h-8 text-sm border rounded px-2"
+                    value={String(getRuleConfigValue(meta.code, field.key) ?? '')}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRuleConfigValue(meta.code, field.key, e.target.value === 'true')}
+                    disabled={!isEditing}
+                  >
+                    {field.options?.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      className="w-20 h-8 text-sm"
+                      min={field.min}
+                      max={field.max}
+                      step={field.step || 1}
+                      value={getRuleConfigValue(meta.code, field.key)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRuleConfigValue(meta.code, field.key, parseFloat(e.target.value))}
+                      disabled={!isEditing}
+                    />
+                    {field.suffix && (
+                      <span className="text-xs text-gray-500">{field.suffix}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render a full rule category card
+  const renderRuleCategoryCard = (
+    category: 'account' | 'cancellation' | 'court' | 'household',
+    icon: React.ElementType
+  ) => {
+    const categoryInfo = CATEGORIES[category];
+    const categoryRules = getRulesByCategory(category);
+    // Skip CRT-003 (tier system removed)
+    const filteredRules = categoryRules.filter(r => r.code !== 'CRT-003');
+    return (
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {React.createElement(icon, { className: 'h-5 w-5' })}
+            {categoryInfo.title}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {renderInstructionCard(categoryInfo.instruction)}
+          {filteredRules.map(renderRuleCard)}
+        </CardContent>
+      </Card>
+    );
+  };
+
   const getCourtStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'active': return 'bg-green-100 text-green-800';
@@ -2187,6 +2374,7 @@ export function FacilityManagement() {
                     <CardDescription>How booking limits are applied</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {renderInstructionCard('Choose whether booking limits apply per individual account or per household address.')}
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
                         <input
@@ -2223,563 +2411,17 @@ export function FacilityManagement() {
                   </CardContent>
                 </Card>
 
-                {/* User Booking Restrictions */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>User Booking Restrictions</CardTitle>
-                    <CardDescription>Limits applied to regular members</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label>Max Bookings Per Week</Label>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={facilityData.bookingRules.maxBookingsPerWeekUnlimited}
-                            onCheckedChange={(checked: boolean) => handleBookingRulesChange('maxBookingsPerWeekUnlimited', checked)}
-                            disabled={!isEditing}
-                          />
-                          <span className="text-sm text-gray-500">Unlimited</span>
-                        </div>
-                      </div>
-                      <Input
-                        type="number"
-                        value={facilityData.bookingRules.maxBookingsPerWeek}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('maxBookingsPerWeek', e.target.value)}
-                        disabled={!isEditing || facilityData.bookingRules.maxBookingsPerWeekUnlimited}
-                        min="1"
-                      />
-                    </div>
+                {/* Account Booking Rules */}
+                {renderRuleCategoryCard('account', Calendar)}
 
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label>Max Booking Duration (hours)</Label>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={facilityData.bookingRules.maxBookingDurationUnlimited}
-                            onCheckedChange={(checked: boolean) => handleBookingRulesChange('maxBookingDurationUnlimited', checked)}
-                            disabled={!isEditing}
-                          />
-                          <span className="text-sm text-gray-500">Unlimited</span>
-                        </div>
-                      </div>
-                      <Input
-                        type="number"
-                        value={facilityData.bookingRules.maxBookingDurationHours}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('maxBookingDurationHours', e.target.value)}
-                        disabled={!isEditing || facilityData.bookingRules.maxBookingDurationUnlimited}
-                        min="0.5"
-                        step="0.5"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label>Advance Booking (days)</Label>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={facilityData.bookingRules.advanceBookingDaysUnlimited}
-                            onCheckedChange={(checked: boolean) => handleBookingRulesChange('advanceBookingDaysUnlimited', checked)}
-                            disabled={!isEditing}
-                          />
-                          <span className="text-sm text-gray-500">Unlimited</span>
-                        </div>
-                      </div>
-                      <Input
-                        type="number"
-                        value={facilityData.bookingRules.advanceBookingDays}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('advanceBookingDays', e.target.value)}
-                        disabled={!isEditing || facilityData.bookingRules.advanceBookingDaysUnlimited}
-                        min="1"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label>Cancellation Notice (hours)</Label>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={facilityData.bookingRules.cancellationNoticeUnlimited}
-                            onCheckedChange={(checked: boolean) => handleBookingRulesChange('cancellationNoticeUnlimited', checked)}
-                            disabled={!isEditing}
-                          />
-                          <span className="text-sm text-gray-500">No notice required</span>
-                        </div>
-                      </div>
-                      <Input
-                        type="number"
-                        value={facilityData.bookingRules.cancellationNoticeHours}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('cancellationNoticeHours', e.target.value)}
-                        disabled={!isEditing || facilityData.bookingRules.cancellationNoticeUnlimited}
-                        min="0"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Advanced Account Rules */}
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Shield className="h-5 w-5" />
-                      Advanced Account Rules
-                    </CardTitle>
-                    <CardDescription>Additional booking constraints and account-level policies</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* ACC-001: Max Active Reservations */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Max Active Reservations</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.maxActiveReservationsEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('maxActiveReservationsEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        <Input
-                          type="number"
-                          value={facilityData.bookingRules.maxActiveReservations}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('maxActiveReservations', e.target.value)}
-                          disabled={!isEditing || !facilityData.bookingRules.maxActiveReservationsEnabled}
-                          min="1"
-                        />
-                        <p className="text-xs text-gray-500">Max upcoming reservations a user can have at once</p>
-                      </div>
-
-                      {/* ACC-003: Max Hours Per Week */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Max Hours Per Week</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.maxHoursPerWeekEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('maxHoursPerWeekEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        <Input
-                          type="number"
-                          value={facilityData.bookingRules.maxHoursPerWeek}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('maxHoursPerWeek', e.target.value)}
-                          disabled={!isEditing || !facilityData.bookingRules.maxHoursPerWeekEnabled}
-                          min="1"
-                          step="0.5"
-                        />
-                        <p className="text-xs text-gray-500">Total booking hours allowed per week</p>
-                      </div>
-
-                      {/* ACC-004: No Overlapping Reservations */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Prevent Overlapping Reservations</Label>
-                          <Switch
-                            checked={facilityData.bookingRules.noOverlappingReservations}
-                            onCheckedChange={(checked: boolean) => handleBookingRulesChange('noOverlappingReservations', checked)}
-                            disabled={!isEditing}
-                          />
-                        </div>
-                        <p className="text-xs text-gray-500">Block users from booking overlapping time slots</p>
-                      </div>
-
-                      {/* ACC-006: Minimum Lead Time */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Minimum Lead Time (minutes)</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.minimumLeadTimeEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('minimumLeadTimeEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        <Input
-                          type="number"
-                          value={facilityData.bookingRules.minimumLeadTimeMinutes}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('minimumLeadTimeMinutes', e.target.value)}
-                          disabled={!isEditing || !facilityData.bookingRules.minimumLeadTimeEnabled}
-                          min="0"
-                        />
-                        <p className="text-xs text-gray-500">Minimum minutes before start time to allow booking</p>
-                      </div>
-
-                      {/* ACC-007: Cancellation Cooldown */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Cancellation Cooldown (minutes)</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.cancellationCooldownEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('cancellationCooldownEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        <Input
-                          type="number"
-                          value={facilityData.bookingRules.cancellationCooldownMinutes}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('cancellationCooldownMinutes', e.target.value)}
-                          disabled={!isEditing || !facilityData.bookingRules.cancellationCooldownEnabled}
-                          min="0"
-                        />
-                        <p className="text-xs text-gray-500">Cooldown period after cancellation before rebooking</p>
-                      </div>
-
-                      {/* ACC-011: Rate Limiting */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label className="flex items-center gap-1">
-                            <Zap className="h-3.5 w-3.5" />
-                            Rate Limiting
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.rateLimitEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('rateLimitEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs">Max Actions</Label>
-                            <Input
-                              type="number"
-                              value={facilityData.bookingRules.rateLimitMaxActions}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('rateLimitMaxActions', e.target.value)}
-                              disabled={!isEditing || !facilityData.bookingRules.rateLimitEnabled}
-                              min="1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Window (seconds)</Label>
-                            <Input
-                              type="number"
-                              value={facilityData.bookingRules.rateLimitWindowSeconds}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('rateLimitWindowSeconds', e.target.value)}
-                              disabled={!isEditing || !facilityData.bookingRules.rateLimitEnabled}
-                              min="1"
-                            />
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-500">Limit booking actions to prevent abuse</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* No-Show / Strike System */}
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5" />
-                        No-Show / Strike System
-                      </span>
-                      <Switch
-                        checked={facilityData.bookingRules.strikeSystemEnabled}
-                        onCheckedChange={(checked: boolean) => handleBookingRulesChange('strikeSystemEnabled', checked)}
-                        disabled={!isEditing}
-                      />
-                    </CardTitle>
-                    <CardDescription>Automatically track no-shows and late cancellations with escalating penalties</CardDescription>
-                  </CardHeader>
-                  {facilityData.bookingRules.strikeSystemEnabled && (
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label>Strike Threshold</Label>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.strikeThreshold}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('strikeThreshold', e.target.value)}
-                            disabled={!isEditing}
-                            min="1"
-                          />
-                          <p className="text-xs text-gray-500">Strikes before lockout</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Window (days)</Label>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.strikeWindowDays}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('strikeWindowDays', e.target.value)}
-                            disabled={!isEditing}
-                            min="1"
-                          />
-                          <p className="text-xs text-gray-500">Rolling window for counting strikes</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Lockout Duration (days)</Label>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.strikeLockoutDays}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('strikeLockoutDays', e.target.value)}
-                            disabled={!isEditing}
-                            min="1"
-                          />
-                          <p className="text-xs text-gray-500">Days locked out after threshold</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
+                {/* Cancellation & No-Show Rules */}
+                {renderRuleCategoryCard('cancellation', Clock)}
 
                 {/* Court Scheduling Rules */}
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Clock className="h-5 w-5" />
-                      Court Scheduling Rules
-                    </CardTitle>
-                    <CardDescription>Per-court scheduling constraints and release policies</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* CRT-007: Buffer Time Between Reservations */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Buffer Time Between Reservations</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.bufferTimeEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('bufferTimeEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        <Input
-                          type="number"
-                          value={facilityData.bookingRules.bufferTimeMinutes}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('bufferTimeMinutes', e.target.value)}
-                          disabled={!isEditing || !facilityData.bookingRules.bufferTimeEnabled}
-                          min="0"
-                          step="5"
-                        />
-                        <p className="text-xs text-gray-500">Minutes of gap required between back-to-back reservations</p>
-                      </div>
+                {renderRuleCategoryCard('court', Settings)}
 
-                      {/* CRT-012: Court Cancellation Deadline */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Court Cancellation Deadline</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.courtCancellationDeadlineEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('courtCancellationDeadlineEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        <Input
-                          type="number"
-                          value={facilityData.bookingRules.courtCancellationDeadlineMinutes}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtCancellationDeadlineMinutes', e.target.value)}
-                          disabled={!isEditing || !facilityData.bookingRules.courtCancellationDeadlineEnabled}
-                          min="0"
-                        />
-                        <p className="text-xs text-gray-500">Minutes before start time that cancellation is no longer allowed</p>
-                      </div>
-
-                      {/* CRT-008: Allowed Booking Types */}
-                      <div className="space-y-2 p-3 border rounded-lg md:col-span-2">
-                        <div className="flex justify-between items-center">
-                          <Label>Restrict Booking Types</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.allowedBookingTypesEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('allowedBookingTypesEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        {facilityData.bookingRules.allowedBookingTypesEnabled && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'].map(type => (
-                              <label key={type} className="flex items-center gap-1.5 text-sm">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded"
-                                  checked={facilityData.bookingRules.allowedBookingTypes.includes(type)}
-                                  disabled={!isEditing}
-                                  onChange={(e) => {
-                                    const current = facilityData.bookingRules.allowedBookingTypes;
-                                    const updated = e.target.checked
-                                      ? [...current, type]
-                                      : current.filter(t => t !== type);
-                                    handleBookingRulesChange('allowedBookingTypes', updated);
-                                  }}
-                                />
-                                <span className="capitalize">{type.replace('_', ' ')}</span>
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                        <p className="text-xs text-gray-500">Limit which booking types are available at this facility</p>
-                      </div>
-
-                      {/* CRT-010: Court Weekly Cap */}
-                      <div className="space-y-2 p-3 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <Label>Per-Court Weekly Cap</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.courtWeeklyCapEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('courtWeeklyCapEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        <Input
-                          type="number"
-                          value={facilityData.bookingRules.courtWeeklyCap}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtWeeklyCap', e.target.value)}
-                          disabled={!isEditing || !facilityData.bookingRules.courtWeeklyCapEnabled}
-                          min="1"
-                        />
-                        <p className="text-xs text-gray-500">Max bookings per account per week on the same court</p>
-                      </div>
-
-                      {/* CRT-011: Court Release Time */}
-                      <div className="space-y-2 p-3 border rounded-lg md:col-span-2">
-                        <div className="flex justify-between items-center">
-                          <Label>Booking Release Schedule</Label>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={facilityData.bookingRules.courtReleaseTimeEnabled}
-                              onCheckedChange={(checked: boolean) => handleBookingRulesChange('courtReleaseTimeEnabled', checked)}
-                              disabled={!isEditing}
-                            />
-                            <span className="text-sm text-gray-500">Enabled</span>
-                          </div>
-                        </div>
-                        {facilityData.bookingRules.courtReleaseTimeEnabled && (
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <Label className="text-xs">Release Time</Label>
-                              <Input
-                                type="time"
-                                value={facilityData.bookingRules.courtReleaseTime}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtReleaseTime', e.target.value)}
-                                disabled={!isEditing}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">Days Ahead</Label>
-                              <Input
-                                type="number"
-                                value={facilityData.bookingRules.courtReleaseDaysAhead}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtReleaseDaysAhead', e.target.value)}
-                                disabled={!isEditing}
-                                min="1"
-                              />
-                            </div>
-                          </div>
-                        )}
-                        <p className="text-xs text-gray-500">Courts become bookable at a specific time, X days ahead</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Household Rules - only show when restriction type is address-based */}
-                {facilityData.bookingRules.restrictionType === 'address' && (
-                  <Card className="lg:col-span-2">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Home className="h-5 w-5" />
-                        Household Rules
-                      </CardTitle>
-                      <CardDescription>Limits applied per household address (address-based restriction mode)</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* HH-001: Max Members Per Address */}
-                        <div className="space-y-2 p-3 border rounded-lg">
-                          <div className="flex justify-between items-center">
-                            <Label>Max Members Per Address</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.householdMaxMembersEnabled}
-                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('householdMaxMembersEnabled', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-sm text-gray-500">Enabled</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.householdMaxMembers}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('householdMaxMembers', e.target.value)}
-                            disabled={!isEditing || !facilityData.bookingRules.householdMaxMembersEnabled}
-                            min="1"
-                          />
-                          <p className="text-xs text-gray-500">Limits how many accounts can be registered at a single address</p>
-                        </div>
-
-                        {/* HH-002: Household Max Active Reservations */}
-                        <div className="space-y-2 p-3 border rounded-lg">
-                          <div className="flex justify-between items-center">
-                            <Label>Household Max Active Reservations</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.householdMaxActiveEnabled}
-                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('householdMaxActiveEnabled', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-sm text-gray-500">Enabled</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.householdMaxActive}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('householdMaxActive', e.target.value)}
-                            disabled={!isEditing || !facilityData.bookingRules.householdMaxActiveEnabled}
-                            min="1"
-                          />
-                          <p className="text-xs text-gray-500">Max active reservations across all accounts at this address</p>
-                        </div>
-
-                        {/* HH-003: Household Prime-Time Cap */}
-                        <div className="space-y-2 p-3 border rounded-lg">
-                          <div className="flex justify-between items-center">
-                            <Label>Household Prime-Time Cap</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.householdPrimeCapEnabled}
-                                onCheckedChange={(checked: boolean) => handleBookingRulesChange('householdPrimeCapEnabled', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-sm text-gray-500">Enabled</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.householdPrimeCap}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('householdPrimeCap', e.target.value)}
-                            disabled={!isEditing || !facilityData.bookingRules.householdPrimeCapEnabled}
-                            min="1"
-                          />
-                          <p className="text-xs text-gray-500">Max prime-time bookings per week for all accounts at this address</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                {/* Household Rules - only when address-based */}
+                {facilityData.bookingRules.restrictionType === 'address' && renderRuleCategoryCard('household', Home)}
 
                 {/* Admin Restrictions */}
                 <Card>

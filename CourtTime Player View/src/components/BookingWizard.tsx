@@ -7,6 +7,7 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
 import { Calendar, Clock, MapPin, AlertCircle, Info, Repeat } from 'lucide-react';
+import { RuleViolationDialog } from './RuleViolationDialog';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, facilitiesApi } from '../api/client';
@@ -396,23 +397,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             </div>
           </div>
 
-          {/* Rule Violations */}
-          {ruleViolations.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-3 space-y-2">
-              <div className="flex items-center gap-2 text-red-800 font-medium text-sm">
-                <AlertCircle className="h-4 w-4" />
-                Booking could not be completed
-              </div>
-              <ul className="space-y-1">
-                {ruleViolations.map((v, i) => (
-                  <li key={i} className="text-sm text-red-700 flex items-start gap-2">
-                    <span className="text-red-400 mt-0.5">-</span>
-                    <span>{v.message}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Rule Violations Dialog */}
+          <RuleViolationDialog
+            open={ruleViolations.length > 0}
+            onClose={() => setRuleViolations([])}
+            violations={ruleViolations}
+          />
 
           {/* Rule Warnings */}
           {ruleWarnings.length > 0 && (

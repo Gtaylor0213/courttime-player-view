@@ -7,6 +7,7 @@ import { Textarea } from './ui/textarea';
 import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Calendar, Clock, MapPin, User, Zap, AlertCircle, Info } from 'lucide-react';
+import { RuleViolationDialog } from './RuleViolationDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi } from '../api/client';
 import { BOOKING_TYPES } from '../constants/bookingTypes';
@@ -974,23 +975,12 @@ export function QuickReservePopup({
             </div>
           )}
 
-              {/* Rule Violations */}
-              {bookingErrors.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-3 space-y-2">
-                  <div className="flex items-center gap-2 text-red-800 font-medium text-sm">
-                    <AlertCircle className="h-4 w-4" />
-                    Booking could not be completed
-                  </div>
-                  <ul className="space-y-1">
-                    {bookingErrors.map((v, i) => (
-                      <li key={i} className="text-sm text-red-700 flex items-start gap-2">
-                        <span className="text-red-400 mt-0.5">-</span>
-                        <span>{v.message}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {/* Rule Violations Dialog */}
+              <RuleViolationDialog
+                open={bookingErrors.length > 0}
+                onClose={() => setBookingErrors([])}
+                violations={bookingErrors}
+              />
 
               {/* Rule Warnings */}
               {bookingWarnings.length > 0 && (

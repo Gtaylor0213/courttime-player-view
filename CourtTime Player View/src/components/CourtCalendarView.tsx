@@ -1022,7 +1022,7 @@ export function CourtCalendarView() {
         )}
 
         {/* Controls Header */}
-        <div className="flex-shrink-0 z-40 bg-gray-50 border-b border-gray-200">
+        <div className="flex-shrink-0 z-40 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
           <div className="px-3 md:px-4 py-2">
             {/* Top Row: Facility Name, Court Type Filter, Courts, Zoom, Bell */}
             <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
@@ -1203,20 +1203,20 @@ export function CourtCalendarView() {
                 <tr>
                   {/* Corner cell: sticky in both directions */}
                   <th
-                    className="sticky top-0 left-0 z-40 bg-gray-100 border-r border-b-2 border-gray-300"
+                    className="sticky top-0 left-0 z-40 bg-green-700 border-r border-b-2 border-green-800"
                     style={{ width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth, height: effectiveHeaderHeight, textAlign: 'center', verticalAlign: 'middle' }}
                   >
-                    <span className="font-semibold text-xs text-gray-700">Time (EST)</span>
+                    <span className="font-semibold text-xs text-green-100">Time (EST)</span>
                   </th>
                   {/* Court header cells: sticky top */}
                   {courts.map((court, index) => (
                     <th
                       key={index}
-                      className="sticky top-0 z-30 bg-white border-r border-b-2 border-gray-300 last:border-r-0 p-3 text-left font-normal"
+                      className="sticky top-0 z-30 bg-gradient-to-b from-green-600 to-green-700 text-white border-r border-b-2 border-green-800 last:border-r-0 p-3 text-left font-normal"
                       style={{ width: effectiveCourtWidth, minWidth: effectiveCourtWidth, height: effectiveHeaderHeight, verticalAlign: 'middle' }}
                     >
-                      <div className="font-semibold text-sm text-gray-900">{court.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5 capitalize">{court.type}</div>
+                      <div className="font-semibold text-sm text-white">{court.name}</div>
+                      <div className="text-xs text-green-200 mt-0.5 capitalize">{court.type}</div>
                     </th>
                   ))}
                 </tr>
@@ -1231,7 +1231,7 @@ export function CourtCalendarView() {
                     <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
                       {/* Sticky time label */}
                       <td
-                        className="sticky left-0 z-10 bg-gray-50 border-r border-gray-200 px-2"
+                        className="sticky left-0 z-10 bg-green-50 border-r border-green-100 px-2"
                         style={{
                           width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth,
                           textAlign: 'right', verticalAlign: 'top', paddingTop: 4,

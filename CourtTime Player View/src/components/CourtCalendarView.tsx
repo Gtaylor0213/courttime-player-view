@@ -232,72 +232,143 @@ export function CourtCalendarView() {
       const dateStr = `${year}-${month}-${day}`;
       console.log('📅 Fetching bookings for facility:', selectedFacility, 'date:', dateStr);
 
-      const response = await bookingApi.getByFacility(selectedFacility, dateStr);
+      // Fetch bookings and blackouts in parallel
+      const [response, blackoutResponse] = await Promise.all([
+        bookingApi.getByFacility(selectedFacility, dateStr),
+        courtConfigApi.getFacilityBlackouts(selectedFacility, {
+          startDate: dateStr,
+          endDate: dateStr,
+        }),
+      ]);
       console.log('📦 Bookings API response:', response);
+
+      // Transform API bookings to match the format expected by the UI
+      const transformedBookings: any = {};
+
+      // Build court lookup maps for parent/child relationships
+      const allFacilityCourts = currentFacility?.courts || [];
+      const courtIdToName: Record<string, string> = {};
+      const courtNameToId: Record<string, string> = {};
+      allFacilityCourts.forEach((c: any) => {
+        courtIdToName[c.id] = c.name;
+        courtNameToId[c.name] = c.id;
+      });
+      const parentToChildren: Record<string, string[]> = {};
+      allFacilityCourts.forEach((c: any) => {
+        if (c.parentCourtId) {
+          if (!parentToChildren[c.parentCourtId]) parentToChildren[c.parentCourtId] = [];
+          parentToChildren[c.parentCourtId].push(c.name);
+        }
+      });
+
+      // Helper to add slot entries for a court
+      const addSlotsForCourt = (targetCourtName: string, booking: any, isBlocked: boolean, blockedBy?: string) => {
+        if (!transformedBookings[targetCourtName]) {
+          transformedBookings[targetCourtName] = {};
+        }
+
+        const slotsToFill = Math.ceil(booking.durationMinutes / 15);
+        const [startHours, startMinutes] = booking.startTime.split(':').map(Number);
+
+        for (let i = 0; i < slotsToFill; i++) {
+          const slotMinutes = startMinutes + (i * 15);
+          const slotHours = startHours + Math.floor(slotMinutes / 60);
+          const actualMinutes = slotMinutes % 60;
+          const period = slotHours >= 12 ? 'PM' : 'AM';
+          const displayHour = slotHours > 12 ? slotHours - 12 : slotHours === 0 ? 12 : slotHours;
+          const slotTime = `${displayHour}:${actualMinutes.toString().padStart(2, '0')} ${period}`;
+
+          // Don't overwrite real bookings with blocked entries
+          if (transformedBookings[targetCourtName][slotTime]) continue;
+
+          if (isBlocked) {
+            transformedBookings[targetCourtName][slotTime] = {
+              player: `Blocked (${blockedBy})`,
+              duration: `${booking.durationMinutes}min`,
+              type: 'blocked',
+              isFirstSlot: i === 0,
+              bookingType: 'blocked',
+            };
+          } else {
+            transformedBookings[targetCourtName][slotTime] = {
+              player: booking.userName || 'Reserved',
+              duration: `${booking.durationMinutes}min`,
+              type: 'reservation',
+              bookingId: booking.id,
+              userId: booking.userId,
+              isFirstSlot: i === 0,
+              bookingType: booking.bookingType,
+              notes: booking.notes,
+              fullDetails: {
+                ...booking,
+                facilityName: currentFacility?.name
+              }
+            };
+          }
+        }
+      };
+
+      // Helper to add blackout slots for a court across a time range
+      const addBlackoutSlots = (courtName: string, startHour: number, startMin: number, endHour: number, endMin: number, title: string) => {
+        if (!transformedBookings[courtName]) {
+          transformedBookings[courtName] = {};
+        }
+        let h = startHour;
+        let m = startMin;
+        let isFirst = true;
+        while (h < endHour || (h === endHour && m < endMin)) {
+          const period = h >= 12 ? 'PM' : 'AM';
+          const displayHour = h > 12 ? h - 12 : h === 0 ? 12 : h;
+          const slotTime = `${displayHour}:${m.toString().padStart(2, '0')} ${period}`;
+
+          if (!transformedBookings[courtName][slotTime]) {
+            transformedBookings[courtName][slotTime] = {
+              player: title || 'Blackout',
+              duration: '',
+              type: 'blocked',
+              isFirstSlot: isFirst,
+              bookingType: 'blackout',
+            };
+          }
+          isFirst = false;
+          m += 15;
+          if (m >= 60) { h++; m = 0; }
+        }
+      };
+
+      // Process blackouts
+      const blackouts = blackoutResponse?.success ? (blackoutResponse.data?.blackouts || []) : [];
+      blackouts.forEach((b: any) => {
+        const bStart = new Date(b.start_datetime);
+        const bEnd = new Date(b.end_datetime);
+        // Clamp to the selected date's boundaries (0:00 - 23:59)
+        const dayStart = new Date(selectedDate); dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(selectedDate); dayEnd.setHours(23, 59, 59, 999);
+        const effectiveStart = bStart < dayStart ? dayStart : bStart;
+        const effectiveEnd = bEnd > dayEnd ? dayEnd : bEnd;
+        const startH = effectiveStart.getHours();
+        const startM = Math.floor(effectiveStart.getMinutes() / 15) * 15;
+        const endH = effectiveEnd.getHours();
+        const endM = Math.ceil(effectiveEnd.getMinutes() / 15) * 15;
+
+        const label = b.title || b.blackout_type || 'Blackout';
+
+        if (b.court_id) {
+          // Court-specific blackout
+          const courtName = courtIdToName[b.court_id];
+          if (courtName) {
+            addBlackoutSlots(courtName, startH, startM, endH, endM, label);
+          }
+        } else {
+          // Facility-wide blackout — apply to all courts
+          allFacilityCourts.forEach((c: any) => {
+            addBlackoutSlots(c.name, startH, startM, endH, endM, label);
+          });
+        }
+      });
 
       if (response.success && response.data?.bookings) {
         console.log('✅ Processing', response.data.bookings.length, 'bookings');
-        // Transform API bookings to match the format expected by the UI
-        const transformedBookings: any = {};
-
-        // Build court lookup maps for parent/child relationships
-        const allFacilityCourts = currentFacility?.courts || [];
-        const courtIdToName: Record<string, string> = {};
-        allFacilityCourts.forEach((c: any) => { courtIdToName[c.id] = c.name; });
-        const parentToChildren: Record<string, string[]> = {};
-        allFacilityCourts.forEach((c: any) => {
-          if (c.parentCourtId) {
-            if (!parentToChildren[c.parentCourtId]) parentToChildren[c.parentCourtId] = [];
-            parentToChildren[c.parentCourtId].push(c.name);
-          }
-        });
-
-        // Helper to add slot entries for a court
-        const addSlotsForCourt = (targetCourtName: string, booking: any, isBlocked: boolean, blockedBy?: string) => {
-          if (!transformedBookings[targetCourtName]) {
-            transformedBookings[targetCourtName] = {};
-          }
-
-          const slotsToFill = Math.ceil(booking.durationMinutes / 15);
-          const [startHours, startMinutes] = booking.startTime.split(':').map(Number);
-
-          for (let i = 0; i < slotsToFill; i++) {
-            const slotMinutes = startMinutes + (i * 15);
-            const slotHours = startHours + Math.floor(slotMinutes / 60);
-            const actualMinutes = slotMinutes % 60;
-            const period = slotHours >= 12 ? 'PM' : 'AM';
-            const displayHour = slotHours > 12 ? slotHours - 12 : slotHours === 0 ? 12 : slotHours;
-            const slotTime = `${displayHour}:${actualMinutes.toString().padStart(2, '0')} ${period}`;
-
-            // Don't overwrite real bookings with blocked entries
-            if (transformedBookings[targetCourtName][slotTime]) continue;
-
-            if (isBlocked) {
-              transformedBookings[targetCourtName][slotTime] = {
-                player: `Blocked (${blockedBy} in use)`,
-                duration: `${booking.durationMinutes}min`,
-                type: 'blocked',
-                isFirstSlot: i === 0,
-                bookingType: 'blocked',
-              };
-            } else {
-              transformedBookings[targetCourtName][slotTime] = {
-                player: booking.userName || 'Reserved',
-                duration: `${booking.durationMinutes}min`,
-                type: 'reservation',
-                bookingId: booking.id,
-                userId: booking.userId,
-                isFirstSlot: i === 0,
-                bookingType: booking.bookingType,
-                notes: booking.notes,
-                fullDetails: {
-                  ...booking,
-                  facilityName: currentFacility?.name
-                }
-              };
-            }
-          }
-        };
 
         response.data.bookings.forEach((booking: any) => {
           const courtName = booking.courtName;
@@ -326,13 +397,10 @@ export function CourtCalendarView() {
             }
           }
         });
-
-        console.log('🎨 Transformed bookings:', transformedBookings);
-        setBookingsData(transformedBookings);
-      } else {
-        console.log('❌ No bookings found or request failed');
-        setBookingsData({});
       }
+
+      console.log('🎨 Transformed bookings:', transformedBookings);
+      setBookingsData(transformedBookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setBookingsData({});

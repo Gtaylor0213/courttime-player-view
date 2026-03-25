@@ -212,6 +212,30 @@ export async function updateBookingStatus(bookingId: string, status: string) {
   }
 }
 
+// ── Rules ─────────────────────────────────────────────────
+
+export async function getFacilityRules(facilityId: string) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/rules/facility/${facilityId}/effective`);
+    return response.json();
+  } catch {
+    return { success: false, error: 'Failed to fetch rules' };
+  }
+}
+
+export async function updateFacilityRule(facilityId: string, ruleCode: string, data: { is_enabled: boolean; rule_config: any }) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/rules/facility/${facilityId}/${ruleCode}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  } catch {
+    return { success: false, error: 'Failed to update rule' };
+  }
+}
+
 // ── Violations ─────────────────────────────────────────────
 
 export async function getFacilityViolations(facilityId: string) {

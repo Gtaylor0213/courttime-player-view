@@ -6,8 +6,9 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Search, X } from 'lucide-react';
-import { getFacilities, getFacility, updateFacility } from '../../api/supportClient';
+import { Search, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Switch } from '../ui/switch';
+import { getFacilities, getFacility, updateFacility, getFacilityRules, updateFacilityRule } from '../../api/supportClient';
 import { toast } from 'sonner';
 
 interface Props {
@@ -22,6 +23,10 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState<any>({});
   const [facilitySearch, setFacilitySearch] = useState('');
+  const [rules, setRules] = useState<any[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [expandedRule, setExpandedRule] = useState<string | null>(null);
+  const [ruleSaving, setRuleSaving] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -70,6 +75,64 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
 
   const updateField = (field: string, value: any) => {
     setEditData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const loadRules = async () => {
+    if (!selectedFacilityId) return;
+    setRulesLoading(true);
+    const res = await getFacilityRules(selectedFacilityId);
+    if (res.success && res.rules) {
+      setRules(res.rules);
+    }
+    setRulesLoading(false);
+  };
+
+  const handleToggleRule = async (rule: any) => {
+    if (!selectedFacilityId) return;
+    setRuleSaving(rule.rule_code);
+    const res = await updateFacilityRule(selectedFacilityId, rule.rule_code, {
+      is_enabled: !rule.isEnabled,
+      rule_config: rule.effectiveConfig || rule.default_config,
+    });
+    if (res.success) {
+      toast.success(`${rule.rule_name} ${!rule.isEnabled ? 'enabled' : 'disabled'}`);
+      await loadRules();
+    } else {
+      toast.error(res.error || 'Failed to update rule');
+    }
+    setRuleSaving(null);
+  };
+
+  const handleUpdateRuleConfig = async (rule: any, newConfig: any) => {
+    if (!selectedFacilityId) return;
+    setRuleSaving(rule.rule_code);
+    const res = await updateFacilityRule(selectedFacilityId, rule.rule_code, {
+      is_enabled: rule.isEnabled,
+      rule_config: newConfig,
+    });
+    if (res.success) {
+      toast.success(`${rule.rule_name} updated`);
+      await loadRules();
+    } else {
+      toast.error(res.error || 'Failed to update rule');
+    }
+    setRuleSaving(null);
+  };
+
+  const rulesByCategory = useMemo(() => {
+    const grouped: Record<string, any[]> = {};
+    for (const rule of rules) {
+      const cat = rule.rule_category || 'other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(rule);
+    }
+    return grouped;
+  }, [rules]);
+
+  const categoryLabels: Record<string, string> = {
+    account: 'Account Rules',
+    court: 'Court Rules',
+    household: 'Household Rules',
   };
 
   return (
@@ -158,6 +221,7 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
             <TabsList>
               <TabsTrigger value="general" className="px-4">General Info</TabsTrigger>
               <TabsTrigger value="contacts" className="px-4">Contacts</TabsTrigger>
+              <TabsTrigger value="rules" className="px-4" onClick={() => { if (rules.length === 0) loadRules(); }}>Rules</TabsTrigger>
             </TabsList>
           </div>
 
@@ -255,6 +319,101 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400">No contacts on file.</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="rules">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Booking Rules Configuration</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {rulesLoading ? (
+                  <div className="flex justify-center py-10">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+                  </div>
+                ) : rules.length === 0 ? (
+                  <p className="text-sm text-gray-400">No rules configured. Click the tab to load.</p>
+                ) : (
+                  <div className="space-y-6">
+                    {Object.entries(rulesByCategory).map(([category, catRules]) => (
+                      <div key={category}>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                          {categoryLabels[category] || category}
+                        </h3>
+                        <div className="space-y-2">
+                          {catRules.map((rule: any) => (
+                            <div key={rule.rule_code} className="border rounded-lg">
+                              <div className="flex items-center justify-between p-3">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <Switch
+                                    checked={rule.isEnabled}
+                                    onCheckedChange={() => handleToggleRule(rule)}
+                                    disabled={ruleSaving === rule.rule_code}
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-mono text-gray-400">{rule.rule_code}</span>
+                                      <span className="text-sm font-medium truncate">{rule.rule_name}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 truncate">{rule.description}</p>
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setExpandedRule(expandedRule === rule.rule_code ? null : rule.rule_code)}
+                                >
+                                  {expandedRule === rule.rule_code ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                </Button>
+                              </div>
+
+                              {expandedRule === rule.rule_code && (
+                                <div className="px-3 pb-3 border-t pt-3">
+                                  <div className="space-y-3">
+                                    <div>
+                                      <Label className="text-xs text-gray-500">Configuration</Label>
+                                      <textarea
+                                        className="w-full mt-1 min-h-[100px] rounded-md border border-input bg-input-background px-3 py-2 text-xs font-mono"
+                                        value={JSON.stringify(rule.effectiveConfig || rule.default_config, null, 2)}
+                                        onChange={(e) => {
+                                          try {
+                                            const parsed = JSON.parse(e.target.value);
+                                            // Update local state for editing
+                                            setRules(prev => prev.map(r =>
+                                              r.rule_code === rule.rule_code
+                                                ? { ...r, effective_config: parsed }
+                                                : r
+                                            ));
+                                          } catch {
+                                            // Invalid JSON, just update the text
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleUpdateRuleConfig(rule, rule.effectiveConfig || rule.default_config)}
+                                        disabled={ruleSaving === rule.rule_code}
+                                      >
+                                        {ruleSaving === rule.rule_code ? 'Saving...' : 'Save Config'}
+                                      </Button>
+                                      <span className="text-xs text-gray-400">
+                                        {rule.facilityConfig ? 'Custom config' : 'Using defaults'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

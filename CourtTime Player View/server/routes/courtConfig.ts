@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { pool } from '../../src/database/connection';
+import { query } from '../../src/database/connection';
 
 const router = express.Router();
 
@@ -20,7 +20,7 @@ router.get('/:courtId/schedule', async (req, res, next) => {
   try {
     const { courtId } = req.params;
 
-    const result = await pool.query(
+    const result = await query(
       `SELECT * FROM court_operating_config
        WHERE court_id = $1
        ORDER BY day_of_week ASC`,
@@ -66,7 +66,7 @@ router.get('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
   try {
     const { courtId, dayOfWeek } = req.params;
 
-    const result = await pool.query(
+    const result = await query(
       `SELECT * FROM court_operating_config
        WHERE court_id = $1 AND day_of_week = $2`,
       [courtId, parseInt(dayOfWeek)]
@@ -144,7 +144,7 @@ router.put('/:courtId/schedule', async (req, res, next) => {
       await client.query('COMMIT');
 
       // Fetch updated schedule
-      const result = await pool.query(
+      const result = await query(
         `SELECT * FROM court_operating_config
          WHERE court_id = $1
          ORDER BY day_of_week ASC`,
@@ -187,7 +187,7 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
       bufferAfter
     } = req.body;
 
-    const result = await pool.query(
+    const result = await query(
       `INSERT INTO court_operating_config (
         court_id, day_of_week, is_open, open_time, close_time,
         prime_time_start, prime_time_end, prime_time_max_duration,
@@ -247,29 +247,29 @@ router.get('/:courtId/blackouts', async (req, res, next) => {
     const { courtId } = req.params;
     const { startDate, endDate, includeExpired } = req.query;
 
-    let query = `
+    let sql = `
       SELECT * FROM court_blackouts
       WHERE (court_id = $1 OR court_id IS NULL)
     `;
     const params: any[] = [courtId];
 
     if (includeExpired !== 'true') {
-      query += ` AND end_datetime > CURRENT_TIMESTAMP`;
+      sql += ` AND end_datetime > CURRENT_TIMESTAMP`;
     }
 
     if (startDate) {
       params.push(startDate);
-      query += ` AND end_datetime >= $${params.length}::timestamp`;
+      sql += ` AND end_datetime >= $${params.length}::timestamp`;
     }
 
     if (endDate) {
       params.push(endDate);
-      query += ` AND start_datetime <= $${params.length}::timestamp`;
+      sql += ` AND start_datetime <= $${params.length}::timestamp`;
     }
 
-    query += ` ORDER BY start_datetime ASC`;
+    sql += ` ORDER BY start_datetime ASC`;
 
-    const result = await pool.query(query, params);
+    const result = await query(sql, params);
 
     res.json({
       success: true,
@@ -289,7 +289,7 @@ router.get('/facility/:facilityId/blackouts', async (req, res, next) => {
     const { facilityId } = req.params;
     const { startDate, endDate, includeExpired } = req.query;
 
-    let query = `
+    let sql = `
       SELECT cb.*, c.name as court_name
       FROM court_blackouts cb
       LEFT JOIN courts c ON cb.court_id = c.id
@@ -298,22 +298,22 @@ router.get('/facility/:facilityId/blackouts', async (req, res, next) => {
     const params: any[] = [facilityId];
 
     if (includeExpired !== 'true') {
-      query += ` AND cb.end_datetime > CURRENT_TIMESTAMP`;
+      sql += ` AND cb.end_datetime > CURRENT_TIMESTAMP`;
     }
 
     if (startDate) {
       params.push(startDate);
-      query += ` AND cb.end_datetime >= $${params.length}::timestamp`;
+      sql += ` AND cb.end_datetime >= $${params.length}::timestamp`;
     }
 
     if (endDate) {
       params.push(endDate);
-      query += ` AND cb.start_datetime <= $${params.length}::timestamp`;
+      sql += ` AND cb.start_datetime <= $${params.length}::timestamp`;
     }
 
-    query += ` ORDER BY cb.start_datetime ASC`;
+    sql += ` ORDER BY cb.start_datetime ASC`;
 
-    const result = await pool.query(query, params);
+    const result = await query(sql, params);
 
     res.json({
       success: true,
@@ -349,7 +349,7 @@ router.post('/blackouts', async (req, res, next) => {
       });
     }
 
-    const result = await pool.query(
+    const result = await query(
       `INSERT INTO court_blackouts (
         court_id, facility_id, blackout_type, title, description,
         start_datetime, end_datetime, recurrence_rule, created_by
@@ -388,7 +388,7 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
       recurrenceRule
     } = req.body;
 
-    const result = await pool.query(
+    const result = await query(
       `UPDATE court_blackouts SET
         court_id = COALESCE($1, court_id),
         blackout_type = COALESCE($2, blackout_type),
@@ -427,7 +427,7 @@ router.delete('/blackouts/:blackoutId', async (req, res, next) => {
   try {
     const { blackoutId } = req.params;
 
-    const result = await pool.query(
+    const result = await query(
       `DELETE FROM court_blackouts WHERE id = $1 RETURNING id`,
       [blackoutId]
     );
@@ -467,7 +467,7 @@ router.get('/:courtId/prime-time', async (req, res, next) => {
     // Get day of week (0 = Sunday, 6 = Saturday)
     const dayOfWeek = new Date(date as string).getDay();
 
-    const result = await pool.query(
+    const result = await query(
       `SELECT prime_time_start, prime_time_end
        FROM court_operating_config
        WHERE court_id = $1 AND day_of_week = $2`,
@@ -517,14 +517,14 @@ router.get('/:courtId/availability', async (req, res, next) => {
     const dayOfWeek = new Date(date as string).getDay();
 
     // Get operating config
-    const configResult = await pool.query(
+    const configResult = await query(
       `SELECT * FROM court_operating_config
        WHERE court_id = $1 AND day_of_week = $2`,
       [courtId, dayOfWeek]
     );
 
     // Get blackouts for this date
-    const blackoutResult = await pool.query(
+    const blackoutResult = await query(
       `SELECT * FROM court_blackouts
        WHERE (court_id = $1 OR court_id IS NULL)
          AND start_datetime::date <= $2::date
@@ -533,7 +533,7 @@ router.get('/:courtId/availability', async (req, res, next) => {
     );
 
     // Get existing bookings
-    const bookingsResult = await pool.query(
+    const bookingsResult = await query(
       `SELECT start_time, end_time FROM bookings
        WHERE court_id = $1 AND booking_date = $2 AND status != 'cancelled'`,
       [courtId, date]

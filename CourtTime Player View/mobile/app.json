@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "CourtTime",
+    "slug": "courttime",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "courttime",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a5f2a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.courttime.player"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a5f2a"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.courttime.player"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ]
+  }
+}

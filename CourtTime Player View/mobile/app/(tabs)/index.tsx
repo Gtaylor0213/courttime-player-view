@@ -12,6 +12,8 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { showAlert } from '../../src/utils/alert';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
@@ -19,27 +21,29 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/the
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, facilityId } = useAuth();
   const router = useRouter();
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [bulletins, setBulletins] = useState<BulletinPostWithAuthor[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!user) return;
+    if (!user || !facilityId) return;
 
     const [bookingsRes, bulletinsRes] = await Promise.all([
-      api.get(`/api/bookings/user/${user.id}?status=confirmed&limit=3`),
-      api.get(`/api/bulletin?limit=5`),
+      api.get(`/api/bookings/upcoming/${user.id}`),
+      api.get(`/api/bulletin-board/${facilityId}`),
     ]);
 
     if (bookingsRes.success && bookingsRes.data) {
-      setBookings(Array.isArray(bookingsRes.data) ? bookingsRes.data : bookingsRes.data.bookings || []);
+      const list = Array.isArray(bookingsRes.data) ? bookingsRes.data : bookingsRes.data.bookings || [];
+      setBookings(list.slice(0, 3));
     }
     if (bulletinsRes.success && bulletinsRes.data) {
-      setBulletins(Array.isArray(bulletinsRes.data) ? bulletinsRes.data : bulletinsRes.data.posts || []);
+      const posts = Array.isArray(bulletinsRes.data) ? bulletinsRes.data : bulletinsRes.data.posts || [];
+      setBulletins(posts.slice(0, 5));
     }
-  }, [user]);
+  }, [user, facilityId]);
 
   useEffect(() => {
     fetchData();
@@ -58,6 +62,25 @@ export default function HomeScreen() {
       day: 'numeric',
     });
   };
+
+  async function handleCancelBooking(bookingId: string) {
+    if (!user) return;
+    showAlert('Cancel Booking', 'Are you sure you want to cancel this booking?', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Cancel Booking',
+        style: 'destructive',
+        onPress: async () => {
+          const res = await api.delete(`/api/bookings/${bookingId}?userId=${user.id}`);
+          if (res.success) {
+            fetchData();
+          } else {
+            showAlert('Error', res.error || 'Could not cancel booking');
+          }
+        },
+      },
+    ]);
+  }
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');
@@ -90,10 +113,10 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={styles.actionCard}
-          onPress={() => router.push('/(tabs)/messages')}
+          onPress={() => router.push('/(tabs)/community')}
         >
-          <Text style={styles.actionEmoji}>{'\u{1F4AC}'}</Text>
-          <Text style={styles.actionLabel}>Messages</Text>
+          <Ionicons name="people" size={28} color={Colors.primary} />
+          <Text style={styles.actionLabel}>Community</Text>
         </TouchableOpacity>
       </View>
 
@@ -119,9 +142,20 @@ export default function HomeScreen() {
               <Text style={styles.bookingDate}>
                 {formatDate(booking.bookingDate)}
               </Text>
-              <Text style={styles.bookingTime}>
-                {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
-              </Text>
+              <View style={styles.bookingFooter}>
+                <Text style={styles.bookingTime}>
+                  {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
+                </Text>
+                {booking.status === 'confirmed' && (
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => handleCancelBooking(booking.id)}
+                  >
+                    <Ionicons name="close-circle-outline" size={16} color={Colors.error} />
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           ))
         )}
@@ -255,10 +289,25 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
   },
+  bookingFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
   bookingTime: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
-    marginTop: 2,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cancelText: {
+    fontSize: FontSize.xs,
+    color: Colors.error,
+    fontWeight: '600',
   },
   bulletinCard: {
     backgroundColor: Colors.card,

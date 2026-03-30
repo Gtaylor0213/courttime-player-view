@@ -1,22 +1,12 @@
 /**
  * Tab Navigation Layout
- * Bottom tab bar with player-facing screens only
+ * Bottom tab bar with player-facing screens
  */
 
 import { Tabs } from 'expo-router';
-import { Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/theme';
-
-// Simple text-based tab icons (replace with proper icons later)
-function TabIcon({ name, color }: { name: string; color: string }) {
-  const icons: Record<string, string> = {
-    home: '\u2302',
-    book: '\u{1F3BE}',
-    messages: '\u2709',
-    profile: '\u263A',
-  };
-  return <Text style={[styles.icon, { color }]}>{icons[name] || '?'}</Text>;
-}
 
 export default function TabLayout() {
   return (
@@ -35,23 +25,31 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
           headerTitle: 'CourtTime',
         }}
       />
       <Tabs.Screen
         name="book"
         options={{
-          title: 'Book Court',
-          tabBarIcon: ({ color }) => <TabIcon name="book" color={color} />,
+          title: 'Book',
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
           headerTitle: 'Book a Court',
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
+          tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+          headerTitle: 'Community',
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
           title: 'Messages',
-          tabBarIcon: ({ color }) => <TabIcon name="messages" color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
           headerTitle: 'Messages',
         }}
       />
@@ -59,7 +57,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <TabIcon name="profile" color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
           headerTitle: 'My Profile',
         }}
       />
@@ -85,8 +83,5 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
     fontWeight: '700',
     fontSize: 18,
-  },
-  icon: {
-    fontSize: 22,
   },
 });

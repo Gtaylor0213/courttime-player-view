@@ -10,9 +10,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   RefreshControl,
 } from 'react-native';
+import { showAlert } from '../../src/utils/alert';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
@@ -28,7 +28,7 @@ export default function ProfileScreen() {
     if (!user) return;
 
     const [profileRes, bookingsRes] = await Promise.all([
-      api.get(`/api/players/${user.id}/profile`),
+      api.get(`/api/player-profile/${user.id}`),
       api.get(`/api/bookings/user/${user.id}`),
     ]);
 
@@ -52,7 +52,7 @@ export default function ProfileScreen() {
   }, [fetchProfile]);
 
   function handleLogout() {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+    showAlert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: logout },
     ]);

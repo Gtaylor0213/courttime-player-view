@@ -9,9 +9,9 @@
     "newArchEnabled": true,
     "scheme": "courttime",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a5f2a"
+      "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,

@@ -10,6 +10,7 @@ import {
   validateResetToken,
   resetPassword
 } from '../../src/services/passwordResetService';
+import { generateToken } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -79,9 +80,17 @@ router.post('/register', async (req, res, next) => {
     // Get user with memberships
     const userWithMemberships = await getUserWithMemberships(result.user!.id);
 
+    // Generate JWT token
+    const token = generateToken({
+      userId: result.user!.id,
+      email: result.user!.email,
+      userType: (result.user!.userType as 'player' | 'admin') || 'player',
+    });
+
     res.status(201).json({
       success: true,
       user: userWithMemberships,
+      token,
       message: 'User registered successfully'
     });
   } catch (error) {
@@ -112,7 +121,44 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json(result);
     }
 
-    res.json(result);
+    // Generate JWT token
+    const token = generateToken({
+      userId: result.user!.id,
+      email: result.user!.email,
+      userType: (result.user!.userType as 'player' | 'admin') || 'player',
+    });
+
+    res.json({ ...result, token });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/auth/me
+ * Get current user from JWT token (mobile app)
+ */
+router.get('/me', async (req, res, next) => {
+  try {
+    const { requireAuth: authMiddleware } = await import('../middleware/auth');
+    // Inline middleware check
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { verifyToken } = await import('../middleware/auth');
+    const payload = verifyToken(authHeader.slice(7));
+    if (!payload) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired token' });
+    }
+
+    const userWithMemberships = await getUserWithMemberships(payload.userId);
+
+    if (!userWithMemberships) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    res.json({ success: true, user: userWithMemberships });
   } catch (error) {
     next(error);
   }
@@ -120,7 +166,7 @@ router.post('/login', async (req, res, next) => {
 
 /**
  * GET /api/auth/me/:userId
- * Get current user with memberships (for session refresh)
+ * Get current user with memberships (for session refresh — legacy/web)
  */
 router.get('/me/:userId', async (req, res, next) => {
   try {

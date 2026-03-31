@@ -60,7 +60,6 @@ export class RulesEngine {
    *
    * NOTE: This method fails gracefully if the rules engine tables don't exist.
    * When tables are missing, it returns allowed=true to let bookings proceed.
-   * TODO: Run migration 007_booking_rules_engine.sql to enable full rule validation.
    */
   async evaluate(request: BookingRequest): Promise<EvaluationResult> {
     try {

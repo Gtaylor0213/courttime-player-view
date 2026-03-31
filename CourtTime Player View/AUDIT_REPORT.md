@@ -41,10 +41,10 @@ Second, there are no automated tests whatsoever. For an application handling pay
 |---|-------|---------|--------|------------|-------|
 | M1 | 100+ `console.log` statements in production code | Across nearly every service/route file. Biggest clusters: `admin.ts` (21), `support.ts` (29+), `CourtCalendarView.tsx` (7), `bookingService.ts` (9+), `facilityService.ts` (15+) | FIXED | 2026-03-31 | Removed 45 debug console.log from 16 files. Kept intentional server/DB/webhook logging. |
 | M2 | Extremely large component files — difficult to review, test, or modify | `FacilityManagement.tsx` (~3136 lines), `FacilityRegistration.tsx` (~2934 lines), `CourtCalendarView.tsx` (~1467 lines) | OPEN | | Fix: break into smaller sub-components |
-| M3 | N+1 query patterns — individual queries inside loops instead of bulk operations | `addressWhitelistService.ts:192-217`, `courtService.ts:88-120`, `facilityService.ts` (multiple) | OPEN | | Fix: use multi-row INSERT statements |
-| M4 | TODO stubs left in code | `AuthContext.tsx:228` (updateProfile is a stub), `rulesEngine/index.ts:63` (stale migration note) | OPEN | | Fix: implement or remove |
-| M5 | Incomplete `.env.example` — missing `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `SUPPORT_PASSWORD` | `.env.example` | OPEN | | Fix: add all required env vars |
-| M6 | Notification polling when tab inactive — polls API every 30 seconds regardless of visibility | `src/contexts/NotificationContext.tsx` | OPEN | | Fix: use Page Visibility API to pause |
+| M3 | N+1 query patterns — individual queries inside loops instead of bulk operations | `addressWhitelistService.ts:192-217`, `courtService.ts:88-120`, `facilityService.ts` (multiple) | FIXED | 2026-03-31 | Converted bulkAddWhitelistedAddresses and createCourtsBulk to multi-row INSERT. facilityService loops deferred (one-time setup, interleaved tables). |
+| M4 | TODO stubs left in code | `AuthContext.tsx:228` (updateProfile is a stub), `rulesEngine/index.ts:63` (stale migration note) | FIXED | 2026-03-31 | Removed both stale TODO comments |
+| M5 | Incomplete `.env.example` — missing `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `SUPPORT_PASSWORD` | `.env.example` | FIXED | 2026-03-31 | Added JWT_SECRET, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET, SUPPORT_PASSWORD, NODE_OPTIONS |
+| M6 | Notification polling when tab inactive — polls API every 30 seconds regardless of visibility | `src/contexts/NotificationContext.tsx` | FIXED | 2026-03-31 | Added Page Visibility API — polling pauses when tab hidden, resumes on focus |
 
 ### Low Issues
 

@@ -83,40 +83,45 @@ export async function createCourtsBulk(
   startingNumber: number = 1
 ): Promise<Court[]> {
   return transaction(async (client: PoolClient) => {
-    const courts: Court[] = [];
+    // Build multi-row INSERT with parameterized values
+    const values: any[] = [];
+    const placeholders: string[] = [];
 
     for (let i = 0; i < count; i++) {
       const courtNumber = startingNumber + i;
       const courtName = `Court ${courtNumber}`;
-
-      const result = await client.query(
-        `INSERT INTO courts (
-          facility_id, name, court_number, surface_type, court_type,
-          is_indoor, has_lights, court_rules, status, is_split_court
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'available', false)
-        RETURNING
-          id, facility_id as "facilityId", name, court_number as "courtNumber",
-          surface_type as "surfaceType", court_type as "courtType",
-          is_indoor as "isIndoor", has_lights as "hasLights", status,
-          court_rules as "courtRules", parent_court_id as "parentCourtId",
-          split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
-          created_at as "createdAt"`,
-        [
-          courtData.facilityId,
-          courtName,
-          courtNumber,
-          courtData.surfaceType,
-          courtData.courtType,
-          courtData.isIndoor,
-          courtData.hasLights,
-          courtData.courtRules || null,
-        ]
+      const offset = i * 8;
+      placeholders.push(
+        `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, 'available', false)`
       );
-
-      courts.push(result.rows[0]);
+      values.push(
+        courtData.facilityId,
+        courtName,
+        courtNumber,
+        courtData.surfaceType,
+        courtData.courtType,
+        courtData.isIndoor,
+        courtData.hasLights,
+        courtData.courtRules || null,
+      );
     }
 
-    return courts;
+    const result = await client.query(
+      `INSERT INTO courts (
+        facility_id, name, court_number, surface_type, court_type,
+        is_indoor, has_lights, court_rules, status, is_split_court
+      ) VALUES ${placeholders.join(', ')}
+      RETURNING
+        id, facility_id as "facilityId", name, court_number as "courtNumber",
+        surface_type as "surfaceType", court_type as "courtType",
+        is_indoor as "isIndoor", has_lights as "hasLights", status,
+        court_rules as "courtRules", parent_court_id as "parentCourtId",
+        split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
+        created_at as "createdAt"`,
+      values
+    );
+
+    return result.rows;
   });
 }
 

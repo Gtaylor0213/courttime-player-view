@@ -65,14 +65,42 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  // Initial load and periodic refresh
+  // Initial load and periodic refresh (pauses when tab is hidden)
   useEffect(() => {
     if (user?.id) {
       refreshNotifications();
 
-      // Refresh notifications every 30 seconds
-      const interval = setInterval(refreshNotifications, 30000);
-      return () => clearInterval(interval);
+      let interval: ReturnType<typeof setInterval> | null = null;
+
+      const startPolling = () => {
+        if (!interval) {
+          interval = setInterval(refreshNotifications, 30000);
+        }
+      };
+
+      const stopPolling = () => {
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+      };
+
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          stopPolling();
+        } else {
+          refreshNotifications();
+          startPolling();
+        }
+      };
+
+      startPolling();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        stopPolling();
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     } else {
       // Clear notifications when user logs out
       setNotifications([]);

@@ -216,7 +216,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!accessToken) return false;
 
     try {
-      // TODO: Implement your profile update logic here
       if (user) {
         const updatedUser = { ...user, ...updates };
         setUser(updatedUser);

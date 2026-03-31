@@ -185,42 +185,38 @@ export async function bulkAddWhitelistedAddresses(
   facilityId: string,
   addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }>
 ): Promise<{ success: boolean; added: number; skipped: number; error?: string }> {
-  let added = 0;
-  let skipped = 0;
-
   try {
-    for (const item of addresses) {
-      const addr = item.address?.trim();
-      if (!addr) {
-        skipped++;
-        continue;
-      }
-      try {
-        const result = await query(
-          `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT DO NOTHING`,
-          [facilityId, addr, (item.lastName || '').trim(), item.accountsLimit || 4]
-        );
-        if (result.rowCount && result.rowCount > 0) {
-          added++;
-        } else {
-          skipped++;
-        }
-      } catch (error: any) {
-        if (error.code === '23505') {
-          skipped++;
-        } else {
-          console.error('Error inserting address:', addr, error);
-          skipped++;
-        }
-      }
+    // Filter out empty addresses
+    const validItems = addresses.filter(item => item.address?.trim());
+    const skippedEmpty = addresses.length - validItems.length;
+
+    if (validItems.length === 0) {
+      return { success: true, added: 0, skipped: skippedEmpty };
     }
+
+    // Build multi-row INSERT with parameterized values
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    validItems.forEach((item, i) => {
+      const offset = i * 4;
+      placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`);
+      values.push(facilityId, item.address.trim(), (item.lastName || '').trim(), item.accountsLimit || 4);
+    });
+
+    const result = await query(
+      `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit)
+       VALUES ${placeholders.join(', ')}
+       ON CONFLICT DO NOTHING`,
+      values
+    );
+
+    const added = result.rowCount || 0;
+    const skipped = skippedEmpty + (validItems.length - added);
 
     return { success: true, added, skipped };
   } catch (error) {
     console.error('Error bulk importing addresses:', error);
-    return { success: false, added, skipped, error: 'Failed to import addresses' };
+    return { success: false, added: 0, skipped: addresses.length, error: 'Failed to import addresses' };
   }
 }
 

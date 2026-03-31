@@ -51,10 +51,10 @@ Second, there are no automated tests whatsoever. For an application handling pay
 | # | Issue | File(s) | Status | Fixed Date | Notes |
 |---|-------|---------|--------|------------|-------|
 | L1 | Hardcoded fallback email domain — emails come from Resend test domain if env var unset | `adminService.ts:27`, `emailService.ts:26`, `passwordResetService.ts:28` | OPEN | | Fix: require env var or fail |
-| L2 | Silent error swallowing — errors caught and ignored without logging or propagation | `server/middleware/auth.ts:40-42`, `src/services/bookingService.ts:738`, multiple services | OPEN | | Fix: log and propagate errors |
-| L3 | Notification toast placeholder handlers — `console.log` instead of actual navigation | `src/contexts/NotificationContext.tsx:189,199,209` | OPEN | | Fix: implement navigation |
-| L4 | Dead scripts not referenced anywhere | `scripts/check-bookings.js`, `scripts/verify-user-data.ts`, `scripts/activate-membership.ts`, `scripts/run-migration.ts` | OPEN | | Fix: delete |
-| L5 | Unnumbered migration files outside naming convention | `src/database/migrations/add_facility_to_conversations.sql`, `add_user_contact_info.sql` | OPEN | | Fix: renumber or delete if applied |
+| L2 | Silent error swallowing — errors caught and ignored without logging or propagation | `server/middleware/auth.ts:40-42`, `src/services/bookingService.ts:738`, multiple services | FIXED | 2026-03-31 | Added error logging to bookingService catch. auth.ts catch is correct (returns null for invalid tokens). |
+| L3 | Notification toast placeholder handlers — `console.log` instead of actual navigation | `src/contexts/NotificationContext.tsx:189,199,209` | FIXED | 2026-03-31 | Placeholder console.log removed during M1 cleanup |
+| L4 | Dead scripts not referenced anywhere | `scripts/check-bookings.js`, `scripts/verify-user-data.ts`, `scripts/activate-membership.ts`, `scripts/run-migration.ts` | FIXED | 2026-03-31 | Deleted all 4 dead scripts |
+| L5 | Unnumbered migration files outside naming convention | `src/database/migrations/add_facility_to_conversations.sql`, `add_user_contact_info.sql` | FIXED | 2026-03-31 | Deleted unnumbered migrations, misplaced root migration, and associated dead scripts |
 
 ---
 

@@ -735,7 +735,7 @@ async function issueStrike(
 
     // Fire-and-forget: send email + in-app notification
     if (strikeId) {
-      sendStrikeNotifications(userId, facilityId, strikeType, reason, expiresAt?.toISOString() ?? null).catch(() => {});
+      sendStrikeNotifications(userId, facilityId, strikeType, reason, expiresAt?.toISOString() ?? null).catch((err) => console.error('Strike notification error:', err));
     }
 
     return strikeId;

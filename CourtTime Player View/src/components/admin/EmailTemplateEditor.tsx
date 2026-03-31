@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -333,7 +334,7 @@ export function EmailTemplateEditor() {
                     <p className="text-xs text-gray-500 mb-1">Subject: <strong>{previewSubject}</strong></p>
                     <div
                       className="bg-white rounded-lg border overflow-hidden"
-                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml) }}
                     />
                   </CardContent>
                 </Card>

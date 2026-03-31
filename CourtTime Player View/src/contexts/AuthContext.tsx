@@ -2,12 +2,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner@2.0.3';
 import { authApi } from '../api/client';
 
-function generateSessionToken(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
-}
-
 export interface User {
   id: string;
   email: string;
@@ -132,12 +126,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (result.success && result.data) {
         const backendResponse = result.data as any;
-        if (backendResponse.user) {
-          const token = generateSessionToken();
+        if (backendResponse.user && backendResponse.token) {
           setUser(backendResponse.user);
-          setAccessToken(token);
+          setAccessToken(backendResponse.token);
           localStorage.setItem('auth_user', JSON.stringify(backendResponse.user));
-          localStorage.setItem('auth_token', token);
+          localStorage.setItem('auth_token', backendResponse.token);
           toast.success('Logged in successfully');
           return true;
         }
@@ -184,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (result.success && result.data && result.data.user) {
         const registeredUser = result.data.user;
-        const token = generateSessionToken();
+        const token = result.data.token;
         setUser(registeredUser);
         setAccessToken(token);
         localStorage.setItem('auth_user', JSON.stringify(registeredUser));

@@ -6,7 +6,10 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'courttime-dev-secret-change-in-production';
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required. Server cannot start without it.');
+}
+const JWT_SECRET: string = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '7d';
 
 export interface JwtPayload {

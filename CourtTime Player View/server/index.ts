@@ -34,6 +34,7 @@ import rulesRoutes from './routes/rules';
 import householdsRoutes from './routes/households';
 import paymentRoutes from './routes/payments';
 import webhookRoutes from './routes/webhook';
+import { requireAuth } from './middleware/auth';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,7 +46,10 @@ app.set('trust proxy', 1);
 app.use('/api/webhooks', webhookRoutes);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.APP_URL || 'http://localhost:5173',
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -97,26 +101,27 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API Routes
+// API Routes — public (no auth required)
 app.use('/api/auth', authRoutes);
 app.use('/api/facilities', facilityRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/members', memberRoutes);
-app.use('/api/player-profile', playerProfileRoutes);
-app.use('/api/hitting-partner', hittingPartnerRoutes);
-app.use('/api/bulletin-board', bulletinBoardRoutes);
-app.use('/api/bookings', bookingRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/address-whitelist', addressWhitelistRoutes);
-app.use('/api/messages', messagesRoutes);
-app.use('/api/notifications', notificationRoutes);
 app.use('/api/developer', supportRoutes);
-// Rules engine routes
-app.use('/api/strikes', strikesRoutes);
-app.use('/api/court-config', courtConfigRoutes);
-app.use('/api/rules', rulesRoutes);
-app.use('/api/households', householdsRoutes);
 app.use('/api/payments', paymentRoutes);
+
+// API Routes — protected (require valid JWT)
+app.use('/api/users', requireAuth, userRoutes);
+app.use('/api/members', requireAuth, memberRoutes);
+app.use('/api/player-profile', requireAuth, playerProfileRoutes);
+app.use('/api/hitting-partner', requireAuth, hittingPartnerRoutes);
+app.use('/api/bulletin-board', requireAuth, bulletinBoardRoutes);
+app.use('/api/bookings', requireAuth, bookingRoutes);
+app.use('/api/admin', requireAuth, adminRoutes);
+app.use('/api/address-whitelist', requireAuth, addressWhitelistRoutes);
+app.use('/api/messages', requireAuth, messagesRoutes);
+app.use('/api/notifications', requireAuth, notificationRoutes);
+app.use('/api/strikes', requireAuth, strikesRoutes);
+app.use('/api/court-config', requireAuth, courtConfigRoutes);
+app.use('/api/rules', requireAuth, rulesRoutes);
+app.use('/api/households', requireAuth, householdsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

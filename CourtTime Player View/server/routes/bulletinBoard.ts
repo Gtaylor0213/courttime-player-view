@@ -6,6 +6,7 @@ import {
   deleteBulletinPost,
   togglePinBulletinPost
 } from '../../src/services/bulletinBoardService';
+import { query } from '../../src/database/connection';
 
 const router = express.Router();
 
@@ -90,34 +91,49 @@ router.patch('/:postId', async (req, res, next) => {
 
 /**
  * DELETE /api/bulletin-board/:postId
- * Delete a bulletin post
+ * Delete a bulletin post (author or facility admin)
  */
 router.delete('/:postId', async (req, res, next) => {
   try {
     const { postId } = req.params;
-    const { authorId } = req.query;
+    const userId = req.user!.userId;
 
-    const isAdmin = req.query.isAdmin === 'true';
+    // Look up the post's facility to check admin status
+    const postResult = await query(
+      `SELECT facility_id, author_id FROM bulletin_posts WHERE id = $1`,
+      [postId]
+    );
 
-    if (!isAdmin && !authorId) {
-      return res.status(400).json({
+    if (postResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Post not found' });
+    }
+
+    const post = postResult.rows[0];
+    const isAuthor = post.author_id === userId;
+
+    // Check if user is a facility admin
+    let isAdmin = false;
+    if (!isAuthor) {
+      const adminResult = await query(
+        `SELECT 1 FROM facility_admins WHERE user_id = $1 AND facility_id = $2 AND status = 'active'`,
+        [userId, post.facility_id]
+      );
+      isAdmin = adminResult.rows.length > 0;
+    }
+
+    if (!isAuthor && !isAdmin) {
+      return res.status(403).json({
         success: false,
-        error: 'authorId is required'
+        error: 'You do not have permission to delete this post'
       });
     }
 
-    const success = await deleteBulletinPost(postId, authorId as string, isAdmin);
+    const success = await deleteBulletinPost(postId, userId, isAuthor ? false : isAdmin);
 
     if (success) {
-      res.json({
-        success: true,
-        message: 'Bulletin post deleted successfully'
-      });
+      res.json({ success: true, message: 'Bulletin post deleted successfully' });
     } else {
-      res.status(404).json({
-        success: false,
-        error: 'Post not found or you do not have permission to delete it'
-      });
+      res.status(404).json({ success: false, error: 'Post not found' });
     }
   } catch (error) {
     next(error);

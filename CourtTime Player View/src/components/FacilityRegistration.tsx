@@ -1035,13 +1035,11 @@ export function FacilityRegistration() {
           memberFacilities: [facilityId],
           adminFacilities: [facilityId],
         };
-        // Generate a proper session token
-        const tokenBytes = new Uint8Array(32);
-        crypto.getRandomValues(tokenBytes);
-        const token = Array.from(tokenBytes, b => b.toString(16).padStart(2, '0')).join('');
 
         localStorage.setItem('auth_user', JSON.stringify(userData));
-        localStorage.setItem('auth_token', token);
+        if (backendResponse.token) {
+          localStorage.setItem('auth_token', backendResponse.token);
+        }
 
         toast.success('Facility registered successfully! Logging you in...');
 

@@ -8,6 +8,7 @@ import {
   registerFacility,
   FacilityRegistrationData
 } from '../../src/services/facilityService';
+import { generateToken } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -274,10 +275,18 @@ router.post('/register', async (req, res, next) => {
     // Register facility
     const result = await registerFacility(registrationData, existingUserId);
 
+    // Generate JWT for auto-login after registration
+    const token = result.user ? generateToken({
+      userId: result.user.id,
+      email: result.user.email,
+      userType: (result.user.userType as 'player' | 'admin') || 'admin',
+    }) : undefined;
+
     res.status(201).json({
       success: true,
       facility: result.facility,
       user: result.user,
+      token,
       courts: result.courts,
       message: 'Facility registered successfully'
     });

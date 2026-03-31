@@ -8,6 +8,7 @@ import {
   getPaymentHistory,
   cancelSubscription,
 } from '../../src/services/paymentService';
+import { requireAuth } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -82,7 +83,7 @@ router.post('/verify-session', async (req, res, next) => {
  * POST /api/payments/portal-session
  * Create a Stripe Customer Portal session for managing billing
  */
-router.post('/portal-session', async (req, res, next) => {
+router.post('/portal-session', requireAuth, async (req, res, next) => {
   try {
     const { facilityId, returnUrl } = req.body;
     if (!facilityId || !returnUrl) {
@@ -104,7 +105,7 @@ router.post('/portal-session', async (req, res, next) => {
  * GET /api/payments/subscription/:facilityId
  * Get subscription status for a facility
  */
-router.get('/subscription/:facilityId', async (req, res, next) => {
+router.get('/subscription/:facilityId', requireAuth, async (req, res, next) => {
   try {
     const { facilityId } = req.params;
     const subscription = await getSubscriptionByFacilityId(facilityId);
@@ -118,7 +119,7 @@ router.get('/subscription/:facilityId', async (req, res, next) => {
  * GET /api/payments/history/:facilityId
  * Get payment history for a facility
  */
-router.get('/history/:facilityId', async (req, res, next) => {
+router.get('/history/:facilityId', requireAuth, async (req, res, next) => {
   try {
     const { facilityId } = req.params;
     const history = await getPaymentHistory(facilityId);
@@ -132,7 +133,7 @@ router.get('/history/:facilityId', async (req, res, next) => {
  * POST /api/payments/cancel-subscription
  * Cancel a facility's subscription at end of current billing period
  */
-router.post('/cancel-subscription', async (req, res, next) => {
+router.post('/cancel-subscription', requireAuth, async (req, res, next) => {
   try {
     const { facilityId } = req.body;
     if (!facilityId) {

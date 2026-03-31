@@ -409,8 +409,8 @@ const ACC011: RuleEvaluator = {
        WHERE user_id = $1
          AND facility_id = $2
          AND action_type = 'create'
-         AND action_timestamp > NOW() - INTERVAL '${windowSeconds} seconds'`,
-      [context.user.id, context.facility.id]
+         AND action_timestamp > NOW() - make_interval(secs => $3)`,
+      [context.user.id, context.facility.id, windowSeconds]
     );
 
     const recentActions = parseInt(result.rows[0]?.count || '0', 10);

@@ -79,9 +79,20 @@ export async function getFacilityBulletinPosts(facilityId: string): Promise<Bull
  */
 export async function createBulletinPost(data: CreateBulletinPost): Promise<string> {
   try {
-    const expiresAt = data.expiresInDays
-      ? `CURRENT_TIMESTAMP + INTERVAL '${parseInt(String(data.expiresInDays))} days'`
-      : 'NULL';
+    const params: any[] = [
+      data.facilityId,
+      data.authorId,
+      data.title,
+      data.content,
+      data.category,
+      data.isAdminPost || false,
+    ];
+
+    let expiresAtExpr = 'NULL';
+    if (data.expiresInDays) {
+      params.push(parseInt(String(data.expiresInDays)));
+      expiresAtExpr = `CURRENT_TIMESTAMP + make_interval(days => $${params.length})`;
+    }
 
     const result = await query(
       `INSERT INTO bulletin_posts (
@@ -93,16 +104,9 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
         is_admin_post,
         expires_at,
         status
-      ) VALUES ($1, $2, $3, $4, $5, $6, ${expiresAt}, 'active')
+      ) VALUES ($1, $2, $3, $4, $5, $6, ${expiresAtExpr}, 'active')
       RETURNING id`,
-      [
-        data.facilityId,
-        data.authorId,
-        data.title,
-        data.content,
-        data.category,
-        data.isAdminPost || false
-      ]
+      params
     );
 
     return result.rows[0].id;

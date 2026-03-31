@@ -23,12 +23,16 @@ async function apiRequest<T = any>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers as Record<string, string>),
+    };
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     });
 
     // Guard against non-JSON responses (e.g. HTML 404 pages)
@@ -838,77 +842,6 @@ export const rulesApi = {
   disableAll: async (facilityId: string) => {
     return apiRequest(`/api/rules/facility/${facilityId}/disable-all`, {
       method: 'POST',
-    });
-  },
-};
-
-// Tiers API
-export const tiersApi = {
-  getByFacility: async (facilityId: string) => {
-    return apiRequest(`/api/tiers/facility/${facilityId}`);
-  },
-
-  create: async (data: {
-    facilityId: string;
-    tierName: string;
-    tierLevel: number;
-    advanceBookingDays?: number;
-    primeTimeEligible?: boolean;
-    primeTimeMaxPerWeek?: number | null;
-    maxActiveReservations?: number | null;
-    maxReservationsPerWeek?: number | null;
-    maxMinutesPerWeek?: number | null;
-    isDefault?: boolean;
-  }) => {
-    return apiRequest('/api/tiers', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  update: async (tierId: string, data: {
-    tierName?: string;
-    tierLevel?: number;
-    advanceBookingDays?: number;
-    primeTimeEligible?: boolean;
-    primeTimeMaxPerWeek?: number | null;
-    maxActiveReservations?: number | null;
-    maxReservationsPerWeek?: number | null;
-    maxMinutesPerWeek?: number | null;
-    isDefault?: boolean;
-  }) => {
-    return apiRequest(`/api/tiers/${tierId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  },
-
-  delete: async (tierId: string) => {
-    return apiRequest(`/api/tiers/${tierId}`, {
-      method: 'DELETE',
-    });
-  },
-
-  getUserTier: async (userId: string, facilityId?: string) => {
-    const qs = facilityId ? `?facilityId=${facilityId}` : '';
-    return apiRequest(`/api/tiers/user/${userId}${qs}`);
-  },
-
-  assignTier: async (tierId: string, data: {
-    userId: string;
-    facilityId: string;
-    assignedBy?: string;
-    expiresAt?: string | null;
-  }) => {
-    return apiRequest(`/api/tiers/${tierId}/assign`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  unassignUser: async (userId: string, facilityId: string) => {
-    return apiRequest(`/api/tiers/user/${userId}/unassign?facilityId=${facilityId}`, {
-      method: 'DELETE',
     });
   },
 };

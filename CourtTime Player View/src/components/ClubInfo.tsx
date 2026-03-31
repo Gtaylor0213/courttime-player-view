@@ -61,7 +61,6 @@ export function ClubInfo() {
       // Load user's member facilities to check if they're a member
       if (user?.id) {
         const profileResponse = await playerProfileApi.getProfile(user.id);
-        console.log('ClubInfo - Profile API response:', profileResponse);
 
         // Check for facilities in the API response (handles both data.profile and direct profile)
         let facilities = profileResponse.data?.profile?.memberFacilities
@@ -70,7 +69,6 @@ export function ClubInfo() {
 
         // If API didn't return facilities, fall back to AuthContext
         if (facilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
-          console.log('ClubInfo - Falling back to AuthContext memberFacilities:', user.memberFacilities);
           // Create facility objects from IDs
           facilities = user.memberFacilities.map(facilityId => ({
             facilityId,

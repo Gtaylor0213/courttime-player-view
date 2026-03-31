@@ -104,7 +104,6 @@ router.post('/users/:userId/reset-password-email', async (req, res) => {
     }
 
     const result = await requestPasswordReset(userResult.rows[0].email);
-    console.log(`[Support] Password reset email triggered for user ${req.params.userId}`);
     res.json({ success: true, message: 'Password reset email sent' });
   } catch (error: any) {
     console.error('[Support] Password reset email error:', error);
@@ -127,7 +126,6 @@ router.post('/users/:userId/set-temporary-password', async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    console.log(`[Support] Temporary password set for user ${req.params.userId}`);
     res.json({ success: true, message: 'Temporary password set successfully' });
   } catch (error: any) {
     console.error('[Support] Set password error:', error);
@@ -166,7 +164,6 @@ router.patch('/facilities/:id', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Facility not found' });
     }
-    console.log(`[Support] Updated facility ${req.params.id}`);
     res.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[Support] Facility update error:', error);
@@ -192,7 +189,6 @@ router.patch('/courts/:courtId', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Court not found' });
     }
-    console.log(`[Support] Updated court ${req.params.courtId}`);
     res.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[Support] Court update error:', error);
@@ -223,7 +219,6 @@ router.patch('/members/:facilityId/:userId', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Member not found' });
     }
-    console.log(`[Support] Updated member ${req.params.userId} in facility ${req.params.facilityId}`);
     res.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[Support] Member update error:', error);
@@ -238,7 +233,6 @@ router.put('/members/:facilityId/:userId/admin', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Member not found' });
     }
-    console.log(`[Support] Toggled admin for ${req.params.userId}: ${isAdmin}`);
     res.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[Support] Admin toggle error:', error);
@@ -271,7 +265,6 @@ router.patch('/bookings/:bookingId/status', async (req, res) => {
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Booking not found' });
     }
-    console.log(`[Support] Updated booking ${req.params.bookingId} status to ${status}`);
     res.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[Support] Booking status error:', error);

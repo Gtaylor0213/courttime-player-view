@@ -52,7 +52,6 @@ export interface PlayerProfileWithUser {
  */
 export async function getPlayerProfile(userId: string): Promise<PlayerProfileWithUser | null> {
   try {
-    console.log('Fetching player profile for userId:', userId);
     const result = await query(
       `SELECT
         u.id as "userId",
@@ -75,8 +74,6 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfileWit
        WHERE u.id = $1`,
       [userId]
     );
-    console.log('Query result rows:', result.rows.length);
-
     if (result.rows.length === 0) {
       return null;
     }
@@ -338,24 +335,17 @@ export async function getUserBookings(userId: string, upcoming: boolean = true):
       const currentDate = `${year}-${month}-${day}`; // YYYY-MM-DD
       const currentTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
 
-      console.log('Filtering bookings - Current date:', currentDate, 'Current time:', currentTime);
-
       const filtered = result.rows.filter(booking => {
         // Keep all future dates
         if (booking.bookingDate > currentDate) {
-          console.log(`  ✓ Keeping ${booking.facilityName} ${booking.courtName} ${booking.startTime}-${booking.endTime} (future date: ${booking.bookingDate})`);
           return true;
         }
         // For today, only keep bookings that haven't ended yet
         if (booking.bookingDate === currentDate) {
-          const keep = booking.endTime >= currentTime;
-          console.log(`  ${keep ? '✓' : '✗'} ${booking.facilityName} ${booking.courtName} ${booking.startTime}-${booking.endTime} (today, endTime ${booking.endTime} ${keep ? '>=' : '<'} ${currentTime})`);
-          return keep;
+          return booking.endTime >= currentTime;
         }
         return false;
       });
-
-      console.log(`Filtered ${filtered.length} bookings from ${result.rows.length} total`);
       return filtered.slice(0, 10);
     }
 

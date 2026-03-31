@@ -186,7 +186,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           duration: 5000,
           action: reservation ? {
             label: 'View Details',
-            onClick: () => console.log('Navigate to reservation details')
+            onClick: () => {}
           } : undefined
         });
         break;
@@ -196,7 +196,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           duration: 6000,
           action: {
             label: 'Book Again',
-            onClick: () => console.log('Navigate to booking')
+            onClick: () => {}
           }
         });
         break;
@@ -206,7 +206,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           duration: 8000,
           action: {
             label: 'Get Directions',
-            onClick: () => console.log('Open maps')
+            onClick: () => {}
           }
         });
         break;

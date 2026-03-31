@@ -111,7 +111,6 @@ export function BookingManagement() {
       };
 
       const response = await adminApi.getBookings(currentFacilityId, filters);
-      console.log('Bookings API response:', JSON.stringify(response, null, 2));
 
       if (response.success) {
         // Handle different response structures
@@ -125,7 +124,6 @@ export function BookingManagement() {
           bookingsData = response.data;
         }
 
-        console.log(`Loaded ${bookingsData.length} bookings`);
         setBookings(bookingsData);
       } else {
         console.error('Failed to load bookings:', response.error);

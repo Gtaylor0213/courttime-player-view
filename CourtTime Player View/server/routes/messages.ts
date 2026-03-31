@@ -144,14 +144,6 @@ router.post('/', async (req, res) => {
   try {
     const { senderId, recipientId, facilityId, messageText } = req.body;
 
-    console.log('POST /api/messages - Request body:', {
-      senderId,
-      recipientId,
-      facilityId,
-      messageText: messageText ? `${messageText.substring(0, 50)}...` : undefined,
-      allKeys: Object.keys(req.body)
-    });
-
     if (!senderId || !recipientId || !facilityId || !messageText) {
       console.error('Missing required fields:', {
         hasSenderId: !!senderId,

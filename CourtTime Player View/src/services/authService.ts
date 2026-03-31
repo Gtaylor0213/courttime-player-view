@@ -46,7 +46,6 @@ async function acceptPendingInvitations(userId: string, email: string): Promise<
       );
 
       accepted.push(invitation.facilityId);
-      console.log(`Auto-accepted admin invitation for ${email} → facility ${invitation.facilityId}`);
     }
 
     return accepted;

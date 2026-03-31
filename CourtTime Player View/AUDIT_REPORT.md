@@ -39,7 +39,7 @@ Second, there are no automated tests whatsoever. For an application handling pay
 
 | # | Issue | File(s) | Status | Fixed Date | Notes |
 |---|-------|---------|--------|------------|-------|
-| M1 | 100+ `console.log` statements in production code | Across nearly every service/route file. Biggest clusters: `admin.ts` (21), `support.ts` (29+), `CourtCalendarView.tsx` (7), `bookingService.ts` (9+), `facilityService.ts` (15+) | OPEN | | Fix: replace with logging library or remove |
+| M1 | 100+ `console.log` statements in production code | Across nearly every service/route file. Biggest clusters: `admin.ts` (21), `support.ts` (29+), `CourtCalendarView.tsx` (7), `bookingService.ts` (9+), `facilityService.ts` (15+) | FIXED | 2026-03-31 | Removed 45 debug console.log from 16 files. Kept intentional server/DB/webhook logging. |
 | M2 | Extremely large component files — difficult to review, test, or modify | `FacilityManagement.tsx` (~3136 lines), `FacilityRegistration.tsx` (~2934 lines), `CourtCalendarView.tsx` (~1467 lines) | OPEN | | Fix: break into smaller sub-components |
 | M3 | N+1 query patterns — individual queries inside loops instead of bulk operations | `addressWhitelistService.ts:192-217`, `courtService.ts:88-120`, `facilityService.ts` (multiple) | OPEN | | Fix: use multi-row INSERT statements |
 | M4 | TODO stubs left in code | `AuthContext.tsx:228` (updateProfile is a stub), `rulesEngine/index.ts:63` (stale migration note) | OPEN | | Fix: implement or remove |
@@ -107,3 +107,4 @@ Second, there are no automated tests whatsoever. For an application handling pay
 | 2026-03-31 | H2 | SQL interpolation replaced with parameterized `make_interval()` in bulletinBoardService and AccountRuleEvaluators | pending |
 | 2026-03-31 | H3 | Added DOMPurify sanitization to EmailTemplateEditor dangerouslySetInnerHTML | pending |
 | 2026-03-31 | H4 | Deleted dead server/routes/tiers.ts and removed unused tiersApi from client.ts | pending |
+| 2026-03-31 | M1 | Removed 45 debug console.log from 16 files across components, services, and routes | pending |

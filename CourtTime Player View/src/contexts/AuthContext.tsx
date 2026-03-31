@@ -97,11 +97,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(refreshedUser);
             // Update localStorage with fresh data
             localStorage.setItem('auth_user', JSON.stringify(refreshedUser));
-            console.log('Session restored and refreshed from API');
           } else {
             // Fall back to cached user if API fails
             setUser(parsedUser);
-            console.log('Session restored from localStorage (API refresh failed)');
           }
         } catch (parseError) {
           console.error('Failed to parse saved user:', parseError);

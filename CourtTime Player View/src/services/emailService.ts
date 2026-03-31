@@ -96,7 +96,6 @@ async function sendTemplatedEmail(
 
   // If custom template exists and is disabled, skip sending
   if (custom && !custom.isEnabled) {
-    console.log(`Email template ${templateType} is disabled for facility ${facilityId}`);
     return false;
   }
 

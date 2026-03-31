@@ -218,7 +218,6 @@ export function CourtCalendarView() {
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async () => {
     if (!selectedFacility) {
-      console.log('⚠️ No facility selected, skipping booking fetch');
       return;
     }
 
@@ -230,7 +229,6 @@ export function CourtCalendarView() {
       const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
       const day = String(selectedDate.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
-      console.log('📅 Fetching bookings for facility:', selectedFacility, 'date:', dateStr);
 
       // Fetch bookings and blackouts in parallel
       const [response, blackoutResponse] = await Promise.all([
@@ -240,7 +238,6 @@ export function CourtCalendarView() {
           endDate: dateStr,
         }),
       ]);
-      console.log('📦 Bookings API response:', response);
 
       // Transform API bookings to match the format expected by the UI
       const transformedBookings: any = {};
@@ -368,12 +365,9 @@ export function CourtCalendarView() {
       });
 
       if (response.success && response.data?.bookings) {
-        console.log('✅ Processing', response.data.bookings.length, 'bookings');
-
         response.data.bookings.forEach((booking: any) => {
           const courtName = booking.courtName;
           const startTime = formatTimeTo12Hour(booking.startTime);
-          console.log('  📍 Booking:', courtName, 'from', startTime, '- User:', booking.userName, '- Duration:', booking.durationMinutes, 'min');
 
           // Add real booking slots
           addSlotsForCourt(courtName, booking, false);
@@ -399,7 +393,6 @@ export function CourtCalendarView() {
         });
       }
 
-      console.log('🎨 Transformed bookings:', transformedBookings);
       setBookingsData(transformedBookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -876,7 +869,6 @@ export function CourtCalendarView() {
     duration: string;
     playerName: string;
   }) => {
-    console.log('Quick reservation made:', reservation);
     // Refresh the bookings to show the new reservation
     await fetchBookings();
   };

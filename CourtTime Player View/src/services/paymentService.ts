@@ -179,7 +179,6 @@ export async function createCheckoutSession(params: {
   // Dev mode — no Stripe keys
   if (!stripe) {
     const devSessionId = `dev_session_${Date.now()}`;
-    console.log(`[DEV MODE] Stripe not configured. Mock session: ${devSessionId}`);
     return {
       sessionId: devSessionId,
       sessionUrl: null as any,

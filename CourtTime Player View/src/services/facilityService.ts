@@ -61,7 +61,6 @@ async function sendAdminInviteEmail(
       return false;
     }
 
-    console.log(`Admin invite email sent to ${inviteEmail} for facility ${facilityName}`);
     return true;
   } catch (error) {
     console.error('Failed to send admin invite email:', error);

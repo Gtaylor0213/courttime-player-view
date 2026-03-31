@@ -51,7 +51,6 @@ export function FindHittingPartner() {
 
       // Load user's facilities with full details
       const profileResponse = await playerProfileApi.getProfile(user.id);
-      console.log('HittingPartner - Profile API response:', profileResponse);
 
       let activeFacilities: any[] = [];
 
@@ -65,7 +64,6 @@ export function FindHittingPartner() {
 
       // If API didn't return facilities, fall back to AuthContext and fetch details
       if (activeFacilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
-        console.log('HittingPartner - Falling back to AuthContext memberFacilities:', user.memberFacilities);
         // Fetch facility details for each facility ID from AuthContext
         for (const facilityId of user.memberFacilities) {
           try {

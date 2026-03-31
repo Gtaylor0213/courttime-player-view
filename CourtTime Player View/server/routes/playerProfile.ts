@@ -15,12 +15,9 @@ const router = express.Router();
 router.get('/:userId', async (req, res, next) => {
   try {
     const { userId } = req.params;
-    console.log('Route handler - Fetching profile for userId:', userId);
     const profile = await getPlayerProfile(userId);
-    console.log('Route handler - Profile fetched:', profile ? 'success' : 'null');
 
     if (!profile) {
-      console.log('Route handler - Profile not found, returning 404');
       return res.status(404).json({
         success: false,
         error: 'Player profile not found'
@@ -32,7 +29,6 @@ router.get('/:userId', async (req, res, next) => {
       profile
     });
   } catch (error) {
-    console.log('Route handler - Error caught:', error);
     next(error);
   }
 });

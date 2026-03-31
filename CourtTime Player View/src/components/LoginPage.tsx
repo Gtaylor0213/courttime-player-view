@@ -20,11 +20,8 @@ export function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     
-    console.log('Login form submitted with:', { email, password: password ? '[hidden]' : 'empty' });
-    
     try {
       const success = await login(email, password);
-      console.log('Login result:', success);
       if (success) {
         const from = (location.state as any)?.from?.pathname || '/calendar';
         navigate(from, { replace: true });

@@ -3,10 +3,11 @@
  * Manages user session with JWT token + secure storage
  */
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { api, setToken, getToken, removeToken, cacheUser, getCachedUser, clearCache } from '../api/client';
+import { registerForPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications';
 import type { User } from '../types/database';
 
 interface AuthUser extends User {
@@ -72,19 +73,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
   const [facilities, setFacilities] = useState<FacilityInfo[]>([]);
+  const pushTokenRef = useRef<string | null>(null);
 
   // Check for existing session on app launch
   useEffect(() => {
     checkAuth();
   }, []);
 
-  // Fetch facility names and restore selected facility when user changes
+  // Register push notifications and fetch facilities when user changes
   useEffect(() => {
     if (!state.user) {
       setFacilities([]);
       setSelectedFacilityId(null);
       return;
     }
+
+    // Register for push notifications (fire-and-forget)
+    registerForPushNotifications(state.user.id).then(token => {
+      pushTokenRef.current = token;
+    });
 
     const allIds = Array.from(new Set([
       ...(state.user.memberFacilities || []),
@@ -193,6 +200,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
+    // Unregister push token before clearing state
+    if (state.user?.id) {
+      await unregisterPushNotifications(state.user.id, pushTokenRef.current);
+      pushTokenRef.current = null;
+    }
     await clearCache();
     setState({ user: null, isLoading: false, isAuthenticated: false });
   }

@@ -1,4 +1,4 @@
-import { getPool } from '../database/connection';
+import { getPool, query as dbQuery } from '../database/connection';
 import { Notification } from '../contexts/NotificationContext';
 
 export interface DBNotification {
@@ -131,6 +131,10 @@ export const notificationService = {
         type,
         options?.actionUrl || null
       ]);
+
+      // Fire-and-forget: send push notification to user's registered devices
+      sendPushNotifications(userId, title, message, type).catch(() => {});
+
       return result.rows[0].id;
     } catch (error) {
       console.error('Error creating notification:', error);
@@ -408,3 +412,46 @@ export const notificationService = {
     return notifications;
   }
 };
+
+/**
+ * Send push notifications to all registered devices for a user via Expo Push API.
+ * Fire-and-forget — failures are logged but don't block notification creation.
+ */
+async function sendPushNotifications(userId: string, title: string, body: string, type: string): Promise<void> {
+  try {
+    const result = await dbQuery(
+      `SELECT push_token FROM user_push_tokens WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) return;
+
+    const messages = result.rows
+      .filter((row: any) => row.push_token.startsWith('ExponentPushToken['))
+      .map((row: any) => ({
+        to: row.push_token,
+        sound: 'default' as const,
+        title,
+        body,
+        data: { type },
+      }));
+
+    if (messages.length === 0) return;
+
+    // Expo Push API accepts batches of up to 100
+    const chunks: typeof messages[] = [];
+    for (let i = 0; i < messages.length; i += 100) {
+      chunks.push(messages.slice(i, i + 100));
+    }
+
+    for (const chunk of chunks) {
+      await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chunk),
+      });
+    }
+  } catch (error) {
+    console.error('Push notification error:', error);
+  }
+}

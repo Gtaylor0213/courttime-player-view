@@ -1,7 +1,51 @@
 import express from 'express';
 import { notificationService } from '../../src/services/notificationService';
+import { query } from '../../src/database/connection';
 
 const router = express.Router();
+
+// Register a push notification token for the current user
+router.post('/register-device', async (req, res) => {
+  try {
+    const { userId, pushToken, platform } = req.body;
+    if (!userId || !pushToken) {
+      return res.status(400).json({ success: false, error: 'userId and pushToken are required' });
+    }
+
+    await query(
+      `INSERT INTO user_push_tokens (user_id, push_token, platform)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, push_token) DO UPDATE SET platform = $3, created_at = CURRENT_TIMESTAMP`,
+      [userId, pushToken, platform || 'unknown']
+    );
+
+    res.json({ success: true, message: 'Device registered' });
+  } catch (error: any) {
+    console.error('Error registering push token:', error);
+    res.status(500).json({ success: false, error: 'Failed to register device' });
+  }
+});
+
+// Unregister a push notification token (on logout)
+router.post('/unregister-device', async (req, res) => {
+  try {
+    const { userId, pushToken } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'userId is required' });
+    }
+
+    if (pushToken) {
+      await query(`DELETE FROM user_push_tokens WHERE user_id = $1 AND push_token = $2`, [userId, pushToken]);
+    } else {
+      await query(`DELETE FROM user_push_tokens WHERE user_id = $1`, [userId]);
+    }
+
+    res.json({ success: true, message: 'Device unregistered' });
+  } catch (error: any) {
+    console.error('Error unregistering push token:', error);
+    res.status(500).json({ success: false, error: 'Failed to unregister device' });
+  }
+});
 
 // Get all notifications for a user
 router.get('/:userId', async (req, res) => {

@@ -44,7 +44,7 @@ The mobile app scaffold exists with ~82% of core features implemented. Here is w
 - Notification settings/preferences
 - ~~Strike/lockout status display~~ **DONE** (2026-04-01)
 - ~~Admin privilege passthrough (admin can book outside rules)~~ **DONE** (2026-04-01) — bulletin posts TBD in 1.9
-- Push notifications (currently polling only)
+- ~~Push notifications (currently polling only)~~ **DONE** (2026-04-01)
 - Offline support (cached data, queue actions for when back online)
 - Deep linking (open specific booking/message from notification)
 - App Store assets (screenshots, description, privacy policy)

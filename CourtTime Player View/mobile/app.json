@@ -36,6 +36,13 @@
         {
           "photosPermission": "CourtTime needs access to your photos to set a profile picture."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1a5f2a"
+        }
       ]
     ]
   }

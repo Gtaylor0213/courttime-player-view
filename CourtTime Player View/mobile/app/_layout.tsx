@@ -3,10 +3,11 @@
  * Wraps the entire app with AuthProvider and handles auth-based routing
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
@@ -15,6 +16,7 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const notificationResponseListener = useRef<Notifications.EventSubscription>();
 
   useEffect(() => {
     if (isLoading) return;
@@ -27,6 +29,26 @@ function RootLayoutNav() {
       router.replace('/(tabs)');
     }
   }, [isAuthenticated, isLoading, segments]);
+
+  // Handle notification tap — navigate to relevant screen
+  useEffect(() => {
+    notificationResponseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.type === 'reservation_confirmed' || data?.type === 'reservation_cancelled' || data?.type === 'reservation_reminder') {
+        router.push('/(tabs)/book');
+      } else if (data?.type === 'message') {
+        router.push('/(tabs)/messages');
+      } else {
+        router.push('/(tabs)/community');
+      }
+    });
+
+    return () => {
+      if (notificationResponseListener.current) {
+        Notifications.removeNotificationSubscription(notificationResponseListener.current);
+      }
+    };
+  }, []);
 
   if (isLoading) {
     return (

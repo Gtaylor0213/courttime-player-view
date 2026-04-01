@@ -457,105 +457,53 @@ export default function BookCourtScreen() {
       <>
       {/* ── Court Selector ── */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Select Court</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.courtScroll}>
-          {courts.map((court) => (
-            <TouchableOpacity
-              key={court.id}
-              style={[
-                styles.courtChip,
-                selectedCourt?.id === court.id && styles.courtChipActive,
-              ]}
-              onPress={() => setSelectedCourt(court)}
-            >
+        <Text style={styles.sectionTitle}>Select a Court to Book</Text>
+        {courts.length === 0 && facilityId && (
+          <View style={styles.emptyCard}>
+            <Ionicons name="tennisball-outline" size={32} color={Colors.textMuted} />
+            <Text style={styles.emptyText}>No courts available</Text>
+          </View>
+        )}
+        {courts.map((court) => (
+          <TouchableOpacity
+            key={court.id}
+            style={styles.courtListCard}
+            onPress={() => {
+              setSelectedCourt(court);
+              // Pre-set first available start time
+              const starts = getAvailableStartTimes();
+              if (starts.length > 0) {
+                setModalStartTime(starts[0]);
+                const ends = getAvailableEndTimes(starts[0]);
+                setModalEndTime(ends.length > 0 ? ends[0] : '');
+              }
+              setBookingType('match');
+              setBookingNotes('');
+              setAdditionalCourtIds([]);
+              setShowBookingModal(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.courtListIcon}>
               <Ionicons
                 name={court.courtType === 'Pickleball' ? 'tennisball' : 'tennisball-outline'}
-                size={16}
-                color={selectedCourt?.id === court.id ? Colors.textInverse : Colors.primary}
+                size={24}
+                color={Colors.primary}
               />
-              <Text style={[
-                styles.courtChipText,
-                selectedCourt?.id === court.id && styles.courtChipTextActive,
-              ]}>
-                {court.name}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.courtListName}>{court.name}</Text>
+              <Text style={styles.courtListMeta}>
+                {court.courtType || 'Tennis'} · {court.surfaceType || 'Hard'}{court.hasLights ? ' · Lights' : ''}
               </Text>
-              <Text style={[
-                styles.courtChipMeta,
-                selectedCourt?.id === court.id && styles.courtChipMetaActive,
-              ]}>
-                {court.courtType || 'Tennis'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-          {courts.length === 0 && facilityId && (
-            <Text style={styles.emptyText}>No courts available</Text>
-          )}
-        </ScrollView>
+            </View>
+            <View style={styles.courtListAvail}>
+              <Text style={styles.courtListAvailText}>{availableCount} slots</Text>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        ))}
       </View>
-
-      {/* ── Time Slots ── */}
-      {selectedCourt && (
-        <View style={styles.section}>
-          <View style={styles.slotHeader}>
-            <Text style={styles.sectionTitle}>Available Times</Text>
-            {totalCount > 0 && (
-              <Text style={styles.slotCount}>
-                {availableCount} of {totalCount} available
-              </Text>
-            )}
-          </View>
-
-          {timeSlots.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Ionicons name="time-outline" size={32} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>
-                No time slots available for this date
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.slotGrid}>
-              {timeSlots.map((slot, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.slotCard,
-                    !slot.available && styles.slotUnavailable,
-                  ]}
-                  onPress={() => slot.available && handleSlotPress(slot)}
-                  disabled={!slot.available || booking}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.slotTime,
-                    !slot.available && styles.slotTimeUnavailable,
-                  ]}>
-                    {formatTime(slot.startTime)}
-                  </Text>
-                  <Text style={[
-                    styles.slotEndTime,
-                    !slot.available && styles.slotTimeUnavailable,
-                  ]}>
-                    {formatTime(slot.endTime)}
-                  </Text>
-                  {slot.available ? (
-                    <View style={styles.slotAvailableDot} />
-                  ) : (
-                    <Ionicons name="close" size={12} color={Colors.textMuted} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* Prompt to select court */}
-      {!selectedCourt && courts.length > 0 && (
-        <View style={styles.emptyCard}>
-          <Ionicons name="arrow-up" size={24} color={Colors.textMuted} />
-          <Text style={styles.emptyText}>Select a court above to see available times</Text>
-        </View>
-      )}
       </>
       )}
 
@@ -924,6 +872,47 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: Colors.success,
     marginTop: 4,
+  },
+
+  // ── Court List Cards (list view) ──
+  courtListCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Spacing.md,
+  },
+  courtListIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary + '12',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  courtListName: {
+    fontSize: FontSize.md,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  courtListMeta: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  courtListAvail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  courtListAvailText: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: '600',
   },
 
   // ── Empty States ──

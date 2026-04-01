@@ -19,11 +19,14 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { FacilitySelector } from '../../src/components/FacilitySelector';
+import { OfflineBanner } from '../../src/components/OfflineBanner';
+import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
 
 export default function HomeScreen() {
   const { user, facilityId } = useAuth();
   const router = useRouter();
+  const { isOffline, fetchWithCache } = useOfflineApi();
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [bulletins, setBulletins] = useState<BulletinPostWithAuthor[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,24 +35,24 @@ export default function HomeScreen() {
   const fetchData = useCallback(async () => {
     if (!user || !facilityId) return;
 
-    const [bookingsRes, bulletinsRes, lockoutRes] = await Promise.all([
-      api.get(`/api/bookings/upcoming/${user.id}`),
-      api.get(`/api/bulletin-board/${facilityId}`),
-      api.get(`/api/strikes/check/${user.id}?facilityId=${facilityId}`),
+    const [bookingsResult, bulletinsResult, lockoutResult] = await Promise.all([
+      fetchWithCache(`bookings_${user.id}`, `/api/bookings/upcoming/${user.id}`),
+      fetchWithCache(`bulletins_${facilityId}`, `/api/bulletin-board/${facilityId}`),
+      fetchWithCache(`lockout_${user.id}_${facilityId}`, `/api/strikes/check/${user.id}?facilityId=${facilityId}`),
     ]);
 
-    if (bookingsRes.success && bookingsRes.data) {
-      const list = Array.isArray(bookingsRes.data) ? bookingsRes.data : bookingsRes.data.bookings || [];
+    if (bookingsResult.data) {
+      const list = Array.isArray(bookingsResult.data) ? bookingsResult.data : (bookingsResult.data as any).bookings || [];
       setBookings(list.slice(0, 3));
     }
-    if (bulletinsRes.success && bulletinsRes.data) {
-      const posts = Array.isArray(bulletinsRes.data) ? bulletinsRes.data : bulletinsRes.data.posts || [];
+    if (bulletinsResult.data) {
+      const posts = Array.isArray(bulletinsResult.data) ? bulletinsResult.data : (bulletinsResult.data as any).posts || [];
       setBulletins(posts.slice(0, 5));
     }
-    if (lockoutRes.success && lockoutRes.data) {
-      setLockout(lockoutRes.data);
+    if (lockoutResult.data) {
+      setLockout(lockoutResult.data as any);
     }
-  }, [user, facilityId]);
+  }, [user, facilityId, fetchWithCache]);
 
   useEffect(() => {
     fetchData();
@@ -101,6 +104,7 @@ export default function HomeScreen() {
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
     >
+      <OfflineBanner visible={isOffline} />
       <View style={styles.welcome}>
         <Text style={styles.greeting}>
           Welcome back, {user?.firstName || 'Player'}!

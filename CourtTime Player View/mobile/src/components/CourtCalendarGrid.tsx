@@ -10,6 +10,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
   Dimensions,
   PanResponder,
   GestureResponderEvent,
@@ -202,6 +203,19 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
     return false;
   };
 
+  // Handle simple tap/click on a cell (works on web + mobile)
+  const handleCellPress = (courtIndex: number, rowIndex: number) => {
+    if (isPast(rowIndex) || isBooked(courtIndex, rowIndex)) return;
+
+    const globalCourtIndex = pageIndex * COURTS_PER_PAGE + courtIndex;
+    const court = courts[globalCourtIndex];
+    if (!court) return;
+
+    const startTime = timeRows[rowIndex] + ':00';
+    const endTime = getRowEndTime(rowIndex) + ':00';
+    onBookingSelected(court, startTime, endTime);
+  };
+
   // Handle touch events for long press + drag
   const handleTouchStart = (courtIndex: number, rowIndex: number) => {
     if (isPast(rowIndex) || isBooked(courtIndex, rowIndex)) return;
@@ -364,8 +378,10 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                     const span = bookingStart ? getBookingRowSpan(courtIndex, rowIndex, bookingStart) : 0;
 
                     return (
-                      <View
+                      <TouchableOpacity
                         key={court.id}
+                        activeOpacity={0.7}
+                        onPress={() => handleCellPress(courtIndex, rowIndex)}
                         style={[
                           styles.cell,
                           { width: courtColumnWidth },
@@ -379,7 +395,6 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                           if (!isDragging.current) return;
                           const y = e.nativeEvent.locationY;
                           const gridY = e.nativeEvent.pageY;
-                          // Approximate row from touch position
                           const newRow = Math.max(0, Math.min(timeRows.length - 1,
                             rowIndex + Math.round(y / ROW_HEIGHT)
                           ));
@@ -396,7 +411,7 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                             </Text>
                           </View>
                         )}
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>

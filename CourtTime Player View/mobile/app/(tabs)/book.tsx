@@ -401,14 +401,14 @@ export default function BookCourtScreen() {
       <View style={styles.viewToggle}>
         <TouchableOpacity
           style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleActive]}
-          onPress={() => setViewMode('list')}
+          onPress={() => { setViewMode('list'); setCalendarExpanded(true); }}
         >
           <Ionicons name="list" size={16} color={viewMode === 'list' ? Colors.textInverse : Colors.textSecondary} />
           <Text style={[styles.viewToggleText, viewMode === 'list' && styles.viewToggleTextActive]}>List</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.viewToggleButton, viewMode === 'calendar' && styles.viewToggleActive]}
-          onPress={() => setViewMode('calendar')}
+          onPress={() => { setViewMode('calendar'); setCalendarExpanded(false); }}
         >
           <Ionicons name="grid" size={16} color={viewMode === 'calendar' ? Colors.textInverse : Colors.textSecondary} />
           <Text style={[styles.viewToggleText, viewMode === 'calendar' && styles.viewToggleTextActive]}>Calendar</Text>
@@ -468,14 +468,62 @@ export default function BookCourtScreen() {
           <TouchableOpacity
             key={court.id}
             style={styles.courtListCard}
-            onPress={() => {
+            onPress={async () => {
               setSelectedCourt(court);
-              // Pre-set first available start time
-              const starts = getAvailableStartTimes();
-              if (starts.length > 0) {
-                setModalStartTime(starts[0]);
-                const ends = getAvailableEndTimes(starts[0]);
-                setModalEndTime(ends.length > 0 ? ends[0] : '');
+              // Fetch availability for this court right now
+              const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
+              if (res.success && res.data && res.data.isOpen) {
+                const data = res.data;
+                const slotDur = data.slotDuration || 30;
+                const [openH, openM] = data.operatingHours.open.split(':').map(Number);
+                const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
+                const bookedSet = new Set((data.existingBookings || []).map((b: any) => b.startTime));
+                const now = new Date();
+                const isToday = selectedDate === getTodayString();
+
+                // Build available start times
+                const starts: string[] = [];
+                let h = openH, m = openM;
+                while (h < closeH || (h === closeH && m < closeM)) {
+                  const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                  const isPast = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
+                  if (!bookedSet.has(t + ':00') && !isPast) starts.push(t);
+                  m += slotDur;
+                  if (m >= 60) { h += Math.floor(m / 60); m = m % 60; }
+                }
+
+                if (starts.length > 0) {
+                  const startTime = starts[0];
+                  setModalStartTime(startTime);
+
+                  // Build end times for first start
+                  const startMin = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
+                  const closeMin = closeH * 60 + closeM;
+                  let maxEnd = closeMin;
+                  // Find next booked slot after start
+                  for (const slot of (data.existingBookings || [])) {
+                    if (!slot.startTime) continue;
+                    const bMin = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
+                    if (bMin > startMin) { maxEnd = Math.min(maxEnd, bMin); break; }
+                  }
+                  const firstEnd = Math.min(startMin + slotDur, maxEnd);
+                  setModalEndTime(`${String(Math.floor(firstEnd / 60)).padStart(2, '0')}:${String(firstEnd % 60).padStart(2, '0')}`);
+
+                  // Also update timeSlots state so the pickers work
+                  const slots: TimeSlot[] = [];
+                  h = openH; m = openM;
+                  while (h < closeH || (h === closeH && m < closeM)) {
+                    const st = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+                    let eM = m + slotDur, eH = h;
+                    if (eM >= 60) { eH += Math.floor(eM / 60); eM = eM % 60; }
+                    const et = `${String(eH).padStart(2, '0')}:${String(eM).padStart(2, '0')}:00`;
+                    const isPast = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
+                    slots.push({ startTime: st, endTime: et, available: !bookedSet.has(st) && !isPast });
+                    m += slotDur;
+                    if (m >= 60) { h += Math.floor(m / 60); m = m % 60; }
+                  }
+                  setTimeSlots(slots);
+                }
               }
               setBookingType('match');
               setBookingNotes('');

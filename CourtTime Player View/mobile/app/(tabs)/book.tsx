@@ -1,6 +1,6 @@
 /**
  * Book Court Tab
- * Calendar date picker → court selector → time slot grid → confirm booking
+ * Calendar date picker → court selector → time slot grid → booking details → confirm
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -11,14 +11,28 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { showAlert } from '../../src/utils/alert';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
+import { FacilitySelector } from '../../src/components/FacilitySelector';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
+
+const BOOKING_TYPES = [
+  { key: 'match', label: 'Match' },
+  { key: 'league_match', label: 'League Match' },
+  { key: 't2_match', label: 'T2 Match' },
+  { key: 'lesson', label: 'Lesson' },
+  { key: 'ball_machine', label: 'Ball Machine' },
+  { key: 'individual_practice', label: 'Practice' },
+  { key: 'other', label: 'Other' },
+];
 
 interface AvailabilityResponse {
   date: string;
@@ -34,6 +48,13 @@ interface TimeSlot {
   available: boolean;
 }
 
+interface RuleViolation {
+  ruleCode: string;
+  ruleName: string;
+  message: string;
+  severity: string;
+}
+
 export default function BookCourtScreen() {
   const { user, facilityId } = useAuth();
   const [courts, setCourts] = useState<Court[]>([]);
@@ -43,6 +64,19 @@ export default function BookCourtScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [booking, setBooking] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(true);
+
+  // Booking details modal state
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [bookingType, setBookingType] = useState('match');
+  const [bookingNotes, setBookingNotes] = useState('');
+
+  // Rule violations modal state
+  const [showViolations, setShowViolations] = useState(false);
+  const [violations, setViolations] = useState<RuleViolation[]>([]);
+  const [warnings, setWarnings] = useState<RuleViolation[]>([]);
+
+  const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
   function getTodayString() {
     const d = new Date();
@@ -123,6 +157,7 @@ export default function BookCourtScreen() {
 
   useEffect(() => {
     fetchCourts();
+    setSelectedCourt(null);
   }, [fetchCourts]);
 
   useEffect(() => {
@@ -136,45 +171,86 @@ export default function BookCourtScreen() {
     setRefreshing(false);
   }, [fetchCourts, fetchTimeSlots]);
 
-  // ── Book a slot ──
-  async function handleBook(slot: TimeSlot) {
-    if (!selectedCourt || !user || !facilityId) return;
+  // ── Open booking details modal ──
+  function handleSlotPress(slot: TimeSlot) {
+    setSelectedSlot(slot);
+    setBookingType('match');
+    setBookingNotes('');
+    setShowBookingModal(true);
+  }
 
-    const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
+  // ── Calculate duration ──
+  function calcDuration(startTime: string, endTime: string): number {
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    return (eh * 60 + em) - (sh * 60 + sm);
+  }
+
+  // ── Submit booking ──
+  async function handleConfirmBooking() {
+    if (!selectedCourt || !user || !facilityId || !selectedSlot) return;
+
+    setBooking(true);
+
+    const bookingData = {
+      courtId: selectedCourt.id,
+      facilityId,
+      userId: user.id,
+      bookingDate: selectedDate,
+      startTime: selectedSlot.startTime,
+      endTime: selectedSlot.endTime,
+      durationMinutes: calcDuration(selectedSlot.startTime, selectedSlot.endTime),
+      bookingType,
+      notes: bookingNotes.trim() || undefined,
+    };
+
+    const res = await api.post('/api/bookings', bookingData);
+
+    if (res.success) {
+      setShowBookingModal(false);
+      showAlert('Booked!', 'Your court has been reserved.');
+      fetchTimeSlots();
+    } else if (res.ruleViolations && res.ruleViolations.length > 0) {
+      // Rule violations — show them
+      setViolations(res.ruleViolations);
+      setWarnings(res.warnings || []);
+      setShowBookingModal(false);
+      setShowViolations(true);
+    } else {
+      showAlert('Booking Failed', res.error || 'Could not complete booking.');
+    }
+    setBooking(false);
+  }
+
+  // ── Admin override booking ──
+  async function handleAdminOverride() {
+    if (!selectedCourt || !user || !facilityId || !selectedSlot) return;
+
+    setBooking(true);
+
+    const res = await api.post('/api/bookings/admin-override', {
+      courtId: selectedCourt.id,
+      facilityId,
+      userId: user.id,
+      bookingDate: selectedDate,
+      startTime: selectedSlot.startTime,
+      endTime: selectedSlot.endTime,
+      durationMinutes: calcDuration(selectedSlot.startTime, selectedSlot.endTime),
+      bookingType,
+      notes: bookingNotes.trim() || undefined,
+      overriddenBy: user.id,
+      overrideReason: 'Admin override from mobile app',
+      overrideRules: violations.map(v => v.ruleCode),
     });
 
-    showAlert(
-      'Confirm Booking',
-      `${selectedCourt.name}\n${dateLabel}\n${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Book',
-          onPress: async () => {
-            setBooking(true);
-            const res = await api.post('/api/bookings', {
-              courtId: selectedCourt.id,
-              facilityId,
-              userId: user.id,
-              bookingDate: selectedDate,
-              startTime: slot.startTime,
-              endTime: slot.endTime,
-            });
-
-            if (res.success) {
-              showAlert('Booked!', 'Your court has been reserved.');
-              fetchTimeSlots();
-            } else {
-              showAlert('Booking Failed', res.error || 'Could not complete booking.');
-            }
-            setBooking(false);
-          },
-        },
-      ]
-    );
+    setShowViolations(false);
+    if (res.success) {
+      showAlert('Booked!', 'Booking created with admin override.');
+      fetchTimeSlots();
+    } else {
+      showAlert('Override Failed', res.error || 'Could not complete booking.');
+    }
+    setBooking(false);
   }
 
   // ── Helpers ──
@@ -204,10 +280,15 @@ export default function BookCourtScreen() {
         <View style={styles.noFacility}>
           <Ionicons name="warning-outline" size={20} color={Colors.warning} />
           <Text style={styles.noFacilityText}>
-            You are not a member of any facility yet. Join a facility through the web app.
+            You are not a member of any facility yet. Join a facility from your Profile.
           </Text>
         </View>
       )}
+
+      {/* Facility Selector */}
+      <View style={{ marginTop: Spacing.sm }}>
+        <FacilitySelector />
+      </View>
 
       {/* ── Calendar ── */}
       <View style={styles.calendarSection}>
@@ -302,7 +383,7 @@ export default function BookCourtScreen() {
                     styles.slotCard,
                     !slot.available && styles.slotUnavailable,
                   ]}
-                  onPress={() => slot.available && handleBook(slot)}
+                  onPress={() => slot.available && handleSlotPress(slot)}
                   disabled={!slot.available || booking}
                   activeOpacity={0.7}
                 >
@@ -339,6 +420,138 @@ export default function BookCourtScreen() {
       )}
 
       <View style={{ height: Spacing.xl }} />
+
+      {/* ── Booking Details Modal ── */}
+      <Modal visible={showBookingModal} transparent animationType="slide" onRequestClose={() => setShowBookingModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Booking Details</Text>
+              <TouchableOpacity onPress={() => setShowBookingModal(false)}>
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Summary */}
+            <View style={styles.modalSummary}>
+              <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
+              <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
+              <Text style={styles.summaryTime}>
+                {selectedSlot && `${formatTime(selectedSlot.startTime)} – ${formatTime(selectedSlot.endTime)}`}
+              </Text>
+            </View>
+
+            {/* Booking Type */}
+            <Text style={styles.modalLabel}>Booking Type</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
+              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                {BOOKING_TYPES.map(bt => (
+                  <TouchableOpacity
+                    key={bt.key}
+                    style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
+                    onPress={() => setBookingType(bt.key)}
+                  >
+                    <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
+                      {bt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Notes */}
+            <Text style={styles.modalLabel}>Notes (optional)</Text>
+            <TextInput
+              style={styles.notesInput}
+              value={bookingNotes}
+              onChangeText={setBookingNotes}
+              placeholder="Special requests or notes..."
+              placeholderTextColor={Colors.textMuted}
+              multiline
+              maxLength={200}
+            />
+
+            {/* Confirm Button */}
+            <TouchableOpacity
+              style={[styles.confirmButton, booking && { opacity: 0.6 }]}
+              onPress={handleConfirmBooking}
+              disabled={booking}
+            >
+              {booking ? (
+                <ActivityIndicator size="small" color={Colors.textInverse} />
+              ) : (
+                <Text style={styles.confirmButtonText}>Confirm Booking</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Rule Violations Modal ── */}
+      <Modal visible={showViolations} transparent animationType="fade" onRequestClose={() => setShowViolations(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: Colors.error }]}>Booking Not Allowed</Text>
+              <TouchableOpacity onPress={() => setShowViolations(false)}>
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.violationSubtitle}>
+              This booking violates the following facility rules:
+            </Text>
+
+            <ScrollView style={{ maxHeight: 250 }}>
+              {violations.map((v, i) => (
+                <View key={i} style={styles.violationCard}>
+                  <Ionicons name="alert-circle" size={20} color={Colors.error} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.violationRuleName}>{v.ruleName}</Text>
+                    <Text style={styles.violationMessage}>{v.message}</Text>
+                  </View>
+                </View>
+              ))}
+              {warnings.length > 0 && (
+                <>
+                  <Text style={[styles.violationSubtitle, { marginTop: Spacing.md }]}>Warnings:</Text>
+                  {warnings.map((w, i) => (
+                    <View key={`w-${i}`} style={[styles.violationCard, { borderLeftColor: Colors.warning }]}>
+                      <Ionicons name="warning" size={20} color={Colors.warning} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.violationRuleName}>{w.ruleName}</Text>
+                        <Text style={styles.violationMessage}>{w.message}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.confirmButton, { backgroundColor: Colors.textSecondary }]}
+              onPress={() => setShowViolations(false)}
+            >
+              <Text style={styles.confirmButtonText}>Dismiss</Text>
+            </TouchableOpacity>
+
+            {/* Admin Override */}
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.confirmButton, { backgroundColor: Colors.warning, marginTop: Spacing.sm }]}
+                onPress={handleAdminOverride}
+                disabled={booking}
+              >
+                {booking ? (
+                  <ActivityIndicator size="small" color={Colors.textInverse} />
+                ) : (
+                  <Text style={styles.confirmButtonText}>Override as Admin</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -381,10 +594,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.text,
-  },
-  calendar: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
   },
 
   // ── Courts ──
@@ -500,5 +709,133 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.sm,
     textAlign: 'center',
+  },
+
+  // ── Modals ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalTitle: {
+    fontSize: FontSize.xl,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  modalSummary: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+  },
+  summaryCourtName: {
+    fontSize: FontSize.md,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  summaryDate: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  summaryTime: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  modalLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: Spacing.sm,
+  },
+  typeChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  typeChipSelected: {
+    backgroundColor: Colors.primary + '15',
+    borderColor: Colors.primary,
+  },
+  typeChipText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+  },
+  typeChipTextSelected: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  notesInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    minHeight: 60,
+    textAlignVertical: 'top',
+    marginBottom: Spacing.md,
+  },
+  confirmButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: Colors.textInverse,
+    fontSize: FontSize.md,
+    fontWeight: '700',
+  },
+
+  // ── Rule Violations ──
+  violationSubtitle: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  violationCard: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    backgroundColor: Colors.error + '08',
+    borderRadius: BorderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.error,
+    marginBottom: Spacing.sm,
+  },
+  violationRuleName: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  violationMessage: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 20,
   },
 });

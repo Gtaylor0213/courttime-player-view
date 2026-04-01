@@ -31,8 +31,8 @@ The mobile app scaffold exists with ~82% of core features implemented. Here is w
 - ~~Facility selector (switching between multiple facilities)~~ **DONE** (2026-04-01)
 - Club/facility info screen
 - Booking editing (change date/time/court on existing booking)
-- Booking type selection and notes
-- Rule violation display when booking fails
+- ~~Booking type selection and notes~~ **DONE** (2026-04-01)
+- ~~Rule violation display when booking fails~~ **DONE** (2026-04-01)
 - Recurring booking support
 - Quick reserve popup alternative
 - Bulletin board post creation (for admins logged in on mobile)
@@ -43,7 +43,7 @@ The mobile app scaffold exists with ~82% of core features implemented. Here is w
 - Notification type icons and priority styling
 - Notification settings/preferences
 - Strike/lockout status display
-- Admin privilege passthrough (admin can book outside rules, create bulletin posts, etc.)
+- ~~Admin privilege passthrough (admin can book outside rules)~~ **DONE** (2026-04-01) — bulletin posts TBD in 1.9
 - Push notifications (currently polling only)
 - Offline support (cached data, queue actions for when back online)
 - Deep linking (open specific booking/message from notification)

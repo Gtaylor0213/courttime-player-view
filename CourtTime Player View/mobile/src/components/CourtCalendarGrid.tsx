@@ -77,12 +77,20 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
       courts.map(async (court) => {
         const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
         if (res.success && res.data) {
+          // Normalize snake_case from API to camelCase
+          const rawBookings = res.data.existingBookings || [];
+          const bookings = rawBookings.map((b: any) => ({
+            startTime: b.startTime || b.start_time || '',
+            endTime: b.endTime || b.end_time || '',
+            userName: b.userName || b.user_name || '',
+            bookingType: b.bookingType || b.booking_type || '',
+          }));
           return {
             courtId: court.id,
             courtName: court.name,
             isOpen: res.data.isOpen,
             operatingHours: res.data.operatingHours || { open: '08:00', close: '21:00' },
-            bookings: res.data.existingBookings || [],
+            bookings,
           };
         }
         return {

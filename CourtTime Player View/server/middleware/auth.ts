@@ -6,11 +6,15 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-if (!process.env.JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required. Server cannot start without it.');
-}
-const JWT_SECRET: string = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '7d';
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required. Server cannot start without it.');
+  }
+  return secret;
+}
 
 export interface JwtPayload {
   userId: string;
@@ -31,7 +35,7 @@ declare global {
  * Generate a JWT token for a user
  */
 export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
 }
 
 /**
@@ -39,7 +43,7 @@ export function generateToken(payload: JwtPayload): string {
  */
 export function verifyToken(token: string): JwtPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+    return jwt.verify(token, getJwtSecret()) as JwtPayload;
   } catch {
     return null;
   }

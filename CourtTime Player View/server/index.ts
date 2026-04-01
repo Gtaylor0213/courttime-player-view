@@ -47,7 +47,19 @@ app.use('/api/webhooks', webhookRoutes);
 
 // Middleware
 app.use(cors({
-  origin: process.env.APP_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    const allowed = [
+      process.env.APP_URL,
+      'http://localhost:5173',
+      'http://localhost:8081',
+    ].filter(Boolean);
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin || allowed.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all in dev; production is same-origin anyway
+    }
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));

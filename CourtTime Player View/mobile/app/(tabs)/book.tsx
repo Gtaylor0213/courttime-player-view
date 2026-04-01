@@ -20,6 +20,7 @@ import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { FacilitySelector } from '../../src/components/FacilitySelector';
+import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
@@ -65,6 +66,7 @@ export default function BookCourtScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [booking, setBooking] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(true);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
   // Booking details modal state
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -175,6 +177,15 @@ export default function BookCourtScreen() {
   // ── Open booking details modal ──
   function handleSlotPress(slot: TimeSlot) {
     setSelectedSlot(slot);
+    setBookingType('match');
+    setBookingNotes('');
+    setShowBookingModal(true);
+  }
+
+  // ── Handle calendar grid booking selection ──
+  function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
+    setSelectedCourt(court);
+    setSelectedSlot({ startTime, endTime, available: true });
     setBookingType('match');
     setBookingNotes('');
     setShowBookingModal(true);
@@ -294,6 +305,24 @@ export default function BookCourtScreen() {
         <FacilitySelector />
       </View>
 
+      {/* View Mode Toggle */}
+      <View style={styles.viewToggle}>
+        <TouchableOpacity
+          style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleActive]}
+          onPress={() => setViewMode('list')}
+        >
+          <Ionicons name="list" size={16} color={viewMode === 'list' ? Colors.textInverse : Colors.textSecondary} />
+          <Text style={[styles.viewToggleText, viewMode === 'list' && styles.viewToggleTextActive]}>List</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewToggleButton, viewMode === 'calendar' && styles.viewToggleActive]}
+          onPress={() => setViewMode('calendar')}
+        >
+          <Ionicons name="grid" size={16} color={viewMode === 'calendar' ? Colors.textInverse : Colors.textSecondary} />
+          <Text style={[styles.viewToggleText, viewMode === 'calendar' && styles.viewToggleTextActive]}>Calendar</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* ── Calendar ── */}
       <View style={styles.calendarSection}>
         <TouchableOpacity
@@ -321,6 +350,19 @@ export default function BookCourtScreen() {
         )}
       </View>
 
+      {/* ══════ CALENDAR GRID VIEW ══════ */}
+      {viewMode === 'calendar' && facilityId && (
+        <CourtCalendarGrid
+          courts={courts}
+          selectedDate={selectedDate}
+          facilityId={facilityId}
+          onBookingSelected={handleCalendarGridSelection}
+        />
+      )}
+
+      {/* ══════ LIST VIEW ══════ */}
+      {viewMode === 'list' && (
+      <>
       {/* ── Court Selector ── */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Select Court</Text>
@@ -421,6 +463,8 @@ export default function BookCourtScreen() {
           <Ionicons name="arrow-up" size={24} color={Colors.textMuted} />
           <Text style={styles.emptyText}>Select a court above to see available times</Text>
         </View>
+      )}
+      </>
       )}
 
       <View style={{ height: Spacing.xl }} />
@@ -565,6 +609,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.surface,
   },
+  // ── View Toggle ──
+  viewToggle: {
+    flexDirection: 'row',
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.borderLight,
+    borderRadius: BorderRadius.md,
+    padding: 3,
+  },
+  viewToggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+  },
+  viewToggleActive: {
+    backgroundColor: Colors.primary,
+  },
+  viewToggleText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  viewToggleTextActive: {
+    color: Colors.textInverse,
+  },
+
   noFacility: {
     flexDirection: 'row',
     margin: Spacing.md,

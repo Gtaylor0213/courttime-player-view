@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { FacilitySelector } from '../../src/components/FacilitySelector';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
+import { TimePicker } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
@@ -73,6 +74,9 @@ export default function BookCourtScreen() {
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [bookingType, setBookingType] = useState('match');
   const [bookingNotes, setBookingNotes] = useState('');
+  const [modalStartTime, setModalStartTime] = useState('');
+  const [modalEndTime, setModalEndTime] = useState('');
+  const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
 
   // Rule violations modal state
   const [showViolations, setShowViolations] = useState(false);
@@ -177,8 +181,11 @@ export default function BookCourtScreen() {
   // ── Open booking details modal ──
   function handleSlotPress(slot: TimeSlot) {
     setSelectedSlot(slot);
+    setModalStartTime(slot.startTime.slice(0, 5));
+    setModalEndTime(slot.endTime.slice(0, 5));
     setBookingType('match');
     setBookingNotes('');
+    setAdditionalCourtIds([]);
     setShowBookingModal(true);
   }
 
@@ -186,8 +193,11 @@ export default function BookCourtScreen() {
   function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
     setSelectedCourt(court);
     setSelectedSlot({ startTime, endTime, available: true });
+    setModalStartTime(startTime.slice(0, 5));
+    setModalEndTime(endTime.slice(0, 5));
     setBookingType('match');
     setBookingNotes('');
+    setAdditionalCourtIds([]);
     setShowBookingModal(true);
   }
 
@@ -200,38 +210,66 @@ export default function BookCourtScreen() {
 
   // ── Submit booking ──
   async function handleConfirmBooking() {
-    if (!selectedCourt || !user || !facilityId || !selectedSlot) return;
+    if (!selectedCourt || !user || !facilityId) return;
+
+    const startTime = modalStartTime + ':00';
+    const endTime = modalEndTime + ':00';
+
+    if (toMinutes(modalEndTime) <= toMinutes(modalStartTime)) {
+      showAlert('Invalid Time', 'End time must be after start time.');
+      return;
+    }
 
     setBooking(true);
 
-    const bookingData = {
-      courtId: selectedCourt.id,
-      facilityId,
-      userId: user.id,
-      bookingDate: selectedDate,
-      startTime: selectedSlot.startTime,
-      endTime: selectedSlot.endTime,
-      durationMinutes: calcDuration(selectedSlot.startTime, selectedSlot.endTime),
-      bookingType,
-      notes: bookingNotes.trim() || undefined,
-    };
+    // Book the primary court
+    const allCourtIds = [selectedCourt.id, ...additionalCourtIds];
+    let allSuccess = true;
+    let firstError: string | null = null;
+    let firstViolations: RuleViolation[] | null = null;
+    let firstWarnings: RuleViolation[] = [];
 
-    const res = await api.post('/api/bookings', bookingData);
+    for (const courtId of allCourtIds) {
+      const bookingData = {
+        courtId,
+        facilityId,
+        userId: user.id,
+        bookingDate: selectedDate,
+        startTime,
+        endTime,
+        durationMinutes: calcDuration(startTime, endTime),
+        bookingType,
+        notes: bookingNotes.trim() || undefined,
+      };
 
-    if (res.success) {
+      const res = await api.post('/api/bookings', bookingData);
+
+      if (!res.success) {
+        allSuccess = false;
+        if (res.ruleViolations && res.ruleViolations.length > 0 && !firstViolations) {
+          firstViolations = res.ruleViolations;
+          firstWarnings = res.warnings || [];
+        } else if (!firstError) {
+          firstError = res.error || 'Could not complete booking.';
+        }
+        break;
+      }
+    }
+
+    if (allSuccess) {
       setShowBookingModal(false);
       hapticSuccess();
-      showAlert('Booked!', 'Your court has been reserved.');
+      const courtCount = allCourtIds.length;
+      showAlert('Booked!', courtCount > 1 ? `${courtCount} courts reserved.` : 'Your court has been reserved.');
       fetchTimeSlots();
-    } else if (res.ruleViolations && res.ruleViolations.length > 0) {
+    } else if (firstViolations) {
       hapticError();
-      // Rule violations — show them
-      setViolations(res.ruleViolations);
-      setWarnings(res.warnings || []);
+      setViolations(firstViolations);
+      setWarnings(firstWarnings);
       setShowBookingModal(false);
       setShowViolations(true);
     } else {
-      showAlert('Booking Failed', res.error || 'Could not complete booking.');
+      showAlert('Booking Failed', firstError || 'Could not complete booking.');
     }
     setBooking(false);
   }
@@ -275,6 +313,60 @@ export default function BookCourtScreen() {
     const ampm = h >= 12 ? 'PM' : 'AM';
     const h12 = h % 12 || 12;
     return `${h12}:${minutes} ${ampm}`;
+  };
+
+  const toMinutes = (t: string) => {
+    const p = t.split(':');
+    return parseInt(p[0]) * 60 + parseInt(p[1] || '0');
+  };
+
+  const fromMinutes = (m: number) => {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  };
+
+  // Get available start times (slots that are not booked and not in the past)
+  const getAvailableStartTimes = (): string[] => {
+    return timeSlots.filter(s => s.available).map(s => s.startTime.slice(0, 5));
+  };
+
+  // Get available end times based on selected start time
+  // Max end = next booking start time or closing time, whichever comes first
+  // Min end = start + 30 min (one slot)
+  const getAvailableEndTimes = (startTime: string): string[] => {
+    const startMin = toMinutes(startTime);
+    const slotDur = timeSlots.length >= 2
+      ? toMinutes(timeSlots[1].startTime) - toMinutes(timeSlots[0].startTime)
+      : 30;
+
+    // Find closing time (end of last slot)
+    const lastSlot = timeSlots[timeSlots.length - 1];
+    const closeMin = lastSlot ? toMinutes(lastSlot.endTime) : startMin + 120;
+
+    // Find next booked slot after start
+    let maxEnd = closeMin;
+    for (const slot of timeSlots) {
+      const slotMin = toMinutes(slot.startTime);
+      if (slotMin > startMin && !slot.available) {
+        maxEnd = slotMin;
+        break;
+      }
+    }
+
+    // Generate end times from start+30 to maxEnd in slotDur increments
+    const ends: string[] = [];
+    for (let m = startMin + slotDur; m <= maxEnd; m += slotDur) {
+      ends.push(fromMinutes(m));
+    }
+    return ends;
+  };
+
+  // Toggle additional court
+  const toggleAdditionalCourt = (courtId: string) => {
+    setAdditionalCourtIds(prev =>
+      prev.includes(courtId) ? prev.filter(id => id !== courtId) : [...prev, courtId]
+    );
   };
 
   const selectedDateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
@@ -472,7 +564,7 @@ export default function BookCourtScreen() {
       {/* ── Booking Details Modal ── */}
       <Modal visible={showBookingModal} transparent animationType="slide" onRequestClose={() => setShowBookingModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Booking Details</Text>
               <TouchableOpacity onPress={() => setShowBookingModal(false)}>
@@ -484,10 +576,44 @@ export default function BookCourtScreen() {
             <View style={styles.modalSummary}>
               <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
               <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
-              <Text style={styles.summaryTime}>
-                {selectedSlot && `${formatTime(selectedSlot.startTime)} – ${formatTime(selectedSlot.endTime)}`}
-              </Text>
             </View>
+
+            {/* Time Pickers */}
+            <Text style={styles.modalLabel}>Select Time</Text>
+            <View style={styles.timePickerRow}>
+              <TimePicker
+                label="Start"
+                times={getAvailableStartTimes()}
+                selectedTime={modalStartTime}
+                onSelect={(t) => {
+                  setModalStartTime(t);
+                  // Auto-adjust end time if needed
+                  const ends = getAvailableEndTimes(t);
+                  if (ends.length > 0 && (toMinutes(modalEndTime) <= toMinutes(t) || !ends.includes(modalEndTime))) {
+                    setModalEndTime(ends[0]);
+                  }
+                }}
+              />
+              <View style={styles.timePickerDivider}>
+                <Text style={styles.timePickerDividerText}>to</Text>
+              </View>
+              <TimePicker
+                label="End"
+                times={getAvailableEndTimes(modalStartTime)}
+                selectedTime={modalEndTime}
+                onSelect={setModalEndTime}
+              />
+            </View>
+
+            {/* Duration display */}
+            {modalStartTime && modalEndTime && toMinutes(modalEndTime) > toMinutes(modalStartTime) && (
+              <View style={styles.durationBadge}>
+                <Ionicons name="time-outline" size={14} color={Colors.primary} />
+                <Text style={styles.durationText}>
+                  {calcDuration(modalStartTime + ':00', modalEndTime + ':00')} minutes
+                </Text>
+              </View>
+            )}
 
             {/* Booking Type */}
             <Text style={styles.modalLabel}>Booking Type</Text>
@@ -506,6 +632,26 @@ export default function BookCourtScreen() {
                 ))}
               </View>
             </ScrollView>
+
+            {/* Additional Courts (Admin only) */}
+            {isAdmin && courts.length > 1 && (
+              <>
+                <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md }}>
+                  {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
+                    <TouchableOpacity
+                      key={court.id}
+                      style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
+                      onPress={() => toggleAdditionalCourt(court.id)}
+                    >
+                      <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
+                        {court.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             {/* Notes */}
             <Text style={styles.modalLabel}>Notes (optional)</Text>
@@ -528,10 +674,16 @@ export default function BookCourtScreen() {
               {booking ? (
                 <ActivityIndicator size="small" color={Colors.textInverse} />
               ) : (
-                <Text style={styles.confirmButtonText}>Confirm Booking</Text>
+                <Text style={styles.confirmButtonText}>
+                  {additionalCourtIds.length > 0
+                    ? `Book ${1 + additionalCourtIds.length} Courts`
+                    : 'Confirm Booking'}
+                </Text>
               )}
             </TouchableOpacity>
-          </View>
+
+            <View style={{ height: Spacing.xl }} />
+          </ScrollView>
         </View>
       </Modal>
 
@@ -800,7 +952,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: BorderRadius.lg,
     borderTopRightRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -876,6 +1028,36 @@ const styles = StyleSheet.create({
     minHeight: 60,
     textAlignVertical: 'top',
     marginBottom: Spacing.md,
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.md,
+  },
+  timePickerDivider: {
+    paddingTop: Spacing.xl + Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+  },
+  timePickerDividerText: {
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary + '10',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    marginBottom: Spacing.md,
+  },
+  durationText: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   confirmButton: {
     backgroundColor: Colors.primary,

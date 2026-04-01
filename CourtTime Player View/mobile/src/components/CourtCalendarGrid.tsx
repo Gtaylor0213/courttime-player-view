@@ -102,6 +102,26 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
     fetchAvailability();
   }, [fetchAvailability]);
 
+  // Auto-scroll to current time when data loads
+  useEffect(() => {
+    if (loading || courtData.length === 0 || !scrollRef.current) return;
+
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (selectedDate !== today) return;
+
+    const hours = courtData[0]?.operatingHours || { open: '08:00', close: '21:00' };
+    const [openH, openM] = hours.open.split(':').map(Number);
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const firstMinutes = openH * 60 + openM;
+    const rowIndex = Math.max(0, Math.floor((nowMinutes - firstMinutes) / SLOT_MINUTES) - 1);
+    const scrollY = rowIndex * ROW_HEIGHT;
+
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: scrollY, animated: true });
+    }, 500);
+  }, [loading, selectedDate]);
+
   // Generate time rows from operating hours
   const getTimeRows = (): string[] => {
     if (courtData.length === 0) return [];
@@ -144,8 +164,11 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
     const rowMinutes = parseInt(rowTime.split(':')[0]) * 60 + parseInt(rowTime.split(':')[1]);
 
     for (const b of data.bookings) {
-      const bStart = parseInt(b.startTime.split(':')[0]) * 60 + parseInt(b.startTime.split(':')[1]);
-      const bEnd = parseInt(b.endTime.split(':')[0]) * 60 + parseInt(b.endTime.split(':')[1]);
+      if (!b.startTime || !b.endTime) continue;
+      const startParts = b.startTime.split(':');
+      const endParts = b.endTime.split(':');
+      const bStart = parseInt(startParts[0]) * 60 + parseInt(startParts[1] || '0');
+      const bEnd = parseInt(endParts[0]) * 60 + parseInt(endParts[1] || '0');
       if (rowMinutes >= bStart && rowMinutes < bEnd) return b;
     }
     return null;

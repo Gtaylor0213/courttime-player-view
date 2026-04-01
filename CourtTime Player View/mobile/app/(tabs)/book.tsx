@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { showAlert } from '../../src/utils/alert';
+import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { FacilitySelector } from '../../src/components/FacilitySelector';
@@ -208,9 +209,11 @@ export default function BookCourtScreen() {
 
     if (res.success) {
       setShowBookingModal(false);
+      hapticSuccess();
       showAlert('Booked!', 'Your court has been reserved.');
       fetchTimeSlots();
     } else if (res.ruleViolations && res.ruleViolations.length > 0) {
+      hapticError();
       // Rule violations — show them
       setViolations(res.ruleViolations);
       setWarnings(res.warnings || []);
@@ -245,6 +248,7 @@ export default function BookCourtScreen() {
 
     setShowViolations(false);
     if (res.success) {
+      hapticSuccess();
       showAlert('Booked!', 'Booking created with admin override.');
       fetchTimeSlots();
     } else {

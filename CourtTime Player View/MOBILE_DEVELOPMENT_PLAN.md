@@ -46,9 +46,9 @@ The mobile app scaffold exists with ~82% of core features implemented. Here is w
 - ~~Admin privilege passthrough (admin can book outside rules)~~ **DONE** (2026-04-01) — bulletin posts TBD in 1.9
 - ~~Push notifications (currently polling only)~~ **DONE** (2026-04-01)
 - ~~Offline support (cached data, queue actions for when back online)~~ **DONE** (2026-04-01)
-- Deep linking (open specific booking/message from notification)
-- App Store assets (screenshots, description, privacy policy)
-- App icon and splash screen finalization
+- ~~Deep linking (open specific booking/message from notification)~~ **DONE** (2026-04-01) — Expo Router handles `courttime://` scheme automatically via file-based routing. Reset password, club info, tabs all reachable. Universal links (HTTPS) configured in Phase 4.
+- App Store assets (screenshots, description, privacy policy) — Phase 4
+- App icon and splash screen finalization — Phase 4
 
 ---
 

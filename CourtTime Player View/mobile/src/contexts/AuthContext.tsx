@@ -4,6 +4,8 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { api, setToken, getToken, removeToken, cacheUser, getCachedUser, clearCache } from '../api/client';
 import type { User } from '../types/database';
 
@@ -16,6 +18,11 @@ interface AuthUser extends User {
   profileImageUrl?: string;
 }
 
+interface FacilityInfo {
+  id: string;
+  name: string;
+}
+
 interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
@@ -24,9 +31,12 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   facilityId: string | null;
+  facilities: FacilityInfo[];
+  setFacilityId: (id: string) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  updateUser: (updates: Partial<AuthUser>) => Promise<void>;
 }
 
 interface RegisterData {
@@ -39,17 +49,77 @@ interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+async function saveFacilityId(id: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.setItem('courttime_facility', id);
+    return;
+  }
+  await SecureStore.setItemAsync('courttime_facility', id);
+}
+
+async function loadFacilityId(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem('courttime_facility');
+  }
+  return SecureStore.getItemAsync('courttime_facility');
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
     isLoading: true,
     isAuthenticated: false,
   });
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+  const [facilities, setFacilities] = useState<FacilityInfo[]>([]);
 
   // Check for existing session on app launch
   useEffect(() => {
     checkAuth();
   }, []);
+
+  // Fetch facility names and restore selected facility when user changes
+  useEffect(() => {
+    if (!state.user) {
+      setFacilities([]);
+      setSelectedFacilityId(null);
+      return;
+    }
+
+    const allIds = Array.from(new Set([
+      ...(state.user.memberFacilities || []),
+      ...(state.user.adminFacilities || []),
+    ]));
+
+    if (allIds.length === 0) {
+      setFacilities([]);
+      setSelectedFacilityId(null);
+      return;
+    }
+
+    // Fetch facility names
+    Promise.all(allIds.map(id => api.get(`/api/facilities/${id}`))).then(async (results) => {
+      const infos: FacilityInfo[] = [];
+      for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        if (res.success && res.data) {
+          const fac = res.data.facility || res.data;
+          infos.push({ id: allIds[i], name: fac.name || allIds[i] });
+        } else {
+          infos.push({ id: allIds[i], name: allIds[i] });
+        }
+      }
+      setFacilities(infos);
+
+      // Restore previously selected facility, or default to first
+      const saved = await loadFacilityId();
+      if (saved && allIds.includes(saved)) {
+        setSelectedFacilityId(saved);
+      } else {
+        setSelectedFacilityId(allIds[0]);
+      }
+    });
+  }, [state.user?.id]);
 
   async function checkAuth() {
     try {
@@ -127,10 +197,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user: null, isLoading: false, isAuthenticated: false });
   }
 
-  const facilityId = state.user?.memberFacilities?.[0] || null;
+  async function updateUser(updates: Partial<AuthUser>) {
+    if (!state.user) return;
+    const updatedUser = { ...state.user, ...updates };
+    await cacheUser(updatedUser);
+    setState(prev => ({ ...prev, user: updatedUser }));
+  }
+
+  function handleSetFacilityId(id: string) {
+    setSelectedFacilityId(id);
+    saveFacilityId(id);
+  }
 
   return (
-    <AuthContext.Provider value={{ ...state, facilityId, login, register, logout }}>
+    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

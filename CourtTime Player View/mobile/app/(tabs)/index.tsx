@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { FacilitySelector } from '../../src/components/FacilitySelector';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
 
 export default function HomeScreen() {
@@ -99,6 +100,11 @@ export default function HomeScreen() {
         <Text style={styles.greeting}>
           Welcome back, {user?.firstName || 'Player'}!
         </Text>
+      </View>
+
+      {/* Facility Selector (only shows for 2+ facilities) */}
+      <View style={{ marginTop: Spacing.sm }}>
+        <FacilitySelector />
       </View>
 
       {/* Quick Actions */}

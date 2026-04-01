@@ -59,6 +59,9 @@ export default function ProfileScreen() {
   const [bio, setBio] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState('');
 
+  // Strike state
+  const [strikes, setStrikes] = useState<any[]>([]);
+
   // Facility membership state
   const [showFindFacility, setShowFindFacility] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,9 +72,10 @@ export default function ProfileScreen() {
   const fetchProfile = useCallback(async () => {
     if (!user) return;
 
-    const [profileRes, bookingsRes] = await Promise.all([
+    const [profileRes, bookingsRes, strikesRes] = await Promise.all([
       api.get(`/api/player-profile/${user.id}`),
       api.get(`/api/bookings/user/${user.id}`),
+      api.get(`/api/strikes/user/${user.id}?activeOnly=true`),
     ]);
 
     if (profileRes.success && profileRes.data) {
@@ -81,6 +85,10 @@ export default function ProfileScreen() {
     if (bookingsRes.success && bookingsRes.data) {
       const bookings = Array.isArray(bookingsRes.data) ? bookingsRes.data : bookingsRes.data.bookings || [];
       setBookingCount(bookings.length);
+    }
+    if (strikesRes.success && strikesRes.data) {
+      const list = Array.isArray(strikesRes.data) ? strikesRes.data : strikesRes.data.strikes || [];
+      setStrikes(list);
     }
   }, [user]);
 
@@ -617,6 +625,38 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Strikes */}
+      {strikes.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Active Strikes</Text>
+          <View style={styles.detailCard}>
+            {strikes.map((strike: any, idx: number) => (
+              <View key={strike.id || idx} style={[styles.detailRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                  <Ionicons name="alert-circle" size={16} color={Colors.error} />
+                  <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: Colors.text }}>
+                    {strike.strike_type || strike.strikeType || 'Violation'}
+                  </Text>
+                </View>
+                {(strike.reason || strike.description) && (
+                  <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary, marginLeft: Spacing.sm + 16 }}>
+                    {strike.reason || strike.description}
+                  </Text>
+                )}
+                <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, marginLeft: Spacing.sm + 16 }}>
+                  {strike.issued_at || strike.issuedAt
+                    ? new Date(strike.issued_at || strike.issuedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : ''}
+                  {(strike.expires_at || strike.expiresAt)
+                    ? ` · Expires ${new Date(strike.expires_at || strike.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                    : ''}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* Admin Note */}
       {user?.userType === 'admin' && (

@@ -27,13 +27,15 @@ export default function HomeScreen() {
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [bulletins, setBulletins] = useState<BulletinPostWithAuthor[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [lockout, setLockout] = useState<{ isLockedOut: boolean; activeStrikes: number; threshold: number; lockoutEndsAt?: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user || !facilityId) return;
 
-    const [bookingsRes, bulletinsRes] = await Promise.all([
+    const [bookingsRes, bulletinsRes, lockoutRes] = await Promise.all([
       api.get(`/api/bookings/upcoming/${user.id}`),
       api.get(`/api/bulletin-board/${facilityId}`),
+      api.get(`/api/strikes/check/${user.id}?facilityId=${facilityId}`),
     ]);
 
     if (bookingsRes.success && bookingsRes.data) {
@@ -43,6 +45,9 @@ export default function HomeScreen() {
     if (bulletinsRes.success && bulletinsRes.data) {
       const posts = Array.isArray(bulletinsRes.data) ? bulletinsRes.data : bulletinsRes.data.posts || [];
       setBulletins(posts.slice(0, 5));
+    }
+    if (lockoutRes.success && lockoutRes.data) {
+      setLockout(lockoutRes.data);
     }
   }, [user, facilityId]);
 
@@ -107,6 +112,32 @@ export default function HomeScreen() {
         <FacilitySelector />
       </View>
 
+      {/* Lockout Banner */}
+      {lockout?.isLockedOut && (
+        <View style={styles.lockoutBanner}>
+          <Ionicons name="lock-closed" size={20} color={Colors.error} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.lockoutTitle}>Account Locked</Text>
+            <Text style={styles.lockoutMessage}>
+              You have {lockout.activeStrikes} strike{lockout.activeStrikes !== 1 ? 's' : ''} (threshold: {lockout.threshold}).
+              {lockout.lockoutEndsAt
+                ? ` Lockout ends ${new Date(lockout.lockoutEndsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`
+                : ''}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Strike Warning (not locked out but has strikes) */}
+      {lockout && !lockout.isLockedOut && lockout.activeStrikes > 0 && (
+        <View style={styles.strikeWarning}>
+          <Ionicons name="warning" size={18} color={Colors.warning} />
+          <Text style={styles.strikeWarningText}>
+            You have {lockout.activeStrikes} of {lockout.threshold} strikes. Additional violations may result in a lockout.
+          </Text>
+        </View>
+      )}
+
       {/* Quick Actions */}
       <View style={styles.quickActions}>
         <TouchableOpacity
@@ -124,6 +155,16 @@ export default function HomeScreen() {
           <Ionicons name="people" size={28} color={Colors.primary} />
           <Text style={styles.actionLabel}>Community</Text>
         </TouchableOpacity>
+
+        {facilityId && (
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push({ pathname: '/club-info', params: { facilityId } })}
+          >
+            <Ionicons name="information-circle" size={28} color={Colors.primary} />
+            <Text style={styles.actionLabel}>Club Info</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Upcoming Bookings */}
@@ -208,6 +249,47 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xl,
     fontWeight: '700',
     color: Colors.textInverse,
+  },
+  lockoutBanner: {
+    flexDirection: 'row',
+    margin: Spacing.md,
+    marginBottom: 0,
+    padding: Spacing.md,
+    backgroundColor: Colors.error + '12',
+    borderRadius: BorderRadius.md,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.error,
+    gap: Spacing.sm,
+    alignItems: 'flex-start',
+  },
+  lockoutTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.error,
+  },
+  lockoutMessage: {
+    fontSize: FontSize.xs,
+    color: Colors.text,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  strikeWarning: {
+    flexDirection: 'row',
+    margin: Spacing.md,
+    marginBottom: 0,
+    padding: Spacing.md,
+    backgroundColor: Colors.warning + '12',
+    borderRadius: BorderRadius.md,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.warning,
+    gap: Spacing.sm,
+    alignItems: 'center',
+  },
+  strikeWarningText: {
+    flex: 1,
+    fontSize: FontSize.xs,
+    color: Colors.text,
+    lineHeight: 18,
   },
   quickActions: {
     flexDirection: 'row',

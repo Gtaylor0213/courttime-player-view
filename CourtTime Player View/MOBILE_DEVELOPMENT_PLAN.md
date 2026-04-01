@@ -29,7 +29,7 @@ The mobile app scaffold exists with ~82% of core features implemented. Here is w
 - ~~Profile picture upload~~ **DONE** (2026-04-01)
 - ~~Facility membership management (request to join, leave facility)~~ **DONE** (2026-04-01)
 - ~~Facility selector (switching between multiple facilities)~~ **DONE** (2026-04-01)
-- Club/facility info screen
+- ~~Club/facility info screen~~ **DONE** (2026-04-01)
 - Booking editing (change date/time/court on existing booking)
 - ~~Booking type selection and notes~~ **DONE** (2026-04-01)
 - ~~Rule violation display when booking fails~~ **DONE** (2026-04-01)
@@ -42,7 +42,7 @@ The mobile app scaffold exists with ~82% of core features implemented. Here is w
 - Hitting partner "Message this player" action
 - Notification type icons and priority styling
 - Notification settings/preferences
-- Strike/lockout status display
+- ~~Strike/lockout status display~~ **DONE** (2026-04-01)
 - ~~Admin privilege passthrough (admin can book outside rules)~~ **DONE** (2026-04-01) — bulletin posts TBD in 1.9
 - Push notifications (currently polling only)
 - Offline support (cached data, queue actions for when back online)

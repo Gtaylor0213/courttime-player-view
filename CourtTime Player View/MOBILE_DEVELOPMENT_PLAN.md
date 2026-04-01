@@ -35,12 +35,12 @@ The mobile app scaffold exists with ~82% of core features implemented. Here is w
 - ~~Rule violation display when booking fails~~ **DONE** (2026-04-01)
 - Recurring booking support
 - Quick reserve popup alternative
-- Bulletin board post creation (for admins logged in on mobile)
-- Bulletin board post deletion
-- Hitting partner post editing
-- Hitting partner filtering (skill level, play style, search)
-- Hitting partner "Message this player" action
-- Notification type icons and priority styling
+- ~~Bulletin board post creation (for admins logged in on mobile)~~ **DONE** (2026-04-01)
+- ~~Bulletin board post deletion~~ **DONE** (2026-04-01)
+- ~~Hitting partner post editing~~ **DONE** (2026-04-01)
+- ~~Hitting partner filtering (skill level, play style, search)~~ **DONE** (2026-04-01)
+- ~~Hitting partner "Message this player" action~~ **DONE** (2026-04-01)
+- ~~Notification type icons and priority styling~~ **DONE** (2026-04-01)
 - Notification settings/preferences
 - ~~Strike/lockout status display~~ **DONE** (2026-04-01)
 - ~~Admin privilege passthrough (admin can book outside rules)~~ **DONE** (2026-04-01) — bulletin posts TBD in 1.9

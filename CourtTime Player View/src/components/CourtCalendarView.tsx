@@ -116,7 +116,8 @@ export function CourtCalendarView() {
   // Calendar display customization
   const [displayedCourtsCount, setDisplayedCourtsCount] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-  const [zoomLevel, setZoomLevel] = useState(100); // percentage: 50-150
+  const [zoomLevel, setZoomLevel] = useState(100); // percentage: 50-200
+  const [userSetZoom, setUserSetZoom] = useState(false); // tracks if user manually zoomed
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [scrollTrigger, setScrollTrigger] = useState(0); // forces auto-scroll on mount
 
@@ -588,6 +589,18 @@ export function CourtCalendarView() {
     return filteredCourts;
   }, [filteredCourts, displayedCourtsCount, isMobile]);
 
+  // Auto-zoom to fill available width when court count changes
+  useEffect(() => {
+    if (userSetZoom || !calendarScrollRef.current || courts.length === 0) return;
+    const containerWidth = calendarScrollRef.current.clientWidth;
+    const availableForCourts = containerWidth - effectiveTimeColWidth - 2; // subtract time col + border
+    const idealCourtWidth = availableForCourts / courts.length;
+    const idealZoom = Math.round((idealCourtWidth / COURT_COL_WIDTH) * 100);
+    // Clamp between 50% and 200%
+    const clamped = Math.max(50, Math.min(200, idealZoom));
+    setZoomLevel(clamped);
+  }, [courts.length, effectiveTimeColWidth, userSetZoom]);
+
   // Fetch prime-time configs for visible courts
   useEffect(() => {
     const fetchPrimeTimeConfigs = async () => {
@@ -1027,14 +1040,14 @@ export function CourtCalendarView() {
                     <Button
                       variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
+                      onClick={() => { setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis'); setUserSetZoom(false); }}
                     >
                       Tennis
                     </Button>
                     <Button
                       variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
+                      onClick={() => { setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball'); setUserSetZoom(false); }}
                     >
                       Pickleball
                     </Button>
@@ -1046,7 +1059,7 @@ export function CourtCalendarView() {
                   <span className="text-sm font-medium text-gray-600 hidden md:inline">Courts:</span>
                   <Select
                     value={displayedCourtsCount?.toString() || 'all'}
-                    onValueChange={(v) => setDisplayedCourtsCount(v === 'all' ? null : parseInt(v))}
+                    onValueChange={(v) => { setDisplayedCourtsCount(v === 'all' ? null : parseInt(v)); setUserSetZoom(false); }}
                   >
                     <SelectTrigger className="w-[90px]">
                       <SelectValue />
@@ -1067,7 +1080,7 @@ export function CourtCalendarView() {
                     variant="outline"
                     size="sm"
                     className="h-9 w-9 md:h-7 md:w-7 p-0"
-                    onClick={() => setZoomLevel(prev => Math.max(50, prev - 10))}
+                    onClick={() => { setUserSetZoom(true); setZoomLevel(prev => Math.max(50, prev - 10)); }}
                     disabled={zoomLevel <= 50}
                   >
                     <ZoomOut className="h-3.5 w-3.5" />
@@ -1077,8 +1090,8 @@ export function CourtCalendarView() {
                     variant="outline"
                     size="sm"
                     className="h-9 w-9 md:h-7 md:w-7 p-0"
-                    onClick={() => setZoomLevel(prev => Math.min(150, prev + 10))}
-                    disabled={zoomLevel >= 150}
+                    onClick={() => { setUserSetZoom(true); setZoomLevel(prev => Math.min(200, prev + 10)); }}
+                    disabled={zoomLevel >= 200}
                   >
                     <ZoomIn className="h-3.5 w-3.5" />
                   </Button>

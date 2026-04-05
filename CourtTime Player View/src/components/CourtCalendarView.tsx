@@ -243,7 +243,8 @@ export function CourtCalendarView() {
       const transformedBookings: any = {};
 
       // Build court lookup maps for parent/child relationships
-      const allFacilityCourts = currentFacility?.courts || [];
+      const facilityForBookings = memberFacilities.find(f => f.id === selectedFacility);
+      const allFacilityCourts = facilityForBookings?.courts || [];
       const courtIdToName: Record<string, string> = {};
       const courtNameToId: Record<string, string> = {};
       allFacilityCourts.forEach((c: any) => {
@@ -298,7 +299,7 @@ export function CourtCalendarView() {
               notes: booking.notes,
               fullDetails: {
                 ...booking,
-                facilityName: currentFacility?.name
+                facilityName: facilityForBookings?.name
               }
             };
           }
@@ -400,7 +401,7 @@ export function CourtCalendarView() {
     } finally {
       setLoadingBookings(false);
     }
-  }, [selectedFacility, selectedDate]);
+  }, [selectedFacility, selectedDate, memberFacilities]);
 
   // Fetch bookings for selected facility and date
   useEffect(() => {

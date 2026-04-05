@@ -13,7 +13,8 @@ import {
 } from '../../src/services/bookingService';
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
-import { pool } from '../../src/database/connection';
+import { query as dbQuery, getPool } from '../../src/database/connection';
+const pool = { query: (text: string, params?: any[]) => getPool().query(text, params) };
 
 const router = express.Router();
 

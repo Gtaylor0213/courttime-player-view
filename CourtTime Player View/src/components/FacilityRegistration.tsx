@@ -1106,12 +1106,12 @@ export function FacilityRegistration() {
             let textColor = '#6b7280';
 
             if (isCurrent) {
-              bgColor = '#2563eb';
-              borderColor = '#2563eb';
+              bgColor = '#15803d'; // green-700
+              borderColor = '#15803d';
               textColor = 'white';
             } else if (isVisited) {
-              bgColor = '#16a34a';
-              borderColor = '#16a34a';
+              bgColor = '#166534'; // green-800
+              borderColor = '#166534';
               textColor = 'white';
             }
 
@@ -1138,7 +1138,7 @@ export function FacilityRegistration() {
                   </div>
                   <div
                     className="text-xs mt-2 text-center"
-                    style={{ color: isCurrent ? '#2563eb' : '#6b7280', fontWeight: isCurrent ? 600 : 400 }}
+                    style={{ color: isCurrent ? '#15803d' : '#6b7280', fontWeight: isCurrent ? 600 : 400 }}
                   >
                     {getStepLabel(stepNumber)}
                   </div>
@@ -1146,7 +1146,7 @@ export function FacilityRegistration() {
                 {stepNumber < totalSteps && (
                   <div
                     className="flex-1 mx-2 transition-colors"
-                    style={{ backgroundColor: isVisited ? '#16a34a' : '#d1d5db', height: '2px' }}
+                    style={{ backgroundColor: isVisited ? '#166534' : '#d1d5db', height: '2px' }}
                   />
                 )}
               </div>

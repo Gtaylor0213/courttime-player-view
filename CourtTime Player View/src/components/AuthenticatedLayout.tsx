@@ -53,15 +53,15 @@ export function AuthenticatedLayout() {
         sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
       )}>
         {/* Mobile header bar */}
-        <div className="sticky top-0 z-30 flex items-center h-14 px-4 bg-white border-b md:hidden">
+        <div className="sticky top-0 z-30 flex items-center h-14 px-4 bg-gradient-to-r from-green-700 to-green-800 border-b border-green-900 md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 -ml-2 rounded-md hover:bg-gray-100"
+            className="p-2 -ml-2 rounded-md hover:bg-white/20 text-white"
             aria-label="Open menu"
           >
             <Menu className="h-6 w-6" />
           </button>
-          <img src={logoImage} alt="CourtTime" className="h-8 w-auto ml-3" />
+          <img src={logoImage} alt="CourtTime" className="h-8 w-auto ml-3 brightness-0 invert" />
         </div>
         {/* Suspended membership banner */}
         {user?.suspendedFacilities && user.suspendedFacilities.length > 0 && (

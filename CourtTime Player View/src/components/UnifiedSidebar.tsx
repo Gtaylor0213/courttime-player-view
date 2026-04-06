@@ -110,7 +110,7 @@ export function UnifiedSidebar({
       <button
         onClick={onClick}
         className={`w-full rounded-lg px-3 py-2 text-left hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center transition-colors ${
-          isActive ? 'bg-green-50 text-green-700' : ''
+          isActive ? 'bg-green-50 text-green-700 border-l-4 border-green-600' : ''
         } ${isCollapsed ? 'justify-center' : ''}`}
       >
         <Icon className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'}`} />
@@ -157,15 +157,15 @@ export function UnifiedSidebar({
         isCollapsed ? 'md:w-16' : 'md:w-64',
       )}>
         {/* Logo and Toggle */}
-        <div className={`${isCollapsed ? 'md:p-3' : ''} p-6 border-b border-gray-200 flex items-center ${isCollapsed ? 'md:justify-center' : 'justify-between'}`}>
+        <div className={`${isCollapsed ? 'md:p-3' : ''} p-6 bg-gradient-to-b from-green-700 to-green-800 flex items-center ${isCollapsed ? 'md:justify-center' : 'justify-between'}`}>
           {/* Show logo when expanded OR on mobile */}
           <div className={cn('flex items-center', isCollapsed && 'md:hidden')}>
-            <img src={logoImage} alt="CourtTime" className="h-10 w-auto" />
+            <img src={logoImage} alt="CourtTime" className="h-10 w-auto brightness-0 invert" />
           </div>
           {/* Mobile close button */}
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-2 rounded-md hover:bg-gray-100 md:hidden"
+            className="p-2 rounded-md hover:bg-white/20 text-white md:hidden"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -180,7 +180,7 @@ export function UnifiedSidebar({
                       variant="ghost"
                       size="sm"
                       onClick={onToggleCollapse}
-                      className={`${isCollapsed ? 'w-10 h-10 p-0' : ''} hover:bg-gray-100`}
+                      className={`${isCollapsed ? 'w-10 h-10 p-0' : ''} hover:bg-white/20 text-white`}
                     >
                       {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                     </Button>

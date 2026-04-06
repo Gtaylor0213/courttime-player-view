@@ -20,17 +20,17 @@ export function AboutPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b">
+      <header className="sticky top-0 z-50 bg-gradient-to-r from-green-700 to-green-800 shadow-lg">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoImage} alt="CourtTime" className="h-10 w-auto" />
+            <img src={logoImage} alt="CourtTime" className="h-10 w-auto brightness-0 invert" />
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={() => navigate('/login')}>
+            <Button variant="ghost" className="text-white hover:bg-white/20" onClick={() => navigate('/login')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Login
             </Button>
-            <Button onClick={() => navigate('/register/facility')}>
+            <Button className="bg-white text-green-800 hover:bg-green-50" onClick={() => navigate('/register/facility')}>
               Register Your Facility
             </Button>
           </div>
@@ -78,7 +78,7 @@ export function AboutPage() {
       {/* What We Offer */}
       <section className="py-16 sm:py-24 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4">What We Offer</h2>
+          <h2 className="text-3xl font-bold text-center mb-4 text-green-800">What We Offer</h2>
           <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
             Everything your facility needs to manage courts, members, and bookings in one place.
           </p>
@@ -120,7 +120,7 @@ export function AboutPage() {
       {/* How to Sign Up */}
       <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4">How to Register Your Facility</h2>
+          <h2 className="text-3xl font-bold text-center mb-4 text-green-800">How to Register Your Facility</h2>
           <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
             Getting started takes just a few minutes. Here's how it works:
           </p>
@@ -157,7 +157,7 @@ export function AboutPage() {
       {/* Pricing */}
       <section className="py-16 sm:py-24 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-4">Simple, Transparent Pricing</h2>
+          <h2 className="text-3xl font-bold mb-4 text-green-800">Simple, Transparent Pricing</h2>
           <p className="text-gray-600 mb-12 max-w-2xl mx-auto">
             Plans that scale with your facility.
           </p>
@@ -226,7 +226,7 @@ export function AboutPage() {
       {/* Contact */}
       <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-4">Questions? Get in Touch</h2>
+          <h2 className="text-3xl font-bold mb-4 text-green-800">Questions? Get in Touch</h2>
           <p className="text-gray-600 mb-8 max-w-xl mx-auto">
             Have questions about CourtTime or need help getting set up?
             We're here to help.

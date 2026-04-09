@@ -13,6 +13,7 @@ import { ReservationDetailsModal } from './ReservationDetailsModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, usersApi, bookingApi, courtConfigApi } from '../api/client';
+import { parseLocalDate } from '../utils/dateUtils';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
 
@@ -338,8 +339,8 @@ export function CourtCalendarView() {
       // Process blackouts
       const blackouts = blackoutResponse?.success ? (blackoutResponse.data?.blackouts || []) : [];
       blackouts.forEach((b: any) => {
-        const bStart = new Date(b.start_datetime);
-        const bEnd = new Date(b.end_datetime);
+        const bStart = parseLocalDate(b.start_datetime);
+        const bEnd = parseLocalDate(b.end_datetime);
         // Clamp to the selected date's boundaries (0:00 - 23:59)
         const dayStart = new Date(selectedDate); dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(selectedDate); dayEnd.setHours(23, 59, 59, 999);

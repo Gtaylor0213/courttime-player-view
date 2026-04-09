@@ -11,6 +11,7 @@ import { Checkbox } from '../ui/checkbox';
 import { useAuth } from '../../contexts/AuthContext';
 import { bookingApi, membersApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
+import { parseLocalDate } from '../../utils/dateUtils';
 
 interface Member {
   userId: string;
@@ -483,8 +484,8 @@ export function AdminBooking() {
     }
 
     const dates: string[] = [];
-    const start = new Date(selectedDate + 'T00:00:00');
-    const end = new Date(recurringEndDate + 'T00:00:00');
+    const start = parseLocalDate(selectedDate);
+    const end = parseLocalDate(recurringEndDate);
 
     let current = new Date(start);
     while (current <= end) {
@@ -578,7 +579,7 @@ export function AdminBooking() {
   }, [duration]);
 
   const formatDisplayDate = (date: string) => {
-    return new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    return parseLocalDate(date).toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -1057,7 +1058,7 @@ export function AdminBooking() {
                       <div className="text-xs text-gray-600 bg-green-50 p-2 rounded border border-green-200">
                         <span className="font-medium">Will create bookings:</span>
                         <div className="mt-1">
-                          Every {recurringDays.join(', ')} from {new Date(selectedDate + 'T00:00:00').toLocaleDateString()} to {new Date(recurringEndDate + 'T00:00:00').toLocaleDateString()}
+                          Every {recurringDays.join(', ')} from {parseLocalDate(selectedDate).toLocaleDateString()} to {parseLocalDate(recurringEndDate).toLocaleDateString()}
                         </div>
                         <div className="mt-1 font-medium">
                           Total bookings: {generateRecurringDates().length * allSelectedCourts.length}

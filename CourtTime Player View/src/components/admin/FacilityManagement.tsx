@@ -13,6 +13,7 @@ import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
+import { parseLocalDate } from '../../utils/dateUtils';
 import { facilitiesApi, adminApi, courtConfigApi, rulesApi, addressWhitelistApi } from '../../api/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -3098,7 +3099,7 @@ export function FacilityManagement() {
                               {b.court_name && <Badge variant="secondary">{b.court_name}</Badge>}
                             </div>
                             <p className="text-sm text-gray-500">
-                              {new Date(b.start_datetime).toLocaleString()} — {new Date(b.end_datetime).toLocaleString()}
+                              {parseLocalDate(b.start_datetime).toLocaleString()} — {parseLocalDate(b.end_datetime).toLocaleString()}
                             </p>
                           </div>
                           <div className="flex gap-2">

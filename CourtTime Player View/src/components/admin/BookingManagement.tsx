@@ -13,6 +13,7 @@ import { useAppContext } from '../../contexts/AppContext';
 import { adminApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
 import { AdminBooking } from './AdminBooking';
+import { parseLocalDate } from '../../utils/dateUtils';
 
 type SortField = 'bookingDate' | 'userName' | 'courtName' | 'status' | 'startTime';
 type SortDirection = 'asc' | 'desc';
@@ -265,7 +266,7 @@ export function BookingManagement() {
 
   const formatDateShort = (dateString: string) => {
     // Handle both ISO timestamp (2025-12-08T05:00:00.000Z) and date-only (2025-12-08) formats
-    const date = new Date(dateString);
+    const date = parseLocalDate(dateString);
     if (isNaN(date.getTime())) {
       return 'Invalid date';
     }

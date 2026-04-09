@@ -13,7 +13,11 @@ export function parseLocalDate(str: string): Date {
   if (!str) return new Date(NaN);
 
   // Strip timezone suffix (Z, +00, +00:00, -04:00, etc.) to treat as local
-  const cleaned = str.replace(/[Zz]$/, '').replace(/[+-]\d{2}(:\d{2})?$/, '');
+  // Only strip timezone from datetime strings (must contain 'T' separator)
+  let cleaned = str.replace(/[Zz]$/, '');
+  if (cleaned.includes('T')) {
+    cleaned = cleaned.replace(/[+-]\d{2}(:\d{2})?$/, '');
+  }
 
   const [datePart, timePart] = cleaned.split('T');
   const [y, m, d] = datePart.split('-').map(Number);

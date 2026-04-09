@@ -5,6 +5,7 @@ import { Badge } from './ui/badge';
 import { Calendar, Clock, MapPin, User, FileText, AlertCircle, Tag } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
+import { parseLocalDate } from '../utils/dateUtils';
 
 interface ReservationDetails {
   id: string;
@@ -49,7 +50,7 @@ export function ReservationDetailsModal({
 
   // Format date for display
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     return date.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -68,7 +69,7 @@ export function ReservationDetailsModal({
 
   // Check if reservation is in the past
   const isPastReservation = () => {
-    const reservationDateTime = new Date(`${reservation.bookingDate}T${reservation.startTime}`);
+    const reservationDateTime = parseLocalDate(`${reservation.bookingDate}T${reservation.startTime}`);
     return reservationDateTime < new Date();
   };
 

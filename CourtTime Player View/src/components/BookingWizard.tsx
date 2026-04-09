@@ -103,6 +103,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [facilityCourts, setFacilityCourts] = useState<Array<{ id: string; name: string; status: string }>>([]);
+  const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast } = useNotifications();
   const { user } = useAuth();
@@ -117,6 +118,34 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       });
     }
   }, [isOpen, facilityId]);
+
+  // Fetch existing bookings to determine court availability
+  useEffect(() => {
+    if (!isOpen || !facilityId || !date) return;
+    bookingApi.getByFacility(facilityId, date).then(res => {
+      if (res.success && res.data?.bookings) {
+        const map: Record<string, Set<string>> = {};
+        for (const b of res.data.bookings) {
+          const name = b.courtName || b.court_name;
+          if (!map[name]) map[name] = new Set();
+          // Add all 15-min slots this booking covers
+          const [sh, sm] = (b.startTime || b.start_time || '').split(':').map(Number);
+          const [eh, em] = (b.endTime || b.end_time || '').split(':').map(Number);
+          if (!isNaN(sh) && !isNaN(eh)) {
+            let t = sh * 60 + (sm || 0);
+            const end = eh * 60 + (em || 0);
+            while (t < end) {
+              const hh = Math.floor(t / 60);
+              const mm = t % 60;
+              map[name].add(`${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`);
+              t += 15;
+            }
+          }
+        }
+        setExistingBookings(map);
+      }
+    });
+  }, [isOpen, facilityId, date]);
 
   // Build the primary court set from drag selection
   const dragSelectedCourts = useMemo(() => {
@@ -197,11 +226,34 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     );
   };
 
-  // Courts available to add (exclude the primary/drag-selected courts)
+  // Courts available to add (exclude primary/drag-selected, only show available during selected time)
   const availableAdditionalCourts = useMemo(() => {
     const dragIds = new Set(dragSelectedCourts.map(c => c.courtId));
-    return facilityCourts.filter(c => !dragIds.has(c.id));
-  }, [facilityCourts, dragSelectedCourts]);
+    const others = facilityCourts.filter(c => !dragIds.has(c.id));
+
+    if (!startTime || !endTime) return others;
+
+    // Build the set of 15-min slots for the selected time range
+    const start24 = convertTo24Hour(startTime);
+    const end24 = convertTo24Hour(endTime);
+    const [sh, sm] = start24.split(':').map(Number);
+    const [eh, em] = end24.split(':').map(Number);
+    const slots: string[] = [];
+    let t = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    while (t < endMin) {
+      const hh = Math.floor(t / 60);
+      const mm = t % 60;
+      slots.push(`${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`);
+      t += 15;
+    }
+
+    return others.filter(c => {
+      const booked = existingBookings[c.name];
+      if (!booked) return true;
+      return !slots.some(s => booked.has(s));
+    });
+  }, [facilityCourts, dragSelectedCourts, startTime, endTime, existingBookings]);
 
   const getDayOfWeek = (d: Date): string => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -494,7 +546,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             />
           </div>
 
-          {/* Recurring Booking */}
+          {/* Recurring Booking - Admin only */}
+          {user?.userType === 'admin' && (
           <div className="flex items-center gap-2 pt-2">
             <Checkbox
               id="recurring-booking"
@@ -506,8 +559,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               Recurring Booking
             </Label>
           </div>
+          )}
 
-          {advancedBooking && (
+          {advancedBooking && user?.userType === 'admin' && (
             <div className="space-y-3 p-3 bg-gray-50 rounded-md border border-gray-200">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Select Days of the Week</Label>
@@ -561,22 +615,38 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             <div className="space-y-2 pt-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" />
-                Select Additional Courts
+                Add Additional Court
               </Label>
-              <div className="p-3 bg-gray-50 rounded-md border border-gray-200 space-y-2">
-                {availableAdditionalCourts.map((c) => (
-                  <div key={c.id} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`bw-court-${c.id}`}
-                      checked={additionalCourtIds.includes(c.id)}
-                      onCheckedChange={() => toggleAdditionalCourt(c.id)}
-                    />
-                    <Label htmlFor={`bw-court-${c.id}`} className="text-sm cursor-pointer">
-                      {c.name}
-                    </Label>
-                  </div>
-                ))}
-              </div>
+              <Select
+                value=""
+                onValueChange={(value) => toggleAdditionalCourt(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a court to add" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableAdditionalCourts
+                    .filter(c => !additionalCourtIds.includes(c.id))
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {additionalCourtIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {additionalCourtIds.map(id => {
+                    const c = facilityCourts.find(fc => fc.id === id);
+                    return c ? (
+                      <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-800 border border-green-200 rounded-md text-xs">
+                        {c.name}
+                        <button type="button" onClick={() => toggleAdditionalCourt(id)} className="hover:text-red-600">×</button>
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
             </div>
           )}
 

@@ -873,45 +873,38 @@ export function QuickReservePopup({
           {/* Available Courts Selection - Show when court type, date, and time are selected */}
           {selectedCourtType && selectedDate && selectedTime && courtsWithAvailability.length > 0 && (
             <div className="space-y-2">
-              <Label>Available Courts <span className="text-xs text-gray-400 font-normal">(select one or more)</span></Label>
-              <div className="grid grid-cols-2 gap-2">
-                {courtsWithAvailability.map((court) => {
-                  const isSelected = court.id === selectedCourtId || additionalCourtIds.includes(court.id);
-                  return (
-                    <button
-                      key={court.id}
-                      type="button"
-                      disabled={!court.isAvailable}
-                      onClick={() => {
-                        if (court.isAvailable) {
-                          toggleCourtSelection(court.id, court.name);
-                        }
-                      }}
-                      className={`
-                        p-3 rounded-md border-2 text-left transition-all
-                        ${court.isAvailable
-                          ? isSelected
-                            ? 'border-green-600 bg-green-50 text-green-800'
-                            : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50 cursor-pointer'
-                          : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                        }
-                      `}
-                    >
-                      <div className="font-medium text-sm">{court.name}</div>
-                      <div className={`text-xs ${court.isAvailable ? isSelected ? 'text-green-600' : 'text-gray-500' : 'text-red-500'}`}>
-                        {court.isAvailable ? (isSelected ? 'Selected' : 'Available') : 'Booked'}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <Label>Available Courts</Label>
+              <Select
+                value={selectedCourtId || undefined}
+                onValueChange={(value) => {
+                  const court = courtsWithAvailability.find(c => c.id === value);
+                  if (court) {
+                    setSelectedCourtId(court.id);
+                    setSelectedCourt(court.name);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a court" />
+                </SelectTrigger>
+                <SelectContent>
+                  {courtsWithAvailability
+                    .filter(court => court.isAvailable)
+                    .map((court) => (
+                      <SelectItem key={court.id} value={court.id}>
+                        {court.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
               {!selectedCourtId && (
-                <p className="text-xs text-amber-600">Please select at least one court above</p>
+                <p className="text-xs text-amber-600">Please select a court</p>
               )}
             </div>
           )}
 
-          {/* Advanced Booking Checkbox */}
+          {/* Advanced Booking Checkbox - Admin only */}
+          {user?.userType === 'admin' && (
           <div className="flex items-center gap-2 pt-2">
             <Checkbox
               id="advanced-booking"
@@ -922,9 +915,10 @@ export function QuickReservePopup({
               Advanced Booking (Recurring)
             </Label>
           </div>
+          )}
 
           {/* Recurring Options - Show when Advanced Booking is checked */}
-          {advancedBooking && (
+          {advancedBooking && user?.userType === 'admin' && (
             <div className="space-y-3 p-3 bg-gray-50 rounded-md border border-gray-200">
               {/* Days of the Week */}
               <div className="space-y-2">

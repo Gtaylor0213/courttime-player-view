@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -416,26 +416,19 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
   return (
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto top-4 translate-y-0">
         <DialogHeader>
           <DialogTitle>Book Court</DialogTitle>
-          <DialogDescription>
-            Complete your reservation details below.
-          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {/* Court & Facility Info */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <MapPin className="h-4 w-4" />
-              <span>{facility}</span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{facility}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />{formatDateForDisplay(date)}</span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Calendar className="h-4 w-4" />
-              <span>{formatDateForDisplay(date)}</span>
-            </div>
-            <div className="bg-green-50 p-3 rounded-md border border-green-200">
+            <div className="bg-green-50 p-2.5 rounded-md border border-green-200">
               <div className="flex items-center gap-2 text-green-800">
                 <Clock className="h-4 w-4" />
                 <span className="font-medium">
@@ -444,7 +437,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                     : court}
                 </span>
               </div>
-              <div className="text-sm text-green-600 mt-1">
+              <div className="text-sm text-green-600 mt-0.5">
                 {startTime} - {endTime} ({durationLabel})
               </div>
             </div>
@@ -483,40 +476,39 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             </div>
           )}
 
-          {/* Start Time */}
-          <div className="space-y-2">
-            <Label>Start Time</Label>
-            <Select value={startTime} onValueChange={(val) => {
-              setStartTime(val);
-              // Auto-adjust end time if it's now before or equal to start
-              if (timeSlotIndex(val) >= timeSlotIndex(endTime)) {
-                setEndTime(addMinutesTo12h(val, 60));
-              }
-            }}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ALL_TIME_SLOTS.map((slot) => (
-                  <SelectItem key={slot} value={slot}>{slot}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* End Time */}
-          <div className="space-y-2">
-            <Label>End Time</Label>
-            <Select value={endTime} onValueChange={setEndTime}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {endTimeOptions.map((slot) => (
-                  <SelectItem key={slot} value={slot}>{slot}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Start Time + End Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Start Time</Label>
+              <Select value={startTime} onValueChange={(val) => {
+                setStartTime(val);
+                if (timeSlotIndex(val) >= timeSlotIndex(endTime)) {
+                  setEndTime(addMinutesTo12h(val, 60));
+                }
+              }}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_TIME_SLOTS.map((slot) => (
+                    <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>End Time</Label>
+              <Select value={endTime} onValueChange={setEndTime}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {endTimeOptions.map((slot) => (
+                    <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Booking Type Dropdown */}
@@ -542,7 +534,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               placeholder="Add any special requests or notes..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows={3}
+              rows={2}
             />
           </div>
 

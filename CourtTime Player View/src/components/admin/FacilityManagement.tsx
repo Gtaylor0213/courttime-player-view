@@ -938,16 +938,16 @@ export function FacilityManagement() {
     if (!confirm('Are you sure you want to delete this court?')) return;
 
     try {
-      const response = await adminApi.updateCourt(id, { status: 'inactive' });
+      const response = await adminApi.updateCourt(id, { status: 'closed' });
       if (response.success) {
-        toast.success('Court deactivated successfully');
+        toast.success('Court deleted successfully');
         await loadCourts();
       } else {
-        toast.error(response.error || 'Failed to deactivate court');
+        toast.error(response.error || 'Failed to delete court');
       }
     } catch (error: any) {
-      console.error('Error deactivating court:', error);
-      toast.error('Failed to deactivate court');
+      console.error('Error deleting court:', error);
+      toast.error('Failed to delete court');
     }
   };
 

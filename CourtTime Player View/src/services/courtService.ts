@@ -276,7 +276,7 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"
      FROM courts
-     WHERE facility_id = $1
+     WHERE facility_id = $1 AND status != 'closed'
      ORDER BY court_number, name`,
     [facilityId]
   );

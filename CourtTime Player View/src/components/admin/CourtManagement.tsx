@@ -672,7 +672,7 @@ export function CourtManagement() {
 
           {/* Courts List */}
           <div className="grid grid-cols-1 gap-4">
-            {courts.map((court) => (
+            {activeCourts.map((court) => (
               <React.Fragment key={court.id}>
                 <Card className={selectedCourts.has(court.id) ? 'ring-2 ring-green-400 bg-green-50/30' : ''}>
                   <CardContent className="p-6">

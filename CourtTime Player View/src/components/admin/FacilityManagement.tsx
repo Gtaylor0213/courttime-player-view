@@ -167,6 +167,11 @@ interface Court {
   isIndoor: boolean;
   hasLights: boolean;
   status: 'active' | 'maintenance' | 'inactive';
+  canSplit?: boolean;
+  splitConfig?: {
+    splitNames: string[];
+    splitType: 'Tennis' | 'Pickleball';
+  };
 }
 
 export function FacilityManagement() {
@@ -864,6 +869,7 @@ export function FacilityManagement() {
       isIndoor: false,
       hasLights: false,
       status: 'active',
+      canSplit: false,
     });
     setIsAddingNewCourt(true);
   };
@@ -889,6 +895,8 @@ export function FacilityManagement() {
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
+          canSplit: editingCourt.canSplit,
+          splitConfig: editingCourt.splitConfig,
         });
       } else {
         // Update existing court
@@ -900,6 +908,8 @@ export function FacilityManagement() {
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
           status: editingCourt.status,
+          canSplit: editingCourt.canSplit,
+          splitConfig: editingCourt.splitConfig,
         });
       }
 
@@ -2769,6 +2779,71 @@ export function FacilityManagement() {
                         <Label htmlFor="lights">Has Lights</Label>
                       </div>
                     </div>
+
+                    <div className="mt-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Switch
+                          id="canSplit"
+                          checked={editingCourt.canSplit || false}
+                          onCheckedChange={(checked) => setEditingCourt({
+                            ...editingCourt,
+                            canSplit: checked,
+                            splitConfig: checked && !editingCourt.splitConfig
+                              ? { splitNames: [], splitType: 'Pickleball' }
+                              : editingCourt.splitConfig,
+                          })}
+                        />
+                        <Label htmlFor="canSplit">Can be split into multiple courts</Label>
+                      </div>
+
+                      {editingCourt.canSplit && (
+                        <div className="ml-6 mt-3 p-4 bg-gray-50 rounded-lg">
+                          <Label className="text-sm mb-2 block">Split Configuration</Label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Split Names (comma-separated)</Label>
+                              <Input
+                                placeholder="3a, 3b"
+                                defaultValue={editingCourt.splitConfig?.splitNames.join(', ') || ''}
+                                key={editingCourt.id + '-splitnames'}
+                                onBlur={(e) => {
+                                  const names = e.target.value.split(',').map((n) => n.trim()).filter(Boolean);
+                                  setEditingCourt({
+                                    ...editingCourt,
+                                    splitConfig: { ...editingCourt.splitConfig, splitNames: names, splitType: editingCourt.splitConfig?.splitType || 'Pickleball' },
+                                  });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Split Type</Label>
+                              <Select
+                                value={editingCourt.splitConfig?.splitType || 'Pickleball'}
+                                onValueChange={(value: 'Tennis' | 'Pickleball') => {
+                                  setEditingCourt({
+                                    ...editingCourt,
+                                    splitConfig: { ...editingCourt.splitConfig, splitType: value, splitNames: editingCourt.splitConfig?.splitNames || [] },
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="text-sm">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Tennis">Tennis</SelectItem>
+                                  <SelectItem value="Pickleball">Pickleball</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Split courts share booking conflicts with the parent court
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex gap-2 mt-6">
                       <Button onClick={handleSaveCourt} disabled={courtSaving}>
                         <Save className="h-4 w-4 mr-2" />

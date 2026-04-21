@@ -574,6 +574,11 @@ export const adminApi = {
     courtType: string;
     isIndoor: boolean;
     hasLights: boolean;
+    canSplit?: boolean;
+    splitConfig?: {
+      splitNames: string[];
+      splitType: string;
+    };
   }) => {
     return apiRequest(`/api/admin/courts/${facilityId}`, {
       method: 'POST',
@@ -616,6 +621,11 @@ export const adminApi = {
     isIndoor?: boolean;
     hasLights?: boolean;
     status?: string;
+    canSplit?: boolean;
+    splitConfig?: {
+      splitNames: string[];
+      splitType: string;
+    };
   }) => {
     if (!courtId) {
       return { success: false, error: 'Court ID is required' };

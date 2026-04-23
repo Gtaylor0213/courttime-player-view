@@ -1,6 +1,6 @@
 export const BOOKING_TYPES = {
   match: {
-    label: 'Match',
+    label: 'Fun',
     color: 'bg-green-100 text-green-800 border-green-300',
     bgColor: 'bg-green-100'
   },
@@ -10,7 +10,7 @@ export const BOOKING_TYPES = {
     bgColor: 'bg-purple-100'
   },
   t2_match: {
-    label: 'T2 Match',
+    label: 'Flex Match (T-2)',
     color: 'bg-indigo-100 text-indigo-800 border-indigo-300',
     bgColor: 'bg-indigo-100'
   },
@@ -24,11 +24,6 @@ export const BOOKING_TYPES = {
     color: 'bg-orange-100 text-orange-800 border-orange-300',
     bgColor: 'bg-orange-100'
   },
-  individual_practice: {
-    label: 'Individual Practice',
-    color: 'bg-green-100 text-green-800 border-green-300',
-    bgColor: 'bg-green-100'
-  },
   other: {
     label: 'Other',
     color: 'bg-gray-100 text-gray-800 border-gray-300',
@@ -37,6 +32,14 @@ export const BOOKING_TYPES = {
 } as const;
 
 export type BookingTypeKey = keyof typeof BOOKING_TYPES;
+
+export const RESERVATION_LABEL_TYPE_KEYS: readonly BookingTypeKey[] = [
+  'match',
+  'league_match',
+  't2_match',
+  'lesson',
+  'ball_machine',
+] as const;
 
 export const getBookingTypeColor = (type: string | undefined): string => {
   if (!type) return BOOKING_TYPES.other.bgColor;

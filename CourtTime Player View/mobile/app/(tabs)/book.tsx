@@ -28,13 +28,11 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/the
 import type { Court } from '../../src/types/database';
 
 const BOOKING_TYPES = [
-  { key: 'match', label: 'Match' },
+  { key: 'match', label: 'Fun' },
   { key: 'league_match', label: 'League Match' },
-  { key: 't2_match', label: 'T2 Match' },
+  { key: 't2_match', label: 'Flex Match (T-2)' },
   { key: 'lesson', label: 'Lesson' },
   { key: 'ball_machine', label: 'Ball Machine' },
-  { key: 'individual_practice', label: 'Practice' },
-  { key: 'other', label: 'Other' },
 ];
 
 interface AvailabilityResponse {

@@ -10,7 +10,7 @@ import { Calendar, Clock, MapPin, User, Zap, AlertCircle, Info } from 'lucide-re
 import { RuleViolationDialog } from './RuleViolationDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi } from '../api/client';
-import { BOOKING_TYPES } from '../constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 
 interface QuickReservePopupProps {
@@ -850,8 +850,8 @@ export function QuickReservePopup({
                 <SelectValue placeholder="Select type (optional)..." />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(BOOKING_TYPES).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                {RESERVATION_LABEL_TYPE_KEYS.map((key) => (
+                  <SelectItem key={key} value={key}>{BOOKING_TYPES[key].label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

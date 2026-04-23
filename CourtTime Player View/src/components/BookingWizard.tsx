@@ -11,7 +11,7 @@ import { RuleViolationDialog } from './RuleViolationDialog';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, facilitiesApi } from '../api/client';
-import { BOOKING_TYPES } from '../constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 
 interface RuleViolation {
@@ -519,8 +519,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                 <SelectValue placeholder="Select booking type..." />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(BOOKING_TYPES).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                {RESERVATION_LABEL_TYPE_KEYS.map((key) => (
+                  <SelectItem key={key} value={key}>{BOOKING_TYPES[key].label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

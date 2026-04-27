@@ -19,14 +19,27 @@ interface BulletinPost {
   id: string;
   title: string;
   description: string;
-  type: 'event' | 'clinic' | 'tournament' | 'social' | 'announcement';
+  type: 'event' | 'clinic' | 'tournament' | 'social' | 'announcement' | 'drill';
   eventDate?: string;
   eventTime?: string;
   location?: string;
   facilityId: string;
   facilityName: string;
   maxParticipants?: number;
+  drillMaxParticipants?: number;
   currentParticipants?: number;
+  drillCourtId?: string;
+  drillCourtName?: string;
+  drillStartAt?: string;
+  drillGenderRestriction?: 'any' | 'male_only' | 'female_only';
+  drillShowParticipants?: boolean;
+  drillConfirmedCount?: number;
+  drillWaitlistCount?: number;
+  currentUserSignupStatus?: 'confirmed' | 'waitlist' | null;
+  currentUserWaitlistPosition?: number | null;
+  currentUserCanSignup?: boolean;
+  signupBlockedReason?: string | null;
+  participants?: Array<{ userId: string; fullName: string; status: 'confirmed' | 'waitlist'; waitlistPosition: number | null }>;
   isPinned: boolean;
   createdAt: string;
   authorName: string;
@@ -38,6 +51,7 @@ const typeIcons = {
   tournament: Tag,
   social: Users,
   announcement: AlertCircle
+  ,drill: Users
 };
 
 const typeColors: Record<string, string> = {
@@ -46,6 +60,7 @@ const typeColors: Record<string, string> = {
   tournament: 'bg-purple-500',
   social: 'bg-pink-500',
   announcement: 'bg-orange-500'
+  ,drill: 'bg-blue-500'
 };
 
 export function BulletinBoard() {
@@ -64,14 +79,18 @@ export function BulletinBoard() {
   const [selectedPost, setSelectedPost] = useState<BulletinPost | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [courtsByFacility, setCourtsByFacility] = useState<Record<string, Array<{ id: string; name: string }>>>({});
   const [newPost, setNewPost] = useState({
     title: '',
     description: '',
-    type: 'announcement' as 'event' | 'clinic' | 'tournament' | 'social' | 'announcement',
+    type: 'announcement' as 'event' | 'clinic' | 'tournament' | 'social' | 'announcement' | 'drill',
     eventDate: '',
     eventTime: '',
     location: '',
     maxParticipants: '',
+    drillCourtId: '',
+    drillGenderRestriction: 'any' as 'any' | 'male_only' | 'female_only',
+    drillShowParticipants: false,
     facilityId: '',
     expiresInDays: '' as string,
   });
@@ -98,7 +117,20 @@ export function BulletinBoard() {
     facilityId: post.facilityId,
     facilityName: post.facilityName || '',
     maxParticipants: post.maxParticipants,
+    drillMaxParticipants: post.drillMaxParticipants,
     currentParticipants: post.currentParticipants,
+    drillCourtId: post.drillCourtId,
+    drillCourtName: post.drillCourtName,
+    drillStartAt: post.drillStartAt,
+    drillGenderRestriction: post.drillGenderRestriction,
+    drillShowParticipants: post.drillShowParticipants,
+    drillConfirmedCount: post.drillConfirmedCount,
+    drillWaitlistCount: post.drillWaitlistCount,
+    currentUserSignupStatus: post.currentUserSignupStatus,
+    currentUserWaitlistPosition: post.currentUserWaitlistPosition,
+    currentUserCanSignup: post.currentUserCanSignup,
+    signupBlockedReason: post.signupBlockedReason,
+    participants: post.participants || [],
     isPinned: post.isPinned || false,
     createdAt: post.createdAt,
     authorName: post.authorName || 'Unknown'
@@ -195,6 +227,11 @@ export function BulletinBoard() {
       return;
     }
 
+    if (newPost.type === 'drill' && (!newPost.eventDate || !newPost.eventTime || !newPost.drillCourtId || !newPost.maxParticipants)) {
+      toast.error('Drill posts require date/time, court, and max participants');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const response = await bulletinBoardApi.create({
@@ -205,6 +242,15 @@ export function BulletinBoard() {
         category: newPost.type,
         isAdminPost: true,
         ...(newPost.expiresInDays ? { expiresInDays: parseInt(newPost.expiresInDays) } : {}),
+        ...(newPost.type === 'drill'
+          ? {
+              drillStartAt: new Date(`${newPost.eventDate}T${newPost.eventTime}`).toISOString(),
+              drillCourtId: newPost.drillCourtId,
+              drillMaxParticipants: parseInt(newPost.maxParticipants),
+              drillGenderRestriction: newPost.drillGenderRestriction,
+              drillShowParticipants: newPost.drillShowParticipants
+            }
+          : {}),
       });
 
       if (response.success) {
@@ -218,6 +264,9 @@ export function BulletinBoard() {
           eventTime: '',
           location: '',
           maxParticipants: '',
+          drillCourtId: '',
+          drillGenderRestriction: 'any',
+          drillShowParticipants: false,
           facilityId: '',
           expiresInDays: '',
         });
@@ -246,6 +295,26 @@ export function BulletinBoard() {
     setShowCreateModal(true);
   };
 
+  const loadCourtsForFacility = async (facilityId: string) => {
+    if (!facilityId || courtsByFacility[facilityId]) return;
+    try {
+      const response = await facilitiesApi.getCourts(facilityId);
+      if (response.success && response.data?.courts) {
+        const courts = response.data.courts.map((court: any) => ({ id: court.id, name: court.name }));
+        setCourtsByFacility((prev) => ({ ...prev, [facilityId]: courts }));
+      }
+    } catch (error) {
+      console.error('Error loading courts:', error);
+      toast.error('Failed to load courts for selected facility');
+    }
+  };
+
+  useEffect(() => {
+    if (showCreateModal && newPost.facilityId) {
+      loadCourtsForFacility(newPost.facilityId);
+    }
+  }, [showCreateModal, newPost.facilityId]);
+
   const handleDeletePost = async (postId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!confirm('Are you sure you want to delete this post?')) return;
@@ -262,6 +331,51 @@ export function BulletinBoard() {
     } catch (error) {
       console.error('Error deleting post:', error);
       toast.error('Failed to delete post');
+    }
+  };
+
+  const handleDrillSignup = async (postId: string) => {
+    try {
+      const response = await bulletinBoardApi.signupForDrill(postId);
+      if (response.success) {
+        toast.success(response.message || 'Signup updated');
+        loadData();
+      } else {
+        toast.error(response.error || 'Unable to sign up');
+      }
+    } catch (error) {
+      console.error('Drill signup error:', error);
+      toast.error('Failed to process signup');
+    }
+  };
+
+  const handleCancelDrillSignup = async (postId: string) => {
+    try {
+      const response = await bulletinBoardApi.cancelDrillSignup(postId);
+      if (response.success) {
+        toast.success('Signup cancelled');
+        loadData();
+      } else {
+        toast.error(response.error || 'Unable to cancel signup');
+      }
+    } catch (error) {
+      console.error('Cancel signup error:', error);
+      toast.error('Failed to cancel signup');
+    }
+  };
+
+  const handleAdminRemoveSignup = async (postId: string, memberUserId: string) => {
+    try {
+      const response = await bulletinBoardApi.adminRemoveDrillSignup(postId, memberUserId);
+      if (response.success) {
+        toast.success('Member removed');
+        loadData();
+      } else {
+        toast.error(response.error || 'Unable to remove member');
+      }
+    } catch (error) {
+      console.error('Admin remove signup error:', error);
+      toast.error('Failed to remove member');
     }
   };
 
@@ -391,6 +505,14 @@ export function BulletinBoard() {
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Announcements
               </Button>
+              <Button
+                variant={selectedType === 'drill' ? 'default' : 'outline'}
+                onClick={() => setSelectedType('drill')}
+                className="rounded-full"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Drills
+              </Button>
             </div>
           )}
 
@@ -420,7 +542,8 @@ export function BulletinBoard() {
                       clinic: 'bg-green-50 border-green-100',
                       tournament: 'bg-purple-50 border-purple-100',
                       social: 'bg-pink-50 border-pink-100',
-                      announcement: 'bg-orange-50 border-orange-100'
+                      announcement: 'bg-orange-50 border-orange-100',
+                      drill: 'bg-blue-50 border-blue-100'
                     }[post.type] || 'bg-gray-50 border-gray-100';
 
                     return (
@@ -463,6 +586,11 @@ export function BulletinBoard() {
                                   <span>{post.eventTime}</span>
                                 </div>
                               )}
+                            </div>
+                          )}
+                          {post.type === 'drill' && post.drillStartAt && (
+                            <div className="text-xs text-gray-600 mb-2">
+                              {new Date(post.drillStartAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             </div>
                           )}
 
@@ -526,6 +654,18 @@ export function BulletinBoard() {
               {/* Content */}
               <div className="space-y-6">
                 <p className="text-gray-700 text-base">{selectedPost.description}</p>
+
+                {selectedPost.type === 'drill' && (
+                  <div className="rounded-lg border p-4 bg-blue-50/50">
+                    <h3 className="font-semibold text-gray-900 mb-3">Drill Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div><span className="text-gray-500">Date & Time:</span> <span className="font-medium">{selectedPost.drillStartAt ? new Date(selectedPost.drillStartAt).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'TBD'}</span></div>
+                      <div><span className="text-gray-500">Court:</span> <span className="font-medium">{selectedPost.drillCourtName || 'TBD'}</span></div>
+                      <div><span className="text-gray-500">Spots:</span> <span className="font-medium">{selectedPost.drillConfirmedCount || 0} / {selectedPost.maxParticipants || selectedPost.drillMaxParticipants || 0}</span></div>
+                      <div><span className="text-gray-500">Waitlist:</span> <span className="font-medium">{selectedPost.drillWaitlistCount || 0}</span></div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Details Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -597,9 +737,29 @@ export function BulletinBoard() {
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-4 border-t">
-                  <Button className="flex-1" onClick={() => toast.info('Registration feature coming soon')}>
-                    {selectedPost.type === 'announcement' ? 'Acknowledge' : 'Register Interest'}
-                  </Button>
+                  {selectedPost.type === 'drill' ? (
+                    selectedPost.currentUserSignupStatus ? (
+                      <Button className="flex-1" variant="outline" onClick={() => handleCancelDrillSignup(selectedPost.id)}>
+                        {selectedPost.currentUserSignupStatus === 'waitlist'
+                          ? `Cancel Waitlist (#${selectedPost.currentUserWaitlistPosition || '-'})`
+                          : 'Cancel Signup'}
+                      </Button>
+                    ) : (
+                      <Button
+                        className="flex-1"
+                        disabled={selectedPost.currentUserCanSignup === false}
+                        onClick={() => handleDrillSignup(selectedPost.id)}
+                      >
+                        {(selectedPost.drillConfirmedCount || 0) >= (selectedPost.maxParticipants || selectedPost.drillMaxParticipants || 0)
+                          ? 'Join Waitlist'
+                          : 'Sign Up'}
+                      </Button>
+                    )
+                  ) : (
+                    <Button className="flex-1" onClick={() => toast.info('Registration feature coming soon')}>
+                      {selectedPost.type === 'announcement' ? 'Acknowledge' : 'Register Interest'}
+                    </Button>
+                  )}
                   <Button variant="outline" className="flex-1" onClick={() => toast.info('Share feature coming soon')}>
                     Share
                   </Button>
@@ -614,6 +774,55 @@ export function BulletinBoard() {
                     </Button>
                   )}
                 </div>
+                {selectedPost.type === 'drill' && selectedPost.signupBlockedReason && !selectedPost.currentUserSignupStatus && (
+                  <p className="text-sm text-red-600">{selectedPost.signupBlockedReason}</p>
+                )}
+                {selectedPost.type === 'drill' && (
+                  <div className="space-y-3 border-t pt-4">
+                    <h4 className="font-medium">
+                      Participants
+                      {selectedPost.drillShowParticipants ? '' : (isAdmin ? ' (admin view)' : ' (hidden by organizer)')}
+                    </h4>
+                    {(selectedPost.participants || []).filter((p) => p.status === 'confirmed').length > 0 ? (
+                      <div className="space-y-2">
+                        {(selectedPost.participants || []).filter((p) => p.status === 'confirmed').map((participant) => (
+                          <div key={participant.userId} className="flex items-center justify-between text-sm">
+                            <span>{participant.fullName}</span>
+                            {isAdmin && (
+                              <Button variant="ghost" size="sm" onClick={() => handleAdminRemoveSignup(selectedPost.id, participant.userId)}>
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No confirmed participants yet.</p>
+                    )}
+                    {isAdmin && (
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 mt-3 mb-1">Waitlist</h5>
+                        {(selectedPost.participants || []).filter((p) => p.status === 'waitlist').length > 0 ? (
+                          <div className="space-y-2">
+                            {(selectedPost.participants || [])
+                              .filter((p) => p.status === 'waitlist')
+                              .sort((a, b) => (a.waitlistPosition || 0) - (b.waitlistPosition || 0))
+                              .map((participant) => (
+                                <div key={participant.userId} className="flex items-center justify-between text-sm">
+                                  <span>#{participant.waitlistPosition} {participant.fullName}</span>
+                                  <Button variant="ghost" size="sm" onClick={() => handleAdminRemoveSignup(selectedPost.id, participant.userId)}>
+                                    Remove
+                                  </Button>
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">No members on the waitlist.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -646,7 +855,7 @@ export function BulletinBoard() {
                   <Label htmlFor="facility">Facility *</Label>
                   <Select
                     value={newPost.facilityId}
-                    onValueChange={(value) => setNewPost(prev => ({ ...prev, facilityId: value }))}
+                    onValueChange={(value) => setNewPost(prev => ({ ...prev, facilityId: value, drillCourtId: '' }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a facility" />
@@ -666,7 +875,7 @@ export function BulletinBoard() {
                   <Label htmlFor="type">Post Type *</Label>
                   <Select
                     value={newPost.type}
-                    onValueChange={(value: 'event' | 'clinic' | 'tournament' | 'social' | 'announcement') =>
+                    onValueChange={(value: 'event' | 'clinic' | 'tournament' | 'social' | 'announcement' | 'drill') =>
                       setNewPost(prev => ({ ...prev, type: value }))
                     }
                   >
@@ -702,6 +911,12 @@ export function BulletinBoard() {
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-pink-500" />
                           Social
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="drill">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-blue-500" />
+                          Drill
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -755,18 +970,20 @@ export function BulletinBoard() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="location">Location</Label>
-                      <Input
-                        id="location"
-                        value={newPost.location}
-                        onChange={(e) => setNewPost(prev => ({ ...prev, location: e.target.value }))}
-                        placeholder="e.g., Main Court, Club House"
-                      />
-                    </div>
+                    {newPost.type !== 'drill' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="location">Location</Label>
+                        <Input
+                          id="location"
+                          value={newPost.location}
+                          onChange={(e) => setNewPost(prev => ({ ...prev, location: e.target.value }))}
+                          placeholder="e.g., Main Court, Club House"
+                        />
+                      </div>
+                    )}
 
                     <div className="space-y-2">
-                      <Label htmlFor="maxParticipants">Max Participants</Label>
+                      <Label htmlFor="maxParticipants">{newPost.type === 'drill' ? 'Max Participants *' : 'Max Participants'}</Label>
                       <Input
                         id="maxParticipants"
                         type="number"
@@ -776,6 +993,57 @@ export function BulletinBoard() {
                         placeholder="Leave empty for unlimited"
                       />
                     </div>
+                    {newPost.type === 'drill' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="drillCourt">Court *</Label>
+                          <Select
+                            value={newPost.drillCourtId}
+                            onValueChange={(value) => setNewPost(prev => ({ ...prev, drillCourtId: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select court" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(courtsByFacility[newPost.facilityId] || []).map((court) => (
+                                <SelectItem key={court.id} value={court.id}>
+                                  {court.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="drillGenderRestriction">Gender Restriction</Label>
+                          <Select
+                            value={newPost.drillGenderRestriction}
+                            onValueChange={(value: 'any' | 'male_only' | 'female_only') =>
+                              setNewPost(prev => ({ ...prev, drillGenderRestriction: value }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="any">Any</SelectItem>
+                              <SelectItem value="male_only">Male only</SelectItem>
+                              <SelectItem value="female_only">Female only</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center justify-between border rounded-md p-3">
+                          <div>
+                            <p className="text-sm font-medium">Show Participants</p>
+                            <p className="text-xs text-gray-500">Allow members to see who is signed up</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={newPost.drillShowParticipants}
+                            onChange={(e) => setNewPost(prev => ({ ...prev, drillShowParticipants: e.target.checked }))}
+                          />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 

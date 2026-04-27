@@ -14,6 +14,7 @@ export interface User {
   fullName: string; // Computed from firstName + lastName
   firstName: string;
   lastName: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
   address?: string;
   streetAddress?: string;
   city?: string;
@@ -143,9 +144,24 @@ export interface BulletinPost {
   title: string;
   content: string;
   category?: string;
+  drillStartAt?: Date;
+  drillCourtId?: string;
+  drillMaxParticipants?: number;
+  drillGenderRestriction?: 'any' | 'male_only' | 'female_only';
+  drillShowParticipants?: boolean;
   isPinned: boolean;
   isAdminPost: boolean;
   postedDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface BulletinDrillSignup {
+  id: string;
+  bulletinPostId: string;
+  userId: string;
+  status: 'confirmed' | 'waitlist';
+  waitlistPosition?: number;
   createdAt: Date;
   updatedAt: Date;
 }

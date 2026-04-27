@@ -458,6 +458,11 @@ export const bulletinBoardApi = {
     category: string;
     isAdminPost?: boolean;
     expiresInDays?: number;
+    drillStartAt?: string;
+    drillCourtId?: string;
+    drillMaxParticipants?: number;
+    drillGenderRestriction?: 'any' | 'male_only' | 'female_only';
+    drillShowParticipants?: boolean;
   }) => {
     return apiRequest('/api/bulletin-board', {
       method: 'POST',
@@ -487,6 +492,24 @@ export const bulletinBoardApi = {
     return apiRequest(`/api/bulletin-board/${postId}/pin`, {
       method: 'PUT',
       body: JSON.stringify({ facilityId, isPinned }),
+    });
+  },
+
+  signupForDrill: async (postId: string) => {
+    return apiRequest(`/api/bulletin-board/${postId}/signup`, {
+      method: 'POST',
+    });
+  },
+
+  cancelDrillSignup: async (postId: string) => {
+    return apiRequest(`/api/bulletin-board/${postId}/signup`, {
+      method: 'DELETE',
+    });
+  },
+
+  adminRemoveDrillSignup: async (postId: string, memberUserId: string) => {
+    return apiRequest(`/api/bulletin-board/${postId}/signup/${memberUserId}`, {
+      method: 'DELETE',
     });
   },
 };

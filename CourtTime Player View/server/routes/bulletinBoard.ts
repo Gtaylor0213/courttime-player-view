@@ -4,7 +4,10 @@ import {
   createBulletinPost,
   updateBulletinPost,
   deleteBulletinPost,
-  togglePinBulletinPost
+  togglePinBulletinPost,
+  signupForDrill,
+  cancelDrillSignup,
+  removeDrillSignupByAdmin
 } from '../../src/services/bulletinBoardService';
 import { query } from '../../src/database/connection';
 
@@ -17,7 +20,7 @@ const router = express.Router();
 router.get('/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
-    const posts = await getFacilityBulletinPosts(facilityId);
+    const posts = await getFacilityBulletinPosts(facilityId, req.user?.userId);
 
     res.json({
       success: true,
@@ -34,13 +37,28 @@ router.get('/:facilityId', async (req, res, next) => {
  */
 router.post('/', async (req, res, next) => {
   try {
-    const postData = req.body;
+    const postData = { ...req.body, authorId: req.user!.userId };
 
     if (!postData.facilityId || !postData.authorId || !postData.title || !postData.content || !postData.category) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: facilityId, authorId, title, content, category'
       });
+    }
+
+    if (postData.category === 'drill') {
+      const adminResult = await query(
+        `SELECT 1 FROM facility_admins
+         WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+         LIMIT 1`,
+        [postData.authorId, postData.facilityId]
+      );
+      if (adminResult.rows.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only facility admins can create drill posts'
+        });
+      }
     }
 
     const postId = await createBulletinPost(postData);
@@ -51,6 +69,97 @@ router.post('/', async (req, res, next) => {
       message: 'Bulletin post created successfully'
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bulletin-board/:postId/signup
+ * Signup current member for a drill post
+ */
+router.post('/:postId/signup', async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const userId = req.user!.userId;
+    const result = await signupForDrill(postId, userId);
+    res.json({
+      success: true,
+      data: result,
+      message: result.status === 'confirmed'
+        ? 'Successfully signed up for drill'
+        : `Added to waitlist at position #${result.waitlistPosition}`
+    });
+  } catch (error: any) {
+    if (error?.message?.includes('restricted') || error?.message?.includes('already signed up') || error?.message?.includes('active member')) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/bulletin-board/:postId/signup
+ * Cancel current member signup/waitlist for a drill post
+ */
+router.delete('/:postId/signup', async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const userId = req.user!.userId;
+    const result = await cancelDrillSignup(postId, userId);
+    res.json({
+      success: true,
+      data: result,
+      message: 'Signup cancelled successfully'
+    });
+  } catch (error: any) {
+    if (error?.message?.includes('not signed up')) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/bulletin-board/:postId/signup/:memberUserId
+ * Admin removes a member from signup/waitlist
+ */
+router.delete('/:postId/signup/:memberUserId', async (req, res, next) => {
+  try {
+    const { postId, memberUserId } = req.params;
+    const adminUserId = req.user!.userId;
+
+    const postResult = await query(
+      `SELECT facility_id, category
+       FROM bulletin_posts
+       WHERE id = $1`,
+      [postId]
+    );
+    if (postResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Post not found' });
+    }
+    if (postResult.rows[0].category !== 'drill') {
+      return res.status(400).json({ success: false, error: 'Signup management is only available for drill posts' });
+    }
+
+    const adminResult = await query(
+      `SELECT 1 FROM facility_admins
+       WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+       LIMIT 1`,
+      [adminUserId, postResult.rows[0].facility_id]
+    );
+    if (adminResult.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Only facility admins can manage drill signups' });
+    }
+
+    await removeDrillSignupByAdmin(postId, memberUserId);
+    res.json({
+      success: true,
+      message: 'Member removed from drill signup list'
+    });
+  } catch (error: any) {
+    if (error?.message?.includes('not signed up')) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     next(error);
   }
 });

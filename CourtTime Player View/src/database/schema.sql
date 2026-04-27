@@ -81,8 +81,19 @@ CREATE TABLE facility_memberships (
 -- BOOKINGS
 -- =====================================================
 
+CREATE TABLE booking_series (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    facility_id VARCHAR(50) NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE bookings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    series_id UUID REFERENCES booking_series(id) ON DELETE SET NULL,
     court_id UUID NOT NULL REFERENCES courts(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     facility_id VARCHAR(50) NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
@@ -100,6 +111,8 @@ CREATE TABLE bookings (
 CREATE INDEX idx_bookings_date ON bookings(booking_date);
 CREATE INDEX idx_bookings_court ON bookings(court_id);
 CREATE INDEX idx_bookings_user ON bookings(user_id);
+CREATE INDEX idx_bookings_series_id ON bookings(series_id);
+CREATE INDEX idx_booking_series_facility ON booking_series(facility_id);
 
 -- =====================================================
 -- HITTING PARTNER POSTS

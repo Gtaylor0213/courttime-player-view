@@ -570,9 +570,18 @@ export function QuickReservePopup({
         }))
       );
 
-      const results = await Promise.all(
-        bookingRequests.map(req => bookingApi.create(req))
-      );
+      const isRecurringSeries = advancedBooking;
+      const results = isRecurringSeries
+        ? [await bookingApi.createRecurringSeries({
+            userId: user.id,
+            facilityId: selectedFacility,
+            bookingType: bookingType || undefined,
+            notes: notes || undefined,
+            instances: bookingRequests
+          })]
+        : await Promise.all(
+            bookingRequests.map(req => bookingApi.create(req))
+          );
 
       const failedBookings = results.filter(r => !r.success);
       const successfulBookings = results.filter(r => r.success);

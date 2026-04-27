@@ -513,6 +513,25 @@ export const bookingApi = {
     });
   },
 
+  createRecurringSeries: async (data: {
+    userId: string;
+    facilityId: string;
+    bookingType?: string;
+    notes?: string;
+    instances: Array<{
+      courtId: string;
+      bookingDate: string;
+      startTime: string;
+      endTime: string;
+      durationMinutes: number;
+    }>;
+  }) => {
+    return apiRequest('/api/bookings/recurring-series', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   cancel: async (bookingId: string, userId: string) => {
     return apiRequest(`/api/bookings/${bookingId}?userId=${userId}`, {
       method: 'DELETE',
@@ -657,6 +676,46 @@ export const adminApi = {
     return apiRequest(`/api/admin/bookings/${bookingId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    });
+  },
+
+  updateBookingSeries: async (seriesId: string, data: {
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+    bookingType?: string;
+    notes?: string;
+  }) => {
+    return apiRequest(`/api/admin/booking-series/${seriesId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteBookingSeries: async (seriesId: string) => {
+    return apiRequest(`/api/admin/booking-series/${seriesId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  updateBookingSeriesInstances: async (seriesId: string, data: {
+    bookingIds: string[];
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+    bookingType?: string;
+    notes?: string;
+  }) => {
+    return apiRequest(`/api/admin/booking-series/${seriesId}/instances`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteBookingSeriesInstances: async (seriesId: string, bookingIds: string[]) => {
+    return apiRequest(`/api/admin/booking-series/${seriesId}/instances`, {
+      method: 'DELETE',
+      body: JSON.stringify({ bookingIds }),
     });
   },
 

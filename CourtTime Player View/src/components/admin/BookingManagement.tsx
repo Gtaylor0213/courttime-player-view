@@ -8,6 +8,8 @@ import { Calendar, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLef
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { adminApi, facilitiesApi } from '../../api/client';
@@ -20,6 +22,7 @@ type SortDirection = 'asc' | 'desc';
 
 interface Booking {
   id: string;
+  seriesId?: string | null;
   courtName: string;
   courtNumber: number;
   userName: string;
@@ -27,10 +30,24 @@ interface Booking {
   bookingDate: string;
   startTime: string;
   endTime: string;
+  durationMinutes: number;
   status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
   bookingType: string;
   notes?: string;
 }
+
+interface BookingSeriesGroup {
+  groupId: string;
+  seriesId?: string | null;
+  userName: string;
+  userEmail: string;
+  bookingType?: string;
+  notes?: string;
+  status: string;
+  bookings: Booking[];
+}
+
+type SeriesEditMode = 'all' | 'selected';
 
 export function BookingManagement() {
   const { user } = useAuth();
@@ -51,6 +68,18 @@ export function BookingManagement() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [expandedSeries, setExpandedSeries] = useState<Record<string, boolean>>({});
+  const [selectedSeriesDates, setSelectedSeriesDates] = useState<Record<string, string[]>>({});
+  const [seriesEditOpen, setSeriesEditOpen] = useState(false);
+  const [seriesEditMode, setSeriesEditMode] = useState<SeriesEditMode>('all');
+  const [seriesEditSeriesId, setSeriesEditSeriesId] = useState<string | null>(null);
+  const [seriesEditBookingIds, setSeriesEditBookingIds] = useState<string[]>([]);
+  const [seriesEditStartTime, setSeriesEditStartTime] = useState('');
+  const [seriesEditEndTime, setSeriesEditEndTime] = useState('');
+  const [seriesEditDurationMinutes, setSeriesEditDurationMinutes] = useState('60');
+  const [seriesEditBookingType, setSeriesEditBookingType] = useState('');
+  const [seriesEditNotes, setSeriesEditNotes] = useState('');
+  const [seriesEditSubmitting, setSeriesEditSubmitting] = useState(false);
 
   useEffect(() => {
     if (currentFacilityId) {
@@ -171,18 +200,44 @@ export function BookingManagement() {
   };
 
   // Filter, sort, and paginate bookings
+  const groupedBookings = useMemo<BookingSeriesGroup[]>(() => {
+    const groups = new Map<string, BookingSeriesGroup>();
+    for (const booking of bookings) {
+      const key = booking.seriesId || booking.id;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.bookings.push(booking);
+      } else {
+        groups.set(key, {
+          groupId: key,
+          seriesId: booking.seriesId || null,
+          userName: booking.userName,
+          userEmail: booking.userEmail,
+          bookingType: booking.bookingType,
+          notes: booking.notes,
+          status: booking.status,
+          bookings: [booking]
+        });
+      }
+    }
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      bookings: [...group.bookings].sort((a, b) => `${a.bookingDate} ${a.startTime}`.localeCompare(`${b.bookingDate} ${b.startTime}`))
+    }));
+  }, [bookings]);
+
   const filteredBookings = useMemo(() => {
-    let result = bookings.filter((booking: Booking) => {
+    let result = groupedBookings.filter((group) => {
       // If no search term, show all bookings
       if (!searchTerm.trim()) return true;
 
       const searchLower = searchTerm.toLowerCase().trim();
       return (
-        (booking.userName?.toLowerCase() || '').includes(searchLower) ||
-        (booking.courtName?.toLowerCase() || '').includes(searchLower) ||
-        (booking.userEmail?.toLowerCase() || '').includes(searchLower) ||
-        (booking.bookingType?.toLowerCase() || '').includes(searchLower) ||
-        (booking.notes?.toLowerCase() || '').includes(searchLower)
+        (group.userName?.toLowerCase() || '').includes(searchLower) ||
+        (group.userEmail?.toLowerCase() || '').includes(searchLower) ||
+        (group.bookingType?.toLowerCase() || '').includes(searchLower) ||
+        (group.notes?.toLowerCase() || '').includes(searchLower) ||
+        group.bookings.some((booking) => (booking.courtName?.toLowerCase() || '').includes(searchLower))
       );
     });
 
@@ -193,24 +248,24 @@ export function BookingManagement() {
 
       switch (sortField) {
         case 'bookingDate':
-          aVal = `${a.bookingDate} ${a.startTime}`;
-          bVal = `${b.bookingDate} ${b.startTime}`;
+          aVal = `${a.bookings[0]?.bookingDate || ''} ${a.bookings[0]?.startTime || ''}`;
+          bVal = `${b.bookings[0]?.bookingDate || ''} ${b.bookings[0]?.startTime || ''}`;
           break;
         case 'userName':
-          aVal = a.userName?.toLowerCase() || '';
-          bVal = b.userName?.toLowerCase() || '';
+          aVal = a.userName.toLowerCase() || '';
+          bVal = b.userName.toLowerCase() || '';
           break;
         case 'courtName':
-          aVal = a.courtName?.toLowerCase() || '';
-          bVal = b.courtName?.toLowerCase() || '';
+          aVal = a.bookings[0]?.courtName?.toLowerCase() || '';
+          bVal = b.bookings[0]?.courtName?.toLowerCase() || '';
           break;
         case 'status':
-          aVal = a.status;
-          bVal = b.status;
+          aVal = a.status || '';
+          bVal = b.status || '';
           break;
         case 'startTime':
-          aVal = a.startTime;
-          bVal = b.startTime;
+          aVal = a.bookings[0]?.startTime || '';
+          bVal = b.bookings[0]?.startTime || '';
           break;
       }
 
@@ -220,7 +275,7 @@ export function BookingManagement() {
     });
 
     return result;
-  }, [bookings, searchTerm, sortField, sortDirection]);
+  }, [groupedBookings, searchTerm, sortField, sortDirection]);
 
   // Pagination
   const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
@@ -281,6 +336,130 @@ export function BookingManagement() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
+  const toggleSeriesExpanded = (groupId: string) => {
+    setExpandedSeries((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  const toggleSeriesDateSelection = (seriesId: string, bookingId: string) => {
+    setSelectedSeriesDates((prev) => {
+      const existing = prev[seriesId] || [];
+      const next = existing.includes(bookingId)
+        ? existing.filter((id) => id !== bookingId)
+        : [...existing, bookingId];
+      return { ...prev, [seriesId]: next };
+    });
+  };
+
+  const setSeriesSelection = (seriesId: string, bookingIds: string[]) => {
+    setSelectedSeriesDates((prev) => ({ ...prev, [seriesId]: bookingIds }));
+  };
+
+  const toggleSeriesSelectAll = (seriesId: string, groupBookings: Booking[]) => {
+    const allIds = groupBookings.map((booking) => booking.id);
+    const existing = selectedSeriesDates[seriesId] || [];
+    const hasAll = allIds.length > 0 && allIds.every((id) => existing.includes(id));
+    setSeriesSelection(seriesId, hasAll ? [] : allIds);
+  };
+
+  const openSeriesEditDialog = (
+    mode: SeriesEditMode,
+    seriesId: string,
+    seed: Booking,
+    bookingIds: string[] = []
+  ) => {
+    setSeriesEditMode(mode);
+    setSeriesEditSeriesId(seriesId);
+    setSeriesEditBookingIds(bookingIds);
+    setSeriesEditStartTime(seed.startTime || '');
+    setSeriesEditEndTime(seed.endTime || '');
+    setSeriesEditDurationMinutes(String(seed.durationMinutes || 60));
+    setSeriesEditBookingType(seed.bookingType || '');
+    setSeriesEditNotes(seed.notes || '');
+    setSeriesEditOpen(true);
+  };
+
+  const handleDeleteSeries = async (seriesId: string) => {
+    if (!confirm('Delete all bookings in this recurring series?')) return;
+    const response = await adminApi.deleteBookingSeries(seriesId);
+    if (response.success) {
+      toast.success('Recurring series deleted');
+      await loadBookings();
+    } else {
+      toast.error(response.error || 'Failed to delete recurring series');
+    }
+  };
+
+  const handleEditSeriesAll = async (seriesId: string, seed: Booking) => {
+    openSeriesEditDialog('all', seriesId, seed);
+  };
+
+  const handleDeleteSeriesSelected = async (seriesId: string) => {
+    const bookingIds = selectedSeriesDates[seriesId] || [];
+    if (bookingIds.length === 0) {
+      toast.error('Select at least one date first');
+      return;
+    }
+    if (!confirm(`Delete ${bookingIds.length} selected date(s)?`)) return;
+    const response = await adminApi.deleteBookingSeriesInstances(seriesId, bookingIds);
+    if (response.success) {
+      toast.success('Selected dates deleted');
+      setSelectedSeriesDates((prev) => ({ ...prev, [seriesId]: [] }));
+      await loadBookings();
+    } else {
+      toast.error(response.error || 'Failed to delete selected dates');
+    }
+  };
+
+  const handleEditSeriesSelected = async (seriesId: string, seed: Booking) => {
+    const bookingIds = selectedSeriesDates[seriesId] || [];
+    if (bookingIds.length === 0) {
+      toast.error('Select at least one date first');
+      return;
+    }
+    openSeriesEditDialog('selected', seriesId, seed, bookingIds);
+  };
+
+  const handleSubmitSeriesEdit = async () => {
+    if (!seriesEditSeriesId) return;
+    const parsedDuration = Number(seriesEditDurationMinutes);
+    if (!Number.isFinite(parsedDuration) || parsedDuration <= 0) {
+      toast.error('Duration must be a positive number');
+      return;
+    }
+
+    setSeriesEditSubmitting(true);
+    try {
+      const payload = {
+        startTime: seriesEditStartTime,
+        endTime: seriesEditEndTime,
+        durationMinutes: parsedDuration,
+        bookingType: seriesEditBookingType.trim() || undefined,
+        notes: seriesEditNotes.trim() || undefined
+      };
+
+      const response = seriesEditMode === 'all'
+        ? await adminApi.updateBookingSeries(seriesEditSeriesId, payload)
+        : await adminApi.updateBookingSeriesInstances(seriesEditSeriesId, {
+            bookingIds: seriesEditBookingIds,
+            ...payload
+          });
+
+      if (!response.success) {
+        toast.error(response.error || 'Failed to update recurring booking');
+        return;
+      }
+
+      toast.success(seriesEditMode === 'all' ? 'Recurring series updated' : 'Selected dates updated');
+      if (seriesEditMode === 'selected') {
+        setSeriesSelection(seriesEditSeriesId, []);
+      }
+      setSeriesEditOpen(false);
+      await loadBookings();
+    } finally {
+      setSeriesEditSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -290,6 +469,7 @@ export function BookingManagement() {
   }
 
   return (
+    <>
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-6">
@@ -455,58 +635,169 @@ export function BookingManagement() {
                         </td>
                       </tr>
                     ) : (
-                      paginatedBookings.map((booking: Booking) => (
-                        <tr key={booking.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2">
-                            <div className="font-medium">{formatDateShort(booking.bookingDate)}</div>
-                            <div className="text-xs text-gray-500">
-                              {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2">
-                            <div className="font-medium truncate max-w-[150px]" title={booking.userName}>
-                              {booking.userName}
-                            </div>
-                            <div className="text-xs text-gray-500 truncate max-w-[150px]" title={booking.userEmail}>
-                              {booking.userEmail}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2">
-                            <span className="font-medium">{booking.courtName}</span>
-                            <span className="text-gray-400 text-xs ml-1">#{booking.courtNumber}</span>
-                          </td>
-                          <td className="px-4 py-2 capitalize">{booking.bookingType}</td>
-                          <td className="px-4 py-2">
-                            <Badge className={`${getStatusColor(booking.status)} text-xs`}>
-                              {formatStatus(booking.status)}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-2">
-                            <div className="flex justify-end gap-1">
-                              {booking.status === 'confirmed' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleCompleteBooking(booking.id)}
-                                  className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                >
-                                  Complete
-                                </Button>
-                              )}
-                              {booking.status !== 'cancelled' && booking.status !== 'completed' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleCancelBooking(booking.id)}
-                                  className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                      paginatedBookings.map((group: BookingSeriesGroup) => {
+                        const head = group.bookings[0];
+                        const isSeries = !!group.seriesId;
+                        const isExpanded = expandedSeries[group.groupId];
+                        const selectedCount = isSeries ? (selectedSeriesDates[group.seriesId!] || []).length : 0;
+                        const allSelected = isSeries
+                          ? group.bookings.length > 0 && selectedCount === group.bookings.length
+                          : false;
+                        return (
+                          <React.Fragment key={group.groupId}>
+                            <tr className={`hover:bg-gray-50 ${isSeries ? 'bg-emerald-50/40' : ''}`}>
+                              <td className="px-4 py-2">
+                                <div className="font-medium flex items-center gap-2">
+                                  {isSeries && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleSeriesExpanded(group.groupId)}
+                                      className="text-gray-500 hover:text-gray-800"
+                                    >
+                                      {isExpanded ? '▾' : '▸'}
+                                    </button>
+                                  )}
+                                  {formatDateShort(head.bookingDate)}
+                                  {isSeries && <Badge className="bg-emerald-100 text-emerald-800">Recurring ({group.bookings.length})</Badge>}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {formatTime(head.startTime)} - {formatTime(head.endTime)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-2">
+                                <div className="font-medium truncate max-w-[150px]" title={group.userName}>
+                                  {group.userName}
+                                </div>
+                                <div className="text-xs text-gray-500 truncate max-w-[150px]" title={group.userEmail}>
+                                  {group.userEmail}
+                                </div>
+                              </td>
+                              <td className="px-4 py-2">
+                                <span className="font-medium">{head.courtName}</span>
+                                <span className="text-gray-400 text-xs ml-1">#{head.courtNumber}</span>
+                              </td>
+                              <td className="px-4 py-2 capitalize">{group.bookingType}</td>
+                              <td className="px-4 py-2">
+                                <Badge className={`${getStatusColor(group.status)} text-xs`}>
+                                  {formatStatus(group.status)}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-2">
+                                {!isSeries ? (
+                                  <div className="flex justify-end gap-1">
+                                    {head.status === 'confirmed' && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleCompleteBooking(head.id)}
+                                        className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      >
+                                        Complete
+                                      </Button>
+                                    )}
+                                    {head.status !== 'cancelled' && head.status !== 'completed' && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleCancelBooking(head.id)}
+                                        className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex justify-end gap-2 items-center">
+                                    {selectedCount > 0 && (
+                                      <span className="text-xs text-emerald-700">{selectedCount} selected</span>
+                                    )}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-7 px-2">
+                                          Actions {isExpanded ? '▴' : '▾'}
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => toggleSeriesExpanded(group.groupId)}>
+                                          {isExpanded ? 'Hide Dates' : 'Show Dates'}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleEditSeriesAll(group.seriesId!, head)}>
+                                          Edit All Dates
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDeleteSeries(group.seriesId!)} className="text-red-600">
+                                          Delete All Dates
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => handleEditSeriesSelected(group.seriesId!, head)}
+                                          disabled={selectedCount === 0}
+                                        >
+                                          Edit Selected Dates
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => handleDeleteSeriesSelected(group.seriesId!)}
+                                          disabled={selectedCount === 0}
+                                          className="text-red-600"
+                                        >
+                                          Delete Selected Dates
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                            {isSeries && isExpanded && (
+                              <tr className="bg-emerald-50/20">
+                                <td colSpan={6} className="px-4 py-2">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleSeriesSelectAll(group.seriesId!, group.bookings)}
+                                      className="text-emerald-700 hover:text-emerald-900"
+                                    >
+                                      {allSelected ? 'Clear all selected dates' : 'Select all dates'}
+                                    </button>
+                                    {selectedCount > 0 && (
+                                      <span className="text-emerald-700">{selectedCount} date(s) selected</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            {isSeries && isExpanded && group.bookings.map((booking) => (
+                              <tr key={booking.id} className="bg-emerald-50/20">
+                                <td className="px-4 py-2 pl-10">
+                                  <div className="font-medium">{formatDateShort(booking.bookingDate)}</div>
+                                  <div className="text-xs text-gray-500">
+                                    {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-2 text-xs text-gray-500">Instance</td>
+                                <td className="px-4 py-2">
+                                  <span className="font-medium">{booking.courtName}</span>
+                                  <span className="text-gray-400 text-xs ml-1">#{booking.courtNumber}</span>
+                                </td>
+                                <td className="px-4 py-2 capitalize">{booking.bookingType}</td>
+                                <td className="px-4 py-2">
+                                  <Badge className={`${getStatusColor(booking.status)} text-xs`}>
+                                    {formatStatus(booking.status)}
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-2 text-right">
+                                  <label className="text-xs inline-flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={(selectedSeriesDates[group.seriesId!] || []).includes(booking.id)}
+                                      onChange={() => toggleSeriesDateSelection(group.seriesId!, booking.id)}
+                                    />
+                                    Select date
+                                  </label>
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })
                     )}
                   </tbody>
                   </table>
@@ -575,5 +866,46 @@ export function BookingManagement() {
           </Tabs>
         </div>
       </div>
+      <Dialog open={seriesEditOpen} onOpenChange={setSeriesEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{seriesEditMode === 'all' ? 'Edit Entire Recurring Series' : 'Edit Selected Dates'}</DialogTitle>
+            <DialogDescription>
+              {seriesEditMode === 'all'
+                ? 'These changes will apply to every booking in this recurring series.'
+                : `These changes will apply to ${seriesEditBookingIds.length} selected booking date(s).`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="series-start">Start Time</Label>
+              <Input id="series-start" value={seriesEditStartTime} onChange={(e) => setSeriesEditStartTime(e.target.value)} placeholder="HH:MM:SS" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="series-end">End Time</Label>
+              <Input id="series-end" value={seriesEditEndTime} onChange={(e) => setSeriesEditEndTime(e.target.value)} placeholder="HH:MM:SS" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="series-duration">Duration (minutes)</Label>
+              <Input id="series-duration" type="number" min={1} value={seriesEditDurationMinutes} onChange={(e) => setSeriesEditDurationMinutes(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="series-type">Booking Type (optional)</Label>
+              <Input id="series-type" value={seriesEditBookingType} onChange={(e) => setSeriesEditBookingType(e.target.value)} />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="series-notes">Notes (optional)</Label>
+              <Input id="series-notes" value={seriesEditNotes} onChange={(e) => setSeriesEditNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSeriesEditOpen(false)} disabled={seriesEditSubmitting}>Cancel</Button>
+            <Button onClick={handleSubmitSeriesEdit} disabled={seriesEditSubmitting}>
+              {seriesEditSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

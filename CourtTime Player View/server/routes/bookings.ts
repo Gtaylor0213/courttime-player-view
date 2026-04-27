@@ -9,7 +9,8 @@ import {
   validateBooking,
   createBookingWithOverride,
   markNoShow,
-  checkInBooking
+  checkInBooking,
+  createRecurringBookingSeries
 } from '../../src/services/bookingService';
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
@@ -202,6 +203,49 @@ router.post('/', async (req, res, next) => {
     } catch (notificationError) {
       console.error('Error creating booking notification:', notificationError);
       // Don't fail the booking if notification fails
+    }
+
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/recurring-series
+ * Create recurring bookings as a grouped series
+ */
+router.post('/recurring-series', async (req, res, next) => {
+  try {
+    const { userId, facilityId, bookingType, notes, instances } = req.body;
+
+    if (!userId || !facilityId || !Array.isArray(instances) || instances.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields for recurring series'
+      });
+    }
+
+    const missing = instances.some((i: any) =>
+      !i.courtId || !i.bookingDate || !i.startTime || !i.endTime || !i.durationMinutes
+    );
+    if (missing) {
+      return res.status(400).json({
+        success: false,
+        error: 'Each recurring instance must include courtId, bookingDate, startTime, endTime, and durationMinutes'
+      });
+    }
+
+    const result = await createRecurringBookingSeries({
+      userId,
+      facilityId,
+      bookingType,
+      notes,
+      instances
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
     }
 
     res.status(201).json(result);

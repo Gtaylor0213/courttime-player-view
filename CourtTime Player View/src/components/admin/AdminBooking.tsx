@@ -679,9 +679,18 @@ export function AdminBooking() {
         }))
       );
 
-      const results = await Promise.all(
-        bookingRequests.map(req => bookingApi.create(req))
-      );
+      const isRecurringSeries = advancedBooking;
+      const results = isRecurringSeries
+        ? [await bookingApi.createRecurringSeries({
+            userId: bookingUserId,
+            facilityId: selectedFacility,
+            bookingType,
+            notes: finalNotes || undefined,
+            instances: bookingRequests
+          })]
+        : await Promise.all(
+            bookingRequests.map(req => bookingApi.create(req))
+          );
 
       const failedBookings = results.filter(r => !r.success);
       const successfulBookings = results.filter(r => r.success);

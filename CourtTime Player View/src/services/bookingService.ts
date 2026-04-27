@@ -5,6 +5,7 @@ import { notificationService } from './notificationService';
 
 export interface Booking {
   id: string;
+  seriesId?: string | null;
   courtId: string;
   userId: string;
   facilityId: string;
@@ -34,6 +35,7 @@ export async function getBookingsByFacilityAndDate(
     const result = await query(
       `SELECT
         b.id,
+        b.series_id as "seriesId",
         b.court_id as "courtId",
         b.user_id as "userId",
         b.facility_id as "facilityId",
@@ -77,6 +79,7 @@ export async function getBookingsByCourtAndDate(
     const result = await query(
       `SELECT
         b.id,
+        b.series_id as "seriesId",
         b.court_id as "courtId",
         b.user_id as "userId",
         b.facility_id as "facilityId",
@@ -120,6 +123,7 @@ export async function getBookingsByUser(
     const query_text = upcoming
       ? `SELECT
           b.id,
+          b.series_id as "seriesId",
           b.court_id as "courtId",
           b.user_id as "userId",
           b.facility_id as "facilityId",
@@ -143,6 +147,7 @@ export async function getBookingsByUser(
         ORDER BY b.booking_date, b.start_time`
       : `SELECT
           b.id,
+          b.series_id as "seriesId",
           b.court_id as "courtId",
           b.user_id as "userId",
           b.facility_id as "facilityId",
@@ -185,6 +190,20 @@ export interface BookingResult {
   isPrimeTime?: boolean;
 }
 
+export interface RecurringSeriesRequest {
+  userId: string;
+  facilityId: string;
+  bookingType?: string;
+  notes?: string;
+  instances: Array<{
+    courtId: string;
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+  }>;
+}
+
 /**
  * Validate a booking without creating it
  */
@@ -221,6 +240,7 @@ export async function createBooking(bookingData: {
   courtId: string;
   userId: string;
   facilityId: string;
+  seriesId?: string;
   bookingDate: string;
   startTime: string;
   endTime: string;
@@ -302,13 +322,14 @@ export async function createBooking(bookingData: {
     // Insert the booking
     const result = await query(
       `INSERT INTO bookings (
-        court_id, user_id, facility_id, booking_date,
+        series_id, court_id, user_id, facility_id, booking_date,
         start_time, end_time, duration_minutes, booking_type,
         activity_type, notes, status, is_prime_time
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'confirmed', $12)
       RETURNING
         id,
+        series_id as "seriesId",
         court_id as "courtId",
         user_id as "userId",
         facility_id as "facilityId",
@@ -324,6 +345,7 @@ export async function createBooking(bookingData: {
         created_at as "createdAt",
         updated_at as "updatedAt"`,
       [
+        bookingData.seriesId || null,
         bookingData.courtId,
         bookingData.userId,
         bookingData.facilityId,
@@ -349,6 +371,156 @@ export async function createBooking(bookingData: {
     return {
       success: false,
       error: 'Failed to create booking'
+    };
+  }
+}
+
+async function hasBookingConflict(
+  courtId: string,
+  bookingDate: string,
+  startTime: string,
+  endTime: string,
+  excludeBookingId?: string
+): Promise<boolean> {
+  const params: any[] = [courtId, bookingDate, startTime, endTime];
+  let sql = `SELECT id FROM bookings
+       WHERE court_id = $1
+         AND booking_date = $2
+         AND status != 'cancelled'
+         AND (
+           (start_time <= $3 AND end_time > $3)
+           OR (start_time < $4 AND end_time >= $4)
+           OR (start_time >= $3 AND end_time <= $4)
+         )`;
+
+  if (excludeBookingId) {
+    params.push(excludeBookingId);
+    sql += ` AND id != $${params.length}`;
+  }
+
+  const conflictResult = await query(sql, params);
+  if (conflictResult.rows.length > 0) return true;
+
+  const splitAvailability = await query(
+    `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
+    [courtId, bookingDate, startTime, endTime]
+  );
+  return !splitAvailability.rows[0]?.available;
+}
+
+export async function createRecurringBookingSeries(
+  payload: RecurringSeriesRequest
+): Promise<BookingResult & { seriesId?: string; bookings?: Booking[] }> {
+  try {
+    const blockers: RuleResult[] = [];
+    const warnings: RuleResult[] = [];
+
+    for (const instance of payload.instances) {
+      const validation = await validateBooking({
+        courtId: instance.courtId,
+        userId: payload.userId,
+        facilityId: payload.facilityId,
+        bookingDate: instance.bookingDate,
+        startTime: instance.startTime,
+        endTime: instance.endTime,
+        durationMinutes: instance.durationMinutes,
+        bookingType: payload.bookingType
+      });
+
+      if (!validation.allowed) {
+        blockers.push(...validation.blockers);
+      }
+      if (validation.warnings?.length) {
+        warnings.push(...validation.warnings);
+      }
+
+      const hasConflict = await hasBookingConflict(
+        instance.courtId,
+        instance.bookingDate,
+        instance.startTime,
+        instance.endTime
+      );
+      if (hasConflict) {
+        return {
+          success: false,
+          error: 'One or more recurring instances conflict with existing bookings.'
+        };
+      }
+    }
+
+    if (blockers.length > 0) {
+      return {
+        success: false,
+        error: blockers[0]?.message || 'Recurring booking failed validation',
+        ruleViolations: blockers,
+        warnings
+      };
+    }
+
+    const created = await transaction(async (client) => {
+      const seriesResult = await client.query(
+        `INSERT INTO booking_series (facility_id, created_by, notes)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [payload.facilityId, payload.userId, payload.notes || null]
+      );
+
+      const seriesId = seriesResult.rows[0].id as string;
+      const rows: Booking[] = [];
+
+      for (const instance of payload.instances) {
+        const insert = await client.query(
+          `INSERT INTO bookings (
+             series_id, court_id, user_id, facility_id, booking_date,
+             start_time, end_time, duration_minutes, booking_type,
+             notes, status, is_prime_time
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', false)
+           RETURNING
+             id,
+             series_id as "seriesId",
+             court_id as "courtId",
+             user_id as "userId",
+             facility_id as "facilityId",
+             TO_CHAR(booking_date, 'YYYY-MM-DD') as "bookingDate",
+             start_time as "startTime",
+             end_time as "endTime",
+             duration_minutes as "durationMinutes",
+             status,
+             booking_type as "bookingType",
+             notes,
+             created_at as "createdAt",
+             updated_at as "updatedAt"`,
+          [
+            seriesId,
+            instance.courtId,
+            payload.userId,
+            payload.facilityId,
+            instance.bookingDate,
+            instance.startTime,
+            instance.endTime,
+            instance.durationMinutes,
+            payload.bookingType || null,
+            payload.notes || null
+          ]
+        );
+        rows.push(insert.rows[0]);
+      }
+
+      return { seriesId, rows };
+    });
+
+    return {
+      success: true,
+      seriesId: created.seriesId,
+      bookings: created.rows,
+      warnings
+    };
+  } catch (error) {
+    console.error('Error creating recurring booking series:', error);
+    return {
+      success: false,
+      error: 'Failed to create recurring booking series'
     };
   }
 }
@@ -437,14 +609,15 @@ export async function createBookingWithOverride(
     // Insert the booking with override info
     const result = await query(
       `INSERT INTO bookings (
-        court_id, user_id, facility_id, booking_date,
+        series_id, court_id, user_id, facility_id, booking_date,
         start_time, end_time, duration_minutes, booking_type,
         activity_type, notes, status, is_prime_time,
         rule_overrides, override_reason, overridden_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'confirmed', $12, $13, $14, $15)
       RETURNING
         id,
+        series_id as "seriesId",
         court_id as "courtId",
         user_id as "userId",
         facility_id as "facilityId",
@@ -460,6 +633,7 @@ export async function createBookingWithOverride(
         created_at as "createdAt",
         updated_at as "updatedAt"`,
       [
+        null,
         bookingData.courtId,
         bookingData.userId,
         bookingData.facilityId,
@@ -621,6 +795,7 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
     const result = await query(
       `SELECT
         b.id,
+        b.series_id as "seriesId",
         b.court_id as "courtId",
         b.user_id as "userId",
         b.facility_id as "facilityId",

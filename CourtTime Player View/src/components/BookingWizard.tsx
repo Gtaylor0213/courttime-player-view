@@ -318,7 +318,6 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       const endTime24 = convertTo24Hour(endTime);
       const datesToBook = generateRecurringDates().map(d => parseDateStr(d));
 
-      // Create bookings for each court × each date
       const bookingRequests = selectedCourts.flatMap(c =>
         datesToBook.map(bookingDate => ({
           courtId: c.courtId,
@@ -334,11 +333,20 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         }))
       );
 
-      const results = await Promise.all(
-        bookingRequests.map(({ courtName, ...req }) =>
-          bookingApi.create(req)
-        )
-      );
+      const isRecurringSeries = advancedBooking;
+      const results = isRecurringSeries
+        ? [await bookingApi.createRecurringSeries({
+            userId: user.id,
+            facilityId,
+            bookingType: bookingType || undefined,
+            notes: notes || undefined,
+            instances: bookingRequests.map(({ courtName, ...req }) => req)
+          })]
+        : await Promise.all(
+            bookingRequests.map(({ courtName, ...req }) =>
+              bookingApi.create(req)
+            )
+          );
 
       const successfulBookings = results.filter(r => r.success);
       const failedBookings = results.filter(r => !r.success);

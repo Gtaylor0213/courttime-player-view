@@ -69,10 +69,19 @@ const CRT002: RuleEvaluator = {
       return { ruleCode: 'CRT-002', ruleName: 'Peak-Hours Max Duration', passed: true, severity: 'error' };
     }
 
-    // Get max duration from court config or rule config
+    // Prefer active peak-slot rule (stored in hours), then legacy minutes configs.
     const dayOfWeek = getDayOfWeek(context.request.bookingDate);
     const dayConfig = context.court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
-    const maxMinutes = dayConfig?.primeTimeMaxDuration || config.max_minutes_prime || 60;
+    const slotMaxHoursRaw = context.activePeakHoursSlot?.rules?.maxDurationHours;
+    const slotMaxHours = slotMaxHoursRaw === undefined ? undefined : Number(slotMaxHoursRaw);
+    if (slotMaxHours === -1) {
+      return { ruleCode: 'CRT-002', ruleName: 'Peak-Hours Max Duration', passed: true, severity: 'error' };
+    }
+    const slotMaxMinutes = Number.isFinite(slotMaxHours) && (slotMaxHours as number) >= 0
+      ? Math.round((slotMaxHours as number) * 60)
+      : null;
+    const configMaxMinutes = config.max_minutes_prime === -1 ? null : config.max_minutes_prime;
+    const maxMinutes = slotMaxMinutes || dayConfig?.primeTimeMaxDuration || configMaxMinutes || 60;
 
     if (context.request.durationMinutes > maxMinutes) {
       return {

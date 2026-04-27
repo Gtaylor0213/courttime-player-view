@@ -24,9 +24,21 @@ import {
   combineDateAndTime,
   minutesBetween,
   timeRangesOverlap,
-  addDays
+  addDays,
+  getDayOfWeek
 } from '../utils/timeUtils';
 import { countPrimeTimeBookings } from '../utils/primeTimeUtils';
+
+function bookingMatchesPeakSlot(
+  booking: { bookingDate: string; startTime: string; endTime: string; courtId: string; status: string },
+  slot: RuleContext['activePeakHoursSlot']
+): boolean {
+  if (!slot || booking.status === 'cancelled') return false;
+  const bookingDay = getDayOfWeek(booking.bookingDate);
+  if (!slot.days.includes(bookingDay)) return false;
+  if (!slot.appliesToAllCourts && !slot.selectedCourtIds.includes(booking.courtId)) return false;
+  return timeRangesOverlap(booking.startTime, booking.endTime, slot.startTime, slot.endTime);
+}
 
 /**
  * ACC-001: Max Active Reservations
@@ -368,12 +380,30 @@ const ACC010: RuleEvaluator = {
       return { ruleCode: 'ACC-010', ruleName: 'Peak-Hours Reservations Per Week', passed: true, severity: 'error' };
     }
 
-    const maxPrime = context.user.tier?.primeTimeMaxPerWeek
-      ?? config.max_prime_per_week
-      ?? 999;
-
     const windowType = config.window_type || 'calendar_week';
-    const currentPrime = countPrimeTimeBookings(context.existingBookings.user, windowType);
+    const currentPrime = context.activePeakHoursSlot
+      ? (() => {
+          const window = getTimeWindow(windowType);
+          const start = formatDate(window.startDate);
+          const end = formatDate(window.endDate);
+          return context.existingBookings.user.filter((booking) =>
+            booking.bookingDate >= start &&
+            booking.bookingDate <= end &&
+            bookingMatchesPeakSlot(booking, context.activePeakHoursSlot)
+          ).length;
+        })()
+      : countPrimeTimeBookings(context.existingBookings.user, windowType);
+    const slotMaxPrime = context.activePeakHoursSlot?.rules?.maxBookingsPerWeek;
+    if (slotMaxPrime === -1) {
+      return { ruleCode: 'ACC-010', ruleName: 'Peak-Hours Reservations Per Week', passed: true, severity: 'error' };
+    }
+    const maxPrime = (slotMaxPrime !== undefined ? Number(slotMaxPrime) : undefined)
+      ?? config.max_prime_per_week
+      ?? context.user.tier?.primeTimeMaxPerWeek
+      ?? 999;
+    if (maxPrime === -1) {
+      return { ruleCode: 'ACC-010', ruleName: 'Peak-Hours Reservations Per Week', passed: true, severity: 'error' };
+    }
 
     if (currentPrime >= maxPrime) {
       return {

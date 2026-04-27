@@ -162,6 +162,27 @@ export interface FacilityWithRules {
   defaultTier?: MembershipTier;
 }
 
+export interface PeakHoursSlotRules {
+  maxBookingsPerDay?: number;
+  maxBookingsPerWeek?: number;
+  maxBookingsPerWeekHousehold?: number;
+  /**
+   * Stored in hours for admin policy compatibility.
+   * Convert to minutes at enforcement time.
+   */
+  maxDurationHours?: number;
+}
+
+export interface PeakHoursSlot {
+  id: string;
+  startTime: string;
+  endTime: string;
+  days: number[]; // 0=Sunday ... 6=Saturday
+  appliesToAllCourts: boolean;
+  selectedCourtIds: string[];
+  rules: PeakHoursSlotRules;
+}
+
 export interface FacilityRuleConfig {
   id: string;
   facilityId: string;
@@ -276,6 +297,8 @@ export interface RuleContext {
   blackouts: CourtBlackout[];
   currentDateTime: Date;
   isPrimeTime: boolean;
+  peakHoursSlots: PeakHoursSlot[];
+  activePeakHoursSlot?: PeakHoursSlot;
 }
 
 export interface RuleResult {

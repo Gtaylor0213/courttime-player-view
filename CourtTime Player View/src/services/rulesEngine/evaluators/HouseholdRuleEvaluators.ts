@@ -15,6 +15,18 @@ import {
   countHouseholdPrimeTimeBookings,
   countHouseholdMembers
 } from '../utils/householdUtils';
+import { formatDate, getDayOfWeek, getTimeWindow, timeRangesOverlap } from '../utils/timeUtils';
+
+function householdBookingMatchesPeakSlot(
+  booking: { bookingDate: string; startTime: string; endTime: string; courtId: string; status: string },
+  slot: RuleContext['activePeakHoursSlot']
+): boolean {
+  if (!slot || booking.status === 'cancelled') return false;
+  const bookingDay = getDayOfWeek(booking.bookingDate);
+  if (!slot.days.includes(bookingDay)) return false;
+  if (!slot.appliesToAllCourts && !slot.selectedCourtIds.includes(booking.courtId)) return false;
+  return timeRangesOverlap(booking.startTime, booking.endTime, slot.startTime, slot.endTime);
+}
 
 /**
  * HH-001: Max Members Per Address
@@ -104,15 +116,30 @@ const HH003: RuleEvaluator = {
       return { ruleCode: 'HH-003', ruleName: 'Household Peak-Hours Cap', passed: true, severity: 'error' };
     }
 
-    const maxPrime = context.household.primeTimeMaxPerWeek
-      || config.max_prime_per_week_household
-      || 999;
-
     const windowType = config.window_type || 'calendar_week';
-    const currentPrime = countHouseholdPrimeTimeBookings(
-      context.existingBookings.household,
-      windowType
-    );
+    const currentPrime = context.activePeakHoursSlot
+      ? (() => {
+          const window = getTimeWindow(windowType);
+          const start = formatDate(window.startDate);
+          const end = formatDate(window.endDate);
+          return context.existingBookings.household.filter((booking) =>
+            booking.bookingDate >= start &&
+            booking.bookingDate <= end &&
+            householdBookingMatchesPeakSlot(booking, context.activePeakHoursSlot)
+          ).length;
+        })()
+      : countHouseholdPrimeTimeBookings(context.existingBookings.household, windowType);
+    const slotMaxPrime = context.activePeakHoursSlot?.rules?.maxBookingsPerWeekHousehold;
+    if (slotMaxPrime === -1) {
+      return { ruleCode: 'HH-003', ruleName: 'Household Peak-Hours Cap', passed: true, severity: 'error' };
+    }
+    const maxPrime = (slotMaxPrime !== undefined ? Number(slotMaxPrime) : undefined)
+      || config.max_prime_per_week_household
+      || context.household.primeTimeMaxPerWeek
+      || 999;
+    if (maxPrime === -1) {
+      return { ruleCode: 'HH-003', ruleName: 'Household Peak-Hours Cap', passed: true, severity: 'error' };
+    }
 
     if (currentPrime >= maxPrime) {
       return {

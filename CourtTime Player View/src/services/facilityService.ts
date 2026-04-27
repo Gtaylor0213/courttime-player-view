@@ -821,14 +821,15 @@ export interface FacilityRegistrationData {
     cancellationNoticeHours: number;
   };
 
-  // Peak hours policy (optional) - with per-day time slots
+  // Peak hours policy (optional) - with slot definitions and selected days
   peakHoursPolicy?: {
     enabled: boolean;
     applyToAdmins: boolean;
-    timeSlots: Record<string, Array<{
+    timeSlots: Array<{
       id: string;
       startTime: string;
       endTime: string;
+      days: number[];
       appliesToAllCourts?: boolean;
       selectedCourtIds?: string[];
       rules?: {
@@ -837,7 +838,7 @@ export interface FacilityRegistrationData {
         maxBookingsPerWeekHousehold?: number;
         maxDurationHours?: number;
       };
-    }>>;
+    }>;
     maxBookingsPerWeek?: number; // legacy
     maxDurationHours?: number; // legacy
   };
@@ -1072,19 +1073,17 @@ export async function registerFacility(
 
     // Peak hours policy - with per-slot restrictions and court targeting
     if (data.peakHoursPolicy?.enabled) {
-      const cleanedTimeSlots: Record<string, any[]> = {};
-      for (const [day, slots] of Object.entries(data.peakHoursPolicy.timeSlots || {})) {
-        if (slots && slots.length > 0) {
-          cleanedTimeSlots[day] = slots.map(slot => ({
-            id: slot.id,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            appliesToAllCourts: slot.appliesToAllCourts !== false,
-            selectedCourtIds: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
-            rules: slot.rules || {},
-          }));
-        }
-      }
+      const cleanedTimeSlots = (data.peakHoursPolicy.timeSlots || [])
+        .filter((slot) => slot.days?.length)
+        .map((slot) => ({
+          id: slot.id,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          days: slot.days,
+          appliesToAllCourts: slot.appliesToAllCourts !== false,
+          selectedCourtIds: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
+          rules: slot.rules || {},
+        }));
 
       await client.query(
         `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config, created_by)

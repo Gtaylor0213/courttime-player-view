@@ -964,7 +964,27 @@ export function FacilityRegistration() {
         peakHoursPolicy: formData.rulesConfig.hasPeakHours ? {
           enabled: true,
           applyToAdmins: formData.rulesConfig.peakHoursApplyToAdmins,
-          timeSlots: formData.rulesConfig.peakHoursSlots,
+          timeSlots: Object.entries(formData.rulesConfig.peakHoursSlots).flatMap(([dayName, slots]) => {
+            const dayMap: Record<string, number> = {
+              sunday: 0,
+              monday: 1,
+              tuesday: 2,
+              wednesday: 3,
+              thursday: 4,
+              friday: 5,
+              saturday: 6,
+            };
+            const day = dayMap[dayName];
+            return (slots || []).map((slot) => ({
+              id: slot.id,
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              days: day === undefined ? [] : [day],
+              appliesToAllCourts: true,
+              selectedCourtIds: [],
+              rules: {},
+            }));
+          }),
           maxBookingsPerWeek: formData.rulesConfig.peakHoursRestrictions.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.peakHoursRestrictions.maxBookingsPerWeek),
           maxDurationHours: formData.rulesConfig.peakHoursRestrictions.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.peakHoursRestrictions.maxDurationHours),
         } : undefined,

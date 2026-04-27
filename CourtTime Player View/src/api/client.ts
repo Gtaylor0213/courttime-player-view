@@ -215,14 +215,15 @@ export const facilitiesApi = {
       cancellationNoticeHours: number;
     };
 
-    // Peak hours policy (optional) - with per-day time slots
+    // Peak hours policy (optional) - with slot definitions and selected days
     peakHoursPolicy?: {
       enabled: boolean;
       applyToAdmins: boolean;
-      timeSlots: Record<string, Array<{
+      timeSlots: Array<{
         id: string;
         startTime: string;
         endTime: string;
+        days: number[];
         appliesToAllCourts?: boolean;
         selectedCourtIds?: string[];
         rules?: {
@@ -231,7 +232,7 @@ export const facilitiesApi = {
           maxBookingsPerWeekHousehold?: number;
           maxDurationHours?: number;
         };
-      }>>;
+      }>;
       maxBookingsPerWeek?: number; // legacy
       maxDurationHours?: number; // legacy
     };

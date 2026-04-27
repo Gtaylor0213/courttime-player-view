@@ -39,6 +39,7 @@ interface PeakHourSlot {
   id: string;
   startTime: string;
   endTime: string;
+  days: number[];
   appliesToAllCourts: boolean;
   selectedCourtIds: string[];
   rules: {
@@ -75,7 +76,7 @@ interface BookingRules {
   adminCancellationUnlimited: boolean;
   hasPeakHours: boolean;
   peakHoursApplyToAdmins: boolean;
-  peakHoursSlots: Record<string, PeakHourSlot[]>;
+  peakHoursSlots: PeakHourSlot[];
   peakHoursRestrictions: {
     maxBookingsPerWeek: string;
     maxBookingsUnlimited: boolean;
@@ -217,7 +218,7 @@ export function FacilityManagement() {
     adminCancellationUnlimited: true,
     hasPeakHours: false,
     peakHoursApplyToAdmins: true,
-    peakHoursSlots: {},
+    peakHoursSlots: [],
     peakHoursRestrictions: {
       maxBookingsPerWeek: '2',
       maxBookingsUnlimited: false,
@@ -405,13 +406,21 @@ export function FacilityManagement() {
         }
 
         // Parse booking rules from facility data
-        const rawPeakHoursSlots = facility.peakHoursPolicy?.timeSlots || {};
-        const normalizedPeakHoursSlots: Record<string, PeakHourSlot[]> = Object.fromEntries(
-          Object.entries(rawPeakHoursSlots).map(([day, slots]: [string, any]) => [
-            day,
-            (Array.isArray(slots) ? slots : []).map((slot: any) => normalizePeakHoursSlot(slot, day))
-          ])
-        );
+        const rawPeakHoursSlots = facility.peakHoursPolicy?.timeSlots || [];
+        const dayNameToNumber: Record<string, number> = {
+          sunday: 0,
+          monday: 1,
+          tuesday: 2,
+          wednesday: 3,
+          thursday: 4,
+          friday: 5,
+          saturday: 6
+        };
+        const normalizedPeakHoursSlots: PeakHourSlot[] = Array.isArray(rawPeakHoursSlots)
+          ? rawPeakHoursSlots.map((slot: any) => normalizePeakHoursSlot(slot))
+          : Object.entries(rawPeakHoursSlots).flatMap(([dayName, slots]: [string, any]) =>
+              (Array.isArray(slots) ? slots : []).map((slot: any) => normalizePeakHoursSlot({ ...slot, days: [dayNameToNumber[dayName]] }))
+            );
 
         const bookingRules: BookingRules = {
           generalRules: facility.generalRules || '',
@@ -662,10 +671,13 @@ export function FacilityManagement() {
     maxDurationUnlimited: false,
   };
 
-  const normalizePeakHoursSlot = (slot: any, day: string): PeakHourSlot => ({
-    id: slot.id || `${day}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+  const normalizePeakHoursSlot = (slot: any): PeakHourSlot => ({
+    id: slot.id || `slot-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     startTime: slot.startTime || slot.start_time || '17:00',
     endTime: slot.endTime || slot.end_time || '20:00',
+    days: Array.isArray(slot.days)
+      ? slot.days.filter((d: unknown) => typeof d === 'number')
+      : [],
     appliesToAllCourts: slot.appliesToAllCourts !== false && slot.applies_to_all_courts !== false,
     selectedCourtIds: Array.isArray(slot.selectedCourtIds)
       ? slot.selectedCourtIds
@@ -682,84 +694,68 @@ export function FacilityManagement() {
     }
   });
 
-  const updatePeakHoursSlot = (day: string, slotId: string, updater: (slot: PeakHourSlot) => PeakHourSlot) => {
+  const updatePeakHoursSlot = (slotId: string, updater: (slot: PeakHourSlot) => PeakHourSlot) => {
     setFacilityData(prev => {
-      const currentSlots = prev.bookingRules.peakHoursSlots[day] || [];
-      const newSlots = currentSlots.map(slot => slot.id === slotId ? updater(slot) : slot);
+      const newSlots = prev.bookingRules.peakHoursSlots.map(slot => slot.id === slotId ? updater(slot) : slot);
       return {
         ...prev,
         bookingRules: {
           ...prev.bookingRules,
-          peakHoursSlots: {
-            ...prev.bookingRules.peakHoursSlots,
-            [day]: newSlots
-          }
+          peakHoursSlots: newSlots
         }
       };
     });
   };
 
-  const addPeakHourSlot = (day: string) => {
+  const addPeakHourSlot = () => {
     setFacilityData(prev => {
-      const currentSlots = prev.bookingRules.peakHoursSlots[day] || [];
       const newSlot: PeakHourSlot = {
-        id: `${day}-${Date.now()}`,
+        id: `slot-${Date.now()}`,
         startTime: '17:00',
         endTime: '20:00',
+        days: [1, 2, 3, 4, 5],
         appliesToAllCourts: true,
         selectedCourtIds: [],
         rules: { ...defaultPeakHoursSlotRules },
       };
-      setExpandedPeakHourSlots((expanded) => ({ ...expanded, [`${day}:${newSlot.id}`]: true }));
+      setExpandedPeakHourSlots((expanded) => ({ ...expanded, [newSlot.id]: true }));
       return {
         ...prev,
         bookingRules: {
           ...prev.bookingRules,
-          peakHoursSlots: {
-            ...prev.bookingRules.peakHoursSlots,
-            [day]: [...currentSlots, newSlot]
-          }
+          peakHoursSlots: [...prev.bookingRules.peakHoursSlots, newSlot]
         }
       };
     });
   };
 
-  const removePeakHourSlot = (day: string, slotId: string) => {
+  const removePeakHourSlot = (slotId: string) => {
     setFacilityData(prev => {
-      const currentSlots = prev.bookingRules.peakHoursSlots[day] || [];
-      const newSlots = currentSlots.filter(slot => slot.id !== slotId);
-      const newPeakHoursSlots = { ...prev.bookingRules.peakHoursSlots };
-      if (newSlots.length === 0) {
-        delete newPeakHoursSlots[day];
-      } else {
-        newPeakHoursSlots[day] = newSlots;
-      }
       return {
         ...prev,
         bookingRules: {
           ...prev.bookingRules,
-          peakHoursSlots: newPeakHoursSlots
+          peakHoursSlots: prev.bookingRules.peakHoursSlots.filter(slot => slot.id !== slotId)
         }
       };
     });
     setExpandedPeakHourSlots((prev) => {
       const updated = { ...prev };
-      delete updated[`${day}:${slotId}`];
+      delete updated[slotId];
       return updated;
     });
   };
 
-  const updatePeakHourSlotTime = (day: string, slotId: string, field: 'startTime' | 'endTime', value: string) => {
-    updatePeakHoursSlot(day, slotId, (slot) => ({ ...slot, [field]: value }));
+  const updatePeakHourSlotTime = (slotId: string, field: 'startTime' | 'endTime', value: string) => {
+    updatePeakHoursSlot(slotId, (slot) => ({ ...slot, [field]: value }));
   };
 
   const updatePeakHourSlotRule = (
-    day: string,
     slotId: string,
     field: keyof PeakHourSlot['rules'],
     value: string | boolean
   ) => {
-    updatePeakHoursSlot(day, slotId, (slot) => ({
+    updatePeakHoursSlot(slotId, (slot) => ({
       ...slot,
       rules: {
         ...slot.rules,
@@ -768,27 +764,38 @@ export function FacilityManagement() {
     }));
   };
 
-  const togglePeakHourSlotExpanded = (day: string, slotId: string) => {
-    const key = `${day}:${slotId}`;
-    setExpandedPeakHourSlots((prev) => ({ ...prev, [key]: !prev[key] }));
+  const togglePeakHourSlotExpanded = (slotId: string) => {
+    setExpandedPeakHourSlots((prev) => ({ ...prev, [slotId]: !prev[slotId] }));
   };
 
-  const setPeakHourSlotCourtMode = (day: string, slotId: string, allCourts: boolean) => {
-    updatePeakHoursSlot(day, slotId, (slot) => ({
+  const setPeakHourSlotCourtMode = (slotId: string, allCourts: boolean) => {
+    updatePeakHoursSlot(slotId, (slot) => ({
       ...slot,
       appliesToAllCourts: allCourts,
       selectedCourtIds: allCourts ? [] : slot.selectedCourtIds
     }));
   };
 
-  const togglePeakHourSlotCourt = (day: string, slotId: string, courtId: string) => {
-    updatePeakHoursSlot(day, slotId, (slot) => {
+  const togglePeakHourSlotCourt = (slotId: string, courtId: string) => {
+    updatePeakHoursSlot(slotId, (slot) => {
       const selected = slot.selectedCourtIds.includes(courtId)
         ? slot.selectedCourtIds.filter((id) => id !== courtId)
         : [...slot.selectedCourtIds, courtId];
       return {
         ...slot,
         selectedCourtIds: selected
+      };
+    });
+  };
+
+  const togglePeakHourSlotDay = (slotId: string, day: number) => {
+    updatePeakHoursSlot(slotId, (slot) => {
+      const days = slot.days.includes(day)
+        ? slot.days.filter((d) => d !== day)
+        : [...slot.days, day].sort((a, b) => a - b);
+      return {
+        ...slot,
+        days
       };
     });
   };
@@ -1180,11 +1187,6 @@ export function FacilityManagement() {
   };
 
   // Rules engine sync
-  const dayNameToNumber: Record<string, number> = {
-    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
-    thursday: 4, friday: 5, saturday: 6,
-  };
-
   const syncBookingRulesToEngine = async () => {
     if (!currentFacilityId) return;
     const rules = facilityData.bookingRules;
@@ -1304,29 +1306,41 @@ export function FacilityManagement() {
 
     // Peak hours rules (slot-level restrictions only)
     if (rules.hasPeakHours) {
-      const peakWindows = Object.entries(rules.peakHoursSlots).flatMap(([day, slots]) =>
-        slots.map((slot) => ({
-          day_of_week: dayNameToNumber[day],
-          start_time: slot.startTime,
-          end_time: slot.endTime,
-          applies_to_all_courts: slot.appliesToAllCourts !== false,
-          selected_court_ids: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
-          rules: {
-            max_bookings_per_day: slot.rules.maxBookingsPerDayUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerDay) || 1),
-            max_bookings_per_week: slot.rules.maxBookingsPerWeekUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeek) || 2),
-            max_bookings_per_week_household: slot.rules.maxBookingsPerWeekHouseholdUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeekHousehold) || 2),
-            max_duration_hours: slot.rules.maxDurationUnlimited ? -1 : (parseFloat(slot.rules.maxDurationHours) || 1.5),
-          }
-        }))
-      );
+      const peakWindows = rules.peakHoursSlots.map((slot) => ({
+        id: slot.id,
+        days: slot.days,
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        applies_to_all_courts: slot.appliesToAllCourts !== false,
+        selected_court_ids: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
+        rules: {
+          max_bookings_per_day: slot.rules.maxBookingsPerDayUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerDay) || 1),
+          max_bookings_per_week: slot.rules.maxBookingsPerWeekUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeek) || 2),
+          max_bookings_per_week_household: slot.rules.maxBookingsPerWeekHouseholdUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeekHousehold) || 2),
+          max_duration_hours: slot.rules.maxDurationUnlimited ? -1 : (parseFloat(slot.rules.maxDurationHours) || 1.5),
+        }
+      }));
       ruleConfigs.push({
         ruleCode: 'CRT-001',
         isEnabled: true,
         ruleConfig: { peak_windows: peakWindows },
       });
-      // Disable legacy global peak-hour rules when slot-level rules are used.
-      ruleConfigs.push({ ruleCode: 'ACC-010', isEnabled: false });
-      ruleConfigs.push({ ruleCode: 'CRT-002', isEnabled: false });
+      // Keep these enabled; evaluators now prioritize active slot rules.
+      ruleConfigs.push({
+        ruleCode: 'ACC-010',
+        isEnabled: !rules.peakHoursRestrictions.maxBookingsUnlimited,
+        ruleConfig: {
+          max_prime_per_week: parseInt(rules.peakHoursRestrictions.maxBookingsPerWeek) || 2,
+          window_type: 'calendar_week'
+        }
+      });
+      ruleConfigs.push({
+        ruleCode: 'CRT-002',
+        isEnabled: !rules.peakHoursRestrictions.maxDurationUnlimited,
+        ruleConfig: {
+          max_minutes_prime: (parseFloat(rules.peakHoursRestrictions.maxDurationHours) || 1.5) * 60
+        }
+      });
     } else {
       ruleConfigs.push({ ruleCode: 'ACC-010', isEnabled: false });
       ruleConfigs.push({ ruleCode: 'CRT-002', isEnabled: false });
@@ -1545,31 +1559,22 @@ export function FacilityManagement() {
             updated.bookingRules.hasPeakHours = true;
             const windows = crt001.effectiveConfig?.peak_windows || crt001.effectiveConfig?.prime_windows;
             if (Array.isArray(windows)) {
-              const numberToDay: Record<number, string> = {
-                0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday',
-                4: 'thursday', 5: 'friday', 6: 'saturday',
-              };
-              const slots: Record<string, PeakHourSlot[]> = {};
-              for (const w of windows) {
-                const dayName = numberToDay[w.day_of_week];
-                if (dayName) {
-                  if (!slots[dayName]) slots[dayName] = [];
-                  slots[dayName].push(normalizePeakHoursSlot({
-                    id: `${dayName}-${w.start_time}-${w.end_time}`,
-                    startTime: w.start_time,
-                    endTime: w.end_time,
-                    appliesToAllCourts: w.applies_to_all_courts !== false,
-                    selectedCourtIds: w.selected_court_ids || [],
-                    rules: {
-                      max_bookings_per_day: w.rules?.max_bookings_per_day,
-                      max_bookings_per_week: w.rules?.max_bookings_per_week,
-                      max_bookings_per_week_household: w.rules?.max_bookings_per_week_household,
-                      max_duration_hours: w.rules?.max_duration_hours,
-                    }
-                  }, dayName));
+              updated.bookingRules.peakHoursSlots = windows.map((w: any) => normalizePeakHoursSlot({
+                id: w.id || `slot-${w.start_time}-${w.end_time}`,
+                startTime: w.start_time,
+                endTime: w.end_time,
+                days: Array.isArray(w.days)
+                  ? w.days
+                  : (typeof w.day_of_week === 'number' ? [w.day_of_week] : []),
+                appliesToAllCourts: w.applies_to_all_courts !== false,
+                selectedCourtIds: w.selected_court_ids || [],
+                rules: {
+                  max_bookings_per_day: w.rules?.max_bookings_per_day,
+                  max_bookings_per_week: w.rules?.max_bookings_per_week,
+                  max_bookings_per_week_household: w.rules?.max_bookings_per_week_household,
+                  max_duration_hours: w.rules?.max_duration_hours,
                 }
-              }
-              updated.bookingRules.peakHoursSlots = slots;
+              }));
             }
           }
 
@@ -2588,150 +2593,160 @@ export function FacilityManagement() {
 
                       {/* Peak Hours Time Slots */}
                       <div className="space-y-4">
-                        <h4 className="font-medium">Peak Hours Schedule</h4>
-                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
-                          <div key={day} className="p-3 border rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium capitalize">{day}</span>
-                              {isEditing && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => addPeakHourSlot(day)}
-                                >
-                                  <Plus className="h-4 w-4 mr-1" />
-                                  Add Slot
-                                </Button>
-                              )}
-                            </div>
-                            {facilityData.bookingRules.peakHoursSlots[day]?.length > 0 ? (
-                              <div className="space-y-2">
-                                {facilityData.bookingRules.peakHoursSlots[day].map((slot) => {
-                                  const slotKey = `${day}:${slot.id}`;
-                                  const expanded = !!expandedPeakHourSlots[slotKey];
-                                  return (
-                                    <div key={slot.id} className="border rounded-md p-2 space-y-2">
-                                      <div className="flex items-center gap-2">
-                                        <Input
-                                          type="time"
-                                          value={slot.startTime}
-                                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotTime(day, slot.id, 'startTime', e.target.value)}
-                                          disabled={!isEditing}
-                                          className="w-32"
-                                        />
-                                        <span>to</span>
-                                        <Input
-                                          type="time"
-                                          value={slot.endTime}
-                                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotTime(day, slot.id, 'endTime', e.target.value)}
-                                          disabled={!isEditing}
-                                          className="w-32"
-                                        />
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => togglePeakHourSlotExpanded(day, slot.id)}
-                                        >
-                                          {expanded ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-                                          Edit Rules
-                                        </Button>
-                                        {isEditing && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => removePeakHourSlot(day, slot.id)}
-                                            className="text-red-600"
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">Peak Hours Slots</h4>
+                          {isEditing && (
+                            <Button variant="outline" size="sm" onClick={() => addPeakHourSlot()}>
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Peak Hours Slot
+                            </Button>
+                          )}
+                        </div>
+                        {facilityData.bookingRules.peakHoursSlots.length > 0 ? (
+                          <div className="space-y-2">
+                            {facilityData.bookingRules.peakHoursSlots.map((slot) => {
+                              const expanded = !!expandedPeakHourSlots[slot.id];
+                              return (
+                                <div key={slot.id} className="border rounded-md p-2 space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      type="time"
+                                      value={slot.startTime}
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotTime(slot.id, 'startTime', e.target.value)}
+                                      disabled={!isEditing}
+                                      className="w-32"
+                                    />
+                                    <span>to</span>
+                                    <Input
+                                      type="time"
+                                      value={slot.endTime}
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotTime(slot.id, 'endTime', e.target.value)}
+                                      disabled={!isEditing}
+                                      className="w-32"
+                                    />
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => togglePeakHourSlotExpanded(slot.id)}
+                                    >
+                                      {expanded ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+                                      Edit Rules
+                                    </Button>
+                                    {isEditing && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => removePeakHourSlot(slot.id)}
+                                        className="text-red-600"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-gray-600">
+                                    Days: {slot.days.length > 0 ? slot.days.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ') : 'None selected'}
+                                  </div>
+                                  {expanded && (
+                                    <div className="space-y-3 p-3 bg-gray-50 rounded-md">
+                                      <div className="space-y-2">
+                                        <Label className="text-sm">Applies To Days</Label>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border rounded p-2 bg-white">
+                                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, day) => (
+                                            <label key={label} className="inline-flex items-center gap-2 text-sm">
+                                              <input
+                                                type="checkbox"
+                                                checked={slot.days.includes(day)}
+                                                disabled={!isEditing}
+                                                onChange={() => togglePeakHourSlotDay(slot.id, day)}
+                                              />
+                                              {label}
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label className="text-sm">Court Targeting</Label>
+                                        <div className="flex items-center gap-4">
+                                          <label className="inline-flex items-center gap-2 text-sm">
+                                            <input
+                                              type="radio"
+                                              checked={slot.appliesToAllCourts}
+                                              disabled={!isEditing}
+                                              onChange={() => setPeakHourSlotCourtMode(slot.id, true)}
+                                            />
+                                            All Courts
+                                          </label>
+                                          <label className="inline-flex items-center gap-2 text-sm">
+                                            <input
+                                              type="radio"
+                                              checked={!slot.appliesToAllCourts}
+                                              disabled={!isEditing}
+                                              onChange={() => setPeakHourSlotCourtMode(slot.id, false)}
+                                            />
+                                            Selected Courts
+                                          </label>
+                                        </div>
+                                        {!slot.appliesToAllCourts && (
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-1 border rounded p-2 bg-white">
+                                            {courts.map((court) => (
+                                              <label key={court.id} className="inline-flex items-center gap-2 text-sm">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={slot.selectedCourtIds.includes(court.id)}
+                                                  disabled={!isEditing}
+                                                  onChange={() => togglePeakHourSlotCourt(slot.id, court.id)}
+                                                />
+                                                {court.name}
+                                              </label>
+                                            ))}
+                                          </div>
                                         )}
                                       </div>
-                                      {expanded && (
-                                        <div className="space-y-3 p-3 bg-gray-50 rounded-md">
-                                          <div className="space-y-2">
-                                            <Label className="text-sm">Court Targeting</Label>
-                                            <div className="flex items-center gap-4">
-                                              <label className="inline-flex items-center gap-2 text-sm">
-                                                <input
-                                                  type="radio"
-                                                  checked={slot.appliesToAllCourts}
-                                                  disabled={!isEditing}
-                                                  onChange={() => setPeakHourSlotCourtMode(day, slot.id, true)}
-                                                />
-                                                All Courts
-                                              </label>
-                                              <label className="inline-flex items-center gap-2 text-sm">
-                                                <input
-                                                  type="radio"
-                                                  checked={!slot.appliesToAllCourts}
-                                                  disabled={!isEditing}
-                                                  onChange={() => setPeakHourSlotCourtMode(day, slot.id, false)}
-                                                />
-                                                Selected Courts
-                                              </label>
-                                            </div>
-                                            {!slot.appliesToAllCourts && (
-                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 border rounded p-2 bg-white">
-                                                {courts.map((court) => (
-                                                  <label key={court.id} className="inline-flex items-center gap-2 text-sm">
-                                                    <input
-                                                      type="checkbox"
-                                                      checked={slot.selectedCourtIds.includes(court.id)}
-                                                      disabled={!isEditing}
-                                                      onChange={() => togglePeakHourSlotCourt(day, slot.id, court.id)}
-                                                    />
-                                                    {court.name}
-                                                  </label>
-                                                ))}
-                                              </div>
-                                            )}
-                                          </div>
 
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                              <Label className="text-xs">Max Bookings Per Day (user)</Label>
-                                              <div className="flex items-center gap-2">
-                                                <Switch checked={slot.rules.maxBookingsPerDayUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(day, slot.id, 'maxBookingsPerDayUnlimited', checked)} disabled={!isEditing} />
-                                                <span className="text-xs text-gray-500">Unlimited</span>
-                                                <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerDay} disabled={!isEditing || slot.rules.maxBookingsPerDayUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(day, slot.id, 'maxBookingsPerDay', e.target.value)} />
-                                              </div>
-                                            </div>
-                                            <div className="space-y-1">
-                                              <Label className="text-xs">Max Bookings Per Week (user)</Label>
-                                              <div className="flex items-center gap-2">
-                                                <Switch checked={slot.rules.maxBookingsPerWeekUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(day, slot.id, 'maxBookingsPerWeekUnlimited', checked)} disabled={!isEditing} />
-                                                <span className="text-xs text-gray-500">Unlimited</span>
-                                                <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerWeek} disabled={!isEditing || slot.rules.maxBookingsPerWeekUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(day, slot.id, 'maxBookingsPerWeek', e.target.value)} />
-                                              </div>
-                                            </div>
-                                            <div className="space-y-1">
-                                              <Label className="text-xs">Max Bookings Per Week (household)</Label>
-                                              <div className="flex items-center gap-2">
-                                                <Switch checked={slot.rules.maxBookingsPerWeekHouseholdUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(day, slot.id, 'maxBookingsPerWeekHouseholdUnlimited', checked)} disabled={!isEditing} />
-                                                <span className="text-xs text-gray-500">Unlimited</span>
-                                                <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerWeekHousehold} disabled={!isEditing || slot.rules.maxBookingsPerWeekHouseholdUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(day, slot.id, 'maxBookingsPerWeekHousehold', e.target.value)} />
-                                              </div>
-                                            </div>
-                                            <div className="space-y-1">
-                                              <Label className="text-xs">Max Duration (hours)</Label>
-                                              <div className="flex items-center gap-2">
-                                                <Switch checked={slot.rules.maxDurationUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(day, slot.id, 'maxDurationUnlimited', checked)} disabled={!isEditing} />
-                                                <span className="text-xs text-gray-500">Unlimited</span>
-                                                <Input type="number" min="0.5" step="0.5" className="w-24 h-8" value={slot.rules.maxDurationHours} disabled={!isEditing || slot.rules.maxDurationUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(day, slot.id, 'maxDurationHours', e.target.value)} />
-                                              </div>
-                                            </div>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">Max Bookings Per Day (user)</Label>
+                                          <div className="flex items-center gap-2">
+                                            <Switch checked={slot.rules.maxBookingsPerDayUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', checked)} disabled={!isEditing} />
+                                            <span className="text-xs text-gray-500">Unlimited</span>
+                                            <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerDay} disabled={!isEditing || slot.rules.maxBookingsPerDayUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', e.target.value)} />
                                           </div>
                                         </div>
-                                      )}
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">Max Bookings Per Week (user)</Label>
+                                          <div className="flex items-center gap-2">
+                                            <Switch checked={slot.rules.maxBookingsPerWeekUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', checked)} disabled={!isEditing} />
+                                            <span className="text-xs text-gray-500">Unlimited</span>
+                                            <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerWeek} disabled={!isEditing || slot.rules.maxBookingsPerWeekUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', e.target.value)} />
+                                          </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">Max Bookings Per Week (household)</Label>
+                                          <div className="flex items-center gap-2">
+                                            <Switch checked={slot.rules.maxBookingsPerWeekHouseholdUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', checked)} disabled={!isEditing} />
+                                            <span className="text-xs text-gray-500">Unlimited</span>
+                                            <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerWeekHousehold} disabled={!isEditing || slot.rules.maxBookingsPerWeekHouseholdUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', e.target.value)} />
+                                          </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">Max Duration (hours)</Label>
+                                          <div className="flex items-center gap-2">
+                                            <Switch checked={slot.rules.maxDurationUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', checked)} disabled={!isEditing} />
+                                            <span className="text-xs text-gray-500">Unlimited</span>
+                                            <Input type="number" min="0.5" step="0.5" className="w-24 h-8" value={slot.rules.maxDurationHours} disabled={!isEditing || slot.rules.maxDurationUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxDurationHours', e.target.value)} />
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500">No peak hours set</p>
-                            )}
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
-                        ))}
+                        ) : (
+                          <p className="text-sm text-gray-500">No peak hours slots configured.</p>
+                        )}
                       </div>
                     </CardContent>
                   )}

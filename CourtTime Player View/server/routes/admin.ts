@@ -275,13 +275,22 @@ router.patch('/facilities/:facilityId', async (req, res) => {
 
         // Upsert peak hours policy
         if (bookingRules.hasPeakHours) {
-          const normalizedTimeSlots = Object.fromEntries(
-            Object.entries(bookingRules.peakHoursSlots || {}).map(([day, slots]: [string, any]) => [
-              day,
-              (Array.isArray(slots) ? slots : []).map((slot: any) => ({
+          const dayNameToNumber: Record<string, number> = {
+            sunday: 0,
+            monday: 1,
+            tuesday: 2,
+            wednesday: 3,
+            thursday: 4,
+            friday: 5,
+            saturday: 6,
+          };
+
+          const normalizedTimeSlots = Array.isArray(bookingRules.peakHoursSlots)
+            ? bookingRules.peakHoursSlots.map((slot: any) => ({
                 id: slot.id,
                 startTime: slot.startTime,
                 endTime: slot.endTime,
+                days: Array.isArray(slot.days) ? slot.days : [],
                 appliesToAllCourts: slot.appliesToAllCourts !== false,
                 selectedCourtIds: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
                 rules: {
@@ -291,8 +300,24 @@ router.patch('/facilities/:facilityId', async (req, res) => {
                   maxDurationHours: slot.rules?.maxDurationUnlimited ? -1 : (parseFloat(slot.rules?.maxDurationHours) || 1.5),
                 }
               }))
-            ])
-          );
+            : Object.entries(bookingRules.peakHoursSlots || {}).flatMap(([dayName, slots]: [string, any]) => {
+                const day = dayNameToNumber[dayName.toLowerCase()];
+                if (!Array.isArray(slots) || day === undefined) return [];
+                return slots.map((slot: any) => ({
+                  id: slot.id,
+                  startTime: slot.startTime,
+                  endTime: slot.endTime,
+                  days: [day],
+                  appliesToAllCourts: slot.appliesToAllCourts !== false,
+                  selectedCourtIds: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
+                  rules: {
+                    maxBookingsPerDay: slot.rules?.maxBookingsPerDayUnlimited ? -1 : (parseInt(slot.rules?.maxBookingsPerDay) || 1),
+                    maxBookingsPerWeek: slot.rules?.maxBookingsPerWeekUnlimited ? -1 : (parseInt(slot.rules?.maxBookingsPerWeek) || 2),
+                    maxBookingsPerWeekHousehold: slot.rules?.maxBookingsPerWeekHouseholdUnlimited ? -1 : (parseInt(slot.rules?.maxBookingsPerWeekHousehold) || 2),
+                    maxDurationHours: slot.rules?.maxDurationUnlimited ? -1 : (parseFloat(slot.rules?.maxDurationHours) || 1.5),
+                  }
+                }));
+              });
 
           const peakConfig = JSON.stringify({
             apply_to_admins: bookingRules.peakHoursApplyToAdmins !== false,

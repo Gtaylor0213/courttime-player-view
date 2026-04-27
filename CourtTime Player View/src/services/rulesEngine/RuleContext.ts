@@ -14,6 +14,7 @@ import {
   CourtAllowedActivity,
   CourtBlackout,
   FacilityWithRules,
+  PeakHoursSlot,
   FacilityRuleConfig,
   HouseholdGroup,
   HouseholdMember,
@@ -21,7 +22,7 @@ import {
   AccountStrike,
   BookingCancellation
 } from './types';
-import { isPrimeTime } from './utils/primeTimeUtils';
+import { getDayOfWeek, timeRangesOverlap } from './utils/timeUtils';
 
 /**
  * Get current time expressed as facility-local components.
@@ -73,7 +74,8 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     courtBookings,
     strikes,
     recentCancellations,
-    blackouts
+    blackouts,
+    peakHoursSlots
   ] = await Promise.all([
     fetchUserWithTier(request.userId, request.facilityId),
     fetchCourtWithConfig(request.courtId),
@@ -83,7 +85,8 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     fetchCourtBookings(request.courtId, request.bookingDate),
     fetchUserStrikes(request.userId, request.facilityId),
     fetchRecentCancellations(request.userId, request.facilityId),
-    fetchCourtBlackouts(request.courtId, request.facilityId, request.bookingDate)
+    fetchCourtBlackouts(request.courtId, request.facilityId, request.bookingDate),
+    fetchPeakHoursSlots(request.facilityId)
   ]);
 
   // Fetch household bookings if household exists
@@ -92,10 +95,25 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     householdBookings = await fetchHouseholdBookings(household.id);
   }
 
-  // Determine if booking is peak hours
-  const bookingIsPrimeTime = court.operatingConfig
-    ? isPrimeTime(court.operatingConfig, request.bookingDate, request.startTime, request.endTime)
-    : false;
+  const slotsFromRuleEngine = extractPeakHoursSlotsFromRuleConfigs(facility.rules || []);
+  const combinedPeakHoursSlots = mergePeakHoursSlots(peakHoursSlots, slotsFromRuleEngine);
+
+  const activePeakHoursSlot = findApplicablePeakHoursSlot(
+    combinedPeakHoursSlots,
+    request.courtId,
+    request.bookingDate,
+    request.startTime,
+    request.endTime
+  );
+  // Fall back to legacy court operating config peak-hours when no slot policy is configured.
+  const dayOfWeek = getDayOfWeek(request.bookingDate);
+  const dayConfig = court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
+  const isLegacyPrime = Boolean(
+    dayConfig?.primeTimeStart &&
+    dayConfig?.primeTimeEnd &&
+    timeRangesOverlap(request.startTime, request.endTime, dayConfig.primeTimeStart, dayConfig.primeTimeEnd)
+  );
+  const bookingIsPrimeTime = Boolean(activePeakHoursSlot || isLegacyPrime);
 
   // Use facility-local time for currentDateTime so comparisons with
   // combineDateAndTime (which uses local time components) are correct
@@ -118,8 +136,154 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     recentCancellations,
     blackouts,
     currentDateTime,
-    isPrimeTime: bookingIsPrimeTime
+    isPrimeTime: bookingIsPrimeTime,
+    peakHoursSlots: combinedPeakHoursSlots,
+    activePeakHoursSlot: activePeakHoursSlot || undefined
   };
+}
+
+function findApplicablePeakHoursSlot(
+  slots: PeakHoursSlot[],
+  courtId: string,
+  bookingDate: string,
+  startTime: string,
+  endTime: string
+): PeakHoursSlot | null {
+  const day = getDayOfWeek(bookingDate);
+  return (
+    slots.find((slot) => {
+      if (!slot.days.includes(day)) return false;
+      if (!slot.appliesToAllCourts && !slot.selectedCourtIds.includes(courtId)) return false;
+      return timeRangesOverlap(startTime, endTime, slot.startTime, slot.endTime);
+    }) || null
+  );
+}
+
+function normalizePeakHoursSlots(rawConfig: any): PeakHoursSlot[] {
+  const timeSlots = rawConfig?.time_slots;
+  if (!timeSlots) return [];
+
+  // New model: slots[] with days array.
+  if (Array.isArray(timeSlots)) {
+    return timeSlots.map((slot: any) => ({
+      id: String(slot.id || `${slot.startTime || slot.start_time}-${slot.endTime || slot.end_time}`),
+      startTime: slot.startTime || slot.start_time,
+      endTime: slot.endTime || slot.end_time,
+      days: Array.isArray(slot.days)
+        ? slot.days.map((d: any) => Number(d)).filter((d: number) => Number.isInteger(d) && d >= 0 && d <= 6)
+        : [],
+      appliesToAllCourts: slot.appliesToAllCourts !== false && slot.applies_to_all_courts !== false,
+      selectedCourtIds: Array.isArray(slot.selectedCourtIds)
+        ? slot.selectedCourtIds
+        : (Array.isArray(slot.selected_court_ids) ? slot.selected_court_ids : []),
+      rules: {
+        maxBookingsPerDay: toOptionalNumber(slot.rules?.maxBookingsPerDay ?? slot.rules?.max_bookings_per_day),
+        maxBookingsPerWeek: toOptionalNumber(slot.rules?.maxBookingsPerWeek ?? slot.rules?.max_bookings_per_week),
+        maxBookingsPerWeekHousehold: toOptionalNumber(slot.rules?.maxBookingsPerWeekHousehold ?? slot.rules?.max_bookings_per_week_household),
+        maxDurationHours: toOptionalNumber(slot.rules?.maxDurationHours ?? slot.rules?.max_duration_hours),
+      }
+    })).filter((slot: PeakHoursSlot) => slot.startTime && slot.endTime && slot.days.length > 0);
+  }
+
+  // Legacy model: Record<dayName, slots[]>
+  if (typeof timeSlots === 'object') {
+    const dayNameToNumber: Record<string, number> = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6
+    };
+    const normalized: PeakHoursSlot[] = [];
+    for (const [dayName, slots] of Object.entries(timeSlots)) {
+      const day = dayNameToNumber[dayName.toLowerCase()];
+      if (day === undefined || !Array.isArray(slots)) continue;
+      for (const slot of slots as any[]) {
+        normalized.push({
+          id: String(slot.id || `${dayName}-${slot.startTime || slot.start_time}-${slot.endTime || slot.end_time}`),
+          startTime: slot.startTime || slot.start_time,
+          endTime: slot.endTime || slot.end_time,
+          days: [day],
+          appliesToAllCourts: slot.appliesToAllCourts !== false && slot.applies_to_all_courts !== false,
+          selectedCourtIds: Array.isArray(slot.selectedCourtIds)
+            ? slot.selectedCourtIds
+            : (Array.isArray(slot.selected_court_ids) ? slot.selected_court_ids : []),
+          rules: {
+            maxBookingsPerDay: toOptionalNumber(slot.rules?.maxBookingsPerDay ?? slot.rules?.max_bookings_per_day),
+            maxBookingsPerWeek: toOptionalNumber(slot.rules?.maxBookingsPerWeek ?? slot.rules?.max_bookings_per_week),
+            maxBookingsPerWeekHousehold: toOptionalNumber(slot.rules?.maxBookingsPerWeekHousehold ?? slot.rules?.max_bookings_per_week_household),
+            maxDurationHours: toOptionalNumber(slot.rules?.maxDurationHours ?? slot.rules?.max_duration_hours),
+          }
+        });
+      }
+    }
+    return normalized.filter((slot) => slot.startTime && slot.endTime && slot.days.length > 0);
+  }
+
+  return [];
+}
+
+async function fetchPeakHoursSlots(facilityId: string): Promise<PeakHoursSlot[]> {
+  const result = await query(
+    `SELECT rule_config as "ruleConfig"
+     FROM facility_rules
+     WHERE facility_id = $1
+       AND rule_type = 'peak_hours'
+       AND is_active = true
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [facilityId]
+  );
+
+  if (result.rows.length === 0) {
+    return [];
+  }
+
+  const rawConfig = result.rows[0].ruleConfig;
+  return normalizePeakHoursSlots(typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig);
+}
+
+function toOptionalNumber(value: any): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function extractPeakHoursSlotsFromRuleConfigs(rules: FacilityRuleConfig[]): PeakHoursSlot[] {
+  const crt001 = rules.find((r) => r.ruleCode === 'CRT-001');
+  if (!crt001?.ruleConfig) return [];
+  const windows = (crt001.ruleConfig.peak_windows || crt001.ruleConfig.prime_windows || []) as any[];
+  if (!Array.isArray(windows)) return [];
+
+  return windows.map((w: any) => ({
+    id: String(w.id || `${w.start_time}-${w.end_time}`),
+    startTime: w.start_time || w.startTime,
+    endTime: w.end_time || w.endTime,
+    days: Array.isArray(w.days)
+      ? w.days.map((d: any) => Number(d)).filter((d: number) => Number.isInteger(d) && d >= 0 && d <= 6)
+      : (typeof w.day_of_week === 'number' ? [w.day_of_week] : []),
+    appliesToAllCourts: w.applies_to_all_courts !== false && w.appliesToAllCourts !== false,
+    selectedCourtIds: Array.isArray(w.selected_court_ids)
+      ? w.selected_court_ids
+      : (Array.isArray(w.selectedCourtIds) ? w.selectedCourtIds : []),
+    rules: {
+      maxBookingsPerDay: toOptionalNumber(w.rules?.max_bookings_per_day ?? w.rules?.maxBookingsPerDay),
+      maxBookingsPerWeek: toOptionalNumber(w.rules?.max_bookings_per_week ?? w.rules?.maxBookingsPerWeek),
+      maxBookingsPerWeekHousehold: toOptionalNumber(w.rules?.max_bookings_per_week_household ?? w.rules?.maxBookingsPerWeekHousehold),
+      maxDurationHours: toOptionalNumber(w.rules?.max_duration_hours ?? w.rules?.maxDurationHours),
+    }
+  })).filter((slot) => slot.startTime && slot.endTime && slot.days.length > 0);
+}
+
+function mergePeakHoursSlots(primary: PeakHoursSlot[], fallback: PeakHoursSlot[]): PeakHoursSlot[] {
+  const merged = new Map<string, PeakHoursSlot>();
+  for (const slot of [...fallback, ...primary]) {
+    const key = `${slot.id}:${slot.startTime}:${slot.endTime}:${slot.days.join(',')}`;
+    merged.set(key, slot);
+  }
+  return Array.from(merged.values());
 }
 
 /**

@@ -406,6 +406,7 @@ router.patch('/courts/:courtId', async (req, res) => {
       courtType,
       isIndoor,
       hasLights,
+      isWalkUp,
       status: rawStatus
     } = req.body;
 
@@ -422,9 +423,10 @@ router.patch('/courts/:courtId', async (req, res) => {
         court_type = COALESCE($4, court_type),
         is_indoor = COALESCE($5, is_indoor),
         has_lights = COALESCE($6, has_lights),
-        status = COALESCE($7, status),
+        is_walk_up = COALESCE($7, is_walk_up),
+        status = COALESCE($8, status),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $8
+      WHERE id = $9
       RETURNING
         id,
         facility_id as "facilityId",
@@ -434,10 +436,11 @@ router.patch('/courts/:courtId', async (req, res) => {
         court_type as "courtType",
         is_indoor as "isIndoor",
         has_lights as "hasLights",
+        is_walk_up as "isWalkUp",
         status,
         created_at as "createdAt",
         updated_at as "updatedAt"
-    `, [name, courtNumber, surfaceType, courtType, isIndoor, hasLights, status, courtId]);
+    `, [name, courtNumber, surfaceType, courtType, isIndoor, hasLights, isWalkUp, status, courtId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -468,7 +471,7 @@ router.patch('/courts/:courtId', async (req, res) => {
 router.post('/courts/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
-    const { name, courtNumber, surfaceType, courtType, isIndoor, hasLights } = req.body;
+    const { name, courtNumber, surfaceType, courtType, isIndoor, hasLights, isWalkUp } = req.body;
 
     if (!name) {
       return res.status(400).json({ success: false, error: 'Court name is required' });
@@ -482,6 +485,7 @@ router.post('/courts/:facilityId', async (req, res) => {
       courtType: courtType || 'Tennis',
       isIndoor: isIndoor || false,
       hasLights: hasLights || false,
+      isWalkUp: isWalkUp || false,
     });
 
     res.json({ success: true, data: { court } });
@@ -498,7 +502,7 @@ router.post('/courts/:facilityId', async (req, res) => {
 router.post('/courts/:facilityId/bulk', async (req, res) => {
   try {
     const { facilityId } = req.params;
-    const { count, startingNumber, surfaceType, courtType, isIndoor, hasLights } = req.body;
+    const { count, startingNumber, surfaceType, courtType, isIndoor, hasLights, isWalkUp } = req.body;
 
     const courtCount = parseInt(count);
     if (isNaN(courtCount) || courtCount < 1 || courtCount > 50) {
@@ -512,6 +516,7 @@ router.post('/courts/:facilityId/bulk', async (req, res) => {
         courtType: courtType || 'Tennis',
         isIndoor: isIndoor || false,
         hasLights: hasLights || false,
+        isWalkUp: isWalkUp || false,
       },
       courtCount,
       parseInt(startingNumber) || 1

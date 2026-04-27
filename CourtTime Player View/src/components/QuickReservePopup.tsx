@@ -28,7 +28,7 @@ interface QuickReservePopupProps {
     id: string;
     name: string;
     type: string;
-    courts: Array<{ id: string; name: string; type: string; parentCourtId?: string | null; isSplitCourt?: boolean }>;
+    courts: Array<{ id: string; name: string; type: string; parentCourtId?: string | null; isSplitCourt?: boolean; isWalkUp?: boolean }>;
   }>;
   selectedFacilityId: string;
 }
@@ -119,7 +119,7 @@ export function QuickReservePopup({
   }, [selectedFacility]);
 
   const currentFacility = facilities.find(f => f.id === selectedFacility);
-  const allCourts = currentFacility?.courts || [];
+  const allCourts = (currentFacility?.courts || []).filter(c => !c.isWalkUp);
 
   // Determine if facility has both types of courts
   const hasTennisCourts = allCourts.some(court => court.type === 'tennis');

@@ -14,6 +14,7 @@ export interface CourtCreateData {
   courtType: 'Tennis' | 'Pickleball' | 'Dual';
   isIndoor: boolean;
   hasLights: boolean;
+  isWalkUp?: boolean;
   courtRules?: string;
   parentCourtId?: string; // For split courts
   splitConfiguration?: {
@@ -31,6 +32,7 @@ export interface Court {
   courtType: string;
   isIndoor: boolean;
   hasLights: boolean;
+  isWalkUp: boolean;
   status: string;
   courtRules?: string;
   parentCourtId?: string;
@@ -46,13 +48,13 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
   const result = await query(
     `INSERT INTO courts (
       facility_id, name, court_number, surface_type, court_type,
-      is_indoor, has_lights, court_rules, parent_court_id, split_configuration,
+      is_indoor, has_lights, is_walk_up, court_rules, parent_court_id, split_configuration,
       is_split_court, status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'available')
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'available')
     RETURNING
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"`,
@@ -64,6 +66,7 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
       courtData.courtType,
       courtData.isIndoor,
       courtData.hasLights,
+      courtData.isWalkUp || false,
       courtData.courtRules || null,
       courtData.parentCourtId || null,
       courtData.splitConfiguration ? JSON.stringify(courtData.splitConfiguration) : null,
@@ -90,9 +93,9 @@ export async function createCourtsBulk(
     for (let i = 0; i < count; i++) {
       const courtNumber = startingNumber + i;
       const courtName = `Court ${courtNumber}`;
-      const offset = i * 8;
+      const offset = i * 9;
       placeholders.push(
-        `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, 'available', false)`
+        `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, 'available', false)`
       );
       values.push(
         courtData.facilityId,
@@ -102,6 +105,7 @@ export async function createCourtsBulk(
         courtData.courtType,
         courtData.isIndoor,
         courtData.hasLights,
+        courtData.isWalkUp || false,
         courtData.courtRules || null,
       );
     }
@@ -109,12 +113,12 @@ export async function createCourtsBulk(
     const result = await client.query(
       `INSERT INTO courts (
         facility_id, name, court_number, surface_type, court_type,
-        is_indoor, has_lights, court_rules, status, is_split_court
+        is_indoor, has_lights, is_walk_up, court_rules, status, is_split_court
       ) VALUES ${placeholders.join(', ')}
       RETURNING
         id, facility_id as "facilityId", name, court_number as "courtNumber",
         surface_type as "surfaceType", court_type as "courtType",
-        is_indoor as "isIndoor", has_lights as "hasLights", status,
+        is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
         court_rules as "courtRules", parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
         created_at as "createdAt"`,
@@ -165,12 +169,12 @@ export async function createSplitCourt(
       const result = await client.query(
         `INSERT INTO courts (
           facility_id, name, court_number, surface_type, court_type,
-          is_indoor, has_lights, parent_court_id, status, is_split_court
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'available', false)
+          is_indoor, has_lights, is_walk_up, parent_court_id, status, is_split_court
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'available', false)
         RETURNING
           id, facility_id as "facilityId", name, court_number as "courtNumber",
           surface_type as "surfaceType", court_type as "courtType",
-          is_indoor as "isIndoor", has_lights as "hasLights", status,
+          is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
           court_rules as "courtRules", parent_court_id as "parentCourtId",
           split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
           created_at as "createdAt"`,
@@ -182,6 +186,7 @@ export async function createSplitCourt(
           splitConfig.splitType,
           parentCourt.is_indoor,
           parentCourt.has_lights,
+          parentCourt.is_walk_up || false,
           parentCourtId,
         ]
       );
@@ -194,7 +199,7 @@ export async function createSplitCourt(
       `SELECT
         id, facility_id as "facilityId", name, court_number as "courtNumber",
         surface_type as "surfaceType", court_type as "courtType",
-        is_indoor as "isIndoor", has_lights as "hasLights", status,
+        is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
         court_rules as "courtRules", parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
         created_at as "createdAt"
@@ -220,6 +225,7 @@ export async function updateCourtsBulk(
     courtType?: string;
     isIndoor?: boolean;
     hasLights?: boolean;
+    isWalkUp?: boolean;
     status?: string;
   }
 ): Promise<number> {
@@ -244,6 +250,10 @@ export async function updateCourtsBulk(
   if (updates.hasLights !== undefined) {
     setClauses.push(`has_lights = $${paramIndex++}`);
     params.push(updates.hasLights);
+  }
+  if (updates.isWalkUp !== undefined) {
+    setClauses.push(`is_walk_up = $${paramIndex++}`);
+    params.push(updates.isWalkUp);
   }
   if (updates.status !== undefined) {
     const statusMap: Record<string, string> = { active: 'available', inactive: 'closed' };
@@ -271,7 +281,7 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
     `SELECT
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"
@@ -292,7 +302,7 @@ export async function getCourtById(courtId: string): Promise<Court | null> {
     `SELECT
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"
@@ -312,7 +322,7 @@ export async function getSplitCourts(parentCourtId: string): Promise<Court[]> {
     `SELECT
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"
@@ -356,6 +366,10 @@ export async function updateCourt(
     fields.push(`has_lights = $${paramCount++}`);
     values.push(updates.hasLights);
   }
+  if (updates.isWalkUp !== undefined) {
+    fields.push(`is_walk_up = $${paramCount++}`);
+    values.push(updates.isWalkUp);
+  }
   if (updates.courtRules !== undefined) {
     fields.push(`court_rules = $${paramCount++}`);
     values.push(updates.courtRules);
@@ -374,7 +388,7 @@ export async function updateCourt(
      RETURNING
        id, facility_id as "facilityId", name, court_number as "courtNumber",
        surface_type as "surfaceType", court_type as "courtType",
-       is_indoor as "isIndoor", has_lights as "hasLights", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
        court_rules as "courtRules", parent_court_id as "parentCourtId",
        split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
        created_at as "createdAt"`,

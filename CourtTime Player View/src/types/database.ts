@@ -71,6 +71,7 @@ export interface Court {
   courtType?: 'Tennis' | 'Pickleball' | 'Dual';
   isIndoor: boolean;
   hasLights: boolean;
+  isWalkUp?: boolean;
   status: 'available' | 'maintenance' | 'closed';
   createdAt: Date;
   updatedAt: Date;

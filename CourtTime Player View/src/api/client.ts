@@ -253,6 +253,7 @@ export const facilitiesApi = {
       courtType: string;
       isIndoor: boolean;
       hasLights: boolean;
+      isWalkUp?: boolean;
       canSplit?: boolean;
       splitConfig?: {
         splitNames: string[];
@@ -606,6 +607,7 @@ export const adminApi = {
     courtType: string;
     isIndoor: boolean;
     hasLights: boolean;
+    isWalkUp?: boolean;
     canSplit?: boolean;
     splitConfig?: {
       splitNames: string[];
@@ -625,6 +627,7 @@ export const adminApi = {
     courtType: string;
     isIndoor: boolean;
     hasLights: boolean;
+    isWalkUp?: boolean;
   }) => {
     return apiRequest(`/api/admin/courts/${facilityId}/bulk`, {
       method: 'POST',
@@ -637,6 +640,7 @@ export const adminApi = {
     courtType?: string;
     isIndoor?: boolean;
     hasLights?: boolean;
+    isWalkUp?: boolean;
     status?: string;
   }) => {
     return apiRequest('/api/admin/courts/bulk-update', {
@@ -652,6 +656,7 @@ export const adminApi = {
     courtType?: string;
     isIndoor?: boolean;
     hasLights?: boolean;
+    isWalkUp?: boolean;
     status?: string;
     canSplit?: boolean;
     splitConfig?: {

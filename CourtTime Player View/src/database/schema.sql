@@ -54,6 +54,7 @@ CREATE TABLE courts (
     court_type VARCHAR(50), -- e.g., 'Tennis', 'Pickleball', 'Dual'
     is_indoor BOOLEAN DEFAULT false,
     has_lights BOOLEAN DEFAULT false,
+    is_walk_up BOOLEAN NOT NULL DEFAULT false, -- walk-up only; not bookable online
     status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'maintenance', 'closed')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

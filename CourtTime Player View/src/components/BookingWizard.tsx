@@ -102,7 +102,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
-  const [facilityCourts, setFacilityCourts] = useState<Array<{ id: string; name: string; status: string }>>([]);
+  const [facilityCourts, setFacilityCourts] = useState<Array<{ id: string; name: string; status: string; isWalkUp?: boolean }>>([]);
   const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast } = useNotifications();
@@ -113,7 +113,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     if (isOpen && facilityId) {
       facilitiesApi.getCourts(facilityId).then(res => {
         if (res.success && res.data?.courts) {
-          setFacilityCourts(res.data.courts.filter((c: any) => c.status === 'available'));
+          setFacilityCourts(res.data.courts.filter((c: any) => c.status === 'available' && !c.isWalkUp));
         }
       });
     }

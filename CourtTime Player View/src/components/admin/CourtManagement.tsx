@@ -23,6 +23,7 @@ interface Court {
   surfaceType: string;
   isIndoor: boolean;
   hasLights: boolean;
+  isWalkUp: boolean;
   status: 'available' | 'maintenance' | 'closed';
 }
 
@@ -103,6 +104,7 @@ export function CourtManagement() {
         const normalized = response.data.courts.map((c: any) => ({
           ...c,
           status: c.status === 'active' ? 'available' : c.status === 'inactive' ? 'closed' : c.status,
+          isWalkUp: c.isWalkUp === true,
         }));
         setCourts(normalized);
       } else {
@@ -138,6 +140,7 @@ export function CourtManagement() {
       surfaceType: 'Hard Court',
       isIndoor: false,
       hasLights: false,
+      isWalkUp: false,
       status: 'available',
     });
     setIsAddingNew(true);
@@ -166,6 +169,7 @@ export function CourtManagement() {
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
+          isWalkUp: editingCourt.isWalkUp,
         });
       } else {
         // Update existing court
@@ -176,6 +180,7 @@ export function CourtManagement() {
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
+          isWalkUp: editingCourt.isWalkUp,
           status: editingCourt.status,
         });
       }
@@ -559,6 +564,14 @@ export function CourtManagement() {
                     />
                     <Label htmlFor="lights">Has Lights</Label>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="walkUp"
+                      checked={editingCourt.isWalkUp}
+                      onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isWalkUp: checked })}
+                    />
+                    <Label htmlFor="walkUp">Walk-up Court (no online booking)</Label>
+                  </div>
                 </div>
                 <div className="flex gap-2 mt-6">
                   <Button onClick={handleSave} disabled={saving}>
@@ -687,6 +700,7 @@ export function CourtManagement() {
                           <div className="flex items-center gap-3 mb-2">
                             <h3 className="text-lg font-semibold">{court.name}</h3>
                             <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
+                            {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
                           </div>
                           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                             <span>Court #: <strong>{court.courtNumber}</strong></span>

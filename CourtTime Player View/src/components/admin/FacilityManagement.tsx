@@ -178,6 +178,7 @@ interface Court {
   surfaceType: string;
   isIndoor: boolean;
   hasLights: boolean;
+  isWalkUp?: boolean;
   status: 'active' | 'maintenance' | 'inactive';
   canSplit?: boolean;
   splitConfig?: {
@@ -959,6 +960,7 @@ export function FacilityManagement() {
       surfaceType: 'Hard Court',
       isIndoor: false,
       hasLights: false,
+      isWalkUp: false,
       status: 'active',
       canSplit: false,
     });
@@ -986,6 +988,7 @@ export function FacilityManagement() {
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
+          isWalkUp: editingCourt.isWalkUp,
           canSplit: editingCourt.canSplit,
           splitConfig: editingCourt.splitConfig,
         });
@@ -998,6 +1001,7 @@ export function FacilityManagement() {
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
+          isWalkUp: editingCourt.isWalkUp,
           status: editingCourt.status,
           canSplit: editingCourt.canSplit,
           splitConfig: editingCourt.splitConfig,
@@ -2928,6 +2932,14 @@ export function FacilityManagement() {
                         />
                         <Label htmlFor="lights">Has Lights</Label>
                       </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="walkUp"
+                          checked={editingCourt.isWalkUp === true}
+                          onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isWalkUp: checked })}
+                        />
+                        <Label htmlFor="walkUp">Walk-up Court (no online booking)</Label>
+                      </div>
                     </div>
 
                     <div className="mt-4">
@@ -3024,6 +3036,7 @@ export function FacilityManagement() {
                               <div className="flex items-center gap-3 mb-2">
                                 <h3 className="text-lg font-semibold">{court.name}</h3>
                                 <Badge className={getCourtStatusColor(court.status)}>{formatCourtStatus(court.status)}</Badge>
+                                {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
                               </div>
                               <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                                 <span>Court #: <strong>{court.courtNumber}</strong></span>

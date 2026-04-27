@@ -325,6 +325,7 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
         court_type as "courtType",
         is_indoor as "isIndoor",
         has_lights as "hasLights",
+        is_walk_up as "isWalkUp",
         status,
         parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration",
@@ -746,6 +747,7 @@ export interface CourtCreateData {
   courtType: 'Tennis' | 'Pickleball' | 'Dual';
   isIndoor: boolean;
   hasLights: boolean;
+  isWalkUp?: boolean;
   canSplit?: boolean;
   splitConfig?: {
     splitNames: string[];
@@ -1147,12 +1149,12 @@ export async function registerFacility(
       const courtResult = await client.query(
         `INSERT INTO courts (
           facility_id, name, court_number, surface_type, court_type,
-          is_indoor, has_lights, status, is_split_court, split_configuration
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'available', $8, $9)
+          is_indoor, has_lights, is_walk_up, status, is_split_court, split_configuration
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'available', $9, $10)
         RETURNING
           id, facility_id as "facilityId", name, court_number as "courtNumber",
           surface_type as "surfaceType", court_type as "courtType",
-          is_indoor as "isIndoor", has_lights as "hasLights", status,
+          is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
           is_split_court as "isSplitCourt", split_configuration as "splitConfiguration"`,
         [
           facilityId,
@@ -1162,6 +1164,7 @@ export async function registerFacility(
           court.courtType,
           court.isIndoor,
           court.hasLights,
+          court.isWalkUp || false,
           court.canSplit || false,
           court.splitConfig ? JSON.stringify(court.splitConfig) : null,
         ]
@@ -1177,8 +1180,8 @@ export async function registerFacility(
           await client.query(
             `INSERT INTO courts (
               facility_id, name, court_number, surface_type, court_type,
-              is_indoor, has_lights, status, parent_court_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'available', $8)`,
+              is_indoor, has_lights, is_walk_up, status, parent_court_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'available', $9)`,
             [
               facilityId,
               `Court ${splitName}`,
@@ -1187,6 +1190,7 @@ export async function registerFacility(
               court.splitConfig.splitType,
               court.isIndoor,
               court.hasLights,
+              court.isWalkUp || false,
               createdCourt.id,
             ]
           );

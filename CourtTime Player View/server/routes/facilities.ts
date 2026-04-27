@@ -252,6 +252,7 @@ router.post('/register', async (req, res, next) => {
         courtType: court.courtType,
         isIndoor: court.isIndoor || false,
         hasLights: court.hasLights || false,
+        isWalkUp: court.isWalkUp || false,
         canSplit: court.canSplit || false,
         splitConfig: court.splitConfig
       })),

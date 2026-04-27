@@ -218,6 +218,27 @@ export async function validateBooking(bookingData: {
   bookingType?: string;
   activityType?: string;
 }): Promise<EvaluationResult> {
+  const walkUpCourt = await query(
+    `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
+    [bookingData.courtId]
+  );
+  if (walkUpCourt.rows.length > 0) {
+    const blocker = {
+      ruleCode: 'COURT-WALKUP-ONLY',
+      ruleName: 'Walk-up only court',
+      message: 'This is a walk-up only court and cannot be booked online.',
+      severity: 'error' as const,
+      passed: false,
+    };
+    return {
+      allowed: false,
+      results: [blocker],
+      blockers: [blocker],
+      warnings: [],
+      isPrimeTime: false,
+    };
+  }
+
   const request: BookingRequest = {
     userId: bookingData.userId,
     courtId: bookingData.courtId,
@@ -251,6 +272,17 @@ export async function createBooking(bookingData: {
   skipRulesValidation?: boolean;  // For admin override
 }): Promise<BookingResult> {
   try {
+    const walkUpCourt = await query(
+      `SELECT name FROM courts WHERE id = $1 AND is_walk_up = true`,
+      [bookingData.courtId]
+    );
+    if (walkUpCourt.rows.length > 0) {
+      return {
+        success: false,
+        error: 'This is a walk-up only court and cannot be booked online.'
+      };
+    }
+
     // Record rate limit action
     await recordRateLimitAction(bookingData.userId, bookingData.facilityId, 'create');
 
@@ -416,6 +448,17 @@ export async function createRecurringBookingSeries(
     const warnings: RuleResult[] = [];
 
     for (const instance of payload.instances) {
+      const walkUpCourt = await query(
+        `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
+        [instance.courtId]
+      );
+      if (walkUpCourt.rows.length > 0) {
+        return {
+          success: false,
+          error: 'This is a walk-up only court and cannot be booked online.'
+        };
+      }
+
       const validation = await validateBooking({
         courtId: instance.courtId,
         userId: payload.userId,
@@ -550,6 +593,17 @@ export async function createBookingWithOverride(
   const adminId = override.adminUserId;
   const overrideReason = override.reason;
   try {
+    const walkUpCourt = await query(
+      `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
+      [bookingData.courtId]
+    );
+    if (walkUpCourt.rows.length > 0) {
+      return {
+        success: false,
+        error: 'This is a walk-up only court and cannot be booked online.'
+      };
+    }
+
     const request: BookingRequest = {
       userId: bookingData.userId,
       courtId: bookingData.courtId,

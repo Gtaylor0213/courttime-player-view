@@ -219,9 +219,21 @@ export const facilitiesApi = {
     peakHoursPolicy?: {
       enabled: boolean;
       applyToAdmins: boolean;
-      timeSlots: Record<string, Array<{ id: string; startTime: string; endTime: string }>>; // e.g., { monday: [{id, startTime, endTime}], ... }
-      maxBookingsPerWeek: number;
-      maxDurationHours: number;
+      timeSlots: Record<string, Array<{
+        id: string;
+        startTime: string;
+        endTime: string;
+        appliesToAllCourts?: boolean;
+        selectedCourtIds?: string[];
+        rules?: {
+          maxBookingsPerDay?: number;
+          maxBookingsPerWeek?: number;
+          maxBookingsPerWeekHousehold?: number;
+          maxDurationHours?: number;
+        };
+      }>>;
+      maxBookingsPerWeek?: number; // legacy
+      maxDurationHours?: number; // legacy
     };
 
     // Weekend policy (optional)
@@ -578,6 +590,7 @@ export const adminApi = {
     logoUrl?: string;
     primaryContact?: { name: string; email: string; phone: string };
     secondaryContacts?: Array<{ name: string; email: string; phone: string }>;
+    bookingRules?: any;
   }) => {
     return apiRequest(`/api/admin/facilities/${facilityId}`, {
       method: 'PATCH',

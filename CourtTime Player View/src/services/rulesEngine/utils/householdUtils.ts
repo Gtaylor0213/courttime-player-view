@@ -116,7 +116,7 @@ export function countHouseholdBookingsInWindow(
 }
 
 /**
- * Count household prime-time bookings in a time window
+ * Count household peak-hours bookings in a time window
  */
 export function countHouseholdPrimeTimeBookings(
   householdBookings: BookingWithDetails[],
@@ -149,7 +149,7 @@ export function getRemainingHouseholdSlots(
 }
 
 /**
- * Get remaining household prime-time slots for the week
+ * Get remaining household peak-hours slots for the week
  */
 export function getRemainingHouseholdPrimeTimeSlots(
   currentPrimeTime: number,

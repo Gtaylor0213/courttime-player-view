@@ -1,5 +1,5 @@
 /**
- * Prime Time Utilities for the Rules Engine
+ * Peak Hours Utilities for the Rules Engine
  */
 
 import { CourtOperatingConfig, BookingWithDetails } from '../types';
@@ -7,7 +7,7 @@ import { timeRangesOverlap, getDayOfWeek, getTimeWindow, formatDate } from './ti
 import type { WindowType } from '../types';
 
 /**
- * Check if a booking time falls within prime time hours for a court
+ * Check if a booking time falls within peak hours hours for a court
  */
 export function isPrimeTime(
   operatingConfigs: CourtOperatingConfig[],
@@ -24,7 +24,7 @@ export function isPrimeTime(
     return false;
   }
 
-  // Check if booking overlaps prime time window
+  // Check if booking overlaps peak hours window
   return timeRangesOverlap(
     startTime,
     endTime,
@@ -34,7 +34,7 @@ export function isPrimeTime(
 }
 
 /**
- * Count prime-time bookings in a time window
+ * Count peak-hours bookings in a time window
  */
 export function countPrimeTimeBookings(
   bookings: BookingWithDetails[],
@@ -56,13 +56,13 @@ export function countPrimeTimeBookings(
       return false;
     }
 
-    // Check if booking is prime time
+    // Check if booking is peak hours
     return booking.isPrimeTime;
   }).length;
 }
 
 /**
- * Get prime time windows for a specific date
+ * Get peak hours windows for a specific date
  */
 export function getPrimeTimeWindows(
   operatingConfigs: CourtOperatingConfig[],
@@ -82,7 +82,7 @@ export function getPrimeTimeWindows(
 }
 
 /**
- * Get prime time max duration for a specific day
+ * Get peak hours max duration for a specific day
  */
 export function getPrimeTimeMaxDuration(
   operatingConfigs: CourtOperatingConfig[],
@@ -99,7 +99,7 @@ export function getPrimeTimeMaxDuration(
 }
 
 /**
- * Calculate percentage of booking that falls within prime time
+ * Calculate percentage of booking that falls within peak hours
  */
 export function getPrimeTimeOverlapPercentage(
   operatingConfigs: CourtOperatingConfig[],
@@ -142,7 +142,7 @@ function timeToMinutes(time: string): number {
 }
 
 /**
- * Check if a tier is eligible for prime time
+ * Check if a tier is eligible for peak hours
  */
 export function isTierEligibleForPrimeTime(
   tierName: string,
@@ -167,7 +167,7 @@ export function isTierEligibleForPrimeTime(
 }
 
 /**
- * Get user's remaining prime time bookings for the week
+ * Get user's remaining peak hours bookings for the week
  */
 export function getRemainingPrimeTimeBookings(
   currentPrimeTimeCount: number,
@@ -177,7 +177,7 @@ export function getRemainingPrimeTimeBookings(
 }
 
 /**
- * Format prime time window for display
+ * Format peak hours window for display
  */
 export function formatPrimeTimeWindow(start: string, end: string): string {
   const formatTime = (time: string): string => {

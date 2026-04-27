@@ -288,8 +288,6 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
             enabled: true,
             applyToAdmins: config.apply_to_admins !== false,
             timeSlots: config.time_slots || {},
-            maxBookingsPerWeek: config.max_bookings_per_week,
-            maxDurationHours: config.max_duration_hours,
           };
         } else if (rule.ruleType === 'weekend_policy') {
           facility.weekendPolicy = {
@@ -825,9 +823,21 @@ export interface FacilityRegistrationData {
   peakHoursPolicy?: {
     enabled: boolean;
     applyToAdmins: boolean;
-    timeSlots: Record<string, Array<{ id: string; startTime: string; endTime: string }>>; // e.g., { monday: [{id, startTime, endTime}], ... }
-    maxBookingsPerWeek: number;
-    maxDurationHours: number;
+    timeSlots: Record<string, Array<{
+      id: string;
+      startTime: string;
+      endTime: string;
+      appliesToAllCourts?: boolean;
+      selectedCourtIds?: string[];
+      rules?: {
+        maxBookingsPerDay?: number;
+        maxBookingsPerWeek?: number;
+        maxBookingsPerWeekHousehold?: number;
+        maxDurationHours?: number;
+      };
+    }>>;
+    maxBookingsPerWeek?: number; // legacy
+    maxDurationHours?: number; // legacy
   };
 
   // Weekend policy (optional)
@@ -1058,15 +1068,18 @@ export async function registerFacility(
       );
     }
 
-    // Peak hours policy - with per-day time slots
+    // Peak hours policy - with per-slot restrictions and court targeting
     if (data.peakHoursPolicy?.enabled) {
-      // Convert timeSlots to a cleaner format for storage (remove client-side IDs)
-      const cleanedTimeSlots: Record<string, Array<{ startTime: string; endTime: string }>> = {};
+      const cleanedTimeSlots: Record<string, any[]> = {};
       for (const [day, slots] of Object.entries(data.peakHoursPolicy.timeSlots || {})) {
         if (slots && slots.length > 0) {
           cleanedTimeSlots[day] = slots.map(slot => ({
+            id: slot.id,
             startTime: slot.startTime,
-            endTime: slot.endTime
+            endTime: slot.endTime,
+            appliesToAllCourts: slot.appliesToAllCourts !== false,
+            selectedCourtIds: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
+            rules: slot.rules || {},
           }));
         }
       }
@@ -1078,9 +1091,7 @@ export async function registerFacility(
           facilityId,
           JSON.stringify({
             apply_to_admins: data.peakHoursPolicy.applyToAdmins !== false,
-            time_slots: cleanedTimeSlots, // Per-day time slots
-            max_bookings_per_week: data.peakHoursPolicy.maxBookingsPerWeek,
-            max_duration_hours: data.peakHoursPolicy.maxDurationHours,
+            time_slots: cleanedTimeSlots,
           }),
           superAdminUserId,
         ]

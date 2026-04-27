@@ -92,7 +92,7 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     householdBookings = await fetchHouseholdBookings(household.id);
   }
 
-  // Determine if booking is prime time
+  // Determine if booking is peak hours
   const bookingIsPrimeTime = court.operatingConfig
     ? isPrimeTime(court.operatingConfig, request.bookingDate, request.startTime, request.endTime)
     : false;

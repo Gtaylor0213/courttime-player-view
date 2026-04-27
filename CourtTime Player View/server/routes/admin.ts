@@ -275,11 +275,28 @@ router.patch('/facilities/:facilityId', async (req, res) => {
 
         // Upsert peak hours policy
         if (bookingRules.hasPeakHours) {
+          const normalizedTimeSlots = Object.fromEntries(
+            Object.entries(bookingRules.peakHoursSlots || {}).map(([day, slots]: [string, any]) => [
+              day,
+              (Array.isArray(slots) ? slots : []).map((slot: any) => ({
+                id: slot.id,
+                startTime: slot.startTime,
+                endTime: slot.endTime,
+                appliesToAllCourts: slot.appliesToAllCourts !== false,
+                selectedCourtIds: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
+                rules: {
+                  maxBookingsPerDay: slot.rules?.maxBookingsPerDayUnlimited ? -1 : (parseInt(slot.rules?.maxBookingsPerDay) || 1),
+                  maxBookingsPerWeek: slot.rules?.maxBookingsPerWeekUnlimited ? -1 : (parseInt(slot.rules?.maxBookingsPerWeek) || 2),
+                  maxBookingsPerWeekHousehold: slot.rules?.maxBookingsPerWeekHouseholdUnlimited ? -1 : (parseInt(slot.rules?.maxBookingsPerWeekHousehold) || 2),
+                  maxDurationHours: slot.rules?.maxDurationUnlimited ? -1 : (parseFloat(slot.rules?.maxDurationHours) || 1.5),
+                }
+              }))
+            ])
+          );
+
           const peakConfig = JSON.stringify({
             apply_to_admins: bookingRules.peakHoursApplyToAdmins !== false,
-            time_slots: bookingRules.peakHoursSlots || {},
-            max_bookings_per_week: bookingRules.peakHoursRestrictions?.maxBookingsUnlimited ? -1 : parseInt(bookingRules.peakHoursRestrictions?.maxBookingsPerWeek) || 2,
-            max_duration_hours: bookingRules.peakHoursRestrictions?.maxDurationUnlimited ? -1 : parseFloat(bookingRules.peakHoursRestrictions?.maxDurationHours) || 1.5,
+            time_slots: normalizedTimeSlots,
           });
           const existingPeak = await query(
             `SELECT id FROM facility_rules WHERE facility_id = $1 AND rule_type = 'peak_hours' LIMIT 1`,

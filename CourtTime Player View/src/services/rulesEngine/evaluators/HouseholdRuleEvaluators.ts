@@ -87,21 +87,21 @@ const HH002: RuleEvaluator = {
 };
 
 /**
- * HH-003: Household Prime-Time Cap
+ * HH-003: Household Peak-Hours Cap
  */
 const HH003: RuleEvaluator = {
   ruleCode: 'HH-003',
-  ruleName: 'Household Prime-Time Cap',
+  ruleName: 'Household Peak-Hours Cap',
   category: 'household',
 
   async evaluate(context: RuleContext, config: HH003Config): Promise<RuleResult> {
-    // Only apply if booking is during prime time
+    // Only apply if booking is during peak hours
     if (!context.isPrimeTime) {
-      return { ruleCode: 'HH-003', ruleName: 'Household Prime-Time Cap', passed: true, severity: 'error' };
+      return { ruleCode: 'HH-003', ruleName: 'Household Peak-Hours Cap', passed: true, severity: 'error' };
     }
 
     if (!context.household) {
-      return { ruleCode: 'HH-003', ruleName: 'Household Prime-Time Cap', passed: true, severity: 'error' };
+      return { ruleCode: 'HH-003', ruleName: 'Household Peak-Hours Cap', passed: true, severity: 'error' };
     }
 
     const maxPrime = context.household.primeTimeMaxPerWeek
@@ -117,10 +117,10 @@ const HH003: RuleEvaluator = {
     if (currentPrime >= maxPrime) {
       return {
         ruleCode: 'HH-003',
-        ruleName: 'Household Prime-Time Cap',
+        ruleName: 'Household Peak-Hours Cap',
         passed: false,
         severity: 'error',
-        message: `Your household has reached its prime-time weekly limit (${currentPrime}/${maxPrime}).`,
+        message: `Your household has reached its peak-hours weekly limit (${currentPrime}/${maxPrime}).`,
         details: {
           current: currentPrime,
           max: maxPrime,
@@ -129,7 +129,7 @@ const HH003: RuleEvaluator = {
       };
     }
 
-    return { ruleCode: 'HH-003', ruleName: 'Household Prime-Time Cap', passed: true, severity: 'error' };
+    return { ruleCode: 'HH-003', ruleName: 'Household Peak-Hours Cap', passed: true, severity: 'error' };
   }
 };
 

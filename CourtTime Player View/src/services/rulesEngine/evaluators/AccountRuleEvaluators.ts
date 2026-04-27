@@ -355,17 +355,17 @@ const ACC009: RuleEvaluator = {
 };
 
 /**
- * ACC-010: Prime-Time Reservations Per Week
+ * ACC-010: Peak-Hours Reservations Per Week
  */
 const ACC010: RuleEvaluator = {
   ruleCode: 'ACC-010',
-  ruleName: 'Prime-Time Reservations Per Week',
+  ruleName: 'Peak-Hours Reservations Per Week',
   category: 'account',
 
   async evaluate(context: RuleContext, config: ACC010Config): Promise<RuleResult> {
-    // Only apply if booking is during prime time
+    // Only apply if booking is during peak hours
     if (!context.isPrimeTime) {
-      return { ruleCode: 'ACC-010', ruleName: 'Prime-Time Reservations Per Week', passed: true, severity: 'error' };
+      return { ruleCode: 'ACC-010', ruleName: 'Peak-Hours Reservations Per Week', passed: true, severity: 'error' };
     }
 
     const maxPrime = context.user.tier?.primeTimeMaxPerWeek
@@ -378,15 +378,15 @@ const ACC010: RuleEvaluator = {
     if (currentPrime >= maxPrime) {
       return {
         ruleCode: 'ACC-010',
-        ruleName: 'Prime-Time Reservations Per Week',
+        ruleName: 'Peak-Hours Reservations Per Week',
         passed: false,
         severity: 'error',
-        message: `Prime-time weekly limit reached (${currentPrime}/${maxPrime}).`,
+        message: `Peak-hours weekly limit reached (${currentPrime}/${maxPrime}).`,
         details: { current: currentPrime, max: maxPrime }
       };
     }
 
-    return { ruleCode: 'ACC-010', ruleName: 'Prime-Time Reservations Per Week', passed: true, severity: 'error' };
+    return { ruleCode: 'ACC-010', ruleName: 'Peak-Hours Reservations Per Week', passed: true, severity: 'error' };
   }
 };
 

@@ -131,7 +131,7 @@ export function CourtCalendarView() {
   const effectiveTimeColWidth = isMobile ? 56 : TIME_COL_WIDTH;
   const effectiveHeaderHeight = isMobile ? 48 : HEADER_HEIGHT;
 
-  // Prime-time config per court: courtId -> schedule array
+  // Peak-hours config per court: courtId -> schedule array
   const [primeTimeConfigs, setPrimeTimeConfigs] = useState<Record<string, any[]>>({});
 
   // Device detection for responsive defaults
@@ -602,7 +602,7 @@ export function CourtCalendarView() {
     setZoomLevel(clamped);
   }, [courts.length, effectiveTimeColWidth, userSetZoom]);
 
-  // Fetch prime-time configs for visible courts
+  // Fetch peak-hours configs for visible courts
   useEffect(() => {
     const fetchPrimeTimeConfigs = async () => {
       if (!courts || courts.length === 0) return;
@@ -626,7 +626,7 @@ export function CourtCalendarView() {
     fetchPrimeTimeConfigs();
   }, [courts]);
 
-  // Helper: check if a time slot is during prime time for a court
+  // Helper: check if a time slot is during peak hours for a court
   const isPrimeTimeSlot = useCallback((courtId: string, time: string): boolean => {
     const schedule = primeTimeConfigs[courtId];
     if (!schedule || schedule.length === 0) return false;
@@ -1098,13 +1098,13 @@ export function CourtCalendarView() {
                   </Button>
                 </div>
 
-                {/* Prime-Time Legend */}
+                {/* Peak-Hours Legend */}
                 {Object.values(primeTimeConfigs).some((schedule: any) =>
                   (schedule as any[]).some((c: any) => (c.primeTimeStart || c.prime_time_start))
                 ) && (
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm bg-purple-100 border border-purple-300" />
-                    <span className="text-xs text-gray-500">Prime Time</span>
+                    <span className="text-xs text-gray-500">Peak Hours</span>
                   </div>
                 )}
               </div>

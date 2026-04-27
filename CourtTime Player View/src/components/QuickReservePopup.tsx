@@ -1004,11 +1004,11 @@ export function QuickReservePopup({
                 </div>
               )}
 
-              {/* Prime Time Badge */}
+              {/* Peak Hours Badge */}
               {isPrimeTime && (
                 <div className="flex items-center gap-2 text-sm bg-purple-50 border border-purple-200 text-purple-700 rounded-md px-3 py-2">
                   <Clock className="h-4 w-4" />
-                  This slot is during prime time
+                  This slot is during peak hours
                 </div>
               )}
 

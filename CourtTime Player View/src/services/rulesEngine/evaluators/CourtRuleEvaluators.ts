@@ -30,12 +30,12 @@ import {
 import { isTierEligibleForPrimeTime } from '../utils/primeTimeUtils';
 
 /**
- * CRT-001: Prime-Time Schedule
- * This rule just marks prime time - actual restrictions are in other rules
+ * CRT-001: Peak-Hours Schedule
+ * This rule just marks peak hours - actual restrictions are in other rules
  */
 const CRT001: RuleEvaluator = {
   ruleCode: 'CRT-001',
-  ruleName: 'Prime-Time Schedule',
+  ruleName: 'Peak-Hours Schedule',
   category: 'court',
 
   async evaluate(context: RuleContext, config: any): Promise<RuleResult> {
@@ -43,30 +43,30 @@ const CRT001: RuleEvaluator = {
     if (context.isPrimeTime) {
       return {
         ruleCode: 'CRT-001',
-        ruleName: 'Prime-Time Schedule',
+        ruleName: 'Peak-Hours Schedule',
         passed: true,
         severity: 'warning',
-        message: `This time is designated as prime time for ${context.court.name}.`,
+        message: `This time is designated as peak hours for ${context.court.name}.`,
         details: { isPrimeTime: true, courtName: context.court.name }
       };
     }
 
-    return { ruleCode: 'CRT-001', ruleName: 'Prime-Time Schedule', passed: true, severity: 'warning' };
+    return { ruleCode: 'CRT-001', ruleName: 'Peak-Hours Schedule', passed: true, severity: 'warning' };
   }
 };
 
 /**
- * CRT-002: Prime-Time Max Duration
+ * CRT-002: Peak-Hours Max Duration
  */
 const CRT002: RuleEvaluator = {
   ruleCode: 'CRT-002',
-  ruleName: 'Prime-Time Max Duration',
+  ruleName: 'Peak-Hours Max Duration',
   category: 'court',
 
   async evaluate(context: RuleContext, config: CRT002Config): Promise<RuleResult> {
-    // Only apply during prime time
+    // Only apply during peak hours
     if (!context.isPrimeTime) {
-      return { ruleCode: 'CRT-002', ruleName: 'Prime-Time Max Duration', passed: true, severity: 'error' };
+      return { ruleCode: 'CRT-002', ruleName: 'Peak-Hours Max Duration', passed: true, severity: 'error' };
     }
 
     // Get max duration from court config or rule config
@@ -77,10 +77,10 @@ const CRT002: RuleEvaluator = {
     if (context.request.durationMinutes > maxMinutes) {
       return {
         ruleCode: 'CRT-002',
-        ruleName: 'Prime-Time Max Duration',
+        ruleName: 'Peak-Hours Max Duration',
         passed: false,
         severity: 'error',
-        message: `Prime-time bookings on ${context.court.name} are limited to ${maxMinutes} minutes.`,
+        message: `Peak-hours bookings on ${context.court.name} are limited to ${maxMinutes} minutes.`,
         details: {
           maxMinutes,
           requestedMinutes: context.request.durationMinutes,
@@ -89,32 +89,32 @@ const CRT002: RuleEvaluator = {
       };
     }
 
-    return { ruleCode: 'CRT-002', ruleName: 'Prime-Time Max Duration', passed: true, severity: 'error' };
+    return { ruleCode: 'CRT-002', ruleName: 'Peak-Hours Max Duration', passed: true, severity: 'error' };
   }
 };
 
 /**
- * CRT-003: Prime-Time Eligibility by Tier
+ * CRT-003: Peak-Hours Eligibility by Tier
  */
 const CRT003: RuleEvaluator = {
   ruleCode: 'CRT-003',
-  ruleName: 'Prime-Time Eligibility by Tier',
+  ruleName: 'Peak-Hours Eligibility by Tier',
   category: 'court',
 
   async evaluate(context: RuleContext, config: CRT003Config): Promise<RuleResult> {
-    // Only apply during prime time
+    // Only apply during peak hours
     if (!context.isPrimeTime) {
-      return { ruleCode: 'CRT-003', ruleName: 'Prime-Time Eligibility by Tier', passed: true, severity: 'error' };
+      return { ruleCode: 'CRT-003', ruleName: 'Peak-Hours Eligibility by Tier', passed: true, severity: 'error' };
     }
 
-    // Check tier's prime time eligibility
+    // Check tier's peak hours eligibility
     if (context.user.tier && !context.user.tier.primeTimeEligible) {
       return {
         ruleCode: 'CRT-003',
-        ruleName: 'Prime-Time Eligibility by Tier',
+        ruleName: 'Peak-Hours Eligibility by Tier',
         passed: false,
         severity: 'error',
-        message: `Your membership tier (${context.user.tier.tierName}) is not eligible to book prime time on ${context.court.name}.`,
+        message: `Your membership tier (${context.user.tier.tierName}) is not eligible to book peak hours on ${context.court.name}.`,
         details: {
           tierName: context.user.tier.tierName,
           courtName: context.court.name
@@ -138,10 +138,10 @@ const CRT003: RuleEvaluator = {
       if (!isEligible) {
         return {
           ruleCode: 'CRT-003',
-          ruleName: 'Prime-Time Eligibility by Tier',
+          ruleName: 'Peak-Hours Eligibility by Tier',
           passed: false,
           severity: 'error',
-          message: `Your membership tier is not eligible to book prime time on ${context.court.name}.`,
+          message: `Your membership tier is not eligible to book peak hours on ${context.court.name}.`,
           details: {
             tierName,
             allowedTiers,
@@ -151,7 +151,7 @@ const CRT003: RuleEvaluator = {
       }
     }
 
-    return { ruleCode: 'CRT-003', ruleName: 'Prime-Time Eligibility by Tier', passed: true, severity: 'error' };
+    return { ruleCode: 'CRT-003', ruleName: 'Peak-Hours Eligibility by Tier', passed: true, severity: 'error' };
   }
 };
 

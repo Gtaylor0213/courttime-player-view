@@ -40,8 +40,8 @@ No remaining TODO items. All features have been implemented.
 - [x] HH-002, HH-003 admin UI controls (Household Rules card)
 - [x] Fix apiRequest to pass through ruleViolations/warnings/isPrimeTime
 - [x] Add bookingApi.validate method
-- [x] BookingWizard: rule violation display (red errors, amber warnings, prime-time badge)
-- [x] QuickReservePopup: rule violation display (red errors, amber warnings, prime-time badge)
+- [x] BookingWizard: rule violation display (red errors, amber warnings, peak-hours badge)
+- [x] QuickReservePopup: rule violation display (red errors, amber warnings, peak-hours badge)
 
 ### Phase 5: Player Profile Strike History
 - [x] Add householdsApi to client.ts (11 methods for Phase 6 prep)
@@ -60,12 +60,12 @@ No remaining TODO items. All features have been implemented.
 - [x] Member verification (verify/reject), set primary, remove
 - [x] Route, sidebar nav, page mapping, dashboard quick action
 
-### Phase 7: Calendar Prime-Time Visualization
+### Phase 7: Calendar Peak-Hours Visualization
 - [x] Fetch court operating configs (prime_time_start/end per court per day)
 - [x] isPrimeTimeSlot() helper for 12h→24h time comparison
-- [x] Purple tint (bg-purple-50) on empty prime-time calendar slots
-- [x] Purple hover (hover:bg-purple-100) for prime-time slots
-- [x] Prime-time legend indicator in calendar header
+- [x] Purple tint (bg-purple-50) on empty peak-hours calendar slots
+- [x] Purple hover (hover:bg-purple-100) for peak-hours slots
+- [x] Peak-hours legend indicator in calendar header
 
 ### Phase 8: Rate Limiting + Email Notifications
 - [x] Install express-rate-limit, add tiered middleware (global 100/15min, auth 10/15min, sensitive 20/15min)
@@ -110,13 +110,13 @@ If deployed on Render, use the database shell in the Render dashboard.
 - ACC-007: Cancellation Cooldown
 - ACC-008: Late Cancellation Policy
 - ACC-009: No-Show Strike System
-- ACC-010: Prime-Time Per Week Limit
+- ACC-010: Peak-Hours Per Week Limit
 - ACC-011: Rate Limit Actions
 
 **Court Rules (CRT-001 to CRT-012):**
-- CRT-001: Prime-Time Schedule
-- CRT-002: Prime-Time Max Duration
-- CRT-003: Prime-Time Eligibility
+- CRT-001: Peak-Hours Schedule
+- CRT-002: Peak-Hours Max Duration
+- CRT-003: Peak-Hours Eligibility
 - CRT-004: Court Operating Hours
 - CRT-005: Reservation Slot Grid
 - CRT-006: Blackout Blocks
@@ -130,7 +130,7 @@ If deployed on Render, use the database shell in the Render dashboard.
 **Household Rules (HH-001 to HH-003):**
 - HH-001: Max Members Per Address
 - HH-002: Household Max Active Reservations
-- HH-003: Household Prime-Time Cap
+- HH-003: Household Peak-Hours Cap
 
 ### Admin UI Rule Coverage
 

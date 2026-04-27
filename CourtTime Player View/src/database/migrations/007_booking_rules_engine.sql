@@ -13,9 +13,9 @@ CREATE TABLE IF NOT EXISTS membership_tiers (
     tier_level INTEGER NOT NULL DEFAULT 1,
     -- ACC-005: Advance booking window
     advance_booking_days INTEGER DEFAULT 7,
-    -- CRT-003: Prime-time eligibility
+    -- CRT-003: Peak-hours eligibility
     prime_time_eligible BOOLEAN DEFAULT true,
-    -- ACC-010: Max prime-time reservations per week
+    -- ACC-010: Max peak-hours reservations per week
     prime_time_max_per_week INTEGER DEFAULT 2,
     -- ACC-001: Max concurrent active reservations
     max_active_reservations INTEGER DEFAULT 3,
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS household_groups (
     household_name VARCHAR(255),
     -- HH-002: Household max active reservations
     max_active_reservations INTEGER DEFAULT 4,
-    -- HH-003: Household prime-time cap per week
+    -- HH-003: Household peak-hours cap per week
     prime_time_max_per_week INTEGER DEFAULT 3,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -165,10 +165,10 @@ CREATE TABLE IF NOT EXISTS court_operating_config (
     is_open BOOLEAN DEFAULT true,
     open_time TIME,
     close_time TIME,
-    -- CRT-001: Prime-time schedule
+    -- CRT-001: Peak-hours schedule
     prime_time_start TIME,
     prime_time_end TIME,
-    -- CRT-002: Prime-time max duration (minutes)
+    -- CRT-002: Peak-hours max duration (minutes)
     prime_time_max_duration INTEGER DEFAULT 60,
     -- CRT-005: Slot grid (minutes)
     slot_duration INTEGER DEFAULT 30,
@@ -316,7 +316,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in BOOLEAN DEFAULT false;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMP;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS no_show_marked BOOLEAN DEFAULT false;
 
-COMMENT ON COLUMN bookings.is_prime_time IS 'Whether this booking falls within prime time hours';
+COMMENT ON COLUMN bookings.is_prime_time IS 'Whether this booking falls within peak hours hours';
 COMMENT ON COLUMN bookings.rule_overrides IS 'JSON array of rule codes that were overridden for this booking';
 COMMENT ON COLUMN bookings.override_reason IS 'Admin reason for overriding rules';
 COMMENT ON COLUMN bookings.checked_in IS 'Whether user checked in for the reservation';
@@ -430,10 +430,10 @@ INSERT INTO booking_rule_definitions (rule_code, rule_category, rule_name, descr
  '{"strike_threshold": 3, "strike_window_days": 30, "lockout_days": 7}',
  108, 'Your account is locked due to no-show/late-cancel penalties until {lockoutEndsAt}.'),
 
-('ACC-010', 'account', 'Prime-Time Reservations Per Week', 'Limits prime-time bookings per week',
+('ACC-010', 'account', 'Peak-Hours Reservations Per Week', 'Limits peak-hours bookings per week',
  '{"type":"object","properties":{"max_prime_per_week":{"type":"integer"},"window_type":{"type":"string"}}}',
  '{"max_prime_per_week": 2, "window_type": "calendar_week"}',
- 109, 'Prime-time weekly limit reached ({current}/{max}).'),
+ 109, 'Peak-hours weekly limit reached ({current}/{max}).'),
 
 ('ACC-011', 'account', 'Rate Limit Reservation Actions', 'Prevents rapid booking actions (anti-abuse)',
  '{"type":"object","properties":{"max_actions":{"type":"integer"},"window_seconds":{"type":"integer"},"action_types":{"type":"array"}}}',
@@ -441,20 +441,20 @@ INSERT INTO booking_rule_definitions (rule_code, rule_category, rule_name, descr
  110, 'Too many actions. Please try again in {retryAfterSeconds} seconds.'),
 
 -- Court Rules
-('CRT-001', 'court', 'Prime-Time Schedule', 'Defines prime-time windows per court',
+('CRT-001', 'court', 'Peak-Hours Schedule', 'Defines peak-hours windows per court',
  '{"type":"object","properties":{"prime_windows":{"type":"array"}}}',
  '{"prime_windows": []}',
- 200, 'This time is designated as prime time for {courtName}.'),
+ 200, 'This time is designated as peak hours for {courtName}.'),
 
-('CRT-002', 'court', 'Prime-Time Max Duration', 'Limits booking duration during prime time',
+('CRT-002', 'court', 'Peak-Hours Max Duration', 'Limits booking duration during peak hours',
  '{"type":"object","properties":{"max_minutes_prime":{"type":"integer"}}}',
  '{"max_minutes_prime": 60}',
- 201, 'Prime-time bookings on {courtName} are limited to {maxMinutes} minutes.'),
+ 201, 'Peak-hours bookings on {courtName} are limited to {maxMinutes} minutes.'),
 
-('CRT-003', 'court', 'Prime-Time Eligibility by Tier', 'Restricts prime-time by membership tier',
+('CRT-003', 'court', 'Peak-Hours Eligibility by Tier', 'Restricts peak-hours by membership tier',
  '{"type":"object","properties":{"allowed_tiers":{"type":"array"}}}',
  '{"allowed_tiers": [], "allow_admin_override": true}',
- 202, 'Your membership tier is not eligible to book prime time on {courtName}.'),
+ 202, 'Your membership tier is not eligible to book peak hours on {courtName}.'),
 
 ('CRT-004', 'court', 'Court Operating Hours', 'Sets open/close hours per court',
  '{"type":"object","properties":{"open_hours":{"type":"object"},"closed_dates":{"type":"array"}}}',
@@ -512,10 +512,10 @@ INSERT INTO booking_rule_definitions (rule_code, rule_category, rule_name, descr
  '{"max_active_household": 2}',
  301, 'Your household has reached its active reservation limit ({current}/{max}).'),
 
-('HH-003', 'household', 'Household Prime-Time Cap', 'Limits household prime-time bookings',
+('HH-003', 'household', 'Household Peak-Hours Cap', 'Limits household peak-hours bookings',
  '{"type":"object","properties":{"max_prime_per_week_household":{"type":"integer"},"window_type":{"type":"string"}}}',
  '{"max_prime_per_week_household": 3, "window_type": "calendar_week"}',
- 302, 'Your household has reached its prime-time weekly limit ({current}/{max}).')
+ 302, 'Your household has reached its peak-hours weekly limit ({current}/{max}).')
 
 ON CONFLICT (rule_code) DO UPDATE SET
     rule_name = EXCLUDED.rule_name,
@@ -612,7 +612,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to check if time is prime time for a court
+-- Function to check if time is peak hours for a court
 CREATE OR REPLACE FUNCTION is_prime_time(
     p_court_id UUID,
     p_booking_date DATE,
@@ -634,7 +634,7 @@ BEGIN
         RETURN false;
     END IF;
 
-    -- Check if booking overlaps prime time window
+    -- Check if booking overlaps peak hours window
     RETURN (p_start_time < v_config.prime_time_end AND p_end_time > v_config.prime_time_start);
 END;
 $$ LANGUAGE plpgsql;
@@ -642,7 +642,7 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION get_active_strike_count IS 'Returns count of active (non-revoked, non-expired) strikes';
 COMMENT ON FUNCTION is_user_locked_out IS 'Checks if user has exceeded strike threshold';
 COMMENT ON FUNCTION get_user_tier IS 'Gets user''s assigned tier or facility default';
-COMMENT ON FUNCTION is_prime_time IS 'Checks if a booking time falls within prime time hours';
+COMMENT ON FUNCTION is_prime_time IS 'Checks if a booking time falls within peak hours hours';
 
 -- =====================================================
 -- MIGRATION COMPLETE

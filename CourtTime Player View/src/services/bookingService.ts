@@ -280,7 +280,7 @@ export async function createBooking(bookingData: {
         };
       }
 
-      // Store warnings and prime time status for response
+      // Store warnings and peak hours status for response
       var isPrimeTime = evaluation.isPrimeTime;
       var warnings = evaluation.warnings;
     }

@@ -735,7 +735,7 @@ export function CourtManagement() {
                   <Card className="border-green-200 bg-green-50/50">
                     <CardHeader>
                       <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
-                      <CardDescription>Configure hours, prime time, and slot settings per day</CardDescription>
+                      <CardDescription>Configure hours, peak hours, and slot settings per day</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {courtScheduleLoading ? (

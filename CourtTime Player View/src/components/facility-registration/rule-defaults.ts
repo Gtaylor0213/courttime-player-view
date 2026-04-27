@@ -141,11 +141,11 @@ export const RULE_METADATA: RuleMeta[] = [
   },
   {
     code: 'ACC-010',
-    name: 'Prime-Time Per Week Limit',
-    description: 'Limits prime-time bookings per member per week.',
+    name: 'Peak-Hours Per Week Limit',
+    description: 'Limits peak-hours bookings per member per week.',
     category: 'account',
     fields: [
-      { key: 'max_prime_per_week', label: 'Max Prime-Time/Week', type: 'number', min: 1, max: 20 },
+      { key: 'max_prime_per_week', label: 'Max Peak-Hours/Week', type: 'number', min: 1, max: 20 },
     ],
   },
 
@@ -193,8 +193,8 @@ export const RULE_METADATA: RuleMeta[] = [
   // Court Scheduling Rules
   {
     code: 'CRT-002',
-    name: 'Prime-Time Max Duration',
-    description: 'Maximum booking duration during prime-time hours.',
+    name: 'Peak-Hours Max Duration',
+    description: 'Maximum booking duration during peak-hours hours.',
     category: 'court',
     fields: [
       { key: 'max_minutes_prime', label: 'Max Duration', type: 'number', min: 15, max: 480, suffix: 'minutes' },
@@ -202,8 +202,8 @@ export const RULE_METADATA: RuleMeta[] = [
   },
   {
     code: 'CRT-003',
-    name: 'Prime-Time Eligibility by Tier',
-    description: 'Restrict prime-time booking to specific membership tiers. Tiers are configured after registration.',
+    name: 'Peak-Hours Eligibility by Tier',
+    description: 'Restrict peak-hours booking to specific membership tiers. Tiers are configured after registration.',
     category: 'court',
     fields: [
       { key: 'allow_admin_override', label: 'Allow Admin Override', type: 'select', options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }] },
@@ -286,11 +286,11 @@ export const RULE_METADATA: RuleMeta[] = [
   },
   {
     code: 'HH-003',
-    name: 'Household Prime-Time Cap',
-    description: 'Limits total prime-time bookings per week for all accounts at an address.',
+    name: 'Household Peak-Hours Cap',
+    description: 'Limits total peak-hours bookings per week for all accounts at an address.',
     category: 'household',
     fields: [
-      { key: 'max_prime_per_week_household', label: 'Max Prime-Time/Week', type: 'number', min: 1, max: 20 },
+      { key: 'max_prime_per_week_household', label: 'Max Peak-Hours/Week', type: 'number', min: 1, max: 20 },
     ],
   },
 ];

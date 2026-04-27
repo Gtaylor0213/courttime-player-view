@@ -1,6 +1,6 @@
 /**
  * Court Configuration Routes
- * Manage court operating hours, prime time, and blackouts
+ * Manage court operating hours, peak hours, and blackouts
  */
 
 import express from 'express';
@@ -460,10 +460,10 @@ router.delete('/blackouts/:blackoutId', async (req, res, next) => {
 });
 
 /**
- * GET /api/court-config/:courtId/prime-time
- * Check if a specific time is during prime time
+ * GET /api/court-config/:courtId/peak-hours
+ * Check if a specific time is during peak hours
  */
-router.get('/:courtId/prime-time', async (req, res, next) => {
+router.get('/:courtId/peak-hours', async (req, res, next) => {
   try {
     const { courtId } = req.params;
     const { date, time } = req.query;
@@ -489,7 +489,7 @@ router.get('/:courtId/prime-time', async (req, res, next) => {
       return res.json({
         success: true,
         isPrimeTime: false,
-        message: 'No prime time configured for this day'
+        message: 'No peak hours configured for this day'
       });
     }
 

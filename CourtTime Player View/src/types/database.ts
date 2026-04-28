@@ -305,6 +305,32 @@ export interface FacilityUsageStats {
 }
 
 // =====================================================
+// TERMS & CONDITIONS
+// =====================================================
+
+export interface FacilityTermsConditionsVersion {
+  id: string;
+  facilityId: string;
+  versionNumber: number;
+  contentHtml: string;
+  publishedAt: Date;
+  createdBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MemberTermsAcceptance {
+  id: string;
+  userId: string;
+  facilityId: string;
+  termsVersionId: string;
+  versionNumber: number;
+  acceptedAt: Date;
+  ipAddress?: string;
+  createdAt: Date;
+}
+
+// =====================================================
 // QUERY RESULT TYPES (with joins)
 // =====================================================
 

@@ -10,9 +10,20 @@ import {
   validateResetToken,
   resetPassword
 } from '../../src/services/passwordResetService';
-import { generateToken } from '../middleware/auth';
+import { generateToken, verifyToken } from '../middleware/auth';
+import {
+  acceptCurrentTermsForUser,
+  getUserPendingTermsAcceptances
+} from '../../src/services/termsService';
 
 const router = express.Router();
+
+function getAuthenticatedUserId(req: express.Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const payload = verifyToken(authHeader.slice(7));
+  return payload?.userId || null;
+}
 
 /**
  * POST /api/auth/register
@@ -140,25 +151,73 @@ router.post('/login', async (req, res, next) => {
  */
 router.get('/me', async (req, res, next) => {
   try {
-    const { requireAuth: authMiddleware } = await import('../middleware/auth');
-    // Inline middleware check
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
     }
-    const { verifyToken } = await import('../middleware/auth');
-    const payload = verifyToken(authHeader.slice(7));
-    if (!payload) {
-      return res.status(401).json({ success: false, error: 'Invalid or expired token' });
-    }
 
-    const userWithMemberships = await getUserWithMemberships(payload.userId);
+    const userWithMemberships = await getUserWithMemberships(userId);
 
     if (!userWithMemberships) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
     res.json({ success: true, user: userWithMemberships });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/auth/terms/status
+ * Get all pending T&C acceptances for the authenticated user
+ */
+router.get('/terms/status', async (req, res, next) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const userWithMemberships = await getUserWithMemberships(userId);
+    if (!userWithMemberships) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (userWithMemberships.userType === 'admin') {
+      return res.json({ success: true, pendingAcceptances: [] });
+    }
+
+    const pendingAcceptances = await getUserPendingTermsAcceptances(userId);
+    res.json({ success: true, pendingAcceptances });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/auth/terms/accept
+ * Accept latest T&C version for a facility as authenticated user
+ */
+router.post('/terms/accept', async (req, res, next) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const { facilityId } = req.body;
+    if (!facilityId) {
+      return res.status(400).json({ success: false, error: 'facilityId is required' });
+    }
+
+    const forwarded = req.headers['x-forwarded-for'];
+    const ipAddress = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim()
+      || req.ip
+      || null;
+
+    const accepted = await acceptCurrentTermsForUser(userId, facilityId, ipAddress);
+    res.json({ success: true, accepted });
   } catch (error) {
     next(error);
   }

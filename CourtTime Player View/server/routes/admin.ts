@@ -11,6 +11,12 @@ import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
 import { createCourt, createCourtsBulk, updateCourtsBulk } from '../../src/services/courtService';
 import { inviteAdmin, getFacilityAdmins, removeAdmin } from '../../src/services/adminService';
+import {
+  getCurrentTermsVersion,
+  getTermsAcceptanceSummaryForFacility,
+  getTermsVersionHistory,
+  publishTermsVersion
+} from '../../src/services/termsService';
 
 const router = express.Router();
 
@@ -1418,6 +1424,79 @@ router.delete('/admins/:adminId', async (req, res) => {
   } catch (error: any) {
     console.error('Error removing admin:', error);
     res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/terms/:facilityId
+ * Get current and historical Terms & Conditions versions for a facility
+ */
+router.get('/terms/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const [currentVersion, versions] = await Promise.all([
+      getCurrentTermsVersion(facilityId),
+      getTermsVersionHistory(facilityId),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        currentVersion,
+        versions,
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching Terms & Conditions:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/terms/:facilityId
+ * Publish a new Terms & Conditions version for a facility
+ */
+router.put('/terms/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { contentHtml } = req.body;
+
+    if (!contentHtml || typeof contentHtml !== 'string' || !contentHtml.trim()) {
+      return res.status(400).json({ success: false, error: 'contentHtml is required' });
+    }
+
+    const createdBy = req.user?.userId;
+    const version = await publishTermsVersion(facilityId, contentHtml, createdBy);
+
+    res.json({
+      success: true,
+      data: {
+        version
+      },
+      message: 'Terms & Conditions published successfully'
+    });
+  } catch (error: any) {
+    console.error('Error publishing Terms & Conditions:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/terms/:facilityId/acceptance
+ * Get acceptance summary for the currently published Terms & Conditions
+ */
+router.get('/terms/:facilityId/acceptance', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const summary = await getTermsAcceptanceSummaryForFacility(facilityId);
+
+    res.json({
+      success: true,
+      data: summary
+    });
+  } catch (error: any) {
+    console.error('Error fetching Terms acceptance summary:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

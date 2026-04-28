@@ -121,6 +121,17 @@ export const authApi = {
     return apiRequest(`/api/auth/me/${userId}`);
   },
 
+  getTermsStatus: async () => {
+    return apiRequest('/api/auth/terms/status');
+  },
+
+  acceptTerms: async (facilityId: string) => {
+    return apiRequest('/api/auth/terms/accept', {
+      method: 'POST',
+      body: JSON.stringify({ facilityId }),
+    });
+  },
+
   forgotPassword: async (email: string) => {
     return apiRequest('/api/auth/forgot-password', {
       method: 'POST',
@@ -804,6 +815,22 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  // Terms & Conditions
+  getTerms: async (facilityId: string) => {
+    return apiRequest(`/api/admin/terms/${facilityId}`);
+  },
+
+  publishTerms: async (facilityId: string, contentHtml: string) => {
+    return apiRequest(`/api/admin/terms/${facilityId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ contentHtml }),
+    });
+  },
+
+  getTermsAcceptanceSummary: async (facilityId: string) => {
+    return apiRequest(`/api/admin/terms/${facilityId}/acceptance`);
   },
 };
 

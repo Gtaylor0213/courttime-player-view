@@ -1,8 +1,9 @@
 import React from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
-import { Mail, FileText } from 'lucide-react';
+import { Mail, FileText, ScrollText } from 'lucide-react';
 import { AdminEmailBlast } from './AdminEmailBlast';
 import { EmailTemplateEditor } from './EmailTemplateEditor';
+import { TermsConditionsManager } from './TermsConditionsManager';
 
 export function AdminCommunication() {
   return (
@@ -20,6 +21,9 @@ export function AdminCommunication() {
           <TabsTrigger value="templates" className="gap-2">
             <FileText className="h-4 w-4" /> Email Templates
           </TabsTrigger>
+          <TabsTrigger value="terms" className="gap-2">
+            <ScrollText className="h-4 w-4" /> Terms & Conditions
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="email-blast" className="mt-4">
@@ -28,6 +32,10 @@ export function AdminCommunication() {
 
         <TabsContent value="templates" className="mt-4">
           <EmailTemplateEditor />
+        </TabsContent>
+
+        <TabsContent value="terms" className="mt-4">
+          <TermsConditionsManager />
         </TabsContent>
       </Tabs>
     </div>

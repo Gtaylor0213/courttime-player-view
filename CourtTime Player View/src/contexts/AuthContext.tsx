@@ -52,11 +52,26 @@ interface RegistrationData {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  termsLoading: boolean;
+  pendingTermsAcceptances: PendingTermsAcceptance[];
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, fullName: string, userType?: 'player' | 'admin', additionalData?: RegistrationData) => Promise<boolean>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<boolean>;
+  refreshTermsStatus: () => Promise<void>;
+  acceptTermsAndContinue: (facilityId: string) => Promise<boolean>;
   getAccessToken: () => string | null;
+}
+
+export interface PendingTermsAcceptance {
+  facilityId: string;
+  facilityName: string;
+  currentVersionId: string;
+  currentVersionNumber: number;
+  contentHtml: string;
+  publishedAt: string;
+  acceptedVersionNumber: number | null;
+  acceptedAt: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,6 +87,8 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [pendingTermsAcceptances, setPendingTermsAcceptances] = useState<PendingTermsAcceptance[]>([]);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
   // Initialize auth state
@@ -97,9 +114,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(refreshedUser);
             // Update localStorage with fresh data
             localStorage.setItem('auth_user', JSON.stringify(refreshedUser));
+            await loadTermsStatus(refreshedUser);
           } else {
             // Fall back to cached user if API fails
             setUser(parsedUser);
+            await loadTermsStatus(parsedUser);
           }
         } catch (parseError) {
           console.error('Failed to parse saved user:', parseError);
@@ -116,6 +135,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const loadTermsStatus = async (currentUser: User | null) => {
+    if (!currentUser || currentUser.userType === 'admin') {
+      setPendingTermsAcceptances([]);
+      return;
+    }
+
+    try {
+      setTermsLoading(true);
+      const response = await authApi.getTermsStatus();
+      if (response.success && response.data?.pendingAcceptances) {
+        setPendingTermsAcceptances(response.data.pendingAcceptances);
+      } else {
+        setPendingTermsAcceptances([]);
+      }
+    } catch (error) {
+      console.error('Failed to load terms status:', error);
+      setPendingTermsAcceptances([]);
+    } finally {
+      setTermsLoading(false);
+    }
+  };
+
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setLoading(true);
@@ -129,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAccessToken(backendResponse.token);
           localStorage.setItem('auth_user', JSON.stringify(backendResponse.user));
           localStorage.setItem('auth_token', backendResponse.token);
+          await loadTermsStatus(backendResponse.user);
           toast.success('Logged in successfully');
           return true;
         }
@@ -180,6 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAccessToken(token);
         localStorage.setItem('auth_user', JSON.stringify(registeredUser));
         localStorage.setItem('auth_token', token);
+        await loadTermsStatus(registeredUser);
         return true;
       } else {
         toast.error(result.error || 'Registration failed');
@@ -205,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(null);
       setAccessToken(null);
+      setPendingTermsAcceptances([]);
       toast.success('Logged out successfully');
     } catch (error: any) {
       console.error('Logout failed:', error);
@@ -236,13 +280,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return accessToken;
   };
 
+  const refreshTermsStatus = async () => {
+    await loadTermsStatus(user);
+  };
+
+  const acceptTermsAndContinue = async (facilityId: string): Promise<boolean> => {
+    try {
+      const response = await authApi.acceptTerms(facilityId);
+      if (!response.success) {
+        toast.error(response.error || 'Failed to accept Terms & Conditions');
+        return false;
+      }
+
+      await loadTermsStatus(user);
+      toast.success('Terms & Conditions accepted');
+      return true;
+    } catch (error: any) {
+      console.error('Failed to accept terms:', error);
+      toast.error(error.message || 'Failed to accept Terms & Conditions');
+      return false;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     loading,
+    termsLoading,
+    pendingTermsAcceptances,
     login,
     register,
     logout,
     updateProfile,
+    refreshTermsStatus,
+    acceptTermsAndContinue,
     getAccessToken,
   };
 

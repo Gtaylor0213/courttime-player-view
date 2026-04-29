@@ -573,7 +573,54 @@ router.get('/bookings/:facilityId', async (req, res) => {
     const { facilityId } = req.params;
     const { status, startDate, endDate, courtId } = req.query;
 
-    let queryText = `
+    const seedConditions: string[] = ['sb.facility_id = $1'];
+    const outerConditions: string[] = ['b.facility_id = $1'];
+
+    const params: any[] = [facilityId];
+    let paramCount = 1;
+
+    if (status && status !== 'all') {
+      paramCount++;
+      seedConditions.push(`sb.status = $${paramCount}`);
+      outerConditions.push(`b.status = $${paramCount}`);
+      params.push(status);
+    }
+
+    if (startDate) {
+      paramCount++;
+      seedConditions.push(`sb.booking_date >= $${paramCount}`);
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      paramCount++;
+      seedConditions.push(`sb.booking_date <= $${paramCount}`);
+      params.push(endDate);
+    }
+
+    if (courtId && courtId !== 'all') {
+      paramCount++;
+      seedConditions.push(`sb.court_id = $${paramCount}`);
+      outerConditions.push(`b.court_id = $${paramCount}`);
+      params.push(courtId);
+    }
+
+    const queryText = `
+      WITH seed_bookings AS (
+        SELECT sb.id, sb.series_id as "seriesId"
+        FROM bookings sb
+        WHERE ${seedConditions.join(' AND ')}
+      ),
+      matched_series AS (
+        SELECT DISTINCT "seriesId"
+        FROM seed_bookings
+        WHERE "seriesId" IS NOT NULL
+      ),
+      matched_singletons AS (
+        SELECT id
+        FROM seed_bookings
+        WHERE "seriesId" IS NULL
+      )
       SELECT
         b.id,
         b.series_id as "seriesId",
@@ -604,37 +651,13 @@ router.get('/bookings/:facilityId', async (req, res) => {
       LEFT JOIN booking_series bs ON b.series_id = bs.id
       JOIN courts c ON b.court_id = c.id
       JOIN users u ON b.user_id = u.id
-      WHERE b.facility_id = $1
+      WHERE ${outerConditions.join(' AND ')}
+        AND (
+          (b.series_id IS NOT NULL AND b.series_id IN (SELECT "seriesId" FROM matched_series))
+          OR (b.series_id IS NULL AND b.id IN (SELECT id FROM matched_singletons))
+        )
+      ORDER BY COALESCE(b.series_id::text, b.id::text), b.booking_date DESC, b.start_time DESC
     `;
-
-    const params: any[] = [facilityId];
-    let paramCount = 1;
-
-    if (status && status !== 'all') {
-      paramCount++;
-      queryText += ` AND b.status = $${paramCount}`;
-      params.push(status);
-    }
-
-    if (startDate) {
-      paramCount++;
-      queryText += ` AND b.booking_date >= $${paramCount}`;
-      params.push(startDate);
-    }
-
-    if (endDate) {
-      paramCount++;
-      queryText += ` AND b.booking_date <= $${paramCount}`;
-      params.push(endDate);
-    }
-
-    if (courtId && courtId !== 'all') {
-      paramCount++;
-      queryText += ` AND b.court_id = $${paramCount}`;
-      params.push(courtId);
-    }
-
-    queryText += ` ORDER BY COALESCE(b.series_id::text, b.id::text), b.booking_date DESC, b.start_time DESC`;
 
     const result = await query(queryText, params);
 

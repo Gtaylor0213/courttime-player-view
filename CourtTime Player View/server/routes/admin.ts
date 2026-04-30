@@ -1149,17 +1149,35 @@ router.post('/email-blast/:facilityId', async (req, res) => {
       console.error('Error creating in-app notifications:', notifError);
     }
 
-    const sent = emailResults.filter(
-      r => r.status === 'fulfilled' && r.value === true
-    ).length;
+    const normalizedResults = emailResults.map((result, index) => {
+      const recipient = recipients[index];
+
+      if (result.status === 'fulfilled') {
+        return {
+          email: recipient.email,
+          success: result.value.success,
+          error: result.value.error,
+        };
+      }
+
+      return {
+        email: recipient.email,
+        success: false,
+        error: result.reason instanceof Error ? result.reason.message : 'Unknown email send error',
+      };
+    });
+
+    const sent = normalizedResults.filter(r => r.success).length;
     const failed = recipients.length - sent;
+    const firstErrorMessage = normalizedResults.find(r => !r.success)?.error;
 
     res.json({
       success: true,
       data: {
         sent,
         failed,
-        total: recipients.length
+        total: recipients.length,
+        errorMessage: firstErrorMessage
       }
     });
   } catch (error: any) {

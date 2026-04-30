@@ -13,14 +13,25 @@ import {
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
+interface EmailSendResult {
+  success: boolean;
+  status: number | null;
+  error?: string;
+  response?: unknown;
+}
+
 /**
  * Send an email via Resend
  */
-async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+async function sendEmail(to: string, subject: string, html: string): Promise<EmailSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('RESEND_API_KEY is not set - skipping email');
-    return false;
+    return {
+      success: false,
+      status: null,
+      error: 'RESEND_API_KEY is not set',
+    };
   }
 
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'CourtTime <onboarding@resend.dev>';
@@ -40,16 +51,50 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Resend API error:', errorData);
-      return false;
+    const rawBody = await response.text();
+    let parsedBody: any = null;
+    try {
+      parsedBody = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      parsedBody = rawBody;
     }
 
-    return true;
+    // Always log the complete response payload to aid debugging.
+    console.log('Resend API response:', {
+      to,
+      subject,
+      status: response.status,
+      ok: response.ok,
+      body: parsedBody,
+    });
+
+    if (!response.ok) {
+      const resendError =
+        parsedBody?.message ||
+        parsedBody?.error?.message ||
+        parsedBody?.error ||
+        `Resend request failed with status ${response.status}`;
+
+      return {
+        success: false,
+        status: response.status,
+        error: resendError,
+        response: parsedBody,
+      };
+    }
+
+    return {
+      success: true,
+      status: response.status,
+      response: parsedBody,
+    };
   } catch (error) {
     console.error('Failed to send email:', error);
-    return false;
+    return {
+      success: false,
+      status: null,
+      error: error instanceof Error ? error.message : 'Unknown email send error',
+    };
   }
 }
 
@@ -106,7 +151,8 @@ async function sendTemplatedEmail(
   const renderedBody = renderTemplate(bodyTemplate, variables);
   const fullHtml = wrapInEmailLayout(renderedBody, facilityName);
 
-  return sendEmail(to, renderedSubject, fullHtml);
+  const result = await sendEmail(to, renderedSubject, fullHtml);
+  return result.success;
 }
 
 // =====================================================
@@ -252,7 +298,7 @@ export async function sendAnnouncementEmail(
   subject: string,
   messageBody: string,
   facilityName: string
-): Promise<boolean> {
+): Promise<EmailSendResult> {
   const htmlMessage = messageBody.replace(/\n/g, '<br>');
   const bodyContent = `
     <p style="color: #374151; margin-top: 0;">Hi ${fullName},</p>

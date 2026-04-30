@@ -31,13 +31,17 @@ export function AdminEmailBlast() {
   const [recipientFilter, setRecipientFilter] = useState('all');
   const [sending, setSending] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number } | null>(null);
+  const [sendAttempted, setSendAttempted] = useState(false);
+  const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number; errorMessage?: string } | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedFacilityId) {
       loadMembers();
       loadFacilityName();
+      setSendAttempted(false);
       setSendResult(null);
+      setSendError(null);
     }
   }, [selectedFacilityId]);
 
@@ -102,8 +106,10 @@ export function AdminEmailBlast() {
     if (!confirmed) return;
 
     try {
+      setSendAttempted(true);
       setSending(true);
       setSendResult(null);
+      setSendError(null);
       const response = await adminApi.sendEmailBlast(selectedFacilityId, {
         subject,
         message,
@@ -111,18 +117,35 @@ export function AdminEmailBlast() {
       });
 
       if (response.success && response.data) {
-        const result = response.data;
+        // apiRequest wraps the backend payload in `data`, so the counts are in response.data.data.
+        const payload: any = response.data;
+        const result = payload?.data || payload;
+
+        if (
+          typeof result?.sent !== 'number' ||
+          typeof result?.failed !== 'number' ||
+          typeof result?.total !== 'number'
+        ) {
+          throw new Error('Email send response is missing counts');
+        }
+
         setSendResult(result);
-        if (result.failed === 0) {
-          toast.success(`Email sent to ${result.sent} recipient${result.sent !== 1 ? 's' : ''}`);
+        if (result.sent === 0) {
+          toast.error('All emails failed to send. Please try again.');
+        } else if (result.failed === 0) {
+          toast.success(`${result.sent} of ${result.total} emails sent successfully`);
         } else {
-          toast.warning(`${result.sent} sent, ${result.failed} failed out of ${result.total}`);
+          toast.warning(`${result.sent} of ${result.total} emails sent. ${result.failed} failed.`);
         }
       } else {
-        toast.error(response.error || 'Failed to send email blast');
+        const errorMessage = response.error || 'Failed to send email blast';
+        setSendError(errorMessage);
+        toast.error(errorMessage);
       }
-    } catch {
-      toast.error('An error occurred while sending');
+    } catch (error: any) {
+      const errorMessage = error?.message || 'An error occurred while sending';
+      setSendError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setSending(false);
     }
@@ -132,7 +155,9 @@ export function AdminEmailBlast() {
     setSubject('');
     setMessage('');
     setRecipientFilter('all');
+    setSendAttempted(false);
     setSendResult(null);
+    setSendError(null);
     setShowPreview(false);
   };
 
@@ -237,22 +262,45 @@ export function AdminEmailBlast() {
           )}
 
           {/* Send Result */}
-          {sendResult && (
-            <div className={`rounded-lg p-4 ${sendResult.failed === 0 ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+          {sendAttempted && (sendResult || sendError) && (
+            <div className={`rounded-lg p-4 ${
+              sendError || (sendResult && sendResult.sent === 0)
+                ? 'bg-red-50 border border-red-200'
+                : sendResult && sendResult.failed > 0
+                  ? 'bg-yellow-50 border border-yellow-200'
+                  : 'bg-green-50 border border-green-200'
+            }`}>
               <div className="flex items-center gap-2 mb-1">
-                {sendResult.failed === 0 ? (
+                {!sendError && sendResult && sendResult.failed === 0 && sendResult.sent > 0 ? (
                   <CheckCircle className="h-5 w-5 text-green-600" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  <AlertCircle className={`h-5 w-5 ${
+                    sendError || (sendResult && sendResult.sent === 0) ? 'text-red-600' : 'text-yellow-600'
+                  }`} />
                 )}
                 <span className="font-medium">
-                  {sendResult.failed === 0 ? 'All emails sent successfully!' : 'Some emails failed to send'}
+                  {sendError
+                    ? sendError
+                    : sendResult && sendResult.sent === 0
+                      ? 'All emails failed to send. Please try again.'
+                      : sendResult && sendResult.failed > 0
+                        ? `${sendResult.sent} of ${sendResult.total} emails sent. ${sendResult.failed} failed.`
+                        : sendResult
+                          ? `${sendResult.sent} of ${sendResult.total} emails sent successfully`
+                          : 'Send failed'}
                 </span>
               </div>
-              <p className="text-sm text-gray-600 ml-7">
-                {sendResult.sent} of {sendResult.total} emails sent
-                {sendResult.failed > 0 && `, ${sendResult.failed} failed`}
-              </p>
+              {sendResult && (
+                <p className="text-sm text-gray-600 ml-7">
+                  {sendResult.sent} of {sendResult.total} emails sent
+                  {sendResult.failed > 0 && `. ${sendResult.failed} failed.`}
+                </p>
+              )}
+              {!sendError && sendResult?.errorMessage && (
+                <p className="text-sm text-gray-700 ml-7 mt-1">
+                  {sendResult.errorMessage}
+                </p>
+              )}
             </div>
           )}
 

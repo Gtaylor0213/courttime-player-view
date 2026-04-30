@@ -20,6 +20,10 @@ import {
 
 const router = express.Router();
 
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
  * GET /api/admin/dashboard/:facilityId
  * Get dashboard statistics for a facility
@@ -1128,18 +1132,37 @@ router.post('/email-blast/:facilityId', async (req, res) => {
       });
     }
 
-    // Send emails and in-app notifications
-    const emailResults = await Promise.allSettled(
-      recipients.map((member: any) =>
-        sendAnnouncementEmail(
+    // Send emails sequentially with a delay to stay under provider rate limits.
+    const normalizedResults: Array<{ email: string; success: boolean; error?: string }> = [];
+    for (let i = 0; i < recipients.length; i++) {
+      const member = recipients[i];
+
+      try {
+        const result = await sendAnnouncementEmail(
           member.email,
           member.fullName,
           subject,
           message,
           facilityName
-        )
-      )
-    );
+        );
+
+        normalizedResults.push({
+          email: member.email,
+          success: result.success,
+          error: result.error,
+        });
+      } catch (error) {
+        normalizedResults.push({
+          email: member.email,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown email send error',
+        });
+      }
+
+      if (i < recipients.length - 1) {
+        await delay(250);
+      }
+    }
 
     // Create in-app notifications for all recipients
     const userIds = recipients.map((m: any) => m.userId);
@@ -1148,24 +1171,6 @@ router.post('/email-blast/:facilityId', async (req, res) => {
     } catch (notifError) {
       console.error('Error creating in-app notifications:', notifError);
     }
-
-    const normalizedResults = emailResults.map((result, index) => {
-      const recipient = recipients[index];
-
-      if (result.status === 'fulfilled') {
-        return {
-          email: recipient.email,
-          success: result.value.success,
-          error: result.value.error,
-        };
-      }
-
-      return {
-        email: recipient.email,
-        success: false,
-        error: result.reason instanceof Error ? result.reason.message : 'Unknown email send error',
-      };
-    });
 
     const sent = normalizedResults.filter(r => r.success).length;
     const failed = recipients.length - sent;

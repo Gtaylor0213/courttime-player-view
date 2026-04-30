@@ -14,6 +14,7 @@ import {
   CourtAllowedActivity,
   CourtBlackout,
   FacilityWithRules,
+  SimplifiedBookingRules,
   PeakHoursSlot,
   FacilityRuleConfig,
   HouseholdGroup,
@@ -497,6 +498,7 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
       id,
       name,
       operating_hours as "operatingHours",
+      booking_rules as "bookingRules",
       timezone,
       status
     FROM facilities
@@ -509,6 +511,19 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
   }
 
   const facility = facilityResult.rows[0];
+  let simplifiedBookingRules: SimplifiedBookingRules | undefined;
+  if (facility.bookingRules) {
+    try {
+      const parsed = typeof facility.bookingRules === 'string'
+        ? JSON.parse(facility.bookingRules)
+        : facility.bookingRules;
+      if (parsed && typeof parsed === 'object' && parsed.userLimits) {
+        simplifiedBookingRules = parsed as SimplifiedBookingRules;
+      }
+    } catch (error) {
+      console.warn('Failed to parse facility booking_rules JSON:', error);
+    }
+  }
 
   // Fetch configured rules
   const rulesResult = await query(
@@ -541,6 +556,7 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
     operatingHours: facility.operatingHours,
     timezone: facility.timezone,
     status: facility.status || 'active',
+    simplifiedBookingRules,
     rules: rulesResult.rows as FacilityRuleConfig[],
     defaultTier
   };

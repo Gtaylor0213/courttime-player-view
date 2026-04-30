@@ -57,6 +57,19 @@ interface PeakHourSlot {
 interface BookingRules {
   generalRules: string;
   restrictionType: 'account' | 'address';
+  daysInAdvanceEnabled: boolean;
+  daysInAdvance: string;
+  cancellationPolicyEnabled: boolean;
+  maxReservationDurationEnabled: boolean;
+  maxReservationDurationMinutes: string;
+  courtsPerWeekUserEnabled: boolean;
+  courtsPerWeekUser: string;
+  courtsPerWeekHouseholdEnabled: boolean;
+  courtsPerWeekHousehold: string;
+  courtsPerDayUserEnabled: boolean;
+  courtsPerDayUser: string;
+  courtsPerDayHouseholdEnabled: boolean;
+  courtsPerDayHousehold: string;
   maxBookingsPerWeek: string;
   maxBookingsPerWeekUnlimited: boolean;
   maxBookingDurationHours: string;
@@ -199,6 +212,19 @@ export function FacilityManagement() {
   const defaultBookingRules: BookingRules = {
     generalRules: '',
     restrictionType: 'account',
+    daysInAdvanceEnabled: true,
+    daysInAdvance: '7',
+    cancellationPolicyEnabled: true,
+    maxReservationDurationEnabled: true,
+    maxReservationDurationMinutes: '120',
+    courtsPerWeekUserEnabled: true,
+    courtsPerWeekUser: '5',
+    courtsPerWeekHouseholdEnabled: true,
+    courtsPerWeekHousehold: '8',
+    courtsPerDayUserEnabled: true,
+    courtsPerDayUser: '1',
+    courtsPerDayHouseholdEnabled: true,
+    courtsPerDayHousehold: '2',
     maxBookingsPerWeek: '3',
     maxBookingsPerWeekUnlimited: false,
     maxBookingDurationHours: '2',
@@ -422,9 +448,31 @@ export function FacilityManagement() {
               (Array.isArray(slots) ? slots : []).map((slot: any) => normalizePeakHoursSlot({ ...slot, days: [dayNameToNumber[dayName]] }))
             );
 
+        let parsedSimplified: any = null;
+        try {
+          parsedSimplified = facility.bookingRules
+            ? (typeof facility.bookingRules === 'string' ? JSON.parse(facility.bookingRules) : facility.bookingRules)
+            : null;
+        } catch {
+          parsedSimplified = null;
+        }
+
         const bookingRules: BookingRules = {
           generalRules: facility.generalRules || '',
-          restrictionType: facility.restrictionType || 'account',
+          restrictionType: parsedSimplified?.restrictionType || facility.restrictionType || 'account',
+          daysInAdvanceEnabled: parsedSimplified?.daysInAdvance?.enabled ?? defaultBookingRules.daysInAdvanceEnabled,
+          daysInAdvance: String(parsedSimplified?.daysInAdvance?.limit ?? defaultBookingRules.daysInAdvance),
+          cancellationPolicyEnabled: parsedSimplified?.cancellationPolicy?.enabled ?? defaultBookingRules.cancellationPolicyEnabled,
+          maxReservationDurationEnabled: parsedSimplified?.maxReservationDuration?.enabled ?? defaultBookingRules.maxReservationDurationEnabled,
+          maxReservationDurationMinutes: String(parsedSimplified?.maxReservationDuration?.limit ?? defaultBookingRules.maxReservationDurationMinutes),
+          courtsPerWeekUserEnabled: parsedSimplified?.userLimits?.perWeekIndividual?.enabled ?? defaultBookingRules.courtsPerWeekUserEnabled,
+          courtsPerWeekUser: String(parsedSimplified?.userLimits?.perWeekIndividual?.limit ?? defaultBookingRules.courtsPerWeekUser),
+          courtsPerWeekHouseholdEnabled: parsedSimplified?.userLimits?.perWeekHousehold?.enabled ?? defaultBookingRules.courtsPerWeekHouseholdEnabled,
+          courtsPerWeekHousehold: String(parsedSimplified?.userLimits?.perWeekHousehold?.limit ?? defaultBookingRules.courtsPerWeekHousehold),
+          courtsPerDayUserEnabled: parsedSimplified?.userLimits?.perDayIndividual?.enabled ?? defaultBookingRules.courtsPerDayUserEnabled,
+          courtsPerDayUser: String(parsedSimplified?.userLimits?.perDayIndividual?.limit ?? defaultBookingRules.courtsPerDayUser),
+          courtsPerDayHouseholdEnabled: parsedSimplified?.userLimits?.perDayHousehold?.enabled ?? defaultBookingRules.courtsPerDayHouseholdEnabled,
+          courtsPerDayHousehold: String(parsedSimplified?.userLimits?.perDayHousehold?.limit ?? defaultBookingRules.courtsPerDayHousehold),
           maxBookingsPerWeek: facility.maxBookingsPerWeek === -1 ? '3' : String(facility.maxBookingsPerWeek || '3'),
           maxBookingsPerWeekUnlimited: facility.maxBookingsPerWeek === -1,
           maxBookingDurationHours: facility.maxBookingDurationHours === -1 ? '2' : String(facility.maxBookingDurationHours || '2'),
@@ -1195,263 +1243,59 @@ export function FacilityManagement() {
       isEnabled: boolean;
       ruleConfig?: Record<string, any>;
     }> = [];
-
-    // ACC-001: Max active reservations
-    if (rules.maxActiveReservationsEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'ACC-001',
-        isEnabled: true,
-        ruleConfig: { max_active_reservations: parseInt(rules.maxActiveReservations) || 3 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'ACC-001', isEnabled: false });
-    }
-
-    // ACC-002: Max bookings per week
-    ruleConfigs.push({
-      ruleCode: 'ACC-002',
-      isEnabled: !rules.maxBookingsPerWeekUnlimited,
-      ruleConfig: { max_per_week: parseInt(rules.maxBookingsPerWeek) || 3 },
-    });
-
-    // ACC-003: Max hours per week
-    if (rules.maxHoursPerWeekEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'ACC-003',
-        isEnabled: true,
-        ruleConfig: { max_minutes_per_week: (parseFloat(rules.maxHoursPerWeek) || 10) * 60 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'ACC-003', isEnabled: false });
-    }
-
-    // ACC-004: No overlapping reservations
-    ruleConfigs.push({
-      ruleCode: 'ACC-004',
-      isEnabled: rules.noOverlappingReservations,
-      ruleConfig: { allow_overlap: !rules.noOverlappingReservations },
-    });
-
-    // ACC-005: Advance booking window
-    ruleConfigs.push({
-      ruleCode: 'ACC-005',
-      isEnabled: !rules.advanceBookingDaysUnlimited,
-      ruleConfig: { max_days_ahead: parseInt(rules.advanceBookingDays) || 14 },
-    });
-
-    // ACC-006: Minimum lead time
-    if (rules.minimumLeadTimeEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'ACC-006',
-        isEnabled: true,
-        ruleConfig: { min_minutes_before_start: parseInt(rules.minimumLeadTimeMinutes) || 60 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'ACC-006', isEnabled: false });
-    }
-
-    // ACC-007: Cancellation cooldown
-    if (rules.cancellationCooldownEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'ACC-007',
-        isEnabled: true,
-        ruleConfig: { cooldown_minutes: parseInt(rules.cancellationCooldownMinutes) || 30 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'ACC-007', isEnabled: false });
-    }
-
-    // ACC-008: Cancellation notice
-    ruleConfigs.push({
-      ruleCode: 'ACC-008',
-      isEnabled: !rules.cancellationNoticeUnlimited,
-      ruleConfig: { late_cancel_cutoff_minutes: (parseInt(rules.cancellationNoticeHours) || 24) * 60 },
-    });
-
-    // ACC-009: Strike system
-    if (rules.strikeSystemEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'ACC-009',
-        isEnabled: true,
-        ruleConfig: {
-          strike_threshold: parseInt(rules.strikeThreshold) || 3,
-          strike_window_days: parseInt(rules.strikeWindowDays) || 30,
-          lockout_duration_days: parseInt(rules.strikeLockoutDays) || 7,
-        },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'ACC-009', isEnabled: false });
-    }
-
-    // ACC-011: Rate limiting
-    if (rules.rateLimitEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'ACC-011',
-        isEnabled: true,
-        ruleConfig: {
-          max_actions: parseInt(rules.rateLimitMaxActions) || 10,
-          window_seconds: parseInt(rules.rateLimitWindowSeconds) || 60,
-        },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'ACC-011', isEnabled: false });
-    }
-
-    // CRT-005: Max booking duration
-    ruleConfigs.push({
-      ruleCode: 'CRT-005',
-      isEnabled: !rules.maxBookingDurationUnlimited,
-      ruleConfig: { max_duration_minutes: (parseFloat(rules.maxBookingDurationHours) || 2) * 60 },
-    });
-
-    // Peak hours rules (slot-level restrictions only)
-    if (rules.hasPeakHours) {
-      const peakWindows = rules.peakHoursSlots.map((slot) => ({
-        id: slot.id,
-        days: slot.days,
-        start_time: slot.startTime,
-        end_time: slot.endTime,
-        applies_to_all_courts: slot.appliesToAllCourts !== false,
-        selected_court_ids: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
-        rules: {
-          max_bookings_per_day: slot.rules.maxBookingsPerDayUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerDay) || 1),
-          max_bookings_per_week: slot.rules.maxBookingsPerWeekUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeek) || 2),
-          max_bookings_per_week_household: slot.rules.maxBookingsPerWeekHouseholdUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeekHousehold) || 2),
-          max_duration_hours: slot.rules.maxDurationUnlimited ? -1 : (parseFloat(slot.rules.maxDurationHours) || 1.5),
-        }
-      }));
-      ruleConfigs.push({
-        ruleCode: 'CRT-001',
-        isEnabled: true,
-        ruleConfig: { peak_windows: peakWindows },
-      });
-      // Keep these enabled; evaluators now prioritize active slot rules.
-      ruleConfigs.push({
-        ruleCode: 'ACC-010',
-        isEnabled: !rules.peakHoursRestrictions.maxBookingsUnlimited,
-        ruleConfig: {
-          max_prime_per_week: parseInt(rules.peakHoursRestrictions.maxBookingsPerWeek) || 2,
-          window_type: 'calendar_week'
-        }
-      });
-      ruleConfigs.push({
-        ruleCode: 'CRT-002',
-        isEnabled: !rules.peakHoursRestrictions.maxDurationUnlimited,
-        ruleConfig: {
-          max_minutes_prime: (parseFloat(rules.peakHoursRestrictions.maxDurationHours) || 1.5) * 60
-        }
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'ACC-010', isEnabled: false });
-      ruleConfigs.push({ ruleCode: 'CRT-002', isEnabled: false });
-      ruleConfigs.push({ ruleCode: 'CRT-001', isEnabled: false });
-    }
-
-    // CRT-003 removed (tier system removed)
-    ruleConfigs.push({ ruleCode: 'CRT-003', isEnabled: false });
-
-    // CRT-007: Buffer time between reservations
-    if (rules.bufferTimeEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'CRT-007',
-        isEnabled: true,
-        ruleConfig: { buffer_minutes: parseInt(rules.bufferTimeMinutes) || 15 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'CRT-007', isEnabled: false });
-    }
-
-    // CRT-008: Allowed booking types
-    if (rules.allowedBookingTypesEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'CRT-008',
-        isEnabled: true,
-        ruleConfig: { allowed_types: rules.allowedBookingTypes },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'CRT-008', isEnabled: false });
-    }
-
-    // CRT-010: Court weekly cap
-    if (rules.courtWeeklyCapEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'CRT-010',
-        isEnabled: true,
-        ruleConfig: { max_per_week_per_account: parseInt(rules.courtWeeklyCap) || 5 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'CRT-010', isEnabled: false });
-    }
-
-    // CRT-011: Court release time
-    if (rules.courtReleaseTimeEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'CRT-011',
-        isEnabled: true,
-        ruleConfig: {
-          release_time_local: rules.courtReleaseTime || '07:00',
-          days_ahead: parseInt(rules.courtReleaseDaysAhead) || 7,
-        },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'CRT-011', isEnabled: false });
-    }
-
-    // CRT-012: Court-specific cancellation deadline
-    if (rules.courtCancellationDeadlineEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'CRT-012',
-        isEnabled: true,
-        ruleConfig: { cancel_cutoff_minutes: parseInt(rules.courtCancellationDeadlineMinutes) || 60 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'CRT-012', isEnabled: false });
-    }
-
-    // HH-001: Max members per address
-    if (rules.householdMaxMembersEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'HH-001',
-        isEnabled: true,
-        ruleConfig: { max_members: parseInt(rules.householdMaxMembers) || 6, verification_method: 'admin_approval' },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'HH-001', isEnabled: false });
-    }
-
-    // HH-002: Household max active reservations
-    if (rules.householdMaxActiveEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'HH-002',
-        isEnabled: true,
-        ruleConfig: { max_active_household: parseInt(rules.householdMaxActive) || 4 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'HH-002', isEnabled: false });
-    }
-
-    // HH-003: Household peak-hours cap
-    if (rules.householdPrimeCapEnabled) {
-      ruleConfigs.push({
-        ruleCode: 'HH-003',
-        isEnabled: true,
-        ruleConfig: { max_prime_per_week_household: parseInt(rules.householdPrimeCap) || 3 },
-      });
-    } else {
-      ruleConfigs.push({ ruleCode: 'HH-003', isEnabled: false });
-    }
-
     try {
+      // Preserve existing Peak Hours Policy behavior.
+      if (rules.hasPeakHours) {
+        const peakWindows = rules.peakHoursSlots.map((slot) => ({
+          id: slot.id,
+          days: slot.days,
+          start_time: slot.startTime,
+          end_time: slot.endTime,
+          applies_to_all_courts: slot.appliesToAllCourts !== false,
+          selected_court_ids: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
+          rules: {
+            max_bookings_per_day: slot.rules.maxBookingsPerDayUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerDay) || 1),
+            max_bookings_per_week: slot.rules.maxBookingsPerWeekUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeek) || 2),
+            max_bookings_per_week_household: slot.rules.maxBookingsPerWeekHouseholdUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeekHousehold) || 2),
+            max_duration_hours: slot.rules.maxDurationUnlimited ? -1 : (parseFloat(slot.rules.maxDurationHours) || 1.5),
+          }
+        }));
+        ruleConfigs.push({
+          ruleCode: 'CRT-001',
+          isEnabled: true,
+          ruleConfig: { peak_windows: peakWindows },
+        });
+        ruleConfigs.push({
+          ruleCode: 'ACC-010',
+          isEnabled: !rules.peakHoursRestrictions.maxBookingsUnlimited,
+          ruleConfig: {
+            max_prime_per_week: parseInt(rules.peakHoursRestrictions.maxBookingsPerWeek) || 2,
+            window_type: 'calendar_week'
+          }
+        });
+        ruleConfigs.push({
+          ruleCode: 'CRT-002',
+          isEnabled: !rules.peakHoursRestrictions.maxDurationUnlimited,
+          ruleConfig: {
+            max_minutes_prime: (parseFloat(rules.peakHoursRestrictions.maxDurationHours) || 1.5) * 60
+          }
+        });
+      } else {
+        ruleConfigs.push({ ruleCode: 'ACC-010', isEnabled: false });
+        ruleConfigs.push({ ruleCode: 'CRT-002', isEnabled: false });
+        ruleConfigs.push({ ruleCode: 'CRT-001', isEnabled: false });
+      }
+
       const response = await rulesApi.bulkUpdate(currentFacilityId, ruleConfigs);
       if (!response.success) {
-        console.error('Error syncing rules to engine:', response.error);
-        toast.error('Failed to save booking rules to engine. Please try saving again.');
+        console.error('Error syncing peak rules to engine:', response.error);
+        toast.error('Failed to save Peak Hours policy.');
         return false;
       }
       return true;
     } catch (error) {
       console.error('Error syncing rules to engine:', error);
-      toast.error('Failed to save booking rules to engine. Please try saving again.');
+      toast.error('Failed to sync booking rules.');
       return false;
     }
   };
@@ -1465,83 +1309,6 @@ export function FacilityManagement() {
         setFacilityData(prev => {
           const updated = { ...prev, bookingRules: { ...prev.bookingRules } };
 
-          const acc001 = ruleMap.get('ACC-001') as any;
-          if (acc001) {
-            updated.bookingRules.maxActiveReservationsEnabled = !!acc001.isEnabled;
-            if (acc001.effectiveConfig?.max_active_reservations) {
-              updated.bookingRules.maxActiveReservations = String(acc001.effectiveConfig.max_active_reservations);
-            }
-          }
-
-          const acc002 = ruleMap.get('ACC-002') as any;
-          if (acc002) {
-            updated.bookingRules.maxBookingsPerWeekUnlimited = !acc002.isEnabled;
-            if (acc002.effectiveConfig?.max_per_week) {
-              updated.bookingRules.maxBookingsPerWeek = String(acc002.effectiveConfig.max_per_week);
-            }
-          }
-
-          const acc003 = ruleMap.get('ACC-003') as any;
-          if (acc003) {
-            updated.bookingRules.maxHoursPerWeekEnabled = !!acc003.isEnabled;
-            if (acc003.effectiveConfig?.max_minutes_per_week) {
-              updated.bookingRules.maxHoursPerWeek = String(acc003.effectiveConfig.max_minutes_per_week / 60);
-            }
-          }
-
-          const acc004 = ruleMap.get('ACC-004') as any;
-          if (acc004) {
-            updated.bookingRules.noOverlappingReservations = !!acc004.isEnabled;
-          }
-
-          const acc005 = ruleMap.get('ACC-005') as any;
-          if (acc005) {
-            updated.bookingRules.advanceBookingDaysUnlimited = !acc005.isEnabled;
-            if (acc005.effectiveConfig?.max_days_ahead) {
-              updated.bookingRules.advanceBookingDays = String(acc005.effectiveConfig.max_days_ahead);
-            }
-          }
-
-          const acc006 = ruleMap.get('ACC-006') as any;
-          if (acc006) {
-            updated.bookingRules.minimumLeadTimeEnabled = !!acc006.isEnabled;
-            if (acc006.effectiveConfig?.min_minutes_before_start) {
-              updated.bookingRules.minimumLeadTimeMinutes = String(acc006.effectiveConfig.min_minutes_before_start);
-            }
-          }
-
-          const acc007 = ruleMap.get('ACC-007') as any;
-          if (acc007) {
-            updated.bookingRules.cancellationCooldownEnabled = !!acc007.isEnabled;
-            if (acc007.effectiveConfig?.cooldown_minutes) {
-              updated.bookingRules.cancellationCooldownMinutes = String(acc007.effectiveConfig.cooldown_minutes);
-            }
-          }
-
-          const acc008 = ruleMap.get('ACC-008') as any;
-          if (acc008) {
-            updated.bookingRules.cancellationNoticeUnlimited = !acc008.isEnabled;
-            if (acc008.effectiveConfig?.late_cancel_cutoff_minutes) {
-              updated.bookingRules.cancellationNoticeHours = String(acc008.effectiveConfig.late_cancel_cutoff_minutes / 60);
-            }
-          }
-
-          const acc009 = ruleMap.get('ACC-009') as any;
-          if (acc009) {
-            updated.bookingRules.strikeSystemEnabled = !!acc009.isEnabled;
-            if (acc009.effectiveConfig) {
-              if (acc009.effectiveConfig.strike_threshold) {
-                updated.bookingRules.strikeThreshold = String(acc009.effectiveConfig.strike_threshold);
-              }
-              if (acc009.effectiveConfig.strike_window_days) {
-                updated.bookingRules.strikeWindowDays = String(acc009.effectiveConfig.strike_window_days);
-              }
-              if (acc009.effectiveConfig.lockout_duration_days) {
-                updated.bookingRules.strikeLockoutDays = String(acc009.effectiveConfig.lockout_duration_days);
-              }
-            }
-          }
-
           const acc010 = ruleMap.get('ACC-010') as any;
           if (acc010) {
             updated.bookingRules.peakHoursRestrictions = {
@@ -1553,7 +1320,6 @@ export function FacilityManagement() {
             }
           }
 
-          // CRT-001: Peak-hour windows — restore hasPeakHours and peakHoursSlots
           const crt001 = ruleMap.get('CRT-001') as any;
           if (crt001 && crt001.facilityConfig && crt001.isEnabled) {
             updated.bookingRules.hasPeakHours = true;
@@ -1578,27 +1344,6 @@ export function FacilityManagement() {
             }
           }
 
-          const acc011 = ruleMap.get('ACC-011') as any;
-          if (acc011) {
-            updated.bookingRules.rateLimitEnabled = !!acc011.isEnabled;
-            if (acc011.effectiveConfig) {
-              if (acc011.effectiveConfig.max_actions) {
-                updated.bookingRules.rateLimitMaxActions = String(acc011.effectiveConfig.max_actions);
-              }
-              if (acc011.effectiveConfig.window_seconds) {
-                updated.bookingRules.rateLimitWindowSeconds = String(acc011.effectiveConfig.window_seconds);
-              }
-            }
-          }
-
-          const crt005 = ruleMap.get('CRT-005') as any;
-          if (crt005) {
-            updated.bookingRules.maxBookingDurationUnlimited = !crt005.isEnabled;
-            if (crt005.effectiveConfig?.max_duration_minutes) {
-              updated.bookingRules.maxBookingDurationHours = String(crt005.effectiveConfig.max_duration_minutes / 60);
-            }
-          }
-
           const crt002 = ruleMap.get('CRT-002') as any;
           if (crt002) {
             updated.bookingRules.peakHoursRestrictions = {
@@ -1607,75 +1352,6 @@ export function FacilityManagement() {
             };
             if (crt002.effectiveConfig?.max_minutes_prime) {
               updated.bookingRules.peakHoursRestrictions.maxDurationHours = String(crt002.effectiveConfig.max_minutes_prime / 60);
-            }
-          }
-
-          const crt007 = ruleMap.get('CRT-007') as any;
-          if (crt007) {
-            updated.bookingRules.bufferTimeEnabled = !!crt007.isEnabled;
-            if (crt007.effectiveConfig?.buffer_minutes) {
-              updated.bookingRules.bufferTimeMinutes = String(crt007.effectiveConfig.buffer_minutes);
-            }
-          }
-
-          const crt008 = ruleMap.get('CRT-008') as any;
-          if (crt008) {
-            updated.bookingRules.allowedBookingTypesEnabled = !!crt008.isEnabled;
-            if (crt008.effectiveConfig?.allowed_types && Array.isArray(crt008.effectiveConfig.allowed_types)) {
-              updated.bookingRules.allowedBookingTypes = crt008.effectiveConfig.allowed_types;
-            }
-          }
-
-          const crt010 = ruleMap.get('CRT-010') as any;
-          if (crt010) {
-            updated.bookingRules.courtWeeklyCapEnabled = !!crt010.isEnabled;
-            if (crt010.effectiveConfig?.max_per_week_per_account) {
-              updated.bookingRules.courtWeeklyCap = String(crt010.effectiveConfig.max_per_week_per_account);
-            }
-          }
-
-          const crt011 = ruleMap.get('CRT-011') as any;
-          if (crt011) {
-            updated.bookingRules.courtReleaseTimeEnabled = !!crt011.isEnabled;
-            if (crt011.effectiveConfig) {
-              if (crt011.effectiveConfig.release_time_local) {
-                updated.bookingRules.courtReleaseTime = crt011.effectiveConfig.release_time_local;
-              }
-              if (crt011.effectiveConfig.days_ahead) {
-                updated.bookingRules.courtReleaseDaysAhead = String(crt011.effectiveConfig.days_ahead);
-              }
-            }
-          }
-
-          const crt012 = ruleMap.get('CRT-012') as any;
-          if (crt012) {
-            updated.bookingRules.courtCancellationDeadlineEnabled = !!crt012.isEnabled;
-            if (crt012.effectiveConfig?.cancel_cutoff_minutes) {
-              updated.bookingRules.courtCancellationDeadlineMinutes = String(crt012.effectiveConfig.cancel_cutoff_minutes);
-            }
-          }
-
-          const hh001 = ruleMap.get('HH-001') as any;
-          if (hh001) {
-            updated.bookingRules.householdMaxMembersEnabled = !!hh001.isEnabled;
-            if (hh001.effectiveConfig?.max_members) {
-              updated.bookingRules.householdMaxMembers = String(hh001.effectiveConfig.max_members);
-            }
-          }
-
-          const hh002 = ruleMap.get('HH-002') as any;
-          if (hh002) {
-            updated.bookingRules.householdMaxActiveEnabled = !!hh002.isEnabled;
-            if (hh002.effectiveConfig?.max_active_household) {
-              updated.bookingRules.householdMaxActive = String(hh002.effectiveConfig.max_active_household);
-            }
-          }
-
-          const hh003 = ruleMap.get('HH-003') as any;
-          if (hh003) {
-            updated.bookingRules.householdPrimeCapEnabled = !!hh003.isEnabled;
-            if (hh003.effectiveConfig?.max_prime_per_week_household) {
-              updated.bookingRules.householdPrimeCap = String(hh003.effectiveConfig.max_prime_per_week_household);
             }
           }
 
@@ -2472,96 +2148,110 @@ export function FacilityManagement() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* General Rules */}
                 <Card className="lg:col-span-2">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      General Rules
-                    </CardTitle>
-                    <CardDescription>Facility rules and guidelines for members</CardDescription>
+                    <CardTitle>Restriction Type</CardTitle>
+                    <CardDescription>Controls whether household limits are enforced</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <Textarea
-                      value={facilityData.bookingRules.generalRules}
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleBookingRulesChange('generalRules', e.target.value)}
-                      disabled={!isEditing}
-                      rows={6}
-                      placeholder="Enter your facility rules and guidelines..."
-                    />
+                  <CardContent className="flex items-center gap-8">
+                    <label className="inline-flex items-center gap-2">
+                      <input type="radio" checked={facilityData.bookingRules.restrictionType === 'account'} onChange={() => handleBookingRulesChange('restrictionType', 'account')} disabled={!isEditing} />
+                      Per Account
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input type="radio" checked={facilityData.bookingRules.restrictionType === 'address'} onChange={() => handleBookingRulesChange('restrictionType', 'address')} disabled={!isEditing} />
+                      Per Address
+                    </label>
                   </CardContent>
                 </Card>
 
-                {/* Restriction Type */}
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Restriction Type</CardTitle>
-                    <CardDescription>How booking limits are applied</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {renderInstructionCard('Choose whether booking limits apply per individual account or per household address.')}
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          id="restrictionAccount"
-                          name="restrictionType"
-                          value="account"
-                          checked={facilityData.bookingRules.restrictionType === 'account'}
-                          onChange={() => handleBookingRulesChange('restrictionType', 'account')}
-                          disabled={!isEditing}
-                          className="h-4 w-4"
-                        />
-                        <Label htmlFor="restrictionAccount">Per Account</Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          id="restrictionAddress"
-                          name="restrictionType"
-                          value="address"
-                          checked={facilityData.bookingRules.restrictionType === 'address'}
-                          onChange={() => handleBookingRulesChange('restrictionType', 'address')}
-                          disabled={!isEditing}
-                          className="h-4 w-4"
-                        />
-                        <Label htmlFor="restrictionAddress">Per Address</Label>
+                  <CardHeader><CardTitle>Days in Advance</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>Enable</Label>
+                      <Switch checked={facilityData.bookingRules.daysInAdvanceEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('daysInAdvanceEnabled', v)} disabled={!isEditing} />
+                    </div>
+                    <Input type="number" min="0" value={facilityData.bookingRules.daysInAdvance} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('daysInAdvance', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.daysInAdvanceEnabled} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader><CardTitle>Cancellation Policy</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>Enable</Label>
+                      <Switch checked={facilityData.bookingRules.cancellationPolicyEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('cancellationPolicyEnabled', v)} disabled={!isEditing} />
+                    </div>
+                    <p className="text-sm text-gray-600">Members can cancel at any time up until the reservation ends.</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader><CardTitle>Max Reservation Duration</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>Enable</Label>
+                      <Switch checked={facilityData.bookingRules.maxReservationDurationEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('maxReservationDurationEnabled', v)} disabled={!isEditing} />
+                    </div>
+                    {(() => {
+                      const totalMinutes = Number(facilityData.bookingRules.maxReservationDurationMinutes) || 0;
+                      const useHours = totalMinutes >= 60;
+                      const displayValue = useHours ? String(totalMinutes / 60) : String(totalMinutes);
+                      return (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min={useHours ? "0.25" : "15"}
+                            step={useHours ? "0.25" : "15"}
+                            value={displayValue}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                              const n = parseFloat(e.target.value);
+                              if (!Number.isFinite(n)) {
+                                handleBookingRulesChange('maxReservationDurationMinutes', '0');
+                                return;
+                              }
+                              const minutes = useHours ? Math.round(n * 60) : Math.round(n);
+                              handleBookingRulesChange('maxReservationDurationMinutes', String(minutes));
+                            }}
+                            disabled={!isEditing || !facilityData.bookingRules.maxReservationDurationEnabled}
+                          />
+                          <span className="text-sm text-gray-500 whitespace-nowrap">{useHours ? 'hours' : 'minutes'}</span>
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+
+                <Card className="lg:col-span-2">
+                  <CardHeader><CardTitle>User-Based Limits</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Courts Per Week (Individual)</Label>
+                      <div className="flex gap-2 items-center">
+                        <Switch checked={facilityData.bookingRules.courtsPerWeekUserEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekUserEnabled', v)} disabled={!isEditing} />
+                        <Input type="number" min="1" value={facilityData.bookingRules.courtsPerWeekUser} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerWeekUser', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerWeekUserEnabled} />
                       </div>
                     </div>
-                    <p className="text-sm text-gray-500">
-                      {facilityData.bookingRules.restrictionType === 'account'
-                        ? 'Booking limits apply to each individual user account'
-                        : 'Booking limits apply to all accounts sharing the same address'}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                {/* Account Booking Rules */}
-                {renderRuleCategoryCard('account', Calendar)}
-
-                {/* Cancellation & No-Show Rules */}
-                {renderRuleCategoryCard('cancellation', Clock)}
-
-                {/* Court Scheduling Rules */}
-                {renderRuleCategoryCard('court', Settings)}
-
-                {/* Household Rules - only when address-based */}
-                {facilityData.bookingRules.restrictionType === 'address' && renderRuleCategoryCard('household', Home)}
-
-                {/* Admin Restrictions */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Shield className="h-5 w-5" />
-                      Admin Booking Policy
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-                      <Info className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm text-green-800">
-                        <p className="font-medium">Facility admins automatically bypass all booking rules.</p>
-                        <p className="mt-1 text-green-700">Admins can book at any time, exceed limits, and ignore restrictions. System-level checks (closed courts, maintenance, suspended accounts) still apply.</p>
+                    <div className="space-y-2">
+                      <Label>Courts Per Week (Household)</Label>
+                      <div className="flex gap-2 items-center">
+                        <Switch checked={facilityData.bookingRules.courtsPerWeekHouseholdEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekHouseholdEnabled', v)} disabled={!isEditing} />
+                        <Input type="number" min="1" value={facilityData.bookingRules.courtsPerWeekHousehold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerWeekHousehold', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerWeekHouseholdEnabled} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Courts Per Day (Individual)</Label>
+                      <div className="flex gap-2 items-center">
+                        <Switch checked={facilityData.bookingRules.courtsPerDayUserEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayUserEnabled', v)} disabled={!isEditing} />
+                        <Input type="number" min="1" value={facilityData.bookingRules.courtsPerDayUser} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerDayUser', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerDayUserEnabled} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Courts Per Day (Household)</Label>
+                      <div className="flex gap-2 items-center">
+                        <Switch checked={facilityData.bookingRules.courtsPerDayHouseholdEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayHouseholdEnabled', v)} disabled={!isEditing} />
+                        <Input type="number" min="1" value={facilityData.bookingRules.courtsPerDayHousehold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerDayHousehold', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerDayHouseholdEnabled} />
                       </div>
                     </div>
                   </CardContent>
@@ -2591,7 +2281,6 @@ export function FacilityManagement() {
                         />
                       </div>
 
-                      {/* Peak Hours Time Slots */}
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="font-medium">Peak Hours Slots</h4>
@@ -2747,99 +2436,6 @@ export function FacilityManagement() {
                         ) : (
                           <p className="text-sm text-gray-500">No peak hours slots configured.</p>
                         )}
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
-
-                {/* Weekend Policy */}
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span>Weekend Policy</span>
-                      <Switch
-                        checked={facilityData.bookingRules.hasWeekendPolicy}
-                        onCheckedChange={(checked: boolean) => handleBookingRulesChange('hasWeekendPolicy', checked)}
-                        disabled={!isEditing}
-                      />
-                    </CardTitle>
-                    <CardDescription>Set different restrictions for weekend bookings</CardDescription>
-                  </CardHeader>
-                  {facilityData.bookingRules.hasWeekendPolicy && (
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <Label>Apply to admins</Label>
-                        <Switch
-                          checked={facilityData.bookingRules.weekendPolicyApplyToAdmins}
-                          onCheckedChange={(checked: boolean) => handleBookingRulesChange('weekendPolicyApplyToAdmins', checked)}
-                          disabled={!isEditing}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label>Max Bookings Per Weekend</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.weekendPolicy.maxBookingsUnlimited}
-                                onCheckedChange={(checked: boolean) => handleWeekendPolicyChange('maxBookingsUnlimited', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-xs text-gray-500">Unlimited</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.weekendPolicy.maxBookingsPerWeekend}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleWeekendPolicyChange('maxBookingsPerWeekend', e.target.value)}
-                            disabled={!isEditing || facilityData.bookingRules.weekendPolicy.maxBookingsUnlimited}
-                            min="1"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label>Max Duration (hours)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.weekendPolicy.maxDurationUnlimited}
-                                onCheckedChange={(checked: boolean) => handleWeekendPolicyChange('maxDurationUnlimited', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-xs text-gray-500">Unlimited</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.weekendPolicy.maxDurationHours}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleWeekendPolicyChange('maxDurationHours', e.target.value)}
-                            disabled={!isEditing || facilityData.bookingRules.weekendPolicy.maxDurationUnlimited}
-                            min="0.5"
-                            step="0.5"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label>Advance Booking (days)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={facilityData.bookingRules.weekendPolicy.advanceBookingUnlimited}
-                                onCheckedChange={(checked: boolean) => handleWeekendPolicyChange('advanceBookingUnlimited', checked)}
-                                disabled={!isEditing}
-                              />
-                              <span className="text-xs text-gray-500">Unlimited</span>
-                            </div>
-                          </div>
-                          <Input
-                            type="number"
-                            value={facilityData.bookingRules.weekendPolicy.advanceBookingDays}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleWeekendPolicyChange('advanceBookingDays', e.target.value)}
-                            disabled={!isEditing || facilityData.bookingRules.weekendPolicy.advanceBookingUnlimited}
-                            min="1"
-                          />
-                        </div>
                       </div>
                     </CardContent>
                   )}

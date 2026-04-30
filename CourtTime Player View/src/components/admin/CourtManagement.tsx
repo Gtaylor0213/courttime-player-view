@@ -749,7 +749,7 @@ export function CourtManagement() {
                   <Card className="border-green-200 bg-green-50/50">
                     <CardHeader>
                       <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
-                      <CardDescription>Configure hours, peak hours, and slot settings per day</CardDescription>
+                      <CardDescription>Configure available/unavailable hours and optional prime-time windows per day</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {courtScheduleLoading ? (
@@ -823,44 +823,6 @@ export function CourtManagement() {
                               </table>
                             </div>
                             <div className="absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-white pointer-events-none md:hidden" />
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
-                            <div className="space-y-1">
-                              <Label className="text-sm">Slot Duration (min)</Label>
-                              <Select
-                                value={String(courtSchedule[0]?.slot_duration || 30)}
-                                onValueChange={(val: string) => updateAllScheduleDays('slot_duration', parseInt(val))}
-                              >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="15">15 min</SelectItem>
-                                  <SelectItem value="30">30 min</SelectItem>
-                                  <SelectItem value="60">60 min</SelectItem>
-                                  <SelectItem value="90">90 min</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-sm">Buffer Before (min)</Label>
-                              <Input
-                                type="number"
-                                value={courtSchedule[0]?.buffer_before || 0}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllScheduleDays('buffer_before', parseInt(e.target.value) || 0)}
-                                min="0"
-                                max="30"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-sm">Buffer After (min)</Label>
-                              <Input
-                                type="number"
-                                value={courtSchedule[0]?.buffer_after || 0}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllScheduleDays('buffer_after', parseInt(e.target.value) || 0)}
-                                min="0"
-                                max="30"
-                              />
-                            </div>
                           </div>
 
                           <div className="flex gap-2 pt-4">

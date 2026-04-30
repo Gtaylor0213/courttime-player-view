@@ -158,8 +158,51 @@ export interface FacilityWithRules {
   operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
   timezone?: string;
   status?: 'active' | 'pending' | 'suspended' | 'closed';
+  simplifiedBookingRules?: SimplifiedBookingRules;
   rules: FacilityRuleConfig[];
   defaultTier?: MembershipTier;
+}
+
+export interface SimplifiedRuleWithLimit {
+  enabled: boolean;
+  limit: number;
+}
+
+export interface SimplifiedDailyHoursConfig {
+  isOpen: boolean;
+  openTime?: string;
+  closeTime?: string;
+}
+
+export interface SimplifiedBookingRules {
+  restrictionType: 'account' | 'address';
+  daysInAdvance: SimplifiedRuleWithLimit;
+  cancellationPolicy: { enabled: boolean };
+  maxReservationDuration: SimplifiedRuleWithLimit;
+  userLimits: {
+    perWeekIndividual: SimplifiedRuleWithLimit;
+    perWeekHousehold: SimplifiedRuleWithLimit;
+    perDayIndividual: SimplifiedRuleWithLimit;
+    perDayHousehold: SimplifiedRuleWithLimit;
+  };
+  facilityHours?: Record<string, SimplifiedDailyHoursConfig>;
+  hasPeakHours?: boolean;
+  peakHoursSlots?: Array<{
+    id: string;
+    startTime: string;
+    endTime: string;
+    days: number[];
+    appliesToAllCourts: boolean;
+    selectedCourtIds: string[];
+    rules: {
+      maxBookingsPerDay: string;
+      maxBookingsPerDayUnlimited: boolean;
+      maxBookingsPerWeek: string;
+      maxBookingsPerWeekUnlimited: boolean;
+      maxDurationHours: string;
+      maxDurationUnlimited: boolean;
+    };
+  }>;
 }
 
 export interface PeakHoursSlotRules {

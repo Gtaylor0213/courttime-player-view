@@ -16,7 +16,7 @@ import {
   FacilityRuleConfig,
   RuleEvaluator
 } from './types';
-import { combineDateAndTime, minutesBetween } from './utils/timeUtils';
+import { combineDateAndTime, formatDate, getDayOfWeek, minutesBetween, timeRangesOverlap, timeToMinutes } from './utils/timeUtils';
 
 // Import evaluators
 import { accountEvaluators } from './evaluators/AccountRuleEvaluators';
@@ -200,6 +200,11 @@ export class RulesEngine {
         };
       }
 
+      const simplifiedResult = this.evaluateSimplifiedRules(context);
+      if (simplifiedResult) {
+        return simplifiedResult;
+      }
+
       // Get applicable rules for this facility/court/tier
       const rules = this.getApplicableRules(context);
 
@@ -264,6 +269,232 @@ export class RulesEngine {
       console.error('Error in rules engine evaluation:', error);
       throw error;
     }
+  }
+
+  private evaluateSimplifiedRules(context: RuleContext): EvaluationResult | null {
+    const config = context.facility.simplifiedBookingRules;
+    if (!config) return null;
+
+    const blockers: RuleResult[] = [];
+    const nowDate = new Date(context.currentDateTime);
+    const requestDate = new Date(context.request.bookingDate);
+    requestDate.setHours(0, 0, 0, 0);
+    nowDate.setHours(0, 0, 0, 0);
+
+    if (config.daysInAdvance?.enabled) {
+      const maxDaysAhead = Number(config.daysInAdvance.limit) || 0;
+      const daysAhead = Math.ceil((requestDate.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysAhead > maxDaysAhead) {
+        blockers.push({
+          ruleCode: 'SIMPLE-ADVANCE',
+          ruleName: 'Days in Advance',
+          passed: false,
+          severity: 'error',
+          message: `You can only book up to ${maxDaysAhead} days in advance`
+        });
+      }
+    }
+
+    const dayOfWeek = getDayOfWeek(context.request.bookingDate);
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayName = dayNames[dayOfWeek];
+    const facilityHours = config.facilityHours?.[dayName] || context.facility.operatingHours?.[dayName];
+    if (facilityHours) {
+      if ((facilityHours as any).isOpen === false || (facilityHours as any).closed === true) {
+        blockers.push({
+          ruleCode: 'SIMPLE-FACILITY-HOURS',
+          ruleName: 'Facility Hours',
+          passed: false,
+          severity: 'error',
+          message: 'This facility is not open during the selected time'
+        });
+      } else if ((facilityHours as any).open && (facilityHours as any).close) {
+        const requestStart = timeToMinutes(context.request.startTime);
+        const requestEnd = timeToMinutes(context.request.endTime);
+        const open = timeToMinutes((facilityHours as any).open);
+        const close = timeToMinutes((facilityHours as any).close);
+        if (requestStart < open || requestEnd > close) {
+          blockers.push({
+            ruleCode: 'SIMPLE-FACILITY-HOURS',
+            ruleName: 'Facility Hours',
+            passed: false,
+            severity: 'error',
+            message: 'This facility is not open during the selected time'
+          });
+        }
+      }
+    }
+
+    const courtDayConfig = context.court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
+    if (courtDayConfig) {
+      if (!courtDayConfig.isOpen) {
+        blockers.push({
+          ruleCode: 'SIMPLE-COURT-HOURS',
+          ruleName: 'Court Hours',
+          passed: false,
+          severity: 'error',
+          message: 'This court is not available during the selected time'
+        });
+      } else if (courtDayConfig.openTime && courtDayConfig.closeTime) {
+        const requestStart = timeToMinutes(context.request.startTime);
+        const requestEnd = timeToMinutes(context.request.endTime);
+        const open = timeToMinutes(courtDayConfig.openTime);
+        const close = timeToMinutes(courtDayConfig.closeTime);
+        if (requestStart < open || requestEnd > close) {
+          blockers.push({
+            ruleCode: 'SIMPLE-COURT-HOURS',
+            ruleName: 'Court Hours',
+            passed: false,
+            severity: 'error',
+            message: 'This court is not available during the selected time'
+          });
+        }
+      }
+    }
+
+    if (config.maxReservationDuration?.enabled) {
+      const maxDuration = Number(config.maxReservationDuration.limit) || 0;
+      if (maxDuration > 0 && context.request.durationMinutes > maxDuration) {
+        const formatted = maxDuration >= 60
+          ? `${maxDuration / 60} ${maxDuration / 60 === 1 ? 'hour' : 'hours'}`
+          : `${maxDuration} minutes`;
+        blockers.push({
+          ruleCode: 'SIMPLE-MAX-DURATION',
+          ruleName: 'Max Reservation Duration',
+          passed: false,
+          severity: 'error',
+          message: `Bookings cannot exceed ${formatted}`
+        });
+      }
+    }
+
+    const countable = (b: any) => b.status === 'confirmed';
+    const requestDay = context.request.bookingDate;
+    const weekStartDate = new Date(context.currentDateTime);
+    const dow = weekStartDate.getDay(); // 0=Sun..6=Sat
+    const diffToMonday = dow === 0 ? -6 : 1 - dow;
+    weekStartDate.setDate(weekStartDate.getDate() + diffToMonday);
+    weekStartDate.setHours(0, 0, 0, 0);
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    const weekStart = formatDate(weekStartDate);
+    const weekEnd = formatDate(weekEndDate);
+    const userDayCount = context.existingBookings.user.filter((b) => countable(b) && b.bookingDate === requestDay).length;
+    const userWeekCount = context.existingBookings.user.filter((b) => countable(b) && b.bookingDate >= weekStart && b.bookingDate <= weekEnd).length;
+    const householdDayCount = context.existingBookings.household.filter((b) => countable(b) && b.bookingDate === requestDay).length;
+    const householdWeekCount = context.existingBookings.household.filter((b) => countable(b) && b.bookingDate >= weekStart && b.bookingDate <= weekEnd).length;
+
+    if (config.userLimits?.perDayIndividual?.enabled && userDayCount >= Number(config.userLimits.perDayIndividual.limit || 0)) {
+      const limit = Number(config.userLimits.perDayIndividual.limit || 0);
+      blockers.push({
+        ruleCode: 'SIMPLE-DAY-USER',
+        ruleName: 'Courts Per Day (Individual)',
+        passed: false,
+        severity: 'error',
+        message: `You have reached your daily booking limit of ${limit}`
+      });
+    }
+    if (config.userLimits?.perWeekIndividual?.enabled && userWeekCount >= Number(config.userLimits.perWeekIndividual.limit || 0)) {
+      const limit = Number(config.userLimits.perWeekIndividual.limit || 0);
+      blockers.push({
+        ruleCode: 'SIMPLE-WEEK-USER',
+        ruleName: 'Courts Per Week (Individual)',
+        passed: false,
+        severity: 'error',
+        message: `You have reached your weekly booking limit of ${limit}`
+      });
+    }
+
+    const enforceHousehold = config.restrictionType === 'address' && !!context.household;
+    if (enforceHousehold && config.userLimits?.perDayHousehold?.enabled && householdDayCount >= Number(config.userLimits.perDayHousehold.limit || 0)) {
+      const limit = Number(config.userLimits.perDayHousehold.limit || 0);
+      blockers.push({
+        ruleCode: 'SIMPLE-DAY-HOUSEHOLD',
+        ruleName: 'Courts Per Day (Household)',
+        passed: false,
+        severity: 'error',
+        message: `Your household has reached its daily booking limit of ${limit}`
+      });
+    }
+    if (enforceHousehold && config.userLimits?.perWeekHousehold?.enabled && householdWeekCount >= Number(config.userLimits.perWeekHousehold.limit || 0)) {
+      const limit = Number(config.userLimits.perWeekHousehold.limit || 0);
+      blockers.push({
+        ruleCode: 'SIMPLE-WEEK-HOUSEHOLD',
+        ruleName: 'Courts Per Week (Household)',
+        passed: false,
+        severity: 'error',
+        message: `Your household has reached its weekly booking limit of ${limit}`
+      });
+    }
+
+    if (config.hasPeakHours && Array.isArray(config.peakHoursSlots)) {
+      const applicableSlots = config.peakHoursSlots.filter((slot) => {
+        if (!slot.days?.includes(dayOfWeek)) return false;
+        if (!slot.appliesToAllCourts && !slot.selectedCourtIds?.includes(context.court.id)) return false;
+        return timeRangesOverlap(context.request.startTime, context.request.endTime, slot.startTime, slot.endTime);
+      });
+
+      for (const slot of applicableSlots) {
+        const peakBookings = context.existingBookings.user.filter((b) => {
+          if (!countable(b)) return false;
+          if (b.bookingDate < weekStart || b.bookingDate > weekEnd) return false;
+          if (!slot.days.includes(getDayOfWeek(b.bookingDate))) return false;
+          if (!slot.appliesToAllCourts && !slot.selectedCourtIds?.includes(b.courtId)) return false;
+          return timeRangesOverlap(b.startTime, b.endTime, slot.startTime, slot.endTime);
+        });
+        const peakDayCount = peakBookings.filter((b) => b.bookingDate === requestDay).length;
+        const peakWeekCount = peakBookings.length;
+
+        if (!slot.rules.maxBookingsPerDayUnlimited) {
+          const maxDay = Number(slot.rules.maxBookingsPerDay || 0);
+          if (maxDay > 0 && peakDayCount >= maxDay) {
+            blockers.push({
+              ruleCode: 'SIMPLE-PEAK-DAY',
+              ruleName: 'Peak Hours Rules',
+              passed: false,
+              severity: 'error',
+              message: 'You have reached your peak hours booking limit'
+            });
+            continue;
+          }
+        }
+
+        if (!slot.rules.maxBookingsPerWeekUnlimited) {
+          const maxWeek = Number(slot.rules.maxBookingsPerWeek || 0);
+          if (maxWeek > 0 && peakWeekCount >= maxWeek) {
+            blockers.push({
+              ruleCode: 'SIMPLE-PEAK-WEEK',
+              ruleName: 'Peak Hours Rules',
+              passed: false,
+              severity: 'error',
+              message: 'You have reached your peak hours booking limit'
+            });
+            continue;
+          }
+        }
+
+        if (!slot.rules.maxDurationUnlimited) {
+          const maxPeakMinutes = Math.round((Number(slot.rules.maxDurationHours || 0) || 0) * 60);
+          if (maxPeakMinutes > 0 && context.request.durationMinutes > maxPeakMinutes) {
+            blockers.push({
+              ruleCode: 'SIMPLE-PEAK-DURATION',
+              ruleName: 'Peak Hours Rules',
+              passed: false,
+              severity: 'error',
+              message: 'You have reached your peak hours booking limit'
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      allowed: blockers.length === 0,
+      results: blockers,
+      blockers,
+      warnings: [],
+      isPrimeTime: false
+    };
   }
 
   /**
@@ -419,15 +650,35 @@ export class RulesEngine {
         request.userId
       );
 
-      // Find cancellation rules
-      const lateCancelRule = facility.rules.find(r => r.ruleCode === 'ACC-008');
-      const courtCancelRule = facility.rules.find(r => r.ruleCode === 'CRT-012');
-
       // Calculate minutes before start (use facility timezone for accurate comparison)
       const bookingStart = combineDateAndTime(booking.bookingDate, booking.startTime);
       const facilityTimezone = (facility as any).timezone || 'America/New_York';
       const now = getFacilityLocalNow(facilityTimezone);
       const minutesBeforeStart = minutesBetween(now, bookingStart);
+
+      if (facility.simplifiedBookingRules?.cancellationPolicy?.enabled) {
+        const bookingEnd = combineDateAndTime(booking.bookingDate, booking.endTime);
+        if (now > bookingEnd) {
+          return {
+            allowed: false,
+            isLateCancel: false,
+            strikeWillBeIssued: false,
+            minutesBeforeStart,
+            message: 'This reservation has already ended and cannot be cancelled'
+          };
+        }
+        return {
+          allowed: true,
+          isLateCancel: false,
+          strikeWillBeIssued: false,
+          minutesBeforeStart,
+          message: 'Members can cancel at any time up until the reservation ends.'
+        };
+      }
+
+      // Find cancellation rules
+      const lateCancelRule = facility.rules.find(r => r.ruleCode === 'ACC-008');
+      const courtCancelRule = facility.rules.find(r => r.ruleCode === 'CRT-012');
 
       // Determine cutoff (court-specific or account-level)
       // Default to 0 (no penalty) if no cancellation rule is configured

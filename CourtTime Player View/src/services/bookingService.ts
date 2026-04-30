@@ -770,6 +770,13 @@ export async function cancelBooking(
       reason
     });
 
+    if (!cancellationEval.allowed) {
+      return {
+        success: false,
+        error: cancellationEval.message || 'Cancellation is not allowed'
+      };
+    }
+
     // Record rate limit action
     await recordRateLimitAction(userId, booking.facilityId, 'cancel');
 

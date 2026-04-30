@@ -13,7 +13,6 @@ import {
   ACC004Config,
   ACC005Config,
   ACC006Config,
-  ACC007Config,
   ACC009Config,
   ACC010Config,
   ACC011Config
@@ -271,53 +270,6 @@ const ACC006: RuleEvaluator = {
 };
 
 /**
- * ACC-007: Cancellation Cooldown
- */
-const ACC007: RuleEvaluator = {
-  ruleCode: 'ACC-007',
-  ruleName: 'Cancellation Cooldown',
-  category: 'account',
-
-  async evaluate(context: RuleContext, config: ACC007Config): Promise<RuleResult> {
-    const cooldownMinutes = config.cooldown_minutes || 30;
-    const onlyIfWithin = config.only_if_within_minutes_of_start;
-
-    // Check recent cancellations
-    const recentCancel = context.recentCancellations.find(c => {
-      // If onlyIfWithin is set, only consider cancellations that were within X minutes of start
-      if (onlyIfWithin && c.minutesBeforeStart > onlyIfWithin) {
-        return false;
-      }
-
-      // Check if within cooldown period
-      const cancelledAt = new Date(c.cancelledAt);
-      const minutesSinceCancel = minutesBetween(cancelledAt, context.currentDateTime);
-      return minutesSinceCancel < cooldownMinutes;
-    });
-
-    if (recentCancel) {
-      const cancelledAt = new Date(recentCancel.cancelledAt);
-      const cooldownEnds = new Date(cancelledAt.getTime() + cooldownMinutes * 60 * 1000);
-
-      return {
-        ruleCode: 'ACC-007',
-        ruleName: 'Cancellation Cooldown',
-        passed: false,
-        severity: 'error',
-        message: `You recently canceled a reservation. You can book again after ${cooldownEnds.toLocaleTimeString()}.`,
-        details: {
-          cooldownMinutes,
-          cooldownEndsAt: cooldownEnds.toISOString(),
-          lastCancellation: recentCancel.cancelledAt
-        }
-      };
-    }
-
-    return { ruleCode: 'ACC-007', ruleName: 'Cancellation Cooldown', passed: true, severity: 'error' };
-  }
-};
-
-/**
  * ACC-009: No-Show / Strike System
  */
 const ACC009: RuleEvaluator = {
@@ -472,7 +424,6 @@ export const accountEvaluators: RuleEvaluator[] = [
   ACC004,
   ACC005,
   ACC006,
-  ACC007,
   ACC009,
   ACC010,
   ACC011

@@ -117,9 +117,6 @@ interface BookingRules {
   // ACC-006: Minimum lead time
   minimumLeadTimeEnabled: boolean;
   minimumLeadTimeMinutes: string;
-  // ACC-007: Cancellation cooldown
-  cancellationCooldownEnabled: boolean;
-  cancellationCooldownMinutes: string;
   // ACC-009: Strike system
   strikeSystemEnabled: boolean;
   strikeThreshold: string;
@@ -268,8 +265,6 @@ export function FacilityManagement() {
     noOverlappingReservations: true,
     minimumLeadTimeEnabled: false,
     minimumLeadTimeMinutes: '60',
-    cancellationCooldownEnabled: false,
-    cancellationCooldownMinutes: '30',
     strikeSystemEnabled: false,
     strikeThreshold: '3',
     strikeWindowDays: '30',
@@ -517,8 +512,6 @@ export function FacilityManagement() {
           noOverlappingReservations: defaultBookingRules.noOverlappingReservations,
           minimumLeadTimeEnabled: defaultBookingRules.minimumLeadTimeEnabled,
           minimumLeadTimeMinutes: defaultBookingRules.minimumLeadTimeMinutes,
-          cancellationCooldownEnabled: defaultBookingRules.cancellationCooldownEnabled,
-          cancellationCooldownMinutes: defaultBookingRules.cancellationCooldownMinutes,
           strikeSystemEnabled: defaultBookingRules.strikeSystemEnabled,
           strikeThreshold: defaultBookingRules.strikeThreshold,
           strikeWindowDays: defaultBookingRules.strikeWindowDays,
@@ -1375,7 +1368,6 @@ export function FacilityManagement() {
     'ACC-004': { enabledField: 'noOverlappingReservations', configMap: {} },
     'ACC-005': { enabledField: 'advanceBookingDaysUnlimited', invertEnabled: true, configMap: { max_days_ahead: { field: 'advanceBookingDays' } } },
     'ACC-006': { enabledField: 'minimumLeadTimeEnabled', configMap: { min_minutes_before_start: { field: 'minimumLeadTimeMinutes' } } },
-    'ACC-007': { enabledField: 'cancellationCooldownEnabled', configMap: { cooldown_minutes: { field: 'cancellationCooldownMinutes' } } },
     'ACC-008': { enabledField: 'cancellationNoticeUnlimited', invertEnabled: true, configMap: { late_cancel_cutoff_minutes: { field: 'cancellationNoticeHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
     'ACC-009': { enabledField: 'strikeSystemEnabled', configMap: { strike_threshold: { field: 'strikeThreshold' }, strike_window_days: { field: 'strikeWindowDays' }, lockout_days: { field: 'strikeLockoutDays' } } },
     'ACC-010': { enabledField: 'peakHoursRestrictions.maxBookingsUnlimited', invertEnabled: true, configMap: { max_prime_per_week: { field: 'peakHoursRestrictions.maxBookingsPerWeek' } } },

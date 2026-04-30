@@ -441,11 +441,6 @@ export interface ACC006Config {
   min_minutes_before_start: number;
 }
 
-export interface ACC007Config {
-  cooldown_minutes: number;
-  only_if_within_minutes_of_start?: number;
-}
-
 export interface ACC008Config {
   late_cancel_cutoff_minutes: number;
   penalty_type: 'strike' | 'warning';

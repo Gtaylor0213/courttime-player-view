@@ -151,15 +151,6 @@ export const RULE_METADATA: RuleMeta[] = [
 
   // Cancellation & No-Show Rules
   {
-    code: 'ACC-007',
-    name: 'Cancellation Cooldown',
-    description: 'Prevents immediate re-booking after a cancellation.',
-    category: 'cancellation',
-    fields: [
-      { key: 'cooldown_minutes', label: 'Cooldown', type: 'number', min: 1, max: 1440, suffix: 'minutes' },
-    ],
-  },
-  {
     code: 'ACC-008',
     name: 'Late Cancellation Policy',
     description: 'Issues a strike when cancellations happen too close to start time.',
@@ -303,7 +294,6 @@ export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
   'ACC-004': { enabled: true, config: { allow_overlap: false, overlap_grace_minutes: 0 } },
   'ACC-005': { enabled: true, config: { max_days_ahead: 14 } },
   'ACC-006': { enabled: true, config: { min_minutes_before_start: 60 } },
-  'ACC-007': { enabled: false, config: { cooldown_minutes: 30, only_if_within_minutes_of_start: 240 } },
   'ACC-008': { enabled: true, config: { late_cancel_cutoff_minutes: 120, penalty_type: 'strike', penalty_value: 1 } },
   'ACC-009': { enabled: true, config: { strike_threshold: 3, strike_window_days: 30, lockout_days: 7 } },
   'ACC-010': { enabled: false, config: { max_prime_per_week: 3, window_type: 'calendar_week' } },

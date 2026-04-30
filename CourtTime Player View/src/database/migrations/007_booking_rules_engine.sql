@@ -330,7 +330,7 @@ ALTER TABLE booking_violations ADD COLUMN IF NOT EXISTS strike_issued BOOLEAN DE
 ALTER TABLE booking_violations ADD COLUMN IF NOT EXISTS strike_id UUID REFERENCES account_strikes(id) ON DELETE SET NULL;
 
 -- =====================================================
--- 13. CANCELLATION TRACKING - For cooldown enforcement
+-- 13. CANCELLATION TRACKING - For cancellation policy enforcement
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS booking_cancellations (
@@ -350,7 +350,7 @@ CREATE TABLE IF NOT EXISTS booking_cancellations (
 CREATE INDEX IF NOT EXISTS idx_booking_cancellations_user ON booking_cancellations(user_id, facility_id);
 CREATE INDEX IF NOT EXISTS idx_booking_cancellations_date ON booking_cancellations(cancelled_at);
 
-COMMENT ON TABLE booking_cancellations IS 'Tracks cancellations for cooldown (ACC-007) and late cancel (ACC-008) enforcement';
+COMMENT ON TABLE booking_cancellations IS 'Tracks cancellations for late cancel (ACC-008) enforcement';
 COMMENT ON COLUMN booking_cancellations.minutes_before_start IS 'Minutes between cancellation and booking start time';
 
 -- =====================================================
@@ -415,30 +415,25 @@ INSERT INTO booking_rule_definitions (rule_code, rule_category, rule_name, descr
  '{"min_minutes_before_start": 15}',
  105, 'Reservations must be made at least {minMinutes} minutes before start time.'),
 
-('ACC-007', 'account', 'Cancellation Cooldown', 'Cooldown period after canceling',
- '{"type":"object","properties":{"cooldown_minutes":{"type":"integer"},"only_if_within_minutes_of_start":{"type":"integer"}}}',
- '{"cooldown_minutes": 30, "only_if_within_minutes_of_start": 240}',
- 106, 'You recently canceled a reservation. You can book again after {cooldownEndsAt}.'),
-
 ('ACC-008', 'account', 'Late Cancellation Policy', 'Enforces penalties for late cancellations',
  '{"type":"object","properties":{"late_cancel_cutoff_minutes":{"type":"integer"},"penalty_type":{"type":"string"},"penalty_value":{"type":"number"}}}',
  '{"late_cancel_cutoff_minutes": 240, "penalty_type": "strike", "penalty_value": 1}',
- 107, 'This cancellation is within {cutoff} minutes of start. Penalty: {penaltySummary}.'),
+ 106, 'This cancellation is within {cutoff} minutes of start. Penalty: {penaltySummary}.'),
 
 ('ACC-009', 'account', 'No-Show / Strike System', 'Manages strikes and lockouts',
  '{"type":"object","properties":{"strike_threshold":{"type":"integer"},"strike_window_days":{"type":"integer"},"lockout_days":{"type":"integer"}}}',
  '{"strike_threshold": 3, "strike_window_days": 30, "lockout_days": 7}',
- 108, 'Your account is locked due to no-show/late-cancel penalties until {lockoutEndsAt}.'),
+ 107, 'Your account is locked due to no-show/late-cancel penalties until {lockoutEndsAt}.'),
 
 ('ACC-010', 'account', 'Peak-Hours Reservations Per Week', 'Limits peak-hours bookings per week',
  '{"type":"object","properties":{"max_prime_per_week":{"type":"integer"},"window_type":{"type":"string"}}}',
  '{"max_prime_per_week": 2, "window_type": "calendar_week"}',
- 109, 'Peak-hours weekly limit reached ({current}/{max}).'),
+ 108, 'Peak-hours weekly limit reached ({current}/{max}).'),
 
 ('ACC-011', 'account', 'Rate Limit Reservation Actions', 'Prevents rapid booking actions (anti-abuse)',
  '{"type":"object","properties":{"max_actions":{"type":"integer"},"window_seconds":{"type":"integer"},"action_types":{"type":"array"}}}',
  '{"max_actions": 10, "window_seconds": 60, "action_types": ["create", "cancel"]}',
- 110, 'Too many actions. Please try again in {retryAfterSeconds} seconds.'),
+ 109, 'Too many actions. Please try again in {retryAfterSeconds} seconds.'),
 
 -- Court Rules
 ('CRT-001', 'court', 'Peak-Hours Schedule', 'Defines peak-hours windows per court',

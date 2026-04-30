@@ -107,7 +107,6 @@ If deployed on Render, use the database shell in the Render dashboard.
 - ACC-004: No Overlapping Reservations
 - ACC-005: Advance Booking Window
 - ACC-006: Minimum Lead Time
-- ACC-007: Cancellation Cooldown
 - ACC-008: Late Cancellation Policy
 - ACC-009: No-Show Strike System
 - ACC-010: Peak-Hours Per Week Limit
@@ -134,8 +133,8 @@ If deployed on Render, use the database shell in the Render dashboard.
 
 ### Admin UI Rule Coverage
 
-**Rules with full admin UI controls (19):**
-ACC-001, ACC-002, ACC-003, ACC-004, ACC-005, ACC-006, ACC-007, ACC-008, ACC-009, ACC-010, ACC-011, CRT-001, CRT-002, CRT-003, CRT-005, CRT-010, CRT-011, HH-002, HH-003
+**Rules with full admin UI controls (18):**
+ACC-001, ACC-002, ACC-003, ACC-004, ACC-005, ACC-006, ACC-008, ACC-009, ACC-010, ACC-011, CRT-001, CRT-002, CRT-003, CRT-005, CRT-010, CRT-011, HH-002, HH-003
 
 **Rules configured via Court Management panel (3):**
 CRT-004 (operating hours), CRT-006 (blackouts), CRT-007 (buffer time)

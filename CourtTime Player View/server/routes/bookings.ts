@@ -492,8 +492,24 @@ router.get('/upcoming/:userId', async (req, res, next) => {
     const { facilityId, limit } = req.query;
 
     let query = `
-      SELECT b.*, c.name as court_name, f.name as facility_name,
-             b.is_prime_time, b.rule_overrides
+      SELECT
+        b.id,
+        b.court_id     as "courtId",
+        b.user_id      as "userId",
+        b.facility_id  as "facilityId",
+        b.booking_date as "bookingDate",
+        b.start_time   as "startTime",
+        b.end_time     as "endTime",
+        b.duration_minutes as "durationMinutes",
+        b.status,
+        b.booking_type as "bookingType",
+        b.notes,
+        b.is_prime_time as "isPrimeTime",
+        b.rule_overrides as "ruleOverrides",
+        b.created_at   as "createdAt",
+        b.updated_at   as "updatedAt",
+        c.name as "courtName",
+        f.name as "facilityName"
       FROM bookings b
       JOIN courts c ON b.court_id = c.id
       JOIN facilities f ON b.facility_id = f.id
@@ -520,7 +536,7 @@ router.get('/upcoming/:userId', async (req, res, next) => {
 
     // Cancellation is always allowed until reservation end under simplified policy.
     const bookingsWithInfo = result.rows.map((b: any) => {
-      const startDateTime = new Date(`${b.booking_date}T${b.start_time}`);
+      const startDateTime = new Date(`${b.bookingDate}T${b.startTime}`);
       const now = new Date();
       const hoursUntilStart = (startDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 

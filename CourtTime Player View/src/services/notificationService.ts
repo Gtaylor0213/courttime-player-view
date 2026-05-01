@@ -419,6 +419,13 @@ export const notificationService = {
  */
 async function sendPushNotifications(userId: string, title: string, body: string, type: string): Promise<void> {
   try {
+    // Honor user notification preferences before pushing
+    const { getNotificationPreferences, preferenceKeyForType } = await import('./userPreferencesService');
+    const prefs = await getNotificationPreferences(userId);
+    if (!prefs.pushEnabled) return;
+    const prefKey = preferenceKeyForType(type);
+    if (prefKey && !prefs[prefKey]) return;
+
     const result = await dbQuery(
       `SELECT push_token FROM user_push_tokens WHERE user_id = $1`,
       [userId]

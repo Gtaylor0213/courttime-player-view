@@ -19,7 +19,6 @@ import { showAlert } from '../../src/utils/alert';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
-import { FacilitySelector } from '../../src/components/FacilitySelector';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
 import { TimePicker } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -392,11 +391,6 @@ export default function BookCourtScreen() {
           </Text>
         </View>
       )}
-
-      {/* Facility Selector */}
-      <View style={{ marginTop: Spacing.sm }}>
-        <FacilitySelector />
-      </View>
 
       {/* View Mode Toggle */}
       <View style={styles.viewToggle}>

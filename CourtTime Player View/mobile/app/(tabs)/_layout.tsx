@@ -7,6 +7,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/theme';
+import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 
 export default function TabLayout() {
   return (
@@ -22,19 +23,11 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
-          headerTitle: 'CourtTime',
-        }}
-      />
-      <Tabs.Screen
         name="book"
         options={{
           title: 'Book',
           tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
-          headerTitle: 'Book a Court',
+          headerTitle: () => <HeaderFacilitySelector fallbackTitle="Book a Court" />,
         }}
       />
       <Tabs.Screen
@@ -42,7 +35,15 @@ export default function TabLayout() {
         options={{
           title: 'Community',
           tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
-          headerTitle: 'Community',
+          headerTitle: () => <HeaderFacilitySelector fallbackTitle="Community" />,
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          headerTitle: () => <HeaderFacilitySelector fallbackTitle="CourtTime" />,
         }}
       />
       <Tabs.Screen
@@ -50,7 +51,7 @@ export default function TabLayout() {
         options={{
           title: 'Messages',
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
-          headerTitle: 'Messages',
+          headerTitle: () => <HeaderFacilitySelector fallbackTitle="Messages" />,
         }}
       />
       <Tabs.Screen

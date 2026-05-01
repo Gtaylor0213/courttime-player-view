@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
+import { showAlert } from '../../src/utils/alert';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 
 interface ConversationItem {
@@ -41,6 +42,7 @@ interface MemberItem {
   fullName: string;
   email: string;
   skillLevel?: string;
+  status?: 'active' | 'pending' | 'expired' | 'suspended';
 }
 
 export default function MessagesScreen() {
@@ -70,7 +72,8 @@ export default function MessagesScreen() {
 
     const res = await api.get(`/api/messages/conversations/${facilityId}/${user.id}`);
     if (res.success && res.data) {
-      const convos = res.data.conversations || [];
+      // Server wraps as { success, data: { conversations } }, so unwrap one level
+      const convos = res.data.conversations || res.data.data?.conversations || [];
       setConversations(convos);
     }
     setLoading(false);
@@ -90,7 +93,8 @@ export default function MessagesScreen() {
   const fetchMessages = useCallback(async (conversationId: string) => {
     const res = await api.get(`/api/messages/${conversationId}`);
     if (res.success && res.data) {
-      setMessages(res.data.messages || []);
+      const msgs = res.data.messages || res.data.data?.messages || [];
+      setMessages(msgs);
     }
 
     // Mark as read
@@ -111,18 +115,22 @@ export default function MessagesScreen() {
     if (!activeConversation) return;
 
     setSending(true);
+    const text = newMessage.trim();
     const res = await api.post('/api/messages', {
       senderId: user.id,
       recipientId: activeConversation.otherUser.id,
       facilityId,
-      messageText: newMessage.trim(),
+      messageText: text,
     });
-
-    if (res.success) {
-      setNewMessage('');
-      fetchMessages(activeConversation.id);
-    }
     setSending(false);
+
+    const newMsg = res.data?.message || res.data?.data?.message;
+    if (res.success && newMsg) {
+      setNewMessage('');
+      setMessages(prev => [...prev, newMsg]);
+    } else {
+      showAlert('Could not send', res.error || 'Message failed to send. Please try again.');
+    }
   }
 
   // ── Start a new conversation ──
@@ -132,8 +140,8 @@ export default function MessagesScreen() {
     const res = await api.get(`/api/members/${facilityId}`);
     if (res.success && res.data) {
       const memberList = Array.isArray(res.data) ? res.data : res.data.members || [];
-      // Exclude self
-      setMembers(memberList.filter((m: MemberItem) => m.userId !== user?.id));
+      // Only active members can receive messages (server enforces this too).
+      setMembers(memberList.filter((m: MemberItem) => m.userId !== user?.id && (!m.status || m.status === 'active')));
     }
     setLoadingMembers(false);
   }
@@ -178,16 +186,19 @@ export default function MessagesScreen() {
       facilityId,
       messageText: newMessage.trim(),
     });
-
-    if (res.success && res.data) {
-      setNewMessage('');
-      const conversationId = res.data.conversationId;
-      // Update the active conversation with the real ID
-      setActiveConversation(prev => prev ? { ...prev, id: conversationId } : null);
-      fetchMessages(conversationId);
-      fetchConversations(); // Refresh the list
-    }
     setSending(false);
+
+    const payload = res.data?.data || res.data;
+    if (res.success && payload?.conversationId) {
+      setNewMessage('');
+      setActiveConversation(prev => prev ? { ...prev, id: payload.conversationId } : null);
+      if (payload.message) {
+        setMessages([payload.message]);
+      }
+      fetchConversations(); // Refresh the list so this convo shows up
+    } else {
+      showAlert('Could not send', res.error || 'Message failed to send. Please try again.');
+    }
   }
 
   // ── Helpers ──
@@ -207,8 +218,7 @@ export default function MessagesScreen() {
   };
 
   const filteredMembers = members.filter(m =>
-    m.fullName.toLowerCase().includes(memberSearch.toLowerCase()) ||
-    m.email.toLowerCase().includes(memberSearch.toLowerCase())
+    m.fullName.toLowerCase().includes(memberSearch.toLowerCase())
   );
 
   // ── RENDER: Message Thread View ──
@@ -396,9 +406,9 @@ export default function MessagesScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.userName}>{item.fullName}</Text>
-                    <Text style={styles.memberMeta}>
-                      {item.skillLevel ? `${item.skillLevel} · ` : ''}{item.email}
-                    </Text>
+                    {item.skillLevel && (
+                      <Text style={styles.memberMeta}>{item.skillLevel}</Text>
+                    )}
                   </View>
                 </TouchableOpacity>
               )}

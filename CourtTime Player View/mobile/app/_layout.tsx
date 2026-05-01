@@ -5,7 +5,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
@@ -28,7 +28,7 @@ function RootLayoutNav() {
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/auth/login');
     } else if (isAuthenticated && inAuthGroup) {
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/book');
     }
   }, [isAuthenticated, isLoading, segments]);
 
@@ -66,7 +66,16 @@ function RootLayoutNav() {
     return <TermsAcceptanceGate />;
   }
 
-  return <Slot />;
+  return (
+    <Stack>
+      {/* Tabs render their own header; auth screens are bare. */}
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="auth" options={{ headerShown: false }} />
+      {/* Top-level screens get the default Stack header with a back button. */}
+      <Stack.Screen name="club-info" />
+      <Stack.Screen name="notification-settings" />
+    </Stack>
+  );
 }
 
 export default function RootLayout() {

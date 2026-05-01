@@ -12,6 +12,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Modal,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../src/utils/alert';
@@ -19,7 +20,6 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
-import { FacilitySelector } from '../../src/components/FacilitySelector';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { EditBookingModal } from '../../src/components/EditBookingModal';
 import { QuickBook } from '../../src/components/QuickBook';
@@ -87,23 +87,28 @@ export default function HomeScreen() {
     });
   };
 
-  async function handleCancelBooking(bookingId: string) {
+  function handleCancelBooking(bookingId: string) {
     if (!user) return;
-    showAlert('Cancel Booking', 'Are you sure you want to cancel this booking?', [
-      { text: 'Keep', style: 'cancel' },
-      {
-        text: 'Cancel Booking',
-        style: 'destructive',
-        onPress: async () => {
-          const res = await api.delete(`/api/bookings/${bookingId}?userId=${user.id}`);
-          if (res.success) {
-            fetchData();
-          } else {
-            showAlert('Error', res.error || 'Could not cancel booking');
-          }
+    Alert.alert(
+      'Cancel this booking?',
+      'Your court reservation will be released and made available to other members. This cannot be undone.',
+      [
+        { text: 'Keep Booking', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            const res = await api.delete(`/api/bookings/${bookingId}?userId=${user.id}`);
+            if (res.success) {
+              fetchData();
+            } else {
+              Alert.alert('Error', res.error || 'Could not cancel booking');
+            }
+          },
         },
-      },
-    ]);
+      ],
+      { cancelable: true }
+    );
   }
 
   const formatTime = (time: string) => {
@@ -124,11 +129,6 @@ export default function HomeScreen() {
         <Text style={styles.greeting}>
           Welcome back, {user?.firstName || 'Player'}!
         </Text>
-      </View>
-
-      {/* Facility Selector (only shows for 2+ facilities) */}
-      <View style={{ marginTop: Spacing.sm }}>
-        <FacilitySelector />
       </View>
 
       {/* Lockout Banner */}

@@ -19,7 +19,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../src/utils/alert';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { FacilitySelector } from '../../src/components/FacilitySelector';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import type { HittingPartnerPostWithUser } from '../../src/types/database';
@@ -333,7 +332,6 @@ export default function CommunityScreen() {
         {/* ══════ PARTNERS TAB ══════ */}
         {activeTab === 'partners' && (
           <>
-            <FacilitySelector />
             <TouchableOpacity style={styles.createButton} onPress={openCreatePost}>
               <Ionicons name="add-circle" size={20} color={Colors.textInverse} />
               <Text style={styles.createButtonText}>Post Looking for Partner</Text>
@@ -408,7 +406,6 @@ export default function CommunityScreen() {
         {/* ══════ BULLETIN BOARD TAB ══════ */}
         {activeTab === 'bulletin' && (
           <>
-            <FacilitySelector />
 
             {/* Admin can create posts */}
             {isAdmin && (

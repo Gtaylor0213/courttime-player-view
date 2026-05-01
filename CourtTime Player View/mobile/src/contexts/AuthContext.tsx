@@ -7,6 +7,7 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { api, setToken, getToken, removeToken, cacheUser, getCachedUser, clearCache } from '../api/client';
+import type { PendingTermsAcceptance } from '../api/client';
 import { registerForPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications';
 import type { User } from '../types/database';
 
@@ -38,6 +39,8 @@ interface AuthContextType extends AuthState {
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<AuthUser>) => Promise<void>;
+  pendingTermsAcceptances: PendingTermsAcceptance[];
+  acceptTermsAndContinue: (facilityId: string) => Promise<boolean>;
 }
 
 interface RegisterData {
@@ -73,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
   const [facilities, setFacilities] = useState<FacilityInfo[]>([]);
+  const [pendingTermsAcceptances, setPendingTermsAcceptances] = useState<PendingTermsAcceptance[]>([]);
   const pushTokenRef = useRef<string | null>(null);
 
   // Check for existing session on app launch
@@ -128,6 +132,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [state.user?.id]);
 
+  async function loadTermsStatus(currentUser: AuthUser | null) {
+    if (!currentUser || currentUser.userType === 'admin') {
+      setPendingTermsAcceptances([]);
+      return;
+    }
+    try {
+      const res = await api.get('/api/auth/terms/status');
+      if (res.success && res.data?.pendingAcceptances) {
+        setPendingTermsAcceptances(res.data.pendingAcceptances);
+      } else {
+        setPendingTermsAcceptances([]);
+      }
+    } catch {
+      setPendingTermsAcceptances([]);
+    }
+  }
+
   async function checkAuth() {
     try {
       const token = await getToken();
@@ -142,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const freshUser = result.data.user;
         await cacheUser(freshUser);
         setState({ user: freshUser, isLoading: false, isAuthenticated: true });
+        await loadTermsStatus(freshUser);
       } else {
         // Token invalid/expired — try cached user as fallback, otherwise logout
         const cached = await getCachedUser();
@@ -170,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         await cacheUser(user);
         setState({ user, isLoading: false, isAuthenticated: true });
+        await loadTermsStatus(user);
         return { success: true };
       }
     }
@@ -192,11 +215,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         await cacheUser(user);
         setState({ user, isLoading: false, isAuthenticated: true });
+        await loadTermsStatus(user);
         return { success: true };
       }
     }
 
     return { success: false, error: result.data?.message || result.error || 'Registration failed' };
+  }
+
+  async function acceptTermsAndContinue(facilityId: string): Promise<boolean> {
+    const res = await api.post('/api/auth/terms/accept', { facilityId });
+    if (!res.success) return false;
+    await loadTermsStatus(state.user);
+    return true;
   }
 
   async function logout() {
@@ -206,6 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       pushTokenRef.current = null;
     }
     await clearCache();
+    setPendingTermsAcceptances([]);
     setState({ user: null, isLoading: false, isAuthenticated: false });
   }
 
@@ -222,7 +254,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, login, register, logout, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
       {children}
     </AuthContext.Provider>
   );

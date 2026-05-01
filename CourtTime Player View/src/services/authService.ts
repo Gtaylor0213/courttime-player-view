@@ -350,6 +350,7 @@ export async function getUserById(userId: string): Promise<User | null> {
         u.state,
         u.zip_code as "zipCode",
         u.phone,
+        u.gender,
         u.user_type as "userType",
         u.created_at as "createdAt",
         u.updated_at as "updatedAt",

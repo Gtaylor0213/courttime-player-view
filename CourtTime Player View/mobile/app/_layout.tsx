@@ -12,9 +12,10 @@ import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
+import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
 
 function RootLayoutNav() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, pendingTermsAcceptances } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const notificationResponseListener = useRef<Notifications.EventSubscription>();
@@ -59,6 +60,10 @@ function RootLayoutNav() {
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
+  }
+
+  if (isAuthenticated && pendingTermsAcceptances.length > 0) {
+    return <TermsAcceptanceGate />;
   }
 
   return <Slot />;

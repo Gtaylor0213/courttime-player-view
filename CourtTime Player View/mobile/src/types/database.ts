@@ -20,6 +20,7 @@ export interface User {
   state?: string;
   zipCode?: string;
   phone?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null;
   userType: 'player' | 'admin';
   createdAt: Date;
   updatedAt: Date;
@@ -70,6 +71,7 @@ export interface Court {
   courtType?: 'Tennis' | 'Pickleball' | 'Dual';
   isIndoor: boolean;
   hasLights: boolean;
+  isWalkUp?: boolean;
   status: 'available' | 'maintenance' | 'closed';
   createdAt: Date;
   updatedAt: Date;

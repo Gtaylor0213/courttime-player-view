@@ -16,6 +16,7 @@ export interface PlayerProfileData {
   state?: string;
   zipCode?: string;
   phone?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null;
   skillLevel?: string;
   ustaRating?: string;
   bio?: string;
@@ -34,6 +35,7 @@ export interface PlayerProfileWithUser {
   state?: string;
   zipCode?: string;
   phone?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null;
   skillLevel?: string;
   ustaRating?: string;
   bio?: string;
@@ -65,6 +67,7 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfileWit
         u.state,
         u.zip_code as "zipCode",
         u.phone,
+        u.gender,
         pp.skill_level as "skillLevel",
         pp.ntrp_rating as "ustaRating",
         pp.bio,
@@ -171,6 +174,11 @@ export async function updatePlayerProfile(
     if (updates.phone !== undefined) {
       userFields.push(`phone = $${userParamIndex++}`);
       userValues.push(updates.phone);
+    }
+
+    if (updates.gender !== undefined) {
+      userFields.push(`gender = $${userParamIndex++}`);
+      userValues.push(updates.gender);
     }
 
     // Player profile table fields

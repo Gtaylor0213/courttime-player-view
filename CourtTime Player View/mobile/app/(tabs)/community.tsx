@@ -28,14 +28,14 @@ type Tab = 'partners' | 'bulletin' | 'notifications';
 
 const SKILL_FILTERS = ['All', 'Beginner', 'Intermediate', 'Advanced', 'Professional'];
 const PLAY_STYLE_OPTIONS = ['Singles', 'Doubles', 'Competitive', 'Casual', 'Baseline', 'Serve & Volley', 'All-court'];
-const BULLETIN_TYPES = ['All', 'announcement', 'event', 'clinic', 'tournament', 'social'];
+const BULLETIN_TYPES = ['All', 'announcement', 'event', 'clinic', 'tournament', 'social', 'drill'];
 const BULLETIN_TYPE_LABELS: Record<string, string> = {
   All: 'All', announcement: 'Announcements', event: 'Events', clinic: 'Clinics',
-  tournament: 'Tournaments', social: 'Social',
+  tournament: 'Tournaments', social: 'Social', drill: 'Drills',
 };
 const BULLETIN_TYPE_COLORS: Record<string, string> = {
   announcement: Colors.info, event: Colors.primary, clinic: Colors.success,
-  tournament: Colors.warning, social: '#a855f7',
+  tournament: Colors.warning, social: '#a855f7', drill: '#0ea5e9',
 };
 
 export default function CommunityScreen() {
@@ -218,6 +218,53 @@ export default function CommunityScreen() {
         fetchBulletins();
       }},
     ]);
+  }
+
+  // ── Drill signup ──
+  const [signupBusyId, setSignupBusyId] = useState<string | null>(null);
+
+  async function handleDrillSignup(postId: string) {
+    setSignupBusyId(postId);
+    const res = await api.post(`/api/bulletin-board/${postId}/signup`, {});
+    if (res.success) {
+      await fetchBulletins();
+      if (res.message) showAlert('Signed Up', res.message);
+    } else {
+      showAlert('Could not sign up', res.error || 'Please try again.');
+    }
+    setSignupBusyId(null);
+  }
+
+  async function handleCancelDrillSignup(postId: string) {
+    showAlert('Cancel Signup', 'Remove yourself from this drill?', [
+      { text: 'Keep Signup', style: 'cancel' },
+      {
+        text: 'Cancel Signup',
+        style: 'destructive',
+        onPress: async () => {
+          setSignupBusyId(postId);
+          const res = await api.delete(`/api/bulletin-board/${postId}/signup`);
+          if (res.success) await fetchBulletins();
+          else showAlert('Error', res.error || 'Could not cancel signup.');
+          setSignupBusyId(null);
+        },
+      },
+    ]);
+  }
+
+  function formatDrillDateTime(iso: string): string {
+    const d = new Date(iso);
+    return d.toLocaleString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+  }
+
+  function genderRestrictionLabel(restriction?: string): string | null {
+    if (!restriction || restriction === 'any') return null;
+    if (restriction === 'male_only') return 'Men only';
+    if (restriction === 'female_only') return 'Women only';
+    return null;
   }
 
   // ── Notifications ──
@@ -414,24 +461,100 @@ export default function CommunityScreen() {
                   </View>
                   <Text style={styles.bulletinTitle}>{post.title}</Text>
                   <Text style={styles.bulletinContent} numberOfLines={4}>{post.content}</Text>
-                  {post.eventDate && (
-                    <View style={styles.bulletinEventRow}>
-                      <Ionicons name="calendar-outline" size={14} color={Colors.primary} />
-                      <Text style={styles.bulletinEventText}>{formatDate(post.eventDate)}</Text>
-                      {post.eventTime && <Text style={styles.bulletinEventText}> at {post.eventTime}</Text>}
-                    </View>
-                  )}
-                  {post.location && (
-                    <View style={styles.bulletinEventRow}>
-                      <Ionicons name="location-outline" size={14} color={Colors.primary} />
-                      <Text style={styles.bulletinEventText}>{post.location}</Text>
-                    </View>
-                  )}
-                  {post.maxParticipants && (
-                    <View style={styles.bulletinEventRow}>
-                      <Ionicons name="people-outline" size={14} color={Colors.primary} />
-                      <Text style={styles.bulletinEventText}>{post.currentParticipants || 0} / {post.maxParticipants} participants</Text>
-                    </View>
+                  {post.category === 'drill' ? (
+                    <>
+                      {post.drillStartAt && (
+                        <View style={styles.bulletinEventRow}>
+                          <Ionicons name="calendar-outline" size={14} color={Colors.primary} />
+                          <Text style={styles.bulletinEventText}>{formatDrillDateTime(post.drillStartAt)}</Text>
+                        </View>
+                      )}
+                      {post.drillCourtName && (
+                        <View style={styles.bulletinEventRow}>
+                          <Ionicons name="tennisball-outline" size={14} color={Colors.primary} />
+                          <Text style={styles.bulletinEventText}>{post.drillCourtName}</Text>
+                        </View>
+                      )}
+                      {typeof post.drillMaxParticipants === 'number' && (
+                        <View style={styles.bulletinEventRow}>
+                          <Ionicons name="people-outline" size={14} color={Colors.primary} />
+                          <Text style={styles.bulletinEventText}>
+                            {post.drillConfirmedCount || 0} / {post.drillMaxParticipants} signed up
+                            {post.drillWaitlistCount > 0 ? ` · ${post.drillWaitlistCount} waitlist` : ''}
+                          </Text>
+                        </View>
+                      )}
+                      {genderRestrictionLabel(post.drillGenderRestriction) && (
+                        <View style={styles.bulletinEventRow}>
+                          <Ionicons name="person-outline" size={14} color={Colors.primary} />
+                          <Text style={styles.bulletinEventText}>{genderRestrictionLabel(post.drillGenderRestriction)}</Text>
+                        </View>
+                      )}
+
+                      {/* Drill signup actions */}
+                      {post.currentUserSignupStatus === 'confirmed' && (
+                        <View style={styles.drillStatusBadge}>
+                          <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                          <Text style={[styles.drillStatusText, { color: Colors.success }]}>You're signed up</Text>
+                        </View>
+                      )}
+                      {post.currentUserSignupStatus === 'waitlist' && (
+                        <View style={styles.drillStatusBadge}>
+                          <Ionicons name="time-outline" size={16} color={Colors.warning} />
+                          <Text style={[styles.drillStatusText, { color: Colors.warning }]}>
+                            Waitlist #{post.currentUserWaitlistPosition}
+                          </Text>
+                        </View>
+                      )}
+                      {post.currentUserSignupStatus ? (
+                        <TouchableOpacity
+                          style={[styles.drillButton, styles.drillButtonCancel]}
+                          onPress={() => handleCancelDrillSignup(post.id)}
+                          disabled={signupBusyId === post.id}
+                        >
+                          <Text style={styles.drillButtonCancelText}>
+                            {signupBusyId === post.id ? '...' : 'Cancel Signup'}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : post.currentUserCanSignup ? (
+                        <TouchableOpacity
+                          style={styles.drillButton}
+                          onPress={() => handleDrillSignup(post.id)}
+                          disabled={signupBusyId === post.id}
+                        >
+                          <Text style={styles.drillButtonText}>
+                            {signupBusyId === post.id ? '...' : 'Sign Up'}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : post.signupBlockedReason ? (
+                        <View style={styles.drillBlockedBox}>
+                          <Ionicons name="lock-closed-outline" size={14} color={Colors.textMuted} />
+                          <Text style={styles.drillBlockedText}>{post.signupBlockedReason}</Text>
+                        </View>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      {post.eventDate && (
+                        <View style={styles.bulletinEventRow}>
+                          <Ionicons name="calendar-outline" size={14} color={Colors.primary} />
+                          <Text style={styles.bulletinEventText}>{formatDate(post.eventDate)}</Text>
+                          {post.eventTime && <Text style={styles.bulletinEventText}> at {post.eventTime}</Text>}
+                        </View>
+                      )}
+                      {post.location && (
+                        <View style={styles.bulletinEventRow}>
+                          <Ionicons name="location-outline" size={14} color={Colors.primary} />
+                          <Text style={styles.bulletinEventText}>{post.location}</Text>
+                        </View>
+                      )}
+                      {post.maxParticipants && (
+                        <View style={styles.bulletinEventRow}>
+                          <Ionicons name="people-outline" size={14} color={Colors.primary} />
+                          <Text style={styles.bulletinEventText}>{post.currentParticipants || 0} / {post.maxParticipants} participants</Text>
+                        </View>
+                      )}
+                    </>
                   )}
                   <Text style={styles.bulletinMeta}>
                     {post.authorName || 'Admin'} · {formatShortDate(post.createdAt || post.postedDate)}
@@ -534,7 +657,7 @@ export default function CommunityScreen() {
             <Text style={styles.formLabel}>Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
               <View style={styles.filterRow}>
-                {BULLETIN_TYPES.filter(t => t !== 'All').map(type => (
+                {BULLETIN_TYPES.filter(t => t !== 'All' && t !== 'drill').map(type => (
                   <TouchableOpacity key={type} style={[styles.filterChip, bulletinCategory === type && styles.filterChipActive]}
                     onPress={() => setBulletinCategory(type)}>
                     <Text style={[styles.filterChipText, bulletinCategory === type && styles.filterChipTextActive]}>
@@ -613,6 +736,16 @@ const styles = StyleSheet.create({
   bulletinEventRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   bulletinEventText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '500' },
   bulletinMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: Spacing.sm },
+
+  // Drill signups
+  drillStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.sm },
+  drillStatusText: { fontSize: FontSize.sm, fontWeight: '600' },
+  drillButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: 10, alignItems: 'center', marginTop: Spacing.sm },
+  drillButtonText: { color: Colors.textInverse, fontSize: FontSize.sm, fontWeight: '700' },
+  drillButtonCancel: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.error },
+  drillButtonCancelText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: '700' },
+  drillBlockedBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surface, padding: Spacing.sm, borderRadius: BorderRadius.sm, marginTop: Spacing.sm },
+  drillBlockedText: { flex: 1, fontSize: FontSize.xs, color: Colors.textMuted },
 
   // Notifications
   markAllRead: { alignSelf: 'flex-end', marginBottom: Spacing.sm },

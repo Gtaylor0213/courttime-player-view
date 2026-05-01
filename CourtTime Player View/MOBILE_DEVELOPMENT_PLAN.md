@@ -30,18 +30,18 @@ The mobile app scaffold exists with ~82% of core features implemented. Here is w
 - ~~Facility membership management (request to join, leave facility)~~ **DONE** (2026-04-01)
 - ~~Facility selector (switching between multiple facilities)~~ **DONE** (2026-04-01)
 - ~~Club/facility info screen~~ **DONE** (2026-04-01)
-- Booking editing (change date/time/court on existing booking)
+- ~~Booking editing (change date/time/court on existing booking)~~ **DONE** (2026-05-01)
 - ~~Booking type selection and notes~~ **DONE** (2026-04-01)
 - ~~Rule violation display when booking fails~~ **DONE** (2026-04-01)
 - Recurring booking support
-- Quick reserve popup alternative
+- ~~Quick reserve popup alternative~~ **DONE** (2026-05-01) — Quick Book section on Home shows next ~3 open 1-hour slots across all bookable courts at the selected facility, tap-to-book.
 - ~~Bulletin board post creation (for admins logged in on mobile)~~ **DONE** (2026-04-01)
 - ~~Bulletin board post deletion~~ **DONE** (2026-04-01)
 - ~~Hitting partner post editing~~ **DONE** (2026-04-01)
 - ~~Hitting partner filtering (skill level, play style, search)~~ **DONE** (2026-04-01)
 - ~~Hitting partner "Message this player" action~~ **DONE** (2026-04-01)
 - ~~Notification type icons and priority styling~~ **DONE** (2026-04-01)
-- Notification settings/preferences
+- ~~Notification settings/preferences~~ **DONE** (2026-05-01) — Per-category push toggles (booking updates, reminders, strikes, announcements, weather) + master toggle. Backed by `user_preferences` push columns; `sendPushNotifications` honors prefs before fan-out.
 - ~~Strike/lockout status display~~ **DONE** (2026-04-01)
 - ~~Admin privilege passthrough (admin can book outside rules)~~ **DONE** (2026-04-01) — bulletin posts TBD in 1.9
 - ~~Push notifications (currently polling only)~~ **DONE** (2026-04-01)

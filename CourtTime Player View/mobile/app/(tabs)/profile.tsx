@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { showAlert } from '../../src/utils/alert';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
@@ -29,6 +30,12 @@ import type { PlayerProfile } from '../../src/types/database';
 
 const SKILL_LEVELS = ['Beginner', 'Intermediate', 'Advanced', 'Professional'];
 const USTA_RATINGS = ['1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0', '5.5', '6.0', '6.5', '7.0'];
+const GENDER_OPTIONS: Array<{ value: 'male' | 'female' | 'other' | 'prefer_not_to_say'; label: string }> = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'other', label: 'Other' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
 
 const US_STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -40,6 +47,7 @@ const US_STATES = [
 
 export default function ProfileScreen() {
   const { user, logout, updateUser, facilities } = useAuth();
+  const router = useRouter();
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [bookingCount, setBookingCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -57,6 +65,7 @@ export default function ProfileScreen() {
   const [skillLevel, setSkillLevel] = useState('');
   const [ustaRating, setUstaRating] = useState('');
   const [bio, setBio] = useState('');
+  const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('');
   const [profileImageUrl, setProfileImageUrl] = useState('');
 
   // Strike state
@@ -109,6 +118,7 @@ export default function ProfileScreen() {
     setUstaRating(profile?.ustaRating || '');
     setBio(profile?.bio || '');
     setProfileImageUrl(profile?.profileImageUrl || '');
+    setGender((user?.gender as any) || '');
     setEditing(true);
   };
 
@@ -132,6 +142,7 @@ export default function ProfileScreen() {
       if (skillLevel !== (profile?.skillLevel || '')) updates.skillLevel = skillLevel;
       if (ustaRating !== (profile?.ustaRating || '')) updates.ustaRating = ustaRating;
       if (bio !== (profile?.bio || '')) updates.bio = bio;
+      if (gender !== ((user.gender as any) || '')) updates.gender = gender || null;
       if (profileImageUrl !== (profile?.profileImageUrl || '')) updates.profileImageUrl = profileImageUrl;
 
       if (Object.keys(updates).length === 0) {
@@ -153,6 +164,7 @@ export default function ProfileScreen() {
             city: city || user.city,
             state: state || user.state,
             zipCode: zipCode || user.zipCode,
+            gender: gender || null,
           });
         }
         await fetchProfile();
@@ -398,6 +410,23 @@ export default function ProfileScreen() {
 
           <View style={styles.formSection}>
             <Text style={styles.formSectionTitle}>Tennis Info</Text>
+
+            <View style={styles.formField}>
+              <Text style={styles.formLabel}>Gender (used for drill eligibility)</Text>
+              <View style={styles.chipRow}>
+                {GENDER_OPTIONS.map(opt => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.chip, gender === opt.value && styles.chipSelected]}
+                    onPress={() => setGender(gender === opt.value ? '' : opt.value)}
+                  >
+                    <Text style={[styles.chipText, gender === opt.value && styles.chipTextSelected]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
             <View style={styles.formField}>
               <Text style={styles.formLabel}>Skill Level</Text>
@@ -667,6 +696,24 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      {/* Settings */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Settings</Text>
+        <TouchableOpacity
+          style={styles.settingsRow}
+          onPress={() => router.push('/notification-settings')}
+        >
+          <View style={styles.settingsIconBox}>
+            <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingsRowTitle}>Notifications</Text>
+            <Text style={styles.settingsRowDescription}>Manage push notification categories</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
       {/* Logout */}
       <View style={styles.section}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -820,6 +867,32 @@ const styles = StyleSheet.create({
   adminNoteText: {
     fontSize: FontSize.sm,
     color: Colors.info,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
+  settingsIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary + '12',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsRowTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  settingsRowDescription: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
   logoutButton: {
     backgroundColor: Colors.card,

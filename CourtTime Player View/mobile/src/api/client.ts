@@ -143,6 +143,19 @@ export async function apiRequest<T = any>(
   }
 }
 
+// ── Terms & Conditions ──
+
+export interface PendingTermsAcceptance {
+  facilityId: string;
+  facilityName: string;
+  currentVersionId: string;
+  currentVersionNumber: number;
+  contentHtml: string;
+  publishedAt: string;
+  acceptedVersionNumber: number | null;
+  acceptedAt: string | null;
+}
+
 // Convenience methods
 export const api = {
   get: <T = any>(endpoint: string) =>

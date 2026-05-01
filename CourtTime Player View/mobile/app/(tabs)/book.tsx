@@ -59,6 +59,7 @@ interface RuleViolation {
 export default function BookCourtScreen() {
   const { user, facilityId } = useAuth();
   const [courts, setCourts] = useState<Court[]>([]);
+  const [walkUpCourts, setWalkUpCourts] = useState<Court[]>([]);
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
@@ -94,7 +95,9 @@ export default function BookCourtScreen() {
     const res = await api.get(`/api/facilities/${facilityId}/courts`);
     if (res.success && res.data) {
       const courtList = Array.isArray(res.data) ? res.data : res.data.courts || [];
-      setCourts(courtList.filter((c: Court) => c.status === 'available'));
+      const available = courtList.filter((c: Court) => c.status === 'available');
+      setCourts(available.filter((c: Court) => !c.isWalkUp));
+      setWalkUpCourts(available.filter((c: Court) => c.isWalkUp));
     }
   }, [facilityId]);
 
@@ -456,6 +459,14 @@ export default function BookCourtScreen() {
       {/* ── Court Selector ── */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Select a Court to Book</Text>
+        {walkUpCourts.length > 0 && (
+          <View style={styles.walkUpBanner}>
+            <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
+            <Text style={styles.walkUpBannerText}>
+              {walkUpCourts.map(c => c.name).join(', ')} {walkUpCourts.length === 1 ? 'is' : 'are'} walk-up only — book in person at the facility.
+            </Text>
+          </View>
+        )}
         {courts.length === 0 && facilityId && (
           <View style={styles.emptyCard}>
             <Ionicons name="tennisball-outline" size={32} color={Colors.textMuted} />
@@ -800,6 +811,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.sm,
     color: Colors.text,
+  },
+  walkUpBanner: {
+    flexDirection: 'row',
+    backgroundColor: Colors.info + '12',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+    alignItems: 'flex-start',
+  },
+  walkUpBannerText: {
+    flex: 1,
+    fontSize: FontSize.xs,
+    color: Colors.text,
+    lineHeight: 18,
   },
 
   // ── Calendar ──

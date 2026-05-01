@@ -11,6 +11,7 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../src/utils/alert';
@@ -20,8 +21,17 @@ import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { FacilitySelector } from '../../src/components/FacilitySelector';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
+import { EditBookingModal } from '../../src/components/EditBookingModal';
+import { QuickBook } from '../../src/components/QuickBook';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
+
+interface RuleViolation {
+  ruleCode: string;
+  ruleName: string;
+  message: string;
+  severity?: string;
+}
 
 export default function HomeScreen() {
   const { user, facilityId } = useAuth();
@@ -31,6 +41,11 @@ export default function HomeScreen() {
   const [bulletins, setBulletins] = useState<BulletinPostWithAuthor[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [lockout, setLockout] = useState<{ isLockedOut: boolean; activeStrikes: number; threshold: number; lockoutEndsAt?: string } | null>(null);
+  const [editingBooking, setEditingBooking] = useState<BookingWithDetails | null>(null);
+  const [quickBookKey, setQuickBookKey] = useState(0);
+  const [violations, setViolations] = useState<RuleViolation[]>([]);
+  const [warnings, setWarnings] = useState<RuleViolation[]>([]);
+  const [showViolations, setShowViolations] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user || !facilityId) return;
@@ -171,6 +186,30 @@ export default function HomeScreen() {
         )}
       </View>
 
+      {/* Quick Book — soonest open slots today */}
+      {user && facilityId && !lockout?.isLockedOut && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="flash" size={18} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Quick Book</Text>
+          </View>
+          <QuickBook
+            userId={user.id}
+            facilityId={facilityId}
+            refreshKey={quickBookKey}
+            onBooked={() => {
+              fetchData();
+              setQuickBookKey(k => k + 1);
+            }}
+            onRuleViolations={(v, w) => {
+              setViolations(v);
+              setWarnings(w);
+              setShowViolations(true);
+            }}
+          />
+        </View>
+      )}
+
       {/* Upcoming Bookings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
@@ -198,13 +237,22 @@ export default function HomeScreen() {
                   {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
                 </Text>
                 {booking.status === 'confirmed' && (
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => handleCancelBooking(booking.id)}
-                  >
-                    <Ionicons name="close-circle-outline" size={16} color={Colors.error} />
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </TouchableOpacity>
+                  <View style={styles.bookingActions}>
+                    <TouchableOpacity
+                      style={styles.editButton}
+                      onPress={() => setEditingBooking(booking)}
+                    >
+                      <Ionicons name="create-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.editText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={() => handleCancelBooking(booking.id)}
+                    >
+                      <Ionicons name="close-circle-outline" size={16} color={Colors.error} />
+                      <Text style={styles.cancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             </View>
@@ -235,6 +283,61 @@ export default function HomeScreen() {
       </View>
 
       <View style={{ height: Spacing.xl }} />
+
+      <EditBookingModal
+        booking={editingBooking}
+        visible={editingBooking !== null}
+        onClose={() => setEditingBooking(null)}
+        onSaved={fetchData}
+      />
+
+      {/* Rule violations from Quick Book */}
+      <Modal visible={showViolations} transparent animationType="fade" onRequestClose={() => setShowViolations(false)}>
+        <View style={styles.violationsOverlay}>
+          <View style={styles.violationsSheet}>
+            <View style={styles.violationsHeader}>
+              <Text style={styles.violationsTitle}>Booking Not Allowed</Text>
+              <TouchableOpacity onPress={() => setShowViolations(false)}>
+                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.violationsSubtitle}>
+              This booking violates the following facility rules:
+            </Text>
+            <ScrollView style={{ maxHeight: 280 }}>
+              {violations.map((v, i) => (
+                <View key={i} style={styles.violationCard}>
+                  <Ionicons name="alert-circle" size={18} color={Colors.error} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.violationName}>{v.ruleName}</Text>
+                    <Text style={styles.violationMsg}>{v.message}</Text>
+                  </View>
+                </View>
+              ))}
+              {warnings.length > 0 && (
+                <>
+                  <Text style={[styles.violationsSubtitle, { marginTop: Spacing.md }]}>Warnings:</Text>
+                  {warnings.map((w, i) => (
+                    <View key={`w-${i}`} style={[styles.violationCard, { borderLeftColor: Colors.warning, backgroundColor: Colors.warning + '08' }]}>
+                      <Ionicons name="warning" size={18} color={Colors.warning} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.violationName}>{w.ruleName}</Text>
+                        <Text style={styles.violationMsg}>{w.message}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.violationsDismiss}
+              onPress={() => setShowViolations(false)}
+            >
+              <Text style={styles.violationsDismissText}>Dismiss</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -330,6 +433,71 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: Spacing.sm,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: Spacing.sm,
+  },
+  violationsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: Spacing.lg,
+  },
+  violationsSheet: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+  },
+  violationsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  violationsTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    color: Colors.error,
+  },
+  violationsSubtitle: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+  },
+  violationCard: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    backgroundColor: Colors.error + '08',
+    borderRadius: BorderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.error,
+    marginBottom: Spacing.sm,
+  },
+  violationName: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  violationMsg: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  violationsDismiss: {
+    backgroundColor: Colors.textSecondary,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+  violationsDismissText: {
+    color: Colors.textInverse,
+    fontSize: FontSize.md,
+    fontWeight: '700',
+  },
   emptyCard: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.md,
@@ -390,6 +558,20 @@ const styles = StyleSheet.create({
   bookingTime: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
+  },
+  bookingActions: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  editText: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   cancelButton: {
     flexDirection: 'row',

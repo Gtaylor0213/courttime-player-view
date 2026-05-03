@@ -9,43 +9,67 @@ import * as SecureStore from 'expo-secure-store';
 
 const API_PORT = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
 
+function stripTrailingSlashes(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+/** True when Metro is reachable only via a tunnel hostname (cannot reach your LAN API). */
+function isTunnelMetroHost(hostUri: string): boolean {
+  const host = hostUri.split(':')[0]?.toLowerCase() ?? '';
+  return (
+    host.includes('exp.direct') ||
+    host.includes('ngrok') ||
+    host.includes('tunnel.') ||
+    host.endsWith('.exp.host')
+  );
+}
+
 /**
  * In __DEV__, Metro sets `expoConfig.hostUri` to the machine running the bundler
- * (e.g. `192.168.1.10:8081`). The API is usually on the same host, so we reuse
- * that hostname with the API port. This fixes Expo Go on a physical device,
- * where `localhost` would point at the phone, not your computer.
+ * (e.g. `192.168.1.10:8081`). Reuse that hostname + API port for a local Express API.
+ * Skipped for tunnel hosts — those cannot reach a dev server on your laptop.
  */
 function getDevApiBaseUrlFromMetroHost(): string | null {
   if (!__DEV__) return null;
   const hostUri = Constants.expoConfig?.hostUri;
   if (!hostUri) return null;
+  if (isTunnelMetroHost(hostUri)) return null;
   const hostname = hostUri.split(':')[0];
   if (!hostname) return null;
-  // Tunnel / cloud URLs cannot reach a local API on your LAN
-  if (hostname.includes('exp.direct') || hostname.includes('ngrok')) {
-    if (Platform.OS !== 'web') {
-      console.warn(
-        '[CourtTime] Metro is using a tunnel URL; auto API host is disabled. ' +
-          'Use a LAN connection in Expo (disable tunnel) or set EXPO_PUBLIC_API_URL to http://<your-computer-ip>:' +
-          API_PORT
-      );
-    }
-    return null;
-  }
   return `http://${hostname}:${API_PORT}`;
 }
 
+function getProductionApiBaseUrl(): string | null {
+  const fromExtra = Constants.expoConfig?.extra?.productionApiUrl;
+  if (typeof fromExtra === 'string' && fromExtra.trim()) {
+    return stripTrailingSlashes(fromExtra.trim());
+  }
+  return null;
+}
+
 // Android emulator: host loopback to the dev machine
-// iOS simulator / web: localhost when Metro host is not available
-const DEFAULT_API_URL =
+// iOS simulator / web: localhost when nothing else applies
+const DEFAULT_LOCAL_API_URL =
   Platform.OS === 'android' ? `http://10.0.2.2:${API_PORT}` : `http://localhost:${API_PORT}`;
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || getDevApiBaseUrlFromMetroHost() || DEFAULT_API_URL;
+/**
+ * 1. EXPO_PUBLIC_API_URL — explicit override (any mode).
+ * 2. __DEV__ + LAN Metro host — local API on your machine (Expo Go on same Wi‑Fi, not tunnel).
+ * 3. Production default from app.config.js `extra.productionApiUrl` (tunnel + release builds).
+ * 4. Last resort localhost / 10.0.2.2 (simulators only; real devices should hit step 2 or 3).
+ */
+const explicitUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const API_BASE_URL = stripTrailingSlashes(
+  explicitUrl ||
+    getDevApiBaseUrlFromMetroHost() ||
+    getProductionApiBaseUrl() ||
+    DEFAULT_LOCAL_API_URL
+);
 
 if (__DEV__ && Platform.OS !== 'web') {
-  // One-line hint when debugging connection issues
-  console.log('[CourtTime] API_BASE_URL =', API_BASE_URL);
+  const hostUri = Constants.expoConfig?.hostUri;
+  const tunnel = hostUri ? isTunnelMetroHost(hostUri) : false;
+  console.log('[CourtTime] API_BASE_URL =', API_BASE_URL, tunnel ? '(tunnel → production or override)' : '');
 }
 
 export interface ApiResponse<T = any> {

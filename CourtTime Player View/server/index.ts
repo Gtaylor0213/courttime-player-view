@@ -7,6 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import os from 'os';
 import path from 'path';
 import { testConnection, closePool } from '../src/database/connection';
 
@@ -38,7 +39,30 @@ import webhookRoutes from './routes/webhook';
 import { requireAuth } from './middleware/auth';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
+/** Bind all interfaces so phones / Expo Go on the same Wi‑Fi can reach the API */
+const HOST = process.env.HOST || '0.0.0.0';
+
+function logLanApiUrls(port: number) {
+  if (process.env.NODE_ENV === 'production') return;
+  const urls: string[] = [];
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] ?? []) {
+      const fam = net.family as string | number;
+      const v4 = fam === 'IPv4' || String(fam) === '4';
+      if (v4 && !net.internal) {
+        urls.push(`http://${net.address}:${port}`);
+      }
+    }
+  }
+  if (urls.length === 0) return;
+  console.log(`\n📱 Expo Go / physical device: API is reachable at (same Wi‑Fi):`);
+  for (const u of urls.slice(0, 6)) {
+    console.log(`   ${u}`);
+  }
+  console.log('   Or rely on auto-detection: mobile app uses Metro hostUri in __DEV__.\n');
+}
 
 // Trust the first proxy (Render runs behind a reverse proxy)
 app.set('trust proxy', 1);
@@ -178,12 +202,13 @@ async function startServer() {
     }
 
     // Start HTTP server
-    const server = app.listen(PORT, () => {
+    const server = app.listen(PORT, HOST, () => {
       console.log(`\n${'='.repeat(60)}`);
       console.log('✅ CourtTime API Server Successfully Started!');
       console.log(`${'='.repeat(60)}`);
-      console.log(`\n🌐 Server URL: http://localhost:${PORT}`);
-      console.log(`📍 Health Check: http://localhost:${PORT}/health`);
+      console.log(`\n🌐 Listening on http://${HOST === '0.0.0.0' ? '0.0.0.0 (all interfaces)' : HOST}:${PORT}`);
+      console.log(`📍 Health check (this machine): http://localhost:${PORT}/health`);
+      logLanApiUrls(PORT);
       console.log(`\n🔗 Available API Endpoints:`);
       console.log(`   🔐 Authentication: /api/auth`);
       console.log(`   🏢 Facilities: /api/facilities`);

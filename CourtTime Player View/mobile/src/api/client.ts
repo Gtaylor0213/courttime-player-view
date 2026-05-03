@@ -3,16 +3,50 @@
  * Mirrors the web app's API client with JWT token auth
  */
 
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-// Android emulator uses 10.0.2.2 to reach the host machine's localhost
-// Web and iOS simulator can use localhost directly
-const DEFAULT_API_URL = Platform.OS === 'android'
-  ? 'http://10.0.2.2:3001'
-  : 'http://localhost:3001';
+const API_PORT = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;
+/**
+ * In __DEV__, Metro sets `expoConfig.hostUri` to the machine running the bundler
+ * (e.g. `192.168.1.10:8081`). The API is usually on the same host, so we reuse
+ * that hostname with the API port. This fixes Expo Go on a physical device,
+ * where `localhost` would point at the phone, not your computer.
+ */
+function getDevApiBaseUrlFromMetroHost(): string | null {
+  if (!__DEV__) return null;
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (!hostUri) return null;
+  const hostname = hostUri.split(':')[0];
+  if (!hostname) return null;
+  // Tunnel / cloud URLs cannot reach a local API on your LAN
+  if (hostname.includes('exp.direct') || hostname.includes('ngrok')) {
+    if (Platform.OS !== 'web') {
+      console.warn(
+        '[CourtTime] Metro is using a tunnel URL; auto API host is disabled. ' +
+          'Use a LAN connection in Expo (disable tunnel) or set EXPO_PUBLIC_API_URL to http://<your-computer-ip>:' +
+          API_PORT
+      );
+    }
+    return null;
+  }
+  return `http://${hostname}:${API_PORT}`;
+}
+
+// Android emulator: host loopback to the dev machine
+// iOS simulator / web: localhost when Metro host is not available
+const DEFAULT_API_URL =
+  Platform.OS === 'android' ? `http://10.0.2.2:${API_PORT}` : `http://localhost:${API_PORT}`;
+
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || getDevApiBaseUrlFromMetroHost() || DEFAULT_API_URL;
+
+if (__DEV__ && Platform.OS !== 'web') {
+  // One-line hint when debugging connection issues
+  console.log('[CourtTime] API_BASE_URL =', API_BASE_URL);
+}
 
 export interface ApiResponse<T = any> {
   success: boolean;

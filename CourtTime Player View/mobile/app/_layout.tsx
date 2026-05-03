@@ -3,7 +3,7 @@
  * Wraps the entire app with AuthProvider and handles auth-based routing
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -18,7 +18,6 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading, pendingTermsAcceptances } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const notificationResponseListener = useRef<Notifications.EventSubscription>();
 
   useEffect(() => {
     if (isLoading) return;
@@ -36,7 +35,7 @@ function RootLayoutNav() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
-    notificationResponseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
       if (data?.type === 'reservation_confirmed' || data?.type === 'reservation_cancelled' || data?.type === 'reservation_reminder') {
         router.push('/(tabs)/book');
@@ -47,12 +46,8 @@ function RootLayoutNav() {
       }
     });
 
-    return () => {
-      if (notificationResponseListener.current) {
-        Notifications.removeNotificationSubscription(notificationResponseListener.current);
-      }
-    };
-  }, []);
+    return () => subscription.remove();
+  }, [router]);
 
   if (isLoading) {
     return (

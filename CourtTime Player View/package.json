@@ -30,7 +30,6 @@
     "cors": "^2.8.5",
     "dompurify": "^3.3.3",
     "dotenv": "^17.2.3",
-    "expo": "^55.0.19",
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "jsonwebtoken": "^9.0.3",
@@ -68,7 +67,8 @@
     "db:check": "node scripts/check-database.js",
     "db:migrate": "node scripts/run-migration.js",
     "db:test-data": "tsx scripts/setup-test-data.ts",
-    "expo:start": "npm --prefix mobile start"
+    "expo:start": "npm --prefix mobile start",
+    "postinstall": "npm --prefix mobile install"
   },
   "description": "This is a code bundle for CourtTime Player View. The original project is available at https://www.figma.com/design/UQjuGWTemayM81rKCsqEHl/CourtTime-Player-View.",
   "keywords": [],

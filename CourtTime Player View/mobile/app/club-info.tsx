@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
+import { useAuth } from '../src/contexts/AuthContext';
 
 export const ErrorBoundary = createRouteErrorBoundary('Club Info');
 
@@ -58,30 +59,46 @@ const DAY_LABELS: Record<string, string> = {
 
 export default function ClubInfoScreen() {
   const router = useRouter();
-  const { facilityId } = useLocalSearchParams<{ facilityId: string }>();
+  const { facilityId: routeFacilityId } = useLocalSearchParams<{ facilityId: string }>();
+  const { facilityId: authFacilityId, isLoading: authLoading } = useAuth();
+  const resolvedFacilityId = routeFacilityId || authFacilityId || null;
   const [facility, setFacility] = useState<FacilityData | null>(null);
   const [courts, setCourts] = useState<CourtData[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!facilityId) return;
+    if (!resolvedFacilityId) {
+      setFacility(null);
+      setCourts([]);
+      setNotFound(false);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setNotFound(false);
 
     const [facRes, courtsRes] = await Promise.all([
-      api.get(`/api/facilities/${facilityId}`),
-      api.get(`/api/facilities/${facilityId}/courts`),
+      api.get(`/api/facilities/${resolvedFacilityId}`),
+      api.get(`/api/facilities/${resolvedFacilityId}/courts`),
     ]);
 
     if (facRes.success && facRes.data) {
       const fac = facRes.data.facility || facRes.data;
       setFacility(fac);
+    } else {
+      setFacility(null);
+      setNotFound(Boolean(facRes.error?.toLowerCase().includes('not found')));
     }
     if (courtsRes.success && courtsRes.data) {
       const list = Array.isArray(courtsRes.data) ? courtsRes.data : courtsRes.data.courts || [];
       setCourts(list);
+    } else {
+      setCourts([]);
     }
     setLoading(false);
-  }, [facilityId]);
+  }, [resolvedFacilityId]);
 
   useEffect(() => {
     fetchData();
@@ -109,7 +126,7 @@ export default function ClubInfoScreen() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <>
         <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
@@ -120,12 +137,27 @@ export default function ClubInfoScreen() {
     );
   }
 
+  if (!resolvedFacilityId) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateTitle}>You're not a member of a club yet</Text>
+          <Text style={styles.emptyStateBody}>Join a club to view contact details, courts, and operating hours.</Text>
+          <TouchableOpacity style={styles.joinButton} onPress={() => router.push('/(tabs)/profile')}>
+            <Text style={styles.joinButtonText}>Find a Club</Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    );
+  }
+
   if (!facility) {
     return (
       <>
         <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }}>
-          <Text style={{ color: Colors.textMuted }}>Facility not found</Text>
+          <Text style={{ color: Colors.textMuted }}>{notFound ? 'No facility found' : 'Could not load club info'}</Text>
         </View>
       </>
     );
@@ -361,5 +393,37 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     marginLeft: Spacing.sm,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.surface,
+  },
+  emptyStateTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  emptyStateBody: {
+    marginTop: Spacing.sm,
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  joinButton: {
+    marginTop: Spacing.lg,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm + 2,
+  },
+  joinButtonText: {
+    color: Colors.textInverse,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
   },
 });

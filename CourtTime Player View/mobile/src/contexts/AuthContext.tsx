@@ -53,20 +53,27 @@ interface RegisterData {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const FACILITY_STORAGE_KEY = 'selectedFacilityId';
+const LEGACY_FACILITY_STORAGE_KEY = 'courttime_facility';
 
 async function saveFacilityId(id: string): Promise<void> {
   if (Platform.OS === 'web') {
-    localStorage.setItem('courttime_facility', id);
+    localStorage.setItem(FACILITY_STORAGE_KEY, id);
+    localStorage.setItem(LEGACY_FACILITY_STORAGE_KEY, id);
     return;
   }
-  await SecureStore.setItemAsync('courttime_facility', id);
+  await SecureStore.setItemAsync(FACILITY_STORAGE_KEY, id);
+  await SecureStore.setItemAsync(LEGACY_FACILITY_STORAGE_KEY, id);
 }
 
 async function loadFacilityId(): Promise<string | null> {
   if (Platform.OS === 'web') {
-    return localStorage.getItem('courttime_facility');
+    return localStorage.getItem(FACILITY_STORAGE_KEY) || localStorage.getItem(LEGACY_FACILITY_STORAGE_KEY);
   }
-  return SecureStore.getItemAsync('courttime_facility');
+  return (
+    (await SecureStore.getItemAsync(FACILITY_STORAGE_KEY)) ||
+    (await SecureStore.getItemAsync(LEGACY_FACILITY_STORAGE_KEY))
+  );
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -85,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
-  // Register push notifications and fetch facilities when user changes
+  // Register push notifications when user changes.
   useEffect(() => {
     if (!state.user) {
       setFacilities([]);
@@ -97,45 +104,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     registerForPushNotifications(state.user.id).then(token => {
       pushTokenRef.current = token;
     });
+  }, [state.user?.id]);
 
-    const allIds = Array.from(new Set([
-      ...(state.user.memberFacilities || []),
-      ...(state.user.adminFacilities || []),
-    ]));
+  async function hydrateFacilitiesForUser(user: AuthUser): Promise<string | null> {
+    const memberFacilities = user.memberFacilities || [];
+    const adminFacilities = user.adminFacilities || [];
+    const allIds = Array.from(new Set([...memberFacilities, ...adminFacilities]));
+
+    const saved = await loadFacilityId();
+    const resolvedSelectedFacilityId =
+      (saved && allIds.includes(saved) ? saved : null) ||
+      memberFacilities[0] ||
+      adminFacilities[0] ||
+      null;
+
+    console.log('[auth] facility hydrate', {
+      userId: user.id,
+      memberFacilities,
+      adminFacilities,
+      savedFacilityId: saved,
+      resolvedSelectedFacilityId,
+    });
 
     if (allIds.length === 0) {
       setFacilities([]);
       setSelectedFacilityId(null);
-      return;
+      return null;
     }
 
-    // Fetch facility names
-    Promise.all(allIds.map(id => api.get(`/api/facilities/${id}`))).then(async (results) => {
-      const infos: FacilityInfo[] = [];
-      for (let i = 0; i < results.length; i++) {
-        const res = results[i];
-        if (res.success && res.data) {
-          const fac = res.data.facility || res.data;
-          infos.push({
-            id: allIds[i],
-            name: fac.name || allIds[i],
-            logoUrl: fac.logoUrl || fac.logo_url || fac.logo || undefined,
-          });
-        } else {
-          infos.push({ id: allIds[i], name: allIds[i] });
-        }
-      }
-      setFacilities(infos);
-
-      // Restore previously selected facility, or default to first
-      const saved = await loadFacilityId();
-      if (saved && allIds.includes(saved)) {
-        setSelectedFacilityId(saved);
+    const results = await Promise.all(allIds.map(id => api.get(`/api/facilities/${id}`)));
+    const infos: FacilityInfo[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const res = results[i];
+      if (res.success && res.data) {
+        const fac = res.data.facility || res.data;
+        infos.push({
+          id: allIds[i],
+          name: fac.name || allIds[i],
+          logoUrl: fac.logoUrl || fac.logo_url || fac.logo || undefined,
+        });
       } else {
-        setSelectedFacilityId(allIds[0]);
+        infos.push({ id: allIds[i], name: allIds[i] });
       }
-    });
-  }, [state.user?.id]);
+    }
+    setFacilities(infos);
+    setSelectedFacilityId(resolvedSelectedFacilityId);
+    if (resolvedSelectedFacilityId) {
+      await saveFacilityId(resolvedSelectedFacilityId);
+    }
+    return resolvedSelectedFacilityId;
+  }
 
   async function loadTermsStatus(currentUser: AuthUser | null) {
     if (!currentUser || currentUser.userType === 'admin') {
@@ -167,6 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success && result.data?.user) {
         const freshUser = result.data.user;
         await cacheUser(freshUser);
+        await hydrateFacilitiesForUser(freshUser);
         setState({ user: freshUser, isLoading: false, isAuthenticated: true });
         await loadTermsStatus(freshUser);
       } else {
@@ -174,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const cached = await getCachedUser();
         if (cached && result.error === 'Network error. Please check your connection.') {
           // Offline — use cached data
+          await hydrateFacilitiesForUser(cached);
           setState({ user: cached, isLoading: false, isAuthenticated: true });
         } else {
           // Token expired or invalid
@@ -195,7 +215,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await setToken(token);
       }
       if (user) {
+        console.log('[auth] login payload', {
+          userId: user.id,
+          email: user.email,
+          memberFacilities: user.memberFacilities || [],
+          adminFacilities: user.adminFacilities || [],
+        });
         await cacheUser(user);
+        const resolvedSelectedFacilityId = await hydrateFacilitiesForUser(user);
+        console.log('[auth] login resolved facility', {
+          userId: user.id,
+          resolvedSelectedFacilityId,
+        });
         setState({ user, isLoading: false, isAuthenticated: true });
         await loadTermsStatus(user);
         return { success: true };
@@ -218,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await setToken(token);
       }
       if (user) {
+        await hydrateFacilitiesForUser(user);
         await cacheUser(user);
         setState({ user, isLoading: false, isAuthenticated: true });
         await loadTermsStatus(user);

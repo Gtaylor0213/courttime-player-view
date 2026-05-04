@@ -63,60 +63,60 @@ export default function LoginScreen() {
           </View>
 
           <Card style={styles.formCard}>
-          <View style={styles.form}>
-            {error ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
+            <View style={styles.form}>
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
 
-            <Text style={styles.label}>Email</Text>
-            <Input
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-            />
+              <Text style={styles.label}>Email</Text>
+              <Input
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+              />
 
-            <Text style={styles.label}>Password</Text>
-            <Input
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry
-              autoComplete="password"
-            />
+              <Text style={styles.label}>Password</Text>
+              <Input
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Enter your password"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry
+                autoComplete="password"
+              />
 
-            <Button
-              style={styles.button}
-              title={loading ? 'Signing in...' : 'Sign In'}
-              onPress={handleLogin}
-              disabled={loading}
-            />
+              <Button
+                style={styles.button}
+                title={loading ? 'Signing in...' : 'Sign In'}
+                onPress={handleLogin}
+                disabled={loading}
+              />
 
-            <Link href="/auth/forgot-password" style={styles.forgotLink}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </Link>
-
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
-              <Link href="/auth/register" style={styles.link}>
-                <Text style={styles.linkText}>Sign Up</Text>
+              <Link href="/auth/forgot-password" style={styles.forgotLink}>
+                <Text style={styles.forgotText}>Forgot Password?</Text>
               </Link>
+
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>Don't have an account? </Text>
+                <Link href="/auth/register" style={styles.link}>
+                  <Text style={styles.linkText}>Sign Up</Text>
+                </Link>
+              </View>
             </View>
           </Card>
 
-            <View style={styles.adminNote}>
-              <Text style={styles.adminNoteText}>
-                Admin features are available on the web app.
-              </Text>
-            </View>
+          <View style={styles.adminNote}>
+            <Text style={styles.adminNoteText}>
+              Admin features are available on the web app.
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   TextInput,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -27,6 +26,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import type { PlayerProfile } from '../../src/types/database';
+import { CachedImage } from '../../src/components/CachedImage';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Profile');
@@ -309,7 +309,7 @@ export default function ProfileScreen() {
           <View style={styles.editAvatarSection}>
             <TouchableOpacity onPress={handlePickImage} style={styles.avatarLarge}>
               {avatarSource ? (
-                <Image source={{ uri: avatarSource }} style={styles.avatarImage} />
+                <CachedImage uri={avatarSource} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarText}>{getInitials()}</Text>
               )}
@@ -500,7 +500,7 @@ export default function ProfileScreen() {
       <View style={styles.header}>
         <View style={styles.avatarLarge}>
           {profile?.profileImageUrl ? (
-            <Image source={{ uri: profile.profileImageUrl }} style={styles.avatarImage} />
+            <CachedImage uri={profile.profileImageUrl} style={styles.avatarImage} />
           ) : (
             <Text style={styles.avatarText}>{getInitials()}</Text>
           )}

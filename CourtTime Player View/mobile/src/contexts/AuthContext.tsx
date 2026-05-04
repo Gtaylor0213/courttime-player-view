@@ -23,6 +23,7 @@ interface AuthUser extends User {
 interface FacilityInfo {
   id: string;
   name: string;
+  logoUrl?: string;
 }
 
 interface AuthState {
@@ -115,7 +116,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = results[i];
         if (res.success && res.data) {
           const fac = res.data.facility || res.data;
-          infos.push({ id: allIds[i], name: fac.name || allIds[i] });
+          infos.push({
+            id: allIds[i],
+            name: fac.name || allIds[i],
+            logoUrl: fac.logoUrl || fac.logo_url || fac.logo || undefined,
+          });
         } else {
           infos.push({ id: allIds[i], name: allIds[i] });
         }

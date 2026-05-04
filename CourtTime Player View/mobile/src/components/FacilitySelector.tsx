@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { CachedImage } from './CachedImage';
 
 export function FacilitySelector() {
   const { facilityId, facilities, setFacilityId } = useAuth();
@@ -28,7 +29,11 @@ export function FacilitySelector() {
   return (
     <>
       <TouchableOpacity style={styles.selector} onPress={() => setOpen(true)}>
-        <Ionicons name="business-outline" size={16} color={Colors.primary} />
+        {currentFacility?.logoUrl ? (
+          <CachedImage uri={currentFacility.logoUrl} style={styles.logo} />
+        ) : (
+          <Ionicons name="business-outline" size={16} color={Colors.primary} />
+        )}
         <Text style={styles.selectorText} numberOfLines={1}>
           {currentFacility?.name || 'Select Facility'}
         </Text>
@@ -57,6 +62,13 @@ export function FacilitySelector() {
                     setOpen(false);
                   }}
                 >
+                  {item.logoUrl ? (
+                    <CachedImage uri={item.logoUrl} style={styles.optionLogo} />
+                  ) : (
+                    <View style={styles.optionLogoFallback}>
+                      <Ionicons name="business-outline" size={14} color={Colors.textSecondary} />
+                    </View>
+                  )}
                   <Text
                     style={[
                       styles.optionText,
@@ -103,6 +115,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
   },
+  logo: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.borderLight,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -134,11 +152,26 @@ const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
+    gap: Spacing.sm,
+  },
+  optionLogo: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.borderLight,
+  },
+  optionLogoFallback: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
   },
   optionSelected: {
     backgroundColor: Colors.primary + '08',

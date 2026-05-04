@@ -23,12 +23,13 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/the
 import { ConversationSkeleton } from '../../src/components/LoadingSkeleton';
 import { EmptyState } from '../../src/components/EmptyState';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { CachedImage } from '../../src/components/CachedImage';
 
 export const ErrorBoundary = createRouteErrorBoundary('Messages');
 
 interface ConversationItem {
   id: string;
-  otherUser: { id: string; name: string; email: string };
+  otherUser: { id: string; name: string; email: string; profileImageUrl?: string };
   lastMessage: { text: string; senderId: string; sentAt: string } | null;
   unreadCount: number;
 }
@@ -46,6 +47,7 @@ interface MemberItem {
   userId: string;
   fullName: string;
   email: string;
+  profileImageUrl?: string;
   skillLevel?: string;
   status?: 'active' | 'pending' | 'expired' | 'suspended';
 }
@@ -63,7 +65,7 @@ export default function MessagesScreen() {
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const messagesListRef = useRef<FlatList>(null);
+  const messagesListRef = useRef<FlatList<MessageItem>>(null);
 
   // New message modal state
   const [showNewMessage, setShowNewMessage] = useState(false);
@@ -79,7 +81,14 @@ export default function MessagesScreen() {
     if (res.success && res.data) {
       // Server wraps as { success, data: { conversations } }, so unwrap one level
       const convos = res.data.conversations || res.data.data?.conversations || [];
-      setConversations(convos);
+      const normalized = convos.map((convo: any) => ({
+        ...convo,
+        otherUser: {
+          ...convo.otherUser,
+          profileImageUrl: convo.otherUser?.profileImageUrl || convo.otherUser?.profile_image_url,
+        },
+      }));
+      setConversations(normalized);
     }
     setLoading(false);
   }, [user, facilityId]);
@@ -146,7 +155,11 @@ export default function MessagesScreen() {
     if (res.success && res.data) {
       const memberList = Array.isArray(res.data) ? res.data : res.data.members || [];
       // Only active members can receive messages (server enforces this too).
-      setMembers(memberList.filter((m: MemberItem) => m.userId !== user?.id && (!m.status || m.status === 'active')));
+      const normalized = memberList.map((member: any) => ({
+        ...member,
+        profileImageUrl: member.profileImageUrl || member.profile_image_url,
+      }));
+      setMembers(normalized.filter((m: MemberItem) => m.userId !== user?.id && (!m.status || m.status === 'active')));
     }
     setLoadingMembers(false);
   }
@@ -173,7 +186,12 @@ export default function MessagesScreen() {
     // The real conversation will be created when the first message is sent
     setActiveConversation({
       id: '', // Will be set after first message
-      otherUser: { id: member.userId, name: member.fullName, email: member.email },
+      otherUser: {
+        id: member.userId,
+        name: member.fullName,
+        email: member.email,
+        profileImageUrl: member.profileImageUrl,
+      },
       lastMessage: null,
       unreadCount: 0,
     });
@@ -226,6 +244,22 @@ export default function MessagesScreen() {
     m.fullName.toLowerCase().includes(memberSearch.toLowerCase())
   );
 
+  const renderMessageItem = useCallback(({ item }: { item: MessageItem }) => {
+    const isMe = item.senderId === user?.id;
+    return (
+      <View style={[styles.messageBubbleRow, isMe && styles.messageBubbleRowMe]}>
+        <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+          <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
+            {item.messageText}
+          </Text>
+          <Text style={[styles.messageTime, isMe && styles.messageTimeMe]}>
+            {formatDate(item.createdAt)}
+          </Text>
+        </View>
+      </View>
+    );
+  }, [user?.id]);
+
   // ── RENDER: Message Thread View ──
   if (activeConversation) {
     return (
@@ -248,9 +282,13 @@ export default function MessagesScreen() {
           </TouchableOpacity>
           <View style={styles.threadHeaderInfo}>
             <View style={styles.avatarSmall}>
-              <Text style={styles.avatarSmallText}>
-                {getInitials(activeConversation.otherUser.name)}
-              </Text>
+              {activeConversation.otherUser.profileImageUrl ? (
+                <CachedImage uri={activeConversation.otherUser.profileImageUrl} style={styles.avatarImageSmall} />
+              ) : (
+                <Text style={styles.avatarSmallText}>
+                  {getInitials(activeConversation.otherUser.name)}
+                </Text>
+              )}
             </View>
             <Text style={styles.threadName}>{activeConversation.otherUser.name}</Text>
           </View>
@@ -262,6 +300,12 @@ export default function MessagesScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesList}
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={10}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => messagesListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
             <EmptyState
@@ -270,21 +314,7 @@ export default function MessagesScreen() {
               description={`Start the conversation with ${activeConversation.otherUser.name}.`}
             />
           }
-          renderItem={({ item }) => {
-            const isMe = item.senderId === user?.id;
-            return (
-              <View style={[styles.messageBubbleRow, isMe && styles.messageBubbleRowMe]}>
-                <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-                  <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
-                    {item.messageText}
-                  </Text>
-                  <Text style={[styles.messageTime, isMe && styles.messageTimeMe]}>
-                    {formatDate(item.createdAt)}
-                  </Text>
-                </View>
-              </View>
-            );
-          }}
+          renderItem={renderMessageItem}
         />
 
         {/* Input */}
@@ -345,7 +375,11 @@ export default function MessagesScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.conversationItem} onPress={() => openConversation(item)}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(item.otherUser.name)}</Text>
+              {item.otherUser.profileImageUrl ? (
+                <CachedImage uri={item.otherUser.profileImageUrl} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{getInitials(item.otherUser.name)}</Text>
+              )}
             </View>
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
@@ -408,7 +442,11 @@ export default function MessagesScreen() {
                   onPress={() => startConversation(item)}
                 >
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{getInitials(item.fullName)}</Text>
+                    {item.profileImageUrl ? (
+                      <CachedImage uri={item.profileImageUrl} style={styles.avatarImage} />
+                    ) : (
+                      <Text style={styles.avatarText}>{getInitials(item.fullName)}</Text>
+                    )}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.userName}>{item.fullName}</Text>
@@ -472,6 +510,11 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
     fontSize: FontSize.md,
     fontWeight: '700',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
   },
   conversationContent: {
     flex: 1,
@@ -559,6 +602,11 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
     fontSize: FontSize.sm,
     fontWeight: '700',
+  },
+  avatarImageSmall: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
   },
   threadName: {
     fontSize: FontSize.md,

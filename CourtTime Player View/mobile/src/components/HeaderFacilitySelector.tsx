@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { CachedImage } from './CachedImage';
 
 interface Props {
   fallbackTitle: string;
@@ -36,6 +37,13 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
   return (
     <>
       <TouchableOpacity style={styles.button} onPress={() => setOpen(true)}>
+        {currentFacility?.logoUrl ? (
+          <CachedImage uri={currentFacility.logoUrl} style={styles.logo} />
+        ) : (
+          <View style={styles.logoFallback}>
+            <Ionicons name="business-outline" size={14} color={Colors.primary} />
+          </View>
+        )}
         <Text style={styles.buttonText} numberOfLines={1}>
           {currentFacility?.name || 'Select Facility'}
         </Text>
@@ -61,6 +69,13 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
                     setOpen(false);
                   }}
                 >
+                  {item.logoUrl ? (
+                    <CachedImage uri={item.logoUrl} style={styles.optionLogo} />
+                  ) : (
+                    <View style={styles.optionLogoFallback}>
+                      <Ionicons name="business-outline" size={14} color={Colors.textSecondary} />
+                    </View>
+                  )}
                   <Text
                     style={[
                       styles.optionText,
@@ -100,6 +115,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  logo: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.borderLight,
+  },
+  logoFallback: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary + '12',
+  },
   buttonText: {
     color: Colors.text,
     fontWeight: '700',
@@ -136,11 +165,26 @@ const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
+    gap: Spacing.sm,
+  },
+  optionLogo: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.borderLight,
+  },
+  optionLogoFallback: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
   },
   optionSelected: {
     backgroundColor: Colors.primary + '08',

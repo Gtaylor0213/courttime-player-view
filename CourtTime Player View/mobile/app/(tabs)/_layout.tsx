@@ -38,6 +38,7 @@ export default function TabLayout() {
     <Tabs
       initialRouteName="book"
       screenOptions={{
+        sceneStyle: { backgroundColor: Colors.surface },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: styles.tabBar,

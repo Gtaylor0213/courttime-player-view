@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary, marginTop: 6 },
 
   // Modal
-  modalContainer: { flex: 1, backgroundColor: Colors.background },
+  modalContainer: { flex: 1, backgroundColor: Colors.surface },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
   modalCancel: { color: Colors.textSecondary, fontSize: FontSize.md },
   modalTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },

@@ -658,7 +658,13 @@ export default function BookCourtScreen() {
       <View style={{ height: Spacing.xl }} />
 
       {/* ── Booking Details Modal ── */}
-      <Modal visible={modalKind === 'booking'} transparent animationType="slide" onRequestClose={() => setModalKind(null)}>
+      <Modal
+        visible={modalKind === 'booking'}
+        transparent
+        animationType="slide"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+        onRequestClose={() => setModalKind(null)}
+      >
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -798,7 +804,13 @@ export default function BookCourtScreen() {
       </Modal>
 
       {/* ── Rule Violations Modal ── */}
-      <Modal visible={modalKind === 'violations'} transparent animationType="fade" onRequestClose={() => setModalKind(null)}>
+      <Modal
+        visible={modalKind === 'violations'}
+        transparent
+        animationType="fade"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+        onRequestClose={() => setModalKind(null)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>

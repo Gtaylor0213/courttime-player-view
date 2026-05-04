@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
   // ── New Message Modal ──
   modalContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',

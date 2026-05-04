@@ -67,7 +67,12 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ animation: 'fade' }}>
+    <Stack
+      screenOptions={{
+        animation: 'fade',
+        contentStyle: { backgroundColor: Colors.surface },
+      }}
+    >
       {/* Tabs render their own header; auth screens are bare. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />

@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../src/utils/alert';
@@ -299,7 +300,13 @@ export default function HomeScreen() {
       />
 
       {/* Rule violations from Quick Book */}
-      <Modal visible={showViolations} transparent animationType="fade" onRequestClose={() => setShowViolations(false)}>
+      <Modal
+        visible={showViolations}
+        transparent
+        animationType="fade"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+        onRequestClose={() => setShowViolations(false)}
+      >
         <View style={styles.violationsOverlay}>
           <View style={styles.violationsSheet}>
             <View style={styles.violationsHeader}>

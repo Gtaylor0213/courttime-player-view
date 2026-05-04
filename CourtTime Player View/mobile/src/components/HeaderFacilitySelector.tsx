@@ -14,6 +14,7 @@ import {
   Modal,
   FlatList,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -88,7 +89,13 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
         <Ionicons name="chevron-down" size={14} color={Colors.textSecondary} />
       </TouchableOpacity>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+        onRequestClose={() => setOpen(false)}
+      >
         <TouchableOpacity
           style={styles.overlay}
           activeOpacity={1}

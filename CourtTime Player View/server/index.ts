@@ -45,23 +45,31 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 function logLanApiUrls(port: number) {
   if (process.env.NODE_ENV === 'production') return;
-  const urls: string[] = [];
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] ?? []) {
-      const fam = net.family as string | number;
-      const v4 = fam === 'IPv4' || String(fam) === '4';
-      if (v4 && !net.internal) {
-        urls.push(`http://${net.address}:${port}`);
+  try {
+    const urls: string[] = [];
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] ?? []) {
+        const fam = net.family as string | number;
+        const v4 = fam === 'IPv4' || String(fam) === '4';
+        if (v4 && !net.internal) {
+          urls.push(`http://${net.address}:${port}`);
+        }
       }
     }
+    if (urls.length === 0) return;
+    console.log(`\n📱 Expo Go / physical device: API is reachable at (same Wi‑Fi):`);
+    for (const u of urls.slice(0, 6)) {
+      console.log(`   ${u}`);
+    }
+    console.log('   Or rely on auto-detection: mobile app uses Metro hostUri in __DEV__.\n');
+  } catch {
+    console.warn(
+      '\n⚠️  Could not list LAN addresses (os.networkInterfaces). Server is still running; use http://localhost:' +
+        port +
+        '/health on this machine, or your machine IP for Expo Go on the same Wi‑Fi.\n'
+    );
   }
-  if (urls.length === 0) return;
-  console.log(`\n📱 Expo Go / physical device: API is reachable at (same Wi‑Fi):`);
-  for (const u of urls.slice(0, 6)) {
-    console.log(`   ${u}`);
-  }
-  console.log('   Or rely on auto-detection: mobile app uses Metro hostUri in __DEV__.\n');
 }
 
 // Trust the first proxy (Render runs behind a reverse proxy)

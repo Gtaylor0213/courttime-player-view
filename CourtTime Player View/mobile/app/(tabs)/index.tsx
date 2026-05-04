@@ -269,9 +269,11 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Bulletin Board</Text>
         {bulletins.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No announcements yet</Text>
-          </View>
+          <EmptyState
+            icon="megaphone-outline"
+            title="No announcements yet"
+            description="You are all caught up."
+          />
         ) : (
           bulletins.map((post) => (
             <View key={post.id} style={styles.bulletinCard}>
@@ -415,7 +417,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     alignItems: 'center',
     gap: Spacing.xs,
-    shadowColor: '#000',
+    shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -446,7 +448,7 @@ const styles = StyleSheet.create({
   },
   violationsOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     padding: Spacing.lg,
   },
@@ -502,22 +504,6 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
     fontSize: FontSize.md,
     fontWeight: '700',
-  },
-  emptyCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  emptyText: {
-    color: Colors.textMuted,
-    fontSize: FontSize.sm,
-  },
-  emptyLink: {
-    color: Colors.primary,
-    fontSize: FontSize.sm,
-    fontWeight: '600',
   },
   bookingCard: {
     backgroundColor: Colors.card,

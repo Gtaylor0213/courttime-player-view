@@ -25,7 +25,7 @@ import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
 import { TimePicker } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
@@ -839,8 +839,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   dayArrow: {
-    width: 36,
-    height: 36,
+    width: TouchTarget.min,
+    height: TouchTarget.min,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -859,12 +859,14 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: BorderRadius.full,
     paddingVertical: Spacing.sm,
+    minHeight: TouchTarget.min,
     paddingHorizontal: Spacing.md,
   },
   calendarToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.md,
+    minHeight: TouchTarget.min,
     gap: Spacing.sm,
   },
   calendarToggleText: {
@@ -881,6 +883,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.sm,
+    minHeight: TouchTarget.min,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -895,7 +898,7 @@ const styles = StyleSheet.create({
   // ── Modals ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -1008,7 +1011,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.md,
+    minHeight: TouchTarget.min,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   confirmButtonText: {
     color: Colors.textInverse,

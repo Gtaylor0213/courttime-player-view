@@ -3,9 +3,10 @@
  * Reusable empty state component with icon, title, and description.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
+import { Button } from './Button';
 
 interface EmptyStateProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -22,9 +23,7 @@ export function EmptyState({ icon, title, description, actionLabel, onAction }: 
       <Text style={styles.title}>{title}</Text>
       {description && <Text style={styles.description}>{description}</Text>}
       {actionLabel && onAction && (
-        <TouchableOpacity style={styles.button} onPress={onAction}>
-          <Text style={styles.buttonText}>{actionLabel}</Text>
-        </TouchableOpacity>
+        <Button title={actionLabel} onPress={onAction} />
       )}
     </View>
   );
@@ -44,26 +43,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: FontSize.xl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     textAlign: 'center',
   },
   description: {
     fontSize: FontSize.sm,
     color: Colors.textMuted,
+    fontFamily: FontFamily.regular,
     textAlign: 'center',
     lineHeight: 22,
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    marginTop: Spacing.sm,
-  },
-  buttonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.sm,
-    fontWeight: '600',
   },
 });

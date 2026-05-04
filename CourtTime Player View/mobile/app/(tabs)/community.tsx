@@ -20,10 +20,11 @@ import { showAlert } from '../../src/utils/alert';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget } from '../../src/constants/theme';
 import type { HittingPartnerPostWithUser } from '../../src/types/database';
 import { CommunitySkeleton } from '../../src/components/LoadingSkeleton';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { EmptyState } from '../../src/components/EmptyState';
 
 export const ErrorBoundary = createRouteErrorBoundary('Community');
 
@@ -38,7 +39,7 @@ const BULLETIN_TYPE_LABELS: Record<string, string> = {
 };
 const BULLETIN_TYPE_COLORS: Record<string, string> = {
   announcement: Colors.info, event: Colors.primary, clinic: Colors.success,
-  tournament: Colors.warning, social: '#a855f7', drill: '#0ea5e9',
+  tournament: Colors.warning, social: Colors.purple, drill: Colors.cyan,
 };
 
 export default function CommunityScreen() {
@@ -391,11 +392,11 @@ export default function CommunityScreen() {
             </ScrollView>
 
             {filteredPosts.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="tennisball-outline" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyTitle}>{posts.length === 0 ? 'No partner posts yet' : 'No matching posts'}</Text>
-                <Text style={styles.emptyText}>{posts.length === 0 ? 'Be the first to post!' : 'Try adjusting your filters.'}</Text>
-              </View>
+              <EmptyState
+                icon="tennisball-outline"
+                title={posts.length === 0 ? 'No partner posts yet' : 'No matching posts'}
+                description={posts.length === 0 ? 'Be the first to post!' : 'Try adjusting your filters.'}
+              />
             ) : (
               filteredPosts.map((post) => (
                 <View key={post.id} style={styles.postCard}>
@@ -461,11 +462,11 @@ export default function CommunityScreen() {
             </ScrollView>
 
             {filteredBulletins.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="megaphone-outline" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyTitle}>No posts yet</Text>
-                <Text style={styles.emptyText}>Check back later for announcements and events.</Text>
-              </View>
+              <EmptyState
+                icon="megaphone-outline"
+                title="No posts yet"
+                description="Check back later for announcements and events."
+              />
             ) : (
               filteredBulletins.map((post) => (
                 <View key={post.id} style={styles.bulletinCard}>
@@ -603,11 +604,11 @@ export default function CommunityScreen() {
             )}
 
             {notifications.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="notifications-off-outline" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyTitle}>No notifications</Text>
-                <Text style={styles.emptyText}>You're all caught up!</Text>
-              </View>
+              <EmptyState
+                icon="notifications-off-outline"
+                title="No notifications"
+                description="You're all caught up!"
+              />
             ) : (
               notifications.map((notif) => (
                 <TouchableOpacity key={notif.id} style={[styles.notifCard, !notif.read && styles.notifUnread]}
@@ -714,13 +715,13 @@ const styles = StyleSheet.create({
 
   // Tab Switcher
   tabBar: { flexDirection: 'row', backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 5, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: TouchTarget.min, gap: 5, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: Colors.primary },
   tabText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textMuted },
   tabTextActive: { color: Colors.primary },
 
   // Create Button
-  createButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
+  createButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: 12, minHeight: TouchTarget.min, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
   createButtonText: { color: Colors.textInverse, fontSize: FontSize.md, fontWeight: '600' },
 
   // Search & Filters
@@ -728,15 +729,10 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: FontSize.sm, color: Colors.text, paddingVertical: 0 },
   filterScroll: { marginBottom: Spacing.md },
   filterRow: { flexDirection: 'row', gap: Spacing.sm },
-  filterChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
+  filterChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minHeight: TouchTarget.min, borderRadius: BorderRadius.full, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, justifyContent: 'center' },
   filterChipActive: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
   filterChipText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600' },
   filterChipTextActive: { color: Colors.primary },
-
-  // Empty State
-  emptyCard: { backgroundColor: Colors.card, borderRadius: BorderRadius.md, padding: Spacing.xl, alignItems: 'center', gap: Spacing.sm },
-  emptyTitle: { fontSize: FontSize.lg, fontWeight: '600', color: Colors.text },
-  emptyText: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center' },
 
   // Partner Posts
   postCard: { backgroundColor: Colors.card, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
@@ -751,7 +747,7 @@ const styles = StyleSheet.create({
   metaText: { fontSize: FontSize.xs, color: Colors.textSecondary },
   postFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   postDate: { fontSize: FontSize.xs, color: Colors.textMuted },
-  messageButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primary + '10', paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.full },
+  messageButton: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: TouchTarget.min, backgroundColor: Colors.primary + '10', paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.full },
   messageButtonText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '600' },
 
   // Bulletin Board
@@ -770,7 +766,7 @@ const styles = StyleSheet.create({
   // Drill signups
   drillStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.sm },
   drillStatusText: { fontSize: FontSize.sm, fontWeight: '600' },
-  drillButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: 10, alignItems: 'center', marginTop: Spacing.sm },
+  drillButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: 10, minHeight: TouchTarget.min, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm },
   drillButtonText: { color: Colors.textInverse, fontSize: FontSize.sm, fontWeight: '700' },
   drillButtonCancel: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.error },
   drillButtonCancelText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: '700' },

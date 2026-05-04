@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: '#0f172a',
+    shadowColor: Colors.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   errorBox: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.error + '12',
     borderColor: Colors.error,
     borderWidth: 1,
     borderRadius: BorderRadius.md,

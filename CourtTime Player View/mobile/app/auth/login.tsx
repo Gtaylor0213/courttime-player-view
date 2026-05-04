@@ -6,8 +6,6 @@ import { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -16,8 +14,11 @@ import {
 import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { Input } from '../../src/components/Input';
+import { Button } from '../../src/components/Button';
+import { Card } from '../../src/components/Card';
 
 export const ErrorBoundary = createRouteErrorBoundary('Login');
 
@@ -61,7 +62,7 @@ export default function LoginScreen() {
             <Text style={styles.subtitle}>Book courts. Find partners. Play better.</Text>
           </View>
 
-          <View style={styles.formCard}>
+          <Card style={styles.formCard}>
           <View style={styles.form}>
             {error ? (
               <View style={styles.errorBox}>
@@ -70,7 +71,7 @@ export default function LoginScreen() {
             ) : null}
 
             <Text style={styles.label}>Email</Text>
-            <TextInput
+            <Input
               style={styles.input}
               value={email}
               onChangeText={setEmail}
@@ -82,7 +83,7 @@ export default function LoginScreen() {
             />
 
             <Text style={styles.label}>Password</Text>
-            <TextInput
+            <Input
               style={styles.input}
               value={password}
               onChangeText={setPassword}
@@ -92,15 +93,12 @@ export default function LoginScreen() {
               autoComplete="password"
             />
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
+            <Button
+              style={styles.button}
+              title={loading ? 'Signing in...' : 'Sign In'}
               onPress={handleLogin}
               disabled={loading}
-            >
-              <Text style={styles.buttonText}>
-                {loading ? 'Signing in...' : 'Sign In'}
-              </Text>
-            </TouchableOpacity>
+            />
 
             <Link href="/auth/forgot-password" style={styles.forgotLink}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
@@ -112,7 +110,7 @@ export default function LoginScreen() {
                 <Text style={styles.linkText}>Sign Up</Text>
               </Link>
             </View>
-          </View>
+          </Card>
 
             <View style={styles.adminNote}>
               <Text style={styles.adminNoteText}>
@@ -146,63 +144,37 @@ const styles = StyleSheet.create({
   },
   logo: {
     fontSize: FontSize.title,
-    fontWeight: '800',
+    fontFamily: FontFamily.bold,
     color: Colors.primary,
     marginBottom: Spacing.xs,
   },
   subtitle: {
     fontSize: FontSize.md,
     color: Colors.textSecondary,
+    fontFamily: FontFamily.regular,
     textAlign: 'center',
   },
   formCard: {
-    backgroundColor: Colors.card,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
   },
   form: {
     gap: Spacing.md,
   },
   label: {
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
     marginTop: Spacing.xs,
   },
   input: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 14,
-    fontSize: FontSize.md,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.inputBackground,
   },
   button: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.lg,
-    paddingVertical: 16,
-    alignItems: 'center',
     marginTop: Spacing.md,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.md,
-    fontWeight: '700',
-  },
   errorBox: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.error + '12',
     borderColor: Colors.error,
     borderWidth: 1,
     borderRadius: BorderRadius.md,
@@ -211,6 +183,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.error,
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
   },
   forgotLink: {
     alignSelf: 'center',
@@ -219,7 +192,7 @@ const styles = StyleSheet.create({
   forgotText: {
     color: Colors.primary,
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   footer: {
     flexDirection: 'row',
@@ -229,12 +202,13 @@ const styles = StyleSheet.create({
   footerText: {
     color: Colors.textSecondary,
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
   },
   link: {},
   linkText: {
     color: Colors.primary,
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   adminNote: {
     alignItems: 'center',
@@ -246,6 +220,6 @@ const styles = StyleSheet.create({
   adminNoteText: {
     color: Colors.textMuted,
     fontSize: FontSize.xs,
-    fontStyle: 'italic',
+    fontFamily: FontFamily.regular,
   },
 });

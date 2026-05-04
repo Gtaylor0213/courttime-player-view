@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../constants/theme';
 import { CachedImage } from './CachedImage';
 
 interface Props {
@@ -113,7 +113,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
 const styles = StyleSheet.create({
   titleStatic: {
     color: Colors.text,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     fontSize: FontSize.lg,
   },
   button: {
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: 40,
+    minHeight: TouchTarget.min,
   },
   buttonLong: {
     borderRadius: BorderRadius.md,
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: Colors.text,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     fontSize: FontSize.lg,
     flexShrink: 1,
   },
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
   },
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     maxHeight: 400,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: '#0f172a',
+    shadowColor: Colors.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },

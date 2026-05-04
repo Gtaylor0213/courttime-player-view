@@ -6,7 +6,7 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../src/constants/theme';
+import { Colors, TouchTarget } from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingTop: 8,
     height: 74,
-    shadowColor: '#0f172a',
+    shadowColor: Colors.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -3 },
@@ -147,6 +147,7 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    minHeight: TouchTarget.min,
   },
   tabButtonPressed: {
     opacity: 0.8,
@@ -157,7 +158,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: Colors.card,
-    shadowColor: '#0f172a',
+    shadowColor: Colors.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },

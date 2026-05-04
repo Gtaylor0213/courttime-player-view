@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily, TouchTarget } from '../constants/theme';
 import { CachedImage } from './CachedImage';
 
 export function FacilitySelector() {
@@ -97,13 +97,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
+    minHeight: TouchTarget.min,
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
     gap: Spacing.sm,
-    shadowColor: '#0f172a',
+    shadowColor: Colors.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
@@ -112,7 +113,7 @@ const styles = StyleSheet.create({
   selectorText: {
     flex: 1,
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   logo: {
@@ -123,7 +124,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
   },
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
     maxHeight: 400,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: '#0f172a',
+    shadowColor: Colors.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
   },
   dropdownTitle: {
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
@@ -155,6 +156,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
+    minHeight: TouchTarget.min,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
     gap: Spacing.sm,
@@ -183,6 +185,6 @@ const styles = StyleSheet.create({
   },
   optionTextSelected: {
     color: Colors.primary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
 });

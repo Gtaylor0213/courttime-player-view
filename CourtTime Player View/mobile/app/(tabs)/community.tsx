@@ -22,6 +22,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import type { HittingPartnerPostWithUser } from '../../src/types/database';
+import { CommunitySkeleton } from '../../src/components/LoadingSkeleton';
 
 type Tab = 'partners' | 'bulletin' | 'notifications';
 
@@ -70,38 +71,56 @@ export default function CommunityScreen() {
   const [postAvailability, setPostAvailability] = useState('');
   const [postPlayStyles, setPostPlayStyles] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+  const [loadingPartners, setLoadingPartners] = useState(false);
+  const [loadingBulletins, setLoadingBulletins] = useState(false);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
 
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
   // ── Fetch data ──
   const fetchPartners = useCallback(async () => {
     if (!facilityId) return;
-    const res = await api.get(`/api/hitting-partner/facility/${facilityId}`);
-    if (res.success && res.data) {
-      setPosts(res.data.posts || []);
+    setLoadingPartners(true);
+    try {
+      const res = await api.get(`/api/hitting-partner/facility/${facilityId}`);
+      if (res.success && res.data) {
+        setPosts(res.data.posts || []);
+      }
+    } finally {
+      setLoadingPartners(false);
     }
   }, [facilityId]);
 
   const fetchBulletins = useCallback(async () => {
     if (!facilityId) return;
-    const res = await api.get(`/api/bulletin-board/${facilityId}`);
-    if (res.success && res.data) {
-      const list = Array.isArray(res.data) ? res.data : res.data.posts || [];
-      setBulletins(list);
+    setLoadingBulletins(true);
+    try {
+      const res = await api.get(`/api/bulletin-board/${facilityId}`);
+      if (res.success && res.data) {
+        const list = Array.isArray(res.data) ? res.data : res.data.posts || [];
+        setBulletins(list);
+      }
+    } finally {
+      setLoadingBulletins(false);
     }
   }, [facilityId]);
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
-    const [notifRes, countRes] = await Promise.all([
-      api.get(`/api/notifications/${user.id}`),
-      api.get(`/api/notifications/${user.id}/unread-count`),
-    ]);
-    if (notifRes.success && notifRes.data) {
-      setNotifications(notifRes.data.notifications || []);
-    }
-    if (countRes.success && countRes.data) {
-      setUnreadCount(countRes.data.count || 0);
+    setLoadingNotifications(true);
+    try {
+      const [notifRes, countRes] = await Promise.all([
+        api.get(`/api/notifications/${user.id}`),
+        api.get(`/api/notifications/${user.id}/unread-count`),
+      ]);
+      if (notifRes.success && notifRes.data) {
+        setNotifications(notifRes.data.notifications || []);
+      }
+      if (countRes.success && countRes.data) {
+        setUnreadCount(countRes.data.count || 0);
+      }
+    } finally {
+      setLoadingNotifications(false);
     }
   }, [user]);
 
@@ -305,6 +324,11 @@ export default function CommunityScreen() {
     }
   };
 
+  const isTabLoading =
+    (activeTab === 'partners' && loadingPartners) ||
+    (activeTab === 'bulletin' && loadingBulletins) ||
+    (activeTab === 'notifications' && loadingNotifications);
+
   return (
     <View style={styles.container}>
       {/* Tab Switcher */}
@@ -329,6 +353,10 @@ export default function CommunityScreen() {
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
       >
+        {isTabLoading ? (
+          <CommunitySkeleton />
+        ) : (
+          <>
         {/* ══════ PARTNERS TAB ══════ */}
         {activeTab === 'partners' && (
           <>
@@ -604,6 +632,8 @@ export default function CommunityScreen() {
         )}
 
         <View style={{ height: Spacing.xl }} />
+          </>
+        )}
       </ScrollView>
 
       {/* ── Create / Edit Partner Post Modal ── */}

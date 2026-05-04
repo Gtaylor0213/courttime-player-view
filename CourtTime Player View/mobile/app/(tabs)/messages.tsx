@@ -20,6 +20,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { showAlert } from '../../src/utils/alert';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { ConversationSkeleton } from '../../src/components/LoadingSkeleton';
 
 interface ConversationItem {
   id: string;
@@ -308,8 +309,8 @@ export default function MessagesScreen() {
   // ── RENDER: Conversation List ──
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>Loading messages...</Text>
+      <View style={styles.container}>
+        <ConversationSkeleton />
       </View>
     );
   }
@@ -384,8 +385,8 @@ export default function MessagesScreen() {
           />
 
           {loadingMembers ? (
-            <View style={styles.centered}>
-              <Text style={styles.emptyText}>Loading members...</Text>
+            <View style={{ paddingTop: Spacing.sm }}>
+              <ConversationSkeleton count={5} />
             </View>
           ) : (
             <FlatList

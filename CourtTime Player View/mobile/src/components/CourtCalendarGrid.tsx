@@ -12,11 +12,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  ActivityIndicator,
 } from 'react-native';
 import { api } from '../api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
 import type { Court } from '../types/database';
+import { BookingSkeleton } from './LoadingSkeleton';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const TIME_LABEL_WIDTH = 52;
@@ -288,12 +288,7 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Loading court availability...</Text>
-      </View>
-    );
+    return <BookingSkeleton />;
   }
 
   if (courts.length === 0) {

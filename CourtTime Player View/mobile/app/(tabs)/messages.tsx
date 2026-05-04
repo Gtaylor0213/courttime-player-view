@@ -114,7 +114,7 @@ export default function MessagesScreen() {
 
     // Mark as read
     if (user) {
-      api.post(`/api/messages/${conversationId}/read`, { userId: user.id });
+      api.patch(`/api/messages/${conversationId}/read`, { userId: user.id });
     }
   }, [user]);
 

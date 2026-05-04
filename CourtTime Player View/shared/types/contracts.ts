@@ -8,6 +8,9 @@ export interface OpeningHoursRange {
 
 export type OpeningHours = Record<string, OpeningHoursRange>;
 
+/** Alias for facility weekly schedules (matches DB naming). */
+export type OperatingHours = OpeningHours;
+
 export interface Facility {
   id: Id;
   name: string;
@@ -28,6 +31,58 @@ export interface Facility {
   bookingRules?: string;
   status?: "active" | "pending" | "suspended" | "closed";
   logoUrl?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
+export interface Court {
+  id: Id;
+  facilityId: Id;
+  name: string;
+  courtNumber?: number;
+  surfaceType?: "Hard" | "Clay" | "Grass" | "Synthetic";
+  courtType?: "Tennis" | "Pickleball" | "Dual";
+  isIndoor: boolean;
+  hasLights: boolean;
+  isWalkUp?: boolean;
+  status: "available" | "maintenance" | "closed";
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
+export interface Booking {
+  id: Id;
+  courtId: Id;
+  userId: Id;
+  facilityId: Id;
+  bookingDate: Date | string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  status: "confirmed" | "pending" | "cancelled" | "completed";
+  bookingType?: string;
+  notes?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
+export interface User {
+  id: Id;
+  email: string;
+  fullName: string;
+  firstName?: string;
+  lastName?: string;
+  gender?: "male" | "female" | "other" | "prefer_not_to_say" | null;
+  address?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  phone?: string;
+  userType: "player" | "admin";
+  /** Server-side only in practice; omitted from mobile payloads. */
+  passwordHash?: string;
+  isSuperAdmin?: boolean;
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }

@@ -10,9 +10,12 @@ import { api, setToken, getToken, removeToken, cacheUser, getCachedUser, clearCa
 import type { PendingTermsAcceptance } from '../api/client';
 import { registerForPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications';
 import type { User } from '../types/database';
-import type { AuthResponseShape, AuthUserShape } from '../../../shared/types';
+import type { AuthResponseShape } from '../../../shared/types';
 
-interface AuthUser extends User, AuthUserShape {
+/** Logged-in user: shared User plus auth payload extras (JWT /login|/register). */
+interface AuthUser extends User {
+  memberFacilities: string[];
+  adminFacilities: string[];
   skillLevel?: string;
   bio?: string;
   ustaRating?: string;

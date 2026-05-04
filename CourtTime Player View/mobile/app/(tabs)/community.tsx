@@ -445,13 +445,13 @@ export default function CommunityScreen() {
 
   // ── Notifications ──
   const markRead = useCallback(async (notificationId: string) => {
-    await api.post(`/api/notifications/${notificationId}/read`, {});
+    await api.patch(`/api/notifications/${notificationId}/read`, {});
     fetchNotifications();
   }, [fetchNotifications]);
 
   const markAllRead = useCallback(async () => {
     if (!user) return;
-    await api.post(`/api/notifications/${user.id}/read-all`, {});
+    await api.patch(`/api/notifications/${user.id}/read-all`, {});
     fetchNotifications();
   }, [user, fetchNotifications]);
 

@@ -11,7 +11,6 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   Modal,
@@ -19,9 +18,11 @@ import {
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { showAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import { ConversationSkeleton } from '../../src/components/LoadingSkeleton';
 import { EmptyState } from '../../src/components/EmptyState';
+import { Input } from '../../src/components/Input';
+import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { CachedImage } from '../../src/components/CachedImage';
 
@@ -319,22 +320,21 @@ export default function MessagesScreen() {
 
         {/* Input */}
         <View style={styles.inputBar}>
-          <TextInput
+          <Input
             style={styles.messageInput}
             value={newMessage}
             onChangeText={setNewMessage}
             placeholder="Type a message..."
-            placeholderTextColor={Colors.textMuted}
             multiline
             maxLength={1000}
           />
-          <TouchableOpacity
-            style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
+          <Button
+            title="Send"
             onPress={activeConversation.id ? handleSend : handleSendNewConversation}
             disabled={!newMessage.trim() || sending}
-          >
-            <Text style={styles.sendButtonText}>{sending ? '...' : 'Send'}</Text>
-          </TouchableOpacity>
+            loading={sending}
+            style={styles.sendButton}
+          />
         </View>
       </KeyboardAvoidingView>
     );
@@ -352,9 +352,9 @@ export default function MessagesScreen() {
   return (
     <View style={styles.container}>
       {/* New Message Button */}
-      <TouchableOpacity style={styles.newMessageButton} onPress={openNewMessage}>
-        <Text style={styles.newMessageButtonText}>+ New Message</Text>
-      </TouchableOpacity>
+      <View style={styles.newMessageButtonWrap}>
+        <Button title="+ New Message" onPress={openNewMessage} />
+      </View>
 
       <FlatList
         data={conversations}
@@ -414,12 +414,11 @@ export default function MessagesScreen() {
             <View style={{ width: 60 }} />
           </View>
 
-          <TextInput
+          <Input
             style={styles.searchInput}
             value={memberSearch}
             onChangeText={setMemberSearch}
             placeholder="Search members..."
-            placeholderTextColor={Colors.textMuted}
             autoFocus
           />
 
@@ -432,9 +431,11 @@ export default function MessagesScreen() {
               data={filteredMembers}
               keyExtractor={(item) => item.userId}
               ListEmptyComponent={
-                <View style={{ padding: Spacing.lg, alignItems: 'center' }}>
-                  <Text style={styles.emptyText}>No members found</Text>
-                </View>
+                <EmptyState
+                  icon="people-outline"
+                  title="No members found"
+                  description="Try a different search or check back when more players join your facility."
+                />
               }
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -475,18 +476,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // ── New Message Button ──
-  newMessageButton: {
+  newMessageButtonWrap: {
     margin: Spacing.md,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  newMessageButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.md,
-    fontWeight: '600',
   },
 
   // ── Conversation List ──
@@ -497,6 +488,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.borderLight,
     alignItems: 'center',
     gap: Spacing.sm,
+    minHeight: TouchTarget.min,
   },
   avatar: {
     width: 48,
@@ -509,7 +501,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: Colors.textInverse,
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
   },
   avatarImage: {
     width: '100%',
@@ -526,11 +518,12 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   timestamp: {
     fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
     color: Colors.textMuted,
   },
   conversationPreview: {
@@ -541,6 +534,7 @@ const styles = StyleSheet.create({
   },
   lastMessage: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
     flex: 1,
     marginRight: Spacing.sm,
@@ -557,13 +551,7 @@ const styles = StyleSheet.create({
   unreadText: {
     color: Colors.textInverse,
     fontSize: 11,
-    fontWeight: '700',
-  },
-
-  emptyText: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    textAlign: 'center',
+    fontFamily: FontFamily.bold,
   },
 
   // ── Thread View ──
@@ -582,7 +570,7 @@ const styles = StyleSheet.create({
   backText: {
     color: Colors.primary,
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   threadHeaderInfo: {
     flexDirection: 'row',
@@ -601,7 +589,7 @@ const styles = StyleSheet.create({
   avatarSmallText: {
     color: Colors.textInverse,
     fontSize: FontSize.sm,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
   },
   avatarImageSmall: {
     width: '100%',
@@ -610,7 +598,7 @@ const styles = StyleSheet.create({
   },
   threadName: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   messagesList: {
@@ -641,6 +629,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.text,
     lineHeight: 20,
   },
@@ -649,6 +638,7 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 10,
+    fontFamily: FontFamily.regular,
     color: Colors.textMuted,
     marginTop: 4,
     alignSelf: 'flex-end',
@@ -669,30 +659,12 @@ const styles = StyleSheet.create({
   },
   messageInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    fontSize: FontSize.sm,
-    color: Colors.text,
     maxHeight: 100,
-    backgroundColor: Colors.surface,
+    alignSelf: 'stretch',
   },
   sendButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    justifyContent: 'center',
-  },
-  sendButtonDisabled: {
-    opacity: 0.4,
-  },
-  sendButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.sm,
-    fontWeight: '600',
+    alignSelf: 'flex-end',
+    minWidth: 88,
   },
 
   // ── New Message Modal ──
@@ -711,23 +683,15 @@ const styles = StyleSheet.create({
   modalCancel: {
     color: Colors.primary,
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   modalTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   searchInput: {
     margin: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    fontSize: FontSize.md,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
   },
   memberItem: {
     flexDirection: 'row',
@@ -736,9 +700,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
     gap: Spacing.sm,
+    minHeight: TouchTarget.min,
   },
   memberMeta: {
     fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
     color: Colors.textMuted,
     marginTop: 2,
     textTransform: 'capitalize',

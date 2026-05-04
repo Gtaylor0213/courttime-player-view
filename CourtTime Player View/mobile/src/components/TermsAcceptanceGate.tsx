@@ -5,18 +5,12 @@
  */
 
 import { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
 import { useAuth } from '../contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../constants/theme';
+import { Button } from './Button';
 
 // Strip HTML tags and decode common entities for plain-text rendering.
 // Preserves block-level structure by mapping <p>, <br>, <li> to line breaks.
@@ -82,10 +76,11 @@ export function TermsAcceptanceGate() {
         <Text style={styles.contentText}>{plainText}</Text>
       </ScrollView>
 
-      <TouchableOpacity
-        style={styles.checkboxRow}
+      <Pressable
+        style={({ pressed }) => [styles.checkboxRow, pressed && styles.pressedOpacity]}
         onPress={() => setAgreed(!agreed)}
-        activeOpacity={0.7}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: agreed }}
       >
         <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
           {agreed && <Ionicons name="checkmark" size={18} color={Colors.textInverse} />}
@@ -93,23 +88,16 @@ export function TermsAcceptanceGate() {
         <Text style={styles.checkboxLabel}>
           I have read and agree to the Terms & Conditions
         </Text>
-      </TouchableOpacity>
+      </Pressable>
 
-      <TouchableOpacity
-        style={[styles.acceptButton, (!agreed || submitting) && styles.acceptButtonDisabled]}
+      <Button
+        title="Accept & Continue"
         onPress={handleAccept}
-        disabled={!agreed || submitting}
-      >
-        {submitting ? (
-          <ActivityIndicator size="small" color={Colors.textInverse} />
-        ) : (
-          <Text style={styles.acceptButtonText}>Accept & Continue</Text>
-        )}
-      </TouchableOpacity>
+        disabled={!agreed}
+        loading={submitting}
+      />
 
-      <TouchableOpacity style={styles.logoutLink} onPress={logout}>
-        <Text style={styles.logoutText}>Log out instead</Text>
-      </TouchableOpacity>
+      <Button variant="destructive" title="Log out instead" onPress={logout} style={styles.logoutButton} />
     </View>
   );
 }
@@ -127,22 +115,24 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: FontSize.xxl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginBottom: Spacing.sm,
   },
   subtitle: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
     lineHeight: 20,
     marginBottom: 4,
   },
   facilityName: {
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   versionMeta: {
     fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
     color: Colors.textMuted,
   },
   contentBox: {
@@ -158,6 +148,7 @@ const styles = StyleSheet.create({
   },
   contentText: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.text,
     lineHeight: 22,
   },
@@ -166,6 +157,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
     marginBottom: Spacing.md,
+    minHeight: TouchTarget.min,
+  },
+  pressedOpacity: {
+    opacity: 0.85,
   },
   checkbox: {
     width: 24,
@@ -184,28 +179,10 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     flex: 1,
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.text,
   },
-  acceptButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-  },
-  acceptButtonDisabled: {
-    opacity: 0.5,
-  },
-  acceptButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.md,
-    fontWeight: '700',
-  },
-  logoutLink: {
-    alignItems: 'center',
-    paddingVertical: Spacing.md,
-  },
-  logoutText: {
-    color: Colors.textSecondary,
-    fontSize: FontSize.sm,
+  logoutButton: {
+    marginTop: Spacing.sm,
   },
 });

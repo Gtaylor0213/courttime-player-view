@@ -1,6 +1,8 @@
 import type { ErrorBoundaryProps } from 'expo-router';
-import { View, Text, TouchableOpacity, StyleSheet, Linking, Platform } from 'react-native';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
+import { Colors, Spacing, FontSize, FontFamily } from '../constants/theme';
+import { Card } from './Card';
+import { Button } from './Button';
 
 export function createRouteErrorBoundary(screenLabel: string) {
   return function RouteErrorBoundary({ error, retry }: ErrorBoundaryProps) {
@@ -32,20 +34,16 @@ export function createRouteErrorBoundary(screenLabel: string) {
 
     return (
       <View style={styles.container}>
-        <View style={styles.card}>
+        <Card style={styles.card} padded>
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.message}>
             {screenLabel} crashed. You can retry this screen without restarting the app.
           </Text>
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.secondaryButton} onPress={reportIssue}>
-              <Text style={styles.secondaryButtonText}>Report issue</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.retryButton} onPress={retry}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
+            <Button variant="secondary" title="Report issue" onPress={reportIssue} />
+            <Button title="Retry" onPress={retry} />
           </View>
-        </View>
+        </Card>
       </View>
     );
   };
@@ -62,48 +60,20 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 420,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.lg,
     gap: Spacing.md,
   },
   title: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   message: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
     lineHeight: 20,
   },
   actions: {
     gap: Spacing.sm,
-  },
-  retryButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-  },
-  retryButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.md,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: Colors.secondary,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  secondaryButtonText: {
-    color: Colors.text,
-    fontSize: FontSize.md,
-    fontWeight: '700',
   },
 });

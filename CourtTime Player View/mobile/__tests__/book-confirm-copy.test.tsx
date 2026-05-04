@@ -1,7 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { TouchableOpacity, Text, Modal } from 'react-native';
+import { TouchableOpacity, Text, Modal, Pressable } from 'react-native';
 import BookCourtScreen from '../app/(tabs)/book';
 import { api } from '../src/api/client';
 
@@ -78,9 +78,21 @@ type TouchableLike = { props: { children?: unknown; onPress?: () => void } };
 type ModalLike = { props: { visible?: boolean; children?: unknown } };
 
 function pressTouchableContainingText(root: renderer.ReactTestRenderer, label: string) {
-  const buttons = root.root.findAllByType(TouchableOpacity) as TouchableLike[];
+  try {
+    const byA11y = root.root.findByProps({ accessibilityLabel: label });
+    act(() => {
+      (byA11y.props as { onPress?: () => void }).onPress?.();
+    });
+    return;
+  } catch {
+    /* fall through */
+  }
+  const buttons = [
+    ...(root.root.findAllByType(TouchableOpacity) as TouchableLike[]),
+    ...(root.root.findAllByType(Pressable) as TouchableLike[]),
+  ];
   const match = buttons.find((b) => collectText(b.props.children).includes(label));
-  if (!match) throw new Error(`No TouchableOpacity containing "${label}"`);
+  if (!match) throw new Error(`No pressable containing "${label}"`);
   act(() => {
     match.props.onPress?.();
   });
@@ -149,7 +161,7 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     });
 
     let texts = visibleModalTexts(tree!);
-    expect(texts).toContain('Confirm Booking');
+    expect(() => tree!.root.findByProps({ accessibilityLabel: 'Confirm Booking' })).not.toThrow();
     expect(texts).not.toContain('Book 2 Courts');
 
     await act(async () => {
@@ -158,7 +170,7 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     });
 
     texts = visibleModalTexts(tree!);
-    expect(texts).toContain('Book 2 Courts');
+    expect(() => tree!.root.findByProps({ accessibilityLabel: 'Book 2 Courts' })).not.toThrow();
 
     await act(async () => {
       pressByTestId(tree!, 'dismiss-booking-modal');
@@ -171,8 +183,8 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     });
 
     texts = visibleModalTexts(tree!);
-    expect(texts).toContain('Confirm Booking');
-    expect(texts.filter((t) => t === 'Book 2 Courts')).toHaveLength(0);
+    expect(() => tree!.root.findByProps({ accessibilityLabel: 'Confirm Booking' })).not.toThrow();
+    expect(() => tree!.root.findByProps({ accessibilityLabel: 'Book 2 Courts' })).toThrow();
   });
 
   it('Quick Reserve keeps selected court when jumping selectedDate to today (no silent skip on confirm)', async () => {

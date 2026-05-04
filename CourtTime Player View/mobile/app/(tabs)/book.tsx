@@ -12,10 +12,10 @@ import {
   TouchableOpacity,
   RefreshControl,
   Modal,
-  TextInput,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  LayoutAnimation,
 } from 'react-native';
 import { showAlert } from '../../src/utils/alert';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
@@ -25,9 +25,12 @@ import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
 import { TimePicker, PICKER_HEIGHT } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius, TouchTarget } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { Button } from '../../src/components/Button';
+import { Input } from '../../src/components/Input';
+import { Card } from '../../src/components/Card';
 
 export const ErrorBoundary = createRouteErrorBoundary('Book');
 
@@ -554,6 +557,7 @@ export default function BookCourtScreen() {
 
   // Toggle additional court
   const toggleAdditionalCourt = (courtId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setAdditionalCourtIds(prev =>
       prev.includes(courtId) ? prev.filter(id => id !== courtId) : [...prev, courtId]
     );
@@ -614,21 +618,14 @@ export default function BookCourtScreen() {
         </View>
 
         <View style={styles.quickReserveRow}>
-          <TouchableOpacity
-            style={[styles.quickReserveButton, quickReserving && { opacity: 0.7 }]}
+          <Button
+            title="Quick Reserve"
             onPress={handleQuickReserve}
-            disabled={quickReserving || !facilityId}
-            activeOpacity={0.8}
-          >
-            {quickReserving ? (
-              <ActivityIndicator size="small" color={Colors.textInverse} />
-            ) : (
-              <>
-                <Ionicons name="flash" size={16} color={Colors.textInverse} />
-                <Text style={styles.quickReserveText}>Quick Reserve</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            disabled={!facilityId}
+            loading={quickReserving}
+            leftIcon={<Ionicons name="flash" size={16} color={Colors.textInverse} />}
+            style={styles.quickReserveButton}
+          />
         </View>
 
         {calendarExpanded && (
@@ -673,19 +670,22 @@ export default function BookCourtScreen() {
             <View style={styles.modalInner}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Booking Details</Text>
-                <TouchableOpacity
+                <Pressable
                   testID="dismiss-booking-modal"
                   onPress={() => setModalKind(null)}
+                  style={({ pressed }) => [styles.modalIconHit, pressed && styles.pressedOpacity]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
                 >
                   <Ionicons name="close" size={24} color={Colors.textSecondary} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               {/* Summary */}
-              <View style={styles.modalSummary}>
+              <Card style={styles.modalSummary} padded>
                 <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
                 <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
-              </View>
+              </Card>
 
               {/* Time Pickers */}
               <Text style={styles.modalLabel}>Select Time</Text>
@@ -772,32 +772,26 @@ export default function BookCourtScreen() {
 
               {/* Notes */}
               <Text style={styles.modalLabel}>Notes (optional)</Text>
-              <TextInput
+              <Input
                 style={styles.notesInput}
                 value={bookingNotes}
                 onChangeText={setBookingNotes}
                 placeholder="Special requests or notes..."
-                placeholderTextColor={Colors.textMuted}
                 multiline
                 maxLength={200}
               />
 
               {/* Confirm Button */}
-              <TouchableOpacity
-                style={[styles.confirmButton, booking && { opacity: 0.6 }]}
+              <Button
+                title={
+                  additionalCourtIds.length > 0
+                    ? `Book ${1 + additionalCourtIds.length} Courts`
+                    : 'Confirm Booking'
+                }
                 onPress={handleConfirmBooking}
-                disabled={booking}
-              >
-                {booking ? (
-                  <ActivityIndicator size="small" color={Colors.textInverse} />
-                ) : (
-                  <Text style={styles.confirmButtonText}>
-                    {additionalCourtIds.length > 0
-                      ? `Book ${1 + additionalCourtIds.length} Courts`
-                      : 'Confirm Booking'}
-                  </Text>
-                )}
-              </TouchableOpacity>
+                loading={booking}
+                style={styles.confirmButton}
+              />
             </View>
           </KeyboardAvoidingView>
         </View>
@@ -815,9 +809,14 @@ export default function BookCourtScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: Colors.error }]}>Booking Not Allowed</Text>
-              <TouchableOpacity onPress={() => setModalKind(null)}>
+              <Pressable
+                onPress={() => setModalKind(null)}
+                style={({ pressed }) => [styles.modalIconHit, pressed && styles.pressedOpacity]}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
                 <Ionicons name="close" size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <Text style={styles.violationSubtitle}>
@@ -850,26 +849,17 @@ export default function BookCourtScreen() {
               )}
             </ScrollView>
 
-            <TouchableOpacity
-              style={[styles.confirmButton, { backgroundColor: Colors.textSecondary }]}
-              onPress={() => setModalKind(null)}
-            >
-              <Text style={styles.confirmButtonText}>Dismiss</Text>
-            </TouchableOpacity>
+            <Button variant="secondary" title="Dismiss" onPress={() => setModalKind(null)} style={styles.confirmButton} />
 
             {/* Admin Override */}
             {isAdmin && (
-              <TouchableOpacity
-                style={[styles.confirmButton, { backgroundColor: Colors.warning, marginTop: Spacing.sm }]}
+              <Button
+                variant="warning"
+                title="Override as Admin"
                 onPress={handleAdminOverride}
-                disabled={booking}
-              >
-                {booking ? (
-                  <ActivityIndicator size="small" color={Colors.textInverse} />
-                ) : (
-                  <Text style={styles.confirmButtonText}>Override as Admin</Text>
-                )}
-              </TouchableOpacity>
+                loading={booking}
+                style={{ marginTop: Spacing.sm }}
+              />
             )}
           </View>
         </View>
@@ -948,19 +938,16 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.sm,
   },
   quickReserveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.sm,
+    alignSelf: 'stretch',
+  },
+  modalIconHit: {
+    minWidth: TouchTarget.min,
     minHeight: TouchTarget.min,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
   },
-  quickReserveText: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.textInverse,
+  pressedOpacity: {
+    opacity: 0.85,
   },
 
   // ── Modals ──
@@ -999,8 +986,6 @@ const styles = StyleSheet.create({
   },
   modalSummary: {
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
     marginBottom: Spacing.md,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
@@ -1044,14 +1029,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   notesInput: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    fontSize: FontSize.sm,
-    color: Colors.text,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 60,
+    minHeight: 80,
     textAlignVertical: 'top',
     marginBottom: Spacing.md,
   },
@@ -1090,17 +1068,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   confirmButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    minHeight: TouchTarget.min,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.md,
-    fontWeight: '700',
+    alignSelf: 'stretch',
   },
 
   // ── Rule Violations ──

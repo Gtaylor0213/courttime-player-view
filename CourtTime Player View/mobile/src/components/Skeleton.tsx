@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, ViewStyle } from 'react-native';
-import { Colors, BorderRadius } from '../constants/theme';
+import { Colors, BorderRadius, Motion } from '../constants/theme';
 
 interface SkeletonProps {
   width?: number | `${number}%`;
@@ -22,13 +22,13 @@ export function Skeleton({
       Animated.sequence([
         Animated.timing(opacity, {
           toValue: 0.85,
-          duration: 180,
+          duration: Motion.standard,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
           toValue: 0.45,
-          duration: 180,
+          duration: Motion.standard,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),

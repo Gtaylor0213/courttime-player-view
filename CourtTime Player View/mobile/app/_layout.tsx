@@ -1,4 +1,5 @@
 import 'react-native-gesture-handler';
+import '../src/registerTextDefaults';
 /**
  * Root Layout
  * Wraps the entire app with AuthProvider and handles auth-based routing

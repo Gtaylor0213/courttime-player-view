@@ -17,10 +17,12 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 import { useAuth } from '../src/contexts/AuthContext';
 import { OperatingHoursCard } from '../src/components/OperatingHoursCard';
+import { EmptyState } from '../src/components/EmptyState';
+import { CardSkeleton } from '../src/components/LoadingSkeleton';
 
 export const ErrorBoundary = createRouteErrorBoundary('Club Info');
 
@@ -119,8 +121,8 @@ export default function ClubInfoScreen() {
     return (
       <>
         <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }}>
-          <Text style={{ color: Colors.textMuted }}>Loading...</Text>
+        <View style={styles.loadingWrap}>
+          <CardSkeleton count={4} />
         </View>
       </>
     );
@@ -130,13 +132,13 @@ export default function ClubInfoScreen() {
     return (
       <>
         <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateTitle}>You're not a member of a club yet</Text>
-          <Text style={styles.emptyStateBody}>Join a club to view contact details, courts, and operating hours.</Text>
-          <TouchableOpacity style={styles.joinButton} onPress={() => router.push('/(tabs)/profile')}>
-            <Text style={styles.joinButtonText}>Find a Club</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon="business-outline"
+          title="You're not a member of a club yet"
+          description="Join a club to view contact details, courts, and operating hours."
+          actionLabel="Find a Club"
+          onAction={() => router.push('/(tabs)/profile')}
+        />
       </>
     );
   }
@@ -145,9 +147,15 @@ export default function ClubInfoScreen() {
     return (
       <>
         <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }}>
-          <Text style={{ color: Colors.textMuted }}>{notFound ? 'No facility found' : 'Could not load club info'}</Text>
-        </View>
+        <EmptyState
+          icon={notFound ? 'search-outline' : 'alert-circle-outline'}
+          title={notFound ? 'No facility found' : 'Could not load club info'}
+          description={
+            notFound
+              ? 'This facility link may be invalid or you may not have access.'
+              : 'Pull to refresh or try again later.'
+          }
+        />
       </>
     );
   }
@@ -275,17 +283,18 @@ const styles = StyleSheet.create({
   },
   facilityName: {
     fontSize: FontSize.xl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   facilityType: {
     fontSize: FontSize.sm,
     color: Colors.primary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     marginTop: Spacing.xs,
   },
   description: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
     lineHeight: 22,
     marginTop: Spacing.sm,
@@ -295,7 +304,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginBottom: Spacing.sm,
   },
@@ -304,6 +313,11 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     overflow: 'hidden',
   },
+  loadingWrap: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    paddingTop: Spacing.md,
+  },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -311,10 +325,12 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
+    minHeight: TouchTarget.min,
   },
   contactText: {
     flex: 1,
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.text,
   },
   courtCard: {
@@ -327,7 +343,7 @@ const styles = StyleSheet.create({
   },
   courtName: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   courtMeta: {
@@ -336,6 +352,7 @@ const styles = StyleSheet.create({
   },
   courtMetaText: {
     fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
   },
   statusDot: {
@@ -343,37 +360,5 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     marginLeft: Spacing.sm,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    backgroundColor: Colors.surface,
-  },
-  emptyStateTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'center',
-  },
-  emptyStateBody: {
-    marginTop: Spacing.sm,
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  joinButton: {
-    marginTop: Spacing.lg,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 2,
-  },
-  joinButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.sm,
-    fontWeight: '700',
   },
 });

@@ -39,6 +39,8 @@ const LightColors = {
   courtMaintenance: '#B7791F',
   courtClosed: '#D4183D',
   shadow: 'rgba(15, 23, 42, 0.12)',
+  /** Android notification channel LED accent (legacy brand green) */
+  androidNotificationLed: '#1a5f2a',
 };
 
 const DarkColors: typeof LightColors = {
@@ -75,6 +77,7 @@ const DarkColors: typeof LightColors = {
   courtMaintenance: '#E4B15A',
   courtClosed: '#F1637D',
   shadow: 'rgba(0, 0, 0, 0.35)',
+  androidNotificationLed: '#1a5f2a',
 };
 
 export const Colors = Appearance.getColorScheme() === 'dark' ? DarkColors : LightColors;

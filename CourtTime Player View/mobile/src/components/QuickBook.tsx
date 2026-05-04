@@ -10,20 +10,16 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { api } from '../api/client';
 import { formatLocalDate } from '../utils/dateUtils';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../constants/theme';
 import type { Court } from '../types/database';
+import { Skeleton } from './Skeleton';
+import { EmptyState } from './EmptyState';
 
 interface QuickSlot {
   courtId: string;
@@ -265,28 +261,55 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
   if (loading) {
     return (
       <View style={styles.loadingBox}>
-        <ActivityIndicator size="small" color={Colors.primary} />
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={styles.skeletonSlotRow}>
+            <Skeleton width={36} height={36} borderRadius={18} />
+            <View style={styles.skeletonSlotTextCol}>
+              <Skeleton width="45%" height={14} />
+              <Skeleton width="55%" height={12} style={{ marginTop: Spacing.sm }} />
+            </View>
+            <Skeleton width={56} height={28} borderRadius={BorderRadius.full} />
+          </View>
+        ))}
       </View>
     );
   }
 
   if (slots.length === 0) {
-    const messageByState: Record<QuickBookEmptyState, string> = {
-      no_courts: 'No courts at this club.',
-      all_booked: 'All courts are booked right now.',
-      outside_open_hours: 'Outside open hours.',
-      request_failed: "Couldn't load availability.",
+    const emptyByState: Record<
+      QuickBookEmptyState,
+      { icon: keyof typeof Ionicons.glyphMap; title: string; description: string }
+    > = {
+      no_courts: {
+        icon: 'tennisball-outline',
+        title: 'No courts',
+        description: 'This club has no bookable courts configured yet.',
+      },
+      all_booked: {
+        icon: 'people-outline',
+        title: 'All booked',
+        description: 'Every court is reserved for the next available window.',
+      },
+      outside_open_hours: {
+        icon: 'moon-outline',
+        title: 'Outside open hours',
+        description: 'Courts are closed for now. Check back during operating hours.',
+      },
+      request_failed: {
+        icon: 'cloud-offline-outline',
+        title: 'Could not load',
+        description: 'Availability could not be refreshed. Check your connection and try again.',
+      },
     };
+    const cfg = emptyByState[emptyState];
     return (
-      <View style={styles.emptyBox}>
-        <Ionicons name="time-outline" size={20} color={Colors.textMuted} />
-        <Text style={styles.emptyText}>{messageByState[emptyState]}</Text>
-        {emptyState === 'request_failed' && (
-          <TouchableOpacity style={styles.retryButton} onPress={computeSlots}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <EmptyState
+        icon={cfg.icon}
+        title={cfg.title}
+        description={cfg.description}
+        actionLabel={emptyState === 'request_failed' ? 'Retry' : undefined}
+        onAction={emptyState === 'request_failed' ? computeSlots : undefined}
+      />
     );
   }
 
@@ -296,12 +319,15 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
         const slotKey = `${slot.courtId}_${slot.startTime}`;
         const busy = bookingSlotKey === slotKey;
         return (
-          <TouchableOpacity
+          <Pressable
             key={slotKey}
-            style={[styles.slot, busy && styles.slotBusy]}
+            style={({ pressed }) => [
+              styles.slot,
+              busy && styles.slotBusy,
+              pressed && bookingSlotKey === null && styles.pressedOpacity,
+            ]}
             onPress={() => confirmAndBook(slot)}
             disabled={bookingSlotKey !== null}
-            activeOpacity={0.7}
           >
             <View style={styles.slotIcon}>
               <Ionicons name="flash" size={18} color={Colors.primary} />
@@ -320,7 +346,7 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
                 <Ionicons name="arrow-forward" size={14} color={Colors.primary} />
               </View>
             )}
-          </TouchableOpacity>
+          </Pressable>
         );
       })}
     </View>
@@ -377,34 +403,20 @@ const styles = StyleSheet.create({
   loadingBox: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    alignItems: 'center',
-  },
-  emptyBox: {
-    flexDirection: 'row',
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
     padding: Spacing.md,
-    alignItems: 'center',
     gap: Spacing.sm,
-    flexWrap: 'wrap',
   },
-  emptyText: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    flexShrink: 1,
+  skeletonSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    minHeight: TouchTarget.min,
   },
-  retryButton: {
-    marginLeft: 'auto',
-    backgroundColor: Colors.primary + '14',
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
+  skeletonSlotTextCol: {
+    flex: 1,
   },
-  retryButtonText: {
-    color: Colors.primary,
-    fontSize: FontSize.xs,
-    fontWeight: '700',
+  pressedOpacity: {
+    opacity: 0.85,
   },
   slot: {
     flexDirection: 'row',
@@ -416,6 +428,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.primary + '20',
     gap: Spacing.md,
+    minHeight: TouchTarget.min,
   },
   slotBusy: {
     opacity: 0.6,
@@ -430,11 +443,12 @@ const styles = StyleSheet.create({
   },
   slotCourt: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   slotTime: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
     marginTop: 2,
   },
@@ -449,7 +463,7 @@ const styles = StyleSheet.create({
   },
   slotCtaText: {
     fontSize: FontSize.xs,
+    fontFamily: FontFamily.bold,
     color: Colors.primary,
-    fontWeight: '700',
   },
 });

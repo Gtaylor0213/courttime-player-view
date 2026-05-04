@@ -10,7 +10,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
-  TextInput,
   Modal,
   FlatList,
   ScrollView,
@@ -31,6 +30,7 @@ import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundar
 import { EmptyState } from '../../src/components/EmptyState';
 import { createPollingTransport } from '../../../shared/api/sync';
 import { Card } from '../../src/components/Card';
+import { Input } from '../../src/components/Input';
 import { Skeleton } from '../../src/components/Skeleton';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
@@ -506,12 +506,11 @@ export default function CommunityScreen() {
         </TouchableOpacity>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={Colors.textMuted} />
-          <TextInput
+          <Input
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search by name or description..."
-            placeholderTextColor={Colors.textMuted}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -976,12 +975,11 @@ export default function CommunityScreen() {
           </View>
           <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
             <Text style={styles.formLabel}>What are you looking for? *</Text>
-            <TextInput
+            <Input
               style={[styles.formInput, styles.formTextArea]}
               value={postDescription}
               onChangeText={setPostDescription}
               placeholder="e.g. Looking for an intermediate player for singles practice..."
-              placeholderTextColor={Colors.textMuted}
               multiline
             />
             {postDescription.trim().length > 0 && postDescription.trim().length < PARTNER_DESCRIPTION_MIN ? (
@@ -989,12 +987,11 @@ export default function CommunityScreen() {
             ) : null}
 
             <Text style={styles.formLabel}>Your availability *</Text>
-            <TextInput
+            <Input
               style={styles.formInput}
               value={postAvailability}
               onChangeText={setPostAvailability}
               placeholder="e.g. Weekday evenings, Saturday mornings"
-              placeholderTextColor={Colors.textMuted}
             />
             {!postAvailability.trim() ? <Text style={styles.fieldHintMuted}>Add at least one time window</Text> : null}
 
@@ -1051,8 +1048,7 @@ export default function CommunityScreen() {
           </View>
           <ScrollView style={styles.modalBody}>
             <Text style={styles.formLabel}>Title *</Text>
-            <TextInput style={styles.formInput} value={bulletinTitle} onChangeText={setBulletinTitle}
-              placeholder="Post title" placeholderTextColor={Colors.textMuted} />
+            <Input style={styles.formInput} value={bulletinTitle} onChangeText={setBulletinTitle} placeholder="Post title" />
 
             <Text style={styles.formLabel}>Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bulletinCategoryScroll}>
@@ -1069,8 +1065,13 @@ export default function CommunityScreen() {
             </ScrollView>
 
             <Text style={styles.formLabel}>Content *</Text>
-            <TextInput style={[styles.formInput, styles.formTextArea]} value={bulletinContent} onChangeText={setBulletinContent}
-              placeholder="Write your announcement..." placeholderTextColor={Colors.textMuted} multiline />
+            <Input
+              style={[styles.formInput, styles.formTextArea]}
+              value={bulletinContent}
+              onChangeText={setBulletinContent}
+              placeholder="Write your announcement..."
+              multiline
+            />
           </ScrollView>
         </View>
       </Modal>

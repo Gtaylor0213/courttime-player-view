@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 /**
  * Root Layout
  * Wraps the entire app with AuthProvider and handles auth-based routing

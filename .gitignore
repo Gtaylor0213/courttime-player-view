@@ -33,3 +33,6 @@ lerna-debug.log*
 
 # Vite
 .vite
+
+# Design review repro artifacts (screenshots, Metro dumps)
+CourtTime Player View/design-review/repro/

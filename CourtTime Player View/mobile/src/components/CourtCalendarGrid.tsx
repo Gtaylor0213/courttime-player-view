@@ -4,7 +4,7 @@
  * Swipe horizontally to page through courts in groups of 3.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { BookingSkeleton } from './LoadingSkeleton';
 import { createPollingTransport } from '../../../shared/api/sync';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TIME_LABEL_WIDTH = 52;
 const ROW_HEIGHT = 48;
 const SLOT_MINUTES = 30;
@@ -187,6 +188,12 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
   };
 
   const timeRows = getTimeRows();
+
+  /** Avoid flex:1 in a parent ScrollView — it can confuse layout/touches; bound grid height instead. */
+  const gridScrollMinHeight = useMemo(() => {
+    const rowsH = timeRows.length * ROW_HEIGHT + 100;
+    return Math.min(SCREEN_HEIGHT * 0.52, Math.max(280, rowsH));
+  }, [timeRows.length]);
 
   const formatTimeLabel = (time: string) => {
     const [h, m] = time.split(':').map(Number);
@@ -375,7 +382,7 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
       {/* Scrollable time grid */}
       <ScrollView
         ref={scrollRef}
-        style={styles.gridScroll}
+        style={[styles.gridScroll, { minHeight: gridScrollMinHeight }]}
         showsVerticalScrollIndicator={false}
         onTouchEnd={handleTouchEnd}
         scrollEnabled={!isDragging.current}
@@ -507,7 +514,7 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    alignSelf: 'stretch',
   },
   loadingContainer: {
     padding: Spacing.xl,
@@ -571,10 +578,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // Grid
-  gridScroll: {
-    flex: 1,
-  },
+  // Grid (height comes from minHeight in component — not flex:1 inside Book's ScrollView)
+  gridScroll: {},
   row: {
     flexDirection: 'row',
     height: ROW_HEIGHT,

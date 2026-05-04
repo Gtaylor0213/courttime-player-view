@@ -5,28 +5,41 @@
 
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontFamily } from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { useMemo } from 'react';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
+  const screenOptions = useMemo(
+    () => ({
+      sceneStyle: { backgroundColor: Colors.surface },
+      tabBarActiveTintColor: Colors.primary,
+      tabBarInactiveTintColor: Colors.textMuted,
+      // Do not set a fixed tabBar height — it can clip touch targets vs. safe area / font scale.
+      tabBarStyle: [
+        styles.tabBar,
+        {
+          paddingBottom: Math.max(insets.bottom, 10),
+          paddingTop: 8,
+        },
+      ],
+      tabBarLabelStyle: styles.tabLabel,
+      headerStyle: styles.header,
+      headerTintColor: Colors.text,
+      headerTitleStyle: styles.headerTitle,
+    }),
+    [insets.bottom]
+  );
+
   return (
-    <Tabs
-      initialRouteName="book"
-      screenOptions={{
-        sceneStyle: { backgroundColor: Colors.surface },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabLabel,
-        headerStyle: styles.header,
-        headerTintColor: Colors.text,
-        headerTitleStyle: styles.headerTitle,
-      }}
-    >
+    <Tabs initialRouteName="book" screenOptions={screenOptions}>
       <Tabs.Screen
         name="book"
         options={{
@@ -76,14 +89,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderTopColor: Colors.border,
     borderTopWidth: 1,
-    paddingBottom: 10,
-    paddingTop: 8,
-    height: 74,
     shadowColor: Colors.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -3 },
-    elevation: 10,
+    elevation: 24,
   },
   tabLabel: {
     fontSize: 11,

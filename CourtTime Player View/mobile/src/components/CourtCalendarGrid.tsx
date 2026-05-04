@@ -58,8 +58,9 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
   const [loading, setLoading] = useState(true);
   const [pageIndex, setPageIndex] = useState(0);
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragStartRef = useRef<{ pageY: number; startRow: number } | null>(null);
   const isDragging = useRef(false);
+  const dragMoved = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const totalPages = Math.ceil(courts.length / COURTS_PER_PAGE);
@@ -209,48 +210,25 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
     return false;
   };
 
-  // Handle simple tap/click on a cell (works on web + mobile)
-  const handleCellPress = (targetPageIndex: number, courtIndex: number, rowIndex: number) => {
+  // Handle touch events for tap + drag selection
+  const handleTouchStart = (
+    targetPageIndex: number,
+    courtIndex: number,
+    rowIndex: number,
+    pageY: number
+  ) => {
     if (isPast(rowIndex) || isBooked(targetPageIndex, courtIndex, rowIndex)) return;
 
-    const globalCourtIndex = targetPageIndex * COURTS_PER_PAGE + courtIndex;
-    const court = courts[globalCourtIndex];
-    if (!court) return;
-
-    const startTime = timeRows[rowIndex] + ':00';
-    const endTime = getRowEndTime(rowIndex) + ':00';
-    onBookingSelected(court, startTime, endTime);
-  };
-
-  // Handle touch events for long press + drag
-  const handleTouchStart = (targetPageIndex: number, courtIndex: number, rowIndex: number) => {
-    if (isPast(rowIndex) || isBooked(targetPageIndex, courtIndex, rowIndex)) return;
-
-    longPressTimer.current = setTimeout(() => {
-      isDragging.current = true;
-      setDragSelection({ pageIndex: targetPageIndex, courtIndex, startRow: rowIndex, endRow: rowIndex });
-    }, 300);
-  };
-
-  const handleTouchMove = (targetPageIndex: number, courtIndex: number, rowIndex: number) => {
-    if (!isDragging.current || !dragSelection) return;
-    if (targetPageIndex !== dragSelection.pageIndex) return;
-    if (courtIndex !== dragSelection.courtIndex) return;
-
-    // Only extend downward from start
-    const newEnd = Math.max(rowIndex, dragSelection.startRow);
-    if (newEnd !== dragSelection.endRow) {
-      setDragSelection({ ...dragSelection, endRow: newEnd });
-    }
+    dragStartRef.current = { pageY, startRow: rowIndex };
+    dragMoved.current = false;
+    isDragging.current = false;
+    setDragSelection({ pageIndex: targetPageIndex, courtIndex, startRow: rowIndex, endRow: rowIndex });
   };
 
   const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
+    if (!dragSelection) return;
 
-    if (isDragging.current && dragSelection && !selectionHasConflict(dragSelection)) {
+    if (isDragging.current && !selectionHasConflict(dragSelection)) {
       const globalCourtIndex = dragSelection.pageIndex * COURTS_PER_PAGE + dragSelection.courtIndex;
       const court = courts[globalCourtIndex];
       const startRow = Math.min(dragSelection.startRow, dragSelection.endRow);
@@ -261,8 +239,19 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
       if (court) {
         onBookingSelected(court, startTime, endTime);
       }
+    } else if (!dragMoved.current) {
+      // Treat as single-tap selection when finger did not move enough to drag.
+      const globalCourtIndex = dragSelection.pageIndex * COURTS_PER_PAGE + dragSelection.courtIndex;
+      const court = courts[globalCourtIndex];
+      const startTime = timeRows[dragSelection.startRow] + ':00';
+      const endTime = getRowEndTime(dragSelection.startRow) + ':00';
+      if (court) {
+        onBookingSelected(court, startTime, endTime);
+      }
     }
 
+    dragStartRef.current = null;
+    dragMoved.current = false;
     isDragging.current = false;
     setDragSelection(null);
   };
@@ -398,7 +387,6 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                           <TouchableOpacity
                             key={court.id}
                             activeOpacity={0.7}
-                            onPress={() => handleCellPress(renderPageIndex, courtIndex, rowIndex)}
                             style={[
                               styles.cell,
                               { width: courtColumnWidth },
@@ -407,12 +395,34 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                               selected && styles.cellSelected,
                               selected && dragSelection && selectionHasConflict(dragSelection) && styles.cellConflict,
                             ]}
-                            onTouchStart={() => handleTouchStart(renderPageIndex, courtIndex, rowIndex)}
+                            onTouchStart={(e) => {
+                              handleTouchStart(
+                                renderPageIndex,
+                                courtIndex,
+                                rowIndex,
+                                e.nativeEvent.pageY
+                              );
+                            }}
                             onTouchMove={(e) => {
+                              if (!dragSelection || !dragStartRef.current) return;
+                              if (renderPageIndex !== dragSelection.pageIndex || courtIndex !== dragSelection.courtIndex) return;
+
+                              const deltaY = e.nativeEvent.pageY - dragStartRef.current.pageY;
+                              const rowOffset = Math.round(deltaY / ROW_HEIGHT);
+                              const nextRow = Math.max(
+                                0,
+                                Math.min(timeRows.length - 1, dragStartRef.current.startRow + rowOffset)
+                              );
+
+                              if (Math.abs(deltaY) > 8) {
+                                isDragging.current = true;
+                                dragMoved.current = true;
+                              }
+
                               if (!isDragging.current) return;
-                              const y = e.nativeEvent.locationY;
-                              const newRow = Math.max(0, Math.min(timeRows.length - 1, rowIndex + Math.round(y / ROW_HEIGHT)));
-                              handleTouchMove(renderPageIndex, courtIndex, newRow);
+                              if (nextRow !== dragSelection.endRow) {
+                                setDragSelection({ ...dragSelection, endRow: nextRow });
+                              }
                             }}
                           >
                             {bookingStart && (

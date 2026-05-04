@@ -20,6 +20,7 @@ import { api } from '../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 import { useAuth } from '../src/contexts/AuthContext';
+import { OperatingHoursCard } from '../src/components/OperatingHoursCard';
 
 export const ErrorBoundary = createRouteErrorBoundary('Club Info');
 
@@ -35,6 +36,7 @@ interface FacilityData {
   phone?: string;
   email?: string;
   website?: string;
+  timezone?: string;
   operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
   memberCount?: number;
   status?: string;
@@ -50,12 +52,6 @@ interface CourtData {
   hasLights: boolean;
   status: string;
 }
-
-const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const DAY_LABELS: Record<string, string> = {
-  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
-  friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
-};
 
 export default function ClubInfoScreen() {
   const router = useRouter();
@@ -109,13 +105,6 @@ export default function ClubInfoScreen() {
     await fetchData();
     setRefreshing(false);
   }, [fetchData]);
-
-  const formatTime = (time: string) => {
-    const [h, m] = time.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-  };
 
   const getCourtStatusColor = (status: string) => {
     switch (status) {
@@ -230,24 +219,7 @@ export default function ClubInfoScreen() {
         {facility.operatingHours && Object.keys(facility.operatingHours).length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Operating Hours</Text>
-            <View style={styles.card}>
-              {DAY_NAMES.map((day, idx) => {
-                const hours = facility.operatingHours?.[day];
-                const isLast = idx === DAY_NAMES.length - 1;
-                return (
-                  <View key={day} style={[styles.hoursRow, isLast && { borderBottomWidth: 0 }]}>
-                    <Text style={styles.dayLabel}>{DAY_LABELS[day]}</Text>
-                    {!hours || hours.closed ? (
-                      <Text style={styles.closedText}>Closed</Text>
-                    ) : (
-                      <Text style={styles.hoursText}>
-                        {formatTime(hours.open)} – {formatTime(hours.close)}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
+            <OperatingHoursCard operatingHours={facility.operatingHours as any} timezone={facility.timezone} />
           </View>
         )}
 
@@ -344,28 +316,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.sm,
     color: Colors.text,
-  },
-  hoursRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  dayLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.text,
-    width: 40,
-  },
-  hoursText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-  },
-  closedText: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    fontStyle: 'italic',
   },
   courtCard: {
     backgroundColor: Colors.card,

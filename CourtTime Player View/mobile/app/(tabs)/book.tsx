@@ -58,14 +58,12 @@ interface RuleViolation {
 export default function BookCourtScreen() {
   const { user, facilityId } = useAuth();
   const [courts, setCourts] = useState<Court[]>([]);
-  const [walkUpCourts, setWalkUpCourts] = useState<Court[]>([]);
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [booking, setBooking] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(true);
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
   // Booking details modal state
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -96,7 +94,6 @@ export default function BookCourtScreen() {
       const courtList = Array.isArray(res.data) ? res.data : res.data.courts || [];
       const available = courtList.filter((c: Court) => c.status === 'available');
       setCourts(available.filter((c: Court) => !c.isWalkUp));
-      setWalkUpCourts(available.filter((c: Court) => c.isWalkUp));
     }
   }, [facilityId]);
 
@@ -177,17 +174,6 @@ export default function BookCourtScreen() {
     await fetchTimeSlots();
     setRefreshing(false);
   }, [fetchCourts, fetchTimeSlots]);
-
-  // ── Open booking details modal ──
-  function handleSlotPress(slot: TimeSlot) {
-    setSelectedSlot(slot);
-    setModalStartTime(slot.startTime.slice(0, 5));
-    setModalEndTime(slot.endTime.slice(0, 5));
-    setBookingType('match');
-    setBookingNotes('');
-    setAdditionalCourtIds([]);
-    setShowBookingModal(true);
-  }
 
   // ── Handle calendar grid booking selection ──
   function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
@@ -307,14 +293,6 @@ export default function BookCourtScreen() {
   }
 
   // ── Helpers ──
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(':');
-    const h = parseInt(hours);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${h12}:${minutes} ${ampm}`;
-  };
-
   const toMinutes = (t: string) => {
     const p = t.split(':');
     return parseInt(p[0]) * 60 + parseInt(p[1] || '0');
@@ -375,9 +353,6 @@ export default function BookCourtScreen() {
     day: 'numeric',
   });
 
-  const availableCount = timeSlots.filter(s => s.available).length;
-  const totalCount = timeSlots.length;
-
   return (
     <ScrollView
       style={styles.container}
@@ -391,24 +366,6 @@ export default function BookCourtScreen() {
           </Text>
         </View>
       )}
-
-      {/* View Mode Toggle */}
-      <View style={styles.viewToggle}>
-        <TouchableOpacity
-          style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleActive]}
-          onPress={() => { setViewMode('list'); setCalendarExpanded(true); }}
-        >
-          <Ionicons name="list" size={16} color={viewMode === 'list' ? Colors.textInverse : Colors.textSecondary} />
-          <Text style={[styles.viewToggleText, viewMode === 'list' && styles.viewToggleTextActive]}>List</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.viewToggleButton, viewMode === 'calendar' && styles.viewToggleActive]}
-          onPress={() => { setViewMode('calendar'); setCalendarExpanded(false); }}
-        >
-          <Ionicons name="grid" size={16} color={viewMode === 'calendar' ? Colors.textInverse : Colors.textSecondary} />
-          <Text style={[styles.viewToggleText, viewMode === 'calendar' && styles.viewToggleTextActive]}>Calendar</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* ── Calendar ── */}
       <View style={styles.calendarSection}>
@@ -437,125 +394,14 @@ export default function BookCourtScreen() {
         )}
       </View>
 
-      {/* ══════ CALENDAR GRID VIEW ══════ */}
-      {viewMode === 'calendar' && facilityId && (
+      {/* ══════ CALENDAR GRID (Website-style default view) ══════ */}
+      {facilityId && (
         <CourtCalendarGrid
           courts={courts}
           selectedDate={selectedDate}
           facilityId={facilityId}
           onBookingSelected={handleCalendarGridSelection}
         />
-      )}
-
-      {/* ══════ LIST VIEW ══════ */}
-      {viewMode === 'list' && (
-      <>
-      {/* ── Court Selector ── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Select a Court to Book</Text>
-        {walkUpCourts.length > 0 && (
-          <View style={styles.walkUpBanner}>
-            <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
-            <Text style={styles.walkUpBannerText}>
-              {walkUpCourts.map(c => c.name).join(', ')} {walkUpCourts.length === 1 ? 'is' : 'are'} walk-up only — book in person at the facility.
-            </Text>
-          </View>
-        )}
-        {courts.length === 0 && facilityId && (
-          <View style={styles.emptyCard}>
-            <Ionicons name="tennisball-outline" size={32} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>No courts available</Text>
-          </View>
-        )}
-        {courts.map((court) => (
-          <TouchableOpacity
-            key={court.id}
-            style={styles.courtListCard}
-            onPress={async () => {
-              setSelectedCourt(court);
-              // Fetch availability for this court right now
-              const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
-              if (res.success && res.data && res.data.isOpen) {
-                const data = res.data;
-                const slotDur = data.slotDuration || 30;
-                const [openH, openM] = data.operatingHours.open.split(':').map(Number);
-                const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
-                const bookedSet = new Set((data.existingBookings || []).map((b: any) => b.startTime));
-                const now = new Date();
-                const isToday = selectedDate === getTodayString();
-
-                // Build available start times
-                const starts: string[] = [];
-                let h = openH, m = openM;
-                while (h < closeH || (h === closeH && m < closeM)) {
-                  const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                  const isPast = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
-                  if (!bookedSet.has(t + ':00') && !isPast) starts.push(t);
-                  m += slotDur;
-                  if (m >= 60) { h += Math.floor(m / 60); m = m % 60; }
-                }
-
-                if (starts.length > 0) {
-                  const startTime = starts[0];
-                  setModalStartTime(startTime);
-
-                  // Build end times for first start
-                  const startMin = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
-                  const closeMin = closeH * 60 + closeM;
-                  let maxEnd = closeMin;
-                  // Find next booked slot after start
-                  for (const slot of (data.existingBookings || [])) {
-                    if (!slot.startTime) continue;
-                    const bMin = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
-                    if (bMin > startMin) { maxEnd = Math.min(maxEnd, bMin); break; }
-                  }
-                  const firstEnd = Math.min(startMin + slotDur, maxEnd);
-                  setModalEndTime(`${String(Math.floor(firstEnd / 60)).padStart(2, '0')}:${String(firstEnd % 60).padStart(2, '0')}`);
-
-                  // Also update timeSlots state so the pickers work
-                  const slots: TimeSlot[] = [];
-                  h = openH; m = openM;
-                  while (h < closeH || (h === closeH && m < closeM)) {
-                    const st = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-                    let eM = m + slotDur, eH = h;
-                    if (eM >= 60) { eH += Math.floor(eM / 60); eM = eM % 60; }
-                    const et = `${String(eH).padStart(2, '0')}:${String(eM).padStart(2, '0')}:00`;
-                    const isPast = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
-                    slots.push({ startTime: st, endTime: et, available: !bookedSet.has(st) && !isPast });
-                    m += slotDur;
-                    if (m >= 60) { h += Math.floor(m / 60); m = m % 60; }
-                  }
-                  setTimeSlots(slots);
-                }
-              }
-              setBookingType('match');
-              setBookingNotes('');
-              setAdditionalCourtIds([]);
-              setShowBookingModal(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.courtListIcon}>
-              <Ionicons
-                name={court.courtType === 'Pickleball' ? 'tennisball' : 'tennisball-outline'}
-                size={24}
-                color={Colors.primary}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.courtListName}>{court.name}</Text>
-              <Text style={styles.courtListMeta}>
-                {court.courtType || 'Tennis'} · {court.surfaceType || 'Hard'}{court.hasLights ? ' · Lights' : ''}
-              </Text>
-            </View>
-            <View style={styles.courtListAvail}>
-              <Text style={styles.courtListAvailText}>{availableCount} slots</Text>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-      </>
       )}
 
       <View style={{ height: Spacing.xl }} />
@@ -760,36 +606,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.surface,
   },
-  // ── View Toggle ──
-  viewToggle: {
-    flexDirection: 'row',
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.borderLight,
-    borderRadius: BorderRadius.md,
-    padding: 3,
-  },
-  viewToggleButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-  },
-  viewToggleActive: {
-    backgroundColor: Colors.primary,
-  },
-  viewToggleText: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  viewToggleTextActive: {
-    color: Colors.textInverse,
-  },
-
   noFacility: {
     flexDirection: 'row',
     margin: Spacing.md,
@@ -805,21 +621,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.sm,
     color: Colors.text,
-  },
-  walkUpBanner: {
-    flexDirection: 'row',
-    backgroundColor: Colors.info + '12',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
-    alignItems: 'flex-start',
-  },
-  walkUpBannerText: {
-    flex: 1,
-    fontSize: FontSize.xs,
-    color: Colors.text,
-    lineHeight: 18,
   },
 
   // ── Calendar ──
@@ -838,162 +639,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.text,
-  },
-
-  // ── Courts ──
-  section: {
-    padding: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: Spacing.sm,
-  },
-  courtScroll: {
-    flexDirection: 'row',
-    marginHorizontal: -Spacing.md,
-    paddingHorizontal: Spacing.md,
-  },
-  courtChip: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginRight: Spacing.sm,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    gap: 4,
-    minWidth: 90,
-  },
-  courtChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  courtChipText: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  courtChipTextActive: {
-    color: Colors.textInverse,
-  },
-  courtChipMeta: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-  },
-  courtChipMetaActive: {
-    color: Colors.textInverse + 'cc',
-  },
-
-  // ── Time Slots ──
-  slotHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  slotCount: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-  },
-  slotGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  slotCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.primary + '30',
-    alignItems: 'center',
-    width: '30%' as any,
-    minWidth: 95,
-  },
-  slotUnavailable: {
-    backgroundColor: Colors.borderLight,
-    borderColor: Colors.border,
-    opacity: 0.6,
-  },
-  slotTime: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  slotEndTime: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
-  slotTimeUnavailable: {
-    color: Colors.textMuted,
-  },
-  slotAvailableDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.success,
-    marginTop: 4,
-  },
-
-  // ── Court List Cards (list view) ──
-  courtListCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: Spacing.md,
-  },
-  courtListIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primary + '12',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  courtListName: {
-    fontSize: FontSize.md,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  courtListMeta: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  courtListAvail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  courtListAvailText: {
-    fontSize: FontSize.xs,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-
-  // ── Empty States ──
-  emptyCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    gap: Spacing.sm,
-    margin: Spacing.md,
-  },
-  emptyText: {
-    color: Colors.textMuted,
-    fontSize: FontSize.sm,
-    textAlign: 'center',
   },
 
   // ── Modals ──
@@ -1036,12 +681,6 @@ const styles = StyleSheet.create({
   summaryDate: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  summaryTime: {
-    fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: '600',
     marginTop: 2,
   },
   modalLabel: {

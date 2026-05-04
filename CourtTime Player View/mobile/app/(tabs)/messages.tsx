@@ -21,6 +21,7 @@ import { api } from '../../src/api/client';
 import { showAlert } from '../../src/utils/alert';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { ConversationSkeleton } from '../../src/components/LoadingSkeleton';
+import { EmptyState } from '../../src/components/EmptyState';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Messages');
@@ -263,11 +264,11 @@ export default function MessagesScreen() {
           contentContainerStyle={styles.messagesList}
           onContentSizeChange={() => messagesListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
-            <View style={styles.emptyThread}>
-              <Text style={styles.emptyThreadText}>
-                Start the conversation with {activeConversation.otherUser.name}!
-              </Text>
-            </View>
+            <EmptyState
+              icon="chatbubble-ellipses-outline"
+              title="No messages yet"
+              description={`Start the conversation with ${activeConversation.otherUser.name}.`}
+            />
           }
           renderItem={({ item }) => {
             const isMe = item.senderId === user?.id;
@@ -333,12 +334,13 @@ export default function MessagesScreen() {
         }
         contentContainerStyle={conversations.length === 0 ? styles.centered : undefined}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-            <Text style={styles.emptyText}>
-              Tap "+ New Message" to start a conversation with a facility member.
-            </Text>
-          </View>
+          <EmptyState
+            icon="mail-open-outline"
+            title="No messages yet"
+            description='Tap "+ New Message" to start a conversation with a facility member.'
+            actionLabel="Start a conversation"
+            onAction={openNewMessage}
+          />
         }
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.conversationItem} onPress={() => openConversation(item)}>
@@ -515,17 +517,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ── Empty State ──
-  emptyContainer: {
-    alignItems: 'center',
-    gap: Spacing.sm,
-    padding: Spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '600',
-    color: Colors.text,
-  },
   emptyText: {
     fontSize: FontSize.sm,
     color: Colors.textMuted,
@@ -577,16 +568,6 @@ const styles = StyleSheet.create({
   messagesList: {
     padding: Spacing.md,
     flexGrow: 1,
-  },
-  emptyThread: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 80,
-  },
-  emptyThreadText: {
-    color: Colors.textMuted,
-    fontSize: FontSize.sm,
   },
   messageBubbleRow: {
     flexDirection: 'row',

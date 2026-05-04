@@ -4,6 +4,7 @@
  */
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { api } from '../api/client';
@@ -41,11 +42,17 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     return null;
   }
 
-  // Get Expo push token
+  // Get Expo push token (projectId must be an EAS UUID, not the app slug)
   try {
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: 'courttime', // matches app.json slug
-    });
+    const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
+    const candidate =
+      extra?.eas?.projectId ?? (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId;
+    const uuidRe =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const projectId = typeof candidate === 'string' && uuidRe.test(candidate) ? candidate : undefined;
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId !== undefined ? { projectId } : {}
+    );
     const pushToken = tokenData.data;
 
     // Register with backend

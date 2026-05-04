@@ -36,6 +36,8 @@ interface AuthContextType extends AuthState {
   facilityId: string | null;
   facilities: FacilityInfo[];
   setFacilityId: (id: string) => void;
+  selectedBookDate: string;
+  setSelectedBookDate: (date: string) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -55,6 +57,7 @@ interface RegisterData {
 const AuthContext = createContext<AuthContextType | null>(null);
 const FACILITY_STORAGE_KEY = 'selectedFacilityId';
 const LEGACY_FACILITY_STORAGE_KEY = 'courttime_facility';
+const BOOK_DATE_STORAGE_KEY = 'selectedBookDate';
 
 async function saveFacilityId(id: string): Promise<void> {
   if (Platform.OS === 'web') {
@@ -76,6 +79,26 @@ async function loadFacilityId(): Promise<string | null> {
   );
 }
 
+function getTodayString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function loadBookDate(): Promise<string> {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem(BOOK_DATE_STORAGE_KEY) || getTodayString();
+  }
+  return (await SecureStore.getItemAsync(BOOK_DATE_STORAGE_KEY)) || getTodayString();
+}
+
+async function saveBookDate(date: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(BOOK_DATE_STORAGE_KEY, date);
+    return;
+  }
+  await SecureStore.setItemAsync(BOOK_DATE_STORAGE_KEY, date);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -83,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
   });
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+  const [selectedBookDate, setSelectedBookDateState] = useState<string>(getTodayString());
   const [facilities, setFacilities] = useState<FacilityInfo[]>([]);
   const [pendingTermsAcceptances, setPendingTermsAcceptances] = useState<PendingTermsAcceptance[]>([]);
   const pushTokenRef = useRef<string | null>(null);
@@ -90,6 +114,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Check for existing session on app launch
   useEffect(() => {
     checkAuth();
+  }, []);
+
+  useEffect(() => {
+    loadBookDate().then(setSelectedBookDateState).catch(() => setSelectedBookDateState(getTodayString()));
   }, []);
 
   // Register push notifications when user changes.
@@ -272,8 +300,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     saveFacilityId(id);
   }
 
+  function handleSetSelectedBookDate(date: string) {
+    setSelectedBookDateState(date);
+    saveBookDate(date);
+  }
+
   return (
-    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, login, register, logout, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
+    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
       {children}
     </AuthContext.Provider>
   );

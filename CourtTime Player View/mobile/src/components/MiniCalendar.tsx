@@ -3,7 +3,7 @@
  * Lightweight month calendar for date selection (no external deps)
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
@@ -25,6 +25,11 @@ export function MiniCalendar({ selectedDate, onSelectDate, minDate }: MiniCalend
     const [y, m] = selectedDate.split('-').map(Number);
     return new Date(y, m - 1, 1);
   });
+
+  useEffect(() => {
+    const [y, m] = selectedDate.split('-').map(Number);
+    setViewDate(new Date(y, m - 1, 1));
+  }, [selectedDate]);
 
   const today = toDateString(new Date());
   const year = viewDate.getFullYear();

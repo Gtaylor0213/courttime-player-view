@@ -67,44 +67,75 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
   const pageCourts = courts.slice(pageIndex * COURTS_PER_PAGE, (pageIndex + 1) * COURTS_PER_PAGE);
   const courtColumnWidth = (SCREEN_WIDTH - TIME_LABEL_WIDTH) / COURTS_PER_PAGE;
 
+  useEffect(() => {
+    console.log('[book-grid] selectedDate prop', selectedDate);
+  }, [selectedDate]);
+
   // Fetch availability for all courts on selected date
   const fetchAvailability = useCallback(async () => {
     if (courts.length === 0) return;
     setLoading(true);
+    console.log('[book-grid] fetch day view', {
+      selectedDate,
+      facilityId,
+      bookingsUrl: `/api/bookings/facility/${facilityId}?date=${selectedDate}`,
+      configUrl: `/api/court-config/facility/${facilityId}?date=${selectedDate}`,
+      courtCount: courts.length,
+    });
 
-    const results = await Promise.all(
-      courts.map(async (court) => {
-        const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
-        if (res.success && res.data) {
-          // Normalize snake_case from API to camelCase
-          const rawBookings = res.data.existingBookings || [];
-          const bookings = rawBookings.map((b: any) => ({
-            startTime: b.startTime || b.start_time || '',
-            endTime: b.endTime || b.end_time || '',
-            userName: b.userName || b.user_name || '',
-            bookingType: b.bookingType || b.booking_type || '',
-          }));
-          return {
-            courtId: court.id,
-            courtName: court.name,
-            isOpen: res.data.isOpen,
-            operatingHours: res.data.operatingHours || { open: '08:00', close: '21:00' },
-            bookings,
-          };
-        }
-        return {
-          courtId: court.id,
-          courtName: court.name,
-          isOpen: false,
-          operatingHours: { open: '08:00', close: '21:00' },
-          bookings: [],
-        };
-      })
-    );
+    const [bookingsRes, configRes] = await Promise.all([
+      api.get(`/api/bookings/facility/${facilityId}?date=${selectedDate}`),
+      api.get(`/api/court-config/facility/${facilityId}?date=${selectedDate}`),
+    ]);
+
+    console.log('[book-grid] day endpoints response', {
+      bookingsSuccess: bookingsRes.success,
+      bookingsErrorCategory: bookingsRes.errorCategory,
+      bookingsError: bookingsRes.error,
+      configSuccess: configRes.success,
+      configErrorCategory: configRes.errorCategory,
+      configError: configRes.error,
+    });
+
+    const bookingsList = bookingsRes.success
+      ? (Array.isArray((bookingsRes.data as any)?.bookings) ? (bookingsRes.data as any).bookings : [])
+      : [];
+    const bookingsByCourtId = new Map<string, Booking[]>();
+    bookingsList.forEach((b: any) => {
+      const normalized: Booking = {
+        startTime: b.startTime || b.start_time || '',
+        endTime: b.endTime || b.end_time || '',
+        userName: b.userName || b.user_name || '',
+        bookingType: b.bookingType || b.booking_type || '',
+      };
+      const existing = bookingsByCourtId.get(b.courtId) || [];
+      existing.push(normalized);
+      bookingsByCourtId.set(b.courtId, existing);
+    });
+
+    const configList = configRes.success
+      ? (Array.isArray((configRes.data as any)?.courtConfigs) ? (configRes.data as any).courtConfigs : [])
+      : [];
+    const configByCourtId = new Map<string, any>();
+    configList.forEach((cfg: any) => configByCourtId.set(cfg.courtId, cfg));
+
+    const results = courts.map((court) => {
+      const config = configByCourtId.get(court.id);
+      return {
+        courtId: court.id,
+        courtName: court.name,
+        isOpen: config ? Boolean(config.isOpen) : true,
+        operatingHours: {
+          open: config?.openTime || '06:00',
+          close: config?.closeTime || '22:00',
+        },
+        bookings: bookingsByCourtId.get(court.id) || [],
+      };
+    });
 
     setCourtData(results);
     setLoading(false);
-  }, [courts, selectedDate]);
+  }, [courts, selectedDate, facilityId]);
 
   useEffect(() => {
     fetchAvailability();

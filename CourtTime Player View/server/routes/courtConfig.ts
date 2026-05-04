@@ -8,6 +8,65 @@ import { query } from '../../src/database/connection';
 
 const router = express.Router();
 
+/**
+ * GET /api/court-config/facility/:facilityId
+ * Get per-court day config for a facility/date.
+ */
+router.get('/facility/:facilityId', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+    const { date } = req.query;
+    const targetDate = typeof date === 'string' ? date : new Date().toISOString().slice(0, 10);
+    const dayOfWeek = new Date(`${targetDate}T00:00:00`).getDay();
+
+    const courtsResult = await query(
+      `SELECT id, name
+       FROM courts
+       WHERE facility_id = $1`,
+      [facilityId]
+    );
+
+    const configResult = await query(
+      `SELECT
+         c.id as "courtId",
+         coc.is_open as "isOpen",
+         coc.open_time as "openTime",
+         coc.close_time as "closeTime",
+         coc.slot_duration as "slotDuration"
+       FROM courts c
+       LEFT JOIN court_operating_config coc
+         ON coc.court_id = c.id
+        AND coc.day_of_week = $2
+       WHERE c.facility_id = $1`,
+      [facilityId, dayOfWeek]
+    );
+
+    const configByCourtId = new Map<string, any>();
+    configResult.rows.forEach((row) => configByCourtId.set(row.courtId, row));
+
+    const courtConfigs = courtsResult.rows.map((court) => {
+      const config = configByCourtId.get(court.id);
+      return {
+        courtId: court.id,
+        courtName: court.name,
+        isOpen: config?.isOpen ?? true,
+        openTime: config?.openTime || '06:00',
+        closeTime: config?.closeTime || '22:00',
+        slotDuration: config?.slotDuration || 30,
+      };
+    });
+
+    res.json({
+      success: true,
+      date: targetDate,
+      dayOfWeek,
+      courtConfigs,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============================================
 // Court Operating Configuration
 // ============================================

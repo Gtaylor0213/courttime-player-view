@@ -14,7 +14,9 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { showAlert } from '../../src/utils/alert';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,9 +61,9 @@ interface RuleViolation {
 }
 
 export default function BookCourtScreen() {
-  const { user, facilityId } = useAuth();
+  const { user, facilityId, selectedBookDate, setSelectedBookDate } = useAuth();
   const [courts, setCourts] = useState<Court[]>([]);
-  const [selectedDate, setSelectedDate] = useState(getTodayString());
+  const [selectedDate, setSelectedDate] = useState(selectedBookDate || getTodayString());
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -82,6 +84,7 @@ export default function BookCourtScreen() {
   const [showViolations, setShowViolations] = useState(false);
   const [violations, setViolations] = useState<RuleViolation[]>([]);
   const [warnings, setWarnings] = useState<RuleViolation[]>([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
@@ -90,16 +93,42 @@ export default function BookCourtScreen() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  useEffect(() => {
+    if (selectedBookDate && selectedBookDate !== selectedDate) {
+      setSelectedDate(selectedBookDate);
+    }
+  }, [selectedBookDate]);
+
+  useEffect(() => {
+    setSelectedBookDate(selectedDate);
+  }, [selectedDate, setSelectedBookDate]);
+
   // ── Fetch courts ──
   const fetchCourts = useCallback(async () => {
     if (!facilityId) return;
+    console.log('[book] fetch courts', {
+      facilityId,
+      selectedDate,
+      courtsUrl: `/api/facilities/${facilityId}/courts`,
+      bookingsUrl: `/api/bookings/facility/${facilityId}?date=${selectedDate}`,
+      courtConfigFacilityUrl: `/api/court-config/facility/${facilityId}?date=${selectedDate}`,
+    });
     const res = await api.get(`/api/facilities/${facilityId}/courts`);
+    console.log('[book] courts response', {
+      success: res.success,
+      errorCategory: res.errorCategory,
+      error: res.error,
+      hasData: Boolean(res.data),
+    });
     if (res.success && res.data) {
       const courtList = Array.isArray(res.data) ? res.data : res.data.courts || [];
-      const available = courtList.filter((c: Court) => c.status === 'available');
-      setCourts(available.filter((c: Court) => !c.isWalkUp));
+      const availableish = courtList.filter((c: Court) => {
+        const status = String(c.status || '').toLowerCase();
+        return status === '' || status === 'available' || status === 'active';
+      });
+      setCourts(availableish.filter((c: Court) => !c.isWalkUp));
     }
-  }, [facilityId]);
+  }, [facilityId, selectedDate]);
 
   // ── Fetch time slots ──
   const fetchTimeSlots = useCallback(async () => {
@@ -111,6 +140,14 @@ export default function BookCourtScreen() {
     const res = await api.get(
       `/api/court-config/${selectedCourt.id}/availability?date=${selectedDate}`
     );
+    console.log('[book] fetch slot availability', {
+      selectedDate,
+      url: `/api/court-config/${selectedCourt.id}/availability?date=${selectedDate}`,
+      success: res.success,
+      errorCategory: res.errorCategory,
+      error: res.error,
+      hasData: Boolean(res.data),
+    });
 
     if (res.success && res.data) {
       const data = res.data as AvailabilityResponse;
@@ -455,7 +492,26 @@ export default function BookCourtScreen() {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    year: 'numeric',
   });
+
+  const selectedDateAsDate = new Date(selectedDate + 'T00:00:00');
+  const stepDate = (deltaDays: number) => {
+    const base = new Date(selectedDate + 'T00:00:00');
+    base.setDate(base.getDate() + deltaDays);
+    const next = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+    setSelectedDate(next);
+  };
+
+  const onNativeDateChange = (event: DateTimePickerEvent, value?: Date) => {
+    if (Platform.OS !== 'ios') {
+      setShowDatePicker(false);
+    }
+    if (event.type === 'dismissed' || !value) return;
+    const next = `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+    setSelectedDate(next);
+    setCalendarExpanded(false);
+  };
 
   return (
     <ScrollView
@@ -473,12 +529,37 @@ export default function BookCourtScreen() {
 
       {/* ── Calendar ── */}
       <View style={styles.calendarSection}>
+        <View style={styles.dayNavRow}>
+          <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(-1)}>
+            <Ionicons name="chevron-back" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.dayDateButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar" size={18} color={Colors.primary} />
+            <Text style={styles.calendarToggleText}>{selectedDateLabel}</Text>
+            <Ionicons name="chevron-down" size={16} color={Colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(1)}>
+            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedDateAsDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+            onChange={onNativeDateChange}
+          />
+        )}
+
         <TouchableOpacity
           style={styles.calendarToggle}
           onPress={() => setCalendarExpanded(!calendarExpanded)}
         >
-          <Ionicons name="calendar" size={18} color={Colors.primary} />
-          <Text style={styles.calendarToggleText}>{selectedDateLabel}</Text>
+          <Text style={styles.calendarToggleText}>Monthly calendar</Text>
           <Ionicons
             name={calendarExpanded ? 'chevron-up' : 'chevron-down'}
             size={18}
@@ -507,6 +588,7 @@ export default function BookCourtScreen() {
           <MiniCalendar
             selectedDate={selectedDate}
             onSelectDate={(date) => {
+              console.log('[book] selectedDate from MiniCalendar', date);
               setSelectedDate(date);
               setCalendarExpanded(false);
             }}
@@ -748,6 +830,36 @@ const styles = StyleSheet.create({
   calendarSection: {
     backgroundColor: Colors.card,
     marginBottom: Spacing.sm,
+  },
+  dayNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    gap: Spacing.sm,
+  },
+  dayArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dayDateButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.full,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
   },
   calendarToggle: {
     flexDirection: 'row',

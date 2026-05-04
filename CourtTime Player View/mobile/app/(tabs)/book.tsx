@@ -14,9 +14,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { showAlert } from '../../src/utils/alert';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,7 +67,7 @@ export default function BookCourtScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [booking, setBooking] = useState(false);
   const [quickReserving, setQuickReserving] = useState(false);
-  const [calendarExpanded, setCalendarExpanded] = useState(true);
+  const [calendarExpanded, setCalendarExpanded] = useState(false);
 
   // Booking details modal state
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -84,8 +82,6 @@ export default function BookCourtScreen() {
   const [showViolations, setShowViolations] = useState(false);
   const [violations, setViolations] = useState<RuleViolation[]>([]);
   const [warnings, setWarnings] = useState<RuleViolation[]>([]);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
   function getTodayString() {
@@ -495,22 +491,11 @@ export default function BookCourtScreen() {
     year: 'numeric',
   });
 
-  const selectedDateAsDate = new Date(selectedDate + 'T00:00:00');
   const stepDate = (deltaDays: number) => {
     const base = new Date(selectedDate + 'T00:00:00');
     base.setDate(base.getDate() + deltaDays);
     const next = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
     setSelectedDate(next);
-  };
-
-  const onNativeDateChange = (event: DateTimePickerEvent, value?: Date) => {
-    if (Platform.OS !== 'ios') {
-      setShowDatePicker(false);
-    }
-    if (event.type === 'dismissed' || !value) return;
-    const next = `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
-    setSelectedDate(next);
-    setCalendarExpanded(false);
   };
 
   return (
@@ -534,38 +519,24 @@ export default function BookCourtScreen() {
             <Ionicons name="chevron-back" size={20} color={Colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.dayDateButton}
-            onPress={() => setShowDatePicker(true)}
+            style={styles.datePill}
+            onPress={() => setCalendarExpanded(v => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={`Selected date ${selectedDateLabel}. Tap to ${calendarExpanded ? 'collapse' : 'expand'} calendar.`}
           >
             <Ionicons name="calendar" size={18} color={Colors.primary} />
-            <Text style={styles.calendarToggleText}>{selectedDateLabel}</Text>
-            <Ionicons name="chevron-down" size={16} color={Colors.textMuted} />
+            <Text style={styles.datePillText}>{selectedDateLabel}</Text>
+            <Ionicons
+              name={calendarExpanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={Colors.textMuted}
+            />
           </TouchableOpacity>
           <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(1)}>
             <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
           </TouchableOpacity>
         </View>
 
-        {showDatePicker && (
-          <DateTimePicker
-            value={selectedDateAsDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            onChange={onNativeDateChange}
-          />
-        )}
-
-        <TouchableOpacity
-          style={styles.calendarToggle}
-          onPress={() => setCalendarExpanded(!calendarExpanded)}
-        >
-          <Text style={styles.calendarToggleText}>Monthly calendar</Text>
-          <Ionicons
-            name={calendarExpanded ? 'chevron-up' : 'chevron-down'}
-            size={18}
-            color={Colors.textMuted}
-          />
-        </TouchableOpacity>
         <View style={styles.quickReserveRow}>
           <TouchableOpacity
             style={[styles.quickReserveButton, quickReserving && { opacity: 0.7 }]}
@@ -848,7 +819,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  dayDateButton: {
+  datePill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -862,18 +833,12 @@ const styles = StyleSheet.create({
     minHeight: TouchTarget.min,
     paddingHorizontal: Spacing.md,
   },
-  calendarToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    minHeight: TouchTarget.min,
-    gap: Spacing.sm,
-  },
-  calendarToggleText: {
+  datePillText: {
     flex: 1,
     fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.text,
+    textAlign: 'center',
   },
   quickReserveRow: {
     paddingHorizontal: Spacing.md,

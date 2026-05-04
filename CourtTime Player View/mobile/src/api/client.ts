@@ -6,15 +6,35 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import NetInfo from '@react-native-community/netinfo';
+import Constants from 'expo-constants';
 import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../../shared/api/core';
 
-// Android emulator uses 10.0.2.2 to reach the host machine's localhost
-// Web and iOS simulator can use localhost directly
-const DEFAULT_API_URL = Platform.OS === 'android'
-  ? 'http://10.0.2.2:3001'
-  : 'http://localhost:3001';
+function inferDevApiBaseUrl(): string {
+  // Android emulator uses 10.0.2.2 to reach the host machine's localhost
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:3001';
+  }
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;
+  // Physical devices: "localhost" refers to the phone itself, not your dev machine.
+  // Expo exposes the packager host in dev; reuse that LAN IP for the API server port.
+  const hostUri =
+    (Constants as any)?.expoGoConfig?.debuggerHost ||
+    (Constants as any)?.expoConfig?.hostUri ||
+    (Constants as any)?.manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any)?.manifest?.debuggerHost;
+
+  if (typeof hostUri === 'string' && hostUri.length > 0) {
+    const host = hostUri.split(':')[0];
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return `http://${host}:3001`;
+    }
+  }
+
+  // iOS simulator / web dev can reach localhost on the host
+  return 'http://localhost:3001';
+}
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || inferDevApiBaseUrl();
 const REQUEST_TIMEOUT_MS = 15000;
 
 export type ApiErrorCategory =

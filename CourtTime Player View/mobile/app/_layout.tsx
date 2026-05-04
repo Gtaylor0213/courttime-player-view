@@ -25,18 +25,20 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading, pendingTermsAcceptances } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  /** Only the top segment — avoids re-running this effect on every in-tab route change (can interrupt tab presses). */
+  const rootSegment = segments[0];
 
   useEffect(() => {
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === 'auth';
+    const inAuthGroup = rootSegment === 'auth';
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/auth/login');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)/book');
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [isAuthenticated, isLoading, rootSegment, router]);
 
   // Handle notification tap — navigate to relevant screen (native only, not web)
   useEffect(() => {

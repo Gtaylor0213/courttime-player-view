@@ -3,8 +3,8 @@
  * Bottom tab bar with player-facing screens
  */
 
-import { useMemo } from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, TouchableOpacity } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,31 @@ import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelec
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
+
+/** Stable RN touch target for every tab (module-level — not recreated each render). */
+const NavTabButton = React.forwardRef<
+  React.ElementRef<typeof TouchableOpacity>,
+  Record<string, unknown> & { children?: React.ReactNode; onPress?: (e: unknown) => void; style?: unknown }
+>(function NavTabButtonImpl(props, ref) {
+  const { children, onPress, onLongPress, style, accessibilityRole, accessibilityState, testID } = props;
+  return (
+    <TouchableOpacity
+      ref={ref}
+      activeOpacity={0.75}
+      style={style as never}
+      onPress={onPress as never}
+      onLongPress={onLongPress as never}
+      accessibilityRole={(accessibilityRole as never) ?? 'button'}
+      accessibilityState={accessibilityState as never}
+      testID={testID as never}
+      hitSlop={{ top: 10, bottom: 14, left: 6, right: 6 }}
+      collapsable={false}
+    >
+      {children}
+    </TouchableOpacity>
+  );
+});
+NavTabButton.displayName = 'NavTabButton';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -35,6 +60,7 @@ export default function TabLayout() {
       headerStyle: styles.header,
       headerTintColor: Colors.text,
       headerTitleStyle: styles.headerTitle,
+      tabBarButton: NavTabButton,
     }),
     [insets.bottom]
   );

@@ -118,14 +118,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       adminFacilities[0] ||
       null;
 
-    console.log('[auth] facility hydrate', {
-      userId: user.id,
-      memberFacilities,
-      adminFacilities,
-      savedFacilityId: saved,
-      resolvedSelectedFacilityId,
-    });
-
     if (allIds.length === 0) {
       setFacilities([]);
       setSelectedFacilityId(null);
@@ -215,18 +207,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await setToken(token);
       }
       if (user) {
-        console.log('[auth] login payload', {
-          userId: user.id,
-          email: user.email,
-          memberFacilities: user.memberFacilities || [],
-          adminFacilities: user.adminFacilities || [],
-        });
         await cacheUser(user);
-        const resolvedSelectedFacilityId = await hydrateFacilitiesForUser(user);
-        console.log('[auth] login resolved facility', {
-          userId: user.id,
-          resolvedSelectedFacilityId,
-        });
+        await hydrateFacilitiesForUser(user);
         setState({ user, isLoading: false, isAuthenticated: true });
         await loadTermsStatus(user);
         return { success: true };

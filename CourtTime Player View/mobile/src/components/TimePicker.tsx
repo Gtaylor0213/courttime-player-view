@@ -29,19 +29,54 @@ interface TimePickerProps {
 
 export function TimePicker({ times, selectedTime, onSelect, label }: TimePickerProps) {
   const flatListRef = useRef<FlatList>(null);
+  const lastSyncedIndexRef = useRef<number>(-1);
   const selectedIndex = times.indexOf(selectedTime);
 
   useEffect(() => {
-    if (selectedIndex >= 0 && flatListRef.current) {
-      setTimeout(() => {
+    if (selectedIndex < 0 || !flatListRef.current) return;
+    if (lastSyncedIndexRef.current === selectedIndex) return;
+
+    lastSyncedIndexRef.current = selectedIndex;
+    flatListRef.current.scrollToIndex({
+      index: selectedIndex,
+      animated: false,
+      viewOffset: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
+    });
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    // Reset sync sentinel when the source options change (e.g. different end-time options).
+    lastSyncedIndexRef.current = -1;
+  }, [times]);
+
+  const handleScrollToIndexFailed = (info: { index: number }) => {
+    // Fallback for transient list measurement timing.
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToOffset({
+        offset: Math.max(0, info.index * ITEM_HEIGHT),
+        animated: false,
+      });
+      requestAnimationFrame(() => {
         flatListRef.current?.scrollToIndex({
-          index: selectedIndex,
+          index: info.index,
           animated: false,
           viewOffset: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
         });
-      }, 50);
+      });
+    });
+  };
+
+  const handleSelect = (index: number, value: string, animated: boolean) => {
+    if (value !== selectedTime) {
+      onSelect(value);
     }
-  }, [selectedIndex]);
+    lastSyncedIndexRef.current = index;
+    flatListRef.current?.scrollToIndex({
+      index,
+      animated,
+      viewOffset: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
+    });
+  };
 
   const formatTime = (time: string) => {
     const parts = time.split(':');
@@ -56,8 +91,9 @@ export function TimePicker({ times, selectedTime, onSelect, label }: TimePickerP
     const offsetY = e.nativeEvent.contentOffset.y;
     const index = Math.round(offsetY / ITEM_HEIGHT);
     const clampedIndex = Math.max(0, Math.min(index, times.length - 1));
-    if (times[clampedIndex] && times[clampedIndex] !== selectedTime) {
-      onSelect(times[clampedIndex]);
+    const value = times[clampedIndex];
+    if (value) {
+      handleSelect(clampedIndex, value, false);
     }
   };
 
@@ -75,7 +111,13 @@ export function TimePicker({ times, selectedTime, onSelect, label }: TimePickerP
           snapToInterval={ITEM_HEIGHT}
           decelerationRate="fast"
           showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          directionalLockEnabled
+          bounces={false}
+          overScrollMode="never"
           onMomentumScrollEnd={handleScrollEnd}
+          onScrollEndDrag={handleScrollEnd}
+          onScrollToIndexFailed={handleScrollToIndexFailed}
           contentContainerStyle={{
             paddingVertical: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
           }}
@@ -89,14 +131,7 @@ export function TimePicker({ times, selectedTime, onSelect, label }: TimePickerP
             return (
               <TouchableOpacity
                 style={styles.item}
-                onPress={() => {
-                  onSelect(item);
-                  flatListRef.current?.scrollToIndex({
-                    index,
-                    animated: true,
-                    viewOffset: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
-                  });
-                }}
+                onPress={() => handleSelect(index, item, true)}
               >
                 <Text style={[styles.itemText, isSelected && styles.itemTextSelected]}>
                   {formatTime(item)}

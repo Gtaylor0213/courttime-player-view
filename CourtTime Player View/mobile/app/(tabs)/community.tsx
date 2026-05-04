@@ -834,7 +834,7 @@ export default function CommunityScreen() {
         title={bulletins.length === 0 ? 'No bulletins yet' : 'No matching posts'}
         description={
           bulletins.length === 0
-            ? 'Your club hasn't posted news this week.'
+            ? "Your club hasn't posted news this week."
             : 'Try another category filter.'
         }
       />

@@ -31,6 +31,18 @@ import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundar
 
 export const ErrorBoundary = createRouteErrorBoundary('Book');
 
+type BookModalKind = 'booking' | 'violations' | null;
+
+function formatTimeForToast(startHHMM: string): string {
+  if (!startHHMM || !startHHMM.includes(':')) return startHHMM || '';
+  const [hStr, mStr] = startHHMM.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr || '0', 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return startHHMM;
+  const d = new Date(1970, 0, 1, h, m, 0, 0);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
 const BOOKING_TYPES = [
   { key: 'match', label: 'Fun' },
   { key: 'league_match', label: 'League Match' },
@@ -71,8 +83,8 @@ export default function BookCourtScreen() {
   const [quickReserving, setQuickReserving] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
 
-  // Booking details modal state
-  const [showBookingModal, setShowBookingModal] = useState(false);
+  // Booking / rule violations: single modal kind so only one native Modal is active
+  const [modalKind, setModalKind] = useState<BookModalKind>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [bookingType, setBookingType] = useState('match');
   const [bookingNotes, setBookingNotes] = useState('');
@@ -80,8 +92,7 @@ export default function BookCourtScreen() {
   const [modalEndTime, setModalEndTime] = useState('');
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
 
-  // Rule violations modal state
-  const [showViolations, setShowViolations] = useState(false);
+  // Rule violations modal payload (shown when modalKind === 'violations')
   const [violations, setViolations] = useState<RuleViolation[]>([]);
   const [warnings, setWarnings] = useState<RuleViolation[]>([]);
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
@@ -94,6 +105,7 @@ export default function BookCourtScreen() {
   useEffect(() => {
     if (selectedBookDate && selectedBookDate !== selectedDate) {
       setSelectedDate(selectedBookDate);
+      setSelectedCourt(null);
     }
   }, [selectedBookDate]);
 
@@ -102,19 +114,16 @@ export default function BookCourtScreen() {
   }, [selectedDate, setSelectedBookDate]);
 
   useEffect(() => {
-    if (!showBookingModal) {
-      if (showViolations) {
-        /* Booking sheet closed to show rule violations; keep slot + form fields for admin override. */
-        return;
-      }
-      setSelectedSlot(null);
-      setBookingType('match');
-      setBookingNotes('');
-      setModalStartTime('');
-      setModalEndTime('');
-      setAdditionalCourtIds([]);
+    if (modalKind !== null) {
+      return;
     }
-  }, [showBookingModal, showViolations]);
+    setSelectedSlot(null);
+    setBookingType('match');
+    setBookingNotes('');
+    setModalStartTime('');
+    setModalEndTime('');
+    setAdditionalCourtIds([]);
+  }, [modalKind]);
 
   // ── Fetch courts ──
   const fetchCourts = useCallback(async () => {
@@ -215,8 +224,11 @@ export default function BookCourtScreen() {
 
   useEffect(() => {
     fetchCourts();
-    setSelectedCourt(null);
   }, [fetchCourts]);
+
+  useEffect(() => {
+    setSelectedCourt(null);
+  }, [facilityId]);
 
   useEffect(() => {
     fetchTimeSlots();
@@ -238,7 +250,7 @@ export default function BookCourtScreen() {
     setBookingType('match');
     setBookingNotes('');
     setAdditionalCourtIds([]);
-    setShowBookingModal(true);
+    setModalKind('booking');
   }
 
   // ── Quick Reserve (autofill soonest available slot like web) ──
@@ -333,7 +345,7 @@ export default function BookCourtScreen() {
       setBookingType('match');
       setBookingNotes('');
       setAdditionalCourtIds([]);
-      setShowBookingModal(true);
+      setModalKind('booking');
     } catch {
       showAlert('Quick Reserve', 'Could not load quick reserve availability. Please try again.');
     } finally {
@@ -350,20 +362,53 @@ export default function BookCourtScreen() {
 
   // ── Submit booking ──
   async function handleConfirmBooking() {
-    if (!selectedCourt || !user || !facilityId) return;
+    console.log('[book.confirm] start', {
+      hasSelectedCourt: Boolean(selectedCourt),
+      selectedCourtId: selectedCourt?.id,
+      hasUser: Boolean(user),
+      userId: user?.id,
+      facilityId,
+      modalStartTime,
+      modalEndTime,
+      bookingType,
+      additionalCourtIds,
+    });
+
+    if (!facilityId) {
+      showAlert('Booking failed', 'No club selected. Please pick a club from the header and try again.');
+      hapticError();
+      return;
+    }
+    if (!user) {
+      showAlert('Booking failed', 'Your session expired. Please log in again.');
+      hapticError();
+      return;
+    }
+    if (!selectedCourt) {
+      showAlert('Booking failed', 'Please pick a court before confirming.');
+      hapticError();
+      return;
+    }
+    if (!modalStartTime || !modalEndTime) {
+      showAlert('Booking failed', 'Please pick a start and end time.');
+      hapticError();
+      return;
+    }
 
     const startTime = modalStartTime + ':00';
     const endTime = modalEndTime + ':00';
 
     if (toMinutes(modalEndTime) <= toMinutes(modalStartTime)) {
+      console.log('[book.confirm] invalid time range', { modalStartTime, modalEndTime });
       showAlert('Invalid Time', 'End time must be after start time.');
+      hapticError();
       return;
     }
 
     setBooking(true);
 
-    // Book the primary court
-    const allCourtIds = [selectedCourt.id, ...additionalCourtIds];
+    const extraCourtIds = additionalCourtIds.filter((id) => id !== selectedCourt.id);
+    const allCourtIds = [selectedCourt.id, ...extraCourtIds];
     let allSuccess = true;
     let firstError: string | null = null;
     let firstViolations: RuleViolation[] | null = null;
@@ -382,7 +427,15 @@ export default function BookCourtScreen() {
         notes: bookingNotes.trim() || undefined,
       };
 
+      console.log('[book.confirm] POST /api/bookings', { courtId, bookingData });
       const res = await api.post('/api/bookings', bookingData);
+      console.log('[book.confirm] response', {
+        courtId,
+        success: res.success,
+        errorCategory: res.errorCategory,
+        error: res.error,
+        hasViolations: Array.isArray(res.ruleViolations) && res.ruleViolations.length > 0,
+      });
 
       if (!res.success) {
         allSuccess = false;
@@ -397,18 +450,23 @@ export default function BookCourtScreen() {
     }
 
     if (allSuccess) {
-      setShowBookingModal(false);
+      setModalKind(null);
       hapticSuccess();
-      const courtCount = allCourtIds.length;
-      showAlert('Booked!', courtCount > 1 ? `${courtCount} courts reserved.` : 'Your court has been reserved.');
+      const primaryName = selectedCourt.name;
+      const timeLabel = formatTimeForToast(modalStartTime);
+      const bookedBody =
+        allCourtIds.length > 1
+          ? `${primaryName} (+ ${allCourtIds.length - 1} more) on ${selectedDateLabel} at ${timeLabel}.`
+          : `${primaryName} on ${selectedDateLabel} at ${timeLabel}.`;
+      showAlert('Booked!', bookedBody);
       fetchTimeSlots();
     } else if (firstViolations) {
       hapticError();
       setViolations(firstViolations);
       setWarnings(firstWarnings);
-      setShowBookingModal(false);
-      setShowViolations(true);
+      setModalKind('violations');
     } else {
+      hapticError();
       showAlert('Booking Failed', firstError || 'Could not complete booking.');
     }
     setBooking(false);
@@ -435,7 +493,7 @@ export default function BookCourtScreen() {
       overrideRules: violations.map(v => v.ruleCode),
     });
 
-    setShowViolations(false);
+    setModalKind(null);
     if (res.success) {
       hapticSuccess();
       showAlert('Booked!', 'Booking created with admin override.');
@@ -513,6 +571,7 @@ export default function BookCourtScreen() {
     base.setDate(base.getDate() + deltaDays);
     const next = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
     setSelectedDate(next);
+    setSelectedCourt(null);
   };
 
   return (
@@ -578,6 +637,7 @@ export default function BookCourtScreen() {
             onSelectDate={(date) => {
               console.log('[book] selectedDate from MiniCalendar', date);
               setSelectedDate(date);
+              setSelectedCourt(null);
               setCalendarExpanded(false);
             }}
             minDate={getTodayString()}
@@ -598,7 +658,7 @@ export default function BookCourtScreen() {
       <View style={{ height: Spacing.xl }} />
 
       {/* ── Booking Details Modal ── */}
-      <Modal visible={showBookingModal} transparent animationType="slide" onRequestClose={() => setShowBookingModal(false)}>
+      <Modal visible={modalKind === 'booking'} transparent animationType="slide" onRequestClose={() => setModalKind(null)}>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -609,7 +669,7 @@ export default function BookCourtScreen() {
                 <Text style={styles.modalTitle}>Booking Details</Text>
                 <TouchableOpacity
                   testID="dismiss-booking-modal"
-                  onPress={() => setShowBookingModal(false)}
+                  onPress={() => setModalKind(null)}
                 >
                   <Ionicons name="close" size={24} color={Colors.textSecondary} />
                 </TouchableOpacity>
@@ -738,12 +798,12 @@ export default function BookCourtScreen() {
       </Modal>
 
       {/* ── Rule Violations Modal ── */}
-      <Modal visible={showViolations} transparent animationType="fade" onRequestClose={() => setShowViolations(false)}>
+      <Modal visible={modalKind === 'violations'} transparent animationType="fade" onRequestClose={() => setModalKind(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: Colors.error }]}>Booking Not Allowed</Text>
-              <TouchableOpacity onPress={() => setShowViolations(false)}>
+              <TouchableOpacity onPress={() => setModalKind(null)}>
                 <Ionicons name="close" size={24} color={Colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -780,7 +840,7 @@ export default function BookCourtScreen() {
 
             <TouchableOpacity
               style={[styles.confirmButton, { backgroundColor: Colors.textSecondary }]}
-              onPress={() => setShowViolations(false)}
+              onPress={() => setModalKind(null)}
             >
               <Text style={styles.confirmButtonText}>Dismiss</Text>
             </TouchableOpacity>

@@ -132,6 +132,7 @@ describe('BookCourtScreen booking modal confirm copy', () => {
 
   afterEach(() => {
     getSpy.mockRestore();
+    jest.useRealTimers();
   });
 
   it('shows Confirm Booking with no extra courts; Book 2 Courts with one additional; resets after close and reopen', async () => {
@@ -172,5 +173,60 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     texts = visibleModalTexts(tree!);
     expect(texts).toContain('Confirm Booking');
     expect(texts.filter((t) => t === 'Book 2 Courts')).toHaveLength(0);
+  });
+
+  it('Quick Reserve keeps selected court when jumping selectedDate to today (no silent skip on confirm)', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    jest.setSystemTime(new Date('2026-05-04T14:30:00'));
+
+    const { useAuth } = require('../src/contexts/AuthContext');
+    (useAuth as jest.Mock).mockImplementation(() => ({
+      user: { id: 'user-1', adminFacilities: [] },
+      facilityId: 'facility-1',
+      selectedBookDate: '2026-01-15',
+      setSelectedBookDate: jest.fn(),
+    }));
+
+    let postSpy: jest.SpiedFunction<typeof api.post>;
+    postSpy = jest.spyOn(api, 'post').mockResolvedValue({ success: true, data: {} });
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<BookCourtScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      pressTouchableContainingText(tree!, 'Quick Reserve');
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      pressTouchableContainingText(tree!, 'Confirm Booking');
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(postSpy).toHaveBeenCalledWith(
+      '/api/bookings',
+      expect.objectContaining({
+        courtId: 'court-1',
+        facilityId: 'facility-1',
+        userId: 'user-1',
+        bookingDate: '2026-05-04',
+      })
+    );
+
+    postSpy.mockRestore();
+    (useAuth as jest.Mock).mockImplementation(() => ({
+      user: { id: 'user-1', adminFacilities: ['facility-1'] },
+      facilityId: 'facility-1',
+      selectedBookDate: '2026-05-04',
+      setSelectedBookDate: jest.fn(),
+    }));
   });
 });

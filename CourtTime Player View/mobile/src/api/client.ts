@@ -18,6 +18,7 @@ function isTunnelMetroHost(hostUri: string): boolean {
   const host = hostUri.split(':')[0]?.toLowerCase() ?? '';
   return (
     host.includes('exp.direct') ||
+    host.includes('expo.dev') ||
     host.includes('ngrok') ||
     host.includes('tunnel.') ||
     host.endsWith('.exp.host')

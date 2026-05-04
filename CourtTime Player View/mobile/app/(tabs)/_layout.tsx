@@ -4,9 +4,7 @@
  */
 
 import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { BottomTabBar } from '@react-navigation/bottom-tabs';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,15 +13,6 @@ import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelec
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
-
-/** Stable tab bar wrapper so the bar stays above native screens for hit-testing (Expo Go + RN Screens). */
-function CourtTimeTabBar(props: BottomTabBarProps) {
-  return (
-    <View style={styles.tabBarLift} pointerEvents="box-none">
-      <BottomTabBar {...props} />
-    </View>
-  );
-}
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -51,12 +40,7 @@ export default function TabLayout() {
   );
 
   return (
-    <Tabs
-      initialRouteName="book"
-      detachInactiveScreens={false}
-      tabBar={CourtTimeTabBar}
-      screenOptions={screenOptions}
-    >
+    <Tabs initialRouteName="book" detachInactiveScreens={false} screenOptions={screenOptions}>
       <Tabs.Screen
         name="book"
         options={{
@@ -102,10 +86,6 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBarLift: {
-    zIndex: 9999,
-    elevation: 9999,
-  },
   tabBar: {
     backgroundColor: Colors.card,
     borderTopColor: Colors.border,

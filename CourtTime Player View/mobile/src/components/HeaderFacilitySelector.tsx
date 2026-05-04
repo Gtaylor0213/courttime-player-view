@@ -33,10 +33,15 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
   }
 
   const currentFacility = facilities.find(f => f.id === facilityId);
+  const facilityName = currentFacility?.name || 'Select Facility';
+  const useTwoLines = facilityName.length > 30;
 
   return (
     <>
-      <TouchableOpacity style={styles.button} onPress={() => setOpen(true)}>
+      <TouchableOpacity
+        style={[styles.button, useTwoLines && styles.buttonLong]}
+        onPress={() => setOpen(true)}
+      >
         {currentFacility?.logoUrl ? (
           <CachedImage uri={currentFacility.logoUrl} style={styles.logo} />
         ) : (
@@ -44,9 +49,17 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
             <Ionicons name="business-outline" size={14} color={Colors.primary} />
           </View>
         )}
-        <Text style={styles.buttonText} numberOfLines={1}>
-          {currentFacility?.name || 'Select Facility'}
-        </Text>
+        <View style={styles.titleWrap}>
+          <Text
+            style={[styles.buttonText, useTwoLines && styles.buttonTextLong]}
+            numberOfLines={useTwoLines ? 2 : 1}
+            adjustsFontSizeToFit={!useTwoLines}
+            minimumFontScale={0.7}
+            ellipsizeMode="tail"
+          >
+            {facilityName}
+          </Text>
+        </View>
         <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
       </TouchableOpacity>
 
@@ -101,7 +114,7 @@ const styles = StyleSheet.create({
   titleStatic: {
     color: Colors.text,
     fontWeight: '700',
-    fontSize: 18,
+    fontSize: FontSize.lg,
   },
   button: {
     flexDirection: 'row',
@@ -114,6 +127,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+    minHeight: 40,
+  },
+  buttonLong: {
+    borderRadius: BorderRadius.md,
+    alignItems: 'flex-start',
+    paddingVertical: Spacing.sm,
+    minHeight: 56,
+  },
+  titleWrap: {
+    flex: 1,
+    flexShrink: 1,
+    justifyContent: 'center',
   },
   logo: {
     width: 22,
@@ -132,7 +157,11 @@ const styles = StyleSheet.create({
   buttonText: {
     color: Colors.text,
     fontWeight: '700',
-    fontSize: FontSize.md,
+    fontSize: FontSize.lg,
+    flexShrink: 1,
+  },
+  buttonTextLong: {
+    lineHeight: 20,
   },
   overlay: {
     flex: 1,

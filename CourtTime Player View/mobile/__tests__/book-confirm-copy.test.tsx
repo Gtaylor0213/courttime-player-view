@@ -1,0 +1,176 @@
+import React from 'react';
+import renderer, { act } from 'react-test-renderer';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { TouchableOpacity, Text, Modal } from 'react-native';
+import BookCourtScreen from '../app/(tabs)/book';
+import { api } from '../src/api/client';
+
+jest.mock('../src/contexts/AuthContext', () => ({
+  useAuth: jest.fn(() => ({
+    user: {
+      id: 'user-1',
+      adminFacilities: ['facility-1'],
+    },
+    facilityId: 'facility-1',
+    selectedBookDate: '2026-05-04',
+    setSelectedBookDate: jest.fn(),
+  })),
+}));
+
+jest.mock('../src/components/CourtCalendarGrid', () => {
+  const React = require('react');
+  const { TouchableOpacity, Text, View } = require('react-native');
+  return {
+    CourtCalendarGrid: ({
+      onBookingSelected,
+    }: {
+      onBookingSelected: (c: unknown, s: string, e: string) => void;
+    }) => (
+      <View testID="mock-grid">
+        <TouchableOpacity
+          testID="open-booking-modal"
+          onPress={() =>
+            onBookingSelected(
+              { id: 'court-1', name: 'Court 1', status: 'available', isWalkUp: false },
+              '10:00:00',
+              '11:00:00'
+            )
+          }
+        >
+          <Text>Open booking</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+  };
+});
+
+jest.mock('../src/utils/alert', () => ({ showAlert: jest.fn() }));
+jest.mock('../src/utils/haptics', () => ({ hapticSuccess: jest.fn(), hapticError: jest.fn() }));
+
+function collectText(node: unknown): string[] {
+  const out: string[] = [];
+  const walk = (n: unknown) => {
+    if (n == null || typeof n === 'boolean') return;
+    if (typeof n === 'string' || typeof n === 'number') {
+      out.push(String(n));
+      return;
+    }
+    if (Array.isArray(n)) {
+      n.forEach(walk);
+      return;
+    }
+    if (React.isValidElement(n) && (n.props as { children?: unknown }).children != null) {
+      walk((n.props as { children?: unknown }).children);
+    }
+  };
+  walk(node);
+  return out;
+}
+
+function pressByTestId(root: renderer.ReactTestRenderer, testId: string) {
+  const el = root.root.findByProps({ testID: testId });
+  act(() => {
+    el.props.onPress();
+  });
+}
+
+type TouchableLike = { props: { children?: unknown; onPress?: () => void } };
+type ModalLike = { props: { visible?: boolean; children?: unknown } };
+
+function pressTouchableContainingText(root: renderer.ReactTestRenderer, label: string) {
+  const buttons = root.root.findAllByType(TouchableOpacity) as TouchableLike[];
+  const match = buttons.find((b) => collectText(b.props.children).includes(label));
+  if (!match) throw new Error(`No TouchableOpacity containing "${label}"`);
+  act(() => {
+    match.props.onPress?.();
+  });
+}
+
+function visibleModalTexts(root: renderer.ReactTestRenderer): string[] {
+  const modals = root.root.findAllByType(Modal) as ModalLike[];
+  const visible = modals.filter((m) => Boolean(m.props.visible));
+  return visible.flatMap((m) => collectText(m.props.children));
+}
+
+describe('BookCourtScreen booking modal confirm copy', () => {
+  let getSpy: jest.SpiedFunction<typeof api.get>;
+
+  beforeEach(() => {
+    getSpy = jest.spyOn(api, 'get').mockImplementation(async (url: string) => {
+      if (url.includes('/api/facilities/') && url.includes('/courts')) {
+        return {
+          success: true,
+          data: {
+            courts: [
+              { id: 'court-1', name: 'Court 1', status: 'available', isWalkUp: false },
+              { id: 'court-2', name: 'Court 2', status: 'available', isWalkUp: false },
+            ],
+          },
+        };
+      }
+      if (url.includes('/api/bookings/facility/')) {
+        return { success: true, data: { bookings: [] } };
+      }
+      if (url.includes('/api/court-config/facility/')) {
+        return { success: true, data: { courtConfigs: [] } };
+      }
+      if (url.includes('/availability')) {
+        return {
+          success: true,
+          data: {
+            date: '2026-05-04',
+            isOpen: true,
+            operatingHours: { open: '08:00', close: '21:00' },
+            slotDuration: 30,
+            existingBookings: [] as Array<{ startTime: string; endTime: string }>,
+          },
+        };
+      }
+      return { success: false, error: 'unexpected url in test mock: ' + url };
+    });
+  });
+
+  afterEach(() => {
+    getSpy.mockRestore();
+  });
+
+  it('shows Confirm Booking with no extra courts; Book 2 Courts with one additional; resets after close and reopen', async () => {
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<BookCourtScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      pressByTestId(tree!, 'open-booking-modal');
+      await Promise.resolve();
+    });
+
+    let texts = visibleModalTexts(tree!);
+    expect(texts).toContain('Confirm Booking');
+    expect(texts).not.toContain('Book 2 Courts');
+
+    await act(async () => {
+      pressTouchableContainingText(tree!, 'Court 2');
+      await Promise.resolve();
+    });
+
+    texts = visibleModalTexts(tree!);
+    expect(texts).toContain('Book 2 Courts');
+
+    await act(async () => {
+      pressByTestId(tree!, 'dismiss-booking-modal');
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      pressByTestId(tree!, 'open-booking-modal');
+      await Promise.resolve();
+    });
+
+    texts = visibleModalTexts(tree!);
+    expect(texts).toContain('Confirm Booking');
+    expect(texts.filter((t) => t === 'Book 2 Courts')).toHaveLength(0);
+  });
+});

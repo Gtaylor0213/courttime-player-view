@@ -14,13 +14,15 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { showAlert } from '../../src/utils/alert';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
-import { TimePicker } from '../../src/components/TimePicker';
+import { TimePicker, PICKER_HEIGHT } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget } from '../../src/constants/theme';
@@ -98,6 +100,21 @@ export default function BookCourtScreen() {
   useEffect(() => {
     setSelectedBookDate(selectedDate);
   }, [selectedDate, setSelectedBookDate]);
+
+  useEffect(() => {
+    if (!showBookingModal) {
+      if (showViolations) {
+        /* Booking sheet closed to show rule violations; keep slot + form fields for admin override. */
+        return;
+      }
+      setSelectedSlot(null);
+      setBookingType('match');
+      setBookingNotes('');
+      setModalStartTime('');
+      setModalEndTime('');
+      setAdditionalCourtIds([]);
+    }
+  }, [showBookingModal, showViolations]);
 
   // ── Fetch courts ──
   const fetchCourts = useCallback(async () => {
@@ -583,126 +600,140 @@ export default function BookCourtScreen() {
       {/* ── Booking Details Modal ── */}
       <Modal visible={showBookingModal} transparent animationType="slide" onRequestClose={() => setShowBookingModal(false)}>
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Booking Details</Text>
-              <TouchableOpacity onPress={() => setShowBookingModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Summary */}
-            <View style={styles.modalSummary}>
-              <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
-              <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
-            </View>
-
-            {/* Time Pickers */}
-            <Text style={styles.modalLabel}>Select Time</Text>
-            <View style={styles.timePickerRow}>
-              <TimePicker
-                label="Start"
-                times={getAvailableStartTimes()}
-                selectedTime={modalStartTime}
-                onSelect={(t) => {
-                  setModalStartTime(t);
-                  // Auto-adjust end time if needed
-                  const ends = getAvailableEndTimes(t);
-                  if (ends.length > 0 && (toMinutes(modalEndTime) <= toMinutes(t) || !ends.includes(modalEndTime))) {
-                    setModalEndTime(ends[0]);
-                  }
-                }}
-              />
-              <View style={styles.timePickerDivider}>
-                <Text style={styles.timePickerDividerText}>to</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalKeyboardShell}
+          >
+            <View style={styles.modalInner}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Booking Details</Text>
+                <TouchableOpacity
+                  testID="dismiss-booking-modal"
+                  onPress={() => setShowBookingModal(false)}
+                >
+                  <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                </TouchableOpacity>
               </View>
-              <TimePicker
-                label="End"
-                times={getAvailableEndTimes(modalStartTime)}
-                selectedTime={modalEndTime}
-                onSelect={setModalEndTime}
-              />
-            </View>
 
-            {/* Duration display */}
-            {modalStartTime && modalEndTime && toMinutes(modalEndTime) > toMinutes(modalStartTime) && (
-              <View style={styles.durationBadge}>
-                <Ionicons name="time-outline" size={14} color={Colors.primary} />
-                <Text style={styles.durationText}>
-                  {calcDuration(modalStartTime + ':00', modalEndTime + ':00')} minutes
-                </Text>
+              {/* Summary */}
+              <View style={styles.modalSummary}>
+                <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
+                <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
               </View>
-            )}
 
-            {/* Booking Type */}
-            <Text style={styles.modalLabel}>Booking Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
-              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                {BOOKING_TYPES.map(bt => (
-                  <TouchableOpacity
-                    key={bt.key}
-                    style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
-                    onPress={() => setBookingType(bt.key)}
-                  >
-                    <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
-                      {bt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              {/* Time Pickers */}
+              <Text style={styles.modalLabel}>Select Time</Text>
+              <View style={styles.timePickerRow}>
+                <View style={styles.timePickerColumn}>
+                  <TimePicker
+                    label="Start"
+                    times={getAvailableStartTimes()}
+                    selectedTime={modalStartTime}
+                    onSelect={(t) => {
+                      setModalStartTime(t);
+                      const ends = getAvailableEndTimes(t);
+                      if (ends.length > 0 && (toMinutes(modalEndTime) <= toMinutes(t) || !ends.includes(modalEndTime))) {
+                        setModalEndTime(ends[0]);
+                      }
+                    }}
+                  />
+                </View>
+                <View style={styles.timePickerDivider}>
+                  <Text style={styles.timePickerDividerText}>to</Text>
+                </View>
+                <View style={styles.timePickerColumn}>
+                  <TimePicker
+                    label="End"
+                    times={getAvailableEndTimes(modalStartTime)}
+                    selectedTime={modalEndTime}
+                    onSelect={setModalEndTime}
+                  />
+                </View>
               </View>
-            </ScrollView>
 
-            {/* Additional Courts (Admin only) */}
-            {isAdmin && courts.length > 1 && (
-              <>
-                <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md }}>
-                  {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
+              {/* Duration display */}
+              {modalStartTime && modalEndTime && toMinutes(modalEndTime) > toMinutes(modalStartTime) && (
+                <View style={styles.durationBadge}>
+                  <Ionicons name="time-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.durationText}>
+                    {calcDuration(modalStartTime + ':00', modalEndTime + ':00')} minutes
+                  </Text>
+                </View>
+              )}
+
+              {/* Booking Type */}
+              <Text style={styles.modalLabel}>Booking Type</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                style={{ marginBottom: Spacing.md }}
+              >
+                <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                  {BOOKING_TYPES.map(bt => (
                     <TouchableOpacity
-                      key={court.id}
-                      style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
-                      onPress={() => toggleAdditionalCourt(court.id)}
+                      key={bt.key}
+                      style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
+                      onPress={() => setBookingType(bt.key)}
                     >
-                      <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
-                        {court.name}
+                      <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
+                        {bt.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-              </>
-            )}
+              </ScrollView>
 
-            {/* Notes */}
-            <Text style={styles.modalLabel}>Notes (optional)</Text>
-            <TextInput
-              style={styles.notesInput}
-              value={bookingNotes}
-              onChangeText={setBookingNotes}
-              placeholder="Special requests or notes..."
-              placeholderTextColor={Colors.textMuted}
-              multiline
-              maxLength={200}
-            />
-
-            {/* Confirm Button */}
-            <TouchableOpacity
-              style={[styles.confirmButton, booking && { opacity: 0.6 }]}
-              onPress={handleConfirmBooking}
-              disabled={booking}
-            >
-              {booking ? (
-                <ActivityIndicator size="small" color={Colors.textInverse} />
-              ) : (
-                <Text style={styles.confirmButtonText}>
-                  {additionalCourtIds.length > 0
-                    ? `Book ${1 + additionalCourtIds.length} Courts`
-                    : 'Confirm Booking'}
-                </Text>
+              {/* Additional Courts (Admin only) */}
+              {isAdmin && courts.length > 1 && (
+                <>
+                  <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md }}>
+                    {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
+                      <TouchableOpacity
+                        key={court.id}
+                        style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
+                        onPress={() => toggleAdditionalCourt(court.id)}
+                      >
+                        <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
+                          {court.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
               )}
-            </TouchableOpacity>
 
-            <View style={{ height: Spacing.xl }} />
-          </ScrollView>
+              {/* Notes */}
+              <Text style={styles.modalLabel}>Notes (optional)</Text>
+              <TextInput
+                style={styles.notesInput}
+                value={bookingNotes}
+                onChangeText={setBookingNotes}
+                placeholder="Special requests or notes..."
+                placeholderTextColor={Colors.textMuted}
+                multiline
+                maxLength={200}
+              />
+
+              {/* Confirm Button */}
+              <TouchableOpacity
+                style={[styles.confirmButton, booking && { opacity: 0.6 }]}
+                onPress={handleConfirmBooking}
+                disabled={booking}
+              >
+                {booking ? (
+                  <ActivityIndicator size="small" color={Colors.textInverse} />
+                ) : (
+                  <Text style={styles.confirmButtonText}>
+                    {additionalCourtIds.length > 0
+                      ? `Book ${1 + additionalCourtIds.length} Courts`
+                      : 'Confirm Booking'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -873,6 +904,16 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     maxHeight: '85%',
   },
+  modalKeyboardShell: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    maxHeight: '85%',
+  },
+  modalInner: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -944,8 +985,12 @@ const styles = StyleSheet.create({
   },
   timePickerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     marginBottom: Spacing.md,
+  },
+  timePickerColumn: {
+    flex: 1,
+    minHeight: PICKER_HEIGHT + Spacing.xl + Spacing.sm,
   },
   timePickerDivider: {
     paddingTop: Spacing.xl + Spacing.sm,

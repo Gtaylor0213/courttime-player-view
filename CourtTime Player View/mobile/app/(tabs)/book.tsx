@@ -63,6 +63,7 @@ export default function BookCourtScreen() {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [booking, setBooking] = useState(false);
+  const [quickReserving, setQuickReserving] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(true);
 
   // Booking details modal state
@@ -185,6 +186,106 @@ export default function BookCourtScreen() {
     setBookingNotes('');
     setAdditionalCourtIds([]);
     setShowBookingModal(true);
+  }
+
+  // ── Quick Reserve (autofill soonest available slot like web) ──
+  async function handleQuickReserve() {
+    if (!facilityId || courts.length === 0) {
+      showAlert('Quick Reserve', 'No courts are available to reserve right now.');
+      return;
+    }
+
+    setQuickReserving(true);
+
+    const today = getTodayString();
+    const now = new Date();
+
+    try {
+      const availabilityResults = await Promise.all(
+        courts.map(async (court) => {
+          const res = await api.get(`/api/court-config/${court.id}/availability?date=${today}`);
+          return { court, res };
+        })
+      );
+
+      type Candidate = { court: Court; startTime: string; endTime: string };
+      const candidates: Candidate[] = [];
+
+      for (const { court, res } of availabilityResults) {
+        if (!res.success || !res.data || !res.data.isOpen) continue;
+
+        const data = res.data as AvailabilityResponse;
+        const slotDur = data.slotDuration || 30;
+        const slotsNeeded = Math.ceil(60 / slotDur); // Quick Reserve defaults to 1 hour
+        const bookedTimes = new Set((data.existingBookings || []).map((b) => b.startTime));
+        const [openH, openM] = data.operatingHours.open.split(':').map(Number);
+        const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
+        const closeMinutes = closeH * 60 + closeM;
+
+        let h = openH;
+        let m = openM;
+
+        while (h < closeH || (h === closeH && m < closeM)) {
+          const slotPast = h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
+          if (!slotPast) {
+            let checkH = h;
+            let checkM = m;
+            let contiguous = true;
+
+            for (let i = 0; i < slotsNeeded; i++) {
+              const checkTime = `${String(checkH).padStart(2, '0')}:${String(checkM).padStart(2, '0')}:00`;
+              const checkMinutes = checkH * 60 + checkM;
+              if (checkMinutes >= closeMinutes || bookedTimes.has(checkTime)) {
+                contiguous = false;
+                break;
+              }
+              checkM += slotDur;
+              if (checkM >= 60) {
+                checkH += Math.floor(checkM / 60);
+                checkM = checkM % 60;
+              }
+            }
+
+            if (contiguous) {
+              const startTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+              const endMinutes = h * 60 + m + 60;
+              const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}:00`;
+              candidates.push({ court, startTime, endTime });
+              break; // earliest valid slot for this court found
+            }
+          }
+
+          m += slotDur;
+          if (m >= 60) {
+            h += Math.floor(m / 60);
+            m = m % 60;
+          }
+        }
+      }
+
+      if (candidates.length === 0) {
+        showAlert('Quick Reserve', 'No open 1-hour slots are available today.');
+        return;
+      }
+
+      candidates.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const best = candidates[0];
+
+      setSelectedDate(today);
+      setCalendarExpanded(false);
+      setSelectedCourt(best.court);
+      setSelectedSlot({ startTime: best.startTime, endTime: best.endTime, available: true });
+      setModalStartTime(best.startTime.slice(0, 5));
+      setModalEndTime(best.endTime.slice(0, 5));
+      setBookingType('match');
+      setBookingNotes('');
+      setAdditionalCourtIds([]);
+      setShowBookingModal(true);
+    } catch {
+      showAlert('Quick Reserve', 'Could not load quick reserve availability. Please try again.');
+    } finally {
+      setQuickReserving(false);
+    }
   }
 
   // ── Calculate duration ──
@@ -381,6 +482,23 @@ export default function BookCourtScreen() {
             color={Colors.textMuted}
           />
         </TouchableOpacity>
+        <View style={styles.quickReserveRow}>
+          <TouchableOpacity
+            style={[styles.quickReserveButton, quickReserving && { opacity: 0.7 }]}
+            onPress={handleQuickReserve}
+            disabled={quickReserving || !facilityId}
+            activeOpacity={0.8}
+          >
+            {quickReserving ? (
+              <ActivityIndicator size="small" color={Colors.textInverse} />
+            ) : (
+              <>
+                <Ionicons name="flash" size={16} color={Colors.textInverse} />
+                <Text style={styles.quickReserveText}>Quick Reserve</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {calendarExpanded && (
           <MiniCalendar
@@ -639,6 +757,24 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.text,
+  },
+  quickReserveRow: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  quickReserveButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  quickReserveText: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.textInverse,
   },
 
   // ── Modals ──

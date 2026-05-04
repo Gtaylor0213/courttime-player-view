@@ -1,11 +1,12 @@
 /**
  * HeaderFacilitySelector
  * Compact facility switcher rendered as the tab navigator's header title.
- * Hidden when the user belongs to 0 or 1 facilities (in those cases a static
- * title is fine — the parent provides a fallback).
+ * 0 facilities: static fallback title from parent.
+ * 1 facility: static club name (no chevron).
+ * 2+ facilities: tappable chip with logo, name, and facility picker modal.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,7 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
 import { CachedImage } from './CachedImage';
 
 interface Props {
@@ -27,40 +28,64 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
   const { facilityId, facilities, setFacilityId } = useAuth();
   const [open, setOpen] = useState(false);
 
-  // Single-facility (or facility-less) users see a static title.
-  if (facilities.length <= 1) {
+  const currentFacility = facilities.find(f => f.id === facilityId);
+  const facilityName =
+    currentFacility?.name ?? (facilities.length > 0 ? facilities[0].name : 'Select Facility');
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log(
+      '[header] facilities=',
+      facilities.map(f => ({ id: f.id, name: f.name, logoUrl: !!f.logoUrl })),
+      'facilityId=',
+      facilityId,
+      'currentFacility=',
+      currentFacility ? { id: currentFacility.id, name: currentFacility.name } : null
+    );
+  }, [facilities, facilityId, currentFacility]);
+
+  if (facilities.length === 1) {
+    return <Text style={styles.titleStatic}>{facilities[0].name}</Text>;
+  }
+
+  if (facilities.length === 0) {
     return <Text style={styles.titleStatic}>{fallbackTitle}</Text>;
   }
 
-  const currentFacility = facilities.find(f => f.id === facilityId);
-  const facilityName = currentFacility?.name || 'Select Facility';
-  const useTwoLines = facilityName.length > 30;
+  const nameLen = facilityName.length;
+  const useTwoLines = nameLen > 30;
+  const textStyles = [
+    styles.buttonText,
+    useTwoLines ? styles.buttonTextXs : nameLen > 18 ? styles.buttonTextSm : null,
+  ];
 
   return (
     <>
       <TouchableOpacity
-        style={[styles.button, useTwoLines && styles.buttonLong]}
+        style={styles.button}
         onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Current club ${facilityName}. Tap to switch.`}
       >
-        {currentFacility?.logoUrl ? (
-          <CachedImage uri={currentFacility.logoUrl} style={styles.logo} />
-        ) : (
-          <View style={styles.logoFallback}>
-            <Ionicons name="business-outline" size={14} color={Colors.primary} />
-          </View>
-        )}
-        <View style={styles.titleWrap}>
+        <View style={styles.logoSlot}>
+          {currentFacility?.logoUrl ? (
+            <CachedImage uri={currentFacility.logoUrl} style={styles.logo} />
+          ) : (
+            <View style={styles.logoFallback}>
+              <Ionicons name="business-outline" size={14} color={Colors.primary} />
+            </View>
+          )}
+        </View>
+        <View style={styles.titleFlex}>
           <Text
-            style={[styles.buttonText, useTwoLines && styles.buttonTextLong]}
+            style={textStyles}
             numberOfLines={useTwoLines ? 2 : 1}
-            adjustsFontSizeToFit={!useTwoLines}
-            minimumFontScale={0.7}
             ellipsizeMode="tail"
           >
             {facilityName}
           </Text>
         </View>
-        <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
+        <Ionicons name="chevron-down" size={14} color={Colors.textSecondary} />
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -119,25 +144,20 @@ const styles = StyleSheet.create({
   button: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    maxWidth: 260,
+    gap: 8,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    minHeight: TouchTarget.min,
+    minHeight: 36,
+    maxWidth: 280,
   },
-  buttonLong: {
-    borderRadius: BorderRadius.md,
-    alignItems: 'flex-start',
-    paddingVertical: Spacing.sm,
-    minHeight: 56,
-  },
-  titleWrap: {
-    flex: 1,
-    flexShrink: 1,
+  logoSlot: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   logo: {
@@ -154,14 +174,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.primary + '12',
   },
+  titleFlex: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 72,
+    justifyContent: 'center',
+  },
   buttonText: {
     color: Colors.text,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.lg,
     flexShrink: 1,
+    minWidth: 1,
   },
-  buttonTextLong: {
-    lineHeight: 20,
+  buttonTextSm: {
+    fontSize: FontSize.md,
+    lineHeight: 18,
+  },
+  buttonTextXs: {
+    fontSize: FontSize.sm,
+    lineHeight: 18,
   },
   overlay: {
     flex: 1,

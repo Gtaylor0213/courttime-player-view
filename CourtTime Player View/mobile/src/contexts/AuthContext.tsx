@@ -304,6 +304,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     saveBookDate(date);
   }
 
+  // Self-heal stored facility id when it no longer matches loaded facilities (e.g. stale SecureStore).
+  useEffect(() => {
+    if (facilities.length === 0 || !selectedFacilityId) return;
+    if (facilities.some(f => f.id === selectedFacilityId)) return;
+    console.warn(
+      '[auth] selected facility id not in facilities list; self-healing to first facility',
+      { selectedFacilityId, facilityIds: facilities.map(f => f.id) }
+    );
+    const nextId = facilities[0].id;
+    setSelectedFacilityId(nextId);
+    void saveFacilityId(nextId);
+  }, [facilities, selectedFacilityId]);
+
   return (
     <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
       {children}

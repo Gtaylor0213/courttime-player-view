@@ -3,16 +3,27 @@
  * Bottom tab bar with player-facing screens
  */
 
+import { useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { BottomTabBar } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontFamily } from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
-import { useMemo } from 'react';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
+
+/** Stable tab bar wrapper so the bar stays above native screens for hit-testing (Expo Go + RN Screens). */
+function CourtTimeTabBar(props: BottomTabBarProps) {
+  return (
+    <View style={styles.tabBarLift} pointerEvents="box-none">
+      <BottomTabBar {...props} />
+    </View>
+  );
+}
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -22,6 +33,7 @@ export default function TabLayout() {
       sceneStyle: { backgroundColor: Colors.surface },
       tabBarActiveTintColor: Colors.primary,
       tabBarInactiveTintColor: Colors.textMuted,
+      freezeOnBlur: false,
       // Do not set a fixed tabBar height — it can clip touch targets vs. safe area / font scale.
       tabBarStyle: [
         styles.tabBar,
@@ -39,7 +51,12 @@ export default function TabLayout() {
   );
 
   return (
-    <Tabs initialRouteName="book" screenOptions={screenOptions}>
+    <Tabs
+      initialRouteName="book"
+      detachInactiveScreens={false}
+      tabBar={CourtTimeTabBar}
+      screenOptions={screenOptions}
+    >
       <Tabs.Screen
         name="book"
         options={{
@@ -85,6 +102,10 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  tabBarLift: {
+    zIndex: 9999,
+    elevation: 9999,
+  },
   tabBar: {
     backgroundColor: Colors.card,
     borderTopColor: Colors.border,

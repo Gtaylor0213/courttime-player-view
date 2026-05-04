@@ -76,7 +76,14 @@ function RootLayoutNav() {
       }}
     >
       {/* Tabs render their own header; auth screens are bare. */}
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="(tabs)"
+        options={{
+          headerShown: false,
+          // Fade + native stack can leave the tab group receiving touches incorrectly in Expo Go.
+          animation: 'none',
+        }}
+      />
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       {/* Top-level screens get the default Stack header with a back button. */}
       <Stack.Screen name="club-info" />
@@ -102,14 +109,14 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <GestureHandlerRootView style={styles.root}>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
         <AuthProvider>
           <StatusBar style="auto" />
           <RootLayoutNav />
         </AuthProvider>
-      </GestureHandlerRootView>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

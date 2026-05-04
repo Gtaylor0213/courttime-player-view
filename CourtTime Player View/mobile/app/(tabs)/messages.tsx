@@ -21,6 +21,9 @@ import { api } from '../../src/api/client';
 import { showAlert } from '../../src/utils/alert';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { ConversationSkeleton } from '../../src/components/LoadingSkeleton';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Messages');
 
 interface ConversationItem {
   id: string;

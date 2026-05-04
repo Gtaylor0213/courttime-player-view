@@ -19,6 +19,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Reset Password');
 
 export default function ResetPasswordScreen() {
   const router = useRouter();

@@ -18,6 +18,9 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
+import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Club Info');
 
 interface FacilityData {
   id: string;

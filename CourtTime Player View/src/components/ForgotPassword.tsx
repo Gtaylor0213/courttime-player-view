@@ -154,8 +154,8 @@ export function ForgotPassword() {
         {/* Additional Help */}
         <div className="mt-6 text-center text-sm text-gray-600">
           <p>Need help? Contact support at</p>
-          <a href="mailto:support@courttime.com" className="text-green-600 hover:text-green-700 font-medium">
-            support@courttime.com
+          <a href="mailto:reidbissell@courttimeapp.com" className="text-green-600 hover:text-green-700 font-medium">
+            reidbissell@courttimeapp.com
           </a>
         </div>
       </div>

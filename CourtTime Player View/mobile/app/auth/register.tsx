@@ -17,6 +17,9 @@ import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Register');
 
 export default function RegisterScreen() {
   const { register } = useAuth();

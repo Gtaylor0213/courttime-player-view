@@ -23,6 +23,9 @@ import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import type { HittingPartnerPostWithUser } from '../../src/types/database';
 import { CommunitySkeleton } from '../../src/components/LoadingSkeleton';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Community');
 
 type Tab = 'partners' | 'bulletin' | 'notifications';
 

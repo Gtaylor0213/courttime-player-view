@@ -25,6 +25,9 @@ import { EditBookingModal } from '../../src/components/EditBookingModal';
 import { QuickBook } from '../../src/components/QuickBook';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Home');
 
 interface RuleViolation {
   ruleCode: string;

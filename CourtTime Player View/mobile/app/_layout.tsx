@@ -13,6 +13,9 @@ import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
+import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('App Shell');
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading, pendingTermsAcceptances } = useAuth();

@@ -21,6 +21,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../src/utils/alert';
 import { api } from '../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
+import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Notification Settings');
 
 interface NotificationPreferences {
   pushEnabled: boolean;

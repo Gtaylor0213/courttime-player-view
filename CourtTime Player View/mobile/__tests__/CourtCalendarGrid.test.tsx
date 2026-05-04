@@ -1,23 +1,12 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
+import { describe, it, expect, jest } from '@jest/globals';
 import { CourtCalendarGrid } from '../src/components/CourtCalendarGrid';
 import { api } from '../src/api/client';
 
-declare const describe: any;
-declare const it: any;
-declare const expect: any;
-declare const jest: any;
-
-jest.mock('../src/api/client', () => ({
-  api: {
-    get: jest.fn(),
-  },
-}));
-
 describe('CourtCalendarGrid', () => {
   it('renders court columns when facility has courts', async () => {
-    const mockedGet = api.get as any;
-    mockedGet.mockImplementation((endpoint: string) => {
+    const getSpy = jest.spyOn(api, 'get').mockImplementation((endpoint: string) => {
       if (endpoint.startsWith('/api/bookings/facility/')) {
         return Promise.resolve({
           success: true,
@@ -60,5 +49,6 @@ describe('CourtCalendarGrid', () => {
     expect(textNodes).toContain('Court 1');
     expect(textNodes).toContain('Court 2');
     expect(textNodes).not.toContain('No courts available');
+    getSpy.mockRestore();
   });
 });

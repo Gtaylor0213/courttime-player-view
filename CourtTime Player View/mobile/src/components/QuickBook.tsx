@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { api } from '../api/client';
+import { formatLocalDate } from '../utils/dateUtils';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
 import type { Court } from '../types/database';
 
@@ -49,10 +50,13 @@ interface Props {
 const SLOT_DURATION_MIN = 60;
 const MAX_SLOTS = 3;
 
+type QuickBookEmptyState = 'no_courts' | 'all_booked' | 'outside_open_hours' | 'request_failed';
+
 export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViolations }: Props) {
   const [slots, setSlots] = useState<QuickSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingSlotKey, setBookingSlotKey] = useState<string | null>(null);
+  const [emptyState, setEmptyState] = useState<QuickBookEmptyState>('all_booked');
 
   const computeSlots = useCallback(async () => {
     setLoading(true);
@@ -60,100 +64,143 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
       const courtsRes = await api.get(`/api/facilities/${facilityId}/courts`);
       if (!courtsRes.success || !courtsRes.data) {
         setSlots([]);
+        setEmptyState('request_failed');
         return;
       }
       const courtList: Court[] = Array.isArray(courtsRes.data)
         ? courtsRes.data
         : courtsRes.data.courts || [];
       const bookable = courtList.filter(
-        (c) => c.status === 'available' && !c.isWalkUp
+        (c) => {
+          const status = String(c.status || '').toLowerCase();
+          return (status === 'available' || status === 'active') && !c.isWalkUp;
+        }
       );
       if (bookable.length === 0) {
         setSlots([]);
+        setEmptyState('no_courts');
         return;
       }
 
-      const today = todayString();
-      const availabilityResults = await Promise.all(
-        bookable.map((c) =>
-          api.get(`/api/court-config/${c.id}/availability?date=${today}`).then(
-            (res) => ({ court: c, res })
-          )
-        )
-      );
+      const today = formatLocalDate(new Date());
+      const bookingsUrl = `/api/bookings/facility/${facilityId}?date=${today}`;
+      const configUrl = `/api/court-config/facility/${facilityId}?date=${today}`;
+      if (__DEV__) {
+        console.log('[quick-book] loading availability', {
+          facilityId,
+          bookingsUrl,
+          configUrl,
+          courtsUrl: `/api/facilities/${facilityId}/courts`,
+        });
+      }
 
-      const now = new Date();
+      const [bookingsRes, configRes] = await Promise.all([
+        api.get(bookingsUrl),
+        api.get(configUrl),
+      ]);
+
+      if (!bookingsRes.success || !configRes.success) {
+        if (__DEV__) {
+          console.log('[quick-book] availability request failed', {
+            bookingsSuccess: bookingsRes.success,
+            bookingsError: bookingsRes.error,
+            configSuccess: configRes.success,
+            configError: configRes.error,
+          });
+        }
+        setSlots([]);
+        setEmptyState('request_failed');
+        return;
+      }
+
+      const configList = Array.isArray((configRes.data as any)?.courtConfigs)
+        ? (configRes.data as any).courtConfigs
+        : [];
+      const configByCourtId = new Map<string, any>();
+      configList.forEach((cfg: any) => configByCourtId.set(cfg.courtId, cfg));
+
+      const bookingsList = Array.isArray((bookingsRes.data as any)?.bookings)
+        ? (bookingsRes.data as any).bookings
+        : [];
+      const bookedByCourtId = new Map<string, Set<string>>();
+      bookingsList.forEach((booking: any) => {
+        const courtId = booking.courtId || booking.court_id;
+        const startTime = normalizeTimeWithSeconds(booking.startTime || booking.start_time || '');
+        if (!courtId || !startTime) return;
+        const existing = bookedByCourtId.get(courtId) || new Set<string>();
+        existing.add(startTime);
+        bookedByCourtId.set(courtId, existing);
+      });
+
+      const nowMinutes = getNowMinutes();
       const found: QuickSlot[] = [];
+      let hasAnyOpenCourtNow = false;
 
-      for (const { court, res } of availabilityResults) {
-        if (!res.success || !res.data || !res.data.isOpen) continue;
-        const data = res.data;
-        const slotDur = data.slotDuration || 30;
-        const [openH, openM] = data.operatingHours.open.split(':').map(Number);
-        const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
-        const bookedTimes = new Set<string>(
-          (data.existingBookings || []).map((b: any) => b.startTime)
-        );
+      for (const court of bookable) {
+        const cfg = configByCourtId.get(court.id);
+        const isOpen = cfg ? Boolean(cfg.isOpen) : true;
+        const openMinutes = parseTimeToMinutes(cfg?.openTime || '06:00');
+        const closeMinutes = parseTimeToMinutes(cfg?.closeTime || '22:00');
+        const slotDur = Math.max(15, Number(cfg?.slotDuration || 30));
+        const bookedTimes = bookedByCourtId.get(court.id) || new Set<string>();
 
-        let h = openH;
-        let m = openM;
-        let earliestStart: { h: number; m: number } | null = null;
+        const currentlyOpen =
+          isOpen &&
+          openMinutes !== null &&
+          closeMinutes !== null &&
+          nowMinutes >= openMinutes &&
+          nowMinutes < closeMinutes;
+        if (currentlyOpen) {
+          hasAnyOpenCourtNow = true;
+        }
 
-        while (h < closeH || (h === closeH && m < closeM)) {
-          const slotStart = `${pad(h)}:${pad(m)}:00`;
-          const slotPast = h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
+        if (!isOpen || openMinutes === null || closeMinutes === null || closeMinutes <= openMinutes) {
+          continue;
+        }
 
-          if (!bookedTimes.has(slotStart) && !slotPast) {
-            // Need a contiguous run of slots covering SLOT_DURATION_MIN
-            const slotsNeeded = Math.ceil(SLOT_DURATION_MIN / slotDur);
-            let contiguous = true;
-            let checkH = h;
-            let checkM = m;
-            for (let i = 0; i < slotsNeeded; i++) {
-              const checkTime = `${pad(checkH)}:${pad(checkM)}:00`;
-              const checkMinutes = checkH * 60 + checkM;
-              const closeMinutes = closeH * 60 + closeM;
-              if (checkMinutes >= closeMinutes || bookedTimes.has(checkTime)) {
-                contiguous = false;
-                break;
-              }
-              checkM += slotDur;
-              if (checkM >= 60) {
-                checkH += Math.floor(checkM / 60);
-                checkM = checkM % 60;
-              }
+        const earliestStartMinutes = roundUpToStep(Math.max(openMinutes, nowMinutes + 1), slotDur);
+        const slotsNeeded = Math.ceil(SLOT_DURATION_MIN / slotDur);
+        let startMinutes = earliestStartMinutes;
+        let earliestStart: number | null = null;
+
+        while (startMinutes + SLOT_DURATION_MIN <= closeMinutes) {
+          let contiguous = true;
+          for (let i = 0; i < slotsNeeded; i++) {
+            const checkMinutes = startMinutes + i * slotDur;
+            if (checkMinutes >= closeMinutes) {
+              contiguous = false;
+              break;
             }
-            if (contiguous) {
-              earliestStart = { h, m };
+            if (bookedTimes.has(minutesToHHMMSS(checkMinutes))) {
+              contiguous = false;
               break;
             }
           }
-
-          m += slotDur;
-          if (m >= 60) {
-            h += Math.floor(m / 60);
-            m = m % 60;
+          if (contiguous) {
+            earliestStart = startMinutes;
+            break;
           }
+          startMinutes += slotDur;
         }
 
-        if (earliestStart) {
-          const startTime = `${pad(earliestStart.h)}:${pad(earliestStart.m)}:00`;
-          const endMinutes = earliestStart.h * 60 + earliestStart.m + SLOT_DURATION_MIN;
-          const endH = Math.floor(endMinutes / 60);
-          const endM = endMinutes % 60;
-          const endTime = `${pad(endH)}:${pad(endM)}:00`;
+        if (earliestStart !== null) {
           found.push({
             courtId: court.id,
             courtName: court.name,
-            startTime,
-            endTime,
+            startTime: minutesToHHMMSS(earliestStart),
+            endTime: minutesToHHMMSS(earliestStart + SLOT_DURATION_MIN),
           });
         }
       }
 
-      // Sort by start time, then take the soonest few
       found.sort((a, b) => a.startTime.localeCompare(b.startTime));
-      setSlots(found.slice(0, MAX_SLOTS));
+      const nextSlots = found.slice(0, MAX_SLOTS);
+      setSlots(nextSlots);
+      if (nextSlots.length > 0) {
+        setEmptyState('all_booked');
+      } else {
+        setEmptyState(hasAnyOpenCourtNow ? 'all_booked' : 'outside_open_hours');
+      }
     } finally {
       setLoading(false);
     }
@@ -162,6 +209,7 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
   useEffect(() => {
     if (!facilityId) {
       setSlots([]);
+      setEmptyState('no_courts');
       setLoading(false);
       return;
     }
@@ -189,7 +237,7 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
       courtId: slot.courtId,
       facilityId,
       userId,
-      bookingDate: todayString(),
+      bookingDate: formatLocalDate(new Date()),
       startTime: slot.startTime,
       endTime: slot.endTime,
       durationMinutes: SLOT_DURATION_MIN,
@@ -223,10 +271,21 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
   }
 
   if (slots.length === 0) {
+    const messageByState: Record<QuickBookEmptyState, string> = {
+      no_courts: 'No courts at this club.',
+      all_booked: 'All courts are booked right now.',
+      outside_open_hours: 'Outside open hours.',
+      request_failed: "Couldn't load availability.",
+    };
     return (
       <View style={styles.emptyBox}>
         <Ionicons name="time-outline" size={20} color={Colors.textMuted} />
-        <Text style={styles.emptyText}>No open 1-hour slots today.</Text>
+        <Text style={styles.emptyText}>{messageByState[emptyState]}</Text>
+        {emptyState === 'request_failed' && (
+          <TouchableOpacity style={styles.retryButton} onPress={computeSlots}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -272,16 +331,46 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
 function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
-function todayString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 function formatTime(time: string): string {
   const [hStr, mStr] = time.split(':');
   const h = parseInt(hStr);
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
   return `${h12}:${mStr} ${ampm}`;
+}
+
+function parseTimeToMinutes(value: string): number | null {
+  const parts = value.split(':').map(Number);
+  if (parts.length < 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) {
+    return null;
+  }
+  return parts[0] * 60 + parts[1];
+}
+
+function getNowMinutes(): number {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+function roundUpToStep(minutes: number, step: number): number {
+  return Math.ceil(minutes / step) * step;
+}
+
+function minutesToHHMMSS(totalMinutes: number): string {
+  const minutesInDay = 24 * 60;
+  const normalized = ((Math.floor(totalMinutes) % minutesInDay) + minutesInDay) % minutesInDay;
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
+  return `${pad(h)}:${pad(m)}:00`;
+}
+
+function normalizeTimeWithSeconds(value: string): string | null {
+  const parts = value.split(':');
+  if (parts.length < 2) return null;
+  const h = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return `${pad(h)}:${pad(m)}:00`;
 }
 
 const styles = StyleSheet.create({
@@ -298,10 +387,24 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     alignItems: 'center',
     gap: Spacing.sm,
+    flexWrap: 'wrap',
   },
   emptyText: {
     fontSize: FontSize.sm,
     color: Colors.textMuted,
+    flexShrink: 1,
+  },
+  retryButton: {
+    marginLeft: 'auto',
+    backgroundColor: Colors.primary + '14',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  retryButtonText: {
+    color: Colors.primary,
+    fontSize: FontSize.xs,
+    fontWeight: '700',
   },
   slot: {
     flexDirection: 'row',

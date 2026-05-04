@@ -18,7 +18,7 @@ export default function TabLayout() {
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabLabel,
         headerStyle: styles.header,
-        headerTintColor: Colors.textInverse,
+        headerTintColor: Colors.text,
         headerTitleStyle: styles.headerTitle,
       }}
     >
@@ -68,20 +68,32 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.card,
     borderTopColor: Colors.border,
-    paddingBottom: 4,
-    height: 60,
+    borderTopWidth: 1,
+    paddingBottom: 10,
+    paddingTop: 8,
+    height: 74,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -3 },
+    elevation: 10,
   },
   tabLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
   },
   header: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.card,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   headerTitle: {
-    color: Colors.textInverse,
+    color: Colors.text,
     fontWeight: '700',
     fontSize: 18,
   },

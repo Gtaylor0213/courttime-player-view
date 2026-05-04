@@ -95,6 +95,7 @@ export default function ResetPasswordScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={styles.formCard}>
           <View style={styles.header}>
             <Text style={styles.title}>New Password</Text>
             <Text style={styles.description}>
@@ -141,6 +142,7 @@ export default function ResetPasswordScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -158,10 +160,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xl,
   },
   header: {
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+  },
+  formCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   title: {
     fontSize: FontSize.xxl,
@@ -175,7 +190,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   form: {
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   label: {
     fontSize: FontSize.sm,
@@ -195,7 +210,7 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: Spacing.md,
@@ -209,10 +224,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   errorBox: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#FEF2F2',
     borderColor: Colors.error,
     borderWidth: 1,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     padding: Spacing.sm,
   },
   errorText: {
@@ -224,6 +239,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginHorizontal: Spacing.md,
+    marginVertical: Spacing.lg,
   },
   successIcon: {
     width: 64,

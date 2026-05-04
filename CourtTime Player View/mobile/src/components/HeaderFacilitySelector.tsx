@@ -39,7 +39,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
         <Text style={styles.buttonText} numberOfLines={1}>
           {currentFacility?.name || 'Select Facility'}
         </Text>
-        <Ionicons name="chevron-down" size={16} color={Colors.textInverse} />
+        <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -84,7 +84,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
 
 const styles = StyleSheet.create({
   titleStatic: {
-    color: Colors.textInverse,
+    color: Colors.text,
     fontWeight: '700',
     fontSize: 18,
   },
@@ -92,12 +92,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    maxWidth: 240,
+    maxWidth: 260,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   buttonText: {
-    color: Colors.textInverse,
+    color: Colors.text,
     fontWeight: '700',
-    fontSize: 18,
+    fontSize: FontSize.md,
   },
   overlay: {
     flex: 1,
@@ -110,6 +116,13 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     paddingVertical: Spacing.md,
     maxHeight: 400,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   dropdownTitle: {
     fontSize: FontSize.md,

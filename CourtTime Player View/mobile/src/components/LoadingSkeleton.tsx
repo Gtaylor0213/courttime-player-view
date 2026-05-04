@@ -24,7 +24,7 @@ function SkeletonBlock({ width = '100%', height = 16, style }: { width?: number 
   return (
     <Animated.View
       style={[
-        { width: width as any, height, borderRadius: BorderRadius.sm, backgroundColor: Colors.border, opacity },
+        { width: width as any, height, borderRadius: BorderRadius.sm, backgroundColor: Colors.surface, opacity },
         style,
       ]}
     />
@@ -62,11 +62,16 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   profileContainer: {
     padding: Spacing.xl,
     backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
 });

@@ -161,9 +161,11 @@ const styles = StyleSheet.create({
   pickerWrapper: {
     height: PICKER_HEIGHT,
     overflow: 'hidden',
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     backgroundColor: Colors.surface,
     width: '100%',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   selectionHighlight: {
     position: 'absolute',

@@ -136,8 +136,12 @@ export function MiniCalendar({ selectedDate, onSelectDate, minDate }: MiniCalend
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Spacing.sm,
-    paddingBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+    paddingTop: Spacing.xs,
+    backgroundColor: Colors.card,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
   },
   header: {
     flexDirection: 'row',
@@ -147,7 +151,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xs,
   },
   arrow: {
-    padding: Spacing.xs,
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
   },
   monthLabel: {
     fontSize: FontSize.md,
@@ -169,9 +178,9 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   dayButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: BorderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -179,8 +188,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   dayToday: {
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.secondary,
   },
   dayText: {
     fontSize: FontSize.sm,

@@ -78,6 +78,7 @@ export default function RegisterScreen() {
             <Text style={styles.subtitle}>Create your player account</Text>
           </View>
 
+          <View style={styles.formCard}>
           <View style={styles.form}>
             {error ? (
               <View style={styles.errorBox}>
@@ -171,6 +172,7 @@ export default function RegisterScreen() {
               </Link>
             </View>
           </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -187,7 +189,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
     paddingTop: Spacing.xl,
   },
   header: {
@@ -203,9 +206,22 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: FontSize.md,
     color: Colors.textSecondary,
+    textAlign: 'center',
+  },
+  formCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   form: {
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   row: {
     flexDirection: 'row',
@@ -232,7 +248,7 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: Spacing.md,
@@ -246,10 +262,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   errorBox: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#FEF2F2',
     borderColor: Colors.error,
     borderWidth: 1,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     padding: Spacing.sm,
   },
   errorText: {

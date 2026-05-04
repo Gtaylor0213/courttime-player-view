@@ -4,40 +4,40 @@
  */
 
 export const Colors = {
-  primary: '#1a5f2a',
-  primaryLight: '#2d8a3e',
-  primaryDark: '#134a20',
-  secondary: '#f5f5f5',
-  accent: '#e8a838',
+  primary: '#2563EB',
+  primaryLight: '#3B82F6',
+  primaryDark: '#1D4ED8',
+  secondary: '#EEF2FF',
+  accent: '#14B8A6',
 
-  background: '#ffffff',
-  surface: '#f8f9fa',
+  background: '#F8FAFC',
+  surface: '#F1F5F9',
   card: '#ffffff',
 
-  text: '#1a1a1a',
-  textSecondary: '#6b7280',
-  textMuted: '#9ca3af',
+  text: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#94A3B8',
   textInverse: '#ffffff',
 
-  border: '#e5e7eb',
-  borderLight: '#f3f4f6',
+  border: '#E2E8F0',
+  borderLight: '#F1F5F9',
 
-  success: '#16a34a',
-  error: '#dc2626',
-  warning: '#f59e0b',
-  info: '#3b82f6',
+  success: '#16A34A',
+  error: '#DC2626',
+  warning: '#F59E0B',
+  info: '#0EA5E9',
 
-  courtAvailable: '#16a34a',
-  courtMaintenance: '#f59e0b',
-  courtClosed: '#dc2626',
+  courtAvailable: '#16A34A',
+  courtMaintenance: '#F59E0B',
+  courtClosed: '#DC2626',
 };
 
 export const Spacing = {
   xs: 4,
-  sm: 8,
+  sm: 10,
   md: 16,
   lg: 24,
-  xl: 32,
+  xl: 36,
   xxl: 48,
 };
 
@@ -52,8 +52,8 @@ export const FontSize = {
 };
 
 export const BorderRadius = {
-  sm: 6,
-  md: 10,
-  lg: 16,
+  sm: 8,
+  md: 14,
+  lg: 20,
   full: 999,
 };

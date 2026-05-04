@@ -34,11 +34,17 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     padding: Spacing.xl,
-    gap: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    marginVertical: Spacing.md,
+    gap: Spacing.md,
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   title: {
-    fontSize: FontSize.lg,
-    fontWeight: '600',
+    fontSize: FontSize.xl,
+    fontWeight: '700',
     color: Colors.text,
     textAlign: 'center',
   },
@@ -51,8 +57,8 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: Colors.primary,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
     marginTop: Spacing.sm,
   },
   buttonText: {

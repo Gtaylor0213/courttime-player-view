@@ -3,74 +3,18 @@
  * Frontend utility for calling backend API
  */
 
-// In production, use empty string for same-origin API calls
-// In development, fallback to localhost:3001
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.PROD ? '' : 'http://localhost:3001');
+import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../shared/api/core';
 
-interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-  ruleViolations?: Array<{ ruleCode: string; ruleName: string; message: string; severity: string }>;
-  warnings?: Array<{ ruleCode: string; ruleName: string; message: string }>;
-  isPrimeTime?: boolean;
-}
+// In production, use empty string for same-origin API calls.
+// In development, fallback to localhost:3001.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
 
-async function apiRequest<T = any>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
-  try {
-    const token = localStorage.getItem('auth_token');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers as Record<string, string>),
-    };
+export type ApiResponse<T = any> = SharedApiResponse<T>;
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    // Guard against non-JSON responses (e.g. HTML 404 pages)
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      const text = await response.text();
-      console.error(`API returned non-JSON (${response.status}):`, text.slice(0, 200));
-      return {
-        success: false,
-        error: `Server error (${response.status}). Please try again.`,
-      };
-    }
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.error || data.message || 'Request failed',
-        ...(data.ruleViolations && { ruleViolations: data.ruleViolations }),
-        ...(data.warnings && { warnings: data.warnings }),
-        ...(data.isPrimeTime !== undefined && { isPrimeTime: data.isPrimeTime }),
-      };
-    }
-
-    return {
-      success: true,
-      data,
-      message: data.message,
-    };
-  } catch (error: any) {
-    console.error('API request error:', error);
-    return {
-      success: false,
-      error: error.message || 'Network error',
-    };
-  }
-}
+const apiRequest = buildApiRequest({
+  baseUrl: API_BASE_URL,
+  getToken: () => localStorage.getItem('auth_token'),
+});
 
 // Auth API
 export const authApi = {

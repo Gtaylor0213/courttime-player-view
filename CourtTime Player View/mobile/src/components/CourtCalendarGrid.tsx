@@ -17,12 +17,14 @@ import { api } from '../api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
 import type { Court } from '../types/database';
 import { BookingSkeleton } from './LoadingSkeleton';
+import { createPollingTransport } from '../../../shared/api/sync';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const TIME_LABEL_WIDTH = 52;
 const ROW_HEIGHT = 48;
 const SLOT_MINUTES = 30;
 const COURTS_PER_PAGE = 3;
+const ACTIVE_DAY_POLL_MS = 5000;
 
 interface Booking {
   startTime: string;
@@ -139,6 +141,13 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
 
   useEffect(() => {
     fetchAvailability();
+  }, [fetchAvailability]);
+
+  useEffect(() => {
+    const stopPolling = createPollingTransport(ACTIVE_DAY_POLL_MS).subscribe(() => {
+      fetchAvailability();
+    });
+    return stopPolling;
   }, [fetchAvailability]);
 
   // Auto-scroll to current time when data loads

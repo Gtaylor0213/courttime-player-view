@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner@2.0.3';
 import { authApi } from '../api/client';
+import type { AuthResponseShape, AuthUserShape } from '../../shared/types';
 
-export interface User {
+export interface User extends Omit<AuthUserShape, 'memberFacilities' | 'adminFacilities'> {
   id: string;
   email: string;
   fullName: string;
@@ -14,8 +15,8 @@ export interface User {
   city?: string;
   state?: string;
   zipCode?: string;
-  memberFacilities?: string[]; // Array of facility IDs user belongs to
-  adminFacilities?: string[]; // Array of facility IDs user is admin of
+  memberFacilities: string[]; // Array of facility IDs user belongs to
+  adminFacilities: string[]; // Array of facility IDs user is admin of
   suspendedFacilities?: Array<{ facilityId: string; facilityName: string; suspendedUntil?: string | null }>;
   profileImageUrl?: string; // Profile image (base64 or URL)
   skillLevel?: string;
@@ -164,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await authApi.login(email, password);
 
       if (result.success && result.data) {
-        const backendResponse = result.data as any;
+        const backendResponse = result.data as AuthResponseShape;
         if (backendResponse.user && backendResponse.token) {
           setUser(backendResponse.user);
           setAccessToken(backendResponse.token);

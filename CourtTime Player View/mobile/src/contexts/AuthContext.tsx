@@ -10,10 +10,9 @@ import { api, setToken, getToken, removeToken, cacheUser, getCachedUser, clearCa
 import type { PendingTermsAcceptance } from '../api/client';
 import { registerForPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications';
 import type { User } from '../types/database';
+import type { AuthResponseShape, AuthUserShape } from '../../../shared/types';
 
-interface AuthUser extends User {
-  memberFacilities?: string[];
-  adminFacilities?: string[];
+interface AuthUser extends User, AuthUserShape {
   skillLevel?: string;
   bio?: string;
   ustaRating?: string;
@@ -230,7 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await api.post('/api/auth/login', { email, password });
 
     if (result.success && result.data) {
-      const { user, token } = result.data;
+      const { user, token } = result.data as AuthResponseShape;
       if (token) {
         await setToken(token);
       }
@@ -254,7 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (result.success && result.data) {
-      const { user, token } = result.data;
+      const { user, token } = result.data as AuthResponseShape;
       if (token) {
         await setToken(token);
       }

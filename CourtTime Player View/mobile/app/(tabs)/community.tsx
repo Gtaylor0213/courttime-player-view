@@ -25,6 +25,7 @@ import type { HittingPartnerPostWithUser } from '../../src/types/database';
 import { CommunitySkeleton } from '../../src/components/LoadingSkeleton';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { EmptyState } from '../../src/components/EmptyState';
+import { createPollingTransport } from '../../../shared/api/sync';
 
 export const ErrorBoundary = createRouteErrorBoundary('Community');
 
@@ -41,6 +42,7 @@ const BULLETIN_TYPE_COLORS: Record<string, string> = {
   announcement: Colors.info, event: Colors.primary, clinic: Colors.success,
   tournament: Colors.warning, social: Colors.purple, drill: Colors.cyan,
 };
+const ACTIVE_FEED_POLL_MS = 5000;
 
 export default function CommunityScreen() {
   const { user, facilityId } = useAuth();
@@ -133,6 +135,17 @@ export default function CommunityScreen() {
     else if (activeTab === 'bulletin') fetchBulletins();
     else fetchNotifications();
   }, [activeTab, fetchPartners, fetchBulletins, fetchNotifications]);
+
+  useEffect(() => {
+    const stopPolling = createPollingTransport(ACTIVE_FEED_POLL_MS).subscribe(() => {
+      if (activeTab === 'partners') {
+        fetchPartners();
+      } else if (activeTab === 'bulletin') {
+        fetchBulletins();
+      }
+    });
+    return stopPolling;
+  }, [activeTab, fetchPartners, fetchBulletins]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

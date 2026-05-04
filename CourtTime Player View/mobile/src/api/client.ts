@@ -6,6 +6,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import NetInfo from '@react-native-community/netinfo';
+import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../../shared/api/core';
 
 // Android emulator uses 10.0.2.2 to reach the host machine's localhost
 // Web and iOS simulator can use localhost directly
@@ -25,17 +26,7 @@ export type ApiErrorCategory =
   | 'timeout'
   | 'unknown';
 
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  errorMessage?: string;
-  errorCategory?: ApiErrorCategory;
-  message?: string;
-  ruleViolations?: Array<{ ruleCode: string; ruleName: string; message: string; severity: string }>;
-  warnings?: Array<{ ruleCode: string; ruleName: string; message: string }>;
-  isPrimeTime?: boolean;
-}
+export type ApiResponse<T = any> = SharedApiResponse<T, ApiErrorCategory>;
 
 // ── Token storage (SecureStore on native, localStorage on web) ──
 
@@ -99,14 +90,6 @@ export async function clearCache(): Promise<void> {
 
 // ── API request with auto-attached Bearer token ──
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const token = await getToken();
-  if (token) {
-    return { Authorization: `Bearer ${token}` };
-  }
-  return {};
-}
-
 async function getOfflineAwareCategoryFromFetchError(error: unknown): Promise<ApiErrorCategory> {
   if ((error as any)?.name === 'AbortError') {
     return 'timeout';
@@ -133,76 +116,19 @@ function categoryFromStatus(status: number): ApiErrorCategory {
   return 'unknown';
 }
 
-export async function apiRequest<T = any>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const authHeaders = await getAuthHeaders();
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders,
-        ...options.headers,
-      },
-    });
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      const errorCategory = categoryFromStatus(response.status);
-      const errorMessage = `Server error (${response.status}). Please try again.`;
-      return {
-        success: false,
-        error: errorMessage,
-        errorMessage,
-        errorCategory,
-      };
-    }
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      const errorMessage = data.error || data.message || 'Request failed';
-      const errorCategory = categoryFromStatus(response.status);
-      return {
-        success: false,
-        error: errorMessage,
-        errorMessage,
-        errorCategory,
-        ...(data.ruleViolations && { ruleViolations: data.ruleViolations }),
-        ...(data.warnings && { warnings: data.warnings }),
-        ...(data.isPrimeTime !== undefined && { isPrimeTime: data.isPrimeTime }),
-      };
-    }
-
-    return {
-      success: true,
-      data,
-      message: data.message,
-    };
-  } catch (error) {
-    const errorCategory = await getOfflineAwareCategoryFromFetchError(error);
-    const errorMessage =
-      errorCategory === 'offline'
-        ? 'You appear to be offline. Please check your connection.'
-        : errorCategory === 'timeout'
-          ? 'Request timed out. Please try again.'
-          : 'Unable to reach CourtTime right now. Please try again.';
-    return {
-      success: false,
-      error: errorMessage,
-      errorMessage,
-      errorCategory,
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
+export const apiRequest = buildApiRequest<ApiErrorCategory>({
+  baseUrl: API_BASE_URL,
+  getToken,
+  timeoutMs: REQUEST_TIMEOUT_MS,
+  mapStatusToCategory: categoryFromStatus,
+  mapErrorToCategory: getOfflineAwareCategoryFromFetchError,
+  mapCategoryToMessage: (errorCategory) =>
+    errorCategory === 'offline'
+      ? 'You appear to be offline. Please check your connection.'
+      : errorCategory === 'timeout'
+        ? 'Request timed out. Please try again.'
+        : 'Unable to reach CourtTime right now. Please try again.',
+});
 
 // ── Terms & Conditions ──
 

@@ -4,6 +4,8 @@
  * Player-facing subset only (no admin-specific types)
  */
 
+import type { OpeningHours, PartnerPost as SharedPartnerPost } from '../../../shared/types';
+
 // =====================================================
 // USERS & AUTHENTICATION
 // =====================================================
@@ -52,7 +54,7 @@ export interface Facility {
   contactName?: string;
   description?: string;
   amenities?: string[];
-  operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
+  operatingHours?: OpeningHours;
   generalRules?: string;
   cancellationPolicy?: string;
   bookingRules?: string;
@@ -125,20 +127,7 @@ export interface BookingWithDetails extends Booking {
 // HITTING PARTNER POSTS
 // =====================================================
 
-export interface HittingPartnerPost {
-  id: string;
-  userId: string;
-  facilityId: string;
-  skillLevel?: string;
-  availability: string;
-  playStyle: string[];
-  description: string;
-  postedDate: Date;
-  expiresAt: Date;
-  status: 'active' | 'expired' | 'deleted';
-  createdAt: Date;
-  updatedAt: Date;
-}
+export interface HittingPartnerPost extends SharedPartnerPost {}
 
 export interface HittingPartnerPostWithUser extends HittingPartnerPost {
   userName: string;

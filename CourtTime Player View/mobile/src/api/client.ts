@@ -3,15 +3,40 @@
  * Mirrors the web app's API client with JWT token auth
  */
 
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import NetInfo from '@react-native-community/netinfo';
 import Constants from 'expo-constants';
+import * as Device from 'expo-device';
 import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../../shared/api/core';
 
+function tryParseHostFromScriptUrl(): string | null {
+  const scriptURL = (NativeModules as any)?.SourceCode?.scriptURL as string | undefined;
+  if (!scriptURL) return null;
+
+  // Typical dev formats:
+  // - http://192.168.1.10:8081/index.bundle?platform=ios&dev=true...
+  // - http://localhost:8081/...
+  try {
+    const withoutScheme = scriptURL.split('://').slice(1).join('://');
+    const hostPort = withoutScheme.split('/')[0] || '';
+    const host = hostPort.split(':')[0];
+    if (!host) return null;
+    if (host === 'localhost' || host === '127.0.0.1') return null;
+    return host;
+  } catch {
+    return null;
+  }
+}
+
 function inferDevApiBaseUrl(): string {
+  const fromScript = tryParseHostFromScriptUrl();
+  if (fromScript) {
+    return `http://${fromScript}:3001`;
+  }
+
   // Android emulator uses 10.0.2.2 to reach the host machine's localhost
-  if (Platform.OS === 'android') {
+  if (Platform.OS === 'android' && !Device.isDevice) {
     return 'http://10.0.2.2:3001';
   }
 
@@ -147,7 +172,7 @@ export const apiRequest = buildApiRequest<ApiErrorCategory>({
       ? 'You appear to be offline. Please check your connection.'
       : errorCategory === 'timeout'
         ? 'Request timed out. Please try again.'
-        : 'Unable to reach CourtTime right now. Please try again.',
+        : `Unable to reach CourtTime right now (${API_BASE_URL}). Please try again.`,
 });
 
 // ── Terms & Conditions ──

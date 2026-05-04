@@ -18,6 +18,9 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Forgot Password');
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -88,6 +91,7 @@ export default function ForgotPasswordScreen() {
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 
+          <View style={styles.formCard}>
           <View style={styles.header}>
             <Text style={styles.title}>Reset Password</Text>
             <Text style={styles.description}>
@@ -125,6 +129,7 @@ export default function ForgotPasswordScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -141,10 +146,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: Spacing.lg,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xl,
   },
   backButton: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
+    alignSelf: 'flex-start',
   },
   backText: {
     color: Colors.primary,
@@ -152,7 +160,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   header: {
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+  },
+  formCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   title: {
     fontSize: FontSize.xxl,
@@ -166,7 +186,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   form: {
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   label: {
     fontSize: FontSize.sm,
@@ -186,7 +206,7 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: Spacing.md,
@@ -200,10 +220,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   errorBox: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: Colors.error + '12',
     borderColor: Colors.error,
     borderWidth: 1,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     padding: Spacing.sm,
   },
   errorText: {
@@ -216,6 +236,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginHorizontal: Spacing.md,
+    marginVertical: Spacing.lg,
   },
   successIcon: {
     width: 64,

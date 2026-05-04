@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   Modal,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
@@ -224,7 +225,13 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           <View style={styles.header}>
@@ -361,7 +368,7 @@ function toDateString(d: Date): string {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: Colors.card,
     borderTopLeftRadius: BorderRadius.lg,

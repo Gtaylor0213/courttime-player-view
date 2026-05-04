@@ -12,19 +12,39 @@ import {
   TouchableOpacity,
   RefreshControl,
   Modal,
-  TextInput,
-  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  LayoutAnimation,
 } from 'react-native';
 import { showAlert } from '../../src/utils/alert';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
-import { TimePicker } from '../../src/components/TimePicker';
+import { TimePicker, PICKER_HEIGHT } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { Button } from '../../src/components/Button';
+import { Input } from '../../src/components/Input';
+import { Card } from '../../src/components/Card';
+
+export const ErrorBoundary = createRouteErrorBoundary('Book');
+
+type BookModalKind = 'booking' | 'violations' | null;
+
+function formatTimeForToast(startHHMM: string): string {
+  if (!startHHMM || !startHHMM.includes(':')) return startHHMM || '';
+  const [hStr, mStr] = startHHMM.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr || '0', 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return startHHMM;
+  const d = new Date(1970, 0, 1, h, m, 0, 0);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
 
 const BOOKING_TYPES = [
   { key: 'match', label: 'Fun' },
@@ -56,19 +76,18 @@ interface RuleViolation {
 }
 
 export default function BookCourtScreen() {
-  const { user, facilityId } = useAuth();
+  const { user, facilityId, selectedBookDate, setSelectedBookDate } = useAuth();
   const [courts, setCourts] = useState<Court[]>([]);
-  const [walkUpCourts, setWalkUpCourts] = useState<Court[]>([]);
-  const [selectedDate, setSelectedDate] = useState(getTodayString());
+  const [selectedDate, setSelectedDate] = useState(selectedBookDate || getTodayString());
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [booking, setBooking] = useState(false);
-  const [calendarExpanded, setCalendarExpanded] = useState(true);
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [quickReserving, setQuickReserving] = useState(false);
+  const [calendarExpanded, setCalendarExpanded] = useState(false);
 
-  // Booking details modal state
-  const [showBookingModal, setShowBookingModal] = useState(false);
+  // Booking / rule violations: single modal kind so only one native Modal is active
+  const [modalKind, setModalKind] = useState<BookModalKind>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [bookingType, setBookingType] = useState('match');
   const [bookingNotes, setBookingNotes] = useState('');
@@ -76,11 +95,9 @@ export default function BookCourtScreen() {
   const [modalEndTime, setModalEndTime] = useState('');
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
 
-  // Rule violations modal state
-  const [showViolations, setShowViolations] = useState(false);
+  // Rule violations modal payload (shown when modalKind === 'violations')
   const [violations, setViolations] = useState<RuleViolation[]>([]);
   const [warnings, setWarnings] = useState<RuleViolation[]>([]);
-
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
   function getTodayString() {
@@ -88,17 +105,55 @@ export default function BookCourtScreen() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  useEffect(() => {
+    if (selectedBookDate && selectedBookDate !== selectedDate) {
+      setSelectedDate(selectedBookDate);
+      setSelectedCourt(null);
+    }
+  }, [selectedBookDate]);
+
+  useEffect(() => {
+    setSelectedBookDate(selectedDate);
+  }, [selectedDate, setSelectedBookDate]);
+
+  useEffect(() => {
+    if (modalKind !== null) {
+      return;
+    }
+    setSelectedSlot(null);
+    setBookingType('match');
+    setBookingNotes('');
+    setModalStartTime('');
+    setModalEndTime('');
+    setAdditionalCourtIds([]);
+  }, [modalKind]);
+
   // ── Fetch courts ──
   const fetchCourts = useCallback(async () => {
     if (!facilityId) return;
+    console.log('[book] fetch courts', {
+      facilityId,
+      selectedDate,
+      courtsUrl: `/api/facilities/${facilityId}/courts`,
+      bookingsUrl: `/api/bookings/facility/${facilityId}?date=${selectedDate}`,
+      courtConfigFacilityUrl: `/api/court-config/facility/${facilityId}?date=${selectedDate}`,
+    });
     const res = await api.get(`/api/facilities/${facilityId}/courts`);
+    console.log('[book] courts response', {
+      success: res.success,
+      errorCategory: res.errorCategory,
+      error: res.error,
+      hasData: Boolean(res.data),
+    });
     if (res.success && res.data) {
       const courtList = Array.isArray(res.data) ? res.data : res.data.courts || [];
-      const available = courtList.filter((c: Court) => c.status === 'available');
-      setCourts(available.filter((c: Court) => !c.isWalkUp));
-      setWalkUpCourts(available.filter((c: Court) => c.isWalkUp));
+      const availableish = courtList.filter((c: Court) => {
+        const status = String(c.status || '').toLowerCase();
+        return status === '' || status === 'available' || status === 'active';
+      });
+      setCourts(availableish.filter((c: Court) => !c.isWalkUp));
     }
-  }, [facilityId]);
+  }, [facilityId, selectedDate]);
 
   // ── Fetch time slots ──
   const fetchTimeSlots = useCallback(async () => {
@@ -110,6 +165,14 @@ export default function BookCourtScreen() {
     const res = await api.get(
       `/api/court-config/${selectedCourt.id}/availability?date=${selectedDate}`
     );
+    console.log('[book] fetch slot availability', {
+      selectedDate,
+      url: `/api/court-config/${selectedCourt.id}/availability?date=${selectedDate}`,
+      success: res.success,
+      errorCategory: res.errorCategory,
+      error: res.error,
+      hasData: Boolean(res.data),
+    });
 
     if (res.success && res.data) {
       const data = res.data as AvailabilityResponse;
@@ -164,8 +227,11 @@ export default function BookCourtScreen() {
 
   useEffect(() => {
     fetchCourts();
-    setSelectedCourt(null);
   }, [fetchCourts]);
+
+  useEffect(() => {
+    setSelectedCourt(null);
+  }, [facilityId]);
 
   useEffect(() => {
     fetchTimeSlots();
@@ -178,17 +244,6 @@ export default function BookCourtScreen() {
     setRefreshing(false);
   }, [fetchCourts, fetchTimeSlots]);
 
-  // ── Open booking details modal ──
-  function handleSlotPress(slot: TimeSlot) {
-    setSelectedSlot(slot);
-    setModalStartTime(slot.startTime.slice(0, 5));
-    setModalEndTime(slot.endTime.slice(0, 5));
-    setBookingType('match');
-    setBookingNotes('');
-    setAdditionalCourtIds([]);
-    setShowBookingModal(true);
-  }
-
   // ── Handle calendar grid booking selection ──
   function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
     setSelectedCourt(court);
@@ -198,7 +253,107 @@ export default function BookCourtScreen() {
     setBookingType('match');
     setBookingNotes('');
     setAdditionalCourtIds([]);
-    setShowBookingModal(true);
+    setModalKind('booking');
+  }
+
+  // ── Quick Reserve (autofill soonest available slot like web) ──
+  async function handleQuickReserve() {
+    if (!facilityId || courts.length === 0) {
+      showAlert('Quick Reserve', 'No courts are available to reserve right now.');
+      return;
+    }
+
+    setQuickReserving(true);
+
+    const today = getTodayString();
+    const now = new Date();
+
+    try {
+      const availabilityResults = await Promise.all(
+        courts.map(async (court) => {
+          const res = await api.get(`/api/court-config/${court.id}/availability?date=${today}`);
+          return { court, res };
+        })
+      );
+
+      type Candidate = { court: Court; startTime: string; endTime: string };
+      const candidates: Candidate[] = [];
+
+      for (const { court, res } of availabilityResults) {
+        if (!res.success || !res.data || !res.data.isOpen) continue;
+
+        const data = res.data as AvailabilityResponse;
+        const slotDur = data.slotDuration || 30;
+        const slotsNeeded = Math.ceil(60 / slotDur); // Quick Reserve defaults to 1 hour
+        const bookedTimes = new Set((data.existingBookings || []).map((b) => b.startTime));
+        const [openH, openM] = data.operatingHours.open.split(':').map(Number);
+        const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
+        const closeMinutes = closeH * 60 + closeM;
+
+        let h = openH;
+        let m = openM;
+
+        while (h < closeH || (h === closeH && m < closeM)) {
+          const slotPast = h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
+          if (!slotPast) {
+            let checkH = h;
+            let checkM = m;
+            let contiguous = true;
+
+            for (let i = 0; i < slotsNeeded; i++) {
+              const checkTime = `${String(checkH).padStart(2, '0')}:${String(checkM).padStart(2, '0')}:00`;
+              const checkMinutes = checkH * 60 + checkM;
+              if (checkMinutes >= closeMinutes || bookedTimes.has(checkTime)) {
+                contiguous = false;
+                break;
+              }
+              checkM += slotDur;
+              if (checkM >= 60) {
+                checkH += Math.floor(checkM / 60);
+                checkM = checkM % 60;
+              }
+            }
+
+            if (contiguous) {
+              const startTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+              const endMinutes = h * 60 + m + 60;
+              const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}:00`;
+              candidates.push({ court, startTime, endTime });
+              break; // earliest valid slot for this court found
+            }
+          }
+
+          m += slotDur;
+          if (m >= 60) {
+            h += Math.floor(m / 60);
+            m = m % 60;
+          }
+        }
+      }
+
+      if (candidates.length === 0) {
+        showAlert('Quick Reserve', 'No open 1-hour slots are available today.');
+        return;
+      }
+
+      candidates.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const best = candidates[0];
+
+      setSelectedDate(today);
+      setCalendarExpanded(false);
+      setSelectedCourt(best.court);
+      setSelectedSlot({ startTime: best.startTime, endTime: best.endTime, available: true });
+      setModalStartTime(best.startTime.slice(0, 5));
+      setModalEndTime(best.endTime.slice(0, 5));
+      setBookingType('match');
+      setBookingNotes('');
+      setAdditionalCourtIds([]);
+      setModalKind('booking');
+    } catch {
+      showAlert('Quick Reserve', 'Could not load quick reserve availability. Please try again.');
+    } finally {
+      setQuickReserving(false);
+    }
   }
 
   // ── Calculate duration ──
@@ -210,20 +365,53 @@ export default function BookCourtScreen() {
 
   // ── Submit booking ──
   async function handleConfirmBooking() {
-    if (!selectedCourt || !user || !facilityId) return;
+    console.log('[book.confirm] start', {
+      hasSelectedCourt: Boolean(selectedCourt),
+      selectedCourtId: selectedCourt?.id,
+      hasUser: Boolean(user),
+      userId: user?.id,
+      facilityId,
+      modalStartTime,
+      modalEndTime,
+      bookingType,
+      additionalCourtIds,
+    });
+
+    if (!facilityId) {
+      showAlert('Booking failed', 'No club selected. Please pick a club from the header and try again.');
+      hapticError();
+      return;
+    }
+    if (!user) {
+      showAlert('Booking failed', 'Your session expired. Please log in again.');
+      hapticError();
+      return;
+    }
+    if (!selectedCourt) {
+      showAlert('Booking failed', 'Please pick a court before confirming.');
+      hapticError();
+      return;
+    }
+    if (!modalStartTime || !modalEndTime) {
+      showAlert('Booking failed', 'Please pick a start and end time.');
+      hapticError();
+      return;
+    }
 
     const startTime = modalStartTime + ':00';
     const endTime = modalEndTime + ':00';
 
     if (toMinutes(modalEndTime) <= toMinutes(modalStartTime)) {
+      console.log('[book.confirm] invalid time range', { modalStartTime, modalEndTime });
       showAlert('Invalid Time', 'End time must be after start time.');
+      hapticError();
       return;
     }
 
     setBooking(true);
 
-    // Book the primary court
-    const allCourtIds = [selectedCourt.id, ...additionalCourtIds];
+    const extraCourtIds = additionalCourtIds.filter((id) => id !== selectedCourt.id);
+    const allCourtIds = [selectedCourt.id, ...extraCourtIds];
     let allSuccess = true;
     let firstError: string | null = null;
     let firstViolations: RuleViolation[] | null = null;
@@ -242,7 +430,15 @@ export default function BookCourtScreen() {
         notes: bookingNotes.trim() || undefined,
       };
 
+      console.log('[book.confirm] POST /api/bookings', { courtId, bookingData });
       const res = await api.post('/api/bookings', bookingData);
+      console.log('[book.confirm] response', {
+        courtId,
+        success: res.success,
+        errorCategory: res.errorCategory,
+        error: res.error,
+        hasViolations: Array.isArray(res.ruleViolations) && res.ruleViolations.length > 0,
+      });
 
       if (!res.success) {
         allSuccess = false;
@@ -257,18 +453,23 @@ export default function BookCourtScreen() {
     }
 
     if (allSuccess) {
-      setShowBookingModal(false);
+      setModalKind(null);
       hapticSuccess();
-      const courtCount = allCourtIds.length;
-      showAlert('Booked!', courtCount > 1 ? `${courtCount} courts reserved.` : 'Your court has been reserved.');
+      const primaryName = selectedCourt.name;
+      const timeLabel = formatTimeForToast(modalStartTime);
+      const bookedBody =
+        allCourtIds.length > 1
+          ? `${primaryName} (+ ${allCourtIds.length - 1} more) on ${selectedDateLabel} at ${timeLabel}.`
+          : `${primaryName} on ${selectedDateLabel} at ${timeLabel}.`;
+      showAlert('Booked!', bookedBody);
       fetchTimeSlots();
     } else if (firstViolations) {
       hapticError();
       setViolations(firstViolations);
       setWarnings(firstWarnings);
-      setShowBookingModal(false);
-      setShowViolations(true);
+      setModalKind('violations');
     } else {
+      hapticError();
       showAlert('Booking Failed', firstError || 'Could not complete booking.');
     }
     setBooking(false);
@@ -295,7 +496,7 @@ export default function BookCourtScreen() {
       overrideRules: violations.map(v => v.ruleCode),
     });
 
-    setShowViolations(false);
+    setModalKind(null);
     if (res.success) {
       hapticSuccess();
       showAlert('Booked!', 'Booking created with admin override.');
@@ -307,14 +508,6 @@ export default function BookCourtScreen() {
   }
 
   // ── Helpers ──
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(':');
-    const h = parseInt(hours);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${h12}:${minutes} ${ampm}`;
-  };
-
   const toMinutes = (t: string) => {
     const p = t.split(':');
     return parseInt(p[0]) * 60 + parseInt(p[1] || '0');
@@ -364,6 +557,7 @@ export default function BookCourtScreen() {
 
   // Toggle additional court
   const toggleAdditionalCourt = (courtId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setAdditionalCourtIds(prev =>
       prev.includes(courtId) ? prev.filter(id => id !== courtId) : [...prev, courtId]
     );
@@ -373,10 +567,16 @@ export default function BookCourtScreen() {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    year: 'numeric',
   });
 
-  const availableCount = timeSlots.filter(s => s.available).length;
-  const totalCount = timeSlots.length;
+  const stepDate = (deltaDays: number) => {
+    const base = new Date(selectedDate + 'T00:00:00');
+    base.setDate(base.getDate() + deltaDays);
+    const next = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+    setSelectedDate(next);
+    setSelectedCourt(null);
+  };
 
   return (
     <ScrollView
@@ -392,44 +592,49 @@ export default function BookCourtScreen() {
         </View>
       )}
 
-      {/* View Mode Toggle */}
-      <View style={styles.viewToggle}>
-        <TouchableOpacity
-          style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleActive]}
-          onPress={() => { setViewMode('list'); setCalendarExpanded(true); }}
-        >
-          <Ionicons name="list" size={16} color={viewMode === 'list' ? Colors.textInverse : Colors.textSecondary} />
-          <Text style={[styles.viewToggleText, viewMode === 'list' && styles.viewToggleTextActive]}>List</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.viewToggleButton, viewMode === 'calendar' && styles.viewToggleActive]}
-          onPress={() => { setViewMode('calendar'); setCalendarExpanded(false); }}
-        >
-          <Ionicons name="grid" size={16} color={viewMode === 'calendar' ? Colors.textInverse : Colors.textSecondary} />
-          <Text style={[styles.viewToggleText, viewMode === 'calendar' && styles.viewToggleTextActive]}>Calendar</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* ── Calendar ── */}
       <View style={styles.calendarSection}>
-        <TouchableOpacity
-          style={styles.calendarToggle}
-          onPress={() => setCalendarExpanded(!calendarExpanded)}
-        >
-          <Ionicons name="calendar" size={18} color={Colors.primary} />
-          <Text style={styles.calendarToggleText}>{selectedDateLabel}</Text>
-          <Ionicons
-            name={calendarExpanded ? 'chevron-up' : 'chevron-down'}
-            size={18}
-            color={Colors.textMuted}
+        <View style={styles.dayNavRow}>
+          <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(-1)}>
+            <Ionicons name="chevron-back" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.datePill}
+            onPress={() => setCalendarExpanded(v => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={`Selected date ${selectedDateLabel}. Tap to ${calendarExpanded ? 'collapse' : 'expand'} calendar.`}
+          >
+            <Ionicons name="calendar" size={18} color={Colors.primary} />
+            <Text style={styles.datePillText}>{selectedDateLabel}</Text>
+            <Ionicons
+              name={calendarExpanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={Colors.textMuted}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(1)}>
+            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.quickReserveRow}>
+          <Button
+            title="Quick Reserve"
+            onPress={handleQuickReserve}
+            disabled={!facilityId}
+            loading={quickReserving}
+            leftIcon={<Ionicons name="flash" size={16} color={Colors.textInverse} />}
+            style={styles.quickReserveButton}
           />
-        </TouchableOpacity>
+        </View>
 
         {calendarExpanded && (
           <MiniCalendar
             selectedDate={selectedDate}
             onSelectDate={(date) => {
+              console.log('[book] selectedDate from MiniCalendar', date);
               setSelectedDate(date);
+              setSelectedCourt(null);
               setCalendarExpanded(false);
             }}
             minDate={getTodayString()}
@@ -437,8 +642,8 @@ export default function BookCourtScreen() {
         )}
       </View>
 
-      {/* ══════ CALENDAR GRID VIEW ══════ */}
-      {viewMode === 'calendar' && facilityId && (
+      {/* ══════ CALENDAR GRID (Website-style default view) ══════ */}
+      {facilityId && (
         <CourtCalendarGrid
           courts={courts}
           selectedDate={selectedDate}
@@ -447,254 +652,171 @@ export default function BookCourtScreen() {
         />
       )}
 
-      {/* ══════ LIST VIEW ══════ */}
-      {viewMode === 'list' && (
-      <>
-      {/* ── Court Selector ── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Select a Court to Book</Text>
-        {walkUpCourts.length > 0 && (
-          <View style={styles.walkUpBanner}>
-            <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
-            <Text style={styles.walkUpBannerText}>
-              {walkUpCourts.map(c => c.name).join(', ')} {walkUpCourts.length === 1 ? 'is' : 'are'} walk-up only — book in person at the facility.
-            </Text>
-          </View>
-        )}
-        {courts.length === 0 && facilityId && (
-          <View style={styles.emptyCard}>
-            <Ionicons name="tennisball-outline" size={32} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>No courts available</Text>
-          </View>
-        )}
-        {courts.map((court) => (
-          <TouchableOpacity
-            key={court.id}
-            style={styles.courtListCard}
-            onPress={async () => {
-              setSelectedCourt(court);
-              // Fetch availability for this court right now
-              const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
-              if (res.success && res.data && res.data.isOpen) {
-                const data = res.data;
-                const slotDur = data.slotDuration || 30;
-                const [openH, openM] = data.operatingHours.open.split(':').map(Number);
-                const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
-                const bookedSet = new Set((data.existingBookings || []).map((b: any) => b.startTime));
-                const now = new Date();
-                const isToday = selectedDate === getTodayString();
-
-                // Build available start times
-                const starts: string[] = [];
-                let h = openH, m = openM;
-                while (h < closeH || (h === closeH && m < closeM)) {
-                  const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                  const isPast = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
-                  if (!bookedSet.has(t + ':00') && !isPast) starts.push(t);
-                  m += slotDur;
-                  if (m >= 60) { h += Math.floor(m / 60); m = m % 60; }
-                }
-
-                if (starts.length > 0) {
-                  const startTime = starts[0];
-                  setModalStartTime(startTime);
-
-                  // Build end times for first start
-                  const startMin = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
-                  const closeMin = closeH * 60 + closeM;
-                  let maxEnd = closeMin;
-                  // Find next booked slot after start
-                  for (const slot of (data.existingBookings || [])) {
-                    if (!slot.startTime) continue;
-                    const bMin = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
-                    if (bMin > startMin) { maxEnd = Math.min(maxEnd, bMin); break; }
-                  }
-                  const firstEnd = Math.min(startMin + slotDur, maxEnd);
-                  setModalEndTime(`${String(Math.floor(firstEnd / 60)).padStart(2, '0')}:${String(firstEnd % 60).padStart(2, '0')}`);
-
-                  // Also update timeSlots state so the pickers work
-                  const slots: TimeSlot[] = [];
-                  h = openH; m = openM;
-                  while (h < closeH || (h === closeH && m < closeM)) {
-                    const st = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-                    let eM = m + slotDur, eH = h;
-                    if (eM >= 60) { eH += Math.floor(eM / 60); eM = eM % 60; }
-                    const et = `${String(eH).padStart(2, '0')}:${String(eM).padStart(2, '0')}:00`;
-                    const isPast = isToday && (h < now.getHours() || (h === now.getHours() && m <= now.getMinutes()));
-                    slots.push({ startTime: st, endTime: et, available: !bookedSet.has(st) && !isPast });
-                    m += slotDur;
-                    if (m >= 60) { h += Math.floor(m / 60); m = m % 60; }
-                  }
-                  setTimeSlots(slots);
-                }
-              }
-              setBookingType('match');
-              setBookingNotes('');
-              setAdditionalCourtIds([]);
-              setShowBookingModal(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.courtListIcon}>
-              <Ionicons
-                name={court.courtType === 'Pickleball' ? 'tennisball' : 'tennisball-outline'}
-                size={24}
-                color={Colors.primary}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.courtListName}>{court.name}</Text>
-              <Text style={styles.courtListMeta}>
-                {court.courtType || 'Tennis'} · {court.surfaceType || 'Hard'}{court.hasLights ? ' · Lights' : ''}
-              </Text>
-            </View>
-            <View style={styles.courtListAvail}>
-              <Text style={styles.courtListAvailText}>{availableCount} slots</Text>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-      </>
-      )}
-
       <View style={{ height: Spacing.xl }} />
 
       {/* ── Booking Details Modal ── */}
-      <Modal visible={showBookingModal} transparent animationType="slide" onRequestClose={() => setShowBookingModal(false)}>
+      <Modal
+        visible={modalKind === 'booking'}
+        transparent
+        animationType="slide"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+        onRequestClose={() => setModalKind(null)}
+      >
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Booking Details</Text>
-              <TouchableOpacity onPress={() => setShowBookingModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Summary */}
-            <View style={styles.modalSummary}>
-              <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
-              <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
-            </View>
-
-            {/* Time Pickers */}
-            <Text style={styles.modalLabel}>Select Time</Text>
-            <View style={styles.timePickerRow}>
-              <TimePicker
-                label="Start"
-                times={getAvailableStartTimes()}
-                selectedTime={modalStartTime}
-                onSelect={(t) => {
-                  setModalStartTime(t);
-                  // Auto-adjust end time if needed
-                  const ends = getAvailableEndTimes(t);
-                  if (ends.length > 0 && (toMinutes(modalEndTime) <= toMinutes(t) || !ends.includes(modalEndTime))) {
-                    setModalEndTime(ends[0]);
-                  }
-                }}
-              />
-              <View style={styles.timePickerDivider}>
-                <Text style={styles.timePickerDividerText}>to</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalKeyboardShell}
+          >
+            <View style={styles.modalInner}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Booking Details</Text>
+                <Pressable
+                  testID="dismiss-booking-modal"
+                  onPress={() => setModalKind(null)}
+                  style={({ pressed }) => [styles.modalIconHit, pressed && styles.pressedOpacity]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                </Pressable>
               </View>
-              <TimePicker
-                label="End"
-                times={getAvailableEndTimes(modalStartTime)}
-                selectedTime={modalEndTime}
-                onSelect={setModalEndTime}
-              />
-            </View>
 
-            {/* Duration display */}
-            {modalStartTime && modalEndTime && toMinutes(modalEndTime) > toMinutes(modalStartTime) && (
-              <View style={styles.durationBadge}>
-                <Ionicons name="time-outline" size={14} color={Colors.primary} />
-                <Text style={styles.durationText}>
-                  {calcDuration(modalStartTime + ':00', modalEndTime + ':00')} minutes
-                </Text>
+              {/* Summary */}
+              <Card style={styles.modalSummary} padded>
+                <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
+                <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
+              </Card>
+
+              {/* Time Pickers */}
+              <Text style={styles.modalLabel}>Select Time</Text>
+              <View style={styles.timePickerRow}>
+                <View style={styles.timePickerColumn}>
+                  <TimePicker
+                    label="Start"
+                    times={getAvailableStartTimes()}
+                    selectedTime={modalStartTime}
+                    onSelect={(t) => {
+                      setModalStartTime(t);
+                      const ends = getAvailableEndTimes(t);
+                      if (ends.length > 0 && (toMinutes(modalEndTime) <= toMinutes(t) || !ends.includes(modalEndTime))) {
+                        setModalEndTime(ends[0]);
+                      }
+                    }}
+                  />
+                </View>
+                <View style={styles.timePickerDivider}>
+                  <Text style={styles.timePickerDividerText}>to</Text>
+                </View>
+                <View style={styles.timePickerColumn}>
+                  <TimePicker
+                    label="End"
+                    times={getAvailableEndTimes(modalStartTime)}
+                    selectedTime={modalEndTime}
+                    onSelect={setModalEndTime}
+                  />
+                </View>
               </View>
-            )}
 
-            {/* Booking Type */}
-            <Text style={styles.modalLabel}>Booking Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
-              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                {BOOKING_TYPES.map(bt => (
-                  <TouchableOpacity
-                    key={bt.key}
-                    style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
-                    onPress={() => setBookingType(bt.key)}
-                  >
-                    <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
-                      {bt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+              {/* Duration display */}
+              {modalStartTime && modalEndTime && toMinutes(modalEndTime) > toMinutes(modalStartTime) && (
+                <View style={styles.durationBadge}>
+                  <Ionicons name="time-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.durationText}>
+                    {calcDuration(modalStartTime + ':00', modalEndTime + ':00')} minutes
+                  </Text>
+                </View>
+              )}
 
-            {/* Additional Courts (Admin only) */}
-            {isAdmin && courts.length > 1 && (
-              <>
-                <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md }}>
-                  {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
+              {/* Booking Type */}
+              <Text style={styles.modalLabel}>Booking Type</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                style={{ marginBottom: Spacing.md }}
+              >
+                <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                  {BOOKING_TYPES.map(bt => (
                     <TouchableOpacity
-                      key={court.id}
-                      style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
-                      onPress={() => toggleAdditionalCourt(court.id)}
+                      key={bt.key}
+                      style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
+                      onPress={() => setBookingType(bt.key)}
                     >
-                      <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
-                        {court.name}
+                      <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
+                        {bt.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-              </>
-            )}
+              </ScrollView>
 
-            {/* Notes */}
-            <Text style={styles.modalLabel}>Notes (optional)</Text>
-            <TextInput
-              style={styles.notesInput}
-              value={bookingNotes}
-              onChangeText={setBookingNotes}
-              placeholder="Special requests or notes..."
-              placeholderTextColor={Colors.textMuted}
-              multiline
-              maxLength={200}
-            />
-
-            {/* Confirm Button */}
-            <TouchableOpacity
-              style={[styles.confirmButton, booking && { opacity: 0.6 }]}
-              onPress={handleConfirmBooking}
-              disabled={booking}
-            >
-              {booking ? (
-                <ActivityIndicator size="small" color={Colors.textInverse} />
-              ) : (
-                <Text style={styles.confirmButtonText}>
-                  {additionalCourtIds.length > 0
-                    ? `Book ${1 + additionalCourtIds.length} Courts`
-                    : 'Confirm Booking'}
-                </Text>
+              {/* Additional Courts (Admin only) */}
+              {isAdmin && courts.length > 1 && (
+                <>
+                  <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md }}>
+                    {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
+                      <TouchableOpacity
+                        key={court.id}
+                        style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
+                        onPress={() => toggleAdditionalCourt(court.id)}
+                      >
+                        <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
+                          {court.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
               )}
-            </TouchableOpacity>
 
-            <View style={{ height: Spacing.xl }} />
-          </ScrollView>
+              {/* Notes */}
+              <Text style={styles.modalLabel}>Notes (optional)</Text>
+              <Input
+                style={styles.notesInput}
+                value={bookingNotes}
+                onChangeText={setBookingNotes}
+                placeholder="Special requests or notes..."
+                multiline
+                maxLength={200}
+              />
+
+              {/* Confirm Button */}
+              <Button
+                title={
+                  additionalCourtIds.length > 0
+                    ? `Book ${1 + additionalCourtIds.length} Courts`
+                    : 'Confirm Booking'
+                }
+                onPress={handleConfirmBooking}
+                loading={booking}
+                style={styles.confirmButton}
+              />
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
       {/* ── Rule Violations Modal ── */}
-      <Modal visible={showViolations} transparent animationType="fade" onRequestClose={() => setShowViolations(false)}>
+      <Modal
+        visible={modalKind === 'violations'}
+        transparent
+        animationType="fade"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+        onRequestClose={() => setModalKind(null)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: Colors.error }]}>Booking Not Allowed</Text>
-              <TouchableOpacity onPress={() => setShowViolations(false)}>
+              <Pressable
+                onPress={() => setModalKind(null)}
+                style={({ pressed }) => [styles.modalIconHit, pressed && styles.pressedOpacity]}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
                 <Ionicons name="close" size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <Text style={styles.violationSubtitle}>
@@ -727,26 +849,17 @@ export default function BookCourtScreen() {
               )}
             </ScrollView>
 
-            <TouchableOpacity
-              style={[styles.confirmButton, { backgroundColor: Colors.textSecondary }]}
-              onPress={() => setShowViolations(false)}
-            >
-              <Text style={styles.confirmButtonText}>Dismiss</Text>
-            </TouchableOpacity>
+            <Button variant="secondary" title="Dismiss" onPress={() => setModalKind(null)} style={styles.confirmButton} />
 
             {/* Admin Override */}
             {isAdmin && (
-              <TouchableOpacity
-                style={[styles.confirmButton, { backgroundColor: Colors.warning, marginTop: Spacing.sm }]}
+              <Button
+                variant="warning"
+                title="Override as Admin"
                 onPress={handleAdminOverride}
-                disabled={booking}
-              >
-                {booking ? (
-                  <ActivityIndicator size="small" color={Colors.textInverse} />
-                ) : (
-                  <Text style={styles.confirmButtonText}>Override as Admin</Text>
-                )}
-              </TouchableOpacity>
+                loading={booking}
+                style={{ marginTop: Spacing.sm }}
+              />
             )}
           </View>
         </View>
@@ -760,36 +873,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.surface,
   },
-  // ── View Toggle ──
-  viewToggle: {
-    flexDirection: 'row',
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.borderLight,
-    borderRadius: BorderRadius.md,
-    padding: 3,
-  },
-  viewToggleButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-  },
-  viewToggleActive: {
-    backgroundColor: Colors.primary,
-  },
-  viewToggleText: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  viewToggleTextActive: {
-    color: Colors.textInverse,
-  },
-
   noFacility: {
     flexDirection: 'row',
     margin: Spacing.md,
@@ -806,200 +889,71 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.text,
   },
-  walkUpBanner: {
-    flexDirection: 'row',
-    backgroundColor: Colors.info + '12',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
-    alignItems: 'flex-start',
-  },
-  walkUpBannerText: {
-    flex: 1,
-    fontSize: FontSize.xs,
-    color: Colors.text,
-    lineHeight: 18,
-  },
 
   // ── Calendar ──
   calendarSection: {
     backgroundColor: Colors.card,
     marginBottom: Spacing.sm,
   },
-  calendarToggle: {
+  dayNavRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
     gap: Spacing.sm,
   },
-  calendarToggleText: {
+  dayArrow: {
+    width: TouchTarget.min,
+    height: TouchTarget.min,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  datePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.full,
+    paddingVertical: Spacing.sm,
+    minHeight: TouchTarget.min,
+    paddingHorizontal: Spacing.md,
+  },
+  datePillText: {
     flex: 1,
     fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.text,
-  },
-
-  // ── Courts ──
-  section: {
-    padding: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: Spacing.sm,
-  },
-  courtScroll: {
-    flexDirection: 'row',
-    marginHorizontal: -Spacing.md,
-    paddingHorizontal: Spacing.md,
-  },
-  courtChip: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginRight: Spacing.sm,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    gap: 4,
-    minWidth: 90,
-  },
-  courtChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  courtChipText: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  courtChipTextActive: {
-    color: Colors.textInverse,
-  },
-  courtChipMeta: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-  },
-  courtChipMetaActive: {
-    color: Colors.textInverse + 'cc',
-  },
-
-  // ── Time Slots ──
-  slotHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  slotCount: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-  },
-  slotGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  slotCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.primary + '30',
-    alignItems: 'center',
-    width: '30%' as any,
-    minWidth: 95,
-  },
-  slotUnavailable: {
-    backgroundColor: Colors.borderLight,
-    borderColor: Colors.border,
-    opacity: 0.6,
-  },
-  slotTime: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  slotEndTime: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
-  slotTimeUnavailable: {
-    color: Colors.textMuted,
-  },
-  slotAvailableDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.success,
-    marginTop: 4,
-  },
-
-  // ── Court List Cards (list view) ──
-  courtListCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: Spacing.md,
-  },
-  courtListIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primary + '12',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  courtListName: {
-    fontSize: FontSize.md,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  courtListMeta: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  courtListAvail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  courtListAvailText: {
-    fontSize: FontSize.xs,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-
-  // ── Empty States ──
-  emptyCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    gap: Spacing.sm,
-    margin: Spacing.md,
-  },
-  emptyText: {
-    color: Colors.textMuted,
-    fontSize: FontSize.sm,
     textAlign: 'center',
+  },
+  quickReserveRow: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  quickReserveButton: {
+    alignSelf: 'stretch',
+  },
+  modalIconHit: {
+    minWidth: TouchTarget.min,
+    minHeight: TouchTarget.min,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressedOpacity: {
+    opacity: 0.85,
   },
 
   // ── Modals ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -1008,6 +962,16 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.lg,
     padding: Spacing.lg,
     maxHeight: '85%',
+  },
+  modalKeyboardShell: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    maxHeight: '85%',
+  },
+  modalInner: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xl,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1022,8 +986,6 @@ const styles = StyleSheet.create({
   },
   modalSummary: {
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
     marginBottom: Spacing.md,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
@@ -1036,12 +998,6 @@ const styles = StyleSheet.create({
   summaryDate: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  summaryTime: {
-    fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: '600',
     marginTop: 2,
   },
   modalLabel: {
@@ -1073,21 +1029,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   notesInput: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    fontSize: FontSize.sm,
-    color: Colors.text,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 60,
+    minHeight: 80,
     textAlignVertical: 'top',
     marginBottom: Spacing.md,
   },
   timePickerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     marginBottom: Spacing.md,
+  },
+  timePickerColumn: {
+    flex: 1,
+    minHeight: PICKER_HEIGHT + Spacing.xl + Spacing.sm,
   },
   timePickerDivider: {
     paddingTop: Spacing.xl + Spacing.sm,
@@ -1115,15 +1068,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   confirmButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-  },
-  confirmButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.md,
-    fontWeight: '700',
+    alignSelf: 'stretch',
   },
 
   // ── Rule Violations ──

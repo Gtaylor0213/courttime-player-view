@@ -9,18 +9,38 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import NetInfo from '@react-native-community/netinfo';
-import { api, ApiResponse } from '../api/client';
-import { getCachedData, setCachedData, queueAction, getActionQueue, removeActionFromQueue } from '../utils/offlineCache';
+import { Platform } from 'react-native';
+import { api, ApiErrorCategory, ApiResponse } from '../api/client';
+import { getCachedDataWithMeta, setCachedData, queueAction, getActionQueue, removeActionFromQueue } from '../utils/offlineCache';
+
+type ConnectivityBannerState = 'offline' | 'backend_unreachable' | 'online';
 
 export function useOfflineApi() {
   const [isOffline, setIsOffline] = useState(false);
+  const [bannerState, setBannerState] = useState<ConnectivityBannerState>('online');
+  const [lastCachedAt, setLastCachedAt] = useState<number | null>(null);
+
+  const fallbackApiBase = Platform.OS === 'android' ? 'http://10.0.2.2:3001' : 'http://localhost:3001';
+  const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || fallbackApiBase;
+  const healthUrl = `${apiBaseUrl.replace(/\/$/, '')}/health`;
 
   useEffect(() => {
+    NetInfo.configure({
+      reachabilityUrl: healthUrl,
+    });
+    NetInfo.fetch().then(state => {
+      const offline = state.isConnected === false;
+      setIsOffline(offline);
+      setBannerState(offline ? 'offline' : 'online');
+    });
+
     const unsubscribe = NetInfo.addEventListener(state => {
-      setIsOffline(!state.isConnected);
+      const offline = state.isConnected === false;
+      setIsOffline(offline);
+      setBannerState(prev => (offline ? 'offline' : prev === 'offline' ? 'online' : prev));
     });
     return () => unsubscribe();
-  }, []);
+  }, [healthUrl]);
 
   /**
    * Fetch data with cache fallback.
@@ -30,30 +50,61 @@ export function useOfflineApi() {
   const fetchWithCache = useCallback(async <T = any>(
     cacheKey: string,
     endpoint: string,
-  ): Promise<{ data: T | null; fromCache: boolean; error?: string }> => {
+  ): Promise<{ data: T | null; fromCache: boolean; error?: string; errorCategory?: ApiErrorCategory; cachedAt?: number }> => {
     // Try API first
     if (!isOffline) {
       const res = await api.get<T>(endpoint);
       if (res.success && res.data) {
         await setCachedData(cacheKey, res.data);
+        setBannerState('online');
+        setLastCachedAt(null);
         return { data: res.data as T, fromCache: false };
       }
 
-      // API failed but might be a network error — try cache
-      if (res.error?.includes('Network error')) {
+      // API failed due to offline — try cache
+      if (res.errorCategory === 'offline') {
         setIsOffline(true);
-        const cached = await getCachedData<T>(cacheKey);
-        if (cached) return { data: cached, fromCache: true };
-        return { data: null, fromCache: true, error: 'No cached data available' };
+        setBannerState('offline');
+        const cached = await getCachedDataWithMeta<T>(cacheKey);
+        if (cached) {
+          setLastCachedAt(cached.cachedAt);
+          return { data: cached.data, fromCache: true, cachedAt: cached.cachedAt };
+        }
+        return { data: null, fromCache: true, error: 'No cached data available', errorCategory: 'offline' };
       }
 
-      return { data: null, fromCache: false, error: res.error };
+      if (res.errorCategory === 'timeout' || res.errorCategory === 'server' || res.errorCategory === 'unknown') {
+        setBannerState('backend_unreachable');
+        const cached = await getCachedDataWithMeta<T>(cacheKey);
+        if (cached) {
+          setLastCachedAt(cached.cachedAt);
+          return {
+            data: cached.data,
+            fromCache: true,
+            cachedAt: cached.cachedAt,
+            errorCategory: res.errorCategory,
+            error: res.errorMessage || res.error,
+          };
+        }
+        return {
+          data: null,
+          fromCache: false,
+          error: res.errorMessage || res.error,
+          errorCategory: res.errorCategory,
+        };
+      }
+
+      return { data: null, fromCache: false, error: res.errorMessage || res.error, errorCategory: res.errorCategory };
     }
 
     // Offline — use cache
-    const cached = await getCachedData<T>(cacheKey);
-    if (cached) return { data: cached, fromCache: true };
-    return { data: null, fromCache: true, error: 'You are offline and no cached data is available' };
+    const cached = await getCachedDataWithMeta<T>(cacheKey);
+    if (cached) {
+      setBannerState('offline');
+      setLastCachedAt(cached.cachedAt);
+      return { data: cached.data, fromCache: true, cachedAt: cached.cachedAt };
+    }
+    return { data: null, fromCache: true, error: 'You are offline and no cached data is available', errorCategory: 'offline' };
   }, [isOffline]);
 
   /**
@@ -114,5 +165,12 @@ export function useOfflineApi() {
     }
   }, [isOffline, processQueue]);
 
-  return { isOffline, fetchWithCache, postWithQueue, processQueue };
+  const retryConnectivity = useCallback(async () => {
+    const state = await NetInfo.fetch();
+    const offline = state.isConnected === false;
+    setIsOffline(offline);
+    setBannerState(offline ? 'offline' : 'online');
+  }, []);
+
+  return { isOffline, bannerState, lastCachedAt, fetchWithCache, postWithQueue, processQueue, retryConnectivity };
 }

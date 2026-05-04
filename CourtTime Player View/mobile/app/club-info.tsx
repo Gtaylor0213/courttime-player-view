@@ -17,7 +17,14 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../src/constants/theme';
+import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
+import { useAuth } from '../src/contexts/AuthContext';
+import { OperatingHoursCard } from '../src/components/OperatingHoursCard';
+import { EmptyState } from '../src/components/EmptyState';
+import { CardSkeleton } from '../src/components/LoadingSkeleton';
+
+export const ErrorBoundary = createRouteErrorBoundary('Club Info');
 
 interface FacilityData {
   id: string;
@@ -31,6 +38,7 @@ interface FacilityData {
   phone?: string;
   email?: string;
   website?: string;
+  timezone?: string;
   operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
   memberCount?: number;
   status?: string;
@@ -47,38 +55,48 @@ interface CourtData {
   status: string;
 }
 
-const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const DAY_LABELS: Record<string, string> = {
-  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
-  friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
-};
-
 export default function ClubInfoScreen() {
   const router = useRouter();
-  const { facilityId } = useLocalSearchParams<{ facilityId: string }>();
+  const { facilityId: routeFacilityId } = useLocalSearchParams<{ facilityId: string }>();
+  const { facilityId: authFacilityId, isLoading: authLoading } = useAuth();
+  const resolvedFacilityId = routeFacilityId || authFacilityId || null;
   const [facility, setFacility] = useState<FacilityData | null>(null);
   const [courts, setCourts] = useState<CourtData[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!facilityId) return;
+    if (!resolvedFacilityId) {
+      setFacility(null);
+      setCourts([]);
+      setNotFound(false);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setNotFound(false);
 
     const [facRes, courtsRes] = await Promise.all([
-      api.get(`/api/facilities/${facilityId}`),
-      api.get(`/api/facilities/${facilityId}/courts`),
+      api.get(`/api/facilities/${resolvedFacilityId}`),
+      api.get(`/api/facilities/${resolvedFacilityId}/courts`),
     ]);
 
     if (facRes.success && facRes.data) {
       const fac = facRes.data.facility || facRes.data;
       setFacility(fac);
+    } else {
+      setFacility(null);
+      setNotFound(Boolean(facRes.error?.toLowerCase().includes('not found')));
     }
     if (courtsRes.success && courtsRes.data) {
       const list = Array.isArray(courtsRes.data) ? courtsRes.data : courtsRes.data.courts || [];
       setCourts(list);
+    } else {
+      setCourts([]);
     }
     setLoading(false);
-  }, [facilityId]);
+  }, [resolvedFacilityId]);
 
   useEffect(() => {
     fetchData();
@@ -90,13 +108,6 @@ export default function ClubInfoScreen() {
     setRefreshing(false);
   }, [fetchData]);
 
-  const formatTime = (time: string) => {
-    const [h, m] = time.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-  };
-
   const getCourtStatusColor = (status: string) => {
     switch (status) {
       case 'available': return Colors.success;
@@ -106,13 +117,28 @@ export default function ClubInfoScreen() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <>
         <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }}>
-          <Text style={{ color: Colors.textMuted }}>Loading...</Text>
+        <View style={styles.loadingWrap}>
+          <CardSkeleton count={4} />
         </View>
+      </>
+    );
+  }
+
+  if (!resolvedFacilityId) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
+        <EmptyState
+          icon="business-outline"
+          title="You're not a member of a club yet"
+          description="Join a club to view contact details, courts, and operating hours."
+          actionLabel="Find a Club"
+          onAction={() => router.push('/(tabs)/profile')}
+        />
       </>
     );
   }
@@ -121,9 +147,15 @@ export default function ClubInfoScreen() {
     return (
       <>
         <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }}>
-          <Text style={{ color: Colors.textMuted }}>Facility not found</Text>
-        </View>
+        <EmptyState
+          icon={notFound ? 'search-outline' : 'alert-circle-outline'}
+          title={notFound ? 'No facility found' : 'Could not load club info'}
+          description={
+            notFound
+              ? 'This facility link may be invalid or you may not have access.'
+              : 'Pull to refresh or try again later.'
+          }
+        />
       </>
     );
   }
@@ -195,24 +227,7 @@ export default function ClubInfoScreen() {
         {facility.operatingHours && Object.keys(facility.operatingHours).length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Operating Hours</Text>
-            <View style={styles.card}>
-              {DAY_NAMES.map((day, idx) => {
-                const hours = facility.operatingHours?.[day];
-                const isLast = idx === DAY_NAMES.length - 1;
-                return (
-                  <View key={day} style={[styles.hoursRow, isLast && { borderBottomWidth: 0 }]}>
-                    <Text style={styles.dayLabel}>{DAY_LABELS[day]}</Text>
-                    {!hours || hours.closed ? (
-                      <Text style={styles.closedText}>Closed</Text>
-                    ) : (
-                      <Text style={styles.hoursText}>
-                        {formatTime(hours.open)} – {formatTime(hours.close)}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
+            <OperatingHoursCard operatingHours={facility.operatingHours as any} timezone={facility.timezone} />
           </View>
         )}
 
@@ -268,17 +283,18 @@ const styles = StyleSheet.create({
   },
   facilityName: {
     fontSize: FontSize.xl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   facilityType: {
     fontSize: FontSize.sm,
     color: Colors.primary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     marginTop: Spacing.xs,
   },
   description: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
     lineHeight: 22,
     marginTop: Spacing.sm,
@@ -288,7 +304,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginBottom: Spacing.sm,
   },
@@ -297,6 +313,11 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     overflow: 'hidden',
   },
+  loadingWrap: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    paddingTop: Spacing.md,
+  },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -304,33 +325,13 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
+    minHeight: TouchTarget.min,
   },
   contactText: {
     flex: 1,
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.text,
-  },
-  hoursRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  dayLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.text,
-    width: 40,
-  },
-  hoursText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-  },
-  closedText: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    fontStyle: 'italic',
   },
   courtCard: {
     backgroundColor: Colors.card,
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
   },
   courtName: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   courtMeta: {
@@ -351,6 +352,7 @@ const styles = StyleSheet.create({
   },
   courtMetaText: {
     fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
   },
   statusDot: {

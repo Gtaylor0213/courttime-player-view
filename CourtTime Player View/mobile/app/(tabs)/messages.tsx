@@ -11,7 +11,6 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   Modal,
@@ -19,11 +18,19 @@ import {
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { showAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
+import { ConversationSkeleton } from '../../src/components/LoadingSkeleton';
+import { EmptyState } from '../../src/components/EmptyState';
+import { Input } from '../../src/components/Input';
+import { Button } from '../../src/components/Button';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { CachedImage } from '../../src/components/CachedImage';
+
+export const ErrorBoundary = createRouteErrorBoundary('Messages');
 
 interface ConversationItem {
   id: string;
-  otherUser: { id: string; name: string; email: string };
+  otherUser: { id: string; name: string; email: string; profileImageUrl?: string };
   lastMessage: { text: string; senderId: string; sentAt: string } | null;
   unreadCount: number;
 }
@@ -41,6 +48,7 @@ interface MemberItem {
   userId: string;
   fullName: string;
   email: string;
+  profileImageUrl?: string;
   skillLevel?: string;
   status?: 'active' | 'pending' | 'expired' | 'suspended';
 }
@@ -58,7 +66,7 @@ export default function MessagesScreen() {
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const messagesListRef = useRef<FlatList>(null);
+  const messagesListRef = useRef<FlatList<MessageItem>>(null);
 
   // New message modal state
   const [showNewMessage, setShowNewMessage] = useState(false);
@@ -74,7 +82,14 @@ export default function MessagesScreen() {
     if (res.success && res.data) {
       // Server wraps as { success, data: { conversations } }, so unwrap one level
       const convos = res.data.conversations || res.data.data?.conversations || [];
-      setConversations(convos);
+      const normalized = convos.map((convo: any) => ({
+        ...convo,
+        otherUser: {
+          ...convo.otherUser,
+          profileImageUrl: convo.otherUser?.profileImageUrl || convo.otherUser?.profile_image_url,
+        },
+      }));
+      setConversations(normalized);
     }
     setLoading(false);
   }, [user, facilityId]);
@@ -99,7 +114,7 @@ export default function MessagesScreen() {
 
     // Mark as read
     if (user) {
-      api.post(`/api/messages/${conversationId}/read`, { userId: user.id });
+      api.patch(`/api/messages/${conversationId}/read`, { userId: user.id });
     }
   }, [user]);
 
@@ -141,7 +156,11 @@ export default function MessagesScreen() {
     if (res.success && res.data) {
       const memberList = Array.isArray(res.data) ? res.data : res.data.members || [];
       // Only active members can receive messages (server enforces this too).
-      setMembers(memberList.filter((m: MemberItem) => m.userId !== user?.id && (!m.status || m.status === 'active')));
+      const normalized = memberList.map((member: any) => ({
+        ...member,
+        profileImageUrl: member.profileImageUrl || member.profile_image_url,
+      }));
+      setMembers(normalized.filter((m: MemberItem) => m.userId !== user?.id && (!m.status || m.status === 'active')));
     }
     setLoadingMembers(false);
   }
@@ -168,7 +187,12 @@ export default function MessagesScreen() {
     // The real conversation will be created when the first message is sent
     setActiveConversation({
       id: '', // Will be set after first message
-      otherUser: { id: member.userId, name: member.fullName, email: member.email },
+      otherUser: {
+        id: member.userId,
+        name: member.fullName,
+        email: member.email,
+        profileImageUrl: member.profileImageUrl,
+      },
       lastMessage: null,
       unreadCount: 0,
     });
@@ -221,6 +245,22 @@ export default function MessagesScreen() {
     m.fullName.toLowerCase().includes(memberSearch.toLowerCase())
   );
 
+  const renderMessageItem = useCallback(({ item }: { item: MessageItem }) => {
+    const isMe = item.senderId === user?.id;
+    return (
+      <View style={[styles.messageBubbleRow, isMe && styles.messageBubbleRowMe]}>
+        <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+          <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
+            {item.messageText}
+          </Text>
+          <Text style={[styles.messageTime, isMe && styles.messageTimeMe]}>
+            {formatDate(item.createdAt)}
+          </Text>
+        </View>
+      </View>
+    );
+  }, [user?.id]);
+
   // ── RENDER: Message Thread View ──
   if (activeConversation) {
     return (
@@ -243,9 +283,13 @@ export default function MessagesScreen() {
           </TouchableOpacity>
           <View style={styles.threadHeaderInfo}>
             <View style={styles.avatarSmall}>
-              <Text style={styles.avatarSmallText}>
-                {getInitials(activeConversation.otherUser.name)}
-              </Text>
+              {activeConversation.otherUser.profileImageUrl ? (
+                <CachedImage uri={activeConversation.otherUser.profileImageUrl} style={styles.avatarImageSmall} />
+              ) : (
+                <Text style={styles.avatarSmallText}>
+                  {getInitials(activeConversation.otherUser.name)}
+                </Text>
+              )}
             </View>
             <Text style={styles.threadName}>{activeConversation.otherUser.name}</Text>
           </View>
@@ -257,49 +301,40 @@ export default function MessagesScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesList}
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={10}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => messagesListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
-            <View style={styles.emptyThread}>
-              <Text style={styles.emptyThreadText}>
-                Start the conversation with {activeConversation.otherUser.name}!
-              </Text>
-            </View>
+            <EmptyState
+              icon="chatbubble-ellipses-outline"
+              title="No messages yet"
+              description={`Start the conversation with ${activeConversation.otherUser.name}.`}
+            />
           }
-          renderItem={({ item }) => {
-            const isMe = item.senderId === user?.id;
-            return (
-              <View style={[styles.messageBubbleRow, isMe && styles.messageBubbleRowMe]}>
-                <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-                  <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
-                    {item.messageText}
-                  </Text>
-                  <Text style={[styles.messageTime, isMe && styles.messageTimeMe]}>
-                    {formatDate(item.createdAt)}
-                  </Text>
-                </View>
-              </View>
-            );
-          }}
+          renderItem={renderMessageItem}
         />
 
         {/* Input */}
         <View style={styles.inputBar}>
-          <TextInput
+          <Input
             style={styles.messageInput}
             value={newMessage}
             onChangeText={setNewMessage}
             placeholder="Type a message..."
-            placeholderTextColor={Colors.textMuted}
             multiline
             maxLength={1000}
           />
-          <TouchableOpacity
-            style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
+          <Button
+            title="Send"
             onPress={activeConversation.id ? handleSend : handleSendNewConversation}
             disabled={!newMessage.trim() || sending}
-          >
-            <Text style={styles.sendButtonText}>{sending ? '...' : 'Send'}</Text>
-          </TouchableOpacity>
+            loading={sending}
+            style={styles.sendButton}
+          />
         </View>
       </KeyboardAvoidingView>
     );
@@ -308,8 +343,8 @@ export default function MessagesScreen() {
   // ── RENDER: Conversation List ──
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>Loading messages...</Text>
+      <View style={styles.container}>
+        <ConversationSkeleton />
       </View>
     );
   }
@@ -317,9 +352,9 @@ export default function MessagesScreen() {
   return (
     <View style={styles.container}>
       {/* New Message Button */}
-      <TouchableOpacity style={styles.newMessageButton} onPress={openNewMessage}>
-        <Text style={styles.newMessageButtonText}>+ New Message</Text>
-      </TouchableOpacity>
+      <View style={styles.newMessageButtonWrap}>
+        <Button title="+ New Message" onPress={openNewMessage} />
+      </View>
 
       <FlatList
         data={conversations}
@@ -329,17 +364,22 @@ export default function MessagesScreen() {
         }
         contentContainerStyle={conversations.length === 0 ? styles.centered : undefined}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-            <Text style={styles.emptyText}>
-              Tap "+ New Message" to start a conversation with a facility member.
-            </Text>
-          </View>
+          <EmptyState
+            icon="mail-open-outline"
+            title="No messages yet"
+            description='Tap "+ New Message" to start a conversation with a facility member.'
+            actionLabel="Start a conversation"
+            onAction={openNewMessage}
+          />
         }
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.conversationItem} onPress={() => openConversation(item)}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(item.otherUser.name)}</Text>
+              {item.otherUser.profileImageUrl ? (
+                <CachedImage uri={item.otherUser.profileImageUrl} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{getInitials(item.otherUser.name)}</Text>
+              )}
             </View>
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
@@ -374,27 +414,28 @@ export default function MessagesScreen() {
             <View style={{ width: 60 }} />
           </View>
 
-          <TextInput
+          <Input
             style={styles.searchInput}
             value={memberSearch}
             onChangeText={setMemberSearch}
             placeholder="Search members..."
-            placeholderTextColor={Colors.textMuted}
             autoFocus
           />
 
           {loadingMembers ? (
-            <View style={styles.centered}>
-              <Text style={styles.emptyText}>Loading members...</Text>
+            <View style={{ paddingTop: Spacing.sm }}>
+              <ConversationSkeleton count={5} />
             </View>
           ) : (
             <FlatList
               data={filteredMembers}
               keyExtractor={(item) => item.userId}
               ListEmptyComponent={
-                <View style={{ padding: Spacing.lg, alignItems: 'center' }}>
-                  <Text style={styles.emptyText}>No members found</Text>
-                </View>
+                <EmptyState
+                  icon="people-outline"
+                  title="No members found"
+                  description="Try a different search or check back when more players join your facility."
+                />
               }
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -402,7 +443,11 @@ export default function MessagesScreen() {
                   onPress={() => startConversation(item)}
                 >
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{getInitials(item.fullName)}</Text>
+                    {item.profileImageUrl ? (
+                      <CachedImage uri={item.profileImageUrl} style={styles.avatarImage} />
+                    ) : (
+                      <Text style={styles.avatarText}>{getInitials(item.fullName)}</Text>
+                    )}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.userName}>{item.fullName}</Text>
@@ -431,18 +476,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // ── New Message Button ──
-  newMessageButton: {
+  newMessageButtonWrap: {
     margin: Spacing.md,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  newMessageButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.md,
-    fontWeight: '600',
   },
 
   // ── Conversation List ──
@@ -453,6 +488,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.borderLight,
     alignItems: 'center',
     gap: Spacing.sm,
+    minHeight: TouchTarget.min,
   },
   avatar: {
     width: 48,
@@ -465,7 +501,12 @@ const styles = StyleSheet.create({
   avatarText: {
     color: Colors.textInverse,
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
   },
   conversationContent: {
     flex: 1,
@@ -477,11 +518,12 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   timestamp: {
     fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
     color: Colors.textMuted,
   },
   conversationPreview: {
@@ -492,6 +534,7 @@ const styles = StyleSheet.create({
   },
   lastMessage: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
     flex: 1,
     marginRight: Spacing.sm,
@@ -508,24 +551,7 @@ const styles = StyleSheet.create({
   unreadText: {
     color: Colors.textInverse,
     fontSize: 11,
-    fontWeight: '700',
-  },
-
-  // ── Empty State ──
-  emptyContainer: {
-    alignItems: 'center',
-    gap: Spacing.sm,
-    padding: Spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  emptyText: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    textAlign: 'center',
+    fontFamily: FontFamily.bold,
   },
 
   // ── Thread View ──
@@ -544,7 +570,7 @@ const styles = StyleSheet.create({
   backText: {
     color: Colors.primary,
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   threadHeaderInfo: {
     flexDirection: 'row',
@@ -563,26 +589,21 @@ const styles = StyleSheet.create({
   avatarSmallText: {
     color: Colors.textInverse,
     fontSize: FontSize.sm,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+  },
+  avatarImageSmall: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
   },
   threadName: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   messagesList: {
     padding: Spacing.md,
     flexGrow: 1,
-  },
-  emptyThread: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 80,
-  },
-  emptyThreadText: {
-    color: Colors.textMuted,
-    fontSize: FontSize.sm,
   },
   messageBubbleRow: {
     flexDirection: 'row',
@@ -608,6 +629,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
     color: Colors.text,
     lineHeight: 20,
   },
@@ -616,6 +638,7 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 10,
+    fontFamily: FontFamily.regular,
     color: Colors.textMuted,
     marginTop: 4,
     alignSelf: 'flex-end',
@@ -636,36 +659,18 @@ const styles = StyleSheet.create({
   },
   messageInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    fontSize: FontSize.sm,
-    color: Colors.text,
     maxHeight: 100,
-    backgroundColor: Colors.surface,
+    alignSelf: 'stretch',
   },
   sendButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    justifyContent: 'center',
-  },
-  sendButtonDisabled: {
-    opacity: 0.4,
-  },
-  sendButtonText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.sm,
-    fontWeight: '600',
+    alignSelf: 'flex-end',
+    minWidth: 88,
   },
 
   // ── New Message Modal ──
   modalContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -678,23 +683,15 @@ const styles = StyleSheet.create({
   modalCancel: {
     color: Colors.primary,
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   modalTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   searchInput: {
     margin: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    fontSize: FontSize.md,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
   },
   memberItem: {
     flexDirection: 'row',
@@ -703,9 +700,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
     gap: Spacing.sm,
+    minHeight: TouchTarget.min,
   },
   memberMeta: {
     fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
     color: Colors.textMuted,
     marginTop: 2,
     textTransform: 'capitalize',

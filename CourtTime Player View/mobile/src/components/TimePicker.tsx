@@ -9,7 +9,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   NativeSyntheticEvent,
   NativeScrollEvent,
@@ -18,7 +18,8 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
 
 const ITEM_HEIGHT = 44;
 const VISIBLE_ITEMS = 5;
-const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+/** Exported for booking modal layout (fixed column height). */
+export const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
 
 interface TimePickerProps {
   times: string[];
@@ -28,74 +29,67 @@ interface TimePickerProps {
 }
 
 export function TimePicker({ times, selectedTime, onSelect, label }: TimePickerProps) {
-  const flatListRef = useRef<FlatList>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const lastSyncedIndexRef = useRef<number>(-1);
   const selectedIndex = times.indexOf(selectedTime);
 
   useEffect(() => {
-    if (selectedIndex >= 0 && flatListRef.current) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: selectedIndex,
-          animated: false,
-          viewOffset: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
-        });
-      }, 50);
-    }
-  }, [selectedIndex]);
+    if (selectedIndex < 0 || !scrollRef.current) return;
+    if (lastSyncedIndexRef.current === selectedIndex) return;
+    lastSyncedIndexRef.current = selectedIndex;
+    scrollRef.current.scrollTo({ y: selectedIndex * ITEM_HEIGHT, animated: false });
+  }, [selectedIndex, times.length]);
+
+  useEffect(() => {
+    lastSyncedIndexRef.current = -1;
+  }, [times]);
 
   const formatTime = (time: string) => {
-    const parts = time.split(':');
-    const h = parseInt(parts[0]);
-    const m = parts[1] || '00';
+    const [hStr, m = '00'] = time.split(':');
+    const h = parseInt(hStr, 10);
     const ampm = h >= 12 ? 'PM' : 'AM';
     const h12 = h % 12 || 12;
     return `${h12}:${m} ${ampm}`;
   };
 
-  const handleScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offsetY = e.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT);
-    const clampedIndex = Math.max(0, Math.min(index, times.length - 1));
-    if (times[clampedIndex] && times[clampedIndex] !== selectedTime) {
-      onSelect(times[clampedIndex]);
-    }
+  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const idx = Math.round(y / ITEM_HEIGHT);
+    const clamped = Math.max(0, Math.min(idx, times.length - 1));
+    const value = times[clamped];
+    if (value && value !== selectedTime) onSelect(value);
+    lastSyncedIndexRef.current = clamped;
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.pickerWrapper}>
-        {/* Selection highlight */}
         <View style={styles.selectionHighlight} pointerEvents="none" />
-
-        <FlatList
-          ref={flatListRef}
-          data={times}
-          keyExtractor={(item) => item}
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
           snapToInterval={ITEM_HEIGHT}
           decelerationRate="fast"
-          showsVerticalScrollIndicator={false}
-          onMomentumScrollEnd={handleScrollEnd}
+          nestedScrollEnabled
+          bounces={false}
+          overScrollMode="never"
+          onMomentumScrollEnd={onMomentumScrollEnd}
+          onScrollEndDrag={onMomentumScrollEnd}
           contentContainerStyle={{
             paddingVertical: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
           }}
-          getItemLayout={(_, index) => ({
-            length: ITEM_HEIGHT,
-            offset: ITEM_HEIGHT * index,
-            index,
-          })}
-          renderItem={({ item, index }) => {
+        >
+          {times.map((item, index) => {
             const isSelected = item === selectedTime;
             return (
               <TouchableOpacity
+                key={item}
                 style={styles.item}
                 onPress={() => {
                   onSelect(item);
-                  flatListRef.current?.scrollToIndex({
-                    index,
-                    animated: true,
-                    viewOffset: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
-                  });
+                  scrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
+                  lastSyncedIndexRef.current = index;
                 }}
               >
                 <Text style={[styles.itemText, isSelected && styles.itemTextSelected]}>
@@ -103,8 +97,8 @@ export function TimePicker({ times, selectedTime, onSelect, label }: TimePickerP
                 </Text>
               </TouchableOpacity>
             );
-          }}
-        />
+          })}
+        </ScrollView>
       </View>
     </View>
   );
@@ -126,9 +120,11 @@ const styles = StyleSheet.create({
   pickerWrapper: {
     height: PICKER_HEIGHT,
     overflow: 'hidden',
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     backgroundColor: Colors.surface,
     width: '100%',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   selectionHighlight: {
     position: 'absolute',

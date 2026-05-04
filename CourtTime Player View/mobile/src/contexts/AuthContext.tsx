@@ -10,10 +10,12 @@ import { api, setToken, getToken, removeToken, cacheUser, getCachedUser, clearCa
 import type { PendingTermsAcceptance } from '../api/client';
 import { registerForPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications';
 import type { User } from '../types/database';
+import type { AuthResponseShape } from '../../../shared/types';
 
+/** Logged-in user: shared User plus auth payload extras (JWT /login|/register). */
 interface AuthUser extends User {
-  memberFacilities?: string[];
-  adminFacilities?: string[];
+  memberFacilities: string[];
+  adminFacilities: string[];
   skillLevel?: string;
   bio?: string;
   ustaRating?: string;
@@ -23,6 +25,7 @@ interface AuthUser extends User {
 interface FacilityInfo {
   id: string;
   name: string;
+  logoUrl?: string;
 }
 
 interface AuthState {
@@ -35,6 +38,8 @@ interface AuthContextType extends AuthState {
   facilityId: string | null;
   facilities: FacilityInfo[];
   setFacilityId: (id: string) => void;
+  selectedBookDate: string;
+  setSelectedBookDate: (date: string) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -52,20 +57,48 @@ interface RegisterData {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const FACILITY_STORAGE_KEY = 'selectedFacilityId';
+const LEGACY_FACILITY_STORAGE_KEY = 'courttime_facility';
+const BOOK_DATE_STORAGE_KEY = 'selectedBookDate';
 
 async function saveFacilityId(id: string): Promise<void> {
   if (Platform.OS === 'web') {
-    localStorage.setItem('courttime_facility', id);
+    localStorage.setItem(FACILITY_STORAGE_KEY, id);
+    localStorage.setItem(LEGACY_FACILITY_STORAGE_KEY, id);
     return;
   }
-  await SecureStore.setItemAsync('courttime_facility', id);
+  await SecureStore.setItemAsync(FACILITY_STORAGE_KEY, id);
+  await SecureStore.setItemAsync(LEGACY_FACILITY_STORAGE_KEY, id);
 }
 
 async function loadFacilityId(): Promise<string | null> {
   if (Platform.OS === 'web') {
-    return localStorage.getItem('courttime_facility');
+    return localStorage.getItem(FACILITY_STORAGE_KEY) || localStorage.getItem(LEGACY_FACILITY_STORAGE_KEY);
   }
-  return SecureStore.getItemAsync('courttime_facility');
+  return (
+    (await SecureStore.getItemAsync(FACILITY_STORAGE_KEY)) ||
+    (await SecureStore.getItemAsync(LEGACY_FACILITY_STORAGE_KEY))
+  );
+}
+
+function getTodayString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function loadBookDate(): Promise<string> {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem(BOOK_DATE_STORAGE_KEY) || getTodayString();
+  }
+  return (await SecureStore.getItemAsync(BOOK_DATE_STORAGE_KEY)) || getTodayString();
+}
+
+async function saveBookDate(date: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(BOOK_DATE_STORAGE_KEY, date);
+    return;
+  }
+  await SecureStore.setItemAsync(BOOK_DATE_STORAGE_KEY, date);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -75,6 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
   });
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+  const [selectedBookDate, setSelectedBookDateState] = useState<string>(getTodayString());
   const [facilities, setFacilities] = useState<FacilityInfo[]>([]);
   const [pendingTermsAcceptances, setPendingTermsAcceptances] = useState<PendingTermsAcceptance[]>([]);
   const pushTokenRef = useRef<string | null>(null);
@@ -84,7 +118,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
-  // Register push notifications and fetch facilities when user changes
+  useEffect(() => {
+    loadBookDate().then(setSelectedBookDateState).catch(() => setSelectedBookDateState(getTodayString()));
+  }, []);
+
+  // Register push notifications when user changes.
   useEffect(() => {
     if (!state.user) {
       setFacilities([]);
@@ -96,41 +134,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     registerForPushNotifications(state.user.id).then(token => {
       pushTokenRef.current = token;
     });
+  }, [state.user?.id]);
 
-    const allIds = Array.from(new Set([
-      ...(state.user.memberFacilities || []),
-      ...(state.user.adminFacilities || []),
-    ]));
+  async function hydrateFacilitiesForUser(user: AuthUser): Promise<string | null> {
+    const memberFacilities = user.memberFacilities || [];
+    const adminFacilities = user.adminFacilities || [];
+    const allIds = Array.from(new Set([...memberFacilities, ...adminFacilities]));
+
+    const saved = await loadFacilityId();
+    const resolvedSelectedFacilityId =
+      (saved && allIds.includes(saved) ? saved : null) ||
+      memberFacilities[0] ||
+      adminFacilities[0] ||
+      null;
 
     if (allIds.length === 0) {
       setFacilities([]);
       setSelectedFacilityId(null);
-      return;
+      return null;
     }
 
-    // Fetch facility names
-    Promise.all(allIds.map(id => api.get(`/api/facilities/${id}`))).then(async (results) => {
-      const infos: FacilityInfo[] = [];
-      for (let i = 0; i < results.length; i++) {
-        const res = results[i];
-        if (res.success && res.data) {
-          const fac = res.data.facility || res.data;
-          infos.push({ id: allIds[i], name: fac.name || allIds[i] });
-        } else {
-          infos.push({ id: allIds[i], name: allIds[i] });
-        }
-      }
-      setFacilities(infos);
-
-      // Restore previously selected facility, or default to first
-      const saved = await loadFacilityId();
-      if (saved && allIds.includes(saved)) {
-        setSelectedFacilityId(saved);
+    const results = await Promise.all(allIds.map(id => api.get(`/api/facilities/${id}`)));
+    const infos: FacilityInfo[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const res = results[i];
+      if (res.success && res.data) {
+        const fac = res.data.facility || res.data;
+        infos.push({
+          id: allIds[i],
+          name: fac.name || allIds[i],
+          logoUrl: fac.logoUrl || fac.logo_url || fac.logo || undefined,
+        });
       } else {
-        setSelectedFacilityId(allIds[0]);
+        infos.push({ id: allIds[i], name: allIds[i] });
       }
-    });
-  }, [state.user?.id]);
+    }
+    setFacilities(infos);
+    setSelectedFacilityId(resolvedSelectedFacilityId);
+    if (resolvedSelectedFacilityId) {
+      await saveFacilityId(resolvedSelectedFacilityId);
+    }
+    return resolvedSelectedFacilityId;
+  }
 
   async function loadTermsStatus(currentUser: AuthUser | null) {
     if (!currentUser || currentUser.userType === 'admin') {
@@ -162,13 +207,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success && result.data?.user) {
         const freshUser = result.data.user;
         await cacheUser(freshUser);
+        await hydrateFacilitiesForUser(freshUser);
         setState({ user: freshUser, isLoading: false, isAuthenticated: true });
         await loadTermsStatus(freshUser);
       } else {
         // Token invalid/expired — try cached user as fallback, otherwise logout
         const cached = await getCachedUser();
-        if (cached && result.error === 'Network error. Please check your connection.') {
+        if (cached && result.errorCategory === 'offline') {
           // Offline — use cached data
+          await hydrateFacilitiesForUser(cached);
           setState({ user: cached, isLoading: false, isAuthenticated: true });
         } else {
           // Token expired or invalid
@@ -185,12 +232,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await api.post('/api/auth/login', { email, password });
 
     if (result.success && result.data) {
-      const { user, token } = result.data;
+      const { user, token } = result.data as AuthResponseShape;
       if (token) {
         await setToken(token);
       }
       if (user) {
         await cacheUser(user);
+        await hydrateFacilitiesForUser(user);
         setState({ user, isLoading: false, isAuthenticated: true });
         await loadTermsStatus(user);
         return { success: true };
@@ -208,11 +256,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (result.success && result.data) {
-      const { user, token } = result.data;
+      const { user, token } = result.data as AuthResponseShape;
       if (token) {
         await setToken(token);
       }
       if (user) {
+        await hydrateFacilitiesForUser(user);
         await cacheUser(user);
         setState({ user, isLoading: false, isAuthenticated: true });
         await loadTermsStatus(user);
@@ -253,8 +302,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     saveFacilityId(id);
   }
 
+  function handleSetSelectedBookDate(date: string) {
+    setSelectedBookDateState(date);
+    saveBookDate(date);
+  }
+
+  // Self-heal stored facility id when it no longer matches loaded facilities (e.g. stale SecureStore).
+  useEffect(() => {
+    if (facilities.length === 0 || !selectedFacilityId) return;
+    if (facilities.some(f => f.id === selectedFacilityId)) return;
+    console.warn(
+      '[auth] selected facility id not in facilities list; self-healing to first facility',
+      { selectedFacilityId, facilityIds: facilities.map(f => f.id) }
+    );
+    const nextId = facilities[0].id;
+    setSelectedFacilityId(nextId);
+    void saveFacilityId(nextId);
+  }, [facilities, selectedFacilityId]);
+
   return (
-    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, login, register, logout, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
+    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
       {children}
     </AuthContext.Provider>
   );

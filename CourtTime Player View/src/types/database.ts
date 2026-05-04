@@ -3,78 +3,26 @@
  * TypeScript interfaces matching the PostgreSQL schema
  */
 
+import type {
+  Booking,
+  Court,
+  Facility,
+  OpeningHours,
+  PartnerPost as SharedPartnerPost,
+  User,
+} from '../../shared/types';
+
+export type { Booking, Court, Facility, User };
+
 // =====================================================
 // USERS & AUTHENTICATION
 // =====================================================
-
-export interface User {
-  id: string;
-  email: string;
-  passwordHash?: string; // Only used server-side
-  fullName: string; // Computed from firstName + lastName
-  firstName: string;
-  lastName: string;
-  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
-  address?: string;
-  streetAddress?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  phone?: string;
-  userType: 'player' | 'admin';
-  isSuperAdmin?: boolean; // True if user created/owns a facility
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 export interface UserPreferences {
   userId: string;
   notifications: boolean;
   timezone: string;
   theme: string;
-  updatedAt: Date;
-}
-
-// =====================================================
-// FACILITIES & COURTS
-// =====================================================
-
-export interface Facility {
-  id: string;
-  name: string;
-  type?: string;
-  address?: string;
-  streetAddress?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  phone?: string;
-  email?: string;
-  contactName?: string;
-  description?: string;
-  amenities?: string[];
-  operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
-  generalRules?: string;
-  cancellationPolicy?: string;
-  bookingRules?: string;
-  status?: 'active' | 'pending' | 'suspended' | 'closed';
-  logoUrl?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface Court {
-  id: string;
-  facilityId: string;
-  name: string;
-  courtNumber?: number;
-  surfaceType?: 'Hard' | 'Clay' | 'Grass' | 'Synthetic';
-  courtType?: 'Tennis' | 'Pickleball' | 'Dual';
-  isIndoor: boolean;
-  hasLights: boolean;
-  isWalkUp?: boolean;
-  status: 'available' | 'maintenance' | 'closed';
-  createdAt: Date;
   updatedAt: Date;
 }
 
@@ -98,40 +46,11 @@ export interface FacilityMembership {
 // BOOKINGS
 // =====================================================
 
-export interface Booking {
-  id: string;
-  courtId: string;
-  userId: string;
-  facilityId: string;
-  bookingDate: Date;
-  startTime: string; // Time format: HH:MM:SS
-  endTime: string;
-  durationMinutes: number;
-  status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
-  bookingType?: string;
-  notes?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 // =====================================================
 // HITTING PARTNER POSTS
 // =====================================================
 
-export interface HittingPartnerPost {
-  id: string;
-  userId: string;
-  facilityId: string;
-  skillLevel?: string;
-  availability: string;
-  playStyle: string[];
-  description: string;
-  postedDate: Date;
-  expiresAt: Date;
-  status: 'active' | 'expired' | 'deleted';
-  createdAt: Date;
-  updatedAt: Date;
-}
+export interface HittingPartnerPost extends SharedPartnerPost {}
 
 // =====================================================
 // BULLETIN BOARD

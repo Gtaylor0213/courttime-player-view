@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../src/utils/alert';
@@ -23,8 +24,12 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/the
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { EditBookingModal } from '../../src/components/EditBookingModal';
 import { QuickBook } from '../../src/components/QuickBook';
+import { EmptyState } from '../../src/components/EmptyState';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
+import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+
+export const ErrorBoundary = createRouteErrorBoundary('Home');
 
 interface RuleViolation {
   ruleCode: string;
@@ -36,7 +41,7 @@ interface RuleViolation {
 export default function HomeScreen() {
   const { user, facilityId } = useAuth();
   const router = useRouter();
-  const { isOffline, fetchWithCache } = useOfflineApi();
+  const { bannerState, lastCachedAt, fetchWithCache, retryConnectivity } = useOfflineApi();
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [bulletins, setBulletins] = useState<BulletinPostWithAuthor[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -124,7 +129,7 @@ export default function HomeScreen() {
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
     >
-      <OfflineBanner visible={isOffline} />
+      <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
       <View style={styles.welcome}>
         <Text style={styles.greeting}>
           Welcome back, {user?.firstName || 'Player'}!
@@ -214,12 +219,13 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
         {bookings.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No upcoming bookings</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/book')}>
-              <Text style={styles.emptyLink}>Book a court now</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState
+            icon="calendar-clear-outline"
+            title="No upcoming bookings"
+            description="You're all clear right now. Pick a time and reserve your next court."
+            actionLabel="Book a court"
+            onAction={() => router.push('/(tabs)/book')}
+          />
         ) : (
           bookings.map((booking) => (
             <View key={booking.id} style={styles.bookingCard}>
@@ -264,9 +270,11 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Bulletin Board</Text>
         {bulletins.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No announcements yet</Text>
-          </View>
+          <EmptyState
+            icon="megaphone-outline"
+            title="No announcements yet"
+            description="You are all caught up."
+          />
         ) : (
           bulletins.map((post) => (
             <View key={post.id} style={styles.bulletinCard}>
@@ -292,7 +300,13 @@ export default function HomeScreen() {
       />
 
       {/* Rule violations from Quick Book */}
-      <Modal visible={showViolations} transparent animationType="fade" onRequestClose={() => setShowViolations(false)}>
+      <Modal
+        visible={showViolations}
+        transparent
+        animationType="fade"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+        onRequestClose={() => setShowViolations(false)}
+      >
         <View style={styles.violationsOverlay}>
           <View style={styles.violationsSheet}>
             <View style={styles.violationsHeader}>
@@ -410,7 +424,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     alignItems: 'center',
     gap: Spacing.xs,
-    shadowColor: '#000',
+    shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -441,7 +455,7 @@ const styles = StyleSheet.create({
   },
   violationsOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     padding: Spacing.lg,
   },
@@ -497,22 +511,6 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
     fontSize: FontSize.md,
     fontWeight: '700',
-  },
-  emptyCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  emptyText: {
-    color: Colors.textMuted,
-    fontSize: FontSize.sm,
-  },
-  emptyLink: {
-    color: Colors.primary,
-    fontSize: FontSize.sm,
-    fontWeight: '600',
   },
   bookingCard: {
     backgroundColor: Colors.card,

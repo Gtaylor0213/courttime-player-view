@@ -3,9 +3,12 @@
  * Mirrors the web app's API client with JWT token auth
  */
 
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import NetInfo from '@react-native-community/netinfo';
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../../shared/api/core';
 
 const API_PORT = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
 
@@ -25,19 +28,52 @@ function isTunnelMetroHost(hostUri: string): boolean {
   );
 }
 
+function tryParseHostFromScriptUrl(): string | null {
+  const scriptURL = (NativeModules as any)?.SourceCode?.scriptURL as string | undefined;
+  if (!scriptURL) return null;
+  try {
+    const withoutScheme = scriptURL.split('://').slice(1).join('://');
+    const hostPort = withoutScheme.split('/')[0] || '';
+    const host = hostPort.split(':')[0];
+    if (!host) return null;
+    if (host === 'localhost' || host === '127.0.0.1') return null;
+    return host;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * In __DEV__, Metro sets `expoConfig.hostUri` to the machine running the bundler
- * (e.g. `192.168.1.10:8081`). Reuse that hostname + API port for a local Express API.
- * Skipped for tunnel hosts — those cannot reach a dev server on your laptop.
+ * Dev-only LAN API URL: script host (helps some physical devices), Android emulator,
+ * then Expo debugger / host URIs. Skips tunnel hosts so we fall through to production URL.
  */
-function getDevApiBaseUrlFromMetroHost(): string | null {
+function getDevLanApiBaseUrl(): string | null {
   if (!__DEV__) return null;
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (!hostUri) return null;
-  if (isTunnelMetroHost(hostUri)) return null;
-  const hostname = hostUri.split(':')[0];
-  if (!hostname) return null;
-  return `http://${hostname}:${API_PORT}`;
+
+  const fromScript = tryParseHostFromScriptUrl();
+  if (fromScript && !isTunnelMetroHost(fromScript)) {
+    return `http://${fromScript}:${API_PORT}`;
+  }
+
+  if (Platform.OS === 'android' && !Device.isDevice) {
+    return `http://10.0.2.2:${API_PORT}`;
+  }
+
+  const hostUri =
+    (Constants as any)?.expoGoConfig?.debuggerHost ||
+    Constants.expoConfig?.hostUri ||
+    (Constants as any)?.manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any)?.manifest?.debuggerHost;
+
+  if (typeof hostUri === 'string' && hostUri.length > 0) {
+    if (isTunnelMetroHost(hostUri)) return null;
+    const host = hostUri.split(':')[0];
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return `http://${host}:${API_PORT}`;
+    }
+  }
+
+  return null;
 }
 
 function getProductionApiBaseUrl(): string | null {
@@ -48,21 +84,19 @@ function getProductionApiBaseUrl(): string | null {
   return null;
 }
 
-// Android emulator: host loopback to the dev machine
-// iOS simulator / web: localhost when nothing else applies
 const DEFAULT_LOCAL_API_URL =
   Platform.OS === 'android' ? `http://10.0.2.2:${API_PORT}` : `http://localhost:${API_PORT}`;
 
 /**
  * 1. EXPO_PUBLIC_API_URL — explicit override (any mode).
- * 2. __DEV__ + LAN Metro host — local API on your machine (Expo Go on same Wi‑Fi, not tunnel).
- * 3. Production default from app.config.js `extra.productionApiUrl` (tunnel + release builds).
- * 4. Last resort localhost / 10.0.2.2 (simulators only; real devices should hit step 2 or 3).
+ * 2. __DEV__ — LAN / script-derived API host (Expo Go on Wi‑Fi; not tunnel).
+ * 3. Production default from app.config.js `extra.productionApiUrl` (tunnel + release).
+ * 4. Last resort localhost / 10.0.2.2.
  */
 const explicitUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 const API_BASE_URL = stripTrailingSlashes(
   explicitUrl ||
-    getDevApiBaseUrlFromMetroHost() ||
+    getDevLanApiBaseUrl() ||
     getProductionApiBaseUrl() ||
     DEFAULT_LOCAL_API_URL
 );
@@ -73,15 +107,18 @@ if (__DEV__ && Platform.OS !== 'web') {
   console.log('[CourtTime] API_BASE_URL =', API_BASE_URL, tunnel ? '(tunnel → production or override)' : '');
 }
 
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-  ruleViolations?: Array<{ ruleCode: string; ruleName: string; message: string; severity: string }>;
-  warnings?: Array<{ ruleCode: string; ruleName: string; message: string }>;
-  isPrimeTime?: boolean;
-}
+const REQUEST_TIMEOUT_MS = 15000;
+
+export type ApiErrorCategory =
+  | 'offline'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'server'
+  | 'timeout'
+  | 'unknown';
+
+export type ApiResponse<T = any> = SharedApiResponse<T, ApiErrorCategory>;
 
 // ── Token storage (SecureStore on native, localStorage on web) ──
 
@@ -145,62 +182,45 @@ export async function clearCache(): Promise<void> {
 
 // ── API request with auto-attached Bearer token ──
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const token = await getToken();
-  if (token) {
-    return { Authorization: `Bearer ${token}` };
+async function getOfflineAwareCategoryFromFetchError(error: unknown): Promise<ApiErrorCategory> {
+  if ((error as any)?.name === 'AbortError') {
+    return 'timeout';
   }
-  return {};
+  if (error instanceof TypeError) {
+    const msg = error.message.toLowerCase();
+    const looksNetworkRejected =
+      msg.includes('network request failed') || msg.includes('failed to fetch');
+    if (looksNetworkRejected) {
+      const net = await NetInfo.fetch();
+      if (net.isConnected === false) {
+        return 'offline';
+      }
+    }
+  }
+  return 'unknown';
 }
 
-export async function apiRequest<T = any>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
-  try {
-    const authHeaders = await getAuthHeaders();
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders,
-        ...options.headers,
-      },
-    });
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      return {
-        success: false,
-        error: `Server error (${response.status}). Please try again.`,
-      };
-    }
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.error || data.message || 'Request failed',
-        ...(data.ruleViolations && { ruleViolations: data.ruleViolations }),
-        ...(data.warnings && { warnings: data.warnings }),
-        ...(data.isPrimeTime !== undefined && { isPrimeTime: data.isPrimeTime }),
-      };
-    }
-
-    return {
-      success: true,
-      data,
-      message: data.message,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: 'Network error. Please check your connection.',
-    };
-  }
+function categoryFromStatus(status: number): ApiErrorCategory {
+  if (status === 401) return 'unauthorized';
+  if (status === 403) return 'forbidden';
+  if (status === 404) return 'not_found';
+  if (status >= 500) return 'server';
+  return 'unknown';
 }
+
+export const apiRequest = buildApiRequest<ApiErrorCategory>({
+  baseUrl: API_BASE_URL,
+  getToken,
+  timeoutMs: REQUEST_TIMEOUT_MS,
+  mapStatusToCategory: categoryFromStatus,
+  mapErrorToCategory: getOfflineAwareCategoryFromFetchError,
+  mapCategoryToMessage: (errorCategory) =>
+    errorCategory === 'offline'
+      ? 'You appear to be offline. Please check your connection.'
+      : errorCategory === 'timeout'
+        ? 'Request timed out. Please try again.'
+        : `Unable to reach CourtTime right now (${API_BASE_URL}). Please try again.`,
+});
 
 // ── Terms & Conditions ──
 

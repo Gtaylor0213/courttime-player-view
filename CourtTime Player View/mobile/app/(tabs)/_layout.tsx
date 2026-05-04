@@ -14,15 +14,16 @@ import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundar
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
 
-/** Stable RN touch target for every tab (module-level — not recreated each render). */
-const NavTabButton = React.forwardRef<
-  React.ElementRef<typeof TouchableOpacity>,
-  Record<string, unknown> & { children?: React.ReactNode; onPress?: (e: unknown) => void; style?: unknown }
->(function NavTabButtonImpl(props, ref) {
-  const { children, onPress, onLongPress, style, accessibilityRole, accessibilityState, testID } = props;
+/**
+ * Bottom tabs call `tabBarButton` as `button(props)` (a plain function).
+ * `React.forwardRef` returns an object, which crashes with "button is not a function".
+ */
+function renderNavTabButton(props: Record<string, unknown>) {
+  const { children, onPress, onLongPress, style, accessibilityRole, accessibilityState, testID, ref } =
+    props;
   return (
     <TouchableOpacity
-      ref={ref}
+      ref={ref as never}
       activeOpacity={0.75}
       style={style as never}
       onPress={onPress as never}
@@ -33,11 +34,10 @@ const NavTabButton = React.forwardRef<
       hitSlop={{ top: 10, bottom: 14, left: 6, right: 6 }}
       collapsable={false}
     >
-      {children}
+      {children as React.ReactNode}
     </TouchableOpacity>
   );
-});
-NavTabButton.displayName = 'NavTabButton';
+}
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -60,7 +60,7 @@ export default function TabLayout() {
       headerStyle: styles.header,
       headerTintColor: Colors.text,
       headerTitleStyle: styles.headerTitle,
-      tabBarButton: NavTabButton,
+      tabBarButton: renderNavTabButton,
     }),
     [insets.bottom]
   );

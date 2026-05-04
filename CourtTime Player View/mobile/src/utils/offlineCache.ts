@@ -13,6 +13,7 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 interface CachedItem<T = any> {
   data: T;
   timestamp: number;
+  cachedAt: number;
 }
 
 interface QueuedAction {
@@ -44,9 +45,27 @@ export async function getCachedData<T>(key: string): Promise<T | null> {
   }
 }
 
+export async function getCachedDataWithMeta<T>(key: string): Promise<{ data: T; cachedAt: number } | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+
+    const item: CachedItem<T> = JSON.parse(raw);
+    if (Date.now() - item.timestamp > CACHE_TTL_MS) {
+      await AsyncStorage.removeItem(CACHE_PREFIX + key);
+      return null;
+    }
+
+    return { data: item.data, cachedAt: item.cachedAt || item.timestamp };
+  } catch {
+    return null;
+  }
+}
+
 export async function setCachedData<T>(key: string, data: T): Promise<void> {
   try {
-    const item: CachedItem<T> = { data, timestamp: Date.now() };
+    const now = Date.now();
+    const item: CachedItem<T> = { data, timestamp: now, cachedAt: now };
     await AsyncStorage.setItem(CACHE_PREFIX + key, JSON.stringify(item));
   } catch {
     // Cache write failed — non-critical

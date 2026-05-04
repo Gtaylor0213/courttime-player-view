@@ -183,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         // Token invalid/expired — try cached user as fallback, otherwise logout
         const cached = await getCachedUser();
-        if (cached && result.error === 'Network error. Please check your connection.') {
+        if (cached && result.errorCategory === 'offline') {
           // Offline — use cached data
           await hydrateFacilitiesForUser(cached);
           setState({ user: cached, isLoading: false, isAuthenticated: true });

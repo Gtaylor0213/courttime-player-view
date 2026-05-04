@@ -40,7 +40,7 @@ interface RuleViolation {
 export default function HomeScreen() {
   const { user, facilityId } = useAuth();
   const router = useRouter();
-  const { isOffline, fetchWithCache } = useOfflineApi();
+  const { bannerState, lastCachedAt, fetchWithCache, retryConnectivity } = useOfflineApi();
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [bulletins, setBulletins] = useState<BulletinPostWithAuthor[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -128,7 +128,7 @@ export default function HomeScreen() {
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
     >
-      <OfflineBanner visible={isOffline} />
+      <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
       <View style={styles.welcome}>
         <Text style={styles.greeting}>
           Welcome back, {user?.firstName || 'Player'}!

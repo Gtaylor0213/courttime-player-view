@@ -2,8 +2,9 @@
  * CourtTime Design Tokens
  * Shared colors and spacing for consistent UI
  */
+import { Appearance } from 'react-native';
 
-export const Colors = {
+const LightColors = {
   primary: '#2563EB',
   primaryLight: '#3B82F6',
   primaryDark: '#1D4ED8',
@@ -31,6 +32,37 @@ export const Colors = {
   courtMaintenance: '#F59E0B',
   courtClosed: '#DC2626',
 };
+
+const DarkColors: typeof LightColors = {
+  primary: '#60A5FA',
+  primaryLight: '#93C5FD',
+  primaryDark: '#3B82F6',
+  secondary: '#1E293B',
+  accent: '#2DD4BF',
+
+  background: '#020617',
+  surface: '#0F172A',
+  card: '#111827',
+
+  text: '#F8FAFC',
+  textSecondary: '#CBD5E1',
+  textMuted: '#94A3B8',
+  textInverse: '#020617',
+
+  border: '#334155',
+  borderLight: '#1E293B',
+
+  success: '#22C55E',
+  error: '#F87171',
+  warning: '#FBBF24',
+  info: '#38BDF8',
+
+  courtAvailable: '#22C55E',
+  courtMaintenance: '#FBBF24',
+  courtClosed: '#F87171',
+};
+
+export const Colors = Appearance.getColorScheme() === 'dark' ? DarkColors : LightColors;
 
 export const Spacing = {
   xs: 4,

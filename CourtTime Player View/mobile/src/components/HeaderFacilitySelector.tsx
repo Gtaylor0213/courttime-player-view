@@ -54,7 +54,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
       <View style={styles.titleStaticWrap}>
         <Text
           style={[styles.titleStatic, n > 42 && styles.titleStaticSm, n > 58 && styles.titleStaticXs]}
-          numberOfLines={3}
+          numberOfLines={1}
           ellipsizeMode="tail"
         >
           {name}
@@ -74,18 +74,14 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
   }
 
   const nameLen = facilityName.length;
-  const useTwoLines = nameLen > 24;
-  const textStyles = [
-    styles.buttonText,
-    useTwoLines ? styles.buttonTextXs : nameLen > 28 ? styles.buttonTextSm : null,
-  ];
+  const textStyles = [styles.buttonText, nameLen > 28 ? styles.buttonTextXs : styles.buttonTextSm];
 
   const chipMaxWidth = Math.max(160, Math.round(windowWidth - Spacing.sm - Spacing.xs));
 
   return (
     <>
       <TouchableOpacity
-        style={[styles.button, { maxWidth: chipMaxWidth }, useTwoLines && styles.buttonMultiline]}
+        style={[styles.button, { maxWidth: chipMaxWidth }]}
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`Current club ${facilityName}. Tap to switch.`}
@@ -100,7 +96,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
           )}
         </View>
         <View style={styles.titleFlex}>
-          <Text style={textStyles} numberOfLines={useTwoLines ? 3 : 1} ellipsizeMode="tail">
+          <Text style={textStyles} numberOfLines={1} ellipsizeMode="tail">
             {facilityName}
           </Text>
         </View>
@@ -171,8 +167,8 @@ const styles = StyleSheet.create({
   titleStatic: {
     color: Colors.text,
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.md,
-    lineHeight: 20,
+    fontSize: FontSize.sm,
+    lineHeight: 17,
   },
   titleStaticSm: {
     fontSize: FontSize.sm,
@@ -193,11 +189,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     minHeight: 36,
-  },
-  buttonMultiline: {
-    minHeight: 48,
-    paddingVertical: 4,
-    alignItems: 'center',
   },
   logoSlot: {
     width: 22,
@@ -228,17 +219,17 @@ const styles = StyleSheet.create({
   buttonText: {
     color: Colors.text,
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
     flexShrink: 1,
     minWidth: 0,
   },
   buttonTextSm: {
-    fontSize: FontSize.md,
-    lineHeight: 18,
+    fontSize: FontSize.sm,
+    lineHeight: 17,
   },
   buttonTextXs: {
-    fontSize: FontSize.sm,
-    lineHeight: 18,
+    fontSize: FontSize.xs,
+    lineHeight: 15,
   },
   overlay: {
     flex: 1,

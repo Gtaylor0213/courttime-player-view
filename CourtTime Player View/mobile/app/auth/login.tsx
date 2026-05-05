@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -58,7 +59,12 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.logo}>CourtTime</Text>
+            <Image
+              source={require('../../assets/splash-logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+              accessibilityLabel="CourtTime logo"
+            />
             <Text style={styles.subtitle}>Book courts. Find partners. Play better.</Text>
           </View>
 
@@ -142,10 +148,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xl,
   },
-  logo: {
-    fontSize: FontSize.title,
-    fontFamily: FontFamily.bold,
-    color: Colors.primary,
+  logoImage: {
+    width: 220,
+    height: 64,
     marginBottom: Spacing.xs,
   },
   subtitle: {

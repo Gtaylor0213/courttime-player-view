@@ -1,10 +1,10 @@
 /**
  * QuickBook
- * Surfaces the next ~3 available 1-hour slots across all bookable courts at the
+ * Surfaces the next ~3 available 2-hour slots across all bookable courts at the
  * current facility, so a player can grab the soonest opening with a single tap
  * — without going through the full Book tab flow.
  *
- * Defaults: 1-hour duration, today only, bookingType 'match'. Walk-up and
+ * Defaults: 2-hour duration, today only, bookingType 'match'. Walk-up and
  * unavailable courts are excluded. Rule-violation responses bubble up via the
  * onRuleViolations callback so the caller can show a violations modal.
  */
@@ -43,7 +43,7 @@ interface Props {
   onRuleViolations: (violations: RuleViolation[], warnings: RuleViolation[]) => void;
 }
 
-const SLOT_DURATION_MIN = 60;
+const SLOT_DURATION_MIN = 120;
 const MAX_SLOTS = 3;
 
 type QuickBookEmptyState = 'no_courts' | 'all_booked' | 'outside_open_hours' | 'request_failed';
@@ -215,7 +215,7 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
   function confirmAndBook(slot: QuickSlot) {
     showAlert(
       'Quick Book',
-      `Book ${slot.courtName} today at ${formatTime(slot.startTime)} for 1 hour?`,
+      `Book ${slot.courtName} today at ${formatTime(slot.startTime)} for 2 hours?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

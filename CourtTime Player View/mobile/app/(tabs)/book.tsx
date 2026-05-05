@@ -16,6 +16,7 @@ import {
   Platform,
   Pressable,
   LayoutAnimation,
+  useWindowDimensions,
 } from 'react-native';
 import { showAlert } from '../../src/utils/alert';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
@@ -76,6 +77,7 @@ interface RuleViolation {
 }
 
 export default function BookCourtScreen() {
+  const { height: windowHeight } = useWindowDimensions();
   const { user, facilityId, selectedBookDate, setSelectedBookDate } = useAuth();
   const [courts, setCourts] = useState<Court[]>([]);
   const [selectedDate, setSelectedDate] = useState(selectedBookDate || getTodayString());
@@ -578,11 +580,14 @@ export default function BookCourtScreen() {
     setSelectedCourt(null);
   };
 
+  const bookingModalMaxHeight = Math.round(windowHeight * 0.92);
+
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
-    >
+    <View style={styles.screenRoot}>
+      <ScrollView
+        style={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+      >
       {!facilityId && (
         <View style={styles.noFacility}>
           <Ionicons name="warning-outline" size={20} color={Colors.warning} />
@@ -653,8 +658,9 @@ export default function BookCourtScreen() {
       )}
 
       <View style={{ height: Spacing.xl }} />
+      </ScrollView>
 
-      {/* ── Booking Details Modal ── */}
+      {/* ── Booking Details Modal (sibling of main ScrollView — avoids scroll gesture capture) ── */}
       <Modal
         visible={modalKind === 'booking'}
         transparent
@@ -665,10 +671,10 @@ export default function BookCourtScreen() {
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.modalKeyboardShell}
+            style={styles.modalKeyboardAvoid}
           >
-            <View style={styles.modalInner}>
-              <View style={styles.modalHeader}>
+            <View style={[styles.modalBookingSheet, { height: bookingModalMaxHeight }]}>
+              <View style={styles.modalBookingHeader}>
                 <Text style={styles.modalTitle}>Booking Details</Text>
                 <Pressable
                   testID="dismiss-booking-modal"
@@ -681,117 +687,127 @@ export default function BookCourtScreen() {
                 </Pressable>
               </View>
 
-              {/* Summary */}
-              <Card style={styles.modalSummary} padded>
-                <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
-                <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
-              </Card>
-
-              {/* Time Pickers */}
-              <Text style={styles.modalLabel}>Select Time</Text>
-              <View style={styles.timePickerRow}>
-                <View style={styles.timePickerColumn}>
-                  <TimePicker
-                    label="Start"
-                    times={getAvailableStartTimes()}
-                    selectedTime={modalStartTime}
-                    onSelect={(t) => {
-                      setModalStartTime(t);
-                      const ends = getAvailableEndTimes(t);
-                      if (ends.length > 0 && (toMinutes(modalEndTime) <= toMinutes(t) || !ends.includes(modalEndTime))) {
-                        setModalEndTime(ends[0]);
-                      }
-                    }}
-                  />
-                </View>
-                <View style={styles.timePickerDivider}>
-                  <Text style={styles.timePickerDividerText}>to</Text>
-                </View>
-                <View style={styles.timePickerColumn}>
-                  <TimePicker
-                    label="End"
-                    times={getAvailableEndTimes(modalStartTime)}
-                    selectedTime={modalEndTime}
-                    onSelect={setModalEndTime}
-                  />
-                </View>
-              </View>
-
-              {/* Duration display */}
-              {modalStartTime && modalEndTime && toMinutes(modalEndTime) > toMinutes(modalStartTime) && (
-                <View style={styles.durationBadge}>
-                  <Ionicons name="time-outline" size={14} color={Colors.primary} />
-                  <Text style={styles.durationText}>
-                    {calcDuration(modalStartTime + ':00', modalEndTime + ':00')} minutes
-                  </Text>
-                </View>
-              )}
-
-              {/* Booking Type */}
-              <Text style={styles.modalLabel}>Booking Type</Text>
               <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
+                style={styles.modalBookingBody}
+                contentContainerStyle={styles.modalBookingScrollContent}
                 keyboardShouldPersistTaps="handled"
-                style={{ marginBottom: Spacing.md }}
+                showsVerticalScrollIndicator
+                bounces={false}
+                nestedScrollEnabled
               >
-                <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                  {BOOKING_TYPES.map(bt => (
-                    <TouchableOpacity
-                      key={bt.key}
-                      style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
-                      onPress={() => setBookingType(bt.key)}
-                    >
-                      <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
-                        {bt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
+                {/* Summary */}
+                <Card style={styles.modalSummary} padded>
+                  <Text style={styles.summaryCourtName}>{selectedCourt?.name}</Text>
+                  <Text style={styles.summaryDate}>{selectedDateLabel}</Text>
+                </Card>
 
-              {/* Additional Courts (Admin only) */}
-              {isAdmin && courts.length > 1 && (
-                <>
-                  <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md }}>
-                    {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
+                {/* Time Pickers */}
+                <Text style={styles.modalLabel}>Select Time</Text>
+                <View style={styles.timePickerRow}>
+                  <View style={styles.timePickerColumn}>
+                    <TimePicker
+                      label="Start"
+                      times={getAvailableStartTimes()}
+                      selectedTime={modalStartTime}
+                      onSelect={(t) => {
+                        setModalStartTime(t);
+                        const ends = getAvailableEndTimes(t);
+                        if (ends.length > 0 && (toMinutes(modalEndTime) <= toMinutes(t) || !ends.includes(modalEndTime))) {
+                          setModalEndTime(ends[0]);
+                        }
+                      }}
+                    />
+                  </View>
+                  <View style={styles.timePickerDivider}>
+                    <Text style={styles.timePickerDividerText}>to</Text>
+                  </View>
+                  <View style={styles.timePickerColumn}>
+                    <TimePicker
+                      label="End"
+                      times={getAvailableEndTimes(modalStartTime)}
+                      selectedTime={modalEndTime}
+                      onSelect={setModalEndTime}
+                    />
+                  </View>
+                </View>
+
+                {/* Duration display */}
+                {modalStartTime && modalEndTime && toMinutes(modalEndTime) > toMinutes(modalStartTime) && (
+                  <View style={styles.durationBadge}>
+                    <Ionicons name="time-outline" size={14} color={Colors.primary} />
+                    <Text style={styles.durationText}>
+                      {calcDuration(modalStartTime + ':00', modalEndTime + ':00')} minutes
+                    </Text>
+                  </View>
+                )}
+
+                {/* Booking Type */}
+                <Text style={styles.modalLabel}>Booking Type</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  style={{ marginBottom: Spacing.sm }}
+                >
+                  <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                    {BOOKING_TYPES.map(bt => (
                       <TouchableOpacity
-                        key={court.id}
-                        style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
-                        onPress={() => toggleAdditionalCourt(court.id)}
+                        key={bt.key}
+                        style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
+                        onPress={() => setBookingType(bt.key)}
                       >
-                        <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
-                          {court.name}
+                        <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
+                          {bt.label}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
-                </>
-              )}
+                </ScrollView>
 
-              {/* Notes */}
-              <Text style={styles.modalLabel}>Notes (optional)</Text>
-              <Input
-                style={styles.notesInput}
-                value={bookingNotes}
-                onChangeText={setBookingNotes}
-                placeholder="Special requests or notes..."
-                multiline
-                maxLength={200}
-              />
+                {/* Additional Courts (Admin only) */}
+                {isAdmin && courts.length > 1 && (
+                  <>
+                    <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm }}>
+                      {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
+                        <TouchableOpacity
+                          key={court.id}
+                          style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
+                          onPress={() => toggleAdditionalCourt(court.id)}
+                        >
+                          <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
+                            {court.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
 
-              {/* Confirm Button */}
-              <Button
-                title={
-                  additionalCourtIds.length > 0
-                    ? `Book ${1 + additionalCourtIds.length} Courts`
-                    : 'Confirm Booking'
-                }
-                onPress={handleConfirmBooking}
-                loading={booking}
-                style={styles.confirmButton}
-              />
+                {/* Notes */}
+                <Text style={styles.modalLabel}>Notes (optional)</Text>
+                <Input
+                  style={styles.notesInput}
+                  value={bookingNotes}
+                  onChangeText={setBookingNotes}
+                  placeholder="Special requests or notes..."
+                  multiline
+                  maxLength={200}
+                />
+              </ScrollView>
+
+              <View style={styles.modalBookingFooter}>
+                <Button
+                  title={
+                    additionalCourtIds.length > 0
+                      ? `Book ${1 + additionalCourtIds.length} Courts`
+                      : 'Confirm Booking'
+                  }
+                  onPress={handleConfirmBooking}
+                  loading={booking}
+                  style={styles.confirmButton}
+                />
+              </View>
             </View>
           </KeyboardAvoidingView>
         </View>
@@ -864,11 +880,15 @@ export default function BookCourtScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.surface,
@@ -963,15 +983,44 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     maxHeight: '85%',
   },
-  modalKeyboardShell: {
+  modalKeyboardAvoid: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
+  modalBookingSheet: {
+    width: '100%',
+    alignSelf: 'stretch',
     backgroundColor: Colors.card,
     borderTopLeftRadius: BorderRadius.lg,
     borderTopRightRadius: BorderRadius.lg,
-    maxHeight: '85%',
+    overflow: 'hidden',
+    flexDirection: 'column',
   },
-  modalInner: {
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xl,
+  modalBookingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexShrink: 0,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  modalBookingBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  modalBookingScrollContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  modalBookingFooter: {
+    flexShrink: 0,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -986,7 +1035,7 @@ const styles = StyleSheet.create({
   },
   modalSummary: {
     backgroundColor: Colors.surface,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
   },
@@ -1029,14 +1078,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   notesInput: {
-    minHeight: 80,
+    minHeight: 52,
     textAlignVertical: 'top',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   timePickerRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   timePickerColumn: {
     flex: 1,

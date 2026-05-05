@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontFamily, FontSize, Spacing } from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
 
@@ -41,6 +42,8 @@ function renderNavTabButton(props: Record<string, unknown>) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { user, facilityId } = useAuth();
+  const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
   const screenOptions = useMemo(
     () => ({
@@ -108,6 +111,15 @@ export default function TabLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
           headerTitle: 'My Profile',
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Admin',
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark" size={size} color={color} />,
+          headerTitle: 'Admin',
         }}
       />
     </Tabs>

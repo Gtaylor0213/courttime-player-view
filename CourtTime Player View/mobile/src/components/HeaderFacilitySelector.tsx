@@ -53,8 +53,8 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
     return (
       <View style={styles.titleStaticWrap}>
         <Text
-          style={[styles.titleStatic, n > 34 && styles.titleStaticSm, n > 48 && styles.titleStaticXs]}
-          numberOfLines={2}
+          style={[styles.titleStatic, n > 42 && styles.titleStaticSm, n > 58 && styles.titleStaticXs]}
+          numberOfLines={3}
           ellipsizeMode="tail"
         >
           {name}
@@ -74,18 +74,18 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
   }
 
   const nameLen = facilityName.length;
-  const useTwoLines = nameLen > 26;
+  const useTwoLines = nameLen > 24;
   const textStyles = [
     styles.buttonText,
-    useTwoLines ? styles.buttonTextXs : nameLen > 22 ? styles.buttonTextSm : null,
+    useTwoLines ? styles.buttonTextXs : nameLen > 28 ? styles.buttonTextSm : null,
   ];
 
-  const chipMaxWidth = Math.max(160, Math.round(windowWidth - Spacing.md * 2));
+  const chipMaxWidth = Math.max(160, Math.round(windowWidth - Spacing.sm - Spacing.xs));
 
   return (
     <>
       <TouchableOpacity
-        style={[styles.button, { maxWidth: chipMaxWidth }]}
+        style={[styles.button, { maxWidth: chipMaxWidth }, useTwoLines && styles.buttonMultiline]}
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`Current club ${facilityName}. Tap to switch.`}
@@ -100,7 +100,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
           )}
         </View>
         <View style={styles.titleFlex}>
-          <Text style={textStyles} numberOfLines={useTwoLines ? 2 : 1} ellipsizeMode="tail">
+          <Text style={textStyles} numberOfLines={useTwoLines ? 3 : 1} ellipsizeMode="tail">
             {facilityName}
           </Text>
         </View>
@@ -172,27 +172,32 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.md,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   titleStaticSm: {
     fontSize: FontSize.sm,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   titleStaticXs: {
     fontSize: FontSize.xs,
-    lineHeight: 16,
+    lineHeight: 15,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: Spacing.md,
+    gap: 6,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
     minHeight: 36,
+  },
+  buttonMultiline: {
+    minHeight: 48,
+    paddingVertical: 4,
+    alignItems: 'center',
   },
   logoSlot: {
     width: 22,

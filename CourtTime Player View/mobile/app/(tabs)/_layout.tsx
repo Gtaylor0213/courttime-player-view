@@ -146,8 +146,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexShrink: 1,
     alignItems: 'flex-start',
-    marginLeft: Spacing.md,
-    marginRight: Spacing.sm,
+    marginLeft: Spacing.sm,
+    marginRight: Spacing.xs,
     maxWidth: '100%',
   },
 });

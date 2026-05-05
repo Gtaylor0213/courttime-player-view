@@ -1251,7 +1251,7 @@ export function CourtCalendarView() {
                         style={{
                           width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth,
                           textAlign: 'right', verticalAlign: 'top', paddingTop: 4,
-                          borderBottom: isHourMark ? '1px solid #d1d5db' : '1px solid #f3f4f6',
+                          borderBottom: isHourMark ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
                         }}
                       >
                         <span className={`text-xs ${isHourMark ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
@@ -1280,7 +1280,7 @@ export function CourtCalendarView() {
                             style={{
                               width: effectiveCourtWidth, minWidth: effectiveCourtWidth,
                               height: effectiveRowHeight, verticalAlign: 'top',
-                              borderBottom: isHourMark ? '1px solid #d1d5db' : '1px solid #f3f4f6',
+                              borderBottom: isHourMark ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
                             }}
                           >
                             {/* Top half (first 15 min) */}
@@ -1304,12 +1304,6 @@ export function CourtCalendarView() {
                               }}
                               onMouseDown={(e) => !isWalkUpCourt && !topBooking && !topPast && !topBlocked && handleMouseDown(court.name, topTime, e)}
                               onMouseEnter={() => !isWalkUpCourt && !topPast && !topBlocked && handleMouseEnter(court.name, topTime)}
-                            />
-
-                            {/* 15-min midpoint line */}
-                            <div
-                              className="absolute left-1 right-1 border-b border-dashed border-gray-200 pointer-events-none"
-                              style={{ top: effectiveSubSlotHeight }}
                             />
 
                             {/* Bottom half (second 15 min) */}
@@ -1374,8 +1368,16 @@ export function CourtCalendarView() {
                 return (
                   <div
                     key={`booking-${booking.bookingId || idx}`}
-                    className={`absolute rounded-lg border shadow-sm ${isBlocked ? 'opacity-70' : 'hover:shadow-md cursor-pointer'} transition-shadow pointer-events-auto overflow-hidden ${colorClass}`}
-                    style={{ top, left, width, height }}
+                    className={`absolute rounded-lg border ${isBlocked ? 'opacity-70' : 'cursor-pointer'} transition-shadow pointer-events-auto overflow-hidden ${colorClass}`}
+                    style={{
+                      top,
+                      left,
+                      width,
+                      height,
+                      boxShadow: isBlocked
+                        ? '0 1px 3px rgba(15, 23, 42, 0.08)'
+                        : '0 2px 6px rgba(15, 23, 42, 0.12)',
+                    }}
                     onClick={() => !isBlocked && handleBookingClick(overlay.courtName, allTimeSlots[overlay.startSlotIndex])}
                   >
                     <div className="px-2 py-1 h-full flex flex-col overflow-hidden">

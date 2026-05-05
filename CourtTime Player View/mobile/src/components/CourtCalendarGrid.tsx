@@ -429,8 +429,6 @@ export function CourtCalendarGrid({
               styles.courtHeader,
               { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
               courtIndex > 0 && styles.courtColumnDividerLeft,
-              courtIndex === 1 && styles.courtColumnToneMid,
-              courtIndex === 2 && styles.courtColumnToneRight,
             ]}
           >
             <Text style={styles.courtHeaderText} numberOfLines={1}>{court.name}</Text>
@@ -446,8 +444,6 @@ export function CourtCalendarGrid({
                 styles.courtHeader,
                 { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
                 courtIndex > 0 && styles.courtColumnDividerLeft,
-                courtIndex === 1 && styles.courtColumnToneMid,
-                courtIndex === 2 && styles.courtColumnToneRight,
               ]}
             />
           );
@@ -510,8 +506,6 @@ export function CourtCalendarGrid({
                               styles.cell,
                               { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
                               courtIndex > 0 && styles.courtColumnDividerLeft,
-                              courtIndex === 1 && styles.courtColumnToneMid,
-                              courtIndex === 2 && styles.courtColumnToneRight,
                               past && styles.cellPast,
                               booked && styles.cellBooked,
                               selected && styles.cellSelected,
@@ -581,8 +575,6 @@ export function CourtCalendarGrid({
                                 marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0,
                               },
                               courtIndex > 0 && styles.courtColumnDividerLeft,
-                              courtIndex === 1 && styles.courtColumnToneMid,
-                              courtIndex === 2 && styles.courtColumnToneRight,
                             ]}
                           />
                         );
@@ -672,13 +664,7 @@ const styles = StyleSheet.create({
   },
   courtColumnDividerLeft: {
     borderLeftWidth: 3,
-    borderLeftColor: Colors.border,
-  },
-  courtColumnToneMid: {
-    backgroundColor: Colors.secondary,
-  },
-  courtColumnToneRight: {
-    backgroundColor: Colors.accent,
+    borderLeftColor: Colors.borderLight,
   },
   timeLabelHeaderSpacer: {
     borderRightWidth: 2,
@@ -705,7 +691,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: ROW_HEIGHT,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: Colors.border,
   },
   timeLabel: {
     width: TIME_LABEL_WIDTH,
@@ -726,6 +712,8 @@ const styles = StyleSheet.create({
   cell: {
     justifyContent: 'center',
     alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: Colors.borderLight,
   },
   cellPast: {
     backgroundColor: Colors.borderLight + '80',

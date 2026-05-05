@@ -3,7 +3,7 @@
  * Calendar date picker → court selector → time slot grid → booking details → confirm
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -160,6 +160,8 @@ interface RuleViolation {
 export default function BookCourtScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const { user, facilityId, selectedBookDate, setSelectedBookDate } = useAuth();
+  /** Avoid applying slot results from a stale availability request after the user picks another court on the grid. */
+  const selectedCourtIdRef = useRef<string | null>(null);
   const [courts, setCourts] = useState<Court[]>([]);
   const [selectedDate, setSelectedDate] = useState(selectedBookDate || getTodayString());
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
@@ -198,6 +200,10 @@ export default function BookCourtScreen() {
   useEffect(() => {
     setSelectedBookDate(selectedDate);
   }, [selectedDate, setSelectedBookDate]);
+
+  useEffect(() => {
+    selectedCourtIdRef.current = selectedCourt?.id ?? null;
+  }, [selectedCourt?.id]);
 
   useEffect(() => {
     if (modalKind !== null) {
@@ -245,17 +251,20 @@ export default function BookCourtScreen() {
       return;
     }
 
-    const res = await api.get(
-      `/api/court-config/${selectedCourt.id}/availability?date=${selectedDate}`
-    );
+    const courtId = selectedCourt.id;
+    const res = await api.get(`/api/court-config/${courtId}/availability?date=${selectedDate}`);
     console.log('[book] fetch slot availability', {
       selectedDate,
-      url: `/api/court-config/${selectedCourt.id}/availability?date=${selectedDate}`,
+      url: `/api/court-config/${courtId}/availability?date=${selectedDate}`,
       success: res.success,
       errorCategory: res.errorCategory,
       error: res.error,
       hasData: Boolean(res.data),
     });
+
+    if (selectedCourtIdRef.current !== courtId) {
+      return;
+    }
 
     if (res.success && res.data) {
       const data = res.data as AvailabilityResponse;
@@ -327,6 +336,7 @@ export default function BookCourtScreen() {
       pickEnd = endOpts[0]!;
     }
 
+    selectedCourtIdRef.current = court.id;
     setTimeSlots(slots);
     setSelectedCourt(court);
     setSelectedSlot({

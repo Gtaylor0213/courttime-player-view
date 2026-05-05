@@ -61,6 +61,8 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
   const [loading, setLoading] = useState(true);
   const [pageIndex, setPageIndex] = useState(0);
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
+  /** Same payload as dragSelection, updated synchronously — RN can fire parent onTouchEnd before state from onTouchStart commits. */
+  const dragSelectionRef = useRef<DragSelection | null>(null);
   const dragStartRef = useRef<{ pageY: number; startRow: number } | null>(null);
   const isDragging = useRef(false);
   const dragMoved = useRef(false);
@@ -273,31 +275,40 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
     dragStartRef.current = { pageY, startRow: rowIndex };
     dragMoved.current = false;
     isDragging.current = false;
-    setDragSelection({ pageIndex: targetPageIndex, courtIndex, startRow: rowIndex, endRow: rowIndex });
+    const nextSel: DragSelection = {
+      pageIndex: targetPageIndex,
+      courtIndex,
+      startRow: rowIndex,
+      endRow: rowIndex,
+    };
+    dragSelectionRef.current = nextSel;
+    setDragSelection(nextSel);
   };
 
   const handleTouchEnd = () => {
-    if (!dragSelection) return;
+    const sel = dragSelectionRef.current;
+    if (!sel) return;
+    dragSelectionRef.current = null;
 
-    if (isDragging.current && !selectionHasConflict(dragSelection)) {
-      const globalCourtIndex = dragSelection.pageIndex * COURTS_PER_PAGE + dragSelection.courtIndex;
+    if (isDragging.current && !selectionHasConflict(sel)) {
+      const globalCourtIndex = sel.pageIndex * COURTS_PER_PAGE + sel.courtIndex;
       const court = courts[globalCourtIndex];
-      const startRow = Math.min(dragSelection.startRow, dragSelection.endRow);
-      const endRow = Math.max(dragSelection.startRow, dragSelection.endRow);
+      const startRow = Math.min(sel.startRow, sel.endRow);
+      const endRow = Math.max(sel.startRow, sel.endRow);
       const startTime = timeRows[startRow] + ':00';
       const endTime = getRowEndTime(endRow) + ':00';
 
       if (court) {
-        onBookingSelected(court, startTime, endTime);
+        void onBookingSelected(court, startTime, endTime);
       }
     } else if (!dragMoved.current) {
       // Treat as single-tap selection when finger did not move enough to drag.
-      const globalCourtIndex = dragSelection.pageIndex * COURTS_PER_PAGE + dragSelection.courtIndex;
+      const globalCourtIndex = sel.pageIndex * COURTS_PER_PAGE + sel.courtIndex;
       const court = courts[globalCourtIndex];
-      const startTime = timeRows[dragSelection.startRow] + ':00';
-      const endTime = getRowEndTime(dragSelection.startRow) + ':00';
+      const startTime = timeRows[sel.startRow] + ':00';
+      const endTime = getRowEndTime(sel.startRow) + ':00';
       if (court) {
-        onBookingSelected(court, startTime, endTime);
+        void onBookingSelected(court, startTime, endTime);
       }
     }
 
@@ -473,9 +484,11 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                                 e.nativeEvent.pageY
                               );
                             }}
+                            onTouchEnd={handleTouchEnd}
                             onTouchMove={(e) => {
-                              if (!dragSelection || !dragStartRef.current) return;
-                              if (renderPageIndex !== dragSelection.pageIndex || courtIndex !== dragSelection.courtIndex) return;
+                              const cur = dragSelectionRef.current;
+                              if (!cur || !dragStartRef.current) return;
+                              if (renderPageIndex !== cur.pageIndex || courtIndex !== cur.courtIndex) return;
 
                               const deltaY = e.nativeEvent.pageY - dragStartRef.current.pageY;
                               const rowOffset = Math.round(deltaY / ROW_HEIGHT);
@@ -490,8 +503,10 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                               }
 
                               if (!isDragging.current) return;
-                              if (nextRow !== dragSelection.endRow) {
-                                setDragSelection({ ...dragSelection, endRow: nextRow });
+                              if (nextRow !== cur.endRow) {
+                                const nextSel = { ...cur, endRow: nextRow };
+                                dragSelectionRef.current = nextSel;
+                                setDragSelection(nextSel);
                               }
                             }}
                           >

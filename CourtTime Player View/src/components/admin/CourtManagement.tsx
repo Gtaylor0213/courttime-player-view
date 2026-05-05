@@ -149,8 +149,13 @@ export function CourtManagement() {
   };
 
   const handleEdit = (court: Court) => {
+    const previousScrollY = window.scrollY;
     setEditingCourt({ ...court });
     setIsAddingNew(false);
+    // Keep viewport anchored; editing form renders above the list.
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: previousScrollY });
+    });
   };
 
   const handleSave = async () => {

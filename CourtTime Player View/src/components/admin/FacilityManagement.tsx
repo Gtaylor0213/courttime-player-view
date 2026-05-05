@@ -1026,8 +1026,13 @@ export function FacilityManagement() {
   };
 
   const handleEditCourt = (court: Court) => {
+    const previousScrollY = window.scrollY;
     setEditingCourt({ ...court });
     setIsAddingNewCourt(false);
+    // Keep viewport anchored; editing form renders above the list.
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: previousScrollY });
+    });
   };
 
   const handleSaveCourt = async () => {

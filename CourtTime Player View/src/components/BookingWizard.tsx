@@ -63,6 +63,10 @@ function timeSlotIndex(time12h: string): number {
   return idx >= 0 ? idx : 0;
 }
 
+function sortSlotsByTime<T extends { time: string }>(slots: T[]): T[] {
+  return [...slots].sort((a, b) => timeSlotIndex(a.time) - timeSlotIndex(b.time));
+}
+
 function addMinutesTo12h(time12h: string, mins: number): string {
   const [t, period] = time12h.split(' ');
   let [hours, minutes] = t.split(':').map(Number);
@@ -88,7 +92,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [startTime, setStartTime] = useState(time);
   const [endTime, setEndTime] = useState(() => {
     if (selectedSlots && selectedSlots.length > 1) {
-      const sorted = [...selectedSlots].sort((a, b) => a.time.localeCompare(b.time));
+      const sorted = sortSlotsByTime(selectedSlots);
       return addMinutesTo12h(sorted[sorted.length - 1].time, 15);
     }
     return addMinutesTo12h(time, 60);
@@ -178,7 +182,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   useEffect(() => {
     if (isOpen) {
       if (selectedSlots && selectedSlots.length > 1) {
-        const sorted = [...selectedSlots].sort((a, b) => a.time.localeCompare(b.time));
+        const sorted = sortSlotsByTime(selectedSlots);
         setStartTime(sorted[0].time);
         setEndTime(addMinutesTo12h(sorted[sorted.length - 1].time, 15));
       } else {

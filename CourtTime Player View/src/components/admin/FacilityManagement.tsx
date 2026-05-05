@@ -2391,7 +2391,6 @@ export function FacilityManagement() {
                                           <Label className="text-xs">Max Bookings Per Day (user)</Label>
                                           <div className="flex items-center gap-2">
                                             <Switch checked={slot.rules.maxBookingsPerDayUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', checked)} disabled={!isEditing} />
-                                            <span className="text-xs text-gray-500">Unlimited</span>
                                             <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerDay} disabled={!isEditing || slot.rules.maxBookingsPerDayUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', e.target.value)} />
                                           </div>
                                         </div>
@@ -2399,7 +2398,6 @@ export function FacilityManagement() {
                                           <Label className="text-xs">Max Bookings Per Week (user)</Label>
                                           <div className="flex items-center gap-2">
                                             <Switch checked={slot.rules.maxBookingsPerWeekUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', checked)} disabled={!isEditing} />
-                                            <span className="text-xs text-gray-500">Unlimited</span>
                                             <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerWeek} disabled={!isEditing || slot.rules.maxBookingsPerWeekUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', e.target.value)} />
                                           </div>
                                         </div>
@@ -2407,7 +2405,6 @@ export function FacilityManagement() {
                                           <Label className="text-xs">Max Bookings Per Week (household)</Label>
                                           <div className="flex items-center gap-2">
                                             <Switch checked={slot.rules.maxBookingsPerWeekHouseholdUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', checked)} disabled={!isEditing} />
-                                            <span className="text-xs text-gray-500">Unlimited</span>
                                             <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerWeekHousehold} disabled={!isEditing || slot.rules.maxBookingsPerWeekHouseholdUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', e.target.value)} />
                                           </div>
                                         </div>
@@ -2415,7 +2412,6 @@ export function FacilityManagement() {
                                           <Label className="text-xs">Max Duration (hours)</Label>
                                           <div className="flex items-center gap-2">
                                             <Switch checked={slot.rules.maxDurationUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', checked)} disabled={!isEditing} />
-                                            <span className="text-xs text-gray-500">Unlimited</span>
                                             <Input type="number" min="0.5" step="0.5" className="w-24 h-8" value={slot.rules.maxDurationHours} disabled={!isEditing || slot.rules.maxDurationUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxDurationHours', e.target.value)} />
                                           </div>
                                         </div>

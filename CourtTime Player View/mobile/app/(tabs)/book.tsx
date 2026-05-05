@@ -184,6 +184,7 @@ export default function BookCourtScreen() {
   const [modalStartTime, setModalStartTime] = useState('');
   const [modalEndTime, setModalEndTime] = useState('');
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
+  const [additionalCourtsExpanded, setAdditionalCourtsExpanded] = useState(false);
 
   // Rule violations modal payload (shown when modalKind === 'violations')
   const [violations, setViolations] = useState<RuleViolation[]>([]);
@@ -220,6 +221,7 @@ export default function BookCourtScreen() {
     setModalStartTime('');
     setModalEndTime('');
     setAdditionalCourtIds([]);
+    setAdditionalCourtsExpanded(false);
   }, [modalKind]);
 
   // ── Fetch courts ──
@@ -359,6 +361,7 @@ export default function BookCourtScreen() {
       setBookingType('match');
       setBookingNotes('');
       setAdditionalCourtIds([]);
+      setAdditionalCourtsExpanded(false);
       setModalKind('booking');
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -458,6 +461,7 @@ export default function BookCourtScreen() {
       setBookingType('match');
       setBookingNotes('');
       setAdditionalCourtIds([]);
+      setAdditionalCourtsExpanded(false);
       setModalKind('booking');
     } catch {
       showAlert('Quick Reserve', 'Could not load quick reserve availability. Please try again.');
@@ -847,20 +851,34 @@ export default function BookCourtScreen() {
                 {/* Additional Courts (Admin only) */}
                 {isAdmin && courts.length > 1 && (
                   <>
-                    <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm }}>
-                      {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
-                        <TouchableOpacity
-                          key={court.id}
-                          style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
-                          onPress={() => toggleAdditionalCourt(court.id)}
-                        >
-                          <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
-                            {court.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                    <TouchableOpacity
+                      style={styles.dropdownToggle}
+                      onPress={() => setAdditionalCourtsExpanded(v => !v)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${additionalCourtsExpanded ? 'Collapse' : 'Expand'} additional courts`}
+                    >
+                      <Text style={styles.modalLabel}>Additional Courts (Admin)</Text>
+                      <Ionicons
+                        name={additionalCourtsExpanded ? 'chevron-up' : 'chevron-down'}
+                        size={16}
+                        color={Colors.textMuted}
+                      />
+                    </TouchableOpacity>
+                    {additionalCourtsExpanded && (
+                      <View style={styles.additionalCourtsWrap}>
+                        {courts.filter(c => c.id !== selectedCourt?.id).map(court => (
+                          <TouchableOpacity
+                            key={court.id}
+                            style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
+                            onPress={() => toggleAdditionalCourt(court.id)}
+                          >
+                            <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
+                              {court.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
                   </>
                 )}
 
@@ -1137,6 +1155,18 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
+    marginBottom: Spacing.sm,
+  },
+  dropdownToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  additionalCourtsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
     marginBottom: Spacing.sm,
   },
   typeChip: {

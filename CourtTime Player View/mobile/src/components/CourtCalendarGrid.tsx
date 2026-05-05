@@ -68,7 +68,11 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
 
   const totalPages = Math.ceil(courts.length / COURTS_PER_PAGE);
   const pageCourts = courts.slice(pageIndex * COURTS_PER_PAGE, (pageIndex + 1) * COURTS_PER_PAGE);
-  const courtColumnWidth = (SCREEN_WIDTH - TIME_LABEL_WIDTH) / COURTS_PER_PAGE;
+  /** Fixed gutters between court columns so borders do not shrink column width math */
+  const COURT_COLUMN_GUTTER = Spacing.sm;
+  const courtTrackWidth = SCREEN_WIDTH - TIME_LABEL_WIDTH;
+  const courtColumnWidth =
+    (courtTrackWidth - COURT_COLUMN_GUTTER * (COURTS_PER_PAGE - 1)) / COURTS_PER_PAGE;
 
   useEffect(() => {
     console.log('[book-grid] selectedDate prop', selectedDate);
@@ -367,16 +371,37 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
 
       {/* Court headers (sticky) */}
       <View style={styles.headerRow}>
-        <View style={styles.timeLabel} />
-        {pageCourts.map((court) => (
-          <View key={court.id} style={[styles.courtHeader, { width: courtColumnWidth }]}>
+        <View style={[styles.timeLabel, styles.timeLabelHeaderSpacer]} />
+        {pageCourts.map((court, courtIndex) => (
+          <View
+            key={court.id}
+            style={[
+              styles.courtHeader,
+              { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
+              courtIndex > 0 && styles.courtColumnDividerLeft,
+              courtIndex === 1 && styles.courtColumnToneMid,
+              courtIndex === 2 && styles.courtColumnToneRight,
+            ]}
+          >
             <Text style={styles.courtHeaderText} numberOfLines={1}>{court.name}</Text>
             <Text style={styles.courtHeaderMeta}>{court.courtType || 'Tennis'}</Text>
           </View>
         ))}
-        {Array.from({ length: Math.max(0, COURTS_PER_PAGE - pageCourts.length) }).map((_, idx) => (
-          <View key={`header-empty-${idx}`} style={[styles.courtHeader, { width: courtColumnWidth }]} />
-        ))}
+        {Array.from({ length: Math.max(0, COURTS_PER_PAGE - pageCourts.length) }).map((_, idx) => {
+          const courtIndex = pageCourts.length + idx;
+          return (
+            <View
+              key={`header-empty-${idx}`}
+              style={[
+                styles.courtHeader,
+                { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
+                courtIndex > 0 && styles.courtColumnDividerLeft,
+                courtIndex === 1 && styles.courtColumnToneMid,
+                courtIndex === 2 && styles.courtColumnToneRight,
+              ]}
+            />
+          );
+        })}
       </View>
 
       {/* Scrollable time grid */}
@@ -412,7 +437,7 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                   return (
                     <View key={`${renderPageIndex}-${time}`} style={styles.row}>
                       {/* Time label */}
-                      <View style={styles.timeLabel}>
+                      <View style={[styles.timeLabel, styles.timeLabelGrid]}>
                         <Text style={[styles.timeLabelText, past && styles.pastText]}>
                           {formatTimeLabel(time)}
                         </Text>
@@ -431,7 +456,10 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                             activeOpacity={0.7}
                             style={[
                               styles.cell,
-                              { width: courtColumnWidth },
+                              { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
+                              courtIndex > 0 && styles.courtColumnDividerLeft,
+                              courtIndex === 1 && styles.courtColumnToneMid,
+                              courtIndex === 2 && styles.courtColumnToneRight,
                               past && styles.cellPast,
                               booked && styles.cellBooked,
                               selected && styles.cellSelected,
@@ -481,9 +509,24 @@ export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingS
                         );
                       })}
 
-                      {Array.from({ length: Math.max(0, COURTS_PER_PAGE - renderPageCourts.length) }).map((_, idx) => (
-                        <View key={`empty-cell-${renderPageIndex}-${rowIndex}-${idx}`} style={[styles.cell, { width: courtColumnWidth }]} />
-                      ))}
+                      {Array.from({ length: Math.max(0, COURTS_PER_PAGE - renderPageCourts.length) }).map((_, idx) => {
+                        const courtIndex = renderPageCourts.length + idx;
+                        return (
+                          <View
+                            key={`empty-cell-${renderPageIndex}-${rowIndex}-${idx}`}
+                            style={[
+                              styles.cell,
+                              {
+                                width: courtColumnWidth,
+                                marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0,
+                              },
+                              courtIndex > 0 && styles.courtColumnDividerLeft,
+                              courtIndex === 1 && styles.courtColumnToneMid,
+                              courtIndex === 2 && styles.courtColumnToneRight,
+                            ]}
+                          />
+                        );
+                      })}
                     </View>
                   );
                 })}
@@ -564,8 +607,26 @@ const styles = StyleSheet.create({
   courtHeader: {
     paddingVertical: Spacing.sm,
     alignItems: 'center',
-    borderLeftWidth: 1,
-    borderLeftColor: Colors.borderLight,
+    justifyContent: 'center',
+    borderRadius: BorderRadius.sm,
+  },
+  courtColumnDividerLeft: {
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.border,
+  },
+  courtColumnToneMid: {
+    backgroundColor: Colors.secondary,
+  },
+  courtColumnToneRight: {
+    backgroundColor: Colors.accent,
+  },
+  timeLabelHeaderSpacer: {
+    borderRightWidth: 2,
+    borderRightColor: Colors.border,
+  },
+  timeLabelGrid: {
+    borderRightWidth: 2,
+    borderRightColor: Colors.border,
   },
   courtHeaderText: {
     fontSize: FontSize.xs,
@@ -603,8 +664,6 @@ const styles = StyleSheet.create({
 
   // Cells
   cell: {
-    borderLeftWidth: 1,
-    borderLeftColor: Colors.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
   },

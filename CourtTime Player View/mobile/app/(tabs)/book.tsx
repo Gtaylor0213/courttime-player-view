@@ -170,6 +170,11 @@ export default function BookCourtScreen() {
   const [booking, setBooking] = useState(false);
   const [quickReserving, setQuickReserving] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
+  /** When the day grid has a finger down, disable the outer Book ScrollView so it does not steal vertical drags. */
+  const [calendarScrollLocked, setCalendarScrollLocked] = useState(false);
+  const onCalendarInteractionLock = useCallback((locked: boolean) => {
+    setCalendarScrollLocked(locked);
+  }, []);
 
   // Booking / rule violations: single modal kind so only one native Modal is active
   const [modalKind, setModalKind] = useState<BookModalKind>(null);
@@ -294,62 +299,71 @@ export default function BookCourtScreen() {
   // ── Handle calendar grid booking selection ──
   /** Load slot list for this court before opening the modal so TimePickers include the dragged range. */
   async function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
-    const start5 = startTime.slice(0, 5);
-    const end5 = endTime.slice(0, 5);
+    try {
+      const start5 = startTime.slice(0, 5);
+      const end5 = endTime.slice(0, 5);
 
-    const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
+      const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
 
-    let slots: TimeSlot[] = [];
-    if (res.success && res.data) {
-      slots = buildTimeSlotsFromAvailability(res.data as AvailabilityResponse, selectedDate, getTodayString());
+      let slots: TimeSlot[] = [];
+      if (res.success && res.data) {
+        slots = buildTimeSlotsFromAvailability(
+          res.data as AvailabilityResponse,
+          selectedDate,
+          getTodayString()
+        );
+      }
+
+      const starts = slots.filter((s) => s.available).map((s) => s.startTime.slice(0, 5));
+      if (starts.length === 0) {
+        showAlert(
+          'Unavailable',
+          'Could not load open times for this court. Pull down to refresh and try again.'
+        );
+        return;
+      }
+
+      let pickStart = start5;
+      if (!starts.includes(start5)) {
+        const target = parseHHMMToMinutes(start5);
+        const future = starts
+          .filter((s) => parseHHMMToMinutes(s) >= target)
+          .sort((a, b) => parseHHMMToMinutes(a) - parseHHMMToMinutes(b));
+        pickStart = future[0] ?? starts[0];
+      }
+
+      const endOpts = computeAvailableEndTimesHHMM(slots, pickStart);
+      let pickEnd = end5;
+      if (endOpts.length === 0) {
+        pickEnd = formatMinutesAsHHMM(parseHHMMToMinutes(pickStart) + 30);
+      } else if (!endOpts.includes(end5)) {
+        const targetEnd = parseHHMMToMinutes(end5);
+        const atOrBefore = endOpts.filter((e) => parseHHMMToMinutes(e) <= targetEnd);
+        pickEnd =
+          atOrBefore.length > 0 ? atOrBefore[atOrBefore.length - 1]! : endOpts[endOpts.length - 1]!;
+      }
+      if (parseHHMMToMinutes(pickEnd) <= parseHHMMToMinutes(pickStart) && endOpts.length > 0) {
+        pickEnd = endOpts[0]!;
+      }
+
+      selectedCourtIdRef.current = court.id;
+      setTimeSlots(slots);
+      setSelectedCourt(court);
+      setSelectedSlot({
+        startTime: pickStart + ':00',
+        endTime: pickEnd + ':00',
+        available: true,
+      });
+      setModalStartTime(pickStart);
+      setModalEndTime(pickEnd);
+      setBookingType('match');
+      setBookingNotes('');
+      setAdditionalCourtIds([]);
+      setModalKind('booking');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      showAlert('Booking', `Could not open booking from the calendar. ${message}`);
     }
-
-    const starts = slots.filter((s) => s.available).map((s) => s.startTime.slice(0, 5));
-    if (starts.length === 0) {
-      showAlert(
-        'Unavailable',
-        'Could not load open times for this court. Pull down to refresh and try again.'
-      );
-      return;
-    }
-
-    let pickStart = start5;
-    if (!starts.includes(start5)) {
-      const target = parseHHMMToMinutes(start5);
-      const future = starts
-        .filter((s) => parseHHMMToMinutes(s) >= target)
-        .sort((a, b) => parseHHMMToMinutes(a) - parseHHMMToMinutes(b));
-      pickStart = future[0] ?? starts[0];
-    }
-
-    const endOpts = computeAvailableEndTimesHHMM(slots, pickStart);
-    let pickEnd = end5;
-    if (endOpts.length === 0) {
-      pickEnd = formatMinutesAsHHMM(parseHHMMToMinutes(pickStart) + 30);
-    } else if (!endOpts.includes(end5)) {
-      const targetEnd = parseHHMMToMinutes(end5);
-      const atOrBefore = endOpts.filter((e) => parseHHMMToMinutes(e) <= targetEnd);
-      pickEnd =
-        atOrBefore.length > 0 ? atOrBefore[atOrBefore.length - 1]! : endOpts[endOpts.length - 1]!;
-    }
-    if (parseHHMMToMinutes(pickEnd) <= parseHHMMToMinutes(pickStart) && endOpts.length > 0) {
-      pickEnd = endOpts[0]!;
-    }
-
-    selectedCourtIdRef.current = court.id;
-    setTimeSlots(slots);
-    setSelectedCourt(court);
-    setSelectedSlot({
-      startTime: pickStart + ':00',
-      endTime: pickEnd + ':00',
-      available: true,
-    });
-    setModalStartTime(pickStart);
-    setModalEndTime(pickEnd);
-    setBookingType('match');
-    setBookingNotes('');
-    setAdditionalCourtIds([]);
-    setModalKind('booking');
   }
 
   // ── Quick Reserve (autofill soonest available slot like web) ──
@@ -649,6 +663,8 @@ export default function BookCourtScreen() {
     <View style={styles.screenRoot}>
       <ScrollView
         style={styles.container}
+        scrollEnabled={!calendarScrollLocked}
+        nestedScrollEnabled
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
       >
       {!facilityId && (
@@ -717,6 +733,7 @@ export default function BookCourtScreen() {
           selectedDate={selectedDate}
           facilityId={facilityId}
           onBookingSelected={handleCalendarGridSelection}
+          onInteractionLockChange={onCalendarInteractionLock}
         />
       )}
 

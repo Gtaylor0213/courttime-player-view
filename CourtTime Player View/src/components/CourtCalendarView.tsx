@@ -1349,6 +1349,7 @@ export function CourtCalendarView() {
                 height: effectiveHeaderHeight + visibleTimeSlots.length * effectiveRowHeight,
                 zIndex: 5,
                 pointerEvents: 'none',
+                overflow: 'visible',
               }}
             >
               {bookingOverlays.map((overlay, idx) => {
@@ -1374,9 +1375,11 @@ export function CourtCalendarView() {
                       left,
                       width,
                       height,
+                      transform: 'none',
+                      filter: 'none',
                       boxShadow: isBlocked
-                        ? '0 1px 3px rgba(15, 23, 42, 0.08)'
-                        : '0 2px 6px rgba(15, 23, 42, 0.12)',
+                        ? '0 6px 12px -8px rgba(15, 23, 42, 0.18)'
+                        : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
                     }}
                     onClick={() => !isBlocked && handleBookingClick(overlay.courtName, allTimeSlots[overlay.startSlotIndex])}
                   >

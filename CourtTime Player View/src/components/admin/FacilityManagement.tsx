@@ -240,7 +240,7 @@ export function FacilityManagement() {
     adminCancellationNoticeHours: '1',
     adminCancellationUnlimited: true,
     hasPeakHours: false,
-    peakHoursApplyToAdmins: true,
+    peakHoursApplyToAdmins: false,
     peakHoursSlots: [],
     peakHoursRestrictions: {
       maxBookingsPerWeek: '2',
@@ -249,7 +249,7 @@ export function FacilityManagement() {
       maxDurationUnlimited: false,
     },
     hasWeekendPolicy: false,
-    weekendPolicyApplyToAdmins: true,
+    weekendPolicyApplyToAdmins: false,
     weekendPolicy: {
       maxBookingsPerWeekend: '2',
       maxBookingsUnlimited: false,
@@ -476,7 +476,7 @@ export function FacilityManagement() {
           advanceBookingDaysUnlimited: facility.advanceBookingDays === -1,
           cancellationNoticeHours: facility.cancellationNoticeHours === 0 ? '24' : String(facility.cancellationNoticeHours || '24'),
           cancellationNoticeUnlimited: facility.cancellationNoticeHours === 0,
-          restrictionsApplyToAdmins: facility.restrictionsApplyToAdmins !== false,
+          restrictionsApplyToAdmins: false,
           adminMaxBookingsPerWeek: String(facility.adminRestrictions?.maxBookingsPerWeek || '10'),
           adminMaxBookingsUnlimited: facility.adminRestrictions?.maxBookingsPerWeek === -1,
           adminMaxBookingDurationHours: String(facility.adminRestrictions?.maxBookingDurationHours || '4'),
@@ -486,7 +486,7 @@ export function FacilityManagement() {
           adminCancellationNoticeHours: String(facility.adminRestrictions?.cancellationNoticeHours || '1'),
           adminCancellationUnlimited: facility.adminRestrictions?.cancellationNoticeHours === 0,
           hasPeakHours: !!facility.peakHoursPolicy?.enabled,
-          peakHoursApplyToAdmins: facility.peakHoursPolicy?.applyToAdmins !== false,
+          peakHoursApplyToAdmins: false,
           peakHoursSlots: normalizedPeakHoursSlots,
           peakHoursRestrictions: {
             maxBookingsPerWeek: String(facility.peakHoursPolicy?.maxBookingsPerWeek || '2'),
@@ -495,7 +495,7 @@ export function FacilityManagement() {
             maxDurationUnlimited: facility.peakHoursPolicy?.maxDurationHours === -1,
           },
           hasWeekendPolicy: !!facility.weekendPolicy?.enabled,
-          weekendPolicyApplyToAdmins: facility.weekendPolicy?.applyToAdmins !== false,
+          weekendPolicyApplyToAdmins: false,
           weekendPolicy: {
             maxBookingsPerWeekend: String(facility.weekendPolicy?.maxBookingsPerWeekend || '2'),
             maxBookingsUnlimited: facility.weekendPolicy?.maxBookingsPerWeekend === -1,
@@ -577,7 +577,16 @@ export function FacilityManagement() {
 
     try {
       setSaving(true);
-      const response = await adminApi.updateFacility(currentFacilityId, facilityData);
+      const payload = {
+        ...facilityData,
+        bookingRules: {
+          ...facilityData.bookingRules,
+          restrictionsApplyToAdmins: false,
+          peakHoursApplyToAdmins: false,
+          weekendPolicyApplyToAdmins: false,
+        },
+      };
+      const response = await adminApi.updateFacility(currentFacilityId, payload);
 
       if (response.success) {
         const rulesOk = await syncBookingRulesToEngine();
@@ -585,7 +594,8 @@ export function FacilityManagement() {
           toast.success('Facility updated successfully');
         }
         setIsEditing(false);
-        setOriginalData(facilityData);
+        setOriginalData(payload);
+        setFacilityData(payload);
       } else {
         toast.error(response.error || 'Failed to update facility');
       }
@@ -2264,15 +2274,6 @@ export function FacilityManagement() {
                   </CardHeader>
                   {facilityData.bookingRules.hasPeakHours && (
                     <CardContent className="space-y-6">
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <Label>Apply to admins</Label>
-                        <Switch
-                          checked={facilityData.bookingRules.peakHoursApplyToAdmins}
-                          onCheckedChange={(checked: boolean) => handleBookingRulesChange('peakHoursApplyToAdmins', checked)}
-                          disabled={!isEditing}
-                        />
-                      </div>
-
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="font-medium">Peak Hours Slots</h4>

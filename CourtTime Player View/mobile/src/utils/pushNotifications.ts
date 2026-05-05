@@ -50,9 +50,13 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     const uuidRe =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     const projectId = typeof candidate === 'string' && uuidRe.test(candidate) ? candidate : undefined;
-    const tokenData = await Notifications.getExpoPushTokenAsync(
-      projectId !== undefined ? { projectId } : {}
-    );
+    // In local Expo dev, projectId may be missing. Skip token registration
+    // instead of surfacing a noisy runtime error to users.
+    if (!projectId) {
+      return null;
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const pushToken = tokenData.data;
 
     // Register with backend
@@ -74,7 +78,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
     return pushToken;
   } catch (error) {
-    console.error('Push notification registration error:', error);
+    console.warn('Push notification registration skipped:', error);
     return null;
   }
 }

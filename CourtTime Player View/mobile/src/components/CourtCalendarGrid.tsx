@@ -25,6 +25,7 @@ const ROW_HEIGHT = 48;
 const DEFAULT_SLOT_MINUTES = 30;
 const COURTS_PER_PAGE = 4;
 const ACTIVE_DAY_POLL_MS = 5000;
+const DRAG_ARM_DELAY_MS = 180;
 
 interface Booking {
   startTime: string;
@@ -77,6 +78,10 @@ export function CourtCalendarGrid({
   const dragStartRef = useRef<{ pageX: number; pageY: number; startRow: number } | null>(null);
   /** When true, current touch intent is horizontal page swipe, so cell tap/drag should be ignored. */
   const horizontalSwipeRef = useRef(false);
+  /** Drag select only starts after a short hold so vertical swipes still scroll naturally. */
+  const dragArmedRef = useRef(false);
+  const dragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartedAtRef = useRef(0);
   const isDragging = useRef(false);
   const dragMoved = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -311,24 +316,35 @@ export function CourtCalendarGrid({
     // Do not lock parent/inner scrolling yet — wait until movement confirms
     // a vertical drag selection. This keeps horizontal court paging responsive.
     dragStartRef.current = { pageX, pageY, startRow: rowIndex };
+    touchStartedAtRef.current = Date.now();
     dragMoved.current = false;
     isDragging.current = false;
     horizontalSwipeRef.current = false;
-    const nextSel: DragSelection = {
-      pageIndex: targetPageIndex,
-      courtIndex,
-      startRow: rowIndex,
-      endRow: rowIndex,
-    };
-    dragSelectionRef.current = nextSel;
-    setDragSelection(nextSel);
+    dragArmedRef.current = false;
+    if (dragArmTimerRef.current) clearTimeout(dragArmTimerRef.current);
+    dragArmTimerRef.current = setTimeout(() => {
+      // User held long enough: arm drag selection now.
+      dragArmedRef.current = true;
+      const nextSel: DragSelection = {
+        pageIndex: targetPageIndex,
+        courtIndex,
+        startRow: rowIndex,
+        endRow: rowIndex,
+      };
+      dragSelectionRef.current = nextSel;
+      setDragSelection(nextSel);
+    }, DRAG_ARM_DELAY_MS);
   };
 
   const handleTouchEnd = () => {
     try {
+      if (dragArmTimerRef.current) {
+        clearTimeout(dragArmTimerRef.current);
+        dragArmTimerRef.current = null;
+      }
       if (horizontalSwipeRef.current) return;
       const sel = dragSelectionRef.current;
-      if (!sel) return;
+      if (!sel || !dragArmedRef.current) return;
       dragSelectionRef.current = null;
 
       if (isDragging.current && !selectionHasConflict(sel)) {
@@ -357,6 +373,7 @@ export function CourtCalendarGrid({
       dragMoved.current = false;
       isDragging.current = false;
       horizontalSwipeRef.current = false;
+      dragArmedRef.current = false;
       setDragSelection(null);
       releaseInteractionLocks();
     }
@@ -539,6 +556,17 @@ export function CourtCalendarGrid({
                               const deltaY = e.nativeEvent.pageY - dragStartRef.current.pageY;
                               const absX = Math.abs(deltaX);
                               const absY = Math.abs(deltaY);
+
+                              // Before drag is armed, movement should behave like normal scroll/swipe.
+                              if (!dragArmedRef.current) {
+                                if (absX > 8 || absY > 8) {
+                                  if (dragArmTimerRef.current) {
+                                    clearTimeout(dragArmTimerRef.current);
+                                    dragArmTimerRef.current = null;
+                                  }
+                                }
+                                return;
+                              }
 
                               // Let horizontal intent page through courts smoothly.
                               if (absX > 10 && absX > absY + 2) {

@@ -74,7 +74,9 @@ export function CourtCalendarGrid({
   const [touchCaptureActive, setTouchCaptureActive] = useState(false);
   /** Same payload as dragSelection, updated synchronously — RN can fire parent onTouchEnd before state from onTouchStart commits. */
   const dragSelectionRef = useRef<DragSelection | null>(null);
-  const dragStartRef = useRef<{ pageY: number; startRow: number } | null>(null);
+  const dragStartRef = useRef<{ pageX: number; pageY: number; startRow: number } | null>(null);
+  /** When true, current touch intent is horizontal page swipe, so cell tap/drag should be ignored. */
+  const horizontalSwipeRef = useRef(false);
   const isDragging = useRef(false);
   const dragMoved = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -301,16 +303,17 @@ export function CourtCalendarGrid({
     targetPageIndex: number,
     courtIndex: number,
     rowIndex: number,
+    pageX: number,
     pageY: number
   ) => {
     if (isPast(rowIndex) || isBooked(targetPageIndex, courtIndex, rowIndex)) return;
 
-    setTouchCaptureActive(true);
-    onInteractionLockChange?.(true);
-
-    dragStartRef.current = { pageY, startRow: rowIndex };
+    // Do not lock parent/inner scrolling yet — wait until movement confirms
+    // a vertical drag selection. This keeps horizontal court paging responsive.
+    dragStartRef.current = { pageX, pageY, startRow: rowIndex };
     dragMoved.current = false;
     isDragging.current = false;
+    horizontalSwipeRef.current = false;
     const nextSel: DragSelection = {
       pageIndex: targetPageIndex,
       courtIndex,
@@ -323,6 +326,7 @@ export function CourtCalendarGrid({
 
   const handleTouchEnd = () => {
     try {
+      if (horizontalSwipeRef.current) return;
       const sel = dragSelectionRef.current;
       if (!sel) return;
       dragSelectionRef.current = null;
@@ -352,6 +356,7 @@ export function CourtCalendarGrid({
       dragStartRef.current = null;
       dragMoved.current = false;
       isDragging.current = false;
+      horizontalSwipeRef.current = false;
       setDragSelection(null);
       releaseInteractionLocks();
     }
@@ -519,6 +524,7 @@ export function CourtCalendarGrid({
                                 renderPageIndex,
                                 courtIndex,
                                 rowIndex,
+                                e.nativeEvent.pageX,
                                 e.nativeEvent.pageY
                               );
                             }}
@@ -529,7 +535,20 @@ export function CourtCalendarGrid({
                               if (!cur || !dragStartRef.current) return;
                               if (renderPageIndex !== cur.pageIndex || courtIndex !== cur.courtIndex) return;
 
+                              const deltaX = e.nativeEvent.pageX - dragStartRef.current.pageX;
                               const deltaY = e.nativeEvent.pageY - dragStartRef.current.pageY;
+                              const absX = Math.abs(deltaX);
+                              const absY = Math.abs(deltaY);
+
+                              // Let horizontal intent page through courts smoothly.
+                              if (absX > 10 && absX > absY + 2) {
+                                horizontalSwipeRef.current = true;
+                                dragSelectionRef.current = null;
+                                setDragSelection(null);
+                                releaseInteractionLocks();
+                                return;
+                              }
+
                               const rowOffset = Math.round(deltaY / ROW_HEIGHT);
                               const nextRow = Math.max(
                                 0,
@@ -537,6 +556,10 @@ export function CourtCalendarGrid({
                               );
 
                               if (Math.abs(deltaY) > 8) {
+                                if (!touchCaptureActive) {
+                                  setTouchCaptureActive(true);
+                                  onInteractionLockChange?.(true);
+                                }
                                 isDragging.current = true;
                                 dragMoved.current = true;
                               }

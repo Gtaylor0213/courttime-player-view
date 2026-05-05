@@ -686,8 +686,8 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
   },
   courtColumnDividerLeft: {
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.borderLight,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.border,
   },
   timeLabelHeaderSpacer: {
     borderRightWidth: 2,

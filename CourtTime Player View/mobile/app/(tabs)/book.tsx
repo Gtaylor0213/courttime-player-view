@@ -185,6 +185,10 @@ export default function BookCourtScreen() {
   const [modalEndTime, setModalEndTime] = useState('');
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const [additionalCourtsExpanded, setAdditionalCourtsExpanded] = useState(false);
+  const [recurringBookingExpanded, setRecurringBookingExpanded] = useState(false);
+  const [recurringBookingEnabled, setRecurringBookingEnabled] = useState(false);
+  const [recurringDays, setRecurringDays] = useState<string[]>([]);
+  const [recurringEndDate, setRecurringEndDate] = useState('');
 
   // Rule violations modal payload (shown when modalKind === 'violations')
   const [violations, setViolations] = useState<RuleViolation[]>([]);
@@ -222,6 +226,10 @@ export default function BookCourtScreen() {
     setModalEndTime('');
     setAdditionalCourtIds([]);
     setAdditionalCourtsExpanded(false);
+    setRecurringBookingExpanded(false);
+    setRecurringBookingEnabled(false);
+    setRecurringDays([]);
+    setRecurringEndDate('');
   }, [modalKind]);
 
   // ── Fetch courts ──
@@ -362,6 +370,10 @@ export default function BookCourtScreen() {
       setBookingNotes('');
       setAdditionalCourtIds([]);
       setAdditionalCourtsExpanded(false);
+      setRecurringBookingExpanded(false);
+      setRecurringBookingEnabled(false);
+      setRecurringDays([]);
+      setRecurringEndDate('');
       setModalKind('booking');
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -462,6 +474,10 @@ export default function BookCourtScreen() {
       setBookingNotes('');
       setAdditionalCourtIds([]);
       setAdditionalCourtsExpanded(false);
+      setRecurringBookingExpanded(false);
+      setRecurringBookingEnabled(false);
+      setRecurringDays([]);
+      setRecurringEndDate('');
       setModalKind('booking');
     } catch {
       showAlert('Quick Reserve', 'Could not load quick reserve availability. Please try again.');
@@ -526,6 +542,68 @@ export default function BookCourtScreen() {
 
     const extraCourtIds = additionalCourtIds.filter((id) => id !== selectedCourt.id);
     const allCourtIds = [selectedCourt.id, ...extraCourtIds];
+
+    if (isAdmin && recurringBookingEnabled) {
+      if (recurringDays.length === 0) {
+        showAlert('Recurring Booking', 'Select at least one day of the week.');
+        hapticError();
+        setBooking(false);
+        return;
+      }
+      if (!recurringEndDate) {
+        showAlert('Recurring Booking', 'Please set a repeat-until date.');
+        hapticError();
+        setBooking(false);
+        return;
+      }
+      if (new Date(recurringEndDate + 'T00:00:00') < new Date(selectedDate + 'T00:00:00')) {
+        showAlert('Recurring Booking', 'Repeat-until date must be on or after the booking date.');
+        hapticError();
+        setBooking(false);
+        return;
+      }
+
+      const recurringDates = generateRecurringDates();
+      const durationMinutes = calcDuration(startTime, endTime);
+      const instances = recurringDates.flatMap((bookingDate) =>
+        allCourtIds.map((courtId) => ({
+          courtId,
+          bookingDate,
+          startTime,
+          endTime,
+          durationMinutes,
+        }))
+      );
+
+      const recurringRes = await api.post('/api/bookings/recurring-series', {
+        userId: user.id,
+        facilityId,
+        bookingType,
+        notes: bookingNotes.trim() || undefined,
+        instances,
+      });
+
+      if (recurringRes.success) {
+        setModalKind(null);
+        hapticSuccess();
+        showAlert(
+          'Booked!',
+          `Created ${instances.length} recurring booking${instances.length === 1 ? '' : 's'} (${recurringDates.length} date${recurringDates.length === 1 ? '' : 's'}${allCourtIds.length > 1 ? ` x ${allCourtIds.length} courts` : ''}).`
+        );
+        fetchTimeSlots();
+      } else if (recurringRes.ruleViolations && recurringRes.ruleViolations.length > 0) {
+        hapticError();
+        setViolations(recurringRes.ruleViolations as RuleViolation[]);
+        setWarnings((recurringRes.warnings || []) as RuleViolation[]);
+        setModalKind('violations');
+      } else {
+        hapticError();
+        showAlert('Booking Failed', recurringRes.error || 'Could not create recurring booking series.');
+      }
+      setBooking(false);
+      return;
+    }
+
     let allSuccess = true;
     let firstError: string | null = null;
     let firstViolations: RuleViolation[] | null = null;
@@ -652,6 +730,34 @@ export default function BookCourtScreen() {
     day: 'numeric',
     year: 'numeric',
   });
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const generateRecurringDates = (): string[] => {
+    if (!recurringBookingEnabled || recurringDays.length === 0 || !recurringEndDate) {
+      return [selectedDate];
+    }
+    const start = new Date(selectedDate + 'T00:00:00');
+    const end = new Date(recurringEndDate + 'T00:00:00');
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      return [selectedDate];
+    }
+    const dates: string[] = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      if (recurringDays.includes(dayNames[cur.getDay()]!)) {
+        dates.push(
+          `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
+        );
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return dates.length > 0 ? dates : [selectedDate];
+  };
+
+  const toggleRecurringDay = (day: string) => {
+    setRecurringDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  };
 
   const stepDate = (deltaDays: number) => {
     const base = new Date(selectedDate + 'T00:00:00');
@@ -877,6 +983,86 @@ export default function BookCourtScreen() {
                             </Text>
                           </TouchableOpacity>
                         ))}
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {/* Recurring Booking (Admin only) */}
+                {isAdmin && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.dropdownToggle}
+                      onPress={() => setRecurringBookingExpanded(v => !v)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${recurringBookingExpanded ? 'Collapse' : 'Expand'} recurring booking options`}
+                    >
+                      <Text style={styles.modalLabel}>Recurring Booking (Admin)</Text>
+                      <Ionicons
+                        name={recurringBookingExpanded ? 'chevron-up' : 'chevron-down'}
+                        size={16}
+                        color={Colors.textMuted}
+                      />
+                    </TouchableOpacity>
+                    {recurringBookingExpanded && (
+                      <View style={styles.recurringWrap}>
+                        <View style={styles.recurringModeRow}>
+                          <TouchableOpacity
+                            style={[styles.typeChip, !recurringBookingEnabled && styles.typeChipSelected]}
+                            onPress={() => setRecurringBookingEnabled(false)}
+                          >
+                            <Text style={[styles.typeChipText, !recurringBookingEnabled && styles.typeChipTextSelected]}>
+                              One-time
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.typeChip, recurringBookingEnabled && styles.typeChipSelected]}
+                            onPress={() => setRecurringBookingEnabled(true)}
+                          >
+                            <Text style={[styles.typeChipText, recurringBookingEnabled && styles.typeChipTextSelected]}>
+                              Weekly recurring
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                        {recurringBookingEnabled && (
+                          <View style={styles.recurringOptionsWrap}>
+                            <Text style={styles.recurringSectionLabel}>Days of week</Text>
+                            <View style={styles.recurringDaysRow}>
+                              {dayNames.map((day) => (
+                                <TouchableOpacity
+                                  key={day}
+                                  style={[styles.weekChip, recurringDays.includes(day) && styles.weekChipSelected]}
+                                  onPress={() => toggleRecurringDay(day)}
+                                >
+                                  <Text style={[styles.weekChipText, recurringDays.includes(day) && styles.weekChipTextSelected]}>
+                                    {day.slice(0, 3)}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+
+                            <Text style={[styles.recurringSectionLabel, { marginTop: Spacing.xs }]}>Repeat until (YYYY-MM-DD)</Text>
+                            <Input
+                              value={recurringEndDate}
+                              onChangeText={setRecurringEndDate}
+                              placeholder={selectedDate}
+                              keyboardType="numbers-and-punctuation"
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                            />
+
+                            {recurringDays.length > 0 && recurringEndDate ? (
+                              <View style={styles.recurringSummaryBox}>
+                                <Text style={styles.recurringSummaryText}>
+                                  Every {recurringDays.join(', ')} through {recurringEndDate}
+                                </Text>
+                                <Text style={styles.recurringSummaryTextStrong}>
+                                  Total bookings: {generateRecurringDates().length * (1 + additionalCourtIds.length)}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        )}
                       </View>
                     )}
                   </>
@@ -1168,6 +1354,67 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.sm,
     marginBottom: Spacing.sm,
+  },
+  recurringWrap: {
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  recurringModeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  recurringOptionsWrap: {
+    gap: Spacing.xs,
+  },
+  recurringSectionLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  recurringDaysRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  weekChip: {
+    minWidth: 34,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  weekChipSelected: {
+    backgroundColor: Colors.primary + '15',
+    borderColor: Colors.primary,
+  },
+  weekChipText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  weekChipTextSelected: {
+    color: Colors.primary,
+  },
+  recurringSummaryBox: {
+    backgroundColor: Colors.primary + '10',
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+    padding: Spacing.sm,
+    gap: 2,
+  },
+  recurringSummaryText: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+  },
+  recurringSummaryTextStrong: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: '700',
   },
   typeChip: {
     paddingHorizontal: Spacing.md,

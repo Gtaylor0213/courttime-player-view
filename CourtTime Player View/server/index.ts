@@ -99,12 +99,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Rate limiting middleware
+const isProduction = process.env.NODE_ENV === 'production';
+const skipRateLimitInDev = () => !isProduction;
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
+  skip: skipRateLimitInDev,
 });
 
 const authLimiter = rateLimit({
@@ -113,6 +117,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later.' },
+  skip: skipRateLimitInDev,
 });
 
 const sensitiveLimiter = rateLimit({
@@ -121,6 +126,7 @@ const sensitiveLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
+  skip: skipRateLimitInDev,
 });
 
 // Apply global rate limit to all API routes

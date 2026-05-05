@@ -269,8 +269,20 @@ export function CourtCalendarView() {
           transformedBookings[targetCourtName] = {};
         }
 
-        const slotsToFill = Math.ceil(booking.durationMinutes / 15);
         const [startHours, startMinutes] = booking.startTime.split(':').map(Number);
+        const [endHours, endMinutes] = booking.endTime ? booking.endTime.split(':').map(Number) : [NaN, NaN];
+        const startTotalMinutes = (startHours * 60) + startMinutes;
+        const endTotalMinutes = Number.isFinite(endHours) && Number.isFinite(endMinutes)
+          ? (endHours * 60) + endMinutes
+          : NaN;
+        let slotsToFill = Number.isFinite(endTotalMinutes) && endTotalMinutes > startTotalMinutes
+          ? Math.ceil((endTotalMinutes - startTotalMinutes) / 15)
+          : Math.ceil(booking.durationMinutes / 15);
+        // Propagated "Blocked (Court X)" entries can include a 15-minute rules buffer.
+        // Trim one slot so the visual block matches the booked court's actual playable span.
+        if (isBlocked && blockedBy && slotsToFill > 1) {
+          slotsToFill -= 1;
+        }
 
         for (let i = 0; i < slotsToFill; i++) {
           const slotMinutes = startMinutes + (i * 15);
@@ -289,6 +301,7 @@ export function CourtCalendarView() {
               duration: `${booking.durationMinutes}min`,
               type: 'blocked',
               isFirstSlot: i === 0,
+              slotCount: slotsToFill,
               bookingType: 'blocked',
             };
           } else {
@@ -299,6 +312,7 @@ export function CourtCalendarView() {
               bookingId: booking.id,
               userId: booking.userId,
               isFirstSlot: i === 0,
+              slotCount: slotsToFill,
               bookingType: booking.bookingType,
               notes: booking.notes,
               fullDetails: {
@@ -317,6 +331,7 @@ export function CourtCalendarView() {
         }
         let h = startHour;
         let m = startMin;
+        const totalSlots = Math.max(1, Math.ceil((((endHour * 60) + endMin) - ((startHour * 60) + startMin)) / 15));
         let isFirst = true;
         while (h < endHour || (h === endHour && m < endMin)) {
           const period = h >= 12 ? 'PM' : 'AM';
@@ -329,6 +344,7 @@ export function CourtCalendarView() {
               duration: '',
               type: 'blocked',
               isFirstSlot: isFirst,
+              slotCount: totalSlots,
               bookingType: 'blackout',
             };
           }
@@ -566,9 +582,11 @@ export function CourtCalendarView() {
     if (period === 'AM' && hours === 12) hours = 0;
 
     const { hours: nowHour, minutes: nowMinute } = getTimeComponents(facilityTimezone);
-    if (hours < nowHour) return true;
-    if (hours === nowHour && (minutes || 0) < nowMinute) return true;
-    return false;
+    const slotStartMinutes = hours * 60 + (minutes || 0);
+    const slotEndMinutes = slotStartMinutes + 15;
+    const currentMinutes = nowHour * 60 + nowMinute;
+
+    return currentMinutes >= slotEndMinutes;
   }, [selectedDate, currentTime, isToday, facilityTimezone]);
 
   // Filter courts based on selected court type
@@ -708,7 +726,11 @@ export function CourtCalendarView() {
         if (booking?.isFirstSlot) {
           const startIdx = allTimeSlots.indexOf(time);
           if (startIdx === -1) return;
-          const slotCount = Math.ceil(parseInt(booking.duration) / 15);
+          const slotCountFromData = Number(booking.slotCount);
+          const slotCount = Number.isFinite(slotCountFromData) && slotCountFromData > 0
+            ? slotCountFromData
+            : Math.ceil(parseInt(booking.duration) / 15);
+          if (!Number.isFinite(slotCount) || slotCount <= 0) return;
           overlays.push({
             courtIndex,
             courtName: court.name,
@@ -1353,15 +1375,14 @@ export function CourtCalendarView() {
               }}
             >
               {bookingOverlays.map((overlay, idx) => {
-                const top = effectiveHeaderHeight + overlay.startSlotIndex * effectiveSubSlotHeight + 2;
-                const left = effectiveTimeColWidth + overlay.courtIndex * effectiveCourtWidth + 4;
-                const width = effectiveCourtWidth - 8;
-                const height = overlay.slotCount * effectiveSubSlotHeight - 4;
                 const { booking } = overlay;
-
                 const isBlocked = booking.type === 'blocked';
+                const top = effectiveHeaderHeight + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
+                const left = effectiveTimeColWidth + overlay.courtIndex * effectiveCourtWidth + (isBlocked ? 0 : 4);
+                const width = effectiveCourtWidth - (isBlocked ? 0 : 8);
+                const height = overlay.slotCount * effectiveSubSlotHeight - (isBlocked ? 0 : 4);
                 const colorClass = isBlocked
-                  ? 'bg-gray-100 text-gray-500 border-gray-300 border-dashed'
+                  ? 'bg-gray-200 text-gray-500 border-0'
                   : booking.bookingType
                     ? getBookingTypeBadgeColor(booking.bookingType)
                     : 'bg-blue-50 text-blue-900 border-blue-200';
@@ -1369,7 +1390,7 @@ export function CourtCalendarView() {
                 return (
                   <div
                     key={`booking-${booking.bookingId || idx}`}
-                    className={`absolute rounded-lg border ${isBlocked ? 'opacity-70' : 'cursor-pointer'} transition-shadow pointer-events-auto overflow-hidden ${colorClass}`}
+                    className={`absolute ${isBlocked ? '' : 'rounded-lg border cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${colorClass}`}
                     style={{
                       top,
                       left,
@@ -1378,12 +1399,12 @@ export function CourtCalendarView() {
                       transform: 'none',
                       filter: 'none',
                       boxShadow: isBlocked
-                        ? '0 6px 12px -8px rgba(15, 23, 42, 0.18)'
+                        ? 'none'
                         : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
                     }}
                     onClick={() => !isBlocked && handleBookingClick(overlay.courtName, allTimeSlots[overlay.startSlotIndex])}
                   >
-                    <div className="px-2 py-1 h-full flex flex-col overflow-hidden">
+                    <div className={`${isBlocked ? 'px-1.5 py-1' : 'px-2 py-1'} h-full flex flex-col overflow-hidden`}>
                       <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>
                       {height > 28 && (
                         <div className="text-[10px] opacity-75 mt-0.5">

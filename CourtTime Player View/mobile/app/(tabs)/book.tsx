@@ -680,7 +680,7 @@ export default function BookCourtScreen() {
       <View style={styles.calendarSection}>
         <View style={styles.dayNavRow}>
           <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(-1)}>
-            <Ionicons name="chevron-back" size={20} color={Colors.primary} />
+            <Ionicons name="chevron-back" size={18} color={Colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.datePill}
@@ -688,16 +688,16 @@ export default function BookCourtScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Selected date ${selectedDateLabel}. Tap to ${calendarExpanded ? 'collapse' : 'expand'} calendar.`}
           >
-            <Ionicons name="calendar" size={18} color={Colors.primary} />
+            <Ionicons name="calendar" size={16} color={Colors.primary} />
             <Text style={styles.datePillText}>{selectedDateLabel}</Text>
             <Ionicons
               name={calendarExpanded ? 'chevron-up' : 'chevron-down'}
-              size={16}
+              size={14}
               color={Colors.textMuted}
             />
           </TouchableOpacity>
           <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(1)}>
-            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+            <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -707,7 +707,7 @@ export default function BookCourtScreen() {
             onPress={handleQuickReserve}
             disabled={!facilityId}
             loading={quickReserving}
-            leftIcon={<Ionicons name="flash" size={16} color={Colors.textInverse} />}
+            leftIcon={<Ionicons name="flash" size={14} color={Colors.textInverse} />}
             style={styles.quickReserveButton}
           />
         </View>
@@ -999,12 +999,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    gap: Spacing.sm,
+    paddingTop: Spacing.sm,
+    gap: Spacing.xs,
   },
   dayArrow: {
-    width: TouchTarget.min,
-    height: TouchTarget.min,
+    width: 40,
+    height: 40,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1028,7 +1028,7 @@ const styles = StyleSheet.create({
   },
   datePillText: {
     flex: 1,
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     color: Colors.text,
     textAlign: 'center',
@@ -1039,6 +1039,8 @@ const styles = StyleSheet.create({
   },
   quickReserveButton: {
     alignSelf: 'stretch',
+    minHeight: 36,
+    paddingVertical: 5,
   },
   modalIconHit: {
     minWidth: TouchTarget.min,

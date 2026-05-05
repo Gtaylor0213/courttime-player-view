@@ -46,6 +46,17 @@ interface CourtAvailability {
   bookings: Booking[];
 }
 
+function parseTimeToMinutesSafe(value: string | undefined | null): number | null {
+  if (!value || typeof value !== 'string') return null;
+  const timePart = value.includes('T') ? value.split('T')[1] || '' : value;
+  const match = timePart.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
 interface DragSelection {
   pageIndex: number;
   courtIndex: number; // index within current page
@@ -208,10 +219,11 @@ export function CourtCalendarGrid({
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (selectedDate !== today) return;
 
-    const hours = courtData[0]?.operatingHours || { open: '08:00', close: '21:00' };
-    const [openH, openM] = hours.open.split(':').map(Number);
+    const openCandidates = courtData
+      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.open))
+      .filter((v): v is number => v !== null);
+    const firstMinutes = openCandidates.length > 0 ? Math.min(...openCandidates) : 8 * 60;
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const firstMinutes = openH * 60 + openM;
     const rowIndex = Math.max(0, Math.floor((nowMinutes - firstMinutes) / slotStepMinutes) - 1);
     const scrollY = rowIndex * ROW_HEIGHT;
 
@@ -223,9 +235,18 @@ export function CourtCalendarGrid({
   // Generate time rows from operating hours
   const getTimeRows = (): string[] => {
     if (courtData.length === 0) return [];
-    const hours = courtData[0]?.operatingHours || { open: '08:00', close: '21:00' };
-    const [openH, openM] = hours.open.split(':').map(Number);
-    const [closeH, closeM] = hours.close.split(':').map(Number);
+    const openCandidates = courtData
+      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.open))
+      .filter((v): v is number => v !== null);
+    const closeCandidates = courtData
+      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.close))
+      .filter((v): v is number => v !== null);
+    const openMinutes = openCandidates.length > 0 ? Math.min(...openCandidates) : 8 * 60;
+    const closeMinutes = closeCandidates.length > 0 ? Math.max(...closeCandidates) : 21 * 60;
+    const openH = Math.floor(openMinutes / 60);
+    const openM = openMinutes % 60;
+    const closeH = Math.floor(closeMinutes / 60);
+    const closeM = closeMinutes % 60;
     const rows: string[] = [];
     let h = openH, m = openM;
     while (h < closeH || (h === closeH && m < closeM)) {
@@ -265,14 +286,14 @@ export function CourtCalendarGrid({
     if (!data) return null;
     const rowTime = timeRows[rowIndex];
     if (!rowTime) return null;
-    const rowMinutes = parseInt(rowTime.split(':')[0]) * 60 + parseInt(rowTime.split(':')[1]);
+    const rowMinutes = parseTimeToMinutesSafe(rowTime);
+    if (rowMinutes === null) return null;
 
     for (const b of data.bookings) {
       if (!b.startTime || !b.endTime) continue;
-      const startParts = b.startTime.split(':');
-      const endParts = b.endTime.split(':');
-      const bStart = parseInt(startParts[0]) * 60 + parseInt(startParts[1] || '0');
-      const bEnd = parseInt(endParts[0]) * 60 + parseInt(endParts[1] || '0');
+      const bStart = parseTimeToMinutesSafe(b.startTime);
+      const bEnd = parseTimeToMinutesSafe(b.endTime);
+      if (bStart === null || bEnd === null) continue;
       if (rowMinutes >= bStart && rowMinutes < bEnd) return b;
     }
     return null;
@@ -285,15 +306,21 @@ export function CourtCalendarGrid({
     if (selectedDate !== today) return selectedDate < today;
     const rowTime = timeRows[rowIndex];
     if (!rowTime) return false;
-    const [h, m] = rowTime.split(':').map(Number);
+    const rowMinutes = parseTimeToMinutesSafe(rowTime);
+    if (rowMinutes === null) return false;
+    const h = Math.floor(rowMinutes / 60);
+    const m = rowMinutes % 60;
     return h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
   };
 
   // Get the row end time (next slot or closing)
   const getRowEndTime = (rowIndex: number): string => {
     if (rowIndex + 1 < timeRows.length) return timeRows[rowIndex + 1];
-    const hours = courtData[0]?.operatingHours || { open: '08:00', close: '21:00' };
-    return hours.close;
+    const closeCandidates = courtData
+      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.close))
+      .filter((v): v is number => v !== null);
+    const closeMinutes = closeCandidates.length > 0 ? Math.max(...closeCandidates) : 21 * 60;
+    return `${String(Math.floor(closeMinutes / 60)).padStart(2, '0')}:${String(closeMinutes % 60).padStart(2, '0')}`;
   };
 
   // Check if drag selection range has any bookings

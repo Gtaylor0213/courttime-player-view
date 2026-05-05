@@ -67,10 +67,13 @@ function collectText(node: unknown): string[] {
   return out;
 }
 
-function pressByTestId(root: renderer.ReactTestRenderer, testId: string) {
+async function pressByTestId(root: renderer.ReactTestRenderer, testId: string) {
   const el = root.root.findByProps({ testID: testId });
-  act(() => {
-    el.props.onPress();
+  await act(async () => {
+    const ret = el.props.onPress?.();
+    if (ret != null && typeof (ret as Promise<unknown>).then === 'function') {
+      await ret;
+    }
   });
 }
 
@@ -148,6 +151,9 @@ describe('BookCourtScreen booking modal confirm copy', () => {
   });
 
   it('shows Confirm Booking with no extra courts; Book 2 Courts with one additional; resets after close and reopen', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    jest.setSystemTime(new Date('2026-05-04T07:00:00'));
+
     let tree: renderer.ReactTestRenderer;
     await act(async () => {
       tree = renderer.create(<BookCourtScreen />);
@@ -156,8 +162,7 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     });
 
     await act(async () => {
-      pressByTestId(tree!, 'open-booking-modal');
-      await Promise.resolve();
+      await pressByTestId(tree!, 'open-booking-modal');
     });
 
     let texts = visibleModalTexts(tree!);
@@ -173,18 +178,18 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     expect(() => tree!.root.findByProps({ accessibilityLabel: 'Book 2 Courts' })).not.toThrow();
 
     await act(async () => {
-      pressByTestId(tree!, 'dismiss-booking-modal');
-      await Promise.resolve();
+      await pressByTestId(tree!, 'dismiss-booking-modal');
     });
 
     await act(async () => {
-      pressByTestId(tree!, 'open-booking-modal');
-      await Promise.resolve();
+      await pressByTestId(tree!, 'open-booking-modal');
     });
 
     texts = visibleModalTexts(tree!);
     expect(() => tree!.root.findByProps({ accessibilityLabel: 'Confirm Booking' })).not.toThrow();
     expect(() => tree!.root.findByProps({ accessibilityLabel: 'Book 2 Courts' })).toThrow();
+
+    jest.useRealTimers();
   });
 
   it('Quick Reserve keeps selected court when jumping selectedDate to today (no silent skip on confirm)', async () => {

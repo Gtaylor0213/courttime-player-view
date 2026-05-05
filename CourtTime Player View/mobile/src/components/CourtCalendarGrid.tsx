@@ -53,7 +53,7 @@ interface Props {
   courts: Court[];
   selectedDate: string;
   facilityId: string;
-  onBookingSelected: (court: Court, startTime: string, endTime: string) => void;
+  onBookingSelected: (court: Court, startTime: string, endTime: string) => void | Promise<void>;
 }
 
 export function CourtCalendarGrid({ courts, selectedDate, facilityId, onBookingSelected }: Props) {

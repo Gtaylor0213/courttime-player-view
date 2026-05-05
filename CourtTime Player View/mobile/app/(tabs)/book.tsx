@@ -69,6 +69,87 @@ interface TimeSlot {
   available: boolean;
 }
 
+function parseHHMMToMinutes(t: string): number {
+  const parts = t.split(':');
+  return parseInt(parts[0] || '0', 10) * 60 + parseInt(parts[1] || '0', 10);
+}
+
+function formatMinutesAsHHMM(m: number): string {
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+function buildTimeSlotsFromAvailability(
+  data: AvailabilityResponse,
+  selectedDate: string,
+  todayYmd: string
+): TimeSlot[] {
+  if (!data.isOpen) return [];
+  const slotDuration = data.slotDuration || 30;
+  const [openH, openM] = data.operatingHours.open.split(':').map(Number);
+  const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
+  const bookedTimes = new Set((data.existingBookings || []).map((b) => b.startTime));
+  const slots: TimeSlot[] = [];
+  let currentH = openH;
+  let currentM = openM;
+
+  while (currentH < closeH || (currentH === closeH && currentM < closeM)) {
+    const startTime = `${String(currentH).padStart(2, '0')}:${String(currentM).padStart(2, '0')}:00`;
+
+    let endM = currentM + slotDuration;
+    let endH = currentH;
+    if (endM >= 60) {
+      endH += Math.floor(endM / 60);
+      endM = endM % 60;
+    }
+    const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`;
+
+    const now = new Date();
+    const isToday = selectedDate === todayYmd;
+    const slotPast =
+      isToday &&
+      (currentH < now.getHours() || (currentH === now.getHours() && currentM <= now.getMinutes()));
+
+    slots.push({
+      startTime,
+      endTime,
+      available: !bookedTimes.has(startTime) && !slotPast,
+    });
+
+    currentM += slotDuration;
+    if (currentM >= 60) {
+      currentH += Math.floor(currentM / 60);
+      currentM = currentM % 60;
+    }
+  }
+
+  return slots;
+}
+
+function computeAvailableEndTimesHHMM(slots: TimeSlot[], startHHMM: string): string[] {
+  const startMin = parseHHMMToMinutes(startHHMM);
+  const slotDur =
+    slots.length >= 2
+      ? parseHHMMToMinutes(slots[1].startTime) - parseHHMMToMinutes(slots[0].startTime)
+      : 30;
+  const lastSlot = slots[slots.length - 1];
+  const closeMin = lastSlot ? parseHHMMToMinutes(lastSlot.endTime) : startMin + 120;
+  let maxEnd = closeMin;
+  for (const slot of slots) {
+    const slotMin = parseHHMMToMinutes(slot.startTime);
+    if (slotMin > startMin && !slot.available) {
+      maxEnd = slotMin;
+      break;
+    }
+  }
+  const ends: string[] = [];
+  for (let m = startMin + slotDur; m <= maxEnd; m += slotDur) {
+    ends.push(formatMinutesAsHHMM(m));
+  }
+  return ends;
+}
+
 interface RuleViolation {
   ruleCode: string;
   ruleName: string;
@@ -178,52 +259,7 @@ export default function BookCourtScreen() {
 
     if (res.success && res.data) {
       const data = res.data as AvailabilityResponse;
-
-      if (!data.isOpen) {
-        setTimeSlots([]);
-        return;
-      }
-
-      const slots: TimeSlot[] = [];
-      const slotDuration = data.slotDuration || 30;
-      const [openH, openM] = data.operatingHours.open.split(':').map(Number);
-      const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
-      const bookedTimes = new Set(
-        (data.existingBookings || []).map((b) => b.startTime)
-      );
-
-      let currentH = openH;
-      let currentM = openM;
-
-      while (currentH < closeH || (currentH === closeH && currentM < closeM)) {
-        const startTime = `${String(currentH).padStart(2, '0')}:${String(currentM).padStart(2, '0')}:00`;
-
-        let endM = currentM + slotDuration;
-        let endH = currentH;
-        if (endM >= 60) {
-          endH += Math.floor(endM / 60);
-          endM = endM % 60;
-        }
-        const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`;
-
-        const now = new Date();
-        const isToday = selectedDate === getTodayString();
-        const slotPast = isToday && (currentH < now.getHours() || (currentH === now.getHours() && currentM <= now.getMinutes()));
-
-        slots.push({
-          startTime,
-          endTime,
-          available: !bookedTimes.has(startTime) && !slotPast,
-        });
-
-        currentM += slotDuration;
-        if (currentM >= 60) {
-          currentH += Math.floor(currentM / 60);
-          currentM = currentM % 60;
-        }
-      }
-
-      setTimeSlots(slots);
+      setTimeSlots(buildTimeSlotsFromAvailability(data, selectedDate, getTodayString()));
     }
   }, [selectedCourt, selectedDate]);
 
@@ -247,11 +283,59 @@ export default function BookCourtScreen() {
   }, [fetchCourts, fetchTimeSlots]);
 
   // ── Handle calendar grid booking selection ──
-  function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
+  /** Load slot list for this court before opening the modal so TimePickers include the dragged range. */
+  async function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
+    const start5 = startTime.slice(0, 5);
+    const end5 = endTime.slice(0, 5);
+
+    const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
+
+    let slots: TimeSlot[] = [];
+    if (res.success && res.data) {
+      slots = buildTimeSlotsFromAvailability(res.data as AvailabilityResponse, selectedDate, getTodayString());
+    }
+
+    const starts = slots.filter((s) => s.available).map((s) => s.startTime.slice(0, 5));
+    if (starts.length === 0) {
+      showAlert(
+        'Unavailable',
+        'Could not load open times for this court. Pull down to refresh and try again.'
+      );
+      return;
+    }
+
+    let pickStart = start5;
+    if (!starts.includes(start5)) {
+      const target = parseHHMMToMinutes(start5);
+      const future = starts
+        .filter((s) => parseHHMMToMinutes(s) >= target)
+        .sort((a, b) => parseHHMMToMinutes(a) - parseHHMMToMinutes(b));
+      pickStart = future[0] ?? starts[0];
+    }
+
+    const endOpts = computeAvailableEndTimesHHMM(slots, pickStart);
+    let pickEnd = end5;
+    if (endOpts.length === 0) {
+      pickEnd = formatMinutesAsHHMM(parseHHMMToMinutes(pickStart) + 30);
+    } else if (!endOpts.includes(end5)) {
+      const targetEnd = parseHHMMToMinutes(end5);
+      const atOrBefore = endOpts.filter((e) => parseHHMMToMinutes(e) <= targetEnd);
+      pickEnd =
+        atOrBefore.length > 0 ? atOrBefore[atOrBefore.length - 1]! : endOpts[endOpts.length - 1]!;
+    }
+    if (parseHHMMToMinutes(pickEnd) <= parseHHMMToMinutes(pickStart) && endOpts.length > 0) {
+      pickEnd = endOpts[0]!;
+    }
+
+    setTimeSlots(slots);
     setSelectedCourt(court);
-    setSelectedSlot({ startTime, endTime, available: true });
-    setModalStartTime(startTime.slice(0, 5));
-    setModalEndTime(endTime.slice(0, 5));
+    setSelectedSlot({
+      startTime: pickStart + ':00',
+      endTime: pickEnd + ':00',
+      available: true,
+    });
+    setModalStartTime(pickStart);
+    setModalEndTime(pickEnd);
     setBookingType('match');
     setBookingNotes('');
     setAdditionalCourtIds([]);
@@ -515,12 +599,6 @@ export default function BookCourtScreen() {
     return parseInt(p[0]) * 60 + parseInt(p[1] || '0');
   };
 
-  const fromMinutes = (m: number) => {
-    const h = Math.floor(m / 60);
-    const min = m % 60;
-    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-  };
-
   // Get available start times (slots that are not booked and not in the past)
   const getAvailableStartTimes = (): string[] => {
     return timeSlots.filter(s => s.available).map(s => s.startTime.slice(0, 5));
@@ -529,33 +607,8 @@ export default function BookCourtScreen() {
   // Get available end times based on selected start time
   // Max end = next booking start time or closing time, whichever comes first
   // Min end = start + 30 min (one slot)
-  const getAvailableEndTimes = (startTime: string): string[] => {
-    const startMin = toMinutes(startTime);
-    const slotDur = timeSlots.length >= 2
-      ? toMinutes(timeSlots[1].startTime) - toMinutes(timeSlots[0].startTime)
-      : 30;
-
-    // Find closing time (end of last slot)
-    const lastSlot = timeSlots[timeSlots.length - 1];
-    const closeMin = lastSlot ? toMinutes(lastSlot.endTime) : startMin + 120;
-
-    // Find next booked slot after start
-    let maxEnd = closeMin;
-    for (const slot of timeSlots) {
-      const slotMin = toMinutes(slot.startTime);
-      if (slotMin > startMin && !slot.available) {
-        maxEnd = slotMin;
-        break;
-      }
-    }
-
-    // Generate end times from start+30 to maxEnd in slotDur increments
-    const ends: string[] = [];
-    for (let m = startMin + slotDur; m <= maxEnd; m += slotDur) {
-      ends.push(fromMinutes(m));
-    }
-    return ends;
-  };
+  const getAvailableEndTimes = (startTime: string): string[] =>
+    computeAvailableEndTimesHHMM(timeSlots, startTime);
 
   // Toggle additional court
   const toggleAdditionalCourt = (courtId: string) => {

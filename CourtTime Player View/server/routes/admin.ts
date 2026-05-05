@@ -9,7 +9,7 @@ import { validateBooking } from '../../src/services/bookingService';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
-import { createCourt, createCourtsBulk, updateCourtsBulk } from '../../src/services/courtService';
+import { createCourt, createCourtsBulk, createSplitCourt, updateCourtsBulk } from '../../src/services/courtService';
 import { inviteAdmin, getFacilityAdmins, removeAdmin } from '../../src/services/adminService';
 import {
   getCurrentTermsVersion,
@@ -347,12 +347,28 @@ router.patch('/courts/:courtId', async (req, res) => {
       isIndoor,
       hasLights,
       isWalkUp,
-      status: rawStatus
+      status: rawStatus,
+      canSplit,
+      splitConfig
     } = req.body;
 
     // Normalize legacy status values to match DB constraint
     const statusMap: Record<string, string> = { active: 'available', inactive: 'closed' };
     const status = rawStatus ? (statusMap[rawStatus] || rawStatus) : rawStatus;
+
+    const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
+      ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
+      : [];
+    const shouldSplit = Boolean(canSplit) && normalizedSplitNames.length > 0;
+    const splitType = (splitConfig?.splitType === 'Tennis' || splitConfig?.splitType === 'Dual')
+      ? splitConfig.splitType
+      : 'Pickleball';
+    const splitConfiguration = shouldSplit
+      ? JSON.stringify({ splitInto: normalizedSplitNames, splitType })
+      : null;
+
+    // Rebuild split children on each save to keep config and child courts in sync.
+    await query(`DELETE FROM courts WHERE parent_court_id = $1`, [courtId]);
 
     const result = await query(`
       UPDATE courts
@@ -365,8 +381,10 @@ router.patch('/courts/:courtId', async (req, res) => {
         has_lights = COALESCE($6, has_lights),
         is_walk_up = COALESCE($7, is_walk_up),
         status = COALESCE($8, status),
+        is_split_court = COALESCE($9, is_split_court),
+        split_configuration = $10,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $9
+      WHERE id = $11
       RETURNING
         id,
         facility_id as "facilityId",
@@ -378,14 +396,37 @@ router.patch('/courts/:courtId', async (req, res) => {
         has_lights as "hasLights",
         is_walk_up as "isWalkUp",
         status,
+        parent_court_id as "parentCourtId",
+        split_configuration as "splitConfiguration",
+        is_split_court as "isSplitCourt",
         created_at as "createdAt",
         updated_at as "updatedAt"
-    `, [name, courtNumber, surfaceType, courtType, isIndoor, hasLights, isWalkUp, status, courtId]);
+    `, [
+      name,
+      courtNumber,
+      surfaceType,
+      courtType,
+      isIndoor,
+      hasLights,
+      isWalkUp,
+      status,
+      shouldSplit,
+      splitConfiguration,
+      courtId
+    ]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Court not found'
+      });
+    }
+
+    if (shouldSplit) {
+      await createSplitCourt(courtId, {
+        splitNames: normalizedSplitNames,
+        splitType,
+        surfaceType,
       });
     }
 
@@ -411,11 +452,19 @@ router.patch('/courts/:courtId', async (req, res) => {
 router.post('/courts/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
-    const { name, courtNumber, surfaceType, courtType, isIndoor, hasLights, isWalkUp } = req.body;
+    const { name, courtNumber, surfaceType, courtType, isIndoor, hasLights, isWalkUp, canSplit, splitConfig } = req.body;
 
     if (!name) {
       return res.status(400).json({ success: false, error: 'Court name is required' });
     }
+
+    const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
+      ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
+      : [];
+    const shouldSplit = Boolean(canSplit) && normalizedSplitNames.length > 0;
+    const splitType = (splitConfig?.splitType === 'Tennis' || splitConfig?.splitType === 'Dual')
+      ? splitConfig.splitType
+      : 'Pickleball';
 
     const court = await createCourt({
       facilityId,
@@ -427,6 +476,14 @@ router.post('/courts/:facilityId', async (req, res) => {
       hasLights: hasLights || false,
       isWalkUp: isWalkUp || false,
     });
+
+    if (shouldSplit) {
+      await createSplitCourt(court.id, {
+        splitNames: normalizedSplitNames,
+        splitType,
+        surfaceType: surfaceType || 'Hard',
+      });
+    }
 
     res.json({ success: true, data: { court } });
   } catch (error: any) {

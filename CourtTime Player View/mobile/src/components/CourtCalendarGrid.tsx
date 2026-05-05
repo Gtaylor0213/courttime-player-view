@@ -11,6 +11,7 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
+  TouchableOpacity,
 } from 'react-native';
 import { api } from '../api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
@@ -28,6 +29,9 @@ const ACTIVE_DAY_POLL_MS = 5000;
 const DRAG_ARM_DELAY_MS = 180;
 
 interface Booking {
+  id?: string;
+  userId?: string;
+  bookingDate?: string;
   startTime: string;
   endTime: string;
   userName?: string;
@@ -54,6 +58,7 @@ interface Props {
   selectedDate: string;
   facilityId: string;
   onBookingSelected: (court: Court, startTime: string, endTime: string) => void | Promise<void>;
+  onBookedSlotPress?: (court: Court, booking: Booking) => void;
   /** While true, parent screen should disable its ScrollView so nested grid drags are not stolen. */
   onInteractionLockChange?: (locked: boolean) => void;
 }
@@ -63,6 +68,7 @@ export function CourtCalendarGrid({
   selectedDate,
   facilityId,
   onBookingSelected,
+  onBookedSlotPress,
   onInteractionLockChange,
 }: Props) {
   const [courtData, setCourtData] = useState<CourtAvailability[]>([]);
@@ -81,7 +87,6 @@ export function CourtCalendarGrid({
   /** Drag select only starts after a short hold so vertical swipes still scroll naturally. */
   const dragArmedRef = useRef(false);
   const dragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const touchStartedAtRef = useRef(0);
   const isDragging = useRef(false);
   const dragMoved = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -130,6 +135,9 @@ export function CourtCalendarGrid({
     const bookingsByCourtId = new Map<string, Booking[]>();
     bookingsList.forEach((b: any) => {
       const normalized: Booking = {
+        id: b.id || b.bookingId,
+        userId: b.userId || b.user_id,
+        bookingDate: b.bookingDate || b.booking_date || selectedDate,
         startTime: b.startTime || b.start_time || '',
         endTime: b.endTime || b.end_time || '',
         userName: b.userName || b.user_name || '',
@@ -316,7 +324,6 @@ export function CourtCalendarGrid({
     // Do not lock parent/inner scrolling yet — wait until movement confirms
     // a vertical drag selection. This keeps horizontal court paging responsive.
     dragStartRef.current = { pageX, pageY, startRow: rowIndex };
-    touchStartedAtRef.current = Date.now();
     dragMoved.current = false;
     isDragging.current = false;
     horizontalSwipeRef.current = false;
@@ -601,14 +608,20 @@ export function CourtCalendarGrid({
                             }}
                           >
                             {bookingStart && (
-                              <View style={[styles.bookingBlock, { height: span * ROW_HEIGHT - 2 }]}>
+                              <TouchableOpacity
+                                style={[styles.bookingBlock, { height: span * ROW_HEIGHT - 2 }]}
+                                activeOpacity={0.9}
+                                onPress={() => onBookedSlotPress?.(court, bookingStart)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`View booking details on ${court.name}`}
+                              >
                                 <Text style={styles.bookingBlockText} numberOfLines={1}>
                                   {bookingStart.bookingType || 'Booked'}
                                 </Text>
                                 <Text style={styles.bookingBlockTime} numberOfLines={1}>
                                   {formatFullTime(bookingStart.startTime)} - {formatFullTime(bookingStart.endTime)}
                                 </Text>
-                              </View>
+                              </TouchableOpacity>
                             )}
                           </View>
                         );

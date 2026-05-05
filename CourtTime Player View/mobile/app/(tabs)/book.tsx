@@ -32,6 +32,7 @@ import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundar
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
 import { Card } from '../../src/components/Card';
+import type { BookingWithDetails } from '../../src/types/database';
 
 export const ErrorBoundary = createRouteErrorBoundary('Book');
 
@@ -194,6 +195,7 @@ export default function BookCourtScreen() {
   const [violations, setViolations] = useState<RuleViolation[]>([]);
   const [warnings, setWarnings] = useState<RuleViolation[]>([]);
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
+  const [selectedCalendarBooking, setSelectedCalendarBooking] = useState<BookingWithDetails | null>(null);
 
   function getTodayString() {
     const d = new Date();
@@ -769,6 +771,49 @@ export default function BookCourtScreen() {
 
   const bookingModalMaxHeight = Math.round(windowHeight * 0.92);
 
+  const formatTimeLabel = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+  };
+
+  const onBookedSlotPress = useCallback((court: Court, booking: any) => {
+    const mapped: BookingWithDetails = {
+      id: booking.id || `${court.id}_${selectedDate}_${booking.startTime}`,
+      courtId: court.id,
+      userId: booking.userId || '',
+      facilityId: facilityId || '',
+      bookingDate: (booking.bookingDate || selectedDate) as any,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      durationMinutes: calcDuration(booking.startTime, booking.endTime),
+      status: 'confirmed',
+      bookingType: booking.bookingType,
+      notes: booking.notes,
+      createdAt: new Date().toISOString() as any,
+      updatedAt: new Date().toISOString() as any,
+      courtName: court.name,
+      facilityName: 'CourtTime',
+      userName: booking.userName || 'Member',
+      userEmail: '',
+    };
+    setSelectedCalendarBooking(mapped);
+  }, [facilityId, selectedDate]);
+
+  const handleCancelSelectedBooking = async () => {
+    if (!selectedCalendarBooking || !user) return;
+    const res = await api.delete(`/api/bookings/${selectedCalendarBooking.id}?userId=${user.id}`);
+    if (res.success) {
+      showAlert('Cancelled', 'Booking was cancelled successfully.');
+      setSelectedCalendarBooking(null);
+      fetchCourts();
+      fetchTimeSlots();
+    } else {
+      showAlert('Error', res.error || 'Could not cancel booking');
+    }
+  };
+
   return (
     <View style={styles.screenRoot}>
       <ScrollView
@@ -843,6 +888,7 @@ export default function BookCourtScreen() {
           selectedDate={selectedDate}
           facilityId={facilityId}
           onBookingSelected={handleCalendarGridSelection}
+          onBookedSlotPress={onBookedSlotPress}
           onInteractionLockChange={onCalendarInteractionLock}
         />
       )}
@@ -1164,6 +1210,85 @@ export default function BookCourtScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Calendar Booking Details ── */}
+      <Modal
+        visible={selectedCalendarBooking !== null}
+        transparent
+        animationType="fade"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+        onRequestClose={() => setSelectedCalendarBooking(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Booking Details</Text>
+              <Pressable
+                onPress={() => setSelectedCalendarBooking(null)}
+                style={({ pressed }) => [styles.modalIconHit, pressed && styles.pressedOpacity]}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </Pressable>
+            </View>
+            {selectedCalendarBooking && (
+              <>
+                <Text style={styles.summaryCourtName}>{selectedCalendarBooking.courtName}</Text>
+                <Text style={styles.summaryDate}>
+                  {new Date(String(selectedCalendarBooking.bookingDate)).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                </Text>
+                <Text style={[styles.summaryDate, { marginTop: 2 }]}>
+                  {formatTimeLabel(selectedCalendarBooking.startTime)} - {formatTimeLabel(selectedCalendarBooking.endTime)}
+                </Text>
+                <Text style={[styles.summaryDate, { marginTop: 2 }]}>
+                  Booked by: {selectedCalendarBooking.userName || 'Member'}
+                </Text>
+                {selectedCalendarBooking.bookingType ? (
+                  <Text style={[styles.summaryDate, { marginTop: 2 }]}>Type: {selectedCalendarBooking.bookingType}</Text>
+                ) : null}
+
+                {user && selectedCalendarBooking.userId === user.id ? (
+                  <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+                    <Button
+                      title="Edit Booking"
+                      variant="secondary"
+                      onPress={async () => {
+                        const court = courts.find((c) => c.id === selectedCalendarBooking.courtId);
+                        if (!court) {
+                          showAlert('Error', 'Could not find this court to open booking details.');
+                          return;
+                        }
+                        setSelectedCalendarBooking(null);
+                        await handleCalendarGridSelection(
+                          court,
+                          selectedCalendarBooking.startTime,
+                          selectedCalendarBooking.endTime
+                        );
+                      }}
+                    />
+                    <Button
+                      title="Cancel Booking"
+                      variant="destructive"
+                      onPress={handleCancelSelectedBooking}
+                    />
+                  </View>
+                ) : (
+                  <Text style={[styles.violationMessage, { marginTop: Spacing.md }]}>
+                    You can only edit or cancel your own bookings.
+                  </Text>
+                )}
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }

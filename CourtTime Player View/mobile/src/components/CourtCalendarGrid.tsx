@@ -20,10 +20,10 @@ import { createPollingTransport } from '../../../shared/api/sync';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const TIME_LABEL_WIDTH = 52;
+const TIME_LABEL_WIDTH = 46;
 const ROW_HEIGHT = 48;
 const DEFAULT_SLOT_MINUTES = 30;
-const COURTS_PER_PAGE = 3;
+const COURTS_PER_PAGE = 4;
 const ACTIVE_DAY_POLL_MS = 5000;
 
 interface Booking {
@@ -84,7 +84,7 @@ export function CourtCalendarGrid({
   const totalPages = Math.ceil(courts.length / COURTS_PER_PAGE);
   const pageCourts = courts.slice(pageIndex * COURTS_PER_PAGE, (pageIndex + 1) * COURTS_PER_PAGE);
   /** Fixed gutters between court columns so borders do not shrink column width math */
-  const COURT_COLUMN_GUTTER = Spacing.sm;
+  const COURT_COLUMN_GUTTER = Spacing.xs;
   const courtTrackWidth = SCREEN_WIDTH - TIME_LABEL_WIDTH;
   const courtColumnWidth =
     (courtTrackWidth - COURT_COLUMN_GUTTER * (COURTS_PER_PAGE - 1)) / COURTS_PER_PAGE;

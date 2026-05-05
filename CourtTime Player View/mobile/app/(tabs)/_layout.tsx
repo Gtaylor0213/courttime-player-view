@@ -8,7 +8,7 @@ import { StyleSheet, TouchableOpacity } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontFamily } from '../../src/constants/theme';
+import { Colors, FontFamily, FontSize, Spacing } from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
@@ -60,6 +60,9 @@ export default function TabLayout() {
       headerStyle: styles.header,
       headerTintColor: Colors.text,
       headerTitleStyle: styles.headerTitle,
+      /** Left-aligned title uses most of the bar width so long club names are not clipped in a narrow center slot */
+      headerTitleAlign: 'left' as const,
+      headerTitleContainerStyle: styles.headerTitleContainer,
       tabBarButton: renderNavTabButton,
     }),
     [insets.bottom]
@@ -137,6 +140,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: Colors.text,
     fontFamily: FontFamily.bold,
-    fontSize: 18,
+    fontSize: FontSize.md,
+  },
+  headerTitleContainer: {
+    flexGrow: 1,
+    flexShrink: 1,
+    alignItems: 'flex-start',
+    marginLeft: Spacing.md,
+    marginRight: Spacing.sm,
+    maxWidth: '100%',
   },
 });

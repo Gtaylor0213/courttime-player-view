@@ -11,7 +11,6 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
-  TouchableOpacity,
 } from 'react-native';
 import { api } from '../api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
@@ -579,7 +578,13 @@ export function CourtCalendarGrid({
                                 e.nativeEvent.pageY
                               );
                             }}
-                            onTouchEnd={handleTouchEnd}
+                            onTouchEnd={() => {
+                              if (booked) {
+                                onBookedSlotPress?.(court, booked);
+                                return;
+                              }
+                              handleTouchEnd();
+                            }}
                             onTouchCancel={handleTouchEnd}
                             onTouchMove={(e) => {
                               const cur = dragSelectionRef.current;
@@ -635,10 +640,8 @@ export function CourtCalendarGrid({
                             }}
                           >
                             {bookingStart && (
-                              <TouchableOpacity
+                              <View
                                 style={[styles.bookingBlock, { height: span * ROW_HEIGHT - 2 }]}
-                                activeOpacity={0.9}
-                                onPress={() => onBookedSlotPress?.(court, bookingStart)}
                                 accessibilityRole="button"
                                 accessibilityLabel={`View booking details on ${court.name}`}
                               >
@@ -648,7 +651,7 @@ export function CourtCalendarGrid({
                                 <Text style={styles.bookingBlockTime} numberOfLines={1}>
                                   {formatFullTime(bookingStart.startTime)} - {formatFullTime(bookingStart.endTime)}
                                 </Text>
-                              </TouchableOpacity>
+                              </View>
                             )}
                           </View>
                         );

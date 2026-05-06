@@ -779,23 +779,32 @@ export default function BookCourtScreen() {
   };
 
   const onBookedSlotPress = useCallback((court: Court, booking: any) => {
+    const bookingId = booking.id || booking.bookingId || booking.booking_id || `${court.id}_${selectedDate}_${booking.startTime}`;
+    const bookingUserId = booking.userId || booking.user_id || '';
+    const bookingDate = booking.bookingDate || booking.booking_date || selectedDate;
+    const bookingStart = booking.startTime || booking.start_time || '';
+    const bookingEnd = booking.endTime || booking.end_time || '';
+    const bookingUserName = booking.userName || booking.user_name || 'Member';
+    const bookingType = booking.bookingType || booking.booking_type;
+    const bookingNotes = booking.notes || booking.booking_notes;
+
     const mapped: BookingWithDetails = {
-      id: booking.id || `${court.id}_${selectedDate}_${booking.startTime}`,
+      id: bookingId,
       courtId: court.id,
-      userId: booking.userId || '',
+      userId: bookingUserId,
       facilityId: facilityId || '',
-      bookingDate: (booking.bookingDate || selectedDate) as any,
-      startTime: booking.startTime,
-      endTime: booking.endTime,
-      durationMinutes: calcDuration(booking.startTime, booking.endTime),
+      bookingDate: bookingDate as any,
+      startTime: bookingStart,
+      endTime: bookingEnd,
+      durationMinutes: calcDuration(bookingStart, bookingEnd),
       status: 'confirmed',
-      bookingType: booking.bookingType,
-      notes: booking.notes,
+      bookingType,
+      notes: bookingNotes,
       createdAt: new Date().toISOString() as any,
       updatedAt: new Date().toISOString() as any,
       courtName: court.name,
       facilityName: 'CourtTime',
-      userName: booking.userName || 'Member',
+      userName: bookingUserName,
       userEmail: '',
     };
     setSelectedCalendarBooking(mapped);
@@ -1253,7 +1262,7 @@ export default function BookCourtScreen() {
                   <Text style={[styles.summaryDate, { marginTop: 2 }]}>Type: {selectedCalendarBooking.bookingType}</Text>
                 ) : null}
 
-                {user && selectedCalendarBooking.userId === user.id ? (
+                {user && (selectedCalendarBooking.userId === user.id || isAdmin) ? (
                   <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
                     <Button
                       title="Edit Booking"

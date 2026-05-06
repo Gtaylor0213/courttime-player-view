@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -83,11 +83,18 @@ export function CourtManagement() {
   const [courtScheduleLoading, setCourtScheduleLoading] = useState(false);
   const [courtScheduleSaving, setCourtScheduleSaving] = useState(false);
 
+  const courtEditPanelRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     if (currentFacilityId) {
       loadCourts();
     }
   }, [currentFacilityId]);
+
+  useEffect(() => {
+    if (!editingCourt || isAddingNew) return;
+    courtEditPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [editingCourt?.id, isAddingNew]);
 
   const loadCourts = async () => {
     if (!currentFacilityId) {
@@ -151,7 +158,6 @@ export function CourtManagement() {
   const handleEdit = (court: Court) => {
     setEditingCourt({ ...court });
     setIsAddingNew(false);
-    // Edit form renders inline within the court's card — no scroll needed.
   };
 
   const handleSave = async () => {
@@ -696,16 +702,83 @@ export function CourtManagement() {
 
           {/* Courts List */}
           <div className="grid grid-cols-1 gap-4">
-            {sortedActiveCourts.map((court) => (
+            {sortedActiveCourts.map((court) => {
+              const isEditingThis =
+                editingCourt !== null && !isAddingNew && editingCourt.id === court.id;
+              return (
               <React.Fragment key={court.id}>
-                {/* Inline Edit Form — renders in place of the court card */}
-                {editingCourt && !isAddingNew && editingCourt.id === court.id ? (
-                  <Card className="border-green-200 bg-green-50">
-                    <CardHeader>
-                      <CardTitle>Edit {court.name}</CardTitle>
-                      <CardDescription>Configure court details and settings</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                <Card
+                  className={[
+                    selectedCourts.has(court.id) ? 'ring-2 ring-green-400 bg-green-50/30' : '',
+                    isEditingThis ? 'border-green-200' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1">
+                        <Checkbox
+                          checked={selectedCourts.has(court.id)}
+                          onCheckedChange={() => toggleCourtSelection(court.id)}
+                          className="h-5 w-5"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-semibold">{court.name}</h3>
+                            <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
+                            {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
+                            {isEditingThis && (
+                              <Badge className="bg-green-100 text-green-800 border-green-200">Editing</Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                            <span>Court #: <strong>{court.courtNumber}</strong></span>
+                            <span>Type: <strong>{court.courtType}</strong></span>
+                            <span>Surface: <strong>{court.surfaceType}</strong></span>
+                            <span>{court.isIndoor ? 'Indoor' : 'Outdoor'}</span>
+                            <span>{court.hasLights ? 'With Lights' : 'No Lights'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleCourtConfig(court.id)}
+                          disabled={editingCourt !== null}
+                          className={configuringCourtId === court.id ? 'bg-green-100 border-green-300' : ''}
+                          title="Schedule Settings"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(court)}
+                          disabled={editingCourt !== null}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(court.id)}
+                          disabled={editingCourt !== null}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                  {isEditingThis && editingCourt && (
+                    <div
+                      ref={courtEditPanelRef}
+                      className="border-t border-green-200 px-6 pb-6 pt-4 bg-green-50 scroll-mt-6"
+                    >
+                      <h4 className="text-base font-semibold text-gray-900">Edit {court.name}</h4>
+                      <p className="text-sm text-gray-600 mt-1 mb-4">Configure court details and settings</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor={`courtName-${court.id}`}>Court Name</Label>
@@ -802,66 +875,9 @@ export function CourtManagement() {
                           Cancel
                         </Button>
                       </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                <Card className={selectedCourts.has(court.id) ? 'ring-2 ring-green-400 bg-green-50/30' : ''}>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1">
-                        <Checkbox
-                          checked={selectedCourts.has(court.id)}
-                          onCheckedChange={() => toggleCourtSelection(court.id)}
-                          className="h-5 w-5"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-semibold">{court.name}</h3>
-                            <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
-                            {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
-                          </div>
-                          <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                            <span>Court #: <strong>{court.courtNumber}</strong></span>
-                            <span>Type: <strong>{court.courtType}</strong></span>
-                            <span>Surface: <strong>{court.surfaceType}</strong></span>
-                            <span>{court.isIndoor ? 'Indoor' : 'Outdoor'}</span>
-                            <span>{court.hasLights ? 'With Lights' : 'No Lights'}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleToggleCourtConfig(court.id)}
-                          disabled={editingCourt !== null}
-                          className={configuringCourtId === court.id ? 'bg-green-100 border-green-300' : ''}
-                          title="Schedule Settings"
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(court)}
-                          disabled={editingCourt !== null}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(court.id)}
-                          disabled={editingCourt !== null}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
                     </div>
-                  </CardContent>
+                  )}
                 </Card>
-                )}
 
                 {/* Court Schedule Config Panel */}
                 {configuringCourtId === court.id && (
@@ -960,7 +976,8 @@ export function CourtManagement() {
                   </Card>
                 )}
               </React.Fragment>
-            ))}
+              );
+            })}
           </div>
 
           {courts.length === 0 && (

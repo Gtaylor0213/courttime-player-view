@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -198,6 +198,195 @@ interface Court {
   };
 }
 
+function FacilityCourtFormBody({
+  editingCourt,
+  setEditingCourt,
+  idPrefix,
+  courtSaving,
+  onSave,
+  onCancel,
+}: {
+  editingCourt: Court;
+  setEditingCourt: React.Dispatch<React.SetStateAction<Court | null>>;
+  idPrefix: string;
+  courtSaving: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const id = (suffix: string) => `${idPrefix}-${suffix}`;
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor={id('courtName')}>Court Name</Label>
+          <Input
+            id={id('courtName')}
+            value={editingCourt.name}
+            onChange={(e) => setEditingCourt({ ...editingCourt, name: e.target.value })}
+            placeholder="e.g., Court 1"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={id('courtNumber')}>Court Number</Label>
+          <Input
+            id={id('courtNumber')}
+            type="number"
+            value={editingCourt.courtNumber}
+            onChange={(e) => setEditingCourt({ ...editingCourt, courtNumber: parseInt(e.target.value) || 1 })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={id('courtType')}>Court Type</Label>
+          <Select
+            value={editingCourt.courtType}
+            onValueChange={(value) => setEditingCourt({ ...editingCourt, courtType: value })}
+          >
+            <SelectTrigger id={id('courtType')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Tennis">Tennis</SelectItem>
+              <SelectItem value="Pickleball">Pickleball</SelectItem>
+              <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={id('courtSurface')}>Surface Type</Label>
+          <Select
+            value={editingCourt.surfaceType}
+            onValueChange={(value) => setEditingCourt({ ...editingCourt, surfaceType: value })}
+          >
+            <SelectTrigger id={id('courtSurface')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Hard Court">Hard Court</SelectItem>
+              <SelectItem value="Clay Court">Clay Court</SelectItem>
+              <SelectItem value="Grass Court">Grass Court</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={id('courtStatus')}>Status</Label>
+          <Select
+            value={editingCourt.status}
+            onValueChange={(value: 'active' | 'maintenance' | 'inactive') => setEditingCourt({ ...editingCourt, status: value })}
+          >
+            <SelectTrigger id={id('courtStatus')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="maintenance">Maintenance</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id={id('indoor')}
+            checked={editingCourt.isIndoor}
+            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isIndoor: checked })}
+          />
+          <Label htmlFor={id('indoor')}>Indoor Court</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id={id('lights')}
+            checked={editingCourt.hasLights}
+            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, hasLights: checked })}
+          />
+          <Label htmlFor={id('lights')}>Has Lights</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id={id('walkUp')}
+            checked={editingCourt.isWalkUp === true}
+            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isWalkUp: checked })}
+          />
+          <Label htmlFor={id('walkUp')}>Walk-up Court (no online booking)</Label>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="flex items-center space-x-2 mb-2">
+          <Switch
+            id={id('canSplit')}
+            checked={editingCourt.canSplit || false}
+            onCheckedChange={(checked) => setEditingCourt({
+              ...editingCourt,
+              canSplit: checked,
+              splitConfig: checked && !editingCourt.splitConfig
+                ? { splitNames: [], splitType: 'Pickleball' }
+                : editingCourt.splitConfig,
+            })}
+          />
+          <Label htmlFor={id('canSplit')}>Can be split into multiple courts</Label>
+        </div>
+
+        {editingCourt.canSplit && (
+          <div className="ml-6 mt-3 p-4 bg-gray-50 rounded-lg">
+            <Label className="text-sm mb-2 block">Split Configuration</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Split Names (comma-separated)</Label>
+                <Input
+                  placeholder="3a, 3b"
+                  defaultValue={editingCourt.splitConfig?.splitNames.join(', ') || ''}
+                  key={idPrefix + '-splitnames'}
+                  onBlur={(e) => {
+                    const names = e.target.value.split(',').map((n) => n.trim()).filter(Boolean);
+                    setEditingCourt({
+                      ...editingCourt,
+                      splitConfig: { ...editingCourt.splitConfig, splitNames: names, splitType: editingCourt.splitConfig?.splitType || 'Pickleball' },
+                    });
+                  }}
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Split Type</Label>
+                <Select
+                  value={editingCourt.splitConfig?.splitType || 'Pickleball'}
+                  onValueChange={(value: 'Tennis' | 'Pickleball') => {
+                    setEditingCourt({
+                      ...editingCourt,
+                      splitConfig: { ...editingCourt.splitConfig, splitType: value, splitNames: editingCourt.splitConfig?.splitNames || [] },
+                    });
+                  }}
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Tennis">Tennis</SelectItem>
+                    <SelectItem value="Pickleball">Pickleball</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Split courts share booking conflicts with the parent court
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2 mt-6">
+        <Button onClick={onSave} disabled={courtSaving}>
+          <Save className="h-4 w-4 mr-2" />
+          {courtSaving ? 'Saving...' : 'Save Court'}
+        </Button>
+        <Button variant="outline" onClick={onCancel} disabled={courtSaving}>
+          <X className="h-4 w-4 mr-2" />
+          Cancel
+        </Button>
+      </div>
+    </>
+  );
+}
+
 export function FacilityManagement() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -338,6 +527,7 @@ export function FacilityManagement() {
   const [courtSchedule, setCourtSchedule] = useState<any[]>([]);
   const [courtScheduleLoading, setCourtScheduleLoading] = useState(false);
   const [courtScheduleSaving, setCourtScheduleSaving] = useState(false);
+  const facilityCourtEditPanelRef = useRef<HTMLDivElement | null>(null);
 
   // Blackout state
   const [blackouts, setBlackouts] = useState<any[]>([]);
@@ -387,6 +577,11 @@ export function FacilityManagement() {
       loadSecondaryLocations();
     }
   }, [currentFacilityId]);
+
+  useEffect(() => {
+    if (!editingCourt || isAddingNewCourt) return;
+    facilityCourtEditPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [editingCourt?.id, isAddingNewCourt]);
 
   const loadFacilityData = async () => {
     if (!currentFacilityId) {
@@ -1154,13 +1349,8 @@ export function FacilityManagement() {
   };
 
   const handleEditCourt = (court: Court) => {
-    const previousScrollY = window.scrollY;
     setEditingCourt({ ...court });
     setIsAddingNewCourt(false);
-    // Keep viewport anchored; editing form renders above the list.
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: previousScrollY });
-    });
   };
 
   const handleSaveCourt = async () => {
@@ -3036,181 +3226,22 @@ export function FacilityManagement() {
                 </Button>
               </div>
 
-              {/* Edit/Add Court Form */}
-              {editingCourt && (
+              {/* Add Court Form — editing an existing court opens inline below that row */}
+              {editingCourt && isAddingNewCourt && (
                 <Card className="border-green-200 bg-green-50">
                   <CardHeader>
-                    <CardTitle>{isAddingNewCourt ? 'Add New Court' : `Edit ${editingCourt.name}`}</CardTitle>
+                    <CardTitle>Add New Court</CardTitle>
                     <CardDescription>Configure court details and settings</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="courtName">Court Name</Label>
-                        <Input
-                          id="courtName"
-                          value={editingCourt.name}
-                          onChange={(e) => setEditingCourt({ ...editingCourt, name: e.target.value })}
-                          placeholder="e.g., Court 1"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="courtNumber">Court Number</Label>
-                        <Input
-                          id="courtNumber"
-                          type="number"
-                          value={editingCourt.courtNumber}
-                          onChange={(e) => setEditingCourt({ ...editingCourt, courtNumber: parseInt(e.target.value) || 1 })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="courtType">Court Type</Label>
-                        <Select
-                          value={editingCourt.courtType}
-                          onValueChange={(value) => setEditingCourt({ ...editingCourt, courtType: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Tennis">Tennis</SelectItem>
-                            <SelectItem value="Pickleball">Pickleball</SelectItem>
-                            <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="courtSurface">Surface Type</Label>
-                        <Select
-                          value={editingCourt.surfaceType}
-                          onValueChange={(value) => setEditingCourt({ ...editingCourt, surfaceType: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Hard Court">Hard Court</SelectItem>
-                            <SelectItem value="Clay Court">Clay Court</SelectItem>
-                            <SelectItem value="Grass Court">Grass Court</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="courtStatus">Status</Label>
-                        <Select
-                          value={editingCourt.status}
-                          onValueChange={(value: 'active' | 'maintenance' | 'inactive') => setEditingCourt({ ...editingCourt, status: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="maintenance">Maintenance</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="indoor"
-                          checked={editingCourt.isIndoor}
-                          onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isIndoor: checked })}
-                        />
-                        <Label htmlFor="indoor">Indoor Court</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="lights"
-                          checked={editingCourt.hasLights}
-                          onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, hasLights: checked })}
-                        />
-                        <Label htmlFor="lights">Has Lights</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="walkUp"
-                          checked={editingCourt.isWalkUp === true}
-                          onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isWalkUp: checked })}
-                        />
-                        <Label htmlFor="walkUp">Walk-up Court (no online booking)</Label>
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Switch
-                          id="canSplit"
-                          checked={editingCourt.canSplit || false}
-                          onCheckedChange={(checked) => setEditingCourt({
-                            ...editingCourt,
-                            canSplit: checked,
-                            splitConfig: checked && !editingCourt.splitConfig
-                              ? { splitNames: [], splitType: 'Pickleball' }
-                              : editingCourt.splitConfig,
-                          })}
-                        />
-                        <Label htmlFor="canSplit">Can be split into multiple courts</Label>
-                      </div>
-
-                      {editingCourt.canSplit && (
-                        <div className="ml-6 mt-3 p-4 bg-gray-50 rounded-lg">
-                          <Label className="text-sm mb-2 block">Split Configuration</Label>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs">Split Names (comma-separated)</Label>
-                              <Input
-                                placeholder="3a, 3b"
-                                defaultValue={editingCourt.splitConfig?.splitNames.join(', ') || ''}
-                                key={editingCourt.id + '-splitnames'}
-                                onBlur={(e) => {
-                                  const names = e.target.value.split(',').map((n) => n.trim()).filter(Boolean);
-                                  setEditingCourt({
-                                    ...editingCourt,
-                                    splitConfig: { ...editingCourt.splitConfig, splitNames: names, splitType: editingCourt.splitConfig?.splitType || 'Pickleball' },
-                                  });
-                                }}
-                                className="text-sm"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Split Type</Label>
-                              <Select
-                                value={editingCourt.splitConfig?.splitType || 'Pickleball'}
-                                onValueChange={(value: 'Tennis' | 'Pickleball') => {
-                                  setEditingCourt({
-                                    ...editingCourt,
-                                    splitConfig: { ...editingCourt.splitConfig, splitType: value, splitNames: editingCourt.splitConfig?.splitNames || [] },
-                                  });
-                                }}
-                              >
-                                <SelectTrigger className="text-sm">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Tennis">Tennis</SelectItem>
-                                  <SelectItem value="Pickleball">Pickleball</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-2">
-                            Split courts share booking conflicts with the parent court
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2 mt-6">
-                      <Button onClick={handleSaveCourt} disabled={courtSaving}>
-                        <Save className="h-4 w-4 mr-2" />
-                        {courtSaving ? 'Saving...' : 'Save Court'}
-                      </Button>
-                      <Button variant="outline" onClick={handleCancelCourtEdit} disabled={courtSaving}>
-                        <X className="h-4 w-4 mr-2" />
-                        Cancel
-                      </Button>
-                    </div>
+                    <FacilityCourtFormBody
+                      editingCourt={editingCourt}
+                      setEditingCourt={setEditingCourt}
+                      idPrefix="new-court"
+                      courtSaving={courtSaving}
+                      onSave={handleSaveCourt}
+                      onCancel={handleCancelCourtEdit}
+                    />
                   </CardContent>
                 </Card>
               )}
@@ -3222,9 +3253,12 @@ export function FacilityManagement() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
-                  {courts.map((court) => (
+                  {courts.map((court) => {
+                    const isEditingThis =
+                      editingCourt !== null && !isAddingNewCourt && editingCourt.id === court.id;
+                    return (
                     <React.Fragment key={court.id}>
-                      <Card>
+                      <Card className={isEditingThis ? 'border-green-200' : ''}>
                         <CardContent className="p-6">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
@@ -3232,6 +3266,9 @@ export function FacilityManagement() {
                                 <h3 className="text-lg font-semibold">{court.name}</h3>
                                 <Badge className={getCourtStatusColor(court.status)}>{formatCourtStatus(court.status)}</Badge>
                                 {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
+                                {isEditingThis && (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200">Editing</Badge>
+                                )}
                               </div>
                               <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                                 <span>Court #: <strong>{court.courtNumber}</strong></span>
@@ -3272,6 +3309,23 @@ export function FacilityManagement() {
                             </div>
                           </div>
                         </CardContent>
+                        {isEditingThis && editingCourt && (
+                          <div
+                            ref={facilityCourtEditPanelRef}
+                            className="border-t border-green-200 px-6 pb-6 pt-4 bg-green-50 scroll-mt-6"
+                          >
+                            <h4 className="text-base font-semibold text-gray-900">Edit {court.name}</h4>
+                            <p className="text-sm text-gray-600 mt-1 mb-4">Configure court details and settings</p>
+                            <FacilityCourtFormBody
+                              editingCourt={editingCourt}
+                              setEditingCourt={setEditingCourt}
+                              idPrefix={court.id}
+                              courtSaving={courtSaving}
+                              onSave={handleSaveCourt}
+                              onCancel={handleCancelCourtEdit}
+                            />
+                          </div>
+                        )}
                       </Card>
 
                       {/* Court Schedule Config Panel */}
@@ -3406,7 +3460,8 @@ export function FacilityManagement() {
                         </Card>
                       )}
                     </React.Fragment>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

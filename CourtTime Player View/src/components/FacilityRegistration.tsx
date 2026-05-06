@@ -582,64 +582,109 @@ export function FacilityRegistration() {
     }));
   };
 
-  // Add a time slot to a specific day
-  const addPeakHourSlot = (day: string) => {
+  const addPeakHourSlot = () => {
     setFormData(prev => {
-      const currentSlots = prev.rulesConfig.peakHoursSlots[day] || [];
       const newSlot = {
-        id: `${day}-${Date.now()}`,
+        id: `slot-${Date.now()}`,
         startTime: '17:00',
-        endTime: '20:00'
+        endTime: '20:00',
+        days: [],
+        appliesToAllCourts: true,
+        selectedCourtIds: [],
+        rules: {
+          maxBookingsPerDay: '1',
+          maxBookingsPerDayUnlimited: false,
+          maxBookingsPerDayHousehold: '2',
+          maxBookingsPerDayHouseholdUnlimited: false,
+          maxBookingsPerWeek: '2',
+          maxBookingsPerWeekUnlimited: false,
+          maxBookingsPerWeekHousehold: '2',
+          maxBookingsPerWeekHouseholdUnlimited: false,
+          maxDurationHours: '1.5',
+          maxDurationUnlimited: false,
+        }
       };
       return {
         ...prev,
         rulesConfig: {
           ...prev.rulesConfig,
-          peakHoursSlots: {
-            ...prev.rulesConfig.peakHoursSlots,
-            [day]: [...currentSlots, newSlot]
-          }
+          peakHoursSlots: [...prev.rulesConfig.peakHoursSlots, newSlot]
         }
       };
     });
   };
 
-  // Remove a time slot from a specific day
-  const removePeakHourSlot = (day: string, slotId: string) => {
+  const removePeakHourSlot = (slotId: string) => {
     setFormData(prev => {
-      const currentSlots = prev.rulesConfig.peakHoursSlots[day] || [];
-      const newSlots = currentSlots.filter(slot => slot.id !== slotId);
-      const newPeakHoursSlots = { ...prev.rulesConfig.peakHoursSlots };
-      if (newSlots.length === 0) {
-        delete newPeakHoursSlots[day];
-      } else {
-        newPeakHoursSlots[day] = newSlots;
-      }
       return {
         ...prev,
         rulesConfig: {
           ...prev.rulesConfig,
-          peakHoursSlots: newPeakHoursSlots
+          peakHoursSlots: prev.rulesConfig.peakHoursSlots.filter(slot => slot.id !== slotId)
         }
       };
     });
   };
 
-  // Update a specific time slot
-  const updatePeakHourSlot = (day: string, slotId: string, field: 'startTime' | 'endTime', value: string) => {
+  const updatePeakHourSlot = (slotId: string, field: 'startTime' | 'endTime', value: string) => {
     setFormData(prev => {
-      const currentSlots = prev.rulesConfig.peakHoursSlots[day] || [];
-      const newSlots = currentSlots.map(slot =>
+      const newSlots = prev.rulesConfig.peakHoursSlots.map(slot =>
         slot.id === slotId ? { ...slot, [field]: value } : slot
       );
       return {
         ...prev,
         rulesConfig: {
           ...prev.rulesConfig,
-          peakHoursSlots: {
-            ...prev.rulesConfig.peakHoursSlots,
-            [day]: newSlots
-          }
+          peakHoursSlots: newSlots
+        }
+      };
+    });
+  };
+
+  const togglePeakHourSlotDay = (slotId: string, day: number) => {
+    setFormData(prev => {
+      const newSlots = prev.rulesConfig.peakHoursSlots.map(slot => {
+        if (slot.id !== slotId) return slot;
+        const hasDay = slot.days.includes(day);
+        const days = hasDay ? slot.days.filter(d => d !== day) : [...slot.days, day];
+        return { ...slot, days };
+      });
+      return {
+        ...prev,
+        rulesConfig: {
+          ...prev.rulesConfig,
+          peakHoursSlots: newSlots,
+        }
+      };
+    });
+  };
+
+  const updatePeakHourSlotRule = (
+    slotId: string,
+    field:
+      | 'maxBookingsPerDay'
+      | 'maxBookingsPerDayUnlimited'
+      | 'maxBookingsPerDayHousehold'
+      | 'maxBookingsPerDayHouseholdUnlimited'
+      | 'maxBookingsPerWeek'
+      | 'maxBookingsPerWeekUnlimited'
+      | 'maxBookingsPerWeekHousehold'
+      | 'maxBookingsPerWeekHouseholdUnlimited'
+      | 'maxDurationHours'
+      | 'maxDurationUnlimited',
+    value: string | boolean
+  ) => {
+    setFormData(prev => {
+      const newSlots = prev.rulesConfig.peakHoursSlots.map(slot =>
+        slot.id === slotId
+          ? { ...slot, rules: { ...slot.rules, [field]: value } }
+          : slot
+      );
+      return {
+        ...prev,
+        rulesConfig: {
+          ...prev.rulesConfig,
+          peakHoursSlots: newSlots,
         }
       };
     });
@@ -963,30 +1008,22 @@ export function FacilityRegistration() {
         // Peak hours policy - with per-day time slots
         peakHoursPolicy: formData.rulesConfig.hasPeakHours ? {
           enabled: true,
-          applyToAdmins: formData.rulesConfig.peakHoursApplyToAdmins,
-          timeSlots: Object.entries(formData.rulesConfig.peakHoursSlots).flatMap(([dayName, slots]) => {
-            const dayMap: Record<string, number> = {
-              sunday: 0,
-              monday: 1,
-              tuesday: 2,
-              wednesday: 3,
-              thursday: 4,
-              friday: 5,
-              saturday: 6,
-            };
-            const day = dayMap[dayName];
-            return (slots || []).map((slot) => ({
-              id: slot.id,
-              startTime: slot.startTime,
-              endTime: slot.endTime,
-              days: day === undefined ? [] : [day],
-              appliesToAllCourts: true,
-              selectedCourtIds: [],
-              rules: {},
-            }));
-          }),
-          maxBookingsPerWeek: formData.rulesConfig.peakHoursRestrictions.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.peakHoursRestrictions.maxBookingsPerWeek),
-          maxDurationHours: formData.rulesConfig.peakHoursRestrictions.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.peakHoursRestrictions.maxDurationHours),
+          applyToAdmins: false,
+          timeSlots: formData.rulesConfig.peakHoursSlots.map((slot) => ({
+            id: slot.id,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            days: slot.days,
+            appliesToAllCourts: slot.appliesToAllCourts,
+            selectedCourtIds: slot.selectedCourtIds,
+            rules: {
+              max_bookings_per_day: slot.rules.maxBookingsPerDayUnlimited ? -1 : parseInt(slot.rules.maxBookingsPerDay, 10),
+              max_bookings_per_day_household: slot.rules.maxBookingsPerDayHouseholdUnlimited ? -1 : parseInt(slot.rules.maxBookingsPerDayHousehold, 10),
+              max_bookings_per_week: slot.rules.maxBookingsPerWeekUnlimited ? -1 : parseInt(slot.rules.maxBookingsPerWeek, 10),
+              max_bookings_per_week_household: slot.rules.maxBookingsPerWeekHouseholdUnlimited ? -1 : parseInt(slot.rules.maxBookingsPerWeekHousehold, 10),
+              max_duration_hours: slot.rules.maxDurationUnlimited ? -1 : parseFloat(slot.rules.maxDurationHours),
+            },
+          })),
         } : undefined,
 
         // Weekend policy
@@ -2368,6 +2405,8 @@ export function FacilityRegistration() {
       onAddPeakHourSlot={addPeakHourSlot}
       onRemovePeakHourSlot={removePeakHourSlot}
       onUpdatePeakHourSlot={updatePeakHourSlot}
+      onTogglePeakHourSlotDay={togglePeakHourSlotDay}
+      onUpdatePeakHourSlotRule={updatePeakHourSlotRule}
       errors={errors}
     />
   );

@@ -38,6 +38,21 @@ export interface PeakHourSlot {
   id: string;
   startTime: string;
   endTime: string;
+  days: number[];
+  appliesToAllCourts: boolean;
+  selectedCourtIds: string[];
+  rules: {
+    maxBookingsPerDay: string;
+    maxBookingsPerDayUnlimited: boolean;
+    maxBookingsPerDayHousehold: string;
+    maxBookingsPerDayHouseholdUnlimited: boolean;
+    maxBookingsPerWeek: string;
+    maxBookingsPerWeekUnlimited: boolean;
+    maxBookingsPerWeekHousehold: string;
+    maxBookingsPerWeekHouseholdUnlimited: boolean;
+    maxDurationHours: string;
+    maxDurationUnlimited: boolean;
+  };
 }
 
 export interface RulesConfig {
@@ -55,7 +70,7 @@ export interface RulesConfig {
   // Peak hours
   hasPeakHours: boolean;
   peakHoursApplyToAdmins: boolean;
-  peakHoursSlots: Record<string, PeakHourSlot[]>;
+  peakHoursSlots: PeakHourSlot[];
   peakHoursRestrictions: PeakHoursRestrictions;
 
   // Weekend policy
@@ -330,7 +345,7 @@ export const DEFAULT_RULES_CONFIG: RulesConfig = {
 
   hasPeakHours: false,
   peakHoursApplyToAdmins: true,
-  peakHoursSlots: {},
+  peakHoursSlots: [],
   peakHoursRestrictions: {
     maxBookingsPerWeek: '2',
     maxBookingsUnlimited: false,

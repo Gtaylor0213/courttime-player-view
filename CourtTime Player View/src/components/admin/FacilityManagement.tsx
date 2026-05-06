@@ -2582,7 +2582,6 @@ export function FacilityManagement() {
                         {facilityData.bookingRules.peakHoursSlots.length > 0 ? (
                           <div className="space-y-2">
                             {facilityData.bookingRules.peakHoursSlots.map((slot) => {
-                              const expanded = !!expandedPeakHourSlots[slot.id];
                               return (
                                 <div key={slot.id} className="border rounded-md p-2 space-y-2">
                                   <div className="flex items-center gap-2">
@@ -2601,14 +2600,6 @@ export function FacilityManagement() {
                                       disabled={!isEditing}
                                       className="w-32"
                                     />
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => togglePeakHourSlotExpanded(slot.id)}
-                                    >
-                                      {expanded ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-                                      Edit Rules
-                                    </Button>
                                     {isEditing && (
                                       <Button
                                         variant="ghost"
@@ -2620,99 +2611,140 @@ export function FacilityManagement() {
                                       </Button>
                                     )}
                                   </div>
-                                  <div className="text-xs text-gray-600">
-                                    Days: {slot.days.length > 0 ? slot.days.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ') : 'None selected'}
-                                  </div>
-                                  {expanded && (
-                                    <div className="space-y-3 p-3 bg-gray-50 rounded-md">
-                                      <div className="space-y-2">
-                                        <Label className="text-sm">Applies To Days</Label>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border rounded p-2 bg-white">
-                                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, day) => (
-                                            <label key={label} className="inline-flex items-center gap-2 text-sm">
-                                              <input
-                                                type="checkbox"
-                                                checked={slot.days.includes(day)}
-                                                disabled={!isEditing}
-                                                onChange={() => togglePeakHourSlotDay(slot.id, day)}
-                                              />
-                                              {label}
-                                            </label>
-                                          ))}
+                                  <div className="space-y-2 p-3 bg-gray-50 rounded-md">
+                                    <Label className="text-sm">Applies To Days</Label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border rounded p-2 bg-white">
+                                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, day) => (
+                                        <label key={label} className="inline-flex items-center gap-2 text-sm">
+                                          <input
+                                            type="checkbox"
+                                            checked={slot.days.includes(day)}
+                                            disabled={!isEditing}
+                                            onChange={() => togglePeakHourSlotDay(slot.id, day)}
+                                          />
+                                          {label}
+                                        </label>
+                                      ))}
+                                    </div>
+                                    <div className="space-y-2 pt-1">
+                                      <Label className="text-sm">Max Reservation Duration</Label>
+                                      <div className="flex items-center justify-between">
+                                        <Label className="text-xs">Enable</Label>
+                                        <Switch
+                                          checked={slot.rules.maxDurationUnlimited}
+                                          onCheckedChange={(checked: boolean) =>
+                                            updatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', checked)
+                                          }
+                                          disabled={!isEditing}
+                                        />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Input
+                                          type="number"
+                                          min="0.5"
+                                          step="0.5"
+                                          className="w-24 h-8"
+                                          value={slot.rules.maxDurationHours}
+                                          disabled={!isEditing || slot.rules.maxDurationUnlimited}
+                                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                            updatePeakHourSlotRule(slot.id, 'maxDurationHours', e.target.value)
+                                          }
+                                        />
+                                        <span className="text-xs text-gray-500 whitespace-nowrap">hours</span>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                      <Label className="text-sm md:col-span-2">User-Based Limits</Label>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Courts Per Day (Individual)</Label>
+                                        <div className="flex items-center gap-2">
+                                          <Switch
+                                            checked={slot.rules.maxBookingsPerDayUnlimited}
+                                            onCheckedChange={(checked: boolean) =>
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', checked)
+                                            }
+                                            disabled={!isEditing}
+                                          />
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            className="w-24 h-8"
+                                            value={slot.rules.maxBookingsPerDay}
+                                            disabled={!isEditing || slot.rules.maxBookingsPerDayUnlimited}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', e.target.value)
+                                            }
+                                          />
                                         </div>
                                       </div>
-
-                                      <div className="space-y-2">
-                                        <Label className="text-sm">Court Targeting</Label>
-                                        <div className="flex items-center gap-4">
-                                          <label className="inline-flex items-center gap-2 text-sm">
-                                            <input
-                                              type="radio"
-                                              checked={slot.appliesToAllCourts}
-                                              disabled={!isEditing}
-                                              onChange={() => setPeakHourSlotCourtMode(slot.id, true)}
-                                            />
-                                            All Courts
-                                          </label>
-                                          <label className="inline-flex items-center gap-2 text-sm">
-                                            <input
-                                              type="radio"
-                                              checked={!slot.appliesToAllCourts}
-                                              disabled={!isEditing}
-                                              onChange={() => setPeakHourSlotCourtMode(slot.id, false)}
-                                            />
-                                            Selected Courts
-                                          </label>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Courts Per Week (Individual)</Label>
+                                        <div className="flex items-center gap-2">
+                                          <Switch
+                                            checked={slot.rules.maxBookingsPerWeekUnlimited}
+                                            onCheckedChange={(checked: boolean) =>
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', checked)
+                                            }
+                                            disabled={!isEditing}
+                                          />
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            className="w-24 h-8"
+                                            value={slot.rules.maxBookingsPerWeek}
+                                            disabled={!isEditing || slot.rules.maxBookingsPerWeekUnlimited}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', e.target.value)
+                                            }
+                                          />
                                         </div>
-                                        {!slot.appliesToAllCourts && (
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-1 border rounded p-2 bg-white">
-                                            {courts.map((court) => (
-                                              <label key={court.id} className="inline-flex items-center gap-2 text-sm">
-                                                <input
-                                                  type="checkbox"
-                                                  checked={slot.selectedCourtIds.includes(court.id)}
-                                                  disabled={!isEditing}
-                                                  onChange={() => togglePeakHourSlotCourt(slot.id, court.id)}
-                                                />
-                                                {court.name}
-                                              </label>
-                                            ))}
-                                          </div>
-                                        )}
                                       </div>
-
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div className="space-y-1">
-                                          <Label className="text-xs">Max Bookings Per Day (user)</Label>
-                                          <div className="flex items-center gap-2">
-                                            <Switch checked={slot.rules.maxBookingsPerDayUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', checked)} disabled={!isEditing} />
-                                            <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerDay} disabled={!isEditing || slot.rules.maxBookingsPerDayUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', e.target.value)} />
-                                          </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Courts Per Week (Household)</Label>
+                                        <div className="flex items-center gap-2">
+                                          <Switch
+                                            checked={slot.rules.maxBookingsPerWeekHouseholdUnlimited}
+                                            onCheckedChange={(checked: boolean) =>
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', checked)
+                                            }
+                                            disabled={!isEditing}
+                                          />
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            className="w-24 h-8"
+                                            value={slot.rules.maxBookingsPerWeekHousehold}
+                                            disabled={!isEditing || slot.rules.maxBookingsPerWeekHouseholdUnlimited}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', e.target.value)
+                                            }
+                                          />
                                         </div>
-                                        <div className="space-y-1">
-                                          <Label className="text-xs">Max Bookings Per Week (user)</Label>
-                                          <div className="flex items-center gap-2">
-                                            <Switch checked={slot.rules.maxBookingsPerWeekUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', checked)} disabled={!isEditing} />
-                                            <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerWeek} disabled={!isEditing || slot.rules.maxBookingsPerWeekUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', e.target.value)} />
-                                          </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                          <Label className="text-xs">Max Bookings Per Week (household)</Label>
-                                          <div className="flex items-center gap-2">
-                                            <Switch checked={slot.rules.maxBookingsPerWeekHouseholdUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', checked)} disabled={!isEditing} />
-                                            <Input type="number" min="1" className="w-24 h-8" value={slot.rules.maxBookingsPerWeekHousehold} disabled={!isEditing || slot.rules.maxBookingsPerWeekHouseholdUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', e.target.value)} />
-                                          </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                          <Label className="text-xs">Max Duration (hours)</Label>
-                                          <div className="flex items-center gap-2">
-                                            <Switch checked={slot.rules.maxDurationUnlimited} onCheckedChange={(checked: boolean) => updatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', checked)} disabled={!isEditing} />
-                                            <Input type="number" min="0.5" step="0.5" className="w-24 h-8" value={slot.rules.maxDurationHours} disabled={!isEditing || slot.rules.maxDurationUnlimited} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePeakHourSlotRule(slot.id, 'maxDurationHours', e.target.value)} />
-                                          </div>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Courts Per Day (Household)</Label>
+                                        <div className="flex items-center gap-2">
+                                          <Switch
+                                            checked={slot.rules.maxBookingsPerDayHouseholdUnlimited}
+                                            onCheckedChange={(checked: boolean) =>
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHouseholdUnlimited', checked)
+                                            }
+                                            disabled={!isEditing}
+                                          />
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            className="w-24 h-8"
+                                            value={slot.rules.maxBookingsPerDayHousehold}
+                                            disabled={!isEditing || slot.rules.maxBookingsPerDayHouseholdUnlimited}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHousehold', e.target.value)
+                                            }
+                                          />
                                         </div>
                                       </div>
                                     </div>
-                                  )}
+                                  </div>
                                 </div>
                               );
                             })}

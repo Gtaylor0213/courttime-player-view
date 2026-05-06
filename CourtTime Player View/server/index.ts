@@ -36,6 +36,7 @@ import rulesRoutes from './routes/rules';
 import householdsRoutes from './routes/households';
 import paymentRoutes from './routes/payments';
 import webhookRoutes from './routes/webhook';
+import facilityLocationsRoutes from './routes/facilityLocations';
 import { requireAuth } from './middleware/auth';
 
 const app = express();
@@ -174,6 +175,7 @@ app.use('/api/strikes', requireAuth, strikesRoutes);
 app.use('/api/court-config', requireAuth, courtConfigRoutes);
 app.use('/api/rules', requireAuth, rulesRoutes);
 app.use('/api/households', requireAuth, householdsRoutes);
+app.use('/api/facility-locations', requireAuth, facilityLocationsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -151,10 +151,10 @@ export function ReservationManagementModal({
     return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
-  // Check if reservation is in the past
+  // Check if reservation is fully completed (end time has passed)
   const isPastReservation = () => {
-    const reservationDateTime = new Date(`${reservation.bookingDate}T${reservation.startTime}`);
-    return reservationDateTime < new Date();
+    const reservationEndDateTime = new Date(`${reservation.bookingDate}T${reservation.endTime}`);
+    return reservationEndDateTime < new Date();
   };
 
   // Handle cancel reservation

@@ -1,5 +1,5 @@
 import express from 'express';
-import { getUserById, getUserWithMemberships, updateUserProfile } from '../../src/services/authService';
+import { getUserById, getUserWithMemberships, updateUserProfile, deleteUser } from '../../src/services/authService';
 
 const router = express.Router();
 
@@ -77,6 +77,36 @@ router.patch('/:id', async (req, res, next) => {
         error: 'Failed to update profile'
       });
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/users/:id
+ * Permanently delete user account and all associated data.
+ * The user may only delete their own account.
+ */
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { requestingUserId } = req.body;
+
+    // Security: only allow self-deletion (or a support override can be added later)
+    if (requestingUserId && requestingUserId !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You may only delete your own account'
+      });
+    }
+
+    const result = await deleteUser(id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({ success: true, message: 'Account deleted successfully' });
   } catch (error) {
     next(error);
   }

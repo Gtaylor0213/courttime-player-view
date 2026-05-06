@@ -149,13 +149,9 @@ export function CourtManagement() {
   };
 
   const handleEdit = (court: Court) => {
-    const previousScrollY = window.scrollY;
     setEditingCourt({ ...court });
     setIsAddingNew(false);
-    // Keep viewport anchored; editing form renders above the list.
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: previousScrollY });
-    });
+    // Edit form renders inline within the court's card — no scroll needed.
   };
 
   const handleSave = async () => {
@@ -400,6 +396,34 @@ export function CourtManagement() {
     }
   };
 
+  // --- Court Sorting ---
+  // Order: Tennis courts first, then Pickleball, then Dual Purpose.
+  // Within each type, sort by court number. Split courts (e.g. 7a, 7b) sort
+  // immediately after their parent by parsing the numeric prefix of the name.
+
+  const courtTypeOrder: Record<string, number> = {
+    'Tennis': 0,
+    'Pickleball': 1,
+    'Dual Purpose': 2,
+  };
+
+  const parseSortKey = (court: Court): [number, number, string] => {
+    const typeRank = courtTypeOrder[court.courtType] ?? 3;
+    // Use courtNumber as primary numeric key, then parse any alphabetic suffix
+    // from the court name (e.g. "Court 7a" → suffix "a") for split court ordering.
+    const nameMatch = court.name.match(/(\d+)([a-zA-Z]*)$/);
+    const nameSuffix = nameMatch ? nameMatch[2].toLowerCase() : '';
+    return [typeRank, court.courtNumber, nameSuffix];
+  };
+
+  const sortedActiveCourts = [...activeCourts].sort((a, b) => {
+    const [typeA, numA, suffA] = parseSortKey(a);
+    const [typeB, numB, suffB] = parseSortKey(b);
+    if (typeA !== typeB) return typeA - typeB;
+    if (numA !== numB) return numA - numB;
+    return suffA.localeCompare(suffB);
+  });
+
   // --- Helpers ---
 
   const getStatusColor = (status: string) => {
@@ -476,11 +500,11 @@ export function CourtManagement() {
             </Alert>
           )}
 
-          {/* Single Add/Edit Form */}
-          {editingCourt && (
+          {/* Add New Court Form (only shown when adding, not when editing existing) */}
+          {editingCourt && isAddingNew && (
             <Card className="mb-6 border-green-200 bg-green-50">
               <CardHeader>
-                <CardTitle>{isAddingNew ? 'Add New Court' : `Edit ${editingCourt.name}`}</CardTitle>
+                <CardTitle>Add New Court</CardTitle>
                 <CardDescription>Configure court details and settings</CardDescription>
               </CardHeader>
               <CardContent>
@@ -535,24 +559,6 @@ export function CourtManagement() {
                       </SelectContent>
                     </Select>
                   </div>
-                  {!isAddingNew && (
-                    <div className="space-y-2">
-                      <Label htmlFor="courtStatus">Status</Label>
-                      <Select
-                        value={editingCourt.status}
-                        onValueChange={(value: 'available' | 'maintenance' | 'closed') => setEditingCourt({ ...editingCourt, status: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="available">Available</SelectItem>
-                          <SelectItem value="maintenance">Maintenance</SelectItem>
-                          <SelectItem value="closed">Closed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="indoor"
@@ -581,7 +587,7 @@ export function CourtManagement() {
                 <div className="flex gap-2 mt-6">
                   <Button onClick={handleSave} disabled={saving}>
                     <Save className="h-4 w-4 mr-2" />
-                    {saving ? 'Saving...' : (isAddingNew ? 'Create Court' : 'Save Court')}
+                    {saving ? 'Saving...' : 'Create Court'}
                   </Button>
                   <Button variant="outline" onClick={handleCancel} disabled={saving}>
                     <X className="h-4 w-4 mr-2" />
@@ -690,8 +696,115 @@ export function CourtManagement() {
 
           {/* Courts List */}
           <div className="grid grid-cols-1 gap-4">
-            {activeCourts.map((court) => (
+            {sortedActiveCourts.map((court) => (
               <React.Fragment key={court.id}>
+                {/* Inline Edit Form — renders in place of the court card */}
+                {editingCourt && !isAddingNew && editingCourt.id === court.id ? (
+                  <Card className="border-green-200 bg-green-50">
+                    <CardHeader>
+                      <CardTitle>Edit {court.name}</CardTitle>
+                      <CardDescription>Configure court details and settings</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor={`courtName-${court.id}`}>Court Name</Label>
+                          <Input
+                            id={`courtName-${court.id}`}
+                            value={editingCourt.name}
+                            onChange={(e) => setEditingCourt({ ...editingCourt, name: e.target.value })}
+                            placeholder={`Court ${editingCourt.courtNumber}`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`courtNumber-${court.id}`}>Court Number</Label>
+                          <Input
+                            id={`courtNumber-${court.id}`}
+                            type="number"
+                            value={editingCourt.courtNumber}
+                            onChange={(e) => setEditingCourt({ ...editingCourt, courtNumber: parseInt(e.target.value) || 1 })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Court Type</Label>
+                          <Select
+                            value={editingCourt.courtType}
+                            onValueChange={(value) => setEditingCourt({ ...editingCourt, courtType: value })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Tennis">Tennis</SelectItem>
+                              <SelectItem value="Pickleball">Pickleball</SelectItem>
+                              <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Surface Type</Label>
+                          <Select
+                            value={editingCourt.surfaceType}
+                            onValueChange={(value) => setEditingCourt({ ...editingCourt, surfaceType: value })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Hard Court">Hard Court</SelectItem>
+                              <SelectItem value="Clay Court">Clay Court</SelectItem>
+                              <SelectItem value="Grass Court">Grass Court</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          <Select
+                            value={editingCourt.status}
+                            onValueChange={(value: 'available' | 'maintenance' | 'closed') => setEditingCourt({ ...editingCourt, status: value })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="available">Available</SelectItem>
+                              <SelectItem value="maintenance">Maintenance</SelectItem>
+                              <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id={`indoor-${court.id}`}
+                            checked={editingCourt.isIndoor}
+                            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isIndoor: checked })}
+                          />
+                          <Label htmlFor={`indoor-${court.id}`}>Indoor Court</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id={`lights-${court.id}`}
+                            checked={editingCourt.hasLights}
+                            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, hasLights: checked })}
+                          />
+                          <Label htmlFor={`lights-${court.id}`}>Has Lights</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id={`walkUp-${court.id}`}
+                            checked={editingCourt.isWalkUp}
+                            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isWalkUp: checked })}
+                          />
+                          <Label htmlFor={`walkUp-${court.id}`}>Walk-up Court (no online booking)</Label>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-6">
+                        <Button onClick={handleSave} disabled={saving}>
+                          <Save className="h-4 w-4 mr-2" />
+                          {saving ? 'Saving...' : 'Save Court'}
+                        </Button>
+                        <Button variant="outline" onClick={handleCancel} disabled={saving}>
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
                 <Card className={selectedCourts.has(court.id) ? 'ring-2 ring-green-400 bg-green-50/30' : ''}>
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
@@ -748,6 +861,7 @@ export function CourtManagement() {
                     </div>
                   </CardContent>
                 </Card>
+                )}
 
                 {/* Court Schedule Config Panel */}
                 {configuringCourtId === court.id && (

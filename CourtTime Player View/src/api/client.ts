@@ -262,6 +262,13 @@ export const usersApi = {
       body: JSON.stringify(updates),
     });
   },
+
+  deleteAccount: async (id: string) => {
+    return apiRequest(`/api/users/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ requestingUserId: id }),
+    });
+  },
 };
 
 // Members API
@@ -1245,6 +1252,47 @@ export const paymentsApi = {
     return apiRequest('/api/payments/cancel-subscription', {
       method: 'POST',
       body: JSON.stringify({ facilityId }),
+    });
+  },
+};
+
+// Secondary Facility Locations API
+export const facilityLocationsApi = {
+  getAll: async (facilityId: string) => {
+    return apiRequest(`/api/facility-locations/${facilityId}`);
+  },
+
+  add: async (facilityId: string, data: {
+    locationName: string;
+    streetAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    phone?: string;
+  }) => {
+    return apiRequest(`/api/facility-locations/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (facilityId: string, locationId: string, data: {
+    locationName?: string;
+    streetAddress?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    phone?: string;
+  }) => {
+    return apiRequest(`/api/facility-locations/${facilityId}/${locationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  remove: async (facilityId: string, locationId: string) => {
+    return apiRequest(`/api/facility-locations/${facilityId}/${locationId}`, {
+      method: 'DELETE',
     });
   },
 };

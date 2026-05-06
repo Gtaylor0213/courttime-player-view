@@ -14,7 +14,7 @@ import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { parseLocalDate } from '../../utils/dateUtils';
-import { facilitiesApi, adminApi, courtConfigApi, rulesApi, addressWhitelistApi } from '../../api/client';
+import { facilitiesApi, adminApi, courtConfigApi, rulesApi, addressWhitelistApi, facilityLocationsApi } from '../../api/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { BillingTab } from './BillingTab';
@@ -354,6 +354,23 @@ export function FacilityManagement() {
   const [whitelistUploading, setWhitelistUploading] = useState(false);
   const whitelistFileRef = React.useRef<HTMLInputElement>(null);
 
+  // Secondary facility locations
+  interface SecondaryLocation {
+    id: string;
+    locationName: string;
+    streetAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    phone?: string;
+  }
+  const [secondaryLocations, setSecondaryLocations] = useState<SecondaryLocation[]>([]);
+  const [addingSecondaryLocation, setAddingSecondaryLocation] = useState(false);
+  const [newSecondaryLocation, setNewSecondaryLocation] = useState({
+    locationName: '', streetAddress: '', city: '', state: '', zipCode: '', phone: ''
+  });
+  const [savingSecondaryLocation, setSavingSecondaryLocation] = useState(false);
+
   const { selectedFacilityId: currentFacilityId } = useAppContext();
 
   useEffect(() => {
@@ -363,6 +380,7 @@ export function FacilityManagement() {
       loadCourts();
       loadBlackouts();
       loadWhitelistAddresses();
+      loadSecondaryLocations();
     }
   }, [currentFacilityId]);
 
@@ -849,6 +867,60 @@ export function FacilityManagement() {
         days
       };
     });
+  };
+
+  // Secondary location CRUD
+  const loadSecondaryLocations = async () => {
+    if (!currentFacilityId) return;
+    try {
+      const response = await facilityLocationsApi.getAll(currentFacilityId);
+      if (response.success && response.data?.locations) {
+        setSecondaryLocations(response.data.locations);
+      }
+    } catch (error) {
+      console.error('Error loading secondary locations:', error);
+    }
+  };
+
+  const handleAddSecondaryLocation = async () => {
+    if (!currentFacilityId) return;
+    if (!newSecondaryLocation.locationName || !newSecondaryLocation.streetAddress ||
+        !newSecondaryLocation.city || !newSecondaryLocation.state || !newSecondaryLocation.zipCode) {
+      toast.error('Location name and full address are required');
+      return;
+    }
+    setSavingSecondaryLocation(true);
+    try {
+      const response = await facilityLocationsApi.add(currentFacilityId, newSecondaryLocation);
+      if (response.success) {
+        toast.success('Secondary location added');
+        setNewSecondaryLocation({ locationName: '', streetAddress: '', city: '', state: '', zipCode: '', phone: '' });
+        setAddingSecondaryLocation(false);
+        loadSecondaryLocations();
+      } else {
+        toast.error(response.error || 'Failed to add location');
+      }
+    } catch (error) {
+      toast.error('Failed to add location');
+    } finally {
+      setSavingSecondaryLocation(false);
+    }
+  };
+
+  const handleRemoveSecondaryLocation = async (locationId: string) => {
+    if (!currentFacilityId) return;
+    if (!confirm('Remove this secondary location?')) return;
+    try {
+      const response = await facilityLocationsApi.remove(currentFacilityId, locationId);
+      if (response.success) {
+        toast.success('Location removed');
+        loadSecondaryLocations();
+      } else {
+        toast.error(response.error || 'Failed to remove location');
+      }
+    } catch (error) {
+      toast.error('Failed to remove location');
+    }
   };
 
   // Address whitelist CRUD
@@ -1831,6 +1903,126 @@ export function FacilityManagement() {
                         />
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Secondary Facility Locations */}
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <MapPin className="h-5 w-5" />
+                          Additional Locations
+                        </CardTitle>
+                        <CardDescription>Add a second campus or branch with a custom name</CardDescription>
+                      </div>
+                      {!addingSecondaryLocation && (
+                        <Button size="sm" variant="outline" onClick={() => setAddingSecondaryLocation(true)}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Location
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {secondaryLocations.length > 0 && (
+                      <div className="space-y-3">
+                        {secondaryLocations.map((loc) => (
+                          <div key={loc.id} className="flex items-start justify-between p-3 border rounded-lg bg-gray-50">
+                            <div>
+                              <p className="font-medium text-sm">{loc.locationName}</p>
+                              <p className="text-sm text-gray-600">{loc.streetAddress}</p>
+                              <p className="text-sm text-gray-600">{loc.city}, {loc.state} {loc.zipCode}</p>
+                              {loc.phone && <p className="text-sm text-gray-500">{loc.phone}</p>}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700"
+                              onClick={() => handleRemoveSecondaryLocation(loc.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {addingSecondaryLocation && (
+                      <div className="border rounded-lg p-4 bg-green-50 space-y-3">
+                        <p className="text-sm font-medium text-gray-800">New Location</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="md:col-span-2 space-y-1">
+                            <Label>Location Name <span className="text-gray-400">(e.g. "North Campus")</span></Label>
+                            <Input
+                              value={newSecondaryLocation.locationName}
+                              onChange={(e) => setNewSecondaryLocation(prev => ({ ...prev, locationName: e.target.value }))}
+                              placeholder="North Campus"
+                            />
+                          </div>
+                          <div className="md:col-span-2 space-y-1">
+                            <Label>Street Address</Label>
+                            <Input
+                              value={newSecondaryLocation.streetAddress}
+                              onChange={(e) => setNewSecondaryLocation(prev => ({ ...prev, streetAddress: e.target.value }))}
+                              placeholder="123 Main St"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>City</Label>
+                            <Input
+                              value={newSecondaryLocation.city}
+                              onChange={(e) => setNewSecondaryLocation(prev => ({ ...prev, city: e.target.value }))}
+                              placeholder="City"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label>State</Label>
+                              <Select
+                                value={newSecondaryLocation.state}
+                                onValueChange={(v) => setNewSecondaryLocation(prev => ({ ...prev, state: v }))}
+                              >
+                                <SelectTrigger><SelectValue placeholder="State" /></SelectTrigger>
+                                <SelectContent>
+                                  {US_STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label>ZIP Code</Label>
+                              <Input
+                                value={newSecondaryLocation.zipCode}
+                                onChange={(e) => setNewSecondaryLocation(prev => ({ ...prev, zipCode: e.target.value }))}
+                                placeholder="12345"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Phone <span className="text-gray-400">(optional)</span></Label>
+                            <Input
+                              value={newSecondaryLocation.phone}
+                              onChange={(e) => setNewSecondaryLocation(prev => ({ ...prev, phone: e.target.value }))}
+                              placeholder="(555) 000-0000"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button size="sm" onClick={handleAddSecondaryLocation} disabled={savingSecondaryLocation}>
+                            <Save className="h-4 w-4 mr-1" />
+                            {savingSecondaryLocation ? 'Saving...' : 'Save Location'}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => { setAddingSecondaryLocation(false); setNewSecondaryLocation({ locationName: '', streetAddress: '', city: '', state: '', zipCode: '', phone: '' }); }}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {secondaryLocations.length === 0 && !addingSecondaryLocation && (
+                      <p className="text-sm text-gray-500">No additional locations. Click "Add Location" to add a second campus or branch.</p>
+                    )}
                   </CardContent>
                 </Card>
 

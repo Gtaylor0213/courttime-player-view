@@ -472,6 +472,53 @@ export async function updateUserProfile(
 }
 
 /**
+ * Delete user account and all associated data (GDPR-style hard delete)
+ */
+export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Cancel all active/confirmed future bookings first
+    await query(
+      `UPDATE bookings
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1 AND status IN ('confirmed', 'pending')
+         AND booking_date >= CURRENT_DATE`,
+      [userId]
+    );
+
+    // Remove facility memberships and admin roles
+    await query(`DELETE FROM facility_memberships WHERE user_id = $1`, [userId]);
+    await query(`DELETE FROM facility_admins WHERE user_id = $1`, [userId]);
+
+    // Remove player profile data
+    await query(`DELETE FROM player_profiles WHERE user_id = $1`, [userId]);
+
+    // Remove user preferences
+    await query(`DELETE FROM user_preferences WHERE user_id = $1`, [userId]);
+
+    // Remove strikes
+    await query(`DELETE FROM strikes WHERE user_id = $1`, [userId]);
+
+    // Remove notifications
+    await query(`DELETE FROM notifications WHERE user_id = $1`, [userId]).catch(() => {});
+
+    // Remove rate limits
+    await query(`DELETE FROM rate_limits WHERE user_id = $1`, [userId]).catch(() => {});
+
+    // Finally delete the user record
+    const result = await query(`DELETE FROM users WHERE id = $1 RETURNING id`, [userId]);
+
+    if (result.rows.length === 0) {
+      return { success: false, error: 'User not found' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Delete user error:', error);
+    return { success: false, error: 'Failed to delete account' };
+  }
+}
+
+/**
  * Add user to facility
  * New members start as 'pending' unless their address is on the whitelist
  */

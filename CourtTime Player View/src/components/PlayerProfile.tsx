@@ -12,7 +12,7 @@ import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Ca
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
-import { playerProfileApi, facilitiesApi, strikesApi, membersApi } from '../api/client';
+import { playerProfileApi, facilitiesApi, strikesApi, membersApi, usersApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -40,6 +40,11 @@ export function PlayerProfile() {
   const [strikes, setStrikes] = useState<any[]>([]);
   const [lockoutStatuses, setLockoutStatuses] = useState<Record<string, any>>({});
   const [showStrikeHistory, setShowStrikeHistory] = useState(false);
+
+  // Account deletion
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [profileData, setProfileData] = useState({
     firstName: '',
@@ -304,6 +309,31 @@ export function PlayerProfile() {
       toast.error('Failed to leave facility');
     } finally {
       setLeavingFacility(null);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user?.id) return;
+    if (deleteConfirmText !== 'DELETE') {
+      toast.error('Please type DELETE to confirm');
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await usersApi.deleteAccount(user.id);
+      if (response.success) {
+        toast.success('Your account has been permanently deleted.');
+        // Sign out and redirect
+        navigate('/login');
+      } else {
+        toast.error(response.error || 'Failed to delete account');
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      toast.error('Failed to delete account');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -917,6 +947,71 @@ export function PlayerProfile() {
                 </CardContent>
               </Card>
 
+              {/* Delete Account */}
+              <Card className="border-red-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-red-700">
+                    <AlertTriangle className="h-5 w-5" />
+                    Delete Account
+                  </CardTitle>
+                  <CardDescription>
+                    Permanently delete your account and all associated data. This cannot be undone.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!showDeleteConfirm ? (
+                    <Button
+                      variant="outline"
+                      className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <AlertTriangle className="h-4 w-4 mr-2" />
+                      Delete My Account
+                    </Button>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p className="text-sm text-red-800 font-medium mb-1">This will permanently:</p>
+                        <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
+                          <li>Delete your account and all personal data</li>
+                          <li>Cancel all your upcoming reservations</li>
+                          <li>Remove you from all facility memberships</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <Label htmlFor="deleteConfirm" className="text-sm font-medium text-gray-700">
+                          Type <strong>DELETE</strong> to confirm
+                        </Label>
+                        <input
+                          id="deleteConfirm"
+                          type="text"
+                          value={deleteConfirmText}
+                          onChange={(e) => setDeleteConfirmText(e.target.value)}
+                          placeholder="DELETE"
+                          className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="destructive"
+                          onClick={handleDeleteAccount}
+                          disabled={isDeleting || deleteConfirmText !== 'DELETE'}
+                        >
+                          {isDeleting ? 'Deleting...' : 'Yes, Permanently Delete My Account'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
+                          disabled={isDeleting}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Request Membership */}
               <Card>
                 <CardHeader>
@@ -962,11 +1057,7 @@ export function PlayerProfile() {
                                   <div className="text-sm text-gray-600 mt-1">
                                     {facility.type}
                                   </div>
-                                  {facility.description && (
-                                    <div className="text-sm text-gray-500 mt-1">
-                                      {facility.description}
-                                    </div>
-                                  )}
+                                  {/* Description is only visible to admitted members, not in search results */}
                                 </div>
                                 <Button
                                   size="sm"

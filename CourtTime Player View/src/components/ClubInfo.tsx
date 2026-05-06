@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { facilitiesApi, playerProfileApi } from '../api/client';
+import { facilitiesApi, playerProfileApi, facilityLocationsApi } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -27,6 +27,12 @@ interface FacilityData {
   operatingHours: any;
   logoUrl?: string;
   memberCount?: number;
+  // Booking rules (shown to admitted members only)
+  generalRules?: string;
+  bookingRules?: any;
+  advanceBookingDays?: number;
+  cancellationNoticeHours?: number;
+  peakHoursPolicy?: any;
   courts: {
     id: string;
     name: string;
@@ -47,6 +53,7 @@ export function ClubInfo() {
   const [facility, setFacility] = useState<FacilityData | null>(null);
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [isMember, setIsMember] = useState(false);
+  const [secondaryLocations, setSecondaryLocations] = useState<any[]>([]);
 
   useEffect(() => {
     if (clubId) {
@@ -109,6 +116,12 @@ export function ClubInfo() {
           }
         }
 
+        // Parse bookingRules JSON if stored as a string
+        let parsedBookingRules = rawFacility.bookingRules;
+        if (typeof parsedBookingRules === 'string') {
+          try { parsedBookingRules = JSON.parse(parsedBookingRules); } catch { parsedBookingRules = null; }
+        }
+
         const facilityData: FacilityData = {
           id: rawFacility.id,
           name: rawFacility.name || '',
@@ -124,10 +137,23 @@ export function ClubInfo() {
           operatingHours: rawFacility.operatingHours || {},
           logoUrl: rawFacility.logoUrl || '',
           memberCount: rawFacility.memberCount,
+          generalRules: rawFacility.generalRules || '',
+          bookingRules: parsedBookingRules,
+          advanceBookingDays: rawFacility.advanceBookingDays,
+          cancellationNoticeHours: rawFacility.cancellationNoticeHours,
+          peakHoursPolicy: rawFacility.peakHoursPolicy,
           courts: [],
         };
 
         setFacility(facilityData);
+
+        // Load secondary locations (members only — loaded here but only rendered if isMember)
+        try {
+          const locResponse = await facilityLocationsApi.getAll(clubId!);
+          if (locResponse.success && locResponse.data?.locations) {
+            setSecondaryLocations(locResponse.data.locations);
+          }
+        } catch { /* silently ignore if not available */ }
 
         // Load courts for this facility
         const courtsResponse = await facilitiesApi.getCourts(clubId);
@@ -256,7 +282,9 @@ export function ClubInfo() {
                       </div>
                     </div>
                   </div>
-                  <p className="text-gray-600 mb-4">{facility.description || 'Professional tennis facility'}</p>
+                  {isMember && facility.description && (
+                    <p className="text-gray-600 mb-4">{facility.description}</p>
+                  )}
 
                   {/* Quick Actions */}
                   <div className="flex gap-3 flex-wrap">
@@ -287,6 +315,12 @@ export function ClubInfo() {
                 <CardTitle>Contact Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Secondary locations (members only) */}
+                {isMember && secondaryLocations.length > 0 && (
+                  <div className="space-y-3 pb-3 border-b border-gray-100">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Main Location</p>
+                  </div>
+                )}
                 {(facility.streetAddress || facility.city) && (
                   <div className="flex items-start">
                     <MapPin className="h-4 w-4 text-gray-400 mr-3 mt-1" />
@@ -325,6 +359,28 @@ export function ClubInfo() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Additional Locations (members only) */}
+            {isMember && secondaryLocations.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Additional Locations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {secondaryLocations.map((loc: any) => (
+                    <div key={loc.id} className="space-y-0.5">
+                      <p className="font-medium text-sm">{loc.locationName}</p>
+                      <p className="text-sm text-gray-600">{loc.streetAddress}</p>
+                      <p className="text-sm text-gray-600">{loc.city}, {loc.state} {loc.zipCode}</p>
+                      {loc.phone && <p className="text-sm text-gray-500">{loc.phone}</p>}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Operating Hours */}
             <Card>
@@ -371,6 +427,97 @@ export function ClubInfo() {
               </CardContent>
             </Card>
 
+            {/* Booking Rules — members only */}
+            {isMember && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5" />
+                    Booking Rules &amp; Policies
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* General rules text */}
+                  {facility.generalRules && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{facility.generalRules}</p>
+                    </div>
+                  )}
+                  {/* Structured rules from booking configuration */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    {(facility.bookingRules?.advanceBookingDaysUnlimited === false && facility.bookingRules?.advanceBookingDays) && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 min-w-[180px]">Book up to:</span>
+                        <span className="text-gray-600">{facility.bookingRules.advanceBookingDays} days in advance</span>
+                      </div>
+                    )}
+                    {(facility.bookingRules?.maxBookingDurationUnlimited === false && facility.bookingRules?.maxBookingDurationHours) && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 min-w-[180px]">Max booking duration:</span>
+                        <span className="text-gray-600">{facility.bookingRules.maxBookingDurationHours} hours</span>
+                      </div>
+                    )}
+                    {(facility.bookingRules?.maxBookingsPerWeekUnlimited === false && facility.bookingRules?.maxBookingsPerWeek) && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 min-w-[180px]">Max bookings per week:</span>
+                        <span className="text-gray-600">{facility.bookingRules.maxBookingsPerWeek}</span>
+                      </div>
+                    )}
+                    {(facility.bookingRules?.cancellationNoticeUnlimited === false && facility.bookingRules?.cancellationNoticeHours) && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 min-w-[180px]">Cancellation notice:</span>
+                        <span className="text-gray-600">{facility.bookingRules.cancellationNoticeHours} hours before booking</span>
+                      </div>
+                    )}
+                    {facility.bookingRules?.minimumLeadTimeEnabled && facility.bookingRules?.minimumLeadTimeMinutes && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 min-w-[180px]">Minimum booking lead time:</span>
+                        <span className="text-gray-600">{Math.round(facility.bookingRules.minimumLeadTimeMinutes / 60)} hours</span>
+                      </div>
+                    )}
+                    {facility.bookingRules?.noOverlappingReservations && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 min-w-[180px]">Overlapping bookings:</span>
+                        <span className="text-gray-600">Not allowed</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Peak hours */}
+                  {facility.bookingRules?.hasPeakHours && facility.bookingRules?.peakHoursSlots?.length > 0 && (
+                    <div>
+                      <p className="font-medium text-gray-700 mb-2">Peak Hours</p>
+                      <div className="space-y-2">
+                        {facility.bookingRules.peakHoursSlots.map((slot: any, idx: number) => {
+                          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                          const days = (slot.days || []).map((d: number) => dayNames[d]).join(', ');
+                          const fmt = (t: string) => {
+                            if (!t) return '';
+                            const [h, m] = t.split(':').map(Number);
+                            const period = h >= 12 ? 'PM' : 'AM';
+                            return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${period}`;
+                          };
+                          return (
+                            <div key={idx} className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
+                              <p className="font-medium text-amber-800">{fmt(slot.startTime)} – {fmt(slot.endTime)}{days ? ` · ${days}` : ''}</p>
+                              {!slot.rules?.maxBookingsPerDayUnlimited && slot.rules?.maxBookingsPerDay && (
+                                <p className="text-amber-700 mt-1">Max {slot.rules.maxBookingsPerDay} booking(s) per day during peak hours</p>
+                              )}
+                              {!slot.rules?.maxDurationUnlimited && slot.rules?.maxDurationHours && (
+                                <p className="text-amber-700">Max duration: {slot.rules.maxDurationHours} hours</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {!facility.generalRules && !facility.bookingRules && (
+                    <p className="text-sm text-gray-500">No booking rules have been configured for this facility.</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Courts */}
             <Card className="lg:col-span-2">
               <CardHeader>
@@ -379,7 +526,16 @@ export function ClubInfo() {
               <CardContent>
                 {facility.courts && facility.courts.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {facility.courts.map((court) => (
+                    {[...facility.courts].sort((a, b) => {
+                      const typeOrder: Record<string, number> = { Tennis: 0, Pickleball: 1, 'Dual Purpose': 2 };
+                      const tA = typeOrder[a.courtType] ?? 3;
+                      const tB = typeOrder[b.courtType] ?? 3;
+                      if (tA !== tB) return tA - tB;
+                      if (a.courtNumber !== b.courtNumber) return a.courtNumber - b.courtNumber;
+                      const sufA = (a.name.match(/(\d+)([a-zA-Z]*)$/) || [])[2]?.toLowerCase() || '';
+                      const sufB = (b.name.match(/(\d+)([a-zA-Z]*)$/) || [])[2]?.toLowerCase() || '';
+                      return sufA.localeCompare(sufB);
+                    }).map((court) => (
                       <div key={court.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-center">
                         <p className="font-medium text-sm">{court.name}</p>
                         <Badge variant="outline" className="mt-1 text-[10px]">{court.courtType}</Badge>

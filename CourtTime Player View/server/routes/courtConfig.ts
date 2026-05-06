@@ -7,6 +7,62 @@ import express from 'express';
 import { query } from '../../src/database/connection';
 
 const router = express.Router();
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+
+function getFacilityDayConfig(rawOperatingHours: any, dayOfWeek: number): any {
+  if (!rawOperatingHours || typeof rawOperatingHours !== 'object') return null;
+  const dayName = DAY_NAMES[dayOfWeek];
+  const shortName = dayName.slice(0, 3);
+  const numericKeys = [String(dayOfWeek), dayOfWeek];
+  for (const key of numericKeys) {
+    const byNumber = (rawOperatingHours as any)[key as any];
+    if (byNumber && typeof byNumber === 'object') return byNumber;
+  }
+  const variants = [
+    dayName,
+    dayName.toUpperCase(),
+    dayName[0].toUpperCase() + dayName.slice(1),
+    shortName,
+    shortName.toUpperCase(),
+    shortName[0].toUpperCase() + shortName.slice(1),
+  ];
+
+  for (const key of variants) {
+    if (rawOperatingHours[key] && typeof rawOperatingHours[key] === 'object') {
+      return rawOperatingHours[key];
+    }
+  }
+
+  for (const [key, value] of Object.entries(rawOperatingHours)) {
+    if (!value || typeof value !== 'object') continue;
+    const normalizedKey = String(key).toLowerCase().trim();
+    if (normalizedKey === dayName || normalizedKey.startsWith(shortName)) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function toHHMM(value: any, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim().toUpperCase();
+  const ampmMatch = normalized.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)/);
+  if (ampmMatch) {
+    let h = Number(ampmMatch[1]);
+    const m = Number(ampmMatch[2]);
+    const suffix = ampmMatch[3];
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return fallback;
+    if (suffix === 'PM' && h !== 12) h += 12;
+    if (suffix === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+  const match = normalized.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return fallback;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return fallback;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 
 /**
  * GET /api/court-config/facility/:facilityId
@@ -18,8 +74,6 @@ router.get('/facility/:facilityId', async (req, res, next) => {
     const { date } = req.query;
     const targetDate = typeof date === 'string' ? date : new Date().toISOString().slice(0, 10);
     const dayOfWeek = new Date(`${targetDate}T00:00:00`).getDay();
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayName = dayNames[dayOfWeek];
 
     const courtsResult = await query(
       `SELECT id, name
@@ -35,10 +89,16 @@ router.get('/facility/:facilityId', async (req, res, next) => {
       [facilityId]
     );
     const operatingHours = facilityResult.rows[0]?.operating_hours || {};
-    const facilityDayConfig = operatingHours?.[dayName] || {};
-    const facilityClosed = Boolean(facilityDayConfig?.closed);
-    const facilityOpenTime = facilityDayConfig?.open || '08:00';
-    const facilityCloseTime = facilityDayConfig?.close || '20:00';
+    const facilityDayConfig = getFacilityDayConfig(operatingHours, dayOfWeek) || {};
+    const facilityClosed = Boolean(facilityDayConfig?.closed) || facilityDayConfig?.isOpen === false || facilityDayConfig?.is_open === false;
+    const facilityOpenTime = toHHMM(
+      facilityDayConfig?.open || facilityDayConfig?.openTime || facilityDayConfig?.open_time,
+      '08:00'
+    );
+    const facilityCloseTime = toHHMM(
+      facilityDayConfig?.close || facilityDayConfig?.closeTime || facilityDayConfig?.close_time,
+      '20:00'
+    );
 
     const configResult = await query(
       `SELECT
@@ -74,6 +134,11 @@ router.get('/facility/:facilityId', async (req, res, next) => {
       success: true,
       date: targetDate,
       dayOfWeek,
+      facilityDayHours: {
+        isOpen: !facilityClosed,
+        open: facilityOpenTime,
+        close: facilityCloseTime,
+      },
       courtConfigs,
     });
   } catch (error) {
@@ -599,8 +664,6 @@ router.get('/:courtId/availability', async (req, res, next) => {
 
     // Get day of week
     const dayOfWeek = new Date(date as string).getDay();
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayName = dayNames[dayOfWeek];
 
     // Get operating config
     const configResult = await query(
@@ -617,10 +680,16 @@ router.get('/:courtId/availability', async (req, res, next) => {
       [courtId]
     );
     const operatingHours = facilityResult.rows[0]?.operating_hours || {};
-    const facilityDayConfig = operatingHours?.[dayName] || {};
-    const facilityClosed = Boolean(facilityDayConfig?.closed);
-    const facilityOpenTime = facilityDayConfig?.open || '08:00';
-    const facilityCloseTime = facilityDayConfig?.close || '20:00';
+    const facilityDayConfig = getFacilityDayConfig(operatingHours, dayOfWeek) || {};
+    const facilityClosed = Boolean(facilityDayConfig?.closed) || facilityDayConfig?.isOpen === false || facilityDayConfig?.is_open === false;
+    const facilityOpenTime = toHHMM(
+      facilityDayConfig?.open || facilityDayConfig?.openTime || facilityDayConfig?.open_time,
+      '08:00'
+    );
+    const facilityCloseTime = toHHMM(
+      facilityDayConfig?.close || facilityDayConfig?.closeTime || facilityDayConfig?.close_time,
+      '20:00'
+    );
 
     // Get blackouts for this date
     const blackoutResult = await query(

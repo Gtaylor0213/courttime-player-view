@@ -32,6 +32,7 @@ const DRAG_ARM_DELAY_MS = 180;
 interface Booking {
   id?: string;
   userId?: string;
+  courtId?: string;
   bookingDate?: string;
   startTime: string;
   endTime: string;
@@ -53,15 +54,79 @@ interface FacilityDayHours {
   close: string;
 }
 
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+
+function getFacilityDayConfig(rawOperatingHours: any, dayIndex: number): any {
+  if (!rawOperatingHours || typeof rawOperatingHours !== 'object') return null;
+  const dayName = DAY_NAMES[dayIndex];
+  const shortName = dayName.slice(0, 3);
+  const numericKeys = [String(dayIndex), dayIndex];
+  for (const key of numericKeys) {
+    const byNumber = (rawOperatingHours as any)[key as any];
+    if (byNumber && typeof byNumber === 'object') return byNumber;
+  }
+  const variants = [
+    dayName,
+    dayName.toUpperCase(),
+    dayName[0].toUpperCase() + dayName.slice(1),
+    shortName,
+    shortName.toUpperCase(),
+    shortName[0].toUpperCase() + shortName.slice(1),
+  ];
+
+  for (const key of variants) {
+    if (rawOperatingHours[key] && typeof rawOperatingHours[key] === 'object') {
+      return rawOperatingHours[key];
+    }
+  }
+
+  for (const [key, value] of Object.entries(rawOperatingHours)) {
+    if (typeof value !== 'object' || !value) continue;
+    const normalizedKey = String(key).toLowerCase().trim();
+    if (normalizedKey === dayName || normalizedKey.startsWith(shortName)) {
+      return value;
+    }
+  }
+  return null;
+}
+
 function parseTimeToMinutesSafe(value: string | undefined | null): number | null {
   if (!value || typeof value !== 'string') return null;
   const timePart = value.includes('T') ? value.split('T')[1] || '' : value;
-  const match = timePart.match(/(\d{1,2}):(\d{2})/);
+  const normalized = timePart.trim().toUpperCase();
+  const ampmMatch = normalized.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)/);
+  if (ampmMatch) {
+    let h = Number(ampmMatch[1]);
+    const m = Number(ampmMatch[2]);
+    const suffix = ampmMatch[3];
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    if (suffix === 'PM' && h !== 12) h += 12;
+    if (suffix === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+  }
+  const match = normalized.match(/(\d{1,2}):(\d{2})/);
   if (!match) return null;
   const h = Number(match[1]);
   const m = Number(match[2]);
   if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
   return h * 60 + m;
+}
+
+function normalizeHHMM(value: string | undefined | null, fallback: string): string {
+  const mins = parseTimeToMinutesSafe(value);
+  if (mins === null) return fallback;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function bookingsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  const aS = parseTimeToMinutesSafe(aStart);
+  const aE = parseTimeToMinutesSafe(aEnd);
+  const bS = parseTimeToMinutesSafe(bStart);
+  const bE = parseTimeToMinutesSafe(bEnd);
+  if (aS === null || aE === null || bS === null || bE === null) return false;
+  return aS < bE && bS < aE;
 }
 
 interface DragSelection {
@@ -153,16 +218,18 @@ export function CourtCalendarGrid({
       facilityError: facilityRes.error,
     });
 
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
     const dateObj = new Date(`${selectedDate}T00:00:00`);
-    const dayName = dayNames[dateObj.getDay()];
-    const facility = facilityRes.success ? ((facilityRes.data as any)?.facility || facilityRes.data || null) : null;
-    const dayConfig = facility?.operatingHours?.[dayName];
+    const dayIndex = dateObj.getDay();
+    const facility = facilityRes.success
+      ? ((facilityRes.data as any)?.facility || facilityRes.data || null)
+      : null;
+    const facilityOperatingHours = facility?.operatingHours || facility?.operating_hours || null;
+    const dayConfig = getFacilityDayConfig(facilityOperatingHours, dayIndex);
     if (dayConfig && typeof dayConfig === 'object') {
-      const open = typeof dayConfig.open === 'string' ? dayConfig.open.slice(0, 5) : '08:00';
-      const close = typeof dayConfig.close === 'string' ? dayConfig.close.slice(0, 5) : '20:00';
+      const open = normalizeHHMM(dayConfig.open || dayConfig.openTime || dayConfig.open_time, '08:00');
+      const close = normalizeHHMM(dayConfig.close || dayConfig.closeTime || dayConfig.close_time, '20:00');
       setFacilityDayHours({
-        isOpen: !Boolean(dayConfig.closed),
+        isOpen: !(Boolean(dayConfig.closed) || dayConfig.isOpen === false || dayConfig.is_open === false),
         open,
         close,
       });
@@ -174,19 +241,65 @@ export function CourtCalendarGrid({
       ? (Array.isArray((bookingsRes.data as any)?.bookings) ? (bookingsRes.data as any).bookings : [])
       : [];
     const bookingsByCourtId = new Map<string, Booking[]>();
+    const courtById = new Map<string, any>();
+    courts.forEach((c: any) => courtById.set(c.id, c));
+    const parentToChildren = new Map<string, string[]>();
+    courts.forEach((c: any) => {
+      if (c?.parentCourtId) {
+        const existing = parentToChildren.get(c.parentCourtId) || [];
+        existing.push(c.id);
+        parentToChildren.set(c.parentCourtId, existing);
+      }
+    });
     bookingsList.forEach((b: any) => {
+      const sourceCourtId = b.courtId || b.court_id;
+      if (!sourceCourtId) return;
       const normalized: Booking = {
         id: b.id || b.bookingId,
         userId: b.userId || b.user_id,
+        courtId: sourceCourtId,
         bookingDate: b.bookingDate || b.booking_date || selectedDate,
         startTime: b.startTime || b.start_time || '',
         endTime: b.endTime || b.end_time || '',
         userName: b.userName || b.user_name || '',
         bookingType: b.bookingType || b.booking_type || '',
       };
-      const existing = bookingsByCourtId.get(b.courtId) || [];
+      const existing = bookingsByCourtId.get(sourceCourtId) || [];
       existing.push(normalized);
-      bookingsByCourtId.set(b.courtId, existing);
+      bookingsByCourtId.set(sourceCourtId, existing);
+
+      // Mirror web behavior for split courts:
+      // - booking parent blocks all children
+      // - booking child blocks parent + siblings
+      const sourceCourt = courtById.get(sourceCourtId);
+      const relatedCourtIds = new Set<string>();
+      const children = parentToChildren.get(sourceCourtId) || [];
+      children.forEach((id) => relatedCourtIds.add(id));
+      if (sourceCourt?.parentCourtId) {
+        relatedCourtIds.add(sourceCourt.parentCourtId);
+        const siblings = parentToChildren.get(sourceCourt.parentCourtId) || [];
+        siblings.forEach((id) => {
+          if (id !== sourceCourtId) relatedCourtIds.add(id);
+        });
+      }
+
+      for (const relatedCourtId of relatedCourtIds) {
+        const existingRelated = bookingsByCourtId.get(relatedCourtId) || [];
+        const conflictAlreadyPresent = existingRelated.some((rb) =>
+          bookingsOverlap(rb.startTime, rb.endTime, normalized.startTime, normalized.endTime)
+        );
+        if (conflictAlreadyPresent) continue;
+        existingRelated.push({
+          id: `${normalized.id || 'booking'}-blocked-${relatedCourtId}`,
+          courtId: relatedCourtId,
+          bookingDate: normalized.bookingDate,
+          startTime: normalized.startTime,
+          endTime: normalized.endTime,
+          userName: `Blocked (${sourceCourt?.name || 'Related court'})`,
+          bookingType: 'blocked',
+        });
+        bookingsByCourtId.set(relatedCourtId, existingRelated);
+      }
     });
 
     const configList = configRes.success
@@ -640,6 +753,7 @@ export function CourtCalendarGrid({
                       {/* Court cells */}
                       {renderPageCourts.map((court, courtIndex) => {
                         const booked = isBooked(renderPageIndex, courtIndex, rowIndex);
+                        const isBlockedSlot = booked?.bookingType === 'blocked';
                         const selected = isSelected(renderPageIndex, courtIndex, rowIndex);
                         const bookingStart = isBookingStart(renderPageIndex, courtIndex, rowIndex);
                         const span = bookingStart ? getBookingRowSpan(renderPageIndex, courtIndex, rowIndex, bookingStart) : 0;
@@ -653,6 +767,7 @@ export function CourtCalendarGrid({
                               courtIndex > 0 && styles.courtColumnDividerLeft,
                               past && styles.cellPast,
                               booked && styles.cellBooked,
+                              isBlockedSlot && styles.cellBlocked,
                               selected && styles.cellSelected,
                               selected && dragSelection && selectionHasConflict(dragSelection) && styles.cellConflict,
                             ]}
@@ -670,6 +785,7 @@ export function CourtCalendarGrid({
                             }}
                             onTouchEnd={() => {
                               if (booked) {
+                                if (booked.bookingType === 'blocked') return;
                                 onBookedSlotPress?.(court, booked);
                                 return;
                               }
@@ -731,12 +847,16 @@ export function CourtCalendarGrid({
                           >
                             {bookingStart && (
                               <View
-                                style={[styles.bookingBlock, { height: span * ROW_HEIGHT - 2 }]}
+                                style={[
+                                  styles.bookingBlock,
+                                  bookingStart.bookingType === 'blocked' && styles.bookingBlockBlocked,
+                                  { height: span * ROW_HEIGHT - 2 },
+                                ]}
                                 accessibilityRole="button"
                                 accessibilityLabel={`View booking details on ${court.name}`}
                               >
                                 <Text style={styles.bookingBlockText} numberOfLines={1}>
-                                  {bookingStart.bookingType || 'Booked'}
+                                  {bookingStart.bookingType === 'blocked' ? 'Blocked' : (bookingStart.bookingType || 'Booked')}
                                 </Text>
                                 <Text style={styles.bookingBlockTime} numberOfLines={1}>
                                   {formatFullTime(bookingStart.startTime)} - {formatFullTime(bookingStart.endTime)}
@@ -929,6 +1049,9 @@ const styles = StyleSheet.create({
   cellBooked: {
     backgroundColor: 'transparent',
   },
+  cellBlocked: {
+    backgroundColor: '#E5E7EB',
+  },
   cellSelected: {
     backgroundColor: Colors.primary + '25',
   },
@@ -949,6 +1072,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 2,
     overflow: 'hidden',
+  },
+  bookingBlockBlocked: {
+    backgroundColor: '#E5E7EB',
+    borderLeftColor: '#6B7280',
   },
   bookingBlockText: {
     fontSize: 10,

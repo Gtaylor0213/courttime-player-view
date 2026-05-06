@@ -263,10 +263,9 @@ export const usersApi = {
     });
   },
 
-  deleteAccount: async (id: string) => {
-    return apiRequest(`/api/users/${id}`, {
+  deleteAccount: async () => {
+    return apiRequest('/api/users/me', {
       method: 'DELETE',
-      body: JSON.stringify({ requestingUserId: id }),
     });
   },
 };

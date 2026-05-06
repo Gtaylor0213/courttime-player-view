@@ -11,6 +11,8 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
+  InteractionManager,
+  TouchableOpacity,
 } from 'react-native';
 import { api } from '../api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
@@ -255,27 +257,6 @@ export function CourtCalendarGrid({
     return stopPolling;
   }, [fetchAvailability]);
 
-  // Auto-scroll to current time when data loads
-  useEffect(() => {
-    if (loading || courtData.length === 0 || !scrollRef.current) return;
-
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    if (selectedDate !== today) return;
-
-    const openCandidates = openCourtData
-      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.open))
-      .filter((v): v is number => v !== null);
-    const firstMinutes = openCandidates.length > 0 ? Math.min(...openCandidates) : 8 * 60;
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const rowIndex = Math.max(0, Math.floor((nowMinutes - firstMinutes) / slotStepMinutes) - 1);
-    const scrollY = rowIndex * ROW_HEIGHT;
-
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: scrollY, animated: true });
-    }, 500);
-  }, [loading, selectedDate, slotStepMinutes, openCourtData]);
-
   // Generate time rows from operating hours
   const getTimeRows = (): string[] => {
     if (facilityDayHours && !facilityDayHours.isOpen) return [];
@@ -337,6 +318,21 @@ export function CourtCalendarGrid({
     return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
   };
 
+  const currentTimeIndicatorY = useMemo(() => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (selectedDate !== today || timeRows.length === 0) return null;
+    const firstRowMinutes = parseTimeToMinutesSafe(timeRows[0]);
+    if (firstRowMinutes === null) return null;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const deltaMinutes = nowMinutes - firstRowMinutes;
+    if (deltaMinutes < 0) return null;
+    const y = (deltaMinutes / slotStepMinutes) * ROW_HEIGHT;
+    const maxY = Math.max(0, timeRows.length * ROW_HEIGHT - 1);
+    if (y > maxY) return null;
+    return y;
+  }, [selectedDate, timeRows, slotStepMinutes]);
+
   // Check if a time row is booked for a court
   const isBooked = (targetPageIndex: number, courtIndex: number, rowIndex: number): Booking | null => {
     const globalCourtIndex = targetPageIndex * COURTS_PER_PAGE + courtIndex;
@@ -370,6 +366,26 @@ export function CourtCalendarGrid({
     const m = rowMinutes % 60;
     return h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
   };
+
+  const scrollToCurrentTime = useCallback(() => {
+    if (loading || !scrollRef.current) return;
+    if (timeRows.length === 0) return;
+    const firstFutureRowIndex = timeRows.findIndex((_, rowIndex) => !isPast(rowIndex));
+    const targetRowIndex = firstFutureRowIndex >= 0 ? Math.max(0, firstFutureRowIndex - 1) : 0;
+    const scrollY = targetRowIndex * ROW_HEIGHT;
+    scrollRef.current.scrollTo({ y: scrollY, animated: false });
+  }, [loading, selectedDate, timeRows, isPast]);
+
+  useEffect(() => {
+    if (loading) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        scrollToCurrentTime();
+        setTimeout(scrollToCurrentTime, 140);
+      });
+    });
+    return () => task.cancel();
+  }, [loading, scrollToCurrentTime, timeRows.length, pageIndex, selectedDate]);
 
   // Get the row end time (next slot or closing)
   const getRowEndTime = (rowIndex: number): string => {
@@ -526,21 +542,26 @@ export function CourtCalendarGrid({
   return (
     <View style={styles.container}>
       {/* Page indicator */}
-      {totalPages > 1 && (
-        <View style={styles.pageIndicator}>
-          <Text style={styles.pageText}>
-            Courts {pageIndex * COURTS_PER_PAGE + 1}-{Math.min((pageIndex + 1) * COURTS_PER_PAGE, courts.length)} of {courts.length}
-          </Text>
-          <View style={styles.pageDots}>
-            {Array.from({ length: totalPages }).map((_, i) => (
-              <View
-                key={i}
-                style={[styles.dot, i === pageIndex && styles.dotActive]}
-              />
-            ))}
-          </View>
+      <View style={styles.pageIndicator}>
+        <Text style={styles.pageText}>
+          Courts {pageIndex * COURTS_PER_PAGE + 1}-{Math.min((pageIndex + 1) * COURTS_PER_PAGE, courts.length)} of {courts.length}
+        </Text>
+        <View style={styles.pageIndicatorRight}>
+          <TouchableOpacity style={styles.nowButton} onPress={scrollToCurrentTime}>
+            <Text style={styles.nowButtonText}>Now</Text>
+          </TouchableOpacity>
+          {totalPages > 1 && (
+            <View style={styles.pageDots}>
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.dot, i === pageIndex && styles.dotActive]}
+                />
+              ))}
+            </View>
+          )}
         </View>
-      )}
+      </View>
 
       {/* Court headers (sticky) */}
       <View style={styles.headerRow}>
@@ -578,6 +599,7 @@ export function CourtCalendarGrid({
         ref={scrollRef}
         style={[styles.gridScroll, { minHeight: gridScrollMinHeight }]}
         showsVerticalScrollIndicator={false}
+        onContentSizeChange={scrollToCurrentTime}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
         nestedScrollEnabled
@@ -602,7 +624,7 @@ export function CourtCalendarGrid({
             );
 
             return (
-              <View key={`page-${renderPageIndex}`} style={{ width: SCREEN_WIDTH }}>
+              <View key={`page-${renderPageIndex}`} style={styles.pageContent}>
                 {timeRows.map((time, rowIndex) => {
                   const past = isPast(rowIndex);
 
@@ -744,6 +766,12 @@ export function CourtCalendarGrid({
                     </View>
                   );
                 })}
+                {currentTimeIndicatorY !== null && (
+                  <View pointerEvents="none" style={[styles.currentTimeLineWrap, { top: currentTimeIndicatorY }]}>
+                    <View style={styles.currentTimeDot} />
+                    <View style={styles.currentTimeLine} />
+                  </View>
+                )}
               </View>
             );
           })}
@@ -797,9 +825,27 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '600',
   },
+  pageIndicatorRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
   pageDots: {
     flexDirection: 'row',
     gap: 6,
+  },
+  nowButton: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    backgroundColor: '#FEE2E2',
+  },
+  nowButtonText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: '#DC2626',
   },
   dot: {
     width: 8,
@@ -940,5 +986,31 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  pageContent: {
+    width: SCREEN_WIDTH,
+    position: 'relative',
+  },
+  currentTimeLineWrap: {
+    position: 'absolute',
+    left: TIME_LABEL_WIDTH,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 5,
+    elevation: 5,
+  },
+  currentTimeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DC2626',
+    marginLeft: 2,
+    marginRight: 4,
+  },
+  currentTimeLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#DC2626',
   },
 });

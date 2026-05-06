@@ -45,6 +45,12 @@ interface CourtAvailability {
   bookings: Booking[];
 }
 
+interface FacilityDayHours {
+  isOpen: boolean;
+  open: string;
+  close: string;
+}
+
 function parseTimeToMinutesSafe(value: string | undefined | null): number | null {
   if (!value || typeof value !== 'string') return null;
   const timePart = value.includes('T') ? value.split('T')[1] || '' : value;
@@ -89,6 +95,7 @@ export function CourtCalendarGrid({
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
   /** Disables inner + parent scroll while a cell gesture is active (refs alone do not re-render scrollEnabled). */
   const [touchCaptureActive, setTouchCaptureActive] = useState(false);
+  const [facilityDayHours, setFacilityDayHours] = useState<FacilityDayHours | null>(null);
   /** Same payload as dragSelection, updated synchronously — RN can fire parent onTouchEnd before state from onTouchStart commits. */
   const dragSelectionRef = useRef<DragSelection | null>(null);
   const dragStartRef = useRef<{ pageX: number; pageY: number; startRow: number } | null>(null);
@@ -103,6 +110,7 @@ export function CourtCalendarGrid({
 
   const totalPages = Math.ceil(courts.length / COURTS_PER_PAGE);
   const pageCourts = courts.slice(pageIndex * COURTS_PER_PAGE, (pageIndex + 1) * COURTS_PER_PAGE);
+  const openCourtData = useMemo(() => courtData.filter((d) => d.isOpen), [courtData]);
   /** Fixed gutters between court columns so borders do not shrink column width math */
   const COURT_COLUMN_GUTTER = Spacing.xs;
   const courtTrackWidth = SCREEN_WIDTH - TIME_LABEL_WIDTH;
@@ -125,9 +133,10 @@ export function CourtCalendarGrid({
       courtCount: courts.length,
     });
 
-    const [bookingsRes, configRes] = await Promise.all([
+    const [bookingsRes, configRes, facilityRes] = await Promise.all([
       api.get(`/api/bookings/facility/${facilityId}?date=${selectedDate}`),
       api.get(`/api/court-config/facility/${facilityId}?date=${selectedDate}`),
+      api.get(`/api/facilities/${facilityId}`),
     ]);
 
     console.log('[book-grid] day endpoints response', {
@@ -137,7 +146,27 @@ export function CourtCalendarGrid({
       configSuccess: configRes.success,
       configErrorCategory: configRes.errorCategory,
       configError: configRes.error,
+      facilitySuccess: facilityRes.success,
+      facilityErrorCategory: facilityRes.errorCategory,
+      facilityError: facilityRes.error,
     });
+
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+    const dateObj = new Date(`${selectedDate}T00:00:00`);
+    const dayName = dayNames[dateObj.getDay()];
+    const facility = facilityRes.success ? ((facilityRes.data as any)?.facility || facilityRes.data || null) : null;
+    const dayConfig = facility?.operatingHours?.[dayName];
+    if (dayConfig && typeof dayConfig === 'object') {
+      const open = typeof dayConfig.open === 'string' ? dayConfig.open.slice(0, 5) : '08:00';
+      const close = typeof dayConfig.close === 'string' ? dayConfig.close.slice(0, 5) : '20:00';
+      setFacilityDayHours({
+        isOpen: !Boolean(dayConfig.closed),
+        open,
+        close,
+      });
+    } else {
+      setFacilityDayHours(null);
+    }
 
     const bookingsList = bookingsRes.success
       ? (Array.isArray((bookingsRes.data as any)?.bookings) ? (bookingsRes.data as any).bookings : [])
@@ -163,6 +192,21 @@ export function CourtCalendarGrid({
       : [];
     const configByCourtId = new Map<string, any>();
     configList.forEach((cfg: any) => configByCourtId.set(cfg.courtId, cfg));
+    const openConfigList = configList.filter((cfg: any) => Boolean(cfg?.isOpen));
+    const openFacilityStartMinutes = openConfigList
+      .map((cfg: any) => parseTimeToMinutesSafe(cfg?.openTime))
+      .filter((v: number | null): v is number => v !== null);
+    const openFacilityEndMinutes = openConfigList
+      .map((cfg: any) => parseTimeToMinutesSafe(cfg?.closeTime))
+      .filter((v: number | null): v is number => v !== null);
+    const facilityOpenTime =
+      openFacilityStartMinutes.length > 0
+        ? `${String(Math.floor(Math.min(...openFacilityStartMinutes) / 60)).padStart(2, '0')}:${String(Math.min(...openFacilityStartMinutes) % 60).padStart(2, '0')}`
+        : '06:00';
+    const facilityCloseTime =
+      openFacilityEndMinutes.length > 0
+        ? `${String(Math.floor(Math.max(...openFacilityEndMinutes) / 60)).padStart(2, '0')}:${String(Math.max(...openFacilityEndMinutes) % 60).padStart(2, '0')}`
+        : '22:00';
 
     let step = DEFAULT_SLOT_MINUTES;
     for (const cfg of configList) {
@@ -177,13 +221,14 @@ export function CourtCalendarGrid({
 
     const results = courts.map((court) => {
       const config = configByCourtId.get(court.id);
+      const isOpen = config ? Boolean(config.isOpen) : openConfigList.length > 0;
       return {
         courtId: court.id,
         courtName: court.name,
-        isOpen: config ? Boolean(config.isOpen) : true,
+        isOpen,
         operatingHours: {
-          open: config?.openTime || '06:00',
-          close: config?.closeTime || '22:00',
+          open: config?.openTime || facilityOpenTime,
+          close: config?.closeTime || facilityCloseTime,
         },
         bookings: bookingsByCourtId.get(court.id) || [],
       };
@@ -218,7 +263,7 @@ export function CourtCalendarGrid({
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (selectedDate !== today) return;
 
-    const openCandidates = courtData
+    const openCandidates = openCourtData
       .map((d) => parseTimeToMinutesSafe(d.operatingHours?.open))
       .filter((v): v is number => v !== null);
     const firstMinutes = openCandidates.length > 0 ? Math.min(...openCandidates) : 8 * 60;
@@ -229,17 +274,31 @@ export function CourtCalendarGrid({
     setTimeout(() => {
       scrollRef.current?.scrollTo({ y: scrollY, animated: true });
     }, 500);
-  }, [loading, selectedDate, slotStepMinutes]);
+  }, [loading, selectedDate, slotStepMinutes, openCourtData]);
 
   // Generate time rows from operating hours
   const getTimeRows = (): string[] => {
-    if (courtData.length === 0) return [];
-    const openCandidates = courtData
+    if (facilityDayHours && !facilityDayHours.isOpen) return [];
+    if (openCourtData.length === 0 && !facilityDayHours) return [];
+    if (facilityDayHours) {
+      const openMinutes = parseTimeToMinutesSafe(facilityDayHours.open);
+      const closeMinutes = parseTimeToMinutesSafe(facilityDayHours.close);
+      if (openMinutes === null || closeMinutes === null || closeMinutes <= openMinutes) return [];
+      const rows: string[] = [];
+      let minutes = openMinutes;
+      while (minutes < closeMinutes) {
+        rows.push(`${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`);
+        minutes += slotStepMinutes;
+      }
+      return rows;
+    }
+    const openCandidates = openCourtData
       .map((d) => parseTimeToMinutesSafe(d.operatingHours?.open))
       .filter((v): v is number => v !== null);
-    const closeCandidates = courtData
+    const closeCandidates = openCourtData
       .map((d) => parseTimeToMinutesSafe(d.operatingHours?.close))
       .filter((v): v is number => v !== null);
+    if (openCandidates.length === 0 || closeCandidates.length === 0) return [];
     const openMinutes = openCandidates.length > 0 ? Math.min(...openCandidates) : 8 * 60;
     const closeMinutes = closeCandidates.length > 0 ? Math.max(...closeCandidates) : 21 * 60;
     const openH = Math.floor(openMinutes / 60);
@@ -315,7 +374,8 @@ export function CourtCalendarGrid({
   // Get the row end time (next slot or closing)
   const getRowEndTime = (rowIndex: number): string => {
     if (rowIndex + 1 < timeRows.length) return timeRows[rowIndex + 1];
-    const closeCandidates = courtData
+    if (facilityDayHours?.close) return facilityDayHours.close;
+    const closeCandidates = openCourtData
       .map((d) => parseTimeToMinutesSafe(d.operatingHours?.close))
       .filter((v): v is number => v !== null);
     const closeMinutes = closeCandidates.length > 0 ? Math.max(...closeCandidates) : 21 * 60;
@@ -451,6 +511,14 @@ export function CourtCalendarGrid({
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>No courts available</Text>
+      </View>
+    );
+  }
+
+  if (timeRows.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Facility is closed on this date</Text>
       </View>
     );
   }

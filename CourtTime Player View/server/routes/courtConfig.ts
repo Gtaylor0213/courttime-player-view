@@ -18,6 +18,8 @@ router.get('/facility/:facilityId', async (req, res, next) => {
     const { date } = req.query;
     const targetDate = typeof date === 'string' ? date : new Date().toISOString().slice(0, 10);
     const dayOfWeek = new Date(`${targetDate}T00:00:00`).getDay();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayName = dayNames[dayOfWeek];
 
     const courtsResult = await query(
       `SELECT id, name
@@ -25,6 +27,18 @@ router.get('/facility/:facilityId', async (req, res, next) => {
        WHERE facility_id = $1`,
       [facilityId]
     );
+    const facilityResult = await query(
+      `SELECT operating_hours
+       FROM facilities
+       WHERE id = $1
+       LIMIT 1`,
+      [facilityId]
+    );
+    const operatingHours = facilityResult.rows[0]?.operating_hours || {};
+    const facilityDayConfig = operatingHours?.[dayName] || {};
+    const facilityClosed = Boolean(facilityDayConfig?.closed);
+    const facilityOpenTime = facilityDayConfig?.open || '08:00';
+    const facilityCloseTime = facilityDayConfig?.close || '20:00';
 
     const configResult = await query(
       `SELECT
@@ -49,9 +63,9 @@ router.get('/facility/:facilityId', async (req, res, next) => {
       return {
         courtId: court.id,
         courtName: court.name,
-        isOpen: config?.isOpen ?? true,
-        openTime: config?.openTime || '06:00',
-        closeTime: config?.closeTime || '22:00',
+        isOpen: config?.isOpen ?? !facilityClosed,
+        openTime: config?.openTime || facilityOpenTime,
+        closeTime: config?.closeTime || facilityCloseTime,
         slotDuration: config?.slotDuration || 30,
       };
     });
@@ -585,6 +599,8 @@ router.get('/:courtId/availability', async (req, res, next) => {
 
     // Get day of week
     const dayOfWeek = new Date(date as string).getDay();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayName = dayNames[dayOfWeek];
 
     // Get operating config
     const configResult = await query(
@@ -592,6 +608,19 @@ router.get('/:courtId/availability', async (req, res, next) => {
        WHERE court_id = $1 AND day_of_week = $2`,
       [courtId, dayOfWeek]
     );
+    const facilityResult = await query(
+      `SELECT f.operating_hours
+       FROM courts c
+       JOIN facilities f ON c.facility_id = f.id
+       WHERE c.id = $1
+       LIMIT 1`,
+      [courtId]
+    );
+    const operatingHours = facilityResult.rows[0]?.operating_hours || {};
+    const facilityDayConfig = operatingHours?.[dayName] || {};
+    const facilityClosed = Boolean(facilityDayConfig?.closed);
+    const facilityOpenTime = facilityDayConfig?.open || '08:00';
+    const facilityCloseTime = facilityDayConfig?.close || '20:00';
 
     // Get blackouts for this date
     const blackoutResult = await query(
@@ -610,9 +639,9 @@ router.get('/:courtId/availability', async (req, res, next) => {
     );
 
     const config = configResult.rows[0] || {
-      is_open: true,
-      open_time: '06:00',
-      close_time: '22:00',
+      is_open: !facilityClosed,
+      open_time: facilityOpenTime,
+      close_time: facilityCloseTime,
       slot_duration: 30
     };
 

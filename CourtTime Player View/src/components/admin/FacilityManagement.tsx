@@ -1324,6 +1324,61 @@ export function FacilityManagement() {
       ruleConfig?: Record<string, any>;
     }> = [];
     try {
+      // Sync all metadata-mapped rule cards so admin edits are enforced by the rules engine.
+      // Peak-hours aggregate rules are handled separately below to preserve existing behavior.
+      const skippedCodes = new Set(['ACC-010', 'CRT-001', 'CRT-002']);
+      const mappedCodes = Object.keys(RULE_STATE_MAP).filter((code) => !skippedCodes.has(code));
+
+      for (const code of mappedCodes) {
+        const map = RULE_STATE_MAP[code];
+        if (!map) continue;
+
+        const enabledRaw = getNestedValue(rules, map.enabledField);
+        const isEnabled = map.invertEnabled ? !enabledRaw : !!enabledRaw;
+        const ruleConfig: Record<string, any> = {};
+
+        for (const [configKey, fieldInfo] of Object.entries(map.configMap)) {
+          const rawValue = getNestedValue(rules, fieldInfo.field);
+          if (rawValue === undefined || rawValue === null || rawValue === '') continue;
+          const numericValue = Number(rawValue);
+          const normalizedValue = fieldInfo.toDb
+            ? fieldInfo.toDb(Number.isFinite(numericValue) ? numericValue : 0)
+            : rawValue;
+          ruleConfig[configKey] = normalizedValue;
+        }
+
+        // Preserve expected default fields for common rules when values are missing.
+        if (code === 'ACC-002') {
+          if (ruleConfig.max_per_week === undefined) {
+            ruleConfig.max_per_week = parseInt(rules.maxBookingsPerWeek, 10) || 1;
+          }
+          if (ruleConfig.window_type === undefined) {
+            ruleConfig.window_type = 'calendar_week';
+          }
+          if (ruleConfig.include_canceled === undefined) {
+            ruleConfig.include_canceled = false;
+          }
+        }
+        if (code === 'ACC-003' && ruleConfig.window_type === undefined) {
+          ruleConfig.window_type = 'calendar_week';
+        }
+        if (code === 'ACC-010' && ruleConfig.window_type === undefined) {
+          ruleConfig.window_type = 'calendar_week';
+        }
+        if (code === 'CRT-008' && ruleConfig.allowed_types === undefined) {
+          ruleConfig.allowed_types = Array.isArray(rules.allowedBookingTypes) ? rules.allowedBookingTypes : [];
+        }
+        if (code === 'CRT-010' && ruleConfig.window_type === undefined) {
+          ruleConfig.window_type = 'calendar_week';
+        }
+
+        ruleConfigs.push({
+          ruleCode: code,
+          isEnabled,
+          ruleConfig,
+        });
+      }
+
       // Preserve existing Peak Hours Policy behavior.
       if (rules.hasPeakHours) {
         const peakWindows = rules.peakHoursSlots.map((slot) => ({
@@ -1432,6 +1487,73 @@ export function FacilityManagement() {
             };
             if (crt002.effectiveConfig?.max_minutes_prime) {
               updated.bookingRules.peakHoursRestrictions.maxDurationHours = String(crt002.effectiveConfig.max_minutes_prime / 60);
+            }
+          }
+
+          const acc002 = ruleMap.get('ACC-002') as any;
+          if (acc002) {
+            updated.bookingRules.maxBookingsPerWeekUnlimited = !acc002.isEnabled;
+            if (acc002.effectiveConfig?.max_per_week !== undefined) {
+              updated.bookingRules.maxBookingsPerWeek = String(acc002.effectiveConfig.max_per_week);
+            }
+          }
+
+          const acc005 = ruleMap.get('ACC-005') as any;
+          if (acc005) {
+            updated.bookingRules.advanceBookingDaysUnlimited = !acc005.isEnabled;
+            if (acc005.effectiveConfig?.max_days_ahead !== undefined) {
+              updated.bookingRules.advanceBookingDays = String(acc005.effectiveConfig.max_days_ahead);
+            }
+          }
+
+          const acc008 = ruleMap.get('ACC-008') as any;
+          if (acc008) {
+            updated.bookingRules.cancellationNoticeUnlimited = !acc008.isEnabled;
+            if (acc008.effectiveConfig?.late_cancel_cutoff_minutes !== undefined) {
+              updated.bookingRules.cancellationNoticeHours = String(acc008.effectiveConfig.late_cancel_cutoff_minutes / 60);
+            }
+          }
+
+          const crt005 = ruleMap.get('CRT-005') as any;
+          if (crt005) {
+            updated.bookingRules.maxBookingDurationUnlimited = !crt005.isEnabled;
+            if (crt005.effectiveConfig?.max_duration_minutes !== undefined) {
+              updated.bookingRules.maxBookingDurationHours = String(crt005.effectiveConfig.max_duration_minutes / 60);
+            }
+          }
+
+          // Overlay all metadata-driven rules so edited values stay consistent with engine state.
+          const skippedCodes = new Set(['ACC-010', 'CRT-001', 'CRT-002']);
+          for (const [code, map] of Object.entries(RULE_STATE_MAP)) {
+            if (skippedCodes.has(code)) continue;
+            const effective = ruleMap.get(code) as any;
+            if (!effective) continue;
+
+            const enabledValue = map.invertEnabled ? !effective.isEnabled : !!effective.isEnabled;
+            if (map.enabledField.includes('.')) {
+              const [parent, child] = map.enabledField.split('.');
+              (updated.bookingRules as any)[parent] = {
+                ...(updated.bookingRules as any)[parent],
+                [child]: enabledValue,
+              };
+            } else {
+              (updated.bookingRules as any)[map.enabledField] = enabledValue;
+            }
+
+            for (const [configKey, fieldInfo] of Object.entries(map.configMap)) {
+              if (effective.effectiveConfig?.[configKey] === undefined) continue;
+              const raw = effective.effectiveConfig[configKey];
+              const mappedValue = fieldInfo.fromDb ? fieldInfo.fromDb(raw) : raw;
+              const normalized = String(mappedValue);
+              if (fieldInfo.field.includes('.')) {
+                const [parent, child] = fieldInfo.field.split('.');
+                (updated.bookingRules as any)[parent] = {
+                  ...(updated.bookingRules as any)[parent],
+                  [child]: normalized,
+                };
+              } else {
+                (updated.bookingRules as any)[fieldInfo.field] = normalized;
+              }
             }
           }
 

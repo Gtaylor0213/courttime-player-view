@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { facilitiesApi, playerProfileApi, facilityLocationsApi } from '../api/client';
+import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -162,7 +163,7 @@ export function ClubInfo() {
           const activeCourts = courtsResponse.data.courts.filter(
             (court: any) => court.status === 'active' || court.status === 'available' || !court.status
           );
-          setFacility(prev => prev ? { ...prev, courts: activeCourts } : null);
+          setFacility(prev => prev ? { ...prev, courts: sortCourtsForDisplay(activeCourts) } : null);
         }
       }
     } catch (error) {
@@ -536,16 +537,7 @@ export function ClubInfo() {
               <CardContent>
                 {facility.courts && facility.courts.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {[...facility.courts].sort((a, b) => {
-                      const typeOrder: Record<string, number> = { Tennis: 0, Pickleball: 1, 'Dual Purpose': 2 };
-                      const tA = typeOrder[a.courtType] ?? 3;
-                      const tB = typeOrder[b.courtType] ?? 3;
-                      if (tA !== tB) return tA - tB;
-                      if (a.courtNumber !== b.courtNumber) return a.courtNumber - b.courtNumber;
-                      const sufA = (a.name.match(/(\d+)([a-zA-Z]*)$/) || [])[2]?.toLowerCase() || '';
-                      const sufB = (b.name.match(/(\d+)([a-zA-Z]*)$/) || [])[2]?.toLowerCase() || '';
-                      return sufA.localeCompare(sufB);
-                    }).map((court) => (
+                    {facility.courts.map((court) => (
                       <div key={court.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-center">
                         <p className="font-medium text-sm">{court.name}</p>
                         <Badge variant="outline" className="mt-1 text-[10px]">{court.courtType}</Badge>

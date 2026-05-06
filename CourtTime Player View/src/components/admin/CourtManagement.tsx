@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { facilitiesApi, adminApi, courtConfigApi } from '../../api/client';
 import { toast } from 'sonner';
+import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
 
 interface Court {
   id: string;
@@ -402,33 +403,7 @@ export function CourtManagement() {
     }
   };
 
-  // --- Court Sorting ---
-  // Order: Tennis courts first, then Pickleball, then Dual Purpose.
-  // Within each type, sort by court number. Split courts (e.g. 7a, 7b) sort
-  // immediately after their parent by parsing the numeric prefix of the name.
-
-  const courtTypeOrder: Record<string, number> = {
-    'Tennis': 0,
-    'Pickleball': 1,
-    'Dual Purpose': 2,
-  };
-
-  const parseSortKey = (court: Court): [number, number, string] => {
-    const typeRank = courtTypeOrder[court.courtType] ?? 3;
-    // Use courtNumber as primary numeric key, then parse any alphabetic suffix
-    // from the court name (e.g. "Court 7a" → suffix "a") for split court ordering.
-    const nameMatch = court.name.match(/(\d+)([a-zA-Z]*)$/);
-    const nameSuffix = nameMatch ? nameMatch[2].toLowerCase() : '';
-    return [typeRank, court.courtNumber, nameSuffix];
-  };
-
-  const sortedActiveCourts = [...activeCourts].sort((a, b) => {
-    const [typeA, numA, suffA] = parseSortKey(a);
-    const [typeB, numB, suffB] = parseSortKey(b);
-    if (typeA !== typeB) return typeA - typeB;
-    if (numA !== numB) return numA - numB;
-    return suffA.localeCompare(suffB);
-  });
+  const sortedActiveCourts = sortCourtsForDisplay(activeCourts);
 
   // --- Helpers ---
 

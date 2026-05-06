@@ -1,4 +1,5 @@
 import { query } from '../database/connection';
+import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import * as bcrypt from 'bcrypt';
 
 const SALT_ROUNDS = 10;
@@ -368,10 +369,10 @@ export async function toggleMemberAdmin(
 
 export async function getFacilityCourts(facilityId: string): Promise<any[]> {
   const result = await query(
-    'SELECT * FROM courts WHERE facility_id = $1 ORDER BY name',
+    'SELECT * FROM courts WHERE facility_id = $1',
     [facilityId]
   );
-  return result.rows;
+  return sortCourtsForDisplay(result.rows);
 }
 
 export async function updateCourt(courtId: string, data: Record<string, any>): Promise<any> {

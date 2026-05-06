@@ -1,4 +1,5 @@
 import { query, transaction } from '../database/connection';
+import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { Facility, Court } from '../types/database';
 import type { PoolClient } from 'pg';
 import { recordPayment } from './paymentService';
@@ -334,10 +335,9 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
         updated_at as "updatedAt"
       FROM courts
       WHERE facility_id = $1
-      ORDER BY court_number
     `, [facilityId]);
 
-    return result.rows;
+    return sortCourtsForDisplay(result.rows);
   } catch (error) {
     console.error('Get facility courts error:', error);
     return [];

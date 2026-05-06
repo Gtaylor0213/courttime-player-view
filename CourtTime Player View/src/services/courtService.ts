@@ -4,6 +4,7 @@
  */
 
 import { query, transaction } from '../database/connection';
+import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import type { PoolClient } from 'pg';
 
 export interface CourtCreateData {
@@ -286,12 +287,11 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"
      FROM courts
-     WHERE facility_id = $1 AND status != 'closed'
-     ORDER BY court_number, name`,
+     WHERE facility_id = $1 AND status != 'closed'`,
     [facilityId]
   );
 
-  return result.rows;
+  return sortCourtsForDisplay(result.rows);
 }
 
 /**

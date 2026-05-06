@@ -5,16 +5,13 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Switch } from '../ui/switch';
 import {
-  Info, ShieldCheck, Clock, Calendar, Home, Settings, Sun, Zap
+  Info, ShieldCheck, Clock, Calendar, Sun, Users
 } from 'lucide-react';
 import {
   RulesConfig,
   RuleEntry,
   RuleMeta,
   RULE_METADATA,
-  CATEGORIES,
-  getRulesByCategory,
-  PeakHourSlot,
 } from './rule-defaults';
 
 interface RulesStepProps {
@@ -130,37 +127,8 @@ export function RulesStep({
   errors,
 }: RulesStepProps) {
   const { rules } = rulesConfig;
-
-  const renderRuleCategory = (
-    category: 'account' | 'cancellation' | 'court' | 'household',
-    icon: React.ElementType
-  ) => {
-    const categoryInfo = CATEGORIES[category];
-    const categoryRules = getRulesByCategory(category);
-
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            {React.createElement(icon, { className: 'h-5 w-5' })}
-            {categoryInfo.title}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <InstructionCard icon={Info} text={categoryInfo.instruction} />
-          {categoryRules.map((meta) => (
-            <RuleCard
-              key={meta.code}
-              meta={meta}
-              entry={rules[meta.code] || { enabled: false, config: {} }}
-              onToggle={(enabled) => onRuleEntryChange(meta.code, { enabled })}
-              onConfigChange={(field, value) => onRuleConfigFieldChange(meta.code, field, value)}
-            />
-          ))}
-        </CardContent>
-      </Card>
-    );
-  };
+  const daysInAdvanceMeta = RULE_METADATA.find((meta) => meta.code === 'ACC-005');
+  const cancellationPolicyMeta = RULE_METADATA.find((meta) => meta.code === 'ACC-008');
 
   return (
     <div className="space-y-6">
@@ -225,35 +193,180 @@ export function RulesStep({
         </CardContent>
       </Card>
 
-      {/* Category 2: Account Booking Rules */}
-      {renderRuleCategory('account', Calendar)}
-
-      {/* Category 3: Cancellation & No-Show Rules */}
-      {renderRuleCategory('cancellation', Clock)}
-
-      {/* Category 4: Court Scheduling Rules */}
-      {renderRuleCategory('court', Settings)}
-
-      {/* Category 5: Household Rules (only when address-based) */}
-      {rulesConfig.restrictionType === 'address' && renderRuleCategory('household', Home)}
-
-      {/* Category 6: Admin Overrides */}
+      {/* Days in Advance */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-lg flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5" />
-            Admin Booking Policy
+            <Calendar className="h-5 w-5" />
+            Days in Advance
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <InstructionCard
             icon={Info}
-            text="Facility admins automatically bypass all booking rules. Admins can book at any time, exceed limits, and ignore restrictions. System-level checks (closed courts, maintenance, suspended accounts) still apply."
+            text="Control how many days ahead members can reserve courts."
           />
+          {daysInAdvanceMeta && (
+            <RuleCard
+              meta={daysInAdvanceMeta}
+              entry={rules['ACC-005'] || { enabled: false, config: {} }}
+              onToggle={(enabled) => onRuleEntryChange('ACC-005', { enabled })}
+              onConfigChange={(field, value) => onRuleConfigFieldChange('ACC-005', field, value)}
+            />
+          )}
         </CardContent>
       </Card>
 
-      {/* Category 7: Peak Hours Policy */}
+      {/* Cancellation Policy */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Cancellation Policy
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <InstructionCard
+            icon={Info}
+            text="Set the late-cancellation cutoff window before reservation start."
+          />
+          {cancellationPolicyMeta && (
+            <RuleCard
+              meta={cancellationPolicyMeta}
+              entry={rules['ACC-008'] || { enabled: false, config: {} }}
+              onToggle={(enabled) => onRuleEntryChange('ACC-008', { enabled })}
+              onConfigChange={(field, value) => onRuleConfigFieldChange('ACC-008', field, value)}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Max Reservation Duration */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Max Reservation Duration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <InstructionCard
+            icon={Info}
+            text="Set the maximum allowed reservation length."
+          />
+          <div className="p-3 border rounded-lg space-y-2">
+            <div className="flex justify-between items-center">
+              <div className="flex-1 mr-3">
+                <Label className="font-medium text-sm">Max Reservation Duration</Label>
+                <p className="text-xs text-gray-500 mt-0.5">Maximum booking duration for a single reservation.</p>
+              </div>
+              <Switch
+                checked={!!rules['CRT-005']?.enabled}
+                onCheckedChange={(enabled) => onRuleEntryChange('CRT-005', { enabled })}
+              />
+            </div>
+            {!!rules['CRT-005']?.enabled && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-gray-600 whitespace-nowrap">Max Duration:</Label>
+                <Input
+                  type="number"
+                  className="w-24 h-8 text-sm"
+                  min={15}
+                  max={480}
+                  step={15}
+                  value={rules['CRT-005']?.config?.max_duration_minutes ?? ''}
+                  onChange={(e) => onRuleConfigFieldChange('CRT-005', 'max_duration_minutes', parseFloat(e.target.value))}
+                />
+                <span className="text-xs text-gray-500">minutes</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* User-Based Limits */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            User-Based Limits
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <InstructionCard
+            icon={Info}
+            text="Configure how many courts can be booked by individuals and households across daily and weekly limits."
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Courts Per Week (Individual)</Label>
+              <div className="flex gap-2 items-center">
+                <Switch
+                  checked={!!rules['ACC-002']?.enabled}
+                  onCheckedChange={(enabled) => onRuleEntryChange('ACC-002', { enabled })}
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  value={rules['ACC-002']?.config?.max_per_week ?? ''}
+                  onChange={(e) => onRuleConfigFieldChange('ACC-002', 'max_per_week', parseInt(e.target.value, 10) || 1)}
+                  disabled={!rules['ACC-002']?.enabled}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Courts Per Day (Individual)</Label>
+              <div className="flex gap-2 items-center">
+                <Switch
+                  checked={!!rules['ACC-002']?.config?.max_per_day_enabled}
+                  onCheckedChange={(enabled) => onRuleConfigFieldChange('ACC-002', 'max_per_day_enabled', enabled)}
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  value={rules['ACC-002']?.config?.max_per_day ?? ''}
+                  onChange={(e) => onRuleConfigFieldChange('ACC-002', 'max_per_day', parseInt(e.target.value, 10) || 1)}
+                  disabled={!rules['ACC-002']?.config?.max_per_day_enabled}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Courts Per Week (Household)</Label>
+              <div className="flex gap-2 items-center">
+                <Switch
+                  checked={!!rules['HH-003']?.enabled}
+                  onCheckedChange={(enabled) => onRuleEntryChange('HH-003', { enabled })}
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  value={rules['HH-003']?.config?.max_per_week_household ?? rules['HH-003']?.config?.max_prime_per_week_household ?? ''}
+                  onChange={(e) => onRuleConfigFieldChange('HH-003', 'max_per_week_household', parseInt(e.target.value, 10) || 1)}
+                  disabled={!rules['HH-003']?.enabled}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Courts Per Day (Household)</Label>
+              <div className="flex gap-2 items-center">
+                <Switch
+                  checked={!!rules['HH-003']?.config?.max_per_day_household_enabled}
+                  onCheckedChange={(enabled) => onRuleConfigFieldChange('HH-003', 'max_per_day_household_enabled', enabled)}
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  value={rules['HH-003']?.config?.max_per_day_household ?? ''}
+                  onChange={(e) => onRuleConfigFieldChange('HH-003', 'max_per_day_household', parseInt(e.target.value, 10) || 1)}
+                  disabled={!rules['HH-003']?.config?.max_per_day_household_enabled}
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Peak Hours Policy */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -335,33 +448,6 @@ export function RulesStep({
               {/* Peak hours booking limits */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-sm">Max Bookings/Week (Peak)</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Switch
-                      checked={rulesConfig.peakHoursRestrictions.maxBookingsUnlimited}
-                      onCheckedChange={(checked) =>
-                        onRulesChange({
-                          peakHoursRestrictions: { ...rulesConfig.peakHoursRestrictions, maxBookingsUnlimited: checked }
-                        })
-                      }
-                    />
-                    <span className="text-xs text-gray-500">Unlimited</span>
-                    {!rulesConfig.peakHoursRestrictions.maxBookingsUnlimited && (
-                      <Input
-                        type="number"
-                        className="w-20 h-8 text-sm"
-                        min={1}
-                        value={rulesConfig.peakHoursRestrictions.maxBookingsPerWeek}
-                        onChange={(e) =>
-                          onRulesChange({
-                            peakHoursRestrictions: { ...rulesConfig.peakHoursRestrictions, maxBookingsPerWeek: e.target.value }
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-                <div>
                   <Label className="text-sm">Max Duration (Peak Hours)</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <Switch
@@ -383,126 +469,6 @@ export function RulesStep({
                         onChange={(e) =>
                           onRulesChange({
                             peakHoursRestrictions: { ...rulesConfig.peakHoursRestrictions, maxDurationHours: e.target.value }
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Category 8: Weekend Policy */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            Weekend Policy
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <InstructionCard
-            icon={Info}
-            text="Apply separate booking limits for weekends. This is optional and can be configured later."
-          />
-          <div className="flex items-center gap-3">
-            <Switch
-              checked={rulesConfig.hasWeekendPolicy}
-              onCheckedChange={(checked) => onRulesChange({ hasWeekendPolicy: checked })}
-            />
-            <Label>Enable Weekend Policy</Label>
-          </div>
-
-          {rulesConfig.hasWeekendPolicy && (
-            <div className="space-y-3 pl-4 border-l-2 border-gray-200">
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={rulesConfig.weekendPolicyApplyToAdmins}
-                  onCheckedChange={(checked) => onRulesChange({ weekendPolicyApplyToAdmins: checked })}
-                />
-                <Label className="text-sm">Apply to admins</Label>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-sm">Max Bookings Per Weekend</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Switch
-                      checked={rulesConfig.weekendPolicy.maxBookingsUnlimited}
-                      onCheckedChange={(checked) =>
-                        onRulesChange({
-                          weekendPolicy: { ...rulesConfig.weekendPolicy, maxBookingsUnlimited: checked }
-                        })
-                      }
-                    />
-                    <span className="text-xs text-gray-500">Unlimited</span>
-                    {!rulesConfig.weekendPolicy.maxBookingsUnlimited && (
-                      <Input
-                        type="number"
-                        className="w-20 h-8 text-sm"
-                        min={1}
-                        value={rulesConfig.weekendPolicy.maxBookingsPerWeekend}
-                        onChange={(e) =>
-                          onRulesChange({
-                            weekendPolicy: { ...rulesConfig.weekendPolicy, maxBookingsPerWeekend: e.target.value }
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm">Max Duration (hours)</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Switch
-                      checked={rulesConfig.weekendPolicy.maxDurationUnlimited}
-                      onCheckedChange={(checked) =>
-                        onRulesChange({
-                          weekendPolicy: { ...rulesConfig.weekendPolicy, maxDurationUnlimited: checked }
-                        })
-                      }
-                    />
-                    <span className="text-xs text-gray-500">Unlimited</span>
-                    {!rulesConfig.weekendPolicy.maxDurationUnlimited && (
-                      <Input
-                        type="number"
-                        className="w-20 h-8 text-sm"
-                        min={0.5}
-                        step={0.5}
-                        value={rulesConfig.weekendPolicy.maxDurationHours}
-                        onChange={(e) =>
-                          onRulesChange({
-                            weekendPolicy: { ...rulesConfig.weekendPolicy, maxDurationHours: e.target.value }
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm">Advance Booking (days)</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Switch
-                      checked={rulesConfig.weekendPolicy.advanceBookingUnlimited}
-                      onCheckedChange={(checked) =>
-                        onRulesChange({
-                          weekendPolicy: { ...rulesConfig.weekendPolicy, advanceBookingUnlimited: checked }
-                        })
-                      }
-                    />
-                    <span className="text-xs text-gray-500">Same as weekdays</span>
-                    {!rulesConfig.weekendPolicy.advanceBookingUnlimited && (
-                      <Input
-                        type="number"
-                        className="w-20 h-8 text-sm"
-                        min={1}
-                        value={rulesConfig.weekendPolicy.advanceBookingDays}
-                        onChange={(e) =>
-                          onRulesChange({
-                            weekendPolicy: { ...rulesConfig.weekendPolicy, advanceBookingDays: e.target.value }
                           })
                         }
                       />

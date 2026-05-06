@@ -2346,27 +2346,80 @@ export function FacilityManagement() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle>Restriction Type</CardTitle>
-                    <CardDescription>Controls whether household limits are enforced</CardDescription>
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      General Rules
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent className="flex items-center gap-8">
-                    <label className="inline-flex items-center gap-2">
-                      <input type="radio" checked={facilityData.bookingRules.restrictionType === 'account'} onChange={() => handleBookingRulesChange('restrictionType', 'account')} disabled={!isEditing} />
-                      Per Account
-                    </label>
-                    <label className="inline-flex items-center gap-2">
-                      <input type="radio" checked={facilityData.bookingRules.restrictionType === 'address'} onChange={() => handleBookingRulesChange('restrictionType', 'address')} disabled={!isEditing} />
-                      Per Address
-                    </label>
+                  <CardContent className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
+                      <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-green-800">
+                        Set general facility policies and member expectations shown to users during booking.
+                      </p>
+                    </div>
+                    <div>
+                      <Label>General Usage Rules</Label>
+                      <Textarea
+                        value={facilityData.bookingRules.generalRules}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleBookingRulesChange('generalRules', e.target.value)}
+                        placeholder="Enter your facility's general booking rules"
+                        className="min-h-[100px] mt-1"
+                        disabled={!isEditing}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle>Days in Advance</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Restriction Type
+                    </CardTitle>
+                    <CardDescription>Controls whether household limits are enforced</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
+                      <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-green-800">
+                        Choose whether booking limits apply per individual account or are shared by household.
+                      </p>
+                    </div>
+                    <Label>Restriction Type</Label>
+                    <Select
+                      value={facilityData.bookingRules.restrictionType}
+                      onValueChange={(value) => handleBookingRulesChange('restrictionType', value as 'account' | 'address')}
+                      disabled={!isEditing}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="account">Per Account</SelectItem>
+                        <SelectItem value="address">Per Address</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Calendar className="h-5 w-5" />
+                      Days in Advance
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
+                      <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-green-800">
+                        Define how far in advance members are allowed to reserve a court.
+                      </p>
+                    </div>
                     <div className="flex items-center justify-between">
                       <Label>Enable</Label>
                       <Switch checked={facilityData.bookingRules.daysInAdvanceEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('daysInAdvanceEnabled', v)} disabled={!isEditing} />
@@ -2376,19 +2429,50 @@ export function FacilityManagement() {
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle>Cancellation Policy</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      Cancellation Policy
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
+                      <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-green-800">
+                        Set whether cancellations are enforced and configure the cancellation window in hours.
+                      </p>
+                    </div>
                     <div className="flex items-center justify-between">
                       <Label>Enable</Label>
                       <Switch checked={facilityData.bookingRules.cancellationPolicyEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('cancellationPolicyEnabled', v)} disabled={!isEditing} />
                     </div>
-                    <p className="text-sm text-gray-600">Members can cancel at any time up until the reservation ends.</p>
+                    <div className="space-y-2">
+                      <Label>Cancellation Window (Hours)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={facilityData.bookingRules.cancellationNoticeHours}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('cancellationNoticeHours', e.target.value)}
+                        disabled={!isEditing || !facilityData.bookingRules.cancellationPolicyEnabled}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle>Max Reservation Duration</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      Max Reservation Duration
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
+                      <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-green-800">
+                        Control the maximum length of a single reservation.
+                      </p>
+                    </div>
                     <div className="flex items-center justify-between">
                       <Label>Enable</Label>
                       <Switch checked={facilityData.bookingRules.maxReservationDurationEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('maxReservationDurationEnabled', v)} disabled={!isEditing} />
@@ -2422,8 +2506,13 @@ export function FacilityManagement() {
                   </CardContent>
                 </Card>
 
-                <Card className="lg:col-span-2">
-                  <CardHeader><CardTitle>User-Based Limits</CardTitle></CardHeader>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      User-Based Limits
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Courts Per Week (Individual)</Label>
@@ -2433,17 +2522,17 @@ export function FacilityManagement() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Courts Per Week (Household)</Label>
-                      <div className="flex gap-2 items-center">
-                        <Switch checked={facilityData.bookingRules.courtsPerWeekHouseholdEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekHouseholdEnabled', v)} disabled={!isEditing} />
-                        <Input type="number" min="1" value={facilityData.bookingRules.courtsPerWeekHousehold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerWeekHousehold', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerWeekHouseholdEnabled} />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
                       <Label>Courts Per Day (Individual)</Label>
                       <div className="flex gap-2 items-center">
                         <Switch checked={facilityData.bookingRules.courtsPerDayUserEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayUserEnabled', v)} disabled={!isEditing} />
                         <Input type="number" min="1" value={facilityData.bookingRules.courtsPerDayUser} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerDayUser', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerDayUserEnabled} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Courts Per Week (Household)</Label>
+                      <div className="flex gap-2 items-center">
+                        <Switch checked={facilityData.bookingRules.courtsPerWeekHouseholdEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekHouseholdEnabled', v)} disabled={!isEditing} />
+                        <Input type="number" min="1" value={facilityData.bookingRules.courtsPerWeekHousehold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerWeekHousehold', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerWeekHouseholdEnabled} />
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -2457,10 +2546,13 @@ export function FacilityManagement() {
                 </Card>
 
                 {/* Peak Hours Policy */}
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span>Peak Hours Policy</span>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Peak Hours Policy
+                      </span>
                       <Switch
                         checked={facilityData.bookingRules.hasPeakHours}
                         onCheckedChange={(checked: boolean) => handleBookingRulesChange('hasPeakHours', checked)}
@@ -2471,6 +2563,12 @@ export function FacilityManagement() {
                   </CardHeader>
                   {facilityData.bookingRules.hasPeakHours && (
                     <CardContent className="space-y-6">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
+                        <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-green-800">
+                          Configure peak-hour time slots and custom restrictions that apply during those windows.
+                        </p>
+                      </div>
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="font-medium">Peak Hours Slots</h4>

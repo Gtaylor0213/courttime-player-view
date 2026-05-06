@@ -147,6 +147,14 @@ export const facilitiesApi = {
       email?: string;
       phone?: string;
     }>;
+    secondaryLocations?: Array<{
+      locationName: string;
+      streetAddress: string;
+      city: string;
+      state: string;
+      zipCode: string;
+      phone?: string;
+    }>;
 
     // Operating Hours
     operatingHours: Record<string, { open: string; close: string; closed?: boolean }>;

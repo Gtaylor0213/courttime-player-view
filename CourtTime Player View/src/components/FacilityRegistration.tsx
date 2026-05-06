@@ -52,6 +52,16 @@ interface FacilityContact {
   phone: string;
 }
 
+interface SecondaryFacilityLocation {
+  id: string;
+  locationName: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phone: string;
+}
+
 // US State abbreviations
 const US_STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -117,6 +127,7 @@ export function FacilityRegistration() {
 
     // Secondary Contacts
     secondaryContacts: [] as Array<{ id: string; name: string; email: string; phone: string }>,
+    secondaryLocations: [] as SecondaryFacilityLocation[],
 
     // Address Whitelist
     addressWhitelistFile: null as File | null,
@@ -339,6 +350,43 @@ export function FacilityRegistration() {
     setFormData(prev => ({
       ...prev,
       secondaryContacts: prev.secondaryContacts.filter(contact => contact.id !== contactId)
+    }));
+  };
+
+  const addSecondaryLocation = () => {
+    const newLocation: SecondaryFacilityLocation = {
+      id: `location-${Date.now()}`,
+      locationName: '',
+      streetAddress: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      phone: '',
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      secondaryLocations: [...prev.secondaryLocations, newLocation],
+    }));
+  };
+
+  const updateSecondaryLocation = (
+    locationId: string,
+    field: keyof Omit<SecondaryFacilityLocation, 'id'>,
+    value: string
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      secondaryLocations: prev.secondaryLocations.map((location) =>
+        location.id === locationId ? { ...location, [field]: value } : location
+      ),
+    }));
+  };
+
+  const removeSecondaryLocation = (locationId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      secondaryLocations: prev.secondaryLocations.filter(location => location.id !== locationId)
     }));
   };
 
@@ -976,6 +1024,22 @@ export function FacilityRegistration() {
             name: c.name,
             email: c.email || undefined,
             phone: c.phone || undefined,
+          })),
+        secondaryLocations: formData.secondaryLocations
+          .filter((location) =>
+            location.locationName.trim() &&
+            location.streetAddress.trim() &&
+            location.city.trim() &&
+            location.state.trim() &&
+            location.zipCode.trim()
+          )
+          .map((location) => ({
+            locationName: location.locationName.trim(),
+            streetAddress: location.streetAddress.trim(),
+            city: location.city.trim(),
+            state: location.state.trim(),
+            zipCode: location.zipCode.trim(),
+            phone: location.phone.trim() || undefined,
           })),
 
         // Operating Hours
@@ -2136,6 +2200,121 @@ export function FacilityRegistration() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Additional Locations (optional satellite / branch addresses) */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Additional Locations
+              </CardTitle>
+              <CardDescription>
+                Add any satellite campuses or branch addresses (optional)
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addSecondaryLocation}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Location
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {formData.secondaryLocations.length === 0 && (
+            <div className="text-sm text-gray-500 border rounded-md bg-gray-50 p-3">
+              No additional locations yet. Click <span className="font-medium">Add Location</span> to add a branch or satellite campus.
+            </div>
+          )}
+          {formData.secondaryLocations.map((location, index) => (
+            <div key={location.id} className="p-4 border rounded-lg bg-gray-50">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-gray-700">Location {index + 1}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeSecondaryLocation(location.id)}
+                  className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label className="text-xs">Location Name</Label>
+                  <Input
+                    value={location.locationName}
+                    onChange={(e) => updateSecondaryLocation(location.id, 'locationName', e.target.value)}
+                    placeholder="North Campus"
+                    className="h-9"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Street Address</Label>
+                  <Input
+                    value={location.streetAddress}
+                    onChange={(e) => updateSecondaryLocation(location.id, 'streetAddress', e.target.value)}
+                    placeholder="123 Main Street"
+                    className="h-9"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Label className="text-xs">City</Label>
+                  <Input
+                    value={location.city}
+                    onChange={(e) => updateSecondaryLocation(location.id, 'city', e.target.value)}
+                    placeholder="Richmond"
+                    className="h-9"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1 grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">State</Label>
+                    <Select
+                      value={location.state}
+                      onValueChange={(value) => updateSecondaryLocation(location.id, 'state', value)}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="State" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {US_STATES.map((state) => (
+                          <SelectItem key={state} value={state}>{state}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">ZIP</Label>
+                    <Input
+                      value={location.zipCode}
+                      onChange={(e) => updateSecondaryLocation(location.id, 'zipCode', e.target.value)}
+                      placeholder="23220"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Phone</Label>
+                  <Input
+                    value={location.phone}
+                    onChange={(e) => updateSecondaryLocation(location.id, 'phone', e.target.value)}
+                    placeholder="(804) 555-1234"
+                    className="h-9"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 

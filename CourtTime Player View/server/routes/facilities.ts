@@ -140,6 +140,7 @@ router.post('/register', async (req, res, next) => {
       // Contacts
       primaryContact,
       secondaryContacts,
+      secondaryLocations,
 
       // Operating Hours
       operatingHours,
@@ -234,6 +235,13 @@ router.post('/register', async (req, res, next) => {
       facilityImage: facilityImage || undefined,
       primaryContact: primaryContact || undefined,
       secondaryContacts: secondaryContacts?.filter((c: any) => c.name?.trim()) || [],
+      secondaryLocations: secondaryLocations?.filter((l: any) =>
+        l.locationName?.trim() &&
+        l.streetAddress?.trim() &&
+        l.city?.trim() &&
+        l.state?.trim() &&
+        l.zipCode?.trim()
+      ) || [],
       operatingHours: operatingHours || {},
       generalRules: generalRules || '',
       restrictionType: restrictionType || 'account',

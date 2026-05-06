@@ -370,6 +370,10 @@ export function FacilityManagement() {
     locationName: '', streetAddress: '', city: '', state: '', zipCode: '', phone: ''
   });
   const [savingSecondaryLocation, setSavingSecondaryLocation] = useState(false);
+  const [editingSecondaryLocationId, setEditingSecondaryLocationId] = useState<string | null>(null);
+  const [editingSecondaryLocation, setEditingSecondaryLocation] = useState({
+    locationName: '', streetAddress: '', city: '', state: '', zipCode: '', phone: ''
+  });
 
   const { selectedFacilityId: currentFacilityId } = useAppContext();
 
@@ -875,7 +879,15 @@ export function FacilityManagement() {
     try {
       const response = await facilityLocationsApi.getAll(currentFacilityId);
       if (response.success && response.data?.locations) {
-        setSecondaryLocations(response.data.locations);
+        setSecondaryLocations(response.data.locations.map((location: any) => ({
+          id: location.id || location.locationId || location.location_id,
+          locationName: location.locationName || location.location_name || '',
+          streetAddress: location.streetAddress || location.street_address || '',
+          city: location.city || '',
+          state: location.state || '',
+          zipCode: location.zipCode || location.zip_code || '',
+          phone: location.phone || '',
+        })));
       }
     } catch (error) {
       console.error('Error loading secondary locations:', error);
@@ -920,6 +932,50 @@ export function FacilityManagement() {
       }
     } catch (error) {
       toast.error('Failed to remove location');
+    }
+  };
+
+  const startEditingSecondaryLocation = (location: SecondaryLocation) => {
+    setAddingSecondaryLocation(false);
+    setEditingSecondaryLocationId(location.id);
+    setEditingSecondaryLocation({
+      locationName: location.locationName || '',
+      streetAddress: location.streetAddress || '',
+      city: location.city || '',
+      state: location.state || '',
+      zipCode: location.zipCode || '',
+      phone: location.phone || '',
+    });
+  };
+
+  const cancelEditingSecondaryLocation = () => {
+    setEditingSecondaryLocationId(null);
+    setEditingSecondaryLocation({
+      locationName: '', streetAddress: '', city: '', state: '', zipCode: '', phone: ''
+    });
+  };
+
+  const handleUpdateSecondaryLocation = async () => {
+    if (!currentFacilityId || !editingSecondaryLocationId) return;
+    if (!editingSecondaryLocation.locationName || !editingSecondaryLocation.streetAddress ||
+      !editingSecondaryLocation.city || !editingSecondaryLocation.state || !editingSecondaryLocation.zipCode) {
+      toast.error('Location name and full address are required');
+      return;
+    }
+    setSavingSecondaryLocation(true);
+    try {
+      const response = await facilityLocationsApi.update(currentFacilityId, editingSecondaryLocationId, editingSecondaryLocation);
+      if (response.success) {
+        toast.success('Location updated');
+        cancelEditingSecondaryLocation();
+        loadSecondaryLocations();
+      } else {
+        toast.error(response.error || 'Failed to update location');
+      }
+    } catch (error) {
+      toast.error('Failed to update location');
+    } finally {
+      setSavingSecondaryLocation(false);
     }
   };
 
@@ -2040,7 +2096,14 @@ export function FacilityManagement() {
                         <CardDescription>Add a second campus or branch with a custom name</CardDescription>
                       </div>
                       {!addingSecondaryLocation && (
-                        <Button size="sm" variant="outline" onClick={() => setAddingSecondaryLocation(true)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            cancelEditingSecondaryLocation();
+                            setAddingSecondaryLocation(true);
+                          }}
+                        >
                           <Plus className="h-4 w-4 mr-1" />
                           Add Location
                         </Button>
@@ -2051,21 +2114,104 @@ export function FacilityManagement() {
                     {secondaryLocations.length > 0 && (
                       <div className="space-y-3">
                         {secondaryLocations.map((loc) => (
-                          <div key={loc.id} className="flex items-start justify-between p-3 border rounded-lg bg-gray-50">
-                            <div>
-                              <p className="font-medium text-sm">{loc.locationName}</p>
-                              <p className="text-sm text-gray-600">{loc.streetAddress}</p>
-                              <p className="text-sm text-gray-600">{loc.city}, {loc.state} {loc.zipCode}</p>
-                              {loc.phone && <p className="text-sm text-gray-500">{loc.phone}</p>}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-500 hover:text-red-700"
-                              onClick={() => handleRemoveSecondaryLocation(loc.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                          <div key={loc.id} className="p-3 border rounded-lg bg-gray-50">
+                            {editingSecondaryLocationId === loc.id ? (
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="md:col-span-2 space-y-1">
+                                    <Label>Location Name</Label>
+                                    <Input
+                                      value={editingSecondaryLocation.locationName}
+                                      onChange={(e) => setEditingSecondaryLocation(prev => ({ ...prev, locationName: e.target.value }))}
+                                      placeholder="North Campus"
+                                    />
+                                  </div>
+                                  <div className="md:col-span-2 space-y-1">
+                                    <Label>Street Address</Label>
+                                    <Input
+                                      value={editingSecondaryLocation.streetAddress}
+                                      onChange={(e) => setEditingSecondaryLocation(prev => ({ ...prev, streetAddress: e.target.value }))}
+                                      placeholder="123 Main St"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label>City</Label>
+                                    <Input
+                                      value={editingSecondaryLocation.city}
+                                      onChange={(e) => setEditingSecondaryLocation(prev => ({ ...prev, city: e.target.value }))}
+                                      placeholder="City"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1">
+                                      <Label>State</Label>
+                                      <Select
+                                        value={editingSecondaryLocation.state}
+                                        onValueChange={(value) => setEditingSecondaryLocation(prev => ({ ...prev, state: value }))}
+                                      >
+                                        <SelectTrigger><SelectValue placeholder="State" /></SelectTrigger>
+                                        <SelectContent>
+                                          {US_STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label>ZIP Code</Label>
+                                      <Input
+                                        value={editingSecondaryLocation.zipCode}
+                                        onChange={(e) => setEditingSecondaryLocation(prev => ({ ...prev, zipCode: e.target.value }))}
+                                        placeholder="12345"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label>Phone</Label>
+                                    <Input
+                                      value={editingSecondaryLocation.phone}
+                                      onChange={(e) => setEditingSecondaryLocation(prev => ({ ...prev, phone: e.target.value }))}
+                                      placeholder="(555) 000-0000"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={handleUpdateSecondaryLocation} disabled={savingSecondaryLocation}>
+                                    <Save className="h-4 w-4 mr-1" />
+                                    {savingSecondaryLocation ? 'Saving...' : 'Save Changes'}
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={cancelEditingSecondaryLocation}>
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start justify-between gap-4">
+                                <div>
+                                  <p className="font-medium text-sm">{loc.locationName}</p>
+                                  <p className="text-sm text-gray-600">{loc.streetAddress}</p>
+                                  <p className="text-sm text-gray-600">{loc.city}, {loc.state} {loc.zipCode}</p>
+                                  {loc.phone && <p className="text-sm text-gray-500">{loc.phone}</p>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => startEditingSecondaryLocation(loc)}
+                                  >
+                                    <Edit className="h-4 w-4 mr-1" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-500 hover:text-red-700"
+                                    onClick={() => handleRemoveSecondaryLocation(loc.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                    Delete
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

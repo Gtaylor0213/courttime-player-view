@@ -798,6 +798,14 @@ export interface FacilityRegistrationData {
   // Contacts
   primaryContact?: FacilityContactData;
   secondaryContacts?: FacilityContactData[];
+  secondaryLocations?: Array<{
+    locationName: string;
+    streetAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    phone?: string;
+  }>;
 
   // Operating Hours
   operatingHours: Record<string, { open: string; close: string; closed?: boolean }>;
@@ -1226,6 +1234,34 @@ export async function registerFacility(
               contact.email?.trim() || null,
               contact.phone?.trim() || null,
               contact.role?.trim() || null
+            ]
+          );
+        }
+      }
+    }
+
+    // Add secondary facility locations
+    if (data.secondaryLocations && data.secondaryLocations.length > 0) {
+      for (const location of data.secondaryLocations) {
+        if (
+          location.locationName?.trim() &&
+          location.streetAddress?.trim() &&
+          location.city?.trim() &&
+          location.state?.trim() &&
+          location.zipCode?.trim()
+        ) {
+          await client.query(
+            `INSERT INTO facility_secondary_locations
+             (facility_id, location_name, street_address, city, state, zip_code, phone)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              facilityId,
+              location.locationName.trim(),
+              location.streetAddress.trim(),
+              location.city.trim(),
+              location.state.trim(),
+              location.zipCode.trim(),
+              location.phone?.trim() || null,
             ]
           );
         }

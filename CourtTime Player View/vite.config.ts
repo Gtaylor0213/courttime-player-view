@@ -37,7 +37,11 @@
       outDir: 'build',
     },
     server: {
+      // Bind IPv4 explicitly — some setups only expose [::1], which breaks
+      // "localhost" / 127.0.0.1 in the browser with "connection failed".
+      host: '127.0.0.1',
       port: 5173,
+      strictPort: false,
       open: true,
     },
   });

@@ -85,7 +85,6 @@ export function UserRegistration() {
             name: facility.name,
             type: facility.type || 'Tennis Facility',
             location: facility.location || 'Location not specified',
-            description: facility.description || '',
             courts: facility.courts || 0,
             members: facility.members || 0,
             requiresApproval: facility.requiresApproval ?? true
@@ -547,7 +546,7 @@ export function UserRegistration() {
                                 <MapPin className="h-3 w-3" />
                                 {facility.location}
                               </p>
-                              <p className="text-sm text-gray-500 mt-1">{facility.description}</p>
+                              <p className="text-sm text-gray-500 mt-1">Join this facility to view the club description</p>
                               <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
                                 <span className="flex items-center gap-1">
                                   <Building className="h-3 w-3" />

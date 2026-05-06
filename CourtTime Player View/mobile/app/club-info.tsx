@@ -58,7 +58,7 @@ interface CourtData {
 export default function ClubInfoScreen() {
   const router = useRouter();
   const { facilityId: routeFacilityId } = useLocalSearchParams<{ facilityId: string }>();
-  const { facilityId: authFacilityId, isLoading: authLoading } = useAuth();
+  const { user, facilityId: authFacilityId, isLoading: authLoading } = useAuth();
   const resolvedFacilityId = routeFacilityId || authFacilityId || null;
   const [facility, setFacility] = useState<FacilityData | null>(null);
   const [courts, setCourts] = useState<CourtData[]>([]);
@@ -162,6 +162,13 @@ export default function ClubInfoScreen() {
 
   const address = [facility.streetAddress, facility.city, facility.state, facility.zipCode].filter(Boolean).join(', ');
 
+  const canViewClubDescription = Boolean(
+    resolvedFacilityId &&
+      user &&
+      (user.adminFacilities?.includes(resolvedFacilityId) ||
+        user.memberFacilities?.includes(resolvedFacilityId))
+  );
+
   return (
     <>
       <Stack.Screen options={{ title: facility.name, headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
@@ -173,8 +180,12 @@ export default function ClubInfoScreen() {
         <View style={styles.header}>
           <Text style={styles.facilityName}>{facility.name}</Text>
           {facility.type && <Text style={styles.facilityType}>{facility.type}</Text>}
-          {facility.description && (
-            <Text style={styles.description}>{facility.description}</Text>
+          {canViewClubDescription ? (
+            facility.description ? (
+              <Text style={styles.description}>{facility.description}</Text>
+            ) : null
+          ) : (
+            <Text style={styles.descriptionPlaceholder}>Join this facility to view the club description</Text>
           )}
         </View>
 
@@ -296,6 +307,13 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
+    lineHeight: 22,
+    marginTop: Spacing.sm,
+  },
+  descriptionPlaceholder: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
     lineHeight: 22,
     marginTop: Spacing.sm,
   },

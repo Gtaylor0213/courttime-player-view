@@ -59,7 +59,7 @@ export function ClubInfo() {
     if (clubId) {
       loadFacilityData();
     }
-  }, [clubId]);
+  }, [clubId, user?.id]);
 
   const loadFacilityData = async () => {
     try {
@@ -212,6 +212,12 @@ export function ClubInfo() {
     );
   }
 
+  const canViewClubDescription = Boolean(
+    user?.adminFacilities?.includes(clubId!) ||
+      memberFacilities.some((f: any) => f.facilityId === clubId && f.status === 'active') ||
+      (user?.memberFacilities?.includes(clubId!) ?? false)
+  );
+
   return (
     <>
         {/* Content */}
@@ -282,8 +288,12 @@ export function ClubInfo() {
                       </div>
                     </div>
                   </div>
-                  {isMember && facility.description && (
-                    <p className="text-gray-600 mb-4">{facility.description}</p>
+                  {canViewClubDescription ? (
+                    facility.description ? (
+                      <p className="text-gray-600 mb-4">{facility.description}</p>
+                    ) : null
+                  ) : (
+                    <p className="text-gray-500 mb-4">Join this facility to view the club description</p>
                   )}
 
                   {/* Quick Actions */}

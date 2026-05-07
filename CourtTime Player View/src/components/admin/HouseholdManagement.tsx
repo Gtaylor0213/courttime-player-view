@@ -7,30 +7,29 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import {
   Search, Home, ChevronDown, ChevronUp, Users, RefreshCw
 } from 'lucide-react';
-import { addressWhitelistApi } from '../../api/client';
+import { membersApi } from '../../api/client';
 import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
 
-interface WhitelistMember {
+interface HouseholdMember {
   userId: string;
   firstName: string;
   lastName: string;
   fullName: string;
   email: string;
-  status: 'active' | 'pending' | 'suspended';
-  membershipType: string;
+  status?: 'active' | 'pending' | 'expired' | 'suspended';
+  membershipType?: string;
 }
 
-interface WhitelistHousehold {
+interface HouseholdRecord {
   id: string;
   address: string;
   lastName: string;
-  accountsLimit: number;
-  members: WhitelistMember[];
+  members: HouseholdMember[];
 }
 
 export function HouseholdManagement() {
-  const [households, setHouseholds] = useState<WhitelistHousehold[]>([]);
+  const [households, setHouseholds] = useState<HouseholdRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -47,9 +46,43 @@ export function HouseholdManagement() {
     if (!currentFacilityId) return;
     try {
       setLoading(true);
-      const response = await addressWhitelistApi.getWithMembers(currentFacilityId);
-      if (response.success && response.data?.entries) {
-        setHouseholds(Array.isArray(response.data.entries) ? response.data.entries : []);
+      const response = await membersApi.getFacilityMembers(currentFacilityId);
+      if (response.success && Array.isArray(response.data?.members)) {
+        const groupedHouseholds = new Map<string, HouseholdRecord>();
+        for (const member of response.data.members as any[]) {
+          const address = (member.streetAddress || '').trim();
+          const fullName = (member.fullName || '').trim();
+          const parsedLastName = fullName.split(' ').slice(1).join(' ').trim();
+          const lastName = (parsedLastName || '').toLowerCase();
+
+          if (!address || !lastName) {
+            continue;
+          }
+
+          const householdKey = `${address.toLowerCase()}||${lastName}`;
+          if (!groupedHouseholds.has(householdKey)) {
+            groupedHouseholds.set(householdKey, {
+              id: householdKey,
+              address,
+              lastName: parsedLastName,
+              members: [],
+            });
+          }
+
+          groupedHouseholds.get(householdKey)?.members.push({
+            userId: member.userId,
+            firstName: fullName.split(' ')[0] || '',
+            lastName: parsedLastName,
+            fullName: member.fullName || '',
+            email: member.email || '',
+            status: member.status,
+            membershipType: member.membershipType,
+          });
+        }
+
+        const householdsList = Array.from(groupedHouseholds.values())
+          .sort((a, b) => a.address.localeCompare(b.address));
+        setHouseholds(householdsList);
       } else {
         setHouseholds([]);
       }
@@ -78,15 +111,6 @@ export function HouseholdManagement() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active': return <Badge className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0">Active</Badge>;
-      case 'pending': return <Badge className="bg-yellow-100 text-yellow-800 text-[10px] px-1.5 py-0">Pending</Badge>;
-      case 'suspended': return <Badge className="bg-red-100 text-red-800 text-[10px] px-1.5 py-0">Suspended</Badge>;
-      default: return <Badge variant="outline" className="text-[10px] px-1.5 py-0">{status}</Badge>;
-    }
-  };
-
   const totalMembers = households.reduce((sum, h) => sum + h.members.length, 0);
 
   if (!currentFacilityId) {
@@ -109,7 +133,7 @@ export function HouseholdManagement() {
           <div>
             <h1 className="text-2xl font-medium text-gray-900">Households</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {households.length} whitelist {households.length === 1 ? 'entry' : 'entries'} · {totalMembers} matched {totalMembers === 1 ? 'account' : 'accounts'}
+              {households.length} household {households.length === 1 ? 'record' : 'records'} · {totalMembers} registered {totalMembers === 1 ? 'member' : 'members'}
             </p>
           </div>
           <Button onClick={loadHouseholds} variant="outline" size="sm">
@@ -122,7 +146,7 @@ export function HouseholdManagement() {
         <div className="relative max-w-md mb-6">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
-            placeholder="Search by address, last name, or member..."
+            placeholder="Search by address, last name, or household member..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -145,7 +169,7 @@ export function HouseholdManagement() {
                 <p className="text-gray-500 font-medium">No households found</p>
                 <p className="text-sm text-gray-400 mt-1">
                   {households.length === 0
-                    ? 'Households are created from your address whitelist. Add addresses in the Court Management tab.'
+                    ? 'No household records have been created for this facility yet.'
                     : 'No households match your search.'}
                 </p>
               </div>
@@ -154,7 +178,6 @@ export function HouseholdManagement() {
                 {filteredHouseholds.map((household) => {
                   const isExpanded = expandedId === household.id;
                   const memberCount = household.members.length;
-                  const atLimit = memberCount >= household.accountsLimit;
 
                   return (
                     <div key={household.id} className="border rounded-lg overflow-hidden">
@@ -179,13 +202,13 @@ export function HouseholdManagement() {
                               )}
                             </div>
                             <div className="text-xs text-gray-500 mt-0.5">
-                              Limit: {household.accountsLimit} accounts
+                              {household.lastName ? `${household.lastName} household` : 'Household group'}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 ml-2">
                             <Users className="h-3.5 w-3.5 text-gray-400" />
-                            <span className={`text-sm font-medium ${atLimit ? 'text-red-600' : 'text-gray-700'}`}>
-                              {memberCount}/{household.accountsLimit}
+                            <span className="text-sm font-medium text-gray-700">
+                              {memberCount}
                             </span>
                           </div>
                         </div>
@@ -203,12 +226,12 @@ export function HouseholdManagement() {
                         <div className="border-t bg-gray-50 px-4 py-3">
                           {memberCount === 0 ? (
                             <div className="text-center py-4">
-                              <p className="text-sm text-gray-500">No member accounts match this address and last name yet.</p>
+                              <p className="text-sm text-gray-500">No registered members found for this household yet.</p>
                             </div>
                           ) : (
                             <div className="space-y-2">
                               <div className="text-xs font-medium text-gray-500 mb-2">
-                                Matched Accounts ({memberCount})
+                                Registered Individuals ({memberCount})
                               </div>
                               {household.members.map((member) => {
                                 const displayName = member.fullName ||
@@ -231,7 +254,11 @@ export function HouseholdManagement() {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      {getStatusBadge(member.status)}
+                                      {member.status && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
+                                          {member.status}
+                                        </Badge>
+                                      )}
                                       {member.membershipType && (
                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
                                           {member.membershipType}

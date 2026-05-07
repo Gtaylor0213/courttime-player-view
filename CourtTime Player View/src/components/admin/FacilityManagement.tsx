@@ -45,6 +45,8 @@ interface PeakHourSlot {
   rules: {
     maxBookingsPerDay: string;
     maxBookingsPerDayUnlimited: boolean;
+    maxBookingsPerDayHousehold: string;
+    maxBookingsPerDayHouseholdUnlimited: boolean;
     maxBookingsPerWeek: string;
     maxBookingsPerWeekUnlimited: boolean;
     maxBookingsPerWeekHousehold: string;
@@ -672,7 +674,9 @@ export function FacilityManagement() {
         const hasFlatSavedRules = !!parsedSimplified && typeof parsedSimplified === 'object' && (
           'daysInAdvanceEnabled' in parsedSimplified ||
           'maxBookingsPerWeekUnlimited' in parsedSimplified ||
-          'peakHoursSlots' in parsedSimplified
+          'peakHoursSlots' in parsedSimplified ||
+          'hasPeakHours' in parsedSimplified ||
+          'peakHoursRestrictions' in parsedSimplified
         );
 
         const bookingRules: BookingRules = hasFlatSavedRules
@@ -958,6 +962,8 @@ export function FacilityManagement() {
   const defaultPeakHoursSlotRules: PeakHourSlot['rules'] = {
     maxBookingsPerDay: '1',
     maxBookingsPerDayUnlimited: false,
+    maxBookingsPerDayHousehold: '1',
+    maxBookingsPerDayHouseholdUnlimited: false,
     maxBookingsPerWeek: '2',
     maxBookingsPerWeekUnlimited: false,
     maxBookingsPerWeekHousehold: '2',
@@ -966,7 +972,14 @@ export function FacilityManagement() {
     maxDurationUnlimited: false,
   };
 
-  const normalizePeakHoursSlot = (slot: any): PeakHourSlot => ({
+  const normalizePeakHoursSlot = (slot: any): PeakHourSlot => {
+    const slotRules = slot?.rules ?? slot ?? {};
+    const maxBookingsPerDayRaw = slotRules.maxBookingsPerDay ?? slotRules.max_bookings_per_day;
+    const maxBookingsPerDayHouseholdRaw = slotRules.maxBookingsPerDayHousehold ?? slotRules.max_bookings_per_day_household;
+    const maxBookingsPerWeekRaw = slotRules.maxBookingsPerWeek ?? slotRules.max_bookings_per_week;
+    const maxBookingsPerWeekHouseholdRaw = slotRules.maxBookingsPerWeekHousehold ?? slotRules.max_bookings_per_week_household;
+    const maxDurationHoursRaw = slotRules.maxDurationHours ?? slotRules.max_duration_hours;
+    return {
     id: slot.id || `slot-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     startTime: slot.startTime || slot.start_time || '17:00',
     endTime: slot.endTime || slot.end_time || '20:00',
@@ -978,16 +991,19 @@ export function FacilityManagement() {
       ? slot.selectedCourtIds
       : (Array.isArray(slot.selected_court_ids) ? slot.selected_court_ids : []),
     rules: {
-      maxBookingsPerDay: String(slot.rules?.maxBookingsPerDay || slot.rules?.max_bookings_per_day || '1'),
-      maxBookingsPerDayUnlimited: slot.rules?.maxBookingsPerDayUnlimited === true || slot.rules?.max_bookings_per_day === -1,
-      maxBookingsPerWeek: String(slot.rules?.maxBookingsPerWeek || slot.rules?.max_bookings_per_week || '2'),
-      maxBookingsPerWeekUnlimited: slot.rules?.maxBookingsPerWeekUnlimited === true || slot.rules?.max_bookings_per_week === -1,
-      maxBookingsPerWeekHousehold: String(slot.rules?.maxBookingsPerWeekHousehold || slot.rules?.max_bookings_per_week_household || '2'),
-      maxBookingsPerWeekHouseholdUnlimited: slot.rules?.maxBookingsPerWeekHouseholdUnlimited === true || slot.rules?.max_bookings_per_week_household === -1,
-      maxDurationHours: String(slot.rules?.maxDurationHours || slot.rules?.max_duration_hours || '1.5'),
-      maxDurationUnlimited: slot.rules?.maxDurationUnlimited === true || slot.rules?.max_duration_hours === -1,
+      maxBookingsPerDay: String(maxBookingsPerDayRaw ?? defaultPeakHoursSlotRules.maxBookingsPerDay),
+      maxBookingsPerDayUnlimited: slotRules.maxBookingsPerDayUnlimited === true || maxBookingsPerDayRaw === -1,
+      maxBookingsPerDayHousehold: String(maxBookingsPerDayHouseholdRaw ?? defaultPeakHoursSlotRules.maxBookingsPerDayHousehold),
+      maxBookingsPerDayHouseholdUnlimited: slotRules.maxBookingsPerDayHouseholdUnlimited === true || maxBookingsPerDayHouseholdRaw === -1,
+      maxBookingsPerWeek: String(maxBookingsPerWeekRaw ?? defaultPeakHoursSlotRules.maxBookingsPerWeek),
+      maxBookingsPerWeekUnlimited: slotRules.maxBookingsPerWeekUnlimited === true || maxBookingsPerWeekRaw === -1,
+      maxBookingsPerWeekHousehold: String(maxBookingsPerWeekHouseholdRaw ?? defaultPeakHoursSlotRules.maxBookingsPerWeekHousehold),
+      maxBookingsPerWeekHouseholdUnlimited: slotRules.maxBookingsPerWeekHouseholdUnlimited === true || maxBookingsPerWeekHouseholdRaw === -1,
+      maxDurationHours: String(maxDurationHoursRaw ?? defaultPeakHoursSlotRules.maxDurationHours),
+      maxDurationUnlimited: slotRules.maxDurationUnlimited === true || maxDurationHoursRaw === -1,
     }
-  });
+    };
+  };
 
   const updatePeakHoursSlot = (slotId: string, updater: (slot: PeakHourSlot) => PeakHourSlot) => {
     setFacilityData(prev => {
@@ -1663,6 +1679,7 @@ export function FacilityManagement() {
           selected_court_ids: slot.appliesToAllCourts ? [] : (slot.selectedCourtIds || []),
           rules: {
             max_bookings_per_day: slot.rules.maxBookingsPerDayUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerDay) || 1),
+            max_bookings_per_day_household: slot.rules.maxBookingsPerDayHouseholdUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerDayHousehold) || 1),
             max_bookings_per_week: slot.rules.maxBookingsPerWeekUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeek) || 2),
             max_bookings_per_week_household: slot.rules.maxBookingsPerWeekHouseholdUnlimited ? -1 : (parseInt(slot.rules.maxBookingsPerWeekHousehold) || 2),
             max_duration_hours: slot.rules.maxDurationUnlimited ? -1 : (parseFloat(slot.rules.maxDurationHours) || 1.5),
@@ -1744,6 +1761,7 @@ export function FacilityManagement() {
                 selectedCourtIds: w.selected_court_ids || [],
                 rules: {
                   max_bookings_per_day: w.rules?.max_bookings_per_day,
+                  max_bookings_per_day_household: w.rules?.max_bookings_per_day_household,
                   max_bookings_per_week: w.rules?.max_bookings_per_week,
                   max_bookings_per_week_household: w.rules?.max_bookings_per_week_household,
                   max_duration_hours: w.rules?.max_duration_hours,

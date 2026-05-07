@@ -544,24 +544,54 @@ export function CourtCalendarView() {
   const availableFacilities = memberFacilities;
   const currentFacility = availableFacilities.find(f => f.id === selectedFacility);
 
-  // Derive operating hours and timezone from facility config
-  const { startHour, endHour, facilityTimezone } = useMemo(() => {
+  // Derive operating hours (minute-precise) and timezone from facility config
+  const { startHour, endHour, dayStartMinutes, dayEndMinutes, facilityTimezone } = useMemo(() => {
     const oh = currentFacility?.operatingHours;
     const tz = currentFacility?.timezone || 'America/New_York';
-    if (!oh) return { startHour: 6, endHour: 21, facilityTimezone: tz };
+    if (!oh) {
+      return {
+        startHour: 6,
+        endHour: 21,
+        dayStartMinutes: 6 * 60,
+        dayEndMinutes: 21 * 60,
+        facilityTimezone: tz,
+      };
+    }
 
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayName = dayNames[selectedDate.getDay()];
     const dayConfig = oh[dayName];
 
     if (!dayConfig || dayConfig.closed) {
-      return { startHour: 6, endHour: 21, facilityTimezone: tz };
+      return {
+        startHour: 6,
+        endHour: 21,
+        dayStartMinutes: 6 * 60,
+        dayEndMinutes: 21 * 60,
+        facilityTimezone: tz,
+      };
     }
 
-    const openHour = dayConfig.open ? parseInt(dayConfig.open.split(':')[0], 10) : 6;
-    const closeHour = dayConfig.close ? parseInt(dayConfig.close.split(':')[0], 10) : 21;
+    const [openHour, openMinute] = dayConfig.open
+      ? dayConfig.open.split(':').map((v: string) => parseInt(v, 10))
+      : [6, 0];
+    const [closeHour, closeMinute] = dayConfig.close
+      ? dayConfig.close.split(':').map((v: string) => parseInt(v, 10))
+      : [21, 0];
+    const safeOpenHour = Number.isFinite(openHour) ? openHour : 6;
+    const safeOpenMinute = Number.isFinite(openMinute) ? openMinute : 0;
+    const safeCloseHour = Number.isFinite(closeHour) ? closeHour : 21;
+    const safeCloseMinute = Number.isFinite(closeMinute) ? closeMinute : 0;
+    const startMinutes = (safeOpenHour * 60) + safeOpenMinute;
+    const endMinutes = (safeCloseHour * 60) + safeCloseMinute;
 
-    return { startHour: openHour, endHour: closeHour, facilityTimezone: tz };
+    return {
+      startHour: safeOpenHour,
+      endHour: safeCloseHour,
+      dayStartMinutes: startMinutes,
+      dayEndMinutes: endMinutes,
+      facilityTimezone: tz,
+    };
   }, [currentFacility, selectedDate]);
 
   // Calculate the position of the current time indicator line
@@ -570,16 +600,12 @@ export function CourtCalendarView() {
 
     const { hours, minutes } = getTimeComponents(facilityTimezone);
 
-    if (hours < startHour || hours > endHour) return null;
-
-    // Each hour = 2 visible rows × effectiveRowHeight = 4 sub-slots × effectiveSubSlotHeight
-    const hoursFromStart = hours - startHour;
-    const minuteFraction = minutes / 60;
-    const totalHours = hoursFromStart + minuteFraction;
-    const position = totalHours * 2 * effectiveRowHeight;
+    const currentMinutes = (hours * 60) + minutes;
+    if (currentMinutes < dayStartMinutes || currentMinutes > dayEndMinutes) return null;
+    const position = ((currentMinutes - dayStartMinutes) / 15) * effectiveSubSlotHeight;
 
     return position;
-  }, [currentTime, selectedDate, isToday, startHour, endHour, facilityTimezone, effectiveRowHeight]);
+  }, [currentTime, selectedDate, isToday, dayStartMinutes, dayEndMinutes, facilityTimezone, effectiveSubSlotHeight]);
 
   // Helper function to check if a time slot is in the past
   const isPastTime = useCallback((timeSlot: string) => {
@@ -701,16 +727,16 @@ export function CourtCalendarView() {
   // Generate time slots for the day (15-minute intervals)
   const allTimeSlots = React.useMemo(() => {
     const slots: string[] = [];
-    for (let hour = startHour; hour <= endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const displayMinute = minute.toString().padStart(2, '0');
-        slots.push(`${displayHour}:${displayMinute} ${period}`);
-      }
+    for (let minuteOfDay = dayStartMinutes; minuteOfDay <= dayEndMinutes; minuteOfDay += 15) {
+      const hour = Math.floor(minuteOfDay / 60);
+      const minute = minuteOfDay % 60;
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      const displayMinute = minute.toString().padStart(2, '0');
+      slots.push(`${displayHour}:${displayMinute} ${period}`);
     }
     return slots;
-  }, [startHour, endHour]);
+  }, [dayStartMinutes, dayEndMinutes]);
 
   // Always show all time slots — past slots are greyed out, not hidden
   const timeSlots = React.useMemo(() => {
@@ -720,16 +746,16 @@ export function CourtCalendarView() {
   // 30-min visible rows for the table grid
   const visibleTimeSlots = React.useMemo(() => {
     const slots: string[] = [];
-    for (let hour = startHour; hour <= endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const displayMinute = minute.toString().padStart(2, '0');
-        slots.push(`${displayHour}:${displayMinute} ${period}`);
-      }
+    for (let minuteOfDay = dayStartMinutes; minuteOfDay <= dayEndMinutes; minuteOfDay += 30) {
+      const hour = Math.floor(minuteOfDay / 60);
+      const minute = minuteOfDay % 60;
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      const displayMinute = minute.toString().padStart(2, '0');
+      slots.push(`${displayHour}:${displayMinute} ${period}`);
     }
     return slots;
-  }, [startHour, endHour]);
+  }, [dayStartMinutes, dayEndMinutes]);
 
   // Use fetched bookings from API
   const bookings = bookingsData;
@@ -1411,12 +1437,12 @@ export function CourtCalendarView() {
                 };
                 const bookingStartMinutes = parseMinutes(booking.startTime);
                 const bookingEndMinutes = parseMinutes(booking.endTime);
-                const dayStartMinutes = startHour * 60;
+                const dayStartMinutesForOverlay = dayStartMinutes;
                 const hasExactRange = bookingStartMinutes !== null
                   && bookingEndMinutes !== null
                   && bookingEndMinutes > bookingStartMinutes;
                 const top = hasExactRange
-                  ? measuredHeaderHeight + ((bookingStartMinutes - dayStartMinutes) / 15) * effectiveSubSlotHeight + (isBlocked ? 0 : 2)
+                  ? measuredHeaderHeight + ((bookingStartMinutes - dayStartMinutesForOverlay) / 15) * effectiveSubSlotHeight + (isBlocked ? 0 : 2)
                   : measuredHeaderHeight + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
                 const left = effectiveTimeColWidth + overlay.courtIndex * effectiveCourtWidth + (isBlocked ? 0 : 4);
                 const width = effectiveCourtWidth - (isBlocked ? 0 : 8);

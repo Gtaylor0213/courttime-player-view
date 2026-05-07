@@ -67,10 +67,10 @@ export function ReservationDetailsModal({
     return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
-  // Check if reservation is in the past
+  // Keep cancellation available until reservation end time
   const isPastReservation = () => {
-    const reservationDateTime = parseLocalDate(`${reservation.bookingDate}T${reservation.startTime}`);
-    return reservationDateTime < new Date();
+    const reservationEndDateTime = parseLocalDate(`${reservation.bookingDate}T${reservation.endTime}`);
+    return reservationEndDateTime < new Date();
   };
 
   // Handle cancel reservation

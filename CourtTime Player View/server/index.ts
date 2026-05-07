@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import os from 'os';
 import path from 'path';
 import { testConnection, closePool } from '../src/database/connection';
+import { processBulletinMinParticipantCancellations } from '../src/services/bulletinBoardService';
 
 // Load environment variables
 dotenv.config();
@@ -244,6 +245,24 @@ async function startServer() {
       console.log(`\n${'='.repeat(60)}\n`);
     });
 
+    let bulletinCancellationSweepRunning = false;
+    const runBulletinCancellationSweep = async () => {
+      if (bulletinCancellationSweepRunning) return;
+      bulletinCancellationSweepRunning = true;
+      try {
+        const cancelledCount = await processBulletinMinParticipantCancellations();
+        if (cancelledCount > 0) {
+          console.log(`📧 Bulletin events cancelled for min participants: ${cancelledCount}`);
+        }
+      } catch (error) {
+        console.error('Bulletin min participant cancellation sweep failed:', error);
+      } finally {
+        bulletinCancellationSweepRunning = false;
+      }
+    };
+    await runBulletinCancellationSweep();
+    const bulletinCancellationInterval = setInterval(runBulletinCancellationSweep, 60 * 1000);
+
     // Handle server errors
     server.on('error', (error: any) => {
       if (error.code === 'EADDRINUSE') {
@@ -266,6 +285,7 @@ async function startServer() {
 
       server.close(async () => {
         console.log('🔌 HTTP server closed');
+        clearInterval(bulletinCancellationInterval);
 
         try {
           await closePool();

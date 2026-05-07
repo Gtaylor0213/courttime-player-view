@@ -26,6 +26,8 @@ interface BulletinPost {
   facilityId: string;
   facilityName: string;
   maxParticipants?: number;
+  minParticipants?: number;
+  cancelIfMinNotMet?: boolean;
   drillMaxParticipants?: number;
   currentParticipants?: number;
   drillCourtId?: string;
@@ -62,6 +64,8 @@ const typeColors: Record<string, string> = {
   announcement: 'bg-orange-500'
   ,drill: 'bg-blue-500'
 };
+const eventSignupTypes = new Set(['drill', 'social', 'clinic', 'tournament']);
+const recurringEligibleTypes = new Set(['drill', 'clinic']);
 
 export function BulletinBoard() {
   const [searchParams] = useSearchParams();
@@ -88,11 +92,18 @@ export function BulletinBoard() {
     eventTime: '',
     location: '',
     maxParticipants: '',
+    minParticipants: '',
+    cancelIfMinNotMet: false,
     drillCourtId: '',
     drillGenderRestriction: 'any' as 'any' | 'male_only' | 'female_only',
     drillShowParticipants: false,
     facilityId: '',
     expiresInDays: '' as string,
+    recurrenceEnabled: false,
+    recurrenceFrequency: 'weekly' as 'daily' | 'weekly' | 'biweekly',
+    recurrenceEndType: 'date' as 'date' | 'occurrences',
+    recurrenceEndDate: '',
+    recurrenceOccurrences: '4',
   });
 
   // Check if user is admin of any facility
@@ -117,6 +128,8 @@ export function BulletinBoard() {
     facilityId: post.facilityId,
     facilityName: post.facilityName || '',
     maxParticipants: post.maxParticipants,
+    minParticipants: post.minParticipants,
+    cancelIfMinNotMet: post.cancelIfMinNotMet,
     drillMaxParticipants: post.drillMaxParticipants,
     currentParticipants: post.currentParticipants,
     drillCourtId: post.drillCourtId,
@@ -227,13 +240,29 @@ export function BulletinBoard() {
       return;
     }
 
-    if (newPost.type === 'drill' && (!newPost.eventDate || !newPost.eventTime || !newPost.drillCourtId || !newPost.maxParticipants)) {
-      toast.error('Drill posts require date/time, court, and max participants');
+    if (eventSignupTypes.has(newPost.type) && (!newPost.eventDate || !newPost.eventTime || !newPost.drillCourtId)) {
+      toast.error('This post type requires date/time and court');
       return;
+    }
+    if (newPost.cancelIfMinNotMet && !newPost.minParticipants) {
+      toast.error('Set Min Participants when auto-cancel is enabled');
+      return;
+    }
+    if (newPost.recurrenceEnabled && recurringEligibleTypes.has(newPost.type)) {
+      if (newPost.recurrenceEndType === 'date' && !newPost.recurrenceEndDate) {
+        toast.error('Set a recurrence end date');
+        return;
+      }
+      if (newPost.recurrenceEndType === 'occurrences' && !newPost.recurrenceOccurrences) {
+        toast.error('Set number of recurrence occurrences');
+        return;
+      }
     }
 
     try {
       setIsSubmitting(true);
+      const parsedMaxParticipants = newPost.maxParticipants ? parseInt(newPost.maxParticipants) : undefined;
+      const expiresAfterEvent = newPost.expiresInDays === 'after_event';
       const response = await bulletinBoardApi.create({
         facilityId: newPost.facilityId,
         authorId: user.id,
@@ -241,14 +270,34 @@ export function BulletinBoard() {
         content: newPost.description,
         category: newPost.type,
         isAdminPost: true,
-        ...(newPost.expiresInDays ? { expiresInDays: parseInt(newPost.expiresInDays) } : {}),
-        ...(newPost.type === 'drill'
+        ...(expiresAfterEvent
+          ? { expiresAfterEvent: true }
+          : (newPost.expiresInDays ? { expiresInDays: parseInt(newPost.expiresInDays) } : {})),
+        ...(eventSignupTypes.has(newPost.type)
           ? {
               drillStartAt: new Date(`${newPost.eventDate}T${newPost.eventTime}`).toISOString(),
               drillCourtId: newPost.drillCourtId,
-              drillMaxParticipants: parseInt(newPost.maxParticipants),
+              ...(typeof parsedMaxParticipants === 'number' && !Number.isNaN(parsedMaxParticipants)
+                ? { drillMaxParticipants: parsedMaxParticipants }
+                : {}),
               drillGenderRestriction: newPost.drillGenderRestriction,
               drillShowParticipants: newPost.drillShowParticipants
+            }
+          : {}),
+        ...(eventSignupTypes.has(newPost.type) && newPost.minParticipants
+          ? { minParticipants: parseInt(newPost.minParticipants) }
+          : {}),
+        ...(eventSignupTypes.has(newPost.type)
+          ? { cancelIfMinNotMet: Boolean(newPost.cancelIfMinNotMet) }
+          : {}),
+        ...(newPost.recurrenceEnabled && recurringEligibleTypes.has(newPost.type)
+          ? {
+              recurrence: {
+                frequency: newPost.recurrenceFrequency,
+                ...(newPost.recurrenceEndType === 'date'
+                  ? { endDate: newPost.recurrenceEndDate }
+                  : { occurrenceCount: parseInt(newPost.recurrenceOccurrences) })
+              }
             }
           : {}),
       });
@@ -264,11 +313,18 @@ export function BulletinBoard() {
           eventTime: '',
           location: '',
           maxParticipants: '',
+          minParticipants: '',
+          cancelIfMinNotMet: false,
           drillCourtId: '',
           drillGenderRestriction: 'any',
           drillShowParticipants: false,
           facilityId: '',
           expiresInDays: '',
+          recurrenceEnabled: false,
+          recurrenceFrequency: 'weekly',
+          recurrenceEndType: 'date',
+          recurrenceEndDate: '',
+          recurrenceOccurrences: '4',
         });
         // Reload posts
         loadData();
@@ -588,7 +644,7 @@ export function BulletinBoard() {
                               )}
                             </div>
                           )}
-                          {post.type === 'drill' && post.drillStartAt && (
+                          {eventSignupTypes.has(post.type) && post.drillStartAt && (
                             <div className="text-xs text-gray-600 mb-2">
                               {new Date(post.drillStartAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             </div>
@@ -655,13 +711,16 @@ export function BulletinBoard() {
               <div className="space-y-6">
                 <p className="text-gray-700 text-base">{selectedPost.description}</p>
 
-                {selectedPost.type === 'drill' && (
+                {eventSignupTypes.has(selectedPost.type) && (
                   <div className="rounded-lg border p-4 bg-blue-50/50">
-                    <h3 className="font-semibold text-gray-900 mb-3">Drill Details</h3>
+                    <h3 className="font-semibold text-gray-900 mb-3">Event Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       <div><span className="text-gray-500">Date & Time:</span> <span className="font-medium">{selectedPost.drillStartAt ? new Date(selectedPost.drillStartAt).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'TBD'}</span></div>
                       <div><span className="text-gray-500">Court:</span> <span className="font-medium">{selectedPost.drillCourtName || 'TBD'}</span></div>
                       <div><span className="text-gray-500">Spots:</span> <span className="font-medium">{selectedPost.drillConfirmedCount || 0} / {selectedPost.maxParticipants || selectedPost.drillMaxParticipants || 0}</span></div>
+                      {selectedPost.minParticipants && (
+                        <div><span className="text-gray-500">Minimum:</span> <span className="font-medium">{selectedPost.minParticipants}</span></div>
+                      )}
                       <div><span className="text-gray-500">Waitlist:</span> <span className="font-medium">{selectedPost.drillWaitlistCount || 0}</span></div>
                     </div>
                   </div>
@@ -737,7 +796,7 @@ export function BulletinBoard() {
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-4 border-t">
-                  {selectedPost.type === 'drill' ? (
+                  {eventSignupTypes.has(selectedPost.type) ? (
                     selectedPost.currentUserSignupStatus ? (
                       <Button className="flex-1" variant="outline" onClick={() => handleCancelDrillSignup(selectedPost.id)}>
                         {selectedPost.currentUserSignupStatus === 'waitlist'
@@ -774,10 +833,10 @@ export function BulletinBoard() {
                     </Button>
                   )}
                 </div>
-                {selectedPost.type === 'drill' && selectedPost.signupBlockedReason && !selectedPost.currentUserSignupStatus && (
+                {eventSignupTypes.has(selectedPost.type) && selectedPost.signupBlockedReason && !selectedPost.currentUserSignupStatus && (
                   <p className="text-sm text-red-600">{selectedPost.signupBlockedReason}</p>
                 )}
-                {selectedPost.type === 'drill' && (
+                {eventSignupTypes.has(selectedPost.type) && (
                   <div className="space-y-3 border-t pt-4">
                     <h4 className="font-medium">
                       Participants
@@ -876,7 +935,11 @@ export function BulletinBoard() {
                   <Select
                     value={newPost.type}
                     onValueChange={(value: 'event' | 'clinic' | 'tournament' | 'social' | 'announcement' | 'drill') =>
-                      setNewPost(prev => ({ ...prev, type: value }))
+                      setNewPost(prev => ({
+                        ...prev,
+                        type: value,
+                        recurrenceEnabled: recurringEligibleTypes.has(value) ? prev.recurrenceEnabled : false
+                      }))
                     }
                   >
                     <SelectTrigger>
@@ -970,7 +1033,7 @@ export function BulletinBoard() {
                       </div>
                     </div>
 
-                    {newPost.type !== 'drill' && (
+                    {!eventSignupTypes.has(newPost.type) && (
                       <div className="space-y-2">
                         <Label htmlFor="location">Location</Label>
                         <Input
@@ -983,7 +1046,7 @@ export function BulletinBoard() {
                     )}
 
                     <div className="space-y-2">
-                      <Label htmlFor="maxParticipants">{newPost.type === 'drill' ? 'Max Participants *' : 'Max Participants'}</Label>
+                      <Label htmlFor="maxParticipants">Max Participants</Label>
                       <Input
                         id="maxParticipants"
                         type="number"
@@ -993,7 +1056,31 @@ export function BulletinBoard() {
                         placeholder="Leave empty for unlimited"
                       />
                     </div>
-                    {newPost.type === 'drill' && (
+                    {eventSignupTypes.has(newPost.type) && (
+                      <div className="space-y-2">
+                        <Label htmlFor="minParticipants">Min Participants</Label>
+                        <Input
+                          id="minParticipants"
+                          type="number"
+                          min="1"
+                          value={newPost.minParticipants}
+                          onChange={(e) => setNewPost(prev => ({ ...prev, minParticipants: e.target.value }))}
+                          placeholder="Leave empty for no minimum"
+                        />
+                        <div className="flex items-center justify-between border rounded-md p-3">
+                          <div>
+                            <p className="text-sm font-medium">Auto-cancel if minimum not met</p>
+                            <p className="text-xs text-gray-500">Cancel at event time and email all signed-up participants</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={newPost.cancelIfMinNotMet}
+                            onChange={(e) => setNewPost(prev => ({ ...prev, cancelIfMinNotMet: e.target.checked }))}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {eventSignupTypes.has(newPost.type) && (
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="drillCourt">Court *</Label>
@@ -1042,6 +1129,79 @@ export function BulletinBoard() {
                             onChange={(e) => setNewPost(prev => ({ ...prev, drillShowParticipants: e.target.checked }))}
                           />
                         </div>
+                        {recurringEligibleTypes.has(newPost.type) && (
+                          <div className="space-y-3 border rounded-md p-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium">Repeat Schedule</p>
+                                <p className="text-xs text-gray-500">Create repeating drill/clinic posts</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={newPost.recurrenceEnabled}
+                                onChange={(e) => setNewPost(prev => ({ ...prev, recurrenceEnabled: e.target.checked }))}
+                              />
+                            </div>
+                            {newPost.recurrenceEnabled && (
+                              <>
+                                <div className="space-y-2">
+                                  <Label htmlFor="recurrenceFrequency">Frequency</Label>
+                                  <Select
+                                    value={newPost.recurrenceFrequency}
+                                    onValueChange={(value: 'daily' | 'weekly' | 'biweekly') => setNewPost(prev => ({ ...prev, recurrenceFrequency: value }))}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="daily">Daily</SelectItem>
+                                      <SelectItem value="weekly">Weekly</SelectItem>
+                                      <SelectItem value="biweekly">Biweekly</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="recurrenceEndType">Ends</Label>
+                                  <Select
+                                    value={newPost.recurrenceEndType}
+                                    onValueChange={(value: 'date' | 'occurrences') => setNewPost(prev => ({ ...prev, recurrenceEndType: value }))}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="date">On date</SelectItem>
+                                      <SelectItem value="occurrences">After occurrences</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {newPost.recurrenceEndType === 'date' ? (
+                                  <div className="space-y-2">
+                                    <Label htmlFor="recurrenceEndDate">End Date</Label>
+                                    <Input
+                                      id="recurrenceEndDate"
+                                      type="date"
+                                      value={newPost.recurrenceEndDate}
+                                      onChange={(e) => setNewPost(prev => ({ ...prev, recurrenceEndDate: e.target.value }))}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <Label htmlFor="recurrenceOccurrences">Occurrences</Label>
+                                    <Input
+                                      id="recurrenceOccurrences"
+                                      type="number"
+                                      min="1"
+                                      max="365"
+                                      value={newPost.recurrenceOccurrences}
+                                      onChange={(e) => setNewPost(prev => ({ ...prev, recurrenceOccurrences: e.target.value }))}
+                                    />
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
                   </>
@@ -1059,6 +1219,9 @@ export function BulletinBoard() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="never">Never</SelectItem>
+                      {eventSignupTypes.has(newPost.type) && (
+                        <SelectItem value="after_event">After the event</SelectItem>
+                      )}
                       <SelectItem value="7">7 days</SelectItem>
                       <SelectItem value="14">14 days</SelectItem>
                       <SelectItem value="30">30 days</SelectItem>

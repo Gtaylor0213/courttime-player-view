@@ -12,6 +12,7 @@ import {
 import { query } from '../../src/database/connection';
 
 const router = express.Router();
+const signupEnabledCategories = new Set(['drill', 'social', 'clinic', 'tournament']);
 
 /**
  * GET /api/bulletin-board/:facilityId
@@ -46,7 +47,7 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    if (postData.category === 'drill') {
+    if (signupEnabledCategories.has(postData.category)) {
       const adminResult = await query(
         `SELECT 1 FROM facility_admins
          WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
@@ -56,7 +57,7 @@ router.post('/', async (req, res, next) => {
       if (adminResult.rows.length === 0) {
         return res.status(403).json({
           success: false,
-          error: 'Only facility admins can create drill posts'
+          error: 'Only facility admins can create this event type'
         });
       }
     }
@@ -75,7 +76,7 @@ router.post('/', async (req, res, next) => {
 
 /**
  * POST /api/bulletin-board/:postId/signup
- * Signup current member for a drill post
+ * Signup current member for an eligible event post
  */
 router.post('/:postId/signup', async (req, res, next) => {
   try {
@@ -86,7 +87,7 @@ router.post('/:postId/signup', async (req, res, next) => {
       success: true,
       data: result,
       message: result.status === 'confirmed'
-        ? 'Successfully signed up for drill'
+        ? 'Successfully signed up for event'
         : `Added to waitlist at position #${result.waitlistPosition}`
     });
   } catch (error: any) {
@@ -99,7 +100,7 @@ router.post('/:postId/signup', async (req, res, next) => {
 
 /**
  * DELETE /api/bulletin-board/:postId/signup
- * Cancel current member signup/waitlist for a drill post
+ * Cancel current member signup/waitlist for an eligible event post
  */
 router.delete('/:postId/signup', async (req, res, next) => {
   try {
@@ -137,8 +138,8 @@ router.delete('/:postId/signup/:memberUserId', async (req, res, next) => {
     if (postResult.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Post not found' });
     }
-    if (postResult.rows[0].category !== 'drill') {
-      return res.status(400).json({ success: false, error: 'Signup management is only available for drill posts' });
+    if (!signupEnabledCategories.has(postResult.rows[0].category)) {
+      return res.status(400).json({ success: false, error: 'Signup management is only available for drill/social/clinic/tournament posts' });
     }
 
     const adminResult = await query(
@@ -148,13 +149,13 @@ router.delete('/:postId/signup/:memberUserId', async (req, res, next) => {
       [adminUserId, postResult.rows[0].facility_id]
     );
     if (adminResult.rows.length === 0) {
-      return res.status(403).json({ success: false, error: 'Only facility admins can manage drill signups' });
+      return res.status(403).json({ success: false, error: 'Only facility admins can manage event signups' });
     }
 
     await removeDrillSignupByAdmin(postId, memberUserId);
     res.json({
       success: true,
-      message: 'Member removed from drill signup list'
+      message: 'Member removed from event signup list'
     });
   } catch (error: any) {
     if (error?.message?.includes('not signed up')) {

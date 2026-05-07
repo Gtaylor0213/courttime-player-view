@@ -66,6 +66,7 @@ const BULLETIN_TYPE_COLORS: Record<string, string> = {
   tournament: Colors.warning, social: Colors.purple, drill: Colors.cyan,
 };
 const ACTIVE_FEED_POLL_MS = 5000;
+const SIGNUP_EVENT_CATEGORIES = new Set(['drill', 'social', 'clinic', 'tournament']);
 
 function formatRelativeTime(iso: string | undefined): string {
   if (!iso) return '';
@@ -396,10 +397,10 @@ export default function CommunityScreen() {
     ]);
   }
 
-  // ── Drill signup ──
+  // ── Event signup ──
   const [signupBusyId, setSignupBusyId] = useState<string | null>(null);
 
-  async function handleDrillSignup(postId: string) {
+  async function handleEventSignup(postId: string) {
     setSignupBusyId(postId);
     const res = await api.post(`/api/bulletin-board/${postId}/signup`, {});
     if (res.success) {
@@ -411,8 +412,8 @@ export default function CommunityScreen() {
     setSignupBusyId(null);
   }
 
-  async function handleCancelDrillSignup(postId: string) {
-    showAlert('Cancel Signup', 'Remove yourself from this drill?', [
+  async function handleCancelEventSignup(postId: string) {
+    showAlert('Cancel Signup', 'Remove yourself from this event?', [
       { text: 'Keep Signup', style: 'cancel' },
       {
         text: 'Cancel Signup',
@@ -666,7 +667,7 @@ export default function CommunityScreen() {
         <Text style={styles.bulletinContent} numberOfLines={4}>
           {post.content}
         </Text>
-        {post.category === 'drill' ? (
+        {SIGNUP_EVENT_CATEGORIES.has(post.category) ? (
           <>
             {post.drillStartAt ? (
               <View style={styles.bulletinEventRow}>
@@ -712,7 +713,7 @@ export default function CommunityScreen() {
             {post.currentUserSignupStatus ? (
               <TouchableOpacity
                 style={[styles.drillButton, styles.drillButtonCancel]}
-                onPress={() => handleCancelDrillSignup(post.id)}
+                onPress={() => handleCancelEventSignup(post.id)}
                 disabled={signupBusyId === post.id}
               >
                 <Text style={styles.drillButtonCancelText}>{signupBusyId === post.id ? '...' : 'Cancel Signup'}</Text>
@@ -720,7 +721,7 @@ export default function CommunityScreen() {
             ) : post.currentUserCanSignup ? (
               <TouchableOpacity
                 style={styles.drillButton}
-                onPress={() => handleDrillSignup(post.id)}
+                onPress={() => handleEventSignup(post.id)}
                 disabled={signupBusyId === post.id}
               >
                 <Text style={styles.drillButtonText}>{signupBusyId === post.id ? '...' : 'Sign Up'}</Text>

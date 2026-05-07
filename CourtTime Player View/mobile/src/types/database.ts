@@ -79,6 +79,8 @@ export interface BulletinPost {
   title: string;
   content: string;
   category?: string;
+  minParticipants?: number;
+  cancelIfMinNotMet?: boolean;
   isPinned: boolean;
   isAdminPost: boolean;
   postedDate: Date;

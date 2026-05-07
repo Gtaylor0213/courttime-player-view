@@ -308,3 +308,30 @@ export async function sendAnnouncementEmail(
 
   return sendEmail(email, `${subject} - ${facilityName}`, fullHtml);
 }
+
+/**
+ * Send bulletin event cancellation email when minimum participants are not met
+ */
+export async function sendBulletinMinParticipantsNotMetEmail(
+  email: string,
+  fullName: string,
+  facilityName: string,
+  eventTitle: string,
+  eventType: string,
+  eventDateTimeLabel: string,
+  minParticipants: number,
+  registeredParticipants: number
+): Promise<EmailSendResult> {
+  const bodyContent = `
+    <p style="color: #374151; margin-top: 0;">Hi ${fullName},</p>
+    <p style="color: #374151;">${eventType} <strong>${eventTitle}</strong> will not be taking place because the minimum participant count was not met.</p>
+    <div style="background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin: 20px 0;">
+      <p style="margin: 4px 0; color: #374151;"><strong>Scheduled Time:</strong> ${eventDateTimeLabel}</p>
+      <p style="margin: 4px 0; color: #374151;"><strong>Minimum Participants:</strong> ${minParticipants}</p>
+      <p style="margin: 4px 0; color: #374151;"><strong>Registered Participants:</strong> ${registeredParticipants}</p>
+    </div>
+    <p style="color: #6b7280; font-size: 14px;">Please check the bulletin board for future postings.</p>
+  `;
+  const html = wrapInEmailLayout(bodyContent, facilityName);
+  return sendEmail(email, `${eventType} Cancelled - ${eventTitle}`, html);
+}

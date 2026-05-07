@@ -153,11 +153,15 @@ CREATE TABLE bulletin_posts (
     drill_start_at TIMESTAMP,
     drill_court_id UUID REFERENCES courts(id) ON DELETE SET NULL,
     drill_max_participants INTEGER CHECK (drill_max_participants > 0),
+    min_participants INTEGER CHECK (min_participants > 0),
+    cancel_if_min_not_met BOOLEAN DEFAULT false,
     drill_gender_restriction VARCHAR(20) DEFAULT 'any' CHECK (drill_gender_restriction IN ('any', 'male_only', 'female_only')),
     drill_show_participants BOOLEAN DEFAULT false,
     is_pinned BOOLEAN DEFAULT false,
     is_admin_post BOOLEAN DEFAULT false,
     posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cancelled_at TIMESTAMP,
+    cancellation_notified_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -66,6 +66,8 @@ export interface BulletinPost {
   drillStartAt?: Date;
   drillCourtId?: string;
   drillMaxParticipants?: number;
+  minParticipants?: number;
+  cancelIfMinNotMet?: boolean;
   drillGenderRestriction?: 'any' | 'male_only' | 'female_only';
   drillShowParticipants?: boolean;
   isPinned: boolean;

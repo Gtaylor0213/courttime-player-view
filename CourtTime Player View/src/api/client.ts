@@ -429,9 +429,17 @@ export const bulletinBoardApi = {
     category: string;
     isAdminPost?: boolean;
     expiresInDays?: number;
+    expiresAfterEvent?: boolean;
+    recurrence?: {
+      frequency: 'daily' | 'weekly' | 'biweekly';
+      endDate?: string;
+      occurrenceCount?: number;
+    };
     drillStartAt?: string;
     drillCourtId?: string;
     drillMaxParticipants?: number;
+    minParticipants?: number;
+    cancelIfMinNotMet?: boolean;
     drillGenderRestriction?: 'any' | 'male_only' | 'female_only';
     drillShowParticipants?: boolean;
   }) => {

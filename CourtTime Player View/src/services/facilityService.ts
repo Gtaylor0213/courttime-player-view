@@ -226,6 +226,7 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
         status,
         logo_url as "logoUrl",
         general_rules as "generalRules",
+        booking_rules as "bookingRules",
         created_at as "createdAt",
         updated_at as "updatedAt"
       FROM facilities

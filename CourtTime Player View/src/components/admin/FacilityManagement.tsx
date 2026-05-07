@@ -669,85 +669,112 @@ export function FacilityManagement() {
           parsedSimplified = null;
         }
 
-        const bookingRules: BookingRules = {
-          generalRules: facility.generalRules || '',
-          restrictionType: parsedSimplified?.restrictionType || facility.restrictionType || 'account',
-          daysInAdvanceEnabled: parsedSimplified?.daysInAdvance?.enabled ?? defaultBookingRules.daysInAdvanceEnabled,
-          daysInAdvance: String(parsedSimplified?.daysInAdvance?.limit ?? defaultBookingRules.daysInAdvance),
-          cancellationPolicyEnabled: parsedSimplified?.cancellationPolicy?.enabled ?? defaultBookingRules.cancellationPolicyEnabled,
-          maxReservationDurationEnabled: parsedSimplified?.maxReservationDuration?.enabled ?? defaultBookingRules.maxReservationDurationEnabled,
-          maxReservationDurationMinutes: String(parsedSimplified?.maxReservationDuration?.limit ?? defaultBookingRules.maxReservationDurationMinutes),
-          courtsPerWeekUserEnabled: parsedSimplified?.userLimits?.perWeekIndividual?.enabled ?? defaultBookingRules.courtsPerWeekUserEnabled,
-          courtsPerWeekUser: String(parsedSimplified?.userLimits?.perWeekIndividual?.limit ?? defaultBookingRules.courtsPerWeekUser),
-          courtsPerWeekHouseholdEnabled: parsedSimplified?.userLimits?.perWeekHousehold?.enabled ?? defaultBookingRules.courtsPerWeekHouseholdEnabled,
-          courtsPerWeekHousehold: String(parsedSimplified?.userLimits?.perWeekHousehold?.limit ?? defaultBookingRules.courtsPerWeekHousehold),
-          courtsPerDayUserEnabled: parsedSimplified?.userLimits?.perDayIndividual?.enabled ?? defaultBookingRules.courtsPerDayUserEnabled,
-          courtsPerDayUser: String(parsedSimplified?.userLimits?.perDayIndividual?.limit ?? defaultBookingRules.courtsPerDayUser),
-          courtsPerDayHouseholdEnabled: parsedSimplified?.userLimits?.perDayHousehold?.enabled ?? defaultBookingRules.courtsPerDayHouseholdEnabled,
-          courtsPerDayHousehold: String(parsedSimplified?.userLimits?.perDayHousehold?.limit ?? defaultBookingRules.courtsPerDayHousehold),
-          maxBookingsPerWeek: facility.maxBookingsPerWeek === -1 ? '3' : String(facility.maxBookingsPerWeek || '3'),
-          maxBookingsPerWeekUnlimited: facility.maxBookingsPerWeek === -1,
-          maxBookingDurationHours: facility.maxBookingDurationHours === -1 ? '2' : String(facility.maxBookingDurationHours || '2'),
-          maxBookingDurationUnlimited: facility.maxBookingDurationHours === -1,
-          advanceBookingDays: facility.advanceBookingDays === -1 ? '14' : String(facility.advanceBookingDays || '14'),
-          advanceBookingDaysUnlimited: facility.advanceBookingDays === -1,
-          cancellationNoticeHours: facility.cancellationNoticeHours === 0 ? '24' : String(facility.cancellationNoticeHours || '24'),
-          cancellationNoticeUnlimited: facility.cancellationNoticeHours === 0,
-          restrictionsApplyToAdmins: false,
-          adminMaxBookingsPerWeek: String(facility.adminRestrictions?.maxBookingsPerWeek || '10'),
-          adminMaxBookingsUnlimited: facility.adminRestrictions?.maxBookingsPerWeek === -1,
-          adminMaxBookingDurationHours: String(facility.adminRestrictions?.maxBookingDurationHours || '4'),
-          adminMaxDurationUnlimited: facility.adminRestrictions?.maxBookingDurationHours === -1,
-          adminAdvanceBookingDays: String(facility.adminRestrictions?.advanceBookingDays || '30'),
-          adminAdvanceBookingUnlimited: facility.adminRestrictions?.advanceBookingDays === -1,
-          adminCancellationNoticeHours: String(facility.adminRestrictions?.cancellationNoticeHours || '1'),
-          adminCancellationUnlimited: facility.adminRestrictions?.cancellationNoticeHours === 0,
-          hasPeakHours: !!facility.peakHoursPolicy?.enabled,
-          peakHoursApplyToAdmins: false,
-          peakHoursSlots: normalizedPeakHoursSlots,
-          peakHoursRestrictions: {
-            maxBookingsPerWeek: String(facility.peakHoursPolicy?.maxBookingsPerWeek || '2'),
-            maxBookingsUnlimited: facility.peakHoursPolicy?.maxBookingsPerWeek === -1,
-            maxDurationHours: String(facility.peakHoursPolicy?.maxDurationHours || '1.5'),
-            maxDurationUnlimited: facility.peakHoursPolicy?.maxDurationHours === -1,
-          },
-          hasWeekendPolicy: !!facility.weekendPolicy?.enabled,
-          weekendPolicyApplyToAdmins: false,
-          weekendPolicy: {
-            maxBookingsPerWeekend: String(facility.weekendPolicy?.maxBookingsPerWeekend || '2'),
-            maxBookingsUnlimited: facility.weekendPolicy?.maxBookingsPerWeekend === -1,
-            maxDurationHours: String(facility.weekendPolicy?.maxDurationHours || '2'),
-            maxDurationUnlimited: facility.weekendPolicy?.maxDurationHours === -1,
-            advanceBookingDays: String(facility.weekendPolicy?.advanceBookingDays || '7'),
-            advanceBookingUnlimited: facility.weekendPolicy?.advanceBookingDays === -1,
-          },
-          // Rules engine fields - defaults until loadFacilityRules overlays actual values
-          maxActiveReservationsEnabled: defaultBookingRules.maxActiveReservationsEnabled,
-          maxActiveReservations: defaultBookingRules.maxActiveReservations,
-          maxHoursPerWeekEnabled: defaultBookingRules.maxHoursPerWeekEnabled,
-          maxHoursPerWeek: defaultBookingRules.maxHoursPerWeek,
-          noOverlappingReservations: defaultBookingRules.noOverlappingReservations,
-          minimumLeadTimeEnabled: defaultBookingRules.minimumLeadTimeEnabled,
-          minimumLeadTimeMinutes: defaultBookingRules.minimumLeadTimeMinutes,
-          strikeSystemEnabled: defaultBookingRules.strikeSystemEnabled,
-          strikeThreshold: defaultBookingRules.strikeThreshold,
-          strikeWindowDays: defaultBookingRules.strikeWindowDays,
-          strikeLockoutDays: defaultBookingRules.strikeLockoutDays,
-          rateLimitEnabled: defaultBookingRules.rateLimitEnabled,
-          rateLimitMaxActions: defaultBookingRules.rateLimitMaxActions,
-          rateLimitWindowSeconds: defaultBookingRules.rateLimitWindowSeconds,
-          courtWeeklyCapEnabled: defaultBookingRules.courtWeeklyCapEnabled,
-          courtWeeklyCap: defaultBookingRules.courtWeeklyCap,
-          courtReleaseTimeEnabled: defaultBookingRules.courtReleaseTimeEnabled,
-          courtReleaseTime: defaultBookingRules.courtReleaseTime,
-          courtReleaseDaysAhead: defaultBookingRules.courtReleaseDaysAhead,
-          householdMaxMembersEnabled: defaultBookingRules.householdMaxMembersEnabled,
-          householdMaxMembers: defaultBookingRules.householdMaxMembers,
-          householdMaxActiveEnabled: defaultBookingRules.householdMaxActiveEnabled,
-          householdMaxActive: defaultBookingRules.householdMaxActive,
-          householdPrimeCapEnabled: defaultBookingRules.householdPrimeCapEnabled,
-          householdPrimeCap: defaultBookingRules.householdPrimeCap,
-        };
+        const hasFlatSavedRules = !!parsedSimplified && typeof parsedSimplified === 'object' && (
+          'daysInAdvanceEnabled' in parsedSimplified ||
+          'maxBookingsPerWeekUnlimited' in parsedSimplified ||
+          'peakHoursSlots' in parsedSimplified
+        );
+
+        const bookingRules: BookingRules = hasFlatSavedRules
+          ? {
+              ...defaultBookingRules,
+              ...parsedSimplified,
+              generalRules: facility.generalRules || parsedSimplified?.generalRules || '',
+              restrictionType: parsedSimplified?.restrictionType || facility.restrictionType || defaultBookingRules.restrictionType,
+              peakHoursSlots: Array.isArray(parsedSimplified?.peakHoursSlots)
+                ? parsedSimplified.peakHoursSlots.map((slot: any) => normalizePeakHoursSlot(slot))
+                : normalizedPeakHoursSlots,
+              peakHoursRestrictions: {
+                ...defaultBookingRules.peakHoursRestrictions,
+                ...(parsedSimplified?.peakHoursRestrictions || {}),
+              },
+              weekendPolicy: {
+                ...defaultBookingRules.weekendPolicy,
+                ...(parsedSimplified?.weekendPolicy || {}),
+              },
+              allowedBookingTypes: Array.isArray(parsedSimplified?.allowedBookingTypes)
+                ? parsedSimplified.allowedBookingTypes
+                : defaultBookingRules.allowedBookingTypes,
+            }
+          : {
+              generalRules: facility.generalRules || '',
+              restrictionType: parsedSimplified?.restrictionType || facility.restrictionType || 'account',
+              daysInAdvanceEnabled: parsedSimplified?.daysInAdvance?.enabled ?? defaultBookingRules.daysInAdvanceEnabled,
+              daysInAdvance: String(parsedSimplified?.daysInAdvance?.limit ?? defaultBookingRules.daysInAdvance),
+              cancellationPolicyEnabled: parsedSimplified?.cancellationPolicy?.enabled ?? defaultBookingRules.cancellationPolicyEnabled,
+              maxReservationDurationEnabled: parsedSimplified?.maxReservationDuration?.enabled ?? defaultBookingRules.maxReservationDurationEnabled,
+              maxReservationDurationMinutes: String(parsedSimplified?.maxReservationDuration?.limit ?? defaultBookingRules.maxReservationDurationMinutes),
+              courtsPerWeekUserEnabled: parsedSimplified?.userLimits?.perWeekIndividual?.enabled ?? defaultBookingRules.courtsPerWeekUserEnabled,
+              courtsPerWeekUser: String(parsedSimplified?.userLimits?.perWeekIndividual?.limit ?? defaultBookingRules.courtsPerWeekUser),
+              courtsPerWeekHouseholdEnabled: parsedSimplified?.userLimits?.perWeekHousehold?.enabled ?? defaultBookingRules.courtsPerWeekHouseholdEnabled,
+              courtsPerWeekHousehold: String(parsedSimplified?.userLimits?.perWeekHousehold?.limit ?? defaultBookingRules.courtsPerWeekHousehold),
+              courtsPerDayUserEnabled: parsedSimplified?.userLimits?.perDayIndividual?.enabled ?? defaultBookingRules.courtsPerDayUserEnabled,
+              courtsPerDayUser: String(parsedSimplified?.userLimits?.perDayIndividual?.limit ?? defaultBookingRules.courtsPerDayUser),
+              courtsPerDayHouseholdEnabled: parsedSimplified?.userLimits?.perDayHousehold?.enabled ?? defaultBookingRules.courtsPerDayHouseholdEnabled,
+              courtsPerDayHousehold: String(parsedSimplified?.userLimits?.perDayHousehold?.limit ?? defaultBookingRules.courtsPerDayHousehold),
+              maxBookingsPerWeek: facility.maxBookingsPerWeek === -1 ? '3' : String(facility.maxBookingsPerWeek || '3'),
+              maxBookingsPerWeekUnlimited: facility.maxBookingsPerWeek === -1,
+              maxBookingDurationHours: facility.maxBookingDurationHours === -1 ? '2' : String(facility.maxBookingDurationHours || '2'),
+              maxBookingDurationUnlimited: facility.maxBookingDurationHours === -1,
+              advanceBookingDays: facility.advanceBookingDays === -1 ? '14' : String(facility.advanceBookingDays || '14'),
+              advanceBookingDaysUnlimited: facility.advanceBookingDays === -1,
+              cancellationNoticeHours: facility.cancellationNoticeHours === 0 ? '24' : String(facility.cancellationNoticeHours || '24'),
+              cancellationNoticeUnlimited: facility.cancellationNoticeHours === 0,
+              restrictionsApplyToAdmins: false,
+              adminMaxBookingsPerWeek: String(facility.adminRestrictions?.maxBookingsPerWeek || '10'),
+              adminMaxBookingsUnlimited: facility.adminRestrictions?.maxBookingsPerWeek === -1,
+              adminMaxBookingDurationHours: String(facility.adminRestrictions?.maxBookingDurationHours || '4'),
+              adminMaxDurationUnlimited: facility.adminRestrictions?.maxBookingDurationHours === -1,
+              adminAdvanceBookingDays: String(facility.adminRestrictions?.advanceBookingDays || '30'),
+              adminAdvanceBookingUnlimited: facility.adminRestrictions?.advanceBookingDays === -1,
+              adminCancellationNoticeHours: String(facility.adminRestrictions?.cancellationNoticeHours || '1'),
+              adminCancellationUnlimited: facility.adminRestrictions?.cancellationNoticeHours === 0,
+              hasPeakHours: !!facility.peakHoursPolicy?.enabled,
+              peakHoursApplyToAdmins: false,
+              peakHoursSlots: normalizedPeakHoursSlots,
+              peakHoursRestrictions: {
+                maxBookingsPerWeek: String(facility.peakHoursPolicy?.maxBookingsPerWeek || '2'),
+                maxBookingsUnlimited: facility.peakHoursPolicy?.maxBookingsPerWeek === -1,
+                maxDurationHours: String(facility.peakHoursPolicy?.maxDurationHours || '1.5'),
+                maxDurationUnlimited: facility.peakHoursPolicy?.maxDurationHours === -1,
+              },
+              hasWeekendPolicy: !!facility.weekendPolicy?.enabled,
+              weekendPolicyApplyToAdmins: false,
+              weekendPolicy: {
+                maxBookingsPerWeekend: String(facility.weekendPolicy?.maxBookingsPerWeekend || '2'),
+                maxBookingsUnlimited: facility.weekendPolicy?.maxBookingsPerWeekend === -1,
+                maxDurationHours: String(facility.weekendPolicy?.maxDurationHours || '2'),
+                maxDurationUnlimited: facility.weekendPolicy?.maxDurationHours === -1,
+                advanceBookingDays: String(facility.weekendPolicy?.advanceBookingDays || '7'),
+                advanceBookingUnlimited: facility.weekendPolicy?.advanceBookingDays === -1,
+              },
+              // Rules engine fields - defaults until loadFacilityRules overlays actual values
+              maxActiveReservationsEnabled: defaultBookingRules.maxActiveReservationsEnabled,
+              maxActiveReservations: defaultBookingRules.maxActiveReservations,
+              maxHoursPerWeekEnabled: defaultBookingRules.maxHoursPerWeekEnabled,
+              maxHoursPerWeek: defaultBookingRules.maxHoursPerWeek,
+              noOverlappingReservations: defaultBookingRules.noOverlappingReservations,
+              minimumLeadTimeEnabled: defaultBookingRules.minimumLeadTimeEnabled,
+              minimumLeadTimeMinutes: defaultBookingRules.minimumLeadTimeMinutes,
+              strikeSystemEnabled: defaultBookingRules.strikeSystemEnabled,
+              strikeThreshold: defaultBookingRules.strikeThreshold,
+              strikeWindowDays: defaultBookingRules.strikeWindowDays,
+              strikeLockoutDays: defaultBookingRules.strikeLockoutDays,
+              rateLimitEnabled: defaultBookingRules.rateLimitEnabled,
+              rateLimitMaxActions: defaultBookingRules.rateLimitMaxActions,
+              rateLimitWindowSeconds: defaultBookingRules.rateLimitWindowSeconds,
+              courtWeeklyCapEnabled: defaultBookingRules.courtWeeklyCapEnabled,
+              courtWeeklyCap: defaultBookingRules.courtWeeklyCap,
+              courtReleaseTimeEnabled: defaultBookingRules.courtReleaseTimeEnabled,
+              courtReleaseTime: defaultBookingRules.courtReleaseTime,
+              courtReleaseDaysAhead: defaultBookingRules.courtReleaseDaysAhead,
+              householdMaxMembersEnabled: defaultBookingRules.householdMaxMembersEnabled,
+              householdMaxMembers: defaultBookingRules.householdMaxMembers,
+              householdMaxActiveEnabled: defaultBookingRules.householdMaxActiveEnabled,
+              householdMaxActive: defaultBookingRules.householdMaxActive,
+              householdPrimeCapEnabled: defaultBookingRules.householdPrimeCapEnabled,
+              householdPrimeCap: defaultBookingRules.householdPrimeCap,
+            };
 
         const data: FacilityData = {
           name: facility.name || '',
@@ -1691,7 +1718,7 @@ export function FacilityManagement() {
           const updated = { ...prev, bookingRules: { ...prev.bookingRules } };
 
           const acc010 = ruleMap.get('ACC-010') as any;
-          if (acc010) {
+          if (acc010?.facilityConfig) {
             updated.bookingRules.peakHoursRestrictions = {
               ...updated.bookingRules.peakHoursRestrictions,
               maxBookingsUnlimited: !acc010.isEnabled,
@@ -1726,7 +1753,7 @@ export function FacilityManagement() {
           }
 
           const crt002 = ruleMap.get('CRT-002') as any;
-          if (crt002) {
+          if (crt002?.facilityConfig) {
             updated.bookingRules.peakHoursRestrictions = {
               ...updated.bookingRules.peakHoursRestrictions,
               maxDurationUnlimited: !crt002.isEnabled,
@@ -1737,7 +1764,7 @@ export function FacilityManagement() {
           }
 
           const acc002 = ruleMap.get('ACC-002') as any;
-          if (acc002) {
+          if (acc002?.facilityConfig) {
             updated.bookingRules.maxBookingsPerWeekUnlimited = !acc002.isEnabled;
             if (acc002.effectiveConfig?.max_per_week !== undefined) {
               updated.bookingRules.maxBookingsPerWeek = String(acc002.effectiveConfig.max_per_week);
@@ -1745,7 +1772,7 @@ export function FacilityManagement() {
           }
 
           const acc005 = ruleMap.get('ACC-005') as any;
-          if (acc005) {
+          if (acc005?.facilityConfig) {
             updated.bookingRules.advanceBookingDaysUnlimited = !acc005.isEnabled;
             if (acc005.effectiveConfig?.max_days_ahead !== undefined) {
               updated.bookingRules.advanceBookingDays = String(acc005.effectiveConfig.max_days_ahead);
@@ -1753,7 +1780,7 @@ export function FacilityManagement() {
           }
 
           const acc008 = ruleMap.get('ACC-008') as any;
-          if (acc008) {
+          if (acc008?.facilityConfig) {
             updated.bookingRules.cancellationNoticeUnlimited = !acc008.isEnabled;
             if (acc008.effectiveConfig?.late_cancel_cutoff_minutes !== undefined) {
               updated.bookingRules.cancellationNoticeHours = String(acc008.effectiveConfig.late_cancel_cutoff_minutes / 60);
@@ -1761,7 +1788,7 @@ export function FacilityManagement() {
           }
 
           const crt005 = ruleMap.get('CRT-005') as any;
-          if (crt005) {
+          if (crt005?.facilityConfig) {
             updated.bookingRules.maxBookingDurationUnlimited = !crt005.isEnabled;
             if (crt005.effectiveConfig?.max_duration_minutes !== undefined) {
               updated.bookingRules.maxBookingDurationHours = String(crt005.effectiveConfig.max_duration_minutes / 60);
@@ -1774,6 +1801,8 @@ export function FacilityManagement() {
             if (skippedCodes.has(code)) continue;
             const effective = ruleMap.get(code) as any;
             if (!effective) continue;
+            // Only apply explicit facility overrides. Otherwise keep persisted booking_rules values.
+            if (!effective.facilityConfig) continue;
 
             const enabledValue = map.invertEnabled ? !effective.isEnabled : !!effective.isEnabled;
             if (map.enabledField.includes('.')) {

@@ -83,6 +83,8 @@ export function CourtCalendarView() {
   const [bookingsData, setBookingsData] = useState<any>({});
   const [loadingBookings, setLoadingBookings] = useState(false);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const headerRowRef = useRef<HTMLTableRowElement>(null);
+  const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState<number>(HEADER_HEIGHT);
   const [bookingWizard, setBookingWizard] = useState({
     isOpen: false,
     court: '',
@@ -275,32 +277,37 @@ export function CourtCalendarView() {
         const endTotalMinutes = Number.isFinite(endHours) && Number.isFinite(endMinutes)
           ? (endHours * 60) + endMinutes
           : NaN;
-        let slotsToFill = Number.isFinite(endTotalMinutes) && endTotalMinutes > startTotalMinutes
-          ? Math.ceil((endTotalMinutes - startTotalMinutes) / 15)
-          : Math.ceil(booking.durationMinutes / 15);
-        // Propagated "Blocked (Court X)" entries can include a 15-minute rules buffer.
-        // Trim one slot so the visual block matches the booked court's actual playable span.
-        if (isBlocked && blockedBy && slotsToFill > 1) {
-          slotsToFill -= 1;
-        }
+        const fallbackDurationMinutes = Number.isFinite(booking.durationMinutes)
+          ? booking.durationMinutes
+          : parseInt(String(booking.durationMinutes), 10);
+        const resolvedEndMinutes = Number.isFinite(endTotalMinutes) && endTotalMinutes > startTotalMinutes
+          ? endTotalMinutes
+          : startTotalMinutes + (Number.isFinite(fallbackDurationMinutes) ? fallbackDurationMinutes : 15);
+        const slotsToFill = Math.max(1, Math.ceil((resolvedEndMinutes - startTotalMinutes) / 15));
 
-        for (let i = 0; i < slotsToFill; i++) {
-          const slotMinutes = startMinutes + (i * 15);
-          const slotHours = startHours + Math.floor(slotMinutes / 60);
-          const actualMinutes = slotMinutes % 60;
+        let slotStartTotalMinutes = startTotalMinutes;
+        while (slotStartTotalMinutes < resolvedEndMinutes) {
+          const slotHours = Math.floor(slotStartTotalMinutes / 60);
+          const actualMinutes = slotStartTotalMinutes % 60;
           const period = slotHours >= 12 ? 'PM' : 'AM';
           const displayHour = slotHours > 12 ? slotHours - 12 : slotHours === 0 ? 12 : slotHours;
           const slotTime = `${displayHour}:${actualMinutes.toString().padStart(2, '0')} ${period}`;
+          const slotIndex = Math.floor((slotStartTotalMinutes - startTotalMinutes) / 15);
 
           // Don't overwrite real bookings with blocked entries
-          if (transformedBookings[targetCourtName][slotTime]) continue;
+          if (transformedBookings[targetCourtName][slotTime]) {
+            slotStartTotalMinutes += 15;
+            continue;
+          }
 
           if (isBlocked) {
             transformedBookings[targetCourtName][slotTime] = {
               player: `Blocked (${blockedBy})`,
               duration: `${booking.durationMinutes}min`,
               type: 'blocked',
-              isFirstSlot: i === 0,
+              startTime: booking.startTime,
+              endTime: booking.endTime,
+              isFirstSlot: slotIndex === 0,
               slotCount: slotsToFill,
               bookingType: 'blocked',
             };
@@ -311,7 +318,9 @@ export function CourtCalendarView() {
               type: 'reservation',
               bookingId: booking.id,
               userId: booking.userId,
-              isFirstSlot: i === 0,
+              startTime: booking.startTime,
+              endTime: booking.endTime,
+              isFirstSlot: slotIndex === 0,
               slotCount: slotsToFill,
               bookingType: booking.bookingType,
               notes: booking.notes,
@@ -321,6 +330,7 @@ export function CourtCalendarView() {
               }
             };
           }
+          slotStartTotalMinutes += 15;
         }
       };
 
@@ -346,6 +356,8 @@ export function CourtCalendarView() {
               isFirstSlot: isFirst,
               slotCount: totalSlots,
               bookingType: 'blackout',
+              startTime: `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}:00`,
+              endTime: `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}:00`,
             };
           }
           isFirst = false;
@@ -621,6 +633,20 @@ export function CourtCalendarView() {
     const clamped = Math.max(50, Math.min(200, idealZoom));
     setZoomLevel(clamped);
   }, [courts.length, effectiveTimeColWidth, userSetZoom]);
+
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      const measured = headerRowRef.current?.getBoundingClientRect().height;
+      if (measured && Number.isFinite(measured) && measured > 0) {
+        setMeasuredHeaderHeight(measured);
+      } else {
+        setMeasuredHeaderHeight(effectiveHeaderHeight);
+      }
+    };
+    updateHeaderHeight();
+    window.addEventListener('resize', updateHeaderHeight);
+    return () => window.removeEventListener('resize', updateHeaderHeight);
+  }, [courts.length, effectiveHeaderHeight, effectiveCourtWidth, zoomLevel]);
 
   // Fetch peak-hours configs for visible courts
   useEffect(() => {
@@ -1235,7 +1261,7 @@ export function CourtCalendarView() {
           >
             <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: effectiveTimeColWidth + courts.length * effectiveCourtWidth }}>
               <thead>
-                <tr>
+                <tr ref={headerRowRef}>
                   {/* Corner cell: sticky in both directions */}
                   <th
                     className="sticky top-0 left-0 z-40 bg-green-700 border-r border-b-2 border-green-800"
@@ -1368,7 +1394,7 @@ export function CourtCalendarView() {
                 top: 0,
                 left: 0,
                 width: effectiveTimeColWidth + courts.length * effectiveCourtWidth,
-                height: effectiveHeaderHeight + visibleTimeSlots.length * effectiveRowHeight,
+                height: measuredHeaderHeight + visibleTimeSlots.length * effectiveRowHeight,
                 zIndex: 5,
                 pointerEvents: 'none',
                 overflow: 'visible',
@@ -1377,10 +1403,26 @@ export function CourtCalendarView() {
               {bookingOverlays.map((overlay, idx) => {
                 const { booking } = overlay;
                 const isBlocked = booking.type === 'blocked';
-                const top = effectiveHeaderHeight + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
+                const parseMinutes = (timeValue?: string): number | null => {
+                  if (!timeValue || typeof timeValue !== 'string') return null;
+                  const [h, m] = timeValue.split(':').map(Number);
+                  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+                  return h * 60 + m;
+                };
+                const bookingStartMinutes = parseMinutes(booking.startTime);
+                const bookingEndMinutes = parseMinutes(booking.endTime);
+                const dayStartMinutes = startHour * 60;
+                const hasExactRange = bookingStartMinutes !== null
+                  && bookingEndMinutes !== null
+                  && bookingEndMinutes > bookingStartMinutes;
+                const top = hasExactRange
+                  ? measuredHeaderHeight + ((bookingStartMinutes - dayStartMinutes) / 15) * effectiveSubSlotHeight + (isBlocked ? 0 : 2)
+                  : measuredHeaderHeight + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
                 const left = effectiveTimeColWidth + overlay.courtIndex * effectiveCourtWidth + (isBlocked ? 0 : 4);
                 const width = effectiveCourtWidth - (isBlocked ? 0 : 8);
-                const height = overlay.slotCount * effectiveSubSlotHeight - (isBlocked ? 0 : 4);
+                const height = hasExactRange
+                  ? (((bookingEndMinutes - bookingStartMinutes) / 15) * effectiveSubSlotHeight) - (isBlocked ? 0 : 4)
+                  : overlay.slotCount * effectiveSubSlotHeight - (isBlocked ? 0 : 4);
                 const colorClass = isBlocked
                   ? 'bg-gray-200 text-gray-500 border-0'
                   : booking.bookingType
@@ -1433,7 +1475,7 @@ export function CourtCalendarView() {
                 className="pointer-events-none"
                 style={{
                   position: 'absolute',
-                  top: `${currentTimeLinePosition + effectiveHeaderHeight}px`,
+                  top: `${currentTimeLinePosition + measuredHeaderHeight}px`,
                   left: 0,
                   right: 0,
                   zIndex: 20,

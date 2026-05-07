@@ -151,6 +151,7 @@ router.patch('/facilities/:facilityId', async (req, res) => {
       name,
       type,
       address,
+      primaryLocationLabel,
       streetAddress,
       city,
       state,
@@ -188,13 +189,15 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         timezone = COALESCE($13, timezone),
         general_rules = COALESCE($14, general_rules),
         booking_rules = COALESCE($15, booking_rules),
+        primary_location_label = COALESCE($16, primary_location_label),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $16
+      WHERE id = $17
       RETURNING
         id,
         name,
         type,
         address,
+        primary_location_label as "primaryLocationLabel",
         street_address as "streetAddress",
         city,
         state,
@@ -208,7 +211,7 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         general_rules as "generalRules",
         created_at as "createdAt",
         updated_at as "updatedAt"
-    `, [name, type, address, phone, email, description, operatingHours, streetAddress, city, state, zipCode, logoUrl, timezone, generalRules, serializedBookingRules, facilityId]);
+    `, [name, type, address, phone, email, description, operatingHours, streetAddress, city, state, zipCode, logoUrl, timezone, generalRules, serializedBookingRules, primaryLocationLabel, facilityId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({

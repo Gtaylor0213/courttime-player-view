@@ -158,6 +158,7 @@ interface BookingRules {
 interface FacilityData {
   name: string;
   type: string;
+  primaryLocationLabel: string;
   streetAddress: string;
   city: string;
   state: string;
@@ -496,6 +497,7 @@ export function FacilityManagement() {
   const [facilityData, setFacilityData] = useState<FacilityData>({
     name: '',
     type: '',
+    primaryLocationLabel: '',
     streetAddress: '',
     city: '',
     state: '',
@@ -783,6 +785,7 @@ export function FacilityManagement() {
         const data: FacilityData = {
           name: facility.name || '',
           type: facility.type || 'Tennis Facility',
+          primaryLocationLabel: facility.primaryLocationLabel || '',
           streetAddress,
           city,
           state,
@@ -2242,6 +2245,16 @@ export function FacilityManagement() {
                     <CardDescription>Facility address</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="primaryLocationLabel">Primary Address Label</Label>
+                      <Input
+                        id="primaryLocationLabel"
+                        value={facilityData.primaryLocationLabel}
+                        onChange={(e) => setFacilityData({ ...facilityData, primaryLocationLabel: e.target.value })}
+                        disabled={!isEditing}
+                        placeholder="Main Campus"
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="streetAddress">Street Address</Label>
                       <Input

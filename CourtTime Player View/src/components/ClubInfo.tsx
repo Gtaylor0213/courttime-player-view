@@ -17,6 +17,7 @@ interface FacilityData {
   name: string;
   type: string;
   description: string;
+  primaryLocationLabel?: string;
   streetAddress: string;
   address?: string; // Legacy field
   city: string;
@@ -128,6 +129,7 @@ export function ClubInfo() {
           name: rawFacility.name || '',
           type: rawFacility.type || 'Tennis Facility',
           description: rawFacility.description || '',
+          primaryLocationLabel: rawFacility.primaryLocationLabel || '',
           streetAddress,
           city,
           state,
@@ -329,13 +331,20 @@ export function ClubInfo() {
                 {/* Secondary locations (members only) */}
                 {isMember && secondaryLocations.length > 0 && (
                   <div className="space-y-3 pb-3 border-b border-gray-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Main Location</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {facility.primaryLocationLabel || 'Main Location'}
+                    </p>
                   </div>
                 )}
                 {(facility.streetAddress || facility.city) && (
                   <div className="flex items-start">
                     <MapPin className="h-4 w-4 text-gray-400 mr-3 mt-1" />
                     <div>
+                      {facility.primaryLocationLabel && (
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                          {facility.primaryLocationLabel}
+                        </p>
+                      )}
                       {facility.streetAddress && <p>{facility.streetAddress}</p>}
                       <p className="text-sm text-gray-600">
                         {[facility.city, facility.state].filter(Boolean).join(', ')}

@@ -107,6 +107,7 @@ export function FacilityRegistration() {
     // Step 2: Facility Information
     facilityName: '',
     facilityType: '',
+    primaryLocationLabel: '',
     streetAddress: '',
     city: '',
     state: '',
@@ -1002,6 +1003,7 @@ export function FacilityRegistration() {
         // Facility Information
         facilityName: formData.facilityName,
         facilityType: formData.facilityType,
+        primaryLocationLabel: formData.primaryLocationLabel.trim() || undefined,
         streetAddress: formData.streetAddress,
         city: formData.city,
         state: formData.state,
@@ -2038,6 +2040,16 @@ export function FacilityRegistration() {
               </div>
 
               <div>
+                <Label htmlFor="primaryLocationLabel">Primary Address Label</Label>
+                <Input
+                  id="primaryLocationLabel"
+                  value={formData.primaryLocationLabel}
+                  onChange={(e) => handleInputChange('primaryLocationLabel', e.target.value)}
+                  placeholder="Main Campus"
+                />
+              </div>
+
+              <div>
                 <Label htmlFor="streetAddress">Street Address *</Label>
                 <Input
                   id="streetAddress"
@@ -2974,6 +2986,7 @@ export function FacilityRegistration() {
           )}
           <div><span className="font-medium">Name:</span> {formData.facilityName}</div>
           <div><span className="font-medium">Type:</span> {formData.facilityType}</div>
+          {formData.primaryLocationLabel && <div><span className="font-medium">Primary Address Label:</span> {formData.primaryLocationLabel}</div>}
           <div><span className="font-medium">Address:</span> {formData.streetAddress}, {formData.city}, {formData.state} {formData.zipCode}</div>
           <div><span className="font-medium">Phone:</span> {formData.phone}</div>
           <div><span className="font-medium">Email:</span> {formData.email}</div>

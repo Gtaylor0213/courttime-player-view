@@ -126,6 +126,7 @@ export const facilitiesApi = {
     // Facility Information
     facilityName: string;
     facilityType: string;
+    primaryLocationLabel?: string;
     streetAddress: string;
     city: string;
     state: string;
@@ -575,6 +576,7 @@ export const adminApi = {
     city?: string;
     state?: string;
     zipCode?: string;
+    primaryLocationLabel?: string;
     address?: string;
     phone?: string;
     email?: string;

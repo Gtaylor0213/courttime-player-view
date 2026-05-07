@@ -4,7 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS facility_secondary_locations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+  facility_id VARCHAR(50) NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
   location_name VARCHAR(255) NOT NULL,          -- e.g. "North Campus", "Annex"
   street_address VARCHAR(255) NOT NULL,
   city VARCHAR(100) NOT NULL,

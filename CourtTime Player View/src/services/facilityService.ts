@@ -77,6 +77,7 @@ async function sendAdminInviteEmail(
 export interface FacilityCreateData {
   name: string;
   type: string;
+  primaryLocationLabel?: string;
   address: string;
   city?: string;
   state?: string;
@@ -124,6 +125,7 @@ export async function getAllFacilities(): Promise<Facility[]> {
         id,
         name,
         type,
+        primary_location_label as "primaryLocationLabel",
         address,
         street_address as "streetAddress",
         city,
@@ -212,6 +214,7 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
         id,
         name,
         type,
+        primary_location_label as "primaryLocationLabel",
         address,
         street_address as "streetAddress",
         city,
@@ -786,6 +789,7 @@ export interface FacilityRegistrationData {
   // Facility Information
   facilityName: string;
   facilityType: string;
+  primaryLocationLabel?: string;
   streetAddress: string;
   city: string;
   state: string;
@@ -975,12 +979,12 @@ export async function registerFacility(
     const facilityResult = await client.query(
       `INSERT INTO facilities (
         id, name, type, street_address, city, state, zip_code, address,
-        phone, email, contact_name, description, operating_hours, timezone,
+        primary_location_label, phone, email, contact_name, description, operating_hours, timezone,
         general_rules, cancellation_policy, booking_rules, logo_url, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'active')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'active')
       RETURNING
         id, name, type, street_address as "streetAddress", city, state, zip_code as "zipCode",
-        address, phone, email, contact_name as "contactName", description,
+        address, primary_location_label as "primaryLocationLabel", phone, email, contact_name as "contactName", description,
         operating_hours as "operatingHours", timezone, general_rules as "generalRules",
         cancellation_policy as "cancellationPolicy", booking_rules as "bookingRules",
         logo_url as "logoUrl", status, created_at as "createdAt"`,
@@ -993,6 +997,7 @@ export async function registerFacility(
         data.state,
         data.zipCode,
         `${data.streetAddress}, ${data.city}, ${data.state} ${data.zipCode}`, // Full address for legacy field
+        data.primaryLocationLabel?.trim() || null,
         data.phone,
         data.email,
         data.contactName,

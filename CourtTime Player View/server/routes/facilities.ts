@@ -127,6 +127,7 @@ router.post('/register', async (req, res, next) => {
       // Facility Information
       facilityName,
       facilityType,
+      primaryLocationLabel,
       streetAddress,
       city,
       state,
@@ -224,6 +225,7 @@ router.post('/register', async (req, res, next) => {
       adminFullName,
       facilityName,
       facilityType,
+      primaryLocationLabel: primaryLocationLabel || undefined,
       streetAddress,
       city,
       state,

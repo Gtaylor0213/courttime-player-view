@@ -30,6 +30,13 @@ export function PlayerProfile() {
   const [isSearchingFacilities, setIsSearchingFacilities] = useState(false);
   const [requestingMembership, setRequestingMembership] = useState<string | null>(null);
   const [leavingFacility, setLeavingFacility] = useState<string | null>(null);
+  const [joinTermsModal, setJoinTermsModal] = useState<{
+    facilityId: string;
+    facilityName: string;
+    termsHtml: string;
+  } | null>(null);
+  const [joinTermsScrolledToBottom, setJoinTermsScrolledToBottom] = useState(false);
+  const [joinTermsAccepted, setJoinTermsAccepted] = useState(false);
 
   // Upcoming reservations
   const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
@@ -255,6 +262,32 @@ export function PlayerProfile() {
     }
   };
 
+  const submitMembershipRequest = async (facilityId: string, facilityName: string, termsAccepted: boolean) => {
+    if (!user?.id) return;
+    setRequestingMembership(facilityId);
+
+    try {
+      const response = await playerProfileApi.requestMembership(user.id, facilityId, 'Full', termsAccepted);
+
+      if (response.success) {
+        toast.success(`Membership request sent to ${facilityName}`);
+        setFacilitySearchQuery('');
+        setFacilitySearchResults([]);
+        setJoinTermsModal(null);
+        setJoinTermsScrolledToBottom(false);
+        setJoinTermsAccepted(false);
+        loadProfile();
+      } else {
+        toast.error(response.error || 'Failed to request membership');
+      }
+    } catch (error) {
+      console.error('Error requesting membership:', error);
+      toast.error('Failed to request membership');
+    } finally {
+      setRequestingMembership(null);
+    }
+  };
+
   const handleRequestMembership = async (facilityId: string, facilityName: string) => {
     if (!user?.id) return;
 
@@ -268,24 +301,25 @@ export function PlayerProfile() {
       return;
     }
 
-    setRequestingMembership(facilityId);
-
     try {
-      const response = await playerProfileApi.requestMembership(user.id, facilityId, 'Full');
+      const termsResponse = await facilitiesApi.getTerms(facilityId);
+      const terms = termsResponse.success ? termsResponse.data?.terms : null;
 
-      if (response.success) {
-        toast.success(`Membership request sent to ${facilityName}`);
-        setFacilitySearchQuery('');
-        setFacilitySearchResults([]);
-        loadProfile(); // Reload to show pending membership
-      } else {
-        toast.error(response.error || 'Failed to request membership');
+      if (terms?.contentHtml?.trim()) {
+        setJoinTermsModal({
+          facilityId,
+          facilityName,
+          termsHtml: terms.contentHtml,
+        });
+        setJoinTermsScrolledToBottom(false);
+        setJoinTermsAccepted(false);
+        return;
       }
+
+      await submitMembershipRequest(facilityId, facilityName, false);
     } catch (error) {
       console.error('Error requesting membership:', error);
       toast.error('Failed to request membership');
-    } finally {
-      setRequestingMembership(null);
     }
   };
 
@@ -1052,6 +1086,64 @@ export function PlayerProfile() {
         reservation={selectedReservation}
         onUpdate={handleReservationUpdate}
       />
+
+      {joinTermsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <CardHeader>
+              <CardTitle>Terms & Conditions</CardTitle>
+              <CardDescription>
+                Review and accept the terms for {joinTermsModal.facilityName} before requesting membership.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 overflow-hidden">
+              <div
+                className="h-72 overflow-y-auto border rounded-md p-3 text-sm"
+                onScroll={(e) => {
+                  const target = e.currentTarget;
+                  const reachedBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 8;
+                  if (reachedBottom) setJoinTermsScrolledToBottom(true);
+                }}
+              >
+                <div dangerouslySetInnerHTML={{ __html: joinTermsModal.termsHtml }} />
+              </div>
+
+              {!joinTermsScrolledToBottom && (
+                <p className="text-xs text-gray-500">Scroll to the bottom to enable acceptance.</p>
+              )}
+
+              <label className={`flex items-center gap-2 text-sm ${!joinTermsScrolledToBottom ? 'opacity-50' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={joinTermsAccepted}
+                  disabled={!joinTermsScrolledToBottom}
+                  onChange={(e) => setJoinTermsAccepted(e.target.checked)}
+                />
+                I have read and accept these Terms & Conditions
+              </label>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setJoinTermsModal(null);
+                    setJoinTermsScrolledToBottom(false);
+                    setJoinTermsAccepted(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={!joinTermsScrolledToBottom || !joinTermsAccepted || requestingMembership === joinTermsModal.facilityId}
+                  onClick={() => submitMembershipRequest(joinTermsModal.facilityId, joinTermsModal.facilityName, true)}
+                >
+                  {requestingMembership === joinTermsModal.facilityId ? 'Requesting...' : 'Accept & Request'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </>
   );
 }

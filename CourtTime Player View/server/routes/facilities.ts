@@ -8,6 +8,7 @@ import {
   registerFacility,
   FacilityRegistrationData
 } from '../../src/services/facilityService';
+import { getCurrentTermsVersion } from '../../src/services/termsService';
 import { generateToken } from '../middleware/auth';
 
 const router = express.Router();
@@ -113,6 +114,24 @@ router.get('/:id/courts', async (req, res, next) => {
 });
 
 /**
+ * GET /api/facilities/:id/terms
+ * Get current Terms & Conditions for a facility (if configured)
+ */
+router.get('/:id/terms', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const currentVersion = await getCurrentTermsVersion(id);
+    res.json({
+      success: true,
+      termsEnabled: Boolean(currentVersion),
+      terms: currentVersion
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/facilities/register
  * Register a new facility with facility administrator
  */
@@ -148,6 +167,7 @@ router.post('/register', async (req, res, next) => {
 
       // Facility Rules
       generalRules,
+      termsAndConditions,
       restrictionType,
       maxBookingsPerWeek,
       maxBookingDurationHours,
@@ -246,6 +266,7 @@ router.post('/register', async (req, res, next) => {
       ) || [],
       operatingHours: operatingHours || {},
       generalRules: generalRules || '',
+      termsAndConditions: termsAndConditions?.trim() || undefined,
       restrictionType: restrictionType || 'account',
       maxBookingsPerWeek: parseInt(maxBookingsPerWeek) || 3,
       maxBookingDurationHours: parseFloat(maxBookingDurationHours) || 2,

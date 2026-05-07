@@ -152,6 +152,8 @@ export function FacilityRegistration() {
 
     // Step 3: Courts (now before Rules)
     rulesConfig: { ...DEFAULT_RULES_CONFIG } as RulesConfig,
+    enableTermsAndConditions: false,
+    termsAndConditions: '',
 
     // Step 4: Courts (will be filled dynamically)
     courts: [] as Court[],
@@ -1050,6 +1052,9 @@ export function FacilityRegistration() {
 
         // Facility Rules
         generalRules: formData.rulesConfig.generalRules,
+        termsAndConditions: formData.enableTermsAndConditions && formData.termsAndConditions.trim()
+          ? formData.termsAndConditions.trim()
+          : undefined,
 
         // Restriction settings - map from rules engine entries for backward compatibility
         restrictionType: formData.rulesConfig.restrictionType,
@@ -2200,6 +2205,35 @@ export function FacilityRegistration() {
                 )}
               </div>
 
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label htmlFor="enableTermsAndConditions">Terms & Conditions (Optional)</Label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      If enabled, players must accept these terms before submitting a join request.
+                    </p>
+                  </div>
+                  <Switch
+                    id="enableTermsAndConditions"
+                    checked={formData.enableTermsAndConditions}
+                    onCheckedChange={(checked) => handleInputChange('enableTermsAndConditions', checked)}
+                  />
+                </div>
+
+                {formData.enableTermsAndConditions && (
+                  <div className="space-y-2">
+                    <Label htmlFor="termsAndConditions">Terms Text</Label>
+                    <Textarea
+                      id="termsAndConditions"
+                      value={formData.termsAndConditions}
+                      onChange={(e) => handleInputChange('termsAndConditions', e.target.value)}
+                      placeholder="Enter your facility terms and conditions..."
+                      className="min-h-[180px]"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
                 <Label htmlFor="description">Facility Description</Label>
                 <Textarea
@@ -2991,6 +3025,12 @@ export function FacilityRegistration() {
           <div><span className="font-medium">Phone:</span> {formData.phone}</div>
           <div><span className="font-medium">Email:</span> {formData.email}</div>
           {formData.description && <div><span className="font-medium">Description:</span> {formData.description}</div>}
+          {formData.enableTermsAndConditions && formData.termsAndConditions.trim() && (
+            <div>
+              <span className="font-medium">Terms & Conditions:</span>
+              <p className="text-gray-600 mt-1 whitespace-pre-line">{formData.termsAndConditions}</p>
+            </div>
+          )}
           {formData.addressWhitelistFileName && <div><span className="font-medium">Address Whitelist:</span> {formData.addressWhitelistFileName}</div>}
         </CardContent>
       </Card>

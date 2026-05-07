@@ -113,6 +113,10 @@ export const facilitiesApi = {
     return apiRequest(`/api/facilities/${id}/courts`);
   },
 
+  getTerms: async (id: string) => {
+    return apiRequest(`/api/facilities/${id}/terms`);
+  },
+
   getStats: async () => {
     return apiRequest('/api/facilities/stats');
   },
@@ -162,6 +166,7 @@ export const facilitiesApi = {
 
     // Facility Rules
     generalRules: string;
+    termsAndConditions?: string;
 
     // Restriction settings
     restrictionType: 'account' | 'address';
@@ -354,10 +359,10 @@ export const playerProfileApi = {
     });
   },
 
-  requestMembership: async (userId: string, facilityId: string, membershipType?: string) => {
+  requestMembership: async (userId: string, facilityId: string, membershipType?: string, termsAccepted?: boolean) => {
     return apiRequest(`/api/player-profile/${userId}/request-membership`, {
       method: 'POST',
-      body: JSON.stringify({ facilityId, membershipType }),
+      body: JSON.stringify({ facilityId, membershipType, termsAccepted }),
     });
   },
 

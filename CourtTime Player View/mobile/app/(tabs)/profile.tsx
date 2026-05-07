@@ -48,6 +48,30 @@ const US_STATES = [
   'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
 ];
 
+interface FacilityTermsVersion {
+  id: string;
+  versionNumber: number;
+  contentHtml: string;
+  publishedAt: string;
+}
+
+function htmlToPlainText(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li)>/gi, '\n\n')
+    .replace(/<li[^>]*>/gi, '* ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export default function ProfileScreen() {
   const { user, logout, updateUser, facilities } = useAuth();
   const router = useRouter();
@@ -80,6 +104,11 @@ export default function ProfileScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [requestingJoin, setRequestingJoin] = useState<string | null>(null);
+  const [termsModalVisible, setTermsModalVisible] = useState(false);
+  const [joinFacilityDraft, setJoinFacilityDraft] = useState<{ id: string; name: string } | null>(null);
+  const [joinTerms, setJoinTerms] = useState<FacilityTermsVersion | null>(null);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
@@ -225,19 +254,48 @@ export default function ProfileScreen() {
     setSearching(false);
   };
 
-  const handleRequestJoin = async (facilityId: string) => {
+  const submitJoinRequest = async (facilityId: string, acceptedTerms: boolean) => {
     if (!user) return;
     setRequestingJoin(facilityId);
-    const result = await api.post(`/api/player-profile/${user.id}/request-membership`, { facilityId });
+    const result = await api.post(`/api/player-profile/${user.id}/request-membership`, {
+      facilityId,
+      termsAccepted: acceptedTerms,
+    });
     setRequestingJoin(null);
     if (result.success) {
       showAlert('Request Sent', 'Your membership request has been sent to the facility admin.');
       setShowFindFacility(false);
+      setTermsModalVisible(false);
+      setJoinFacilityDraft(null);
+      setJoinTerms(null);
+      setHasScrolledToBottom(false);
+      setTermsAccepted(false);
       setSearchQuery('');
       setSearchResults([]);
     } else {
       showAlert('Error', result.error || 'Failed to send membership request');
     }
+  };
+
+  const handleRequestJoin = async (facility: { id: string; name: string }) => {
+    const termsRes = await api.get(`/api/facilities/${facility.id}/terms`);
+    const terms = termsRes.success ? (termsRes.data?.terms || null) : null;
+
+    if (!terms?.contentHtml?.trim()) {
+      await submitJoinRequest(facility.id, false);
+      return;
+    }
+
+    setJoinFacilityDraft(facility);
+    setJoinTerms({
+      id: terms.id,
+      versionNumber: Number(terms.versionNumber),
+      contentHtml: terms.contentHtml,
+      publishedAt: terms.publishedAt,
+    });
+    setHasScrolledToBottom(false);
+    setTermsAccepted(false);
+    setTermsModalVisible(true);
   };
 
   const handleLeaveFacility = (facilityId: string, facilityName: string) => {
@@ -644,7 +702,7 @@ export default function ProfileScreen() {
                   </View>
                   <TouchableOpacity
                     style={{ backgroundColor: Colors.primary, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md }}
-                    onPress={() => handleRequestJoin(item.id)}
+                    onPress={() => handleRequestJoin({ id: item.id, name: item.name })}
                     disabled={requestingJoin === item.id}
                   >
                     <Text style={{ color: Colors.textInverse, fontSize: FontSize.xs, fontWeight: '600' }}>
@@ -654,6 +712,102 @@ export default function ProfileScreen() {
                 </View>
               )}
             />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={termsModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setTermsModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: Colors.surface }}>
+          <View style={styles.editHeader}>
+            <TouchableOpacity onPress={() => setTermsModalVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.editTitle}>Terms & Conditions</Text>
+            <View style={{ width: 50 }} />
+          </View>
+
+          <View style={{ padding: Spacing.md, flex: 1 }}>
+            <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: Colors.text }}>
+              {joinFacilityDraft?.name}
+            </Text>
+            {joinTerms && (
+              <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 4 }}>
+                Version {joinTerms.versionNumber} · Published {new Date(joinTerms.publishedAt).toLocaleDateString()}
+              </Text>
+            )}
+
+            <View style={{ marginTop: Spacing.md, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, backgroundColor: Colors.card, flex: 1 }}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: Spacing.md }}
+                onScroll={({ nativeEvent }) => {
+                  const padding = 24;
+                  const reachedBottom =
+                    nativeEvent.layoutMeasurement.height + nativeEvent.contentOffset.y >=
+                    nativeEvent.contentSize.height - padding;
+                  if (reachedBottom) setHasScrolledToBottom(true);
+                }}
+                scrollEventThrottle={16}
+              >
+                <Text style={{ fontSize: FontSize.sm, lineHeight: 22, color: Colors.text }}>
+                  {htmlToPlainText(joinTerms?.contentHtml || '')}
+                </Text>
+              </ScrollView>
+            </View>
+
+            {!hasScrolledToBottom && (
+              <Text style={{ marginTop: Spacing.sm, color: Colors.textMuted, fontSize: FontSize.xs }}>
+                Scroll to the bottom to enable acceptance.
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md, opacity: hasScrolledToBottom ? 1 : 0.5 }}
+              disabled={!hasScrolledToBottom}
+              onPress={() => setTermsAccepted((prev) => !prev)}
+            >
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  borderWidth: 2,
+                  borderColor: termsAccepted ? Colors.primary : Colors.border,
+                  backgroundColor: termsAccepted ? Colors.primary : Colors.card,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {termsAccepted && <Ionicons name="checkmark" size={14} color={Colors.textInverse} />}
+              </View>
+              <Text style={{ fontSize: FontSize.sm, color: Colors.text }}>
+                I have read and accept these Terms & Conditions
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                marginTop: Spacing.md,
+                backgroundColor: hasScrolledToBottom && termsAccepted ? Colors.primary : Colors.textMuted,
+                paddingVertical: Spacing.md,
+                borderRadius: BorderRadius.md,
+                alignItems: 'center',
+              }}
+              disabled={!joinFacilityDraft || !hasScrolledToBottom || !termsAccepted || requestingJoin === joinFacilityDraft.id}
+              onPress={() => {
+                if (!joinFacilityDraft) return;
+                submitJoinRequest(joinFacilityDraft.id, true);
+              }}
+            >
+              <Text style={{ color: Colors.textInverse, fontSize: FontSize.sm, fontWeight: '700' }}>
+                {joinFacilityDraft && requestingJoin === joinFacilityDraft.id ? 'Sending...' : 'Accept & Request to Join'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

@@ -238,9 +238,24 @@ export async function updatePlayerProfile(
 export async function requestFacilityMembership(
   userId: string,
   facilityId: string,
-  membershipType: string = 'Full'
+  membershipType: string = 'Full',
+  termsAccepted: boolean = false
 ): Promise<boolean> {
   try {
+    const termsResult = await query(
+      `SELECT id, version_number
+       FROM facility_terms_conditions_versions
+       WHERE facility_id = $1
+       ORDER BY version_number DESC
+       LIMIT 1`,
+      [facilityId]
+    );
+    const currentTerms = termsResult.rows[0];
+
+    if (currentTerms && !termsAccepted) {
+      throw new Error('You must accept this facility\'s Terms & Conditions before requesting membership.');
+    }
+
     await query(
       `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)
        VALUES ($1, $2, $3, 'pending', CURRENT_DATE)
@@ -249,6 +264,20 @@ export async function requestFacilityMembership(
          membership_type = $3`,
       [userId, facilityId, membershipType]
     );
+
+    if (currentTerms) {
+      await query(
+        `INSERT INTO member_terms_acceptances (
+           user_id,
+           facility_id,
+           terms_version_id,
+           version_number
+         ) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, facility_id, version_number)
+         DO UPDATE SET accepted_at = CURRENT_TIMESTAMP`,
+        [userId, facilityId, currentTerms.id, Number(currentTerms.version_number)]
+      );
+    }
 
     // Notify facility admins about the new membership request
     try {

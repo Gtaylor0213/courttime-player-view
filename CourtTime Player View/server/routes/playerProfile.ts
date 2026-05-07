@@ -69,7 +69,7 @@ router.patch('/:userId', async (req, res, next) => {
 router.post('/:userId/request-membership', async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const { facilityId, membershipType } = req.body;
+    const { facilityId, membershipType, termsAccepted } = req.body;
 
     if (!facilityId) {
       return res.status(400).json({
@@ -78,7 +78,7 @@ router.post('/:userId/request-membership', async (req, res, next) => {
       });
     }
 
-    const success = await requestFacilityMembership(userId, facilityId, membershipType);
+    const success = await requestFacilityMembership(userId, facilityId, membershipType, Boolean(termsAccepted));
 
     if (success) {
       res.json({

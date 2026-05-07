@@ -817,6 +817,7 @@ export interface FacilityRegistrationData {
 
   // Facility Rules
   generalRules: string;
+  termsAndConditions?: string;
 
   // Restriction settings
   restrictionType: 'account' | 'address';
@@ -1012,6 +1013,19 @@ export async function registerFacility(
     );
 
     const facility = facilityResult.rows[0];
+
+    // 3b. Publish initial Terms & Conditions if provided during registration.
+    if (data.termsAndConditions && data.termsAndConditions.trim()) {
+      await client.query(
+        `INSERT INTO facility_terms_conditions_versions (
+          facility_id,
+          version_number,
+          content_html,
+          created_by
+        ) VALUES ($1, 1, $2, $3)`,
+        [facilityId, data.termsAndConditions.trim(), superAdminUserId]
+      );
+    }
 
     // 4. Add user as facility admin (super admin)
     await client.query(

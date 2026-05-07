@@ -3136,9 +3136,9 @@ export function FacilityManagement() {
                                       <div className="flex items-center justify-between">
                                         <Label className="text-xs">Enable</Label>
                                         <Switch
-                                          checked={slot.rules.maxDurationUnlimited}
+                                          checked={!slot.rules.maxDurationUnlimited}
                                           onCheckedChange={(checked: boolean) =>
-                                            updatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', checked)
+                                            updatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', !checked)
                                           }
                                           disabled={!isEditing}
                                         />
@@ -3164,9 +3164,9 @@ export function FacilityManagement() {
                                         <Label className="text-xs">Courts Per Day (Individual)</Label>
                                         <div className="flex items-center gap-2">
                                           <Switch
-                                            checked={slot.rules.maxBookingsPerDayUnlimited}
+                                            checked={!slot.rules.maxBookingsPerDayUnlimited}
                                             onCheckedChange={(checked: boolean) =>
-                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', checked)
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', !checked)
                                             }
                                             disabled={!isEditing}
                                           />
@@ -3186,9 +3186,9 @@ export function FacilityManagement() {
                                         <Label className="text-xs">Courts Per Week (Individual)</Label>
                                         <div className="flex items-center gap-2">
                                           <Switch
-                                            checked={slot.rules.maxBookingsPerWeekUnlimited}
+                                            checked={!slot.rules.maxBookingsPerWeekUnlimited}
                                             onCheckedChange={(checked: boolean) =>
-                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', checked)
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', !checked)
                                             }
                                             disabled={!isEditing}
                                           />
@@ -3208,9 +3208,9 @@ export function FacilityManagement() {
                                         <Label className="text-xs">Courts Per Week (Household)</Label>
                                         <div className="flex items-center gap-2">
                                           <Switch
-                                            checked={slot.rules.maxBookingsPerWeekHouseholdUnlimited}
+                                            checked={!slot.rules.maxBookingsPerWeekHouseholdUnlimited}
                                             onCheckedChange={(checked: boolean) =>
-                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', checked)
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', !checked)
                                             }
                                             disabled={!isEditing}
                                           />
@@ -3230,9 +3230,9 @@ export function FacilityManagement() {
                                         <Label className="text-xs">Courts Per Day (Household)</Label>
                                         <div className="flex items-center gap-2">
                                           <Switch
-                                            checked={slot.rules.maxBookingsPerDayHouseholdUnlimited}
+                                            checked={!slot.rules.maxBookingsPerDayHouseholdUnlimited}
                                             onCheckedChange={(checked: boolean) =>
-                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHouseholdUnlimited', checked)
+                                              updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHouseholdUnlimited', !checked)
                                             }
                                             disabled={!isEditing}
                                           />

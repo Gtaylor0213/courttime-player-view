@@ -10,6 +10,11 @@ const router = express.Router();
 
 // Get the pool instance for direct queries and transactions
 const getDbPool = () => getPool();
+const HIDDEN_RULE_CODES = ['ACC-006', 'ACC-008', 'CRT-012'] as const;
+
+function isHiddenRuleCode(ruleCode: string): boolean {
+  return HIDDEN_RULE_CODES.includes(ruleCode as (typeof HIDDEN_RULE_CODES)[number]);
+}
 
 /**
  * GET /api/rules/definitions
@@ -22,11 +27,13 @@ router.get('/definitions', async (req, res, next) => {
     let query = `
       SELECT * FROM booking_rule_definitions
     `;
-    const params: any[] = [];
+    const params: any[] = [HIDDEN_RULE_CODES];
+
+    query += ` WHERE rule_code != ALL($1::text[])`;
 
     if (category) {
       params.push(category);
-      query += ` WHERE rule_category = $${params.length}`;
+      query += ` AND rule_category = $${params.length}`;
     }
 
     query += ` ORDER BY evaluation_order ASC`;
@@ -49,6 +56,12 @@ router.get('/definitions', async (req, res, next) => {
 router.get('/definitions/:ruleCode', async (req, res, next) => {
   try {
     const { ruleCode } = req.params;
+    if (isHiddenRuleCode(ruleCode)) {
+      return res.status(404).json({
+        success: false,
+        error: 'Rule definition not found'
+      });
+    }
 
     const result = await getDbPool().query(
       `SELECT * FROM booking_rule_definitions WHERE rule_code = $1`,
@@ -86,8 +99,9 @@ router.get('/facility/:facilityId', async (req, res, next) => {
       FROM facility_rule_configs frc
       JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
       WHERE frc.facility_id = $1
+        AND brd.rule_code != ALL($2::text[])
     `;
-    const params: any[] = [facilityId];
+    const params: any[] = [facilityId, HIDDEN_RULE_CODES];
 
     if (enabledOnly === 'true') {
       query += ` AND frc.is_enabled = true`;
@@ -121,7 +135,10 @@ router.get('/facility/:facilityId/effective', async (req, res, next) => {
 
     // Get all rule definitions
     const definitionsResult = await getDbPool().query(
-      `SELECT * FROM booking_rule_definitions ORDER BY evaluation_order ASC`
+      `SELECT * FROM booking_rule_definitions
+       WHERE rule_code != ALL($1::text[])
+       ORDER BY evaluation_order ASC`,
+      [HIDDEN_RULE_CODES]
     );
 
     // Get facility configs
@@ -129,8 +146,9 @@ router.get('/facility/:facilityId/effective', async (req, res, next) => {
       `SELECT frc.*, brd.rule_code
        FROM facility_rule_configs frc
        JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
-       WHERE frc.facility_id = $1`,
-      [facilityId]
+       WHERE frc.facility_id = $1
+         AND brd.rule_code != ALL($2::text[])`,
+      [facilityId, HIDDEN_RULE_CODES]
     );
 
     const configsByCode = new Map(
@@ -179,6 +197,12 @@ router.post('/facility/:facilityId', async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'ruleCode is required'
+      });
+    }
+    if (isHiddenRuleCode(ruleCode)) {
+      return res.status(404).json({
+        success: false,
+        error: `Rule definition '${ruleCode}' not found`
       });
     }
 
@@ -271,6 +295,12 @@ router.post('/facility/:facilityId', async (req, res, next) => {
 router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
   try {
     const { facilityId, ruleCode } = req.params;
+    if (isHiddenRuleCode(ruleCode)) {
+      return res.status(404).json({
+        success: false,
+        error: `Rule definition '${ruleCode}' not found`
+      });
+    }
     const {
       ruleConfig,
       isEnabled,
@@ -338,6 +368,12 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
 router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
   try {
     const { facilityId, ruleCode } = req.params;
+    if (isHiddenRuleCode(ruleCode)) {
+      return res.status(404).json({
+        success: false,
+        error: `Rule definition '${ruleCode}' not found`
+      });
+    }
 
     // Get rule definition ID
     const defResult = await getDbPool().query(
@@ -399,6 +435,9 @@ router.post('/facility/:facilityId/bulk', async (req, res, next) => {
 
       for (const rule of rules) {
         const { ruleCode, ruleConfig, isEnabled, appliesToCourtIds, appliesToTierIds } = rule;
+        if (isHiddenRuleCode(ruleCode)) {
+          continue;
+        }
 
         // Get rule definition ID
         const defResult = await client.query(
@@ -467,7 +506,10 @@ router.post('/facility/:facilityId/enable-all', async (req, res, next) => {
 
     // Get all rule definitions
     const defResult = await getDbPool().query(
-      `SELECT id, rule_code, default_config FROM booking_rule_definitions`
+      `SELECT id, rule_code, default_config
+       FROM booking_rule_definitions
+       WHERE rule_code != ALL($1::text[])`,
+      [HIDDEN_RULE_CODES]
     );
 
     const client = await getDbPool().connect();

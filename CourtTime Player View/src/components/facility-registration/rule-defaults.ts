@@ -146,15 +146,6 @@ export const RULE_METADATA: RuleMeta[] = [
     ],
   },
   {
-    code: 'ACC-006',
-    name: 'Minimum Lead Time',
-    description: 'Minimum time before a slot starts that a booking can be made.',
-    category: 'account',
-    fields: [
-      { key: 'min_minutes_before_start', label: 'Lead Time', type: 'number', min: 0, max: 1440, suffix: 'minutes' },
-    ],
-  },
-  {
     code: 'ACC-010',
     name: 'Peak-Hours Per Week Limit',
     description: 'Limits peak-hours bookings per member per week.',
@@ -165,15 +156,6 @@ export const RULE_METADATA: RuleMeta[] = [
   },
 
   // Cancellation & No-Show Rules
-  {
-    code: 'ACC-008',
-    name: 'Late Cancellation Policy',
-    description: 'Issues a strike when cancellations happen too close to start time.',
-    category: 'cancellation',
-    fields: [
-      { key: 'late_cancel_cutoff_minutes', label: 'Cutoff', type: 'number', min: 15, max: 1440, suffix: 'minutes before start' },
-    ],
-  },
   {
     code: 'ACC-009',
     name: 'No-Show / Strike System',
@@ -261,15 +243,6 @@ export const RULE_METADATA: RuleMeta[] = [
       { key: 'days_ahead', label: 'Days Ahead', type: 'number', min: 1, max: 30, suffix: 'days' },
     ],
   },
-  {
-    code: 'CRT-012',
-    name: 'Court Cancellation Deadline',
-    description: 'Prevents cancellation within a set time before the booking starts.',
-    category: 'court',
-    fields: [
-      { key: 'cancel_cutoff_minutes', label: 'Deadline', type: 'number', min: 0, max: 1440, suffix: 'minutes before start' },
-    ],
-  },
 
   // Household Rules
   {
@@ -308,8 +281,8 @@ export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
   'ACC-003': { enabled: false, config: { max_minutes_per_week: 600, window_type: 'calendar_week' } },
   'ACC-004': { enabled: true, config: { allow_overlap: false, overlap_grace_minutes: 0 } },
   'ACC-005': { enabled: true, config: { max_days_ahead: 14 } },
-  'ACC-006': { enabled: true, config: { min_minutes_before_start: 60 } },
-  'ACC-008': { enabled: true, config: { late_cancel_cutoff_minutes: 120, penalty_type: 'strike', penalty_value: 1 } },
+  'ACC-006': { enabled: false, config: { min_minutes_before_start: 0 } },
+  'ACC-008': { enabled: false, config: { late_cancel_cutoff_minutes: 0, penalty_type: 'warning', penalty_value: 0 } },
   'ACC-009': { enabled: true, config: { strike_threshold: 3, strike_window_days: 30, lockout_days: 7 } },
   'ACC-010': { enabled: false, config: { max_prime_per_week: 3, window_type: 'calendar_week' } },
   'ACC-011': { enabled: true, config: { max_actions: 10, window_seconds: 60, action_types: ['create', 'cancel'] } },
@@ -320,7 +293,7 @@ export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
   'CRT-008': { enabled: false, config: { allowed_types: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'] } },
   'CRT-010': { enabled: false, config: { max_per_week_per_account: 3, window_type: 'calendar_week' } },
   'CRT-011': { enabled: false, config: { release_time_local: '07:00', days_ahead: 3 } },
-  'CRT-012': { enabled: false, config: { cancel_cutoff_minutes: 60 } },
+  'CRT-012': { enabled: false, config: { cancel_cutoff_minutes: 0, penalty_type: 'warning', penalty_value: 0 } },
   'HH-001': { enabled: false, config: { max_members: 6, verification_method: 'admin_approval' } },
   'HH-002': { enabled: false, config: { max_active_household: 4 } },
   'HH-003': { enabled: false, config: { max_prime_per_week_household: 3, window_type: 'calendar_week' } },
@@ -378,7 +351,7 @@ export const CATEGORIES = {
   },
   cancellation: {
     title: 'Cancellation & No-Show Rules',
-    instruction: 'Manage cancellation behavior and accountability. The strike system tracks no-shows and late cancellations, temporarily suspending repeat offenders.',
+    instruction: 'Manage no-show accountability. The strike system tracks no-shows and can temporarily suspend repeat offenders.',
   },
   court: {
     title: 'Court Scheduling Rules',

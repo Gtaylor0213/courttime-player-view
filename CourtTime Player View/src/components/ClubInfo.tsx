@@ -33,7 +33,6 @@ interface FacilityData {
   generalRules?: string;
   bookingRules?: any;
   advanceBookingDays?: number;
-  cancellationNoticeHours?: number;
   peakHoursPolicy?: any;
   courts: {
     id: string;
@@ -143,7 +142,6 @@ export function ClubInfo() {
           generalRules: rawFacility.generalRules || '',
           bookingRules: parsedBookingRules,
           advanceBookingDays: rawFacility.advanceBookingDays,
-          cancellationNoticeHours: rawFacility.cancellationNoticeHours,
           peakHoursPolicy: rawFacility.peakHoursPolicy,
           courts: [],
         };
@@ -481,18 +479,6 @@ export function ClubInfo() {
                       <div className="flex items-start gap-2">
                         <span className="font-medium text-gray-700 min-w-[180px]">Max bookings per week:</span>
                         <span className="text-gray-600">{facility.bookingRules.maxBookingsPerWeek}</span>
-                      </div>
-                    )}
-                    {(facility.bookingRules?.cancellationNoticeUnlimited === false && facility.bookingRules?.cancellationNoticeHours) && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-medium text-gray-700 min-w-[180px]">Cancellation notice:</span>
-                        <span className="text-gray-600">{facility.bookingRules.cancellationNoticeHours} hours before booking</span>
-                      </div>
-                    )}
-                    {facility.bookingRules?.minimumLeadTimeEnabled && facility.bookingRules?.minimumLeadTimeMinutes && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-medium text-gray-700 min-w-[180px]">Minimum booking lead time:</span>
-                        <span className="text-gray-600">{Math.round(facility.bookingRules.minimumLeadTimeMinutes / 60)} hours</span>
                       </div>
                     )}
                     {facility.bookingRules?.noOverlappingReservations && (

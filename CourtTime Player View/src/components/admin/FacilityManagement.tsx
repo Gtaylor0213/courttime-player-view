@@ -1806,14 +1806,6 @@ export function FacilityManagement() {
             }
           }
 
-          const acc008 = ruleMap.get('ACC-008') as any;
-          if (acc008?.facilityConfig) {
-            updated.bookingRules.cancellationNoticeUnlimited = !acc008.isEnabled;
-            if (acc008.effectiveConfig?.late_cancel_cutoff_minutes !== undefined) {
-              updated.bookingRules.cancellationNoticeHours = String(acc008.effectiveConfig.late_cancel_cutoff_minutes / 60);
-            }
-          }
-
           const crt005 = ruleMap.get('CRT-005') as any;
           if (crt005?.facilityConfig) {
             updated.bookingRules.maxBookingDurationUnlimited = !crt005.isEnabled;
@@ -1878,8 +1870,6 @@ export function FacilityManagement() {
     'ACC-003': { enabledField: 'maxHoursPerWeekEnabled', configMap: { max_minutes_per_week: { field: 'maxHoursPerWeek', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
     'ACC-004': { enabledField: 'noOverlappingReservations', configMap: {} },
     'ACC-005': { enabledField: 'advanceBookingDaysUnlimited', invertEnabled: true, configMap: { max_days_ahead: { field: 'advanceBookingDays' } } },
-    'ACC-006': { enabledField: 'minimumLeadTimeEnabled', configMap: { min_minutes_before_start: { field: 'minimumLeadTimeMinutes' } } },
-    'ACC-008': { enabledField: 'cancellationNoticeUnlimited', invertEnabled: true, configMap: { late_cancel_cutoff_minutes: { field: 'cancellationNoticeHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
     'ACC-009': { enabledField: 'strikeSystemEnabled', configMap: { strike_threshold: { field: 'strikeThreshold' }, strike_window_days: { field: 'strikeWindowDays' }, lockout_days: { field: 'strikeLockoutDays' } } },
     'ACC-010': { enabledField: 'peakHoursRestrictions.maxBookingsUnlimited', invertEnabled: true, configMap: { max_prime_per_week: { field: 'peakHoursRestrictions.maxBookingsPerWeek' } } },
     'ACC-011': { enabledField: 'rateLimitEnabled', configMap: { max_actions: { field: 'rateLimitMaxActions' }, window_seconds: { field: 'rateLimitWindowSeconds' } } },
@@ -1889,7 +1879,6 @@ export function FacilityManagement() {
     'CRT-008': { enabledField: 'allowedBookingTypesEnabled', configMap: {} },
     'CRT-010': { enabledField: 'courtWeeklyCapEnabled', configMap: { max_per_week_per_account: { field: 'courtWeeklyCap' } } },
     'CRT-011': { enabledField: 'courtReleaseTimeEnabled', configMap: { release_time_local: { field: 'courtReleaseTime' }, days_ahead: { field: 'courtReleaseDaysAhead' } } },
-    'CRT-012': { enabledField: 'courtCancellationDeadlineEnabled', configMap: { cancel_cutoff_minutes: { field: 'courtCancellationDeadlineMinutes' } } },
     'HH-001': { enabledField: 'householdMaxMembersEnabled', configMap: { max_members: { field: 'householdMaxMembers' } } },
     'HH-002': { enabledField: 'householdMaxActiveEnabled', configMap: { max_active_household: { field: 'householdMaxActive' } } },
     'HH-003': { enabledField: 'householdPrimeCapEnabled', configMap: { max_prime_per_week_household: { field: 'householdPrimeCap' } } },
@@ -2949,37 +2938,6 @@ export function FacilityManagement() {
                       <Switch checked={facilityData.bookingRules.daysInAdvanceEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('daysInAdvanceEnabled', v)} disabled={!isEditing} />
                     </div>
                     <Input type="number" min="0" value={facilityData.bookingRules.daysInAdvance} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('daysInAdvance', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.daysInAdvanceEnabled} />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Clock className="h-5 w-5" />
-                      Cancellation Policy
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
-                      <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-green-800">
-                        Set whether cancellations are enforced and configure the cancellation window in hours.
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Label>Enable</Label>
-                      <Switch checked={facilityData.bookingRules.cancellationPolicyEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('cancellationPolicyEnabled', v)} disabled={!isEditing} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Cancellation Window (Hours)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={facilityData.bookingRules.cancellationNoticeHours}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('cancellationNoticeHours', e.target.value)}
-                        disabled={!isEditing || !facilityData.bookingRules.cancellationPolicyEnabled}
-                      />
-                    </div>
                   </CardContent>
                 </Card>
 

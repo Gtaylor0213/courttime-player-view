@@ -12,7 +12,6 @@ import {
   ACC003Config,
   ACC004Config,
   ACC005Config,
-  ACC006Config,
   ACC009Config,
   ACC010Config,
   ACC011Config
@@ -20,8 +19,6 @@ import {
 import {
   getTimeWindow,
   formatDate,
-  combineDateAndTime,
-  minutesBetween,
   timeRangesOverlap,
   addDays,
   getDayOfWeek
@@ -241,35 +238,6 @@ const ACC005: RuleEvaluator = {
 };
 
 /**
- * ACC-006: Minimum Lead Time
- */
-const ACC006: RuleEvaluator = {
-  ruleCode: 'ACC-006',
-  ruleName: 'Minimum Lead Time',
-  category: 'account',
-
-  async evaluate(context: RuleContext, config: ACC006Config): Promise<RuleResult> {
-    const minMinutes = config.min_minutes_before_start || 15;
-
-    const bookingStart = combineDateAndTime(context.request.bookingDate, context.request.startTime);
-    const minutesUntilStart = minutesBetween(context.currentDateTime, bookingStart);
-
-    if (minutesUntilStart < minMinutes) {
-      return {
-        ruleCode: 'ACC-006',
-        ruleName: 'Minimum Lead Time',
-        passed: false,
-        severity: 'error',
-        message: `Reservations must be made at least ${minMinutes} minutes before start time.`,
-        details: { minMinutes, minutesUntilStart }
-      };
-    }
-
-    return { ruleCode: 'ACC-006', ruleName: 'Minimum Lead Time', passed: true, severity: 'error' };
-  }
-};
-
-/**
  * ACC-009: No-Show / Strike System
  */
 const ACC009: RuleEvaluator = {
@@ -423,7 +391,6 @@ export const accountEvaluators: RuleEvaluator[] = [
   ACC003,
   ACC004,
   ACC005,
-  ACC006,
   ACC009,
   ACC010,
   ACC011

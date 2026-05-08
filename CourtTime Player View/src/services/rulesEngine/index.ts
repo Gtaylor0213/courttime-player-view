@@ -543,7 +543,12 @@ export class RulesEngine {
    * Get rules applicable to this booking
    */
   private getApplicableRules(context: RuleContext): FacilityRuleConfig[] {
+    const retiredRuleCodes = new Set(['ACC-006', 'ACC-008', 'CRT-012']);
     return context.facility.rules.filter(rule => {
+      if (retiredRuleCodes.has(rule.ruleCode)) {
+        return false;
+      }
+
       // Check if rule applies to this court
       if (rule.appliesToCourtIds && rule.appliesToCourtIds.length > 0) {
         if (!rule.appliesToCourtIds.includes(context.court.id)) {
@@ -656,59 +661,23 @@ export class RulesEngine {
       const now = getFacilityLocalNow(facilityTimezone);
       const minutesBeforeStart = minutesBetween(now, bookingStart);
 
-      if (facility.simplifiedBookingRules?.cancellationPolicy?.enabled) {
-        const bookingEnd = combineDateAndTime(booking.bookingDate, booking.endTime);
-        if (now > bookingEnd) {
-          return {
-            allowed: false,
-            isLateCancel: false,
-            strikeWillBeIssued: false,
-            minutesBeforeStart,
-            message: 'This reservation has already ended and cannot be cancelled'
-          };
-        }
+      const bookingEnd = combineDateAndTime(booking.bookingDate, booking.endTime);
+      if (now > bookingEnd) {
         return {
-          allowed: true,
+          allowed: false,
           isLateCancel: false,
           strikeWillBeIssued: false,
           minutesBeforeStart,
-          message: 'Members can cancel at any time up until the reservation ends.'
+          message: 'This reservation has already ended and cannot be cancelled'
         };
       }
 
-      // Find cancellation rules
-      const lateCancelRule = facility.rules.find(r => r.ruleCode === 'ACC-008');
-      const courtCancelRule = facility.rules.find(r => r.ruleCode === 'CRT-012');
-
-      // Determine cutoff (court-specific or account-level)
-      // Default to 0 (no penalty) if no cancellation rule is configured
-      let cutoffMinutes = 0;
-      let penaltyType = 'strike';
-
-      if (courtCancelRule && courtCancelRule.ruleConfig) {
-        cutoffMinutes = courtCancelRule.ruleConfig.cancel_cutoff_minutes || cutoffMinutes;
-        penaltyType = courtCancelRule.ruleConfig.penalty_type || penaltyType;
-      } else if (lateCancelRule && lateCancelRule.ruleConfig) {
-        cutoffMinutes = lateCancelRule.ruleConfig.late_cancel_cutoff_minutes || cutoffMinutes;
-        penaltyType = lateCancelRule.ruleConfig.penalty_type || penaltyType;
-      }
-
-      const isLateCancel = minutesBeforeStart < cutoffMinutes;
-      const strikeWillBeIssued = isLateCancel && penaltyType === 'strike';
-
-      let message: string | undefined;
-      if (isLateCancel) {
-        message = strikeWillBeIssued
-          ? `This is a late cancellation (within ${cutoffMinutes} minutes of start). A strike will be issued.`
-          : `This is a late cancellation (within ${cutoffMinutes} minutes of start).`;
-      }
-
       return {
-        allowed: true, // Cancellation is always allowed, but may have consequences
-        isLateCancel,
-        strikeWillBeIssued,
+        allowed: true,
+        isLateCancel: false,
+        strikeWillBeIssued: false,
         minutesBeforeStart,
-        message
+        message: 'Members can cancel at any time up until the reservation ends.'
       };
     } catch (error: any) {
       // Gracefully handle missing tables

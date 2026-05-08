@@ -144,7 +144,6 @@ export function RulesStep({
 }: RulesStepProps) {
   const { rules } = rulesConfig;
   const daysInAdvanceMeta = RULE_METADATA.find((meta) => meta.code === 'ACC-005');
-  const cancellationPolicyMeta = RULE_METADATA.find((meta) => meta.code === 'ACC-008');
 
   return (
     <div className="space-y-6">
@@ -228,30 +227,6 @@ export function RulesStep({
               entry={rules['ACC-005'] || { enabled: false, config: {} }}
               onToggle={(enabled) => onRuleEntryChange('ACC-005', { enabled })}
               onConfigChange={(field, value) => onRuleConfigFieldChange('ACC-005', field, value)}
-            />
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Cancellation Policy */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Cancellation Policy
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <InstructionCard
-            icon={Info}
-            text="Set the late-cancellation cutoff window before reservation start."
-          />
-          {cancellationPolicyMeta && (
-            <RuleCard
-              meta={cancellationPolicyMeta}
-              entry={rules['ACC-008'] || { enabled: false, config: {} }}
-              onToggle={(enabled) => onRuleEntryChange('ACC-008', { enabled })}
-              onConfigChange={(field, value) => onRuleConfigFieldChange('ACC-008', field, value)}
             />
           )}
         </CardContent>

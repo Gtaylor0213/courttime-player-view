@@ -663,21 +663,6 @@ const CRT011: RuleEvaluator = {
   }
 };
 
-/**
- * CRT-012: Court-Specific Cancellation Deadline
- * Note: This is evaluated during cancellation, not booking creation
- */
-const CRT012: RuleEvaluator = {
-  ruleCode: 'CRT-012',
-  ruleName: 'Court-Specific Cancellation Deadline',
-  category: 'court',
-
-  async evaluate(context: RuleContext, config: any): Promise<RuleResult> {
-    // This rule is informational during booking - actual enforcement is during cancellation
-    return { ruleCode: 'CRT-012', ruleName: 'Court-Specific Cancellation Deadline', passed: true, severity: 'warning' };
-  }
-};
-
 // Export all court evaluators
 export const courtEvaluators: RuleEvaluator[] = [
   CRT001,
@@ -690,6 +675,5 @@ export const courtEvaluators: RuleEvaluator[] = [
   CRT008,
   CRT009,
   CRT010,
-  CRT011,
-  CRT012
+  CRT011
 ];

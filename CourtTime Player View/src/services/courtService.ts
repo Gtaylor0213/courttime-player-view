@@ -399,13 +399,14 @@ export async function updateCourt(
 }
 
 /**
- * Delete court (soft delete by setting status to 'closed')
+ * Permanently remove a court and dependent rows (bookings, schedules, split children, etc. via FK CASCADE).
  */
-export async function deleteCourt(courtId: string): Promise<void> {
-  await query(
-    `UPDATE courts SET status = 'closed' WHERE id = $1`,
+export async function deleteCourt(courtId: string): Promise<boolean> {
+  const result = await query<{ id: string }>(
+    `DELETE FROM courts WHERE id = $1 RETURNING id`,
     [courtId]
   );
+  return result.rows.length > 0;
 }
 
 /**

@@ -681,6 +681,15 @@ export const adminApi = {
     });
   },
 
+  deleteCourt: async (courtId: string) => {
+    if (!courtId) {
+      return { success: false, error: 'Court ID is required' };
+    }
+    return apiRequest(`/api/admin/courts/${courtId}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Booking Management
   getBookings: async (facilityId: string, filters?: {
     status?: string;

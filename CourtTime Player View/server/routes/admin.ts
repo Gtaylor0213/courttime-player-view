@@ -9,7 +9,7 @@ import { validateBooking } from '../../src/services/bookingService';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
-import { createCourt, createCourtsBulk, createSplitCourt, updateCourtsBulk } from '../../src/services/courtService';
+import { createCourt, createCourtsBulk, createSplitCourt, deleteCourt, updateCourtsBulk } from '../../src/services/courtService';
 import { inviteAdmin, getFacilityAdmins, removeAdmin } from '../../src/services/adminService';
 import {
   getCurrentTermsVersion,
@@ -444,6 +444,30 @@ router.patch('/courts/:courtId', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/admin/courts/:courtId
+ * Permanently remove a court (and cascade-related bookings/config per DB constraints).
+ */
+router.delete('/courts/:courtId', async (req, res) => {
+  try {
+    const { courtId } = req.params;
+    const removed = await deleteCourt(courtId);
+    if (!removed) {
+      return res.status(404).json({
+        success: false,
+        error: 'Court not found',
+      });
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting court:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });

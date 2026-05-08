@@ -1457,12 +1457,18 @@ export function FacilityManagement() {
   };
 
   const handleDeleteCourt = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this court?')) return;
+    if (
+      !confirm(
+        'Delete this court permanently? This removes the court from your facility and deletes related bookings and schedule settings.'
+      )
+    ) {
+      return;
+    }
 
     try {
-      const response = await adminApi.updateCourt(id, { status: 'closed' });
+      const response = await adminApi.deleteCourt(id);
       if (response.success) {
-        toast.success('Court deleted successfully');
+        toast.success('Court deleted');
         await loadCourts();
       } else {
         toast.error(response.error || 'Failed to delete court');

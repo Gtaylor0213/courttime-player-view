@@ -11,9 +11,22 @@ const router = express.Router();
 // Get the pool instance for direct queries and transactions
 const getDbPool = () => getPool();
 const HIDDEN_RULE_CODES = ['ACC-006', 'ACC-008', 'CRT-012'] as const;
+const ALLOWED_RULE_CODES = [
+  'ACC-002', // Courts per week (individual)
+  'ACC-005', // Days in advance
+  'CRT-005', // Max reservation duration
+  'ACC-010', // Peak-hours per week (individual)
+  'CRT-001', // Peak-hours schedule
+  'CRT-002', // Peak-hours max duration
+  'HH-003'   // Peak-hours per week (household)
+] as const;
 
 function isHiddenRuleCode(ruleCode: string): boolean {
   return HIDDEN_RULE_CODES.includes(ruleCode as (typeof HIDDEN_RULE_CODES)[number]);
+}
+
+function isAllowedRuleCode(ruleCode: string): boolean {
+  return ALLOWED_RULE_CODES.includes(ruleCode as (typeof ALLOWED_RULE_CODES)[number]);
 }
 
 /**
@@ -27,9 +40,9 @@ router.get('/definitions', async (req, res, next) => {
     let query = `
       SELECT * FROM booking_rule_definitions
     `;
-    const params: any[] = [HIDDEN_RULE_CODES];
+    const params: any[] = [HIDDEN_RULE_CODES, ALLOWED_RULE_CODES];
 
-    query += ` WHERE rule_code != ALL($1::text[])`;
+    query += ` WHERE rule_code != ALL($1::text[]) AND rule_code = ANY($2::text[])`;
 
     if (category) {
       params.push(category);
@@ -56,7 +69,7 @@ router.get('/definitions', async (req, res, next) => {
 router.get('/definitions/:ruleCode', async (req, res, next) => {
   try {
     const { ruleCode } = req.params;
-    if (isHiddenRuleCode(ruleCode)) {
+    if (isHiddenRuleCode(ruleCode) || !isAllowedRuleCode(ruleCode)) {
       return res.status(404).json({
         success: false,
         error: 'Rule definition not found'
@@ -64,8 +77,8 @@ router.get('/definitions/:ruleCode', async (req, res, next) => {
     }
 
     const result = await getDbPool().query(
-      `SELECT * FROM booking_rule_definitions WHERE rule_code = $1`,
-      [ruleCode]
+      `SELECT * FROM booking_rule_definitions WHERE rule_code = $1 AND rule_code = ANY($2::text[])`,
+      [ruleCode, ALLOWED_RULE_CODES]
     );
 
     if (result.rows.length === 0) {
@@ -100,8 +113,9 @@ router.get('/facility/:facilityId', async (req, res, next) => {
       JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
       WHERE frc.facility_id = $1
         AND brd.rule_code != ALL($2::text[])
+        AND brd.rule_code = ANY($3::text[])
     `;
-    const params: any[] = [facilityId, HIDDEN_RULE_CODES];
+    const params: any[] = [facilityId, HIDDEN_RULE_CODES, ALLOWED_RULE_CODES];
 
     if (enabledOnly === 'true') {
       query += ` AND frc.is_enabled = true`;
@@ -127,46 +141,50 @@ router.get('/facility/:facilityId', async (req, res, next) => {
 
 /**
  * GET /api/rules/facility/:facilityId/effective
- * Get effective rules (configured + defaults for unconfigured)
+ * Get effective rules (configured/enabled only)
  */
 router.get('/facility/:facilityId/effective', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
 
-    // Get all rule definitions
-    const definitionsResult = await getDbPool().query(
-      `SELECT * FROM booking_rule_definitions
-       WHERE rule_code != ALL($1::text[])
-       ORDER BY evaluation_order ASC`,
-      [HIDDEN_RULE_CODES]
-    );
-
-    // Get facility configs
     const configsResult = await getDbPool().query(
-      `SELECT frc.*, brd.rule_code
+      `SELECT
+         brd.*,
+         frc.id as facility_config_id,
+         frc.rule_config as facility_rule_config,
+         frc.is_enabled as facility_is_enabled,
+         frc.applies_to_court_ids as facility_applies_to_court_ids,
+         frc.applies_to_tier_ids as facility_applies_to_tier_ids,
+         frc.priority as facility_priority,
+         frc.created_at as facility_created_at,
+         frc.updated_at as facility_updated_at
        FROM facility_rule_configs frc
        JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
        WHERE frc.facility_id = $1
-         AND brd.rule_code != ALL($2::text[])`,
-      [facilityId, HIDDEN_RULE_CODES]
+         AND frc.is_enabled = true
+         AND brd.rule_code != ALL($2::text[])
+         AND brd.rule_code = ANY($3::text[])
+       ORDER BY brd.evaluation_order ASC, frc.priority ASC`,
+      [facilityId, HIDDEN_RULE_CODES, ALLOWED_RULE_CODES]
     );
 
-    const configsByCode = new Map(
-      configsResult.rows.map(c => [c.rule_code, c])
-    );
-
-    // Merge definitions with configs
-    const effectiveRules = definitionsResult.rows.map(def => {
-      const config = configsByCode.get(def.rule_code);
-      return {
-        ...def,
-        facilityConfig: config || null,
-        isEnabled: config?.is_enabled ?? true, // Default enabled if no config
-        effectiveConfig: config?.rule_config || def.default_config,
-        appliesToCourts: config?.applies_to_court_ids || null,
-        appliesToTiers: config?.applies_to_tier_ids || null
-      };
-    });
+    const effectiveRules = configsResult.rows.map((row) => ({
+      ...row,
+      facilityConfig: {
+        id: row.facility_config_id,
+        rule_config: row.facility_rule_config,
+        is_enabled: row.facility_is_enabled,
+        applies_to_court_ids: row.facility_applies_to_court_ids,
+        applies_to_tier_ids: row.facility_applies_to_tier_ids,
+        priority: row.facility_priority,
+        created_at: row.facility_created_at,
+        updated_at: row.facility_updated_at
+      },
+      isEnabled: true,
+      effectiveConfig: row.facility_rule_config,
+      appliesToCourts: row.facility_applies_to_court_ids || null,
+      appliesToTiers: row.facility_applies_to_tier_ids || null
+    }));
 
     res.json({
       success: true,
@@ -199,7 +217,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
         error: 'ruleCode is required'
       });
     }
-    if (isHiddenRuleCode(ruleCode)) {
+    if (isHiddenRuleCode(ruleCode) || !isAllowedRuleCode(ruleCode)) {
       return res.status(404).json({
         success: false,
         error: `Rule definition '${ruleCode}' not found`
@@ -208,8 +226,8 @@ router.post('/facility/:facilityId', async (req, res, next) => {
 
     // Get rule definition ID
     const defResult = await getDbPool().query(
-      `SELECT id FROM booking_rule_definitions WHERE rule_code = $1`,
-      [ruleCode]
+      `SELECT id FROM booking_rule_definitions WHERE rule_code = $1 AND rule_code = ANY($2::text[])`,
+      [ruleCode, ALLOWED_RULE_CODES]
     );
 
     if (defResult.rows.length === 0) {
@@ -227,6 +245,19 @@ router.post('/facility/:facilityId', async (req, res, next) => {
        WHERE facility_id = $1 AND rule_definition_id = $2`,
       [facilityId, ruleDefinitionId]
     );
+
+    if (isEnabled === false) {
+      await getDbPool().query(
+        `DELETE FROM facility_rule_configs
+         WHERE facility_id = $1 AND rule_definition_id = $2`,
+        [facilityId, ruleDefinitionId]
+      );
+      return res.json({
+        success: true,
+        rule: null,
+        message: 'Rule disabled and removed from facility configuration'
+      });
+    }
 
     let result;
     if (existingResult.rows.length > 0) {
@@ -295,7 +326,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
 router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
   try {
     const { facilityId, ruleCode } = req.params;
-    if (isHiddenRuleCode(ruleCode)) {
+    if (isHiddenRuleCode(ruleCode) || !isAllowedRuleCode(ruleCode)) {
       return res.status(404).json({
         success: false,
         error: `Rule definition '${ruleCode}' not found`
@@ -311,8 +342,8 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
 
     // Get rule definition ID
     const defResult = await getDbPool().query(
-      `SELECT id FROM booking_rule_definitions WHERE rule_code = $1`,
-      [ruleCode]
+      `SELECT id FROM booking_rule_definitions WHERE rule_code = $1 AND rule_code = ANY($2::text[])`,
+      [ruleCode, ALLOWED_RULE_CODES]
     );
 
     if (defResult.rows.length === 0) {
@@ -323,6 +354,19 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
     }
 
     const ruleDefinitionId = defResult.rows[0].id;
+
+    if (isEnabled === false) {
+      await getDbPool().query(
+        `DELETE FROM facility_rule_configs
+         WHERE facility_id = $1 AND rule_definition_id = $2`,
+        [facilityId, ruleDefinitionId]
+      );
+      return res.json({
+        success: true,
+        rule: null,
+        message: 'Rule disabled and removed from facility configuration'
+      });
+    }
 
     const result = await getDbPool().query(
       `UPDATE facility_rule_configs SET
@@ -368,7 +412,7 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
 router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
   try {
     const { facilityId, ruleCode } = req.params;
-    if (isHiddenRuleCode(ruleCode)) {
+    if (isHiddenRuleCode(ruleCode) || !isAllowedRuleCode(ruleCode)) {
       return res.status(404).json({
         success: false,
         error: `Rule definition '${ruleCode}' not found`
@@ -377,8 +421,8 @@ router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
 
     // Get rule definition ID
     const defResult = await getDbPool().query(
-      `SELECT id FROM booking_rule_definitions WHERE rule_code = $1`,
-      [ruleCode]
+      `SELECT id FROM booking_rule_definitions WHERE rule_code = $1 AND rule_code = ANY($2::text[])`,
+      [ruleCode, ALLOWED_RULE_CODES]
     );
 
     if (defResult.rows.length === 0) {
@@ -433,16 +477,30 @@ router.post('/facility/:facilityId/bulk', async (req, res, next) => {
     try {
       await client.query('BEGIN');
 
-      for (const rule of rules) {
+      const enabledRules = rules.filter((rule) => !isHiddenRuleCode(rule.ruleCode) && rule.isEnabled !== false);
+      const enabledRuleCodes = Array.from(new Set(enabledRules.map((rule) => rule.ruleCode)));
+
+      // Authoritative replace: remove all visible facility rule configs that are not enabled in this payload.
+      await client.query(
+        `DELETE FROM facility_rule_configs frc
+         USING booking_rule_definitions brd
+         WHERE frc.rule_definition_id = brd.id
+           AND frc.facility_id = $1
+           AND brd.rule_code != ALL($2::text[])
+           AND NOT (brd.rule_code = ANY($3::text[]))`,
+        [facilityId, HIDDEN_RULE_CODES, enabledRuleCodes]
+      );
+
+      for (const rule of enabledRules) {
         const { ruleCode, ruleConfig, isEnabled, appliesToCourtIds, appliesToTierIds } = rule;
-        if (isHiddenRuleCode(ruleCode)) {
+        if (isHiddenRuleCode(ruleCode) || !isAllowedRuleCode(ruleCode)) {
           continue;
         }
 
         // Get rule definition ID
         const defResult = await client.query(
-          `SELECT id FROM booking_rule_definitions WHERE rule_code = $1`,
-          [ruleCode]
+          `SELECT id FROM booking_rule_definitions WHERE rule_code = $1 AND rule_code = ANY($2::text[])`,
+          [ruleCode, ALLOWED_RULE_CODES]
         );
 
         if (defResult.rows.length === 0) {
@@ -508,8 +566,9 @@ router.post('/facility/:facilityId/enable-all', async (req, res, next) => {
     const defResult = await getDbPool().query(
       `SELECT id, rule_code, default_config
        FROM booking_rule_definitions
-       WHERE rule_code != ALL($1::text[])`,
-      [HIDDEN_RULE_CODES]
+       WHERE rule_code != ALL($1::text[])
+         AND rule_code = ANY($2::text[])`,
+      [HIDDEN_RULE_CODES, ALLOWED_RULE_CODES]
     );
 
     const client = await getDbPool().connect();
@@ -553,14 +612,14 @@ router.post('/facility/:facilityId/disable-all', async (req, res, next) => {
     const { facilityId } = req.params;
 
     await getDbPool().query(
-      `UPDATE facility_rule_configs SET is_enabled = false, updated_at = CURRENT_TIMESTAMP
+      `DELETE FROM facility_rule_configs
        WHERE facility_id = $1`,
       [facilityId]
     );
 
     res.json({
       success: true,
-      message: 'All rules disabled for facility'
+      message: 'All rules removed for facility'
     });
   } catch (error) {
     next(error);

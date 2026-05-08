@@ -199,12 +199,10 @@ export const RULE_METADATA: RuleMeta[] = [
   },
   {
     code: 'CRT-005',
-    name: 'Reservation Slot Grid',
-    description: 'Controls time slot alignment and booking duration limits.',
+    name: 'Max Reservation Duration',
+    description: 'Limits the maximum booking duration for a single reservation.',
     category: 'court',
     fields: [
-      { key: 'slot_minutes', label: 'Slot Duration', type: 'number', min: 15, max: 120, suffix: 'minutes' },
-      { key: 'min_duration_minutes', label: 'Min Booking', type: 'number', min: 15, max: 240, suffix: 'minutes' },
       { key: 'max_duration_minutes', label: 'Max Booking', type: 'number', min: 15, max: 480, suffix: 'minutes' },
     ],
   },
@@ -288,7 +286,7 @@ export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
   'ACC-011': { enabled: true, config: { max_actions: 10, window_seconds: 60, action_types: ['create', 'cancel'] } },
   'CRT-002': { enabled: true, config: { max_minutes_prime: 60 } },
   'CRT-003': { enabled: false, config: { allowed_tiers: [], allow_admin_override: true } },
-  'CRT-005': { enabled: true, config: { slot_minutes: 30, min_duration_minutes: 30, max_duration_minutes: 120 } },
+  'CRT-005': { enabled: true, config: { max_duration_minutes: 120 } },
   'CRT-007': { enabled: false, config: { buffer_minutes: 15 } },
   'CRT-008': { enabled: false, config: { allowed_types: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'] } },
   'CRT-010': { enabled: false, config: { max_per_week_per_account: 3, window_type: 'calendar_week' } },

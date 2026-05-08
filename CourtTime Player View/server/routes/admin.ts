@@ -24,6 +24,62 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function toDurationMinutes(value: any, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  // Legacy/admin UI may provide hour-like values (e.g. "2") in the minutes field.
+  return n <= 12 ? Math.round(n * 60) : Math.round(n);
+}
+
+function normalizeBookingRulesPayload(bookingRules: any): any {
+  if (!bookingRules || typeof bookingRules !== 'object') return bookingRules;
+  if (bookingRules.userLimits && bookingRules.maxReservationDuration && bookingRules.daysInAdvance) {
+    return bookingRules;
+  }
+
+  const maxReservationDurationEnabled = !!bookingRules.maxReservationDurationEnabled;
+  const maxReservationDurationLimit = toDurationMinutes(
+    bookingRules.maxReservationDurationMinutes,
+    Number(bookingRules.maxBookingDurationHours) > 0 ? Math.round(Number(bookingRules.maxBookingDurationHours) * 60) : 120
+  );
+
+  return {
+    ...bookingRules,
+    restrictionType: bookingRules.restrictionType === 'address' ? 'address' : 'account',
+    daysInAdvance: {
+      enabled: !!bookingRules.daysInAdvanceEnabled,
+      limit: Number(bookingRules.daysInAdvance) || 14,
+    },
+    cancellationPolicy: {
+      enabled: !!bookingRules.cancellationPolicyEnabled,
+    },
+    maxReservationDuration: {
+      enabled: maxReservationDurationEnabled,
+      limit: maxReservationDurationLimit,
+    },
+    userLimits: {
+      perWeekIndividual: {
+        enabled: !!bookingRules.courtsPerWeekUserEnabled,
+        limit: Number(bookingRules.courtsPerWeekUser) || 0,
+      },
+      perWeekHousehold: {
+        enabled: !!bookingRules.courtsPerWeekHouseholdEnabled,
+        limit: Number(bookingRules.courtsPerWeekHousehold) || 0,
+      },
+      perDayIndividual: {
+        enabled: !!bookingRules.courtsPerDayUserEnabled,
+        limit: Number(bookingRules.courtsPerDayUser) || 0,
+      },
+      perDayHousehold: {
+        enabled: !!bookingRules.courtsPerDayHouseholdEnabled,
+        limit: Number(bookingRules.courtsPerDayHousehold) || 0,
+      },
+    },
+    hasPeakHours: !!bookingRules.hasPeakHours,
+    peakHoursSlots: Array.isArray(bookingRules.peakHoursSlots) ? bookingRules.peakHoursSlots : [],
+  };
+}
+
 /**
  * GET /api/admin/dashboard/:facilityId
  * Get dashboard statistics for a facility
@@ -167,9 +223,10 @@ router.patch('/facilities/:facilityId', async (req, res) => {
       bookingRules
     } = req.body;
 
+    const normalizedBookingRules = normalizeBookingRulesPayload(bookingRules);
     // Extract generalRules from bookingRules if provided
-    const generalRules = bookingRules?.generalRules ?? null;
-    const serializedBookingRules = bookingRules ? JSON.stringify(bookingRules) : null;
+    const generalRules = normalizedBookingRules?.generalRules ?? null;
+    const serializedBookingRules = normalizedBookingRules ? JSON.stringify(normalizedBookingRules) : null;
 
     const result = await query(`
       UPDATE facilities
@@ -261,11 +318,11 @@ router.patch('/facilities/:facilityId', async (req, res) => {
     }
 
     // Save booking rules to facility_rules table (legacy storage for restriction type, peak hours, weekend policy)
-    if (bookingRules) {
+    if (normalizedBookingRules) {
       try {
         // Upsert restriction type only (new simplified rules use facilities.booking_rules JSON)
         const bookingLimitConfig = JSON.stringify({
-          restriction_type: bookingRules.restrictionType || 'account',
+          restriction_type: normalizedBookingRules.restrictionType || 'account',
         });
 
         const existingLimit = await query(
@@ -281,6 +338,35 @@ router.patch('/facilities/:facilityId', async (req, res) => {
              VALUES ($1, 'booking_limit', 'Default Booking Limits', 'Default booking limits', $2)`,
             [facilityId, bookingLimitConfig]
           );
+        }
+
+        // Keep CRT-005 in sync immediately when admin saves settings.
+        const crt005Def = await query(
+          `SELECT id FROM booking_rule_definitions WHERE rule_code = 'CRT-005' LIMIT 1`
+        );
+        if (crt005Def.rows.length > 0) {
+          const crt005RuleDefinitionId = crt005Def.rows[0].id;
+          const maxDurationEnabled = !!normalizedBookingRules.maxReservationDuration?.enabled;
+          const maxDurationMinutes = toDurationMinutes(normalizedBookingRules.maxReservationDuration?.limit, 120);
+
+          if (maxDurationEnabled) {
+            await query(
+              `INSERT INTO facility_rule_configs (facility_id, rule_definition_id, rule_config, is_enabled)
+               VALUES ($1, $2, $3::jsonb, true)
+               ON CONFLICT (facility_id, rule_definition_id)
+               DO UPDATE SET
+                 rule_config = EXCLUDED.rule_config,
+                 is_enabled = true,
+                 updated_at = CURRENT_TIMESTAMP`,
+              [facilityId, crt005RuleDefinitionId, JSON.stringify({ max_duration_minutes: maxDurationMinutes })]
+            );
+          } else {
+            await query(
+              `DELETE FROM facility_rule_configs
+               WHERE facility_id = $1 AND rule_definition_id = $2`,
+              [facilityId, crt005RuleDefinitionId]
+            );
+          }
         }
 
         // Remove legacy policy rows from this section

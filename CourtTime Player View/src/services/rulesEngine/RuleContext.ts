@@ -25,6 +25,16 @@ import {
 } from './types';
 import { getDayOfWeek, timeRangesOverlap } from './utils/timeUtils';
 
+const ALLOWED_RULE_CODES = [
+  'ACC-002',
+  'ACC-005',
+  'CRT-005',
+  'ACC-010',
+  'CRT-001',
+  'CRT-002',
+  'HH-003'
+] as const;
+
 /**
  * Get current time expressed as facility-local components.
  * On servers running in UTC (e.g., Render), new Date() is UTC but booking
@@ -287,6 +297,77 @@ function mergePeakHoursSlots(primary: PeakHoursSlot[], fallback: PeakHoursSlot[]
   return Array.from(merged.values());
 }
 
+function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+
+  const normalizeDurationLimit = (value: any, fallback: number): number => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    // Legacy payloads may store hour-like values in this field (e.g. "2" means 2 hours).
+    return n <= 12 ? Math.round(n * 60) : Math.round(n);
+  };
+
+  // Already normalized shape.
+  if (raw.userLimits && raw.maxReservationDuration && raw.daysInAdvance) {
+    return {
+      ...(raw as SimplifiedBookingRules),
+      maxReservationDuration: {
+        ...(raw.maxReservationDuration || {}),
+        limit: normalizeDurationLimit(raw.maxReservationDuration?.limit, 120),
+      },
+    } as SimplifiedBookingRules;
+  }
+
+  // Admin booking management currently stores a flat shape in facilities.booking_rules.
+  const hasFlatShape =
+    'maxReservationDurationEnabled' in raw ||
+    'maxReservationDurationMinutes' in raw ||
+    'daysInAdvanceEnabled' in raw ||
+    'courtsPerWeekUserEnabled' in raw;
+
+  if (!hasFlatShape) return undefined;
+
+  const toNum = (v: any, fallback: number): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  return {
+    restrictionType: raw.restrictionType === 'address' ? 'address' : 'account',
+    daysInAdvance: {
+      enabled: !!raw.daysInAdvanceEnabled,
+      limit: toNum(raw.daysInAdvance, 14)
+    },
+    cancellationPolicy: {
+      enabled: !!raw.cancellationPolicyEnabled
+    },
+    maxReservationDuration: {
+      enabled: !!raw.maxReservationDurationEnabled,
+      limit: normalizeDurationLimit(raw.maxReservationDurationMinutes, 120)
+    },
+    userLimits: {
+      perWeekIndividual: {
+        enabled: !!raw.courtsPerWeekUserEnabled,
+        limit: toNum(raw.courtsPerWeekUser, 0)
+      },
+      perWeekHousehold: {
+        enabled: !!raw.courtsPerWeekHouseholdEnabled,
+        limit: toNum(raw.courtsPerWeekHousehold, 0)
+      },
+      perDayIndividual: {
+        enabled: !!raw.courtsPerDayUserEnabled,
+        limit: toNum(raw.courtsPerDayUser, 0)
+      },
+      perDayHousehold: {
+        enabled: !!raw.courtsPerDayHouseholdEnabled,
+        limit: toNum(raw.courtsPerDayHousehold, 0)
+      }
+    },
+    hasPeakHours: !!raw.hasPeakHours,
+    peakHoursSlots: Array.isArray(raw.peakHoursSlots) ? raw.peakHoursSlots : []
+  };
+}
+
 /**
  * Fetch user with their membership tier
  */
@@ -517,9 +598,7 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
       const parsed = typeof facility.bookingRules === 'string'
         ? JSON.parse(facility.bookingRules)
         : facility.bookingRules;
-      if (parsed && typeof parsed === 'object' && parsed.userLimits) {
-        simplifiedBookingRules = parsed as SimplifiedBookingRules;
-      }
+      simplifiedBookingRules = normalizeSimplifiedBookingRules(parsed);
     } catch (error) {
       console.warn('Failed to parse facility booking_rules JSON:', error);
     }
@@ -542,9 +621,11 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
       brd.failure_message_template as "failureMessageTemplate"
     FROM facility_rule_configs frc
     JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
-    WHERE frc.facility_id = $1 AND frc.is_enabled = true
+    WHERE frc.facility_id = $1
+      AND frc.is_enabled = true
+      AND brd.rule_code = ANY($2::text[])
     ORDER BY brd.evaluation_order, frc.priority`,
-    [facilityId]
+    [facilityId, ALLOWED_RULE_CODES]
   );
 
   // Fetch default tier

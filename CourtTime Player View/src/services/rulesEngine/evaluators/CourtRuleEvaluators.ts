@@ -19,7 +19,6 @@ import {
 import {
   getDayOfWeek,
   timeToMinutes,
-  isAlignedToSlot,
   timeRangesOverlap,
   getTimeWindow,
   formatDate,
@@ -258,49 +257,24 @@ const CRT004: RuleEvaluator = {
 };
 
 /**
- * CRT-005: Reservation Slot Grid
+ * CRT-005: Max Reservation Duration
  */
 const CRT005: RuleEvaluator = {
   ruleCode: 'CRT-005',
-  ruleName: 'Reservation Slot Grid',
+  ruleName: 'Max Reservation Duration',
   category: 'court',
 
   async evaluate(context: RuleContext, config: CRT005Config): Promise<RuleResult> {
     const dayOfWeek = getDayOfWeek(context.request.bookingDate);
     const dayConfig = context.court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
 
-    const slotMinutes = dayConfig?.slotDuration || config.slot_minutes || 30;
-    const minDuration = dayConfig?.minDuration || config.min_duration_minutes || 30;
-    const maxDuration = dayConfig?.maxDuration || config.max_duration_minutes || 120;
-
-    // Check start time alignment
-    if (!isAlignedToSlot(context.request.startTime, slotMinutes)) {
-      return {
-        ruleCode: 'CRT-005',
-        ruleName: 'Reservation Slot Grid',
-        passed: false,
-        severity: 'error',
-        message: `Reservations must start on ${slotMinutes}-minute increments.`,
-        details: { slotMinutes, requestedStart: context.request.startTime }
-      };
-    }
-
-    // Check duration bounds
-    if (context.request.durationMinutes < minDuration) {
-      return {
-        ruleCode: 'CRT-005',
-        ruleName: 'Reservation Slot Grid',
-        passed: false,
-        severity: 'error',
-        message: `Minimum reservation duration is ${minDuration} minutes.`,
-        details: { minDuration, requestedDuration: context.request.durationMinutes }
-      };
-    }
+    // Admin-configured booking rule must take precedence over court defaults.
+    const maxDuration = config.max_duration_minutes || dayConfig?.maxDuration || 120;
 
     if (context.request.durationMinutes > maxDuration) {
       return {
         ruleCode: 'CRT-005',
-        ruleName: 'Reservation Slot Grid',
+        ruleName: 'Max Reservation Duration',
         passed: false,
         severity: 'error',
         message: `Maximum reservation duration is ${maxDuration} minutes.`,
@@ -308,7 +282,7 @@ const CRT005: RuleEvaluator = {
       };
     }
 
-    return { ruleCode: 'CRT-005', ruleName: 'Reservation Slot Grid', passed: true, severity: 'error' };
+    return { ruleCode: 'CRT-005', ruleName: 'Max Reservation Duration', passed: true, severity: 'error' };
   }
 };
 

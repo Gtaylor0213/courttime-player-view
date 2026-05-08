@@ -5,6 +5,15 @@ import type { PoolClient } from 'pg';
 import { recordPayment } from './paymentService';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
+const ALLOWED_BOOKING_RULE_CODES = new Set([
+  'ACC-002',
+  'ACC-005',
+  'CRT-005',
+  'ACC-010',
+  'CRT-001',
+  'CRT-002',
+  'HH-003'
+]);
 
 /**
  * Send an admin invitation email via Resend
@@ -1148,7 +1157,8 @@ export async function registerFacility(
     // 6b. Save rules engine configs (facility_rule_configs table)
     if (data.ruleConfigs && Array.isArray(data.ruleConfigs)) {
       try {
-        for (const rule of data.ruleConfigs) {
+        // Persist enabled rules only so DB always reflects enforced rules.
+        for (const rule of data.ruleConfigs.filter((r: any) => r?.isEnabled !== false && ALLOWED_BOOKING_RULE_CODES.has(r?.ruleCode))) {
           const defResult = await client.query(
             'SELECT id FROM booking_rule_definitions WHERE rule_code = $1',
             [rule.ruleCode]

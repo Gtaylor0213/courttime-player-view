@@ -680,6 +680,18 @@ export function FacilityManagement() {
           'hasPeakHours' in parsedSimplified ||
           'peakHoursRestrictions' in parsedSimplified
         );
+        const normalizeDurationMinutes = (rawMinutes: any, rawHours: any, fallback: number) => {
+          const mins = Number(rawMinutes);
+          if (Number.isFinite(mins) && mins > 0) {
+            // Legacy flat payloads may store hour-like values (e.g. "2") in this field.
+            return mins <= 12 ? Math.round(mins * 60) : Math.round(mins);
+          }
+          const hours = Number(rawHours);
+          if (Number.isFinite(hours) && hours > 0) {
+            return Math.round(hours * 60);
+          }
+          return fallback;
+        };
 
         const bookingRules: BookingRules = hasFlatSavedRules
           ? {
@@ -701,6 +713,13 @@ export function FacilityManagement() {
               allowedBookingTypes: Array.isArray(parsedSimplified?.allowedBookingTypes)
                 ? parsedSimplified.allowedBookingTypes
                 : defaultBookingRules.allowedBookingTypes,
+              maxReservationDurationMinutes: String(
+                normalizeDurationMinutes(
+                  parsedSimplified?.maxReservationDurationMinutes,
+                  parsedSimplified?.maxBookingDurationHours,
+                  Number(defaultBookingRules.maxReservationDurationMinutes) || 120
+                )
+              ),
             }
           : {
               generalRules: facility.generalRules || '',
@@ -709,7 +728,13 @@ export function FacilityManagement() {
               daysInAdvance: String(parsedSimplified?.daysInAdvance?.limit ?? defaultBookingRules.daysInAdvance),
               cancellationPolicyEnabled: parsedSimplified?.cancellationPolicy?.enabled ?? defaultBookingRules.cancellationPolicyEnabled,
               maxReservationDurationEnabled: parsedSimplified?.maxReservationDuration?.enabled ?? defaultBookingRules.maxReservationDurationEnabled,
-              maxReservationDurationMinutes: String(parsedSimplified?.maxReservationDuration?.limit ?? defaultBookingRules.maxReservationDurationMinutes),
+              maxReservationDurationMinutes: String(
+                normalizeDurationMinutes(
+                  parsedSimplified?.maxReservationDuration?.limit,
+                  facility.maxBookingDurationHours,
+                  Number(defaultBookingRules.maxReservationDurationMinutes) || 120
+                )
+              ),
               courtsPerWeekUserEnabled: parsedSimplified?.userLimits?.perWeekIndividual?.enabled ?? defaultBookingRules.courtsPerWeekUserEnabled,
               courtsPerWeekUser: String(parsedSimplified?.userLimits?.perWeekIndividual?.limit ?? defaultBookingRules.courtsPerWeekUser),
               courtsPerWeekHouseholdEnabled: parsedSimplified?.userLimits?.perWeekHousehold?.enabled ?? defaultBookingRules.courtsPerWeekHouseholdEnabled,
@@ -1645,6 +1670,20 @@ export function FacilityManagement() {
           ruleConfig[configKey] = normalizedValue;
         }
 
+        // Normalize max duration from admin entry.
+        // Some legacy states stored "2" in maxReservationDurationMinutes to mean 2 hours.
+        if (code === 'CRT-005') {
+          const rawMinutes = Number(rules.maxReservationDurationMinutes);
+          if (Number.isFinite(rawMinutes) && rawMinutes > 0) {
+            ruleConfig.max_duration_minutes = rawMinutes <= 12 ? Math.round(rawMinutes * 60) : Math.round(rawMinutes);
+          } else {
+            const rawHours = Number(rules.maxBookingDurationHours);
+            if (Number.isFinite(rawHours) && rawHours > 0) {
+              ruleConfig.max_duration_minutes = Math.round(rawHours * 60);
+            }
+          }
+        }
+
         // Preserve expected default fields for common rules when values are missing.
         if (code === 'ACC-002') {
           if (ruleConfig.max_per_week === undefined) {
@@ -1808,8 +1847,10 @@ export function FacilityManagement() {
 
           const crt005 = ruleMap.get('CRT-005') as any;
           if (crt005?.facilityConfig) {
+            updated.bookingRules.maxReservationDurationEnabled = !!crt005.isEnabled;
             updated.bookingRules.maxBookingDurationUnlimited = !crt005.isEnabled;
             if (crt005.effectiveConfig?.max_duration_minutes !== undefined) {
+              updated.bookingRules.maxReservationDurationMinutes = String(crt005.effectiveConfig.max_duration_minutes);
               updated.bookingRules.maxBookingDurationHours = String(crt005.effectiveConfig.max_duration_minutes / 60);
             }
           }
@@ -1874,7 +1915,7 @@ export function FacilityManagement() {
     'ACC-010': { enabledField: 'peakHoursRestrictions.maxBookingsUnlimited', invertEnabled: true, configMap: { max_prime_per_week: { field: 'peakHoursRestrictions.maxBookingsPerWeek' } } },
     'ACC-011': { enabledField: 'rateLimitEnabled', configMap: { max_actions: { field: 'rateLimitMaxActions' }, window_seconds: { field: 'rateLimitWindowSeconds' } } },
     'CRT-002': { enabledField: 'peakHoursRestrictions.maxDurationUnlimited', invertEnabled: true, configMap: { max_minutes_prime: { field: 'peakHoursRestrictions.maxDurationHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
-    'CRT-005': { enabledField: 'maxBookingDurationUnlimited', invertEnabled: true, configMap: { max_duration_minutes: { field: 'maxBookingDurationHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
+    'CRT-005': { enabledField: 'maxReservationDurationEnabled', configMap: { max_duration_minutes: { field: 'maxReservationDurationMinutes', fromDb: (v: number) => v, toDb: (v: number) => v } } },
     'CRT-007': { enabledField: 'bufferTimeEnabled', configMap: { buffer_minutes: { field: 'bufferTimeMinutes' } } },
     'CRT-008': { enabledField: 'allowedBookingTypesEnabled', configMap: {} },
     'CRT-010': { enabledField: 'courtWeeklyCapEnabled', configMap: { max_per_week_per_account: { field: 'courtWeeklyCap' } } },
@@ -2961,14 +3002,13 @@ export function FacilityManagement() {
                     </div>
                     {(() => {
                       const totalMinutes = Number(facilityData.bookingRules.maxReservationDurationMinutes) || 0;
-                      const useHours = totalMinutes >= 60;
-                      const displayValue = useHours ? String(totalMinutes / 60) : String(totalMinutes);
+                      const displayValue = String(totalMinutes / 60);
                       return (
                         <div className="flex items-center gap-2">
                           <Input
                             type="number"
-                            min={useHours ? "0.25" : "15"}
-                            step={useHours ? "0.25" : "15"}
+                            min="0.25"
+                            step="0.25"
                             value={displayValue}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                               const n = parseFloat(e.target.value);
@@ -2976,12 +3016,12 @@ export function FacilityManagement() {
                                 handleBookingRulesChange('maxReservationDurationMinutes', '0');
                                 return;
                               }
-                              const minutes = useHours ? Math.round(n * 60) : Math.round(n);
+                              const minutes = Math.round(n * 60);
                               handleBookingRulesChange('maxReservationDurationMinutes', String(minutes));
                             }}
                             disabled={!isEditing || !facilityData.bookingRules.maxReservationDurationEnabled}
                           />
-                          <span className="text-sm text-gray-500 whitespace-nowrap">{useHours ? 'hours' : 'minutes'}</span>
+                          <span className="text-sm text-gray-500 whitespace-nowrap">hours</span>
                         </div>
                       );
                     })()}

@@ -16,7 +16,7 @@ import {
   FacilityRuleConfig,
   RuleEvaluator
 } from './types';
-import { combineDateAndTime, formatDate, getDayOfWeek, minutesBetween, timeRangesOverlap, timeToMinutes } from './utils/timeUtils';
+import { combineDateAndTime, formatDate, getDayOfWeek, minutesBetween, timeRangesOverlap } from './utils/timeUtils';
 
 // Import evaluators
 import { accountEvaluators } from './evaluators/AccountRuleEvaluators';
@@ -28,6 +28,15 @@ import { householdEvaluators } from './evaluators/HouseholdRuleEvaluators';
  */
 export class RulesEngine {
   private evaluators: Map<string, RuleEvaluator>;
+  private readonly allowedRuleCodes = new Set([
+    'ACC-002',
+    'ACC-005',
+    'CRT-005',
+    'ACC-010',
+    'CRT-001',
+    'CRT-002',
+    'HH-003'
+  ]);
 
   constructor() {
     this.evaluators = new Map();
@@ -189,17 +198,6 @@ export class RulesEngine {
 
       // === End pre-rule hard blocks ===
 
-      // Facility admins bypass all booking rules automatically
-      if (context.user.isFacilityAdmin) {
-        return {
-          allowed: true,
-          results: [],
-          blockers: [],
-          warnings: [],
-          isPrimeTime: context.isPrimeTime
-        };
-      }
-
       const simplifiedResult = this.evaluateSimplifiedRules(context);
       if (simplifiedResult) {
         return simplifiedResult;
@@ -296,61 +294,6 @@ export class RulesEngine {
     }
 
     const dayOfWeek = getDayOfWeek(context.request.bookingDate);
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayName = dayNames[dayOfWeek];
-    const facilityHours = config.facilityHours?.[dayName] || context.facility.operatingHours?.[dayName];
-    if (facilityHours) {
-      if ((facilityHours as any).isOpen === false || (facilityHours as any).closed === true) {
-        blockers.push({
-          ruleCode: 'SIMPLE-FACILITY-HOURS',
-          ruleName: 'Facility Hours',
-          passed: false,
-          severity: 'error',
-          message: 'This facility is not open during the selected time'
-        });
-      } else if ((facilityHours as any).open && (facilityHours as any).close) {
-        const requestStart = timeToMinutes(context.request.startTime);
-        const requestEnd = timeToMinutes(context.request.endTime);
-        const open = timeToMinutes((facilityHours as any).open);
-        const close = timeToMinutes((facilityHours as any).close);
-        if (requestStart < open || requestEnd > close) {
-          blockers.push({
-            ruleCode: 'SIMPLE-FACILITY-HOURS',
-            ruleName: 'Facility Hours',
-            passed: false,
-            severity: 'error',
-            message: 'This facility is not open during the selected time'
-          });
-        }
-      }
-    }
-
-    const courtDayConfig = context.court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
-    if (courtDayConfig) {
-      if (!courtDayConfig.isOpen) {
-        blockers.push({
-          ruleCode: 'SIMPLE-COURT-HOURS',
-          ruleName: 'Court Hours',
-          passed: false,
-          severity: 'error',
-          message: 'This court is not available during the selected time'
-        });
-      } else if (courtDayConfig.openTime && courtDayConfig.closeTime) {
-        const requestStart = timeToMinutes(context.request.startTime);
-        const requestEnd = timeToMinutes(context.request.endTime);
-        const open = timeToMinutes(courtDayConfig.openTime);
-        const close = timeToMinutes(courtDayConfig.closeTime);
-        if (requestStart < open || requestEnd > close) {
-          blockers.push({
-            ruleCode: 'SIMPLE-COURT-HOURS',
-            ruleName: 'Court Hours',
-            passed: false,
-            severity: 'error',
-            message: 'This court is not available during the selected time'
-          });
-        }
-      }
-    }
 
     if (config.maxReservationDuration?.enabled) {
       const maxDuration = Number(config.maxReservationDuration.limit) || 0;
@@ -545,6 +488,9 @@ export class RulesEngine {
   private getApplicableRules(context: RuleContext): FacilityRuleConfig[] {
     const retiredRuleCodes = new Set(['ACC-006', 'ACC-008', 'CRT-012']);
     return context.facility.rules.filter(rule => {
+      if (!this.allowedRuleCodes.has(rule.ruleCode)) {
+        return false;
+      }
       if (retiredRuleCodes.has(rule.ruleCode)) {
         return false;
       }

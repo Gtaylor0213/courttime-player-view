@@ -23,6 +23,7 @@ import {
   addDays,
   getDayOfWeek
 } from '../utils/timeUtils';
+import { resolveWeeklyIndividualFromBookingRules } from '../RuleContext';
 import { countPrimeTimeBookings } from '../utils/primeTimeUtils';
 
 function bookingMatchesPeakSlot(
@@ -81,14 +82,28 @@ const ACC002: RuleEvaluator = {
   category: 'account',
 
   async evaluate(context: RuleContext, config: ACC002Config): Promise<RuleResult> {
-    const maxPerWeek = context.user.tier?.maxReservationsPerWeek
-      ?? config.max_per_week
-      ?? 999;
+    const resolved = resolveWeeklyIndividualFromBookingRules(context.facility);
+    if (!resolved.enabled) {
+      return { ruleCode: 'ACC-002', ruleName: 'Max Reservations Per Week', passed: true, severity: 'error' };
+    }
+
+    let maxPerWeek = resolved.limit > 0 ? resolved.limit : Number(config.max_per_week);
+
+    if (!Number.isFinite(maxPerWeek) || maxPerWeek <= 0) {
+      maxPerWeek = Number(context.user.tier?.maxReservationsPerWeek);
+    }
+    if (!Number.isFinite(maxPerWeek) || maxPerWeek <= 0) {
+      maxPerWeek = 999;
+    }
 
     const windowType = config.window_type || 'calendar_week';
     const includeCanceled = config.include_canceled || false;
 
-    const window = getTimeWindow(windowType);
+    // Week for the reservation being validated (facility-local calendar date), not server UTC "now".
+    const [by, bm, bd] = context.request.bookingDate.split('-').map(Number);
+    const referenceDate = new Date(by, bm - 1, bd, 12, 0, 0, 0);
+
+    const window = getTimeWindow(windowType, referenceDate);
     const windowStart = formatDate(window.startDate);
     const windowEnd = formatDate(window.endDate);
 

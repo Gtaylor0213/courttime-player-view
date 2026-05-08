@@ -158,6 +158,8 @@ export interface FacilityWithRules {
   operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
   timezone?: string;
   status?: 'active' | 'pending' | 'suspended' | 'closed';
+  /** Parsed `facilities.booking_rules` JSON (flat + nested); used to resolve limits when nested values are stale. */
+  bookingRulesRaw?: Record<string, unknown> | null;
   simplifiedBookingRules?: SimplifiedBookingRules;
   rules: FacilityRuleConfig[];
   defaultTier?: MembershipTier;

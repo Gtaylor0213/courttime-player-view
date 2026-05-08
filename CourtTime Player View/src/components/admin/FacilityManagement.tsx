@@ -857,6 +857,10 @@ export function FacilityManagement() {
         ...facilityData,
         bookingRules: {
           ...facilityData.bookingRules,
+          // Keep legacy and current weekly-limit fields aligned so all
+          // backend enforcement paths use the same updated value.
+          maxBookingsPerWeek: facilityData.bookingRules.courtsPerWeekUser,
+          maxBookingsPerWeekUnlimited: !facilityData.bookingRules.courtsPerWeekUserEnabled,
           restrictionsApplyToAdmins: false,
           peakHoursApplyToAdmins: false,
           weekendPolicyApplyToAdmins: false,
@@ -865,9 +869,11 @@ export function FacilityManagement() {
       const response = await adminApi.updateFacility(currentFacilityId, payload);
 
       if (response.success) {
-        const rulesOk = await syncBookingRulesToEngine();
+        const rulesOk = await syncBookingRulesToEngine(payload.bookingRules);
         if (rulesOk) {
           toast.success('Facility updated successfully');
+        } else {
+          toast.error('Facility saved, but booking rules failed to sync to the rules engine. Try again or contact support.');
         }
         setIsEditing(false);
         setOriginalData(payload);
@@ -1638,9 +1644,9 @@ export function FacilityManagement() {
   };
 
   // Rules engine sync
-  const syncBookingRulesToEngine = async () => {
-    if (!currentFacilityId) return;
-    const rules = facilityData.bookingRules;
+  const syncBookingRulesToEngine = async (rulesSnapshot?: FacilityData['bookingRules']) => {
+    if (!currentFacilityId) return false;
+    const rules = rulesSnapshot ?? facilityData.bookingRules;
     const ruleConfigs: Array<{
       ruleCode: string;
       isEnabled: boolean;
@@ -1686,15 +1692,20 @@ export function FacilityManagement() {
 
         // Preserve expected default fields for common rules when values are missing.
         if (code === 'ACC-002') {
-          if (ruleConfig.max_per_week === undefined) {
-            ruleConfig.max_per_week = parseInt(rules.maxBookingsPerWeek, 10) || 1;
-          }
-          if (ruleConfig.window_type === undefined) {
-            ruleConfig.window_type = 'calendar_week';
-          }
-          if (ruleConfig.include_canceled === undefined) {
-            ruleConfig.include_canceled = false;
-          }
+          // ACC-002 should always mirror the "Courts Per Week (Individual)" controls.
+          // These are the fields admins edit in Booking Management.
+          const weeklyEnabled = !!rules.courtsPerWeekUserEnabled;
+          const weeklyLimit = parseInt(rules.courtsPerWeekUser, 10) || 1;
+          ruleConfigs.push({
+            ruleCode: code,
+            isEnabled: weeklyEnabled,
+            ruleConfig: {
+              max_per_week: weeklyLimit,
+              window_type: 'calendar_week',
+              include_canceled: false,
+            },
+          });
+          continue;
         }
         if (code === 'ACC-003' && ruleConfig.window_type === undefined) {
           ruleConfig.window_type = 'calendar_week';
@@ -1832,8 +1843,11 @@ export function FacilityManagement() {
           const acc002 = ruleMap.get('ACC-002') as any;
           if (acc002?.facilityConfig) {
             updated.bookingRules.maxBookingsPerWeekUnlimited = !acc002.isEnabled;
+            updated.bookingRules.courtsPerWeekUserEnabled = !!acc002.isEnabled;
             if (acc002.effectiveConfig?.max_per_week !== undefined) {
-              updated.bookingRules.maxBookingsPerWeek = String(acc002.effectiveConfig.max_per_week);
+              const weeklyLimit = String(acc002.effectiveConfig.max_per_week);
+              updated.bookingRules.maxBookingsPerWeek = weeklyLimit;
+              updated.bookingRules.courtsPerWeekUser = weeklyLimit;
             }
           }
 

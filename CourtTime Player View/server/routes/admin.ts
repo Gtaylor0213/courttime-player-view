@@ -33,25 +33,75 @@ function toDurationMinutes(value: any, fallback: number): number {
 
 function normalizeBookingRulesPayload(bookingRules: any): any {
   if (!bookingRules || typeof bookingRules !== 'object') return bookingRules;
-  if (bookingRules.userLimits && bookingRules.maxReservationDuration && bookingRules.daysInAdvance) {
-    return bookingRules;
-  }
 
-  const maxReservationDurationEnabled = !!bookingRules.maxReservationDurationEnabled;
+  const toBoolean = (value: any, fallback: boolean): boolean => {
+    if (value === undefined || value === null) return fallback;
+    return !!value;
+  };
+  const toNumber = (value: any, fallback: number): number => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const pickNumber = (primary: any, secondary: any, fallback: number): number => {
+    const p = Number(primary);
+    if (Number.isFinite(p)) return p;
+    const s = Number(secondary);
+    if (Number.isFinite(s)) return s;
+    return fallback;
+  };
+  const firstPositiveWeeklyLimit = (...candidates: any[]): number => {
+    for (const v of candidates) {
+      if (v === undefined || v === null || v === '') continue;
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return Math.floor(n);
+    }
+    return 0;
+  };
+  const pickEnabled = (preferred: any, legacyEnabled: any, legacyUnlimited: any, fallback: boolean): boolean => {
+    if (preferred !== undefined && preferred !== null) return !!preferred;
+    if (legacyEnabled !== undefined && legacyEnabled !== null) return !!legacyEnabled;
+    if (legacyUnlimited !== undefined && legacyUnlimited !== null) return !legacyUnlimited;
+    return fallback;
+  };
+
+  const existingDaysInAdvance = bookingRules.daysInAdvance || {};
+  const existingCancellationPolicy = bookingRules.cancellationPolicy || {};
+  const existingMaxReservationDuration = bookingRules.maxReservationDuration || {};
+  const existingUserLimits = bookingRules.userLimits || {};
+  const existingPerWeekIndividual = existingUserLimits.perWeekIndividual || {};
+  const existingPerWeekHousehold = existingUserLimits.perWeekHousehold || {};
+  const existingPerDayIndividual = existingUserLimits.perDayIndividual || {};
+  const existingPerDayHousehold = existingUserLimits.perDayHousehold || {};
+
+  const maxReservationDurationEnabled = pickEnabled(
+    bookingRules.maxReservationDurationEnabled,
+    existingMaxReservationDuration.enabled,
+    bookingRules.maxBookingDurationUnlimited,
+    false
+  );
+  const maxDurationFallbackRaw = pickNumber(existingMaxReservationDuration.limit, bookingRules.maxBookingDurationHours, 2);
+  const maxDurationFallback = maxDurationFallbackRaw > 0
+    ? Math.round(maxDurationFallbackRaw * (maxDurationFallbackRaw <= 12 ? 60 : 1))
+    : 120;
   const maxReservationDurationLimit = toDurationMinutes(
     bookingRules.maxReservationDurationMinutes,
-    Number(bookingRules.maxBookingDurationHours) > 0 ? Math.round(Number(bookingRules.maxBookingDurationHours) * 60) : 120
+    maxDurationFallback
   );
 
-  return {
+  const merged: Record<string, any> = {
     ...bookingRules,
     restrictionType: bookingRules.restrictionType === 'address' ? 'address' : 'account',
     daysInAdvance: {
-      enabled: !!bookingRules.daysInAdvanceEnabled,
-      limit: Number(bookingRules.daysInAdvance) || 14,
+      enabled: pickEnabled(
+        bookingRules.daysInAdvanceEnabled,
+        existingDaysInAdvance.enabled,
+        bookingRules.advanceBookingDaysUnlimited,
+        false
+      ),
+      limit: pickNumber(bookingRules.daysInAdvance, bookingRules.advanceBookingDays, toNumber(existingDaysInAdvance.limit, 14)),
     },
     cancellationPolicy: {
-      enabled: !!bookingRules.cancellationPolicyEnabled,
+      enabled: toBoolean(bookingRules.cancellationPolicyEnabled, toBoolean(existingCancellationPolicy.enabled, false)),
     },
     maxReservationDuration: {
       enabled: maxReservationDurationEnabled,
@@ -59,25 +109,57 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
     },
     userLimits: {
       perWeekIndividual: {
-        enabled: !!bookingRules.courtsPerWeekUserEnabled,
-        limit: Number(bookingRules.courtsPerWeekUser) || 0,
+        enabled: pickEnabled(
+          bookingRules.courtsPerWeekUserEnabled,
+          bookingRules.maxBookingsPerWeekUnlimited !== undefined ? !bookingRules.maxBookingsPerWeekUnlimited : undefined,
+          existingPerWeekIndividual.enabled,
+          undefined,
+          false
+        ),
+        limit:
+          firstPositiveWeeklyLimit(
+            bookingRules.courtsPerWeekUser,
+            existingPerWeekIndividual.limit,
+            bookingRules.maxBookingsPerWeek
+          ) || toNumber(existingPerWeekIndividual.limit, 0),
       },
       perWeekHousehold: {
-        enabled: !!bookingRules.courtsPerWeekHouseholdEnabled,
-        limit: Number(bookingRules.courtsPerWeekHousehold) || 0,
+        enabled: toBoolean(bookingRules.courtsPerWeekHouseholdEnabled, toBoolean(existingPerWeekHousehold.enabled, false)),
+        limit: pickNumber(
+          bookingRules.courtsPerWeekHousehold,
+          bookingRules.maxBookingsPerWeekHousehold,
+          toNumber(existingPerWeekHousehold.limit, 0)
+        ),
       },
       perDayIndividual: {
-        enabled: !!bookingRules.courtsPerDayUserEnabled,
-        limit: Number(bookingRules.courtsPerDayUser) || 0,
+        enabled: toBoolean(bookingRules.courtsPerDayUserEnabled, toBoolean(existingPerDayIndividual.enabled, false)),
+        limit: toNumber(
+          bookingRules.courtsPerDayUser !== undefined ? bookingRules.courtsPerDayUser : existingPerDayIndividual.limit,
+          0
+        ),
       },
       perDayHousehold: {
-        enabled: !!bookingRules.courtsPerDayHouseholdEnabled,
-        limit: Number(bookingRules.courtsPerDayHousehold) || 0,
+        enabled: toBoolean(bookingRules.courtsPerDayHouseholdEnabled, toBoolean(existingPerDayHousehold.enabled, false)),
+        limit: toNumber(
+          bookingRules.courtsPerDayHousehold !== undefined ? bookingRules.courtsPerDayHousehold : existingPerDayHousehold.limit,
+          0
+        ),
       },
     },
     hasPeakHours: !!bookingRules.hasPeakHours,
     peakHoursSlots: Array.isArray(bookingRules.peakHoursSlots) ? bookingRules.peakHoursSlots : [],
   };
+
+  // Mirror nested weekly cap into flat keys on every save so DB JSON and player enforcement stay aligned.
+  const ind = merged.userLimits?.perWeekIndividual;
+  if (ind) {
+    merged.courtsPerWeekUser = String(Number(ind.limit) || 0);
+    merged.courtsPerWeekUserEnabled = !!ind.enabled;
+    merged.maxBookingsPerWeek = String(Number(ind.limit) || 0);
+    merged.maxBookingsPerWeekUnlimited = !ind.enabled;
+  }
+
+  return merged;
 }
 
 /**
@@ -365,6 +447,44 @@ router.patch('/facilities/:facilityId', async (req, res) => {
               `DELETE FROM facility_rule_configs
                WHERE facility_id = $1 AND rule_definition_id = $2`,
               [facilityId, crt005RuleDefinitionId]
+            );
+          }
+        }
+
+        // Keep ACC-002 (weekly cap) in sync from normalized booking rules so enforcement matches admin saves
+        // even if the client bulk rules API is skipped or fails.
+        const acc002Def = await query(
+          `SELECT id FROM booking_rule_definitions WHERE rule_code = 'ACC-002' LIMIT 1`
+        );
+        if (acc002Def.rows.length > 0) {
+          const acc002RuleDefinitionId = acc002Def.rows[0].id;
+          const weeklyEnabled = !!normalizedBookingRules.userLimits?.perWeekIndividual?.enabled;
+          const weeklyLimit = Number(normalizedBookingRules.userLimits?.perWeekIndividual?.limit) || 1;
+
+          if (weeklyEnabled && weeklyLimit > 0) {
+            await query(
+              `INSERT INTO facility_rule_configs (facility_id, rule_definition_id, rule_config, is_enabled)
+               VALUES ($1, $2, $3::jsonb, true)
+               ON CONFLICT (facility_id, rule_definition_id)
+               DO UPDATE SET
+                 rule_config = EXCLUDED.rule_config,
+                 is_enabled = true,
+                 updated_at = CURRENT_TIMESTAMP`,
+              [
+                facilityId,
+                acc002RuleDefinitionId,
+                JSON.stringify({
+                  max_per_week: weeklyLimit,
+                  window_type: 'calendar_week',
+                  include_canceled: false,
+                }),
+              ]
+            );
+          } else {
+            await query(
+              `DELETE FROM facility_rule_configs
+               WHERE facility_id = $1 AND rule_definition_id = $2`,
+              [facilityId, acc002RuleDefinitionId]
             );
           }
         }

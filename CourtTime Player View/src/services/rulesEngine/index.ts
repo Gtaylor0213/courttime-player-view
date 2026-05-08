@@ -4,7 +4,7 @@
  */
 
 import { query } from '../../database/connection';
-import { buildRuleContext, buildCancellationContext, getFacilityLocalNow } from './RuleContext';
+import { buildRuleContext, buildCancellationContext, getFacilityLocalNow, resolveWeeklyIndividualFromBookingRules } from './RuleContext';
 import {
   BookingRequest,
   CancellationRequest,
@@ -198,7 +198,10 @@ export class RulesEngine {
 
       // === End pre-rule hard blocks ===
 
-      const simplifiedResult = this.evaluateSimplifiedRules(context);
+      // Use legacy simplified rules only as a fallback when no configured
+      // rules-engine entries exist for this facility.
+      const hasConfiguredEngineRules = Array.isArray(context.facility.rules) && context.facility.rules.length > 0;
+      const simplifiedResult = hasConfiguredEngineRules ? null : this.evaluateSimplifiedRules(context);
       if (simplifiedResult) {
         return simplifiedResult;
       }
@@ -231,6 +234,12 @@ export class RulesEngine {
           const result = await this.evaluateRule(rule, context);
           if (result) results.push(result);
         }
+      }
+
+      // Other engine rules skip the full simplified path, but ACC-002 may be absent or not apply to
+      // this member's tier — still enforce weekly caps from facilities.booking_rules JSON.
+      if (!rules.some((r) => r.ruleCode === 'ACC-002')) {
+        results.push(...this.weeklyLimitsFromSimplifiedConfig(context));
       }
 
       // Compile final result
@@ -267,6 +276,65 @@ export class RulesEngine {
       console.error('Error in rules engine evaluation:', error);
       throw error;
     }
+  }
+
+  /**
+   * Weekly individual (from resolveWeeklyIndividualFromBookingRules) + weekly household limits
+   * using the same confirmed-only counts as the legacy simplified path.
+   */
+  private weeklyLimitsFromSimplifiedConfig(context: RuleContext): RuleResult[] {
+    const config = context.facility.simplifiedBookingRules;
+    if (!config) return [];
+
+    const out: RuleResult[] = [];
+    const countable = (b: { status: string }) => b.status === 'confirmed';
+    const [wy, wm, wd] = context.request.bookingDate.split('-').map(Number);
+    const weekStartDate = new Date(wy, wm - 1, wd, 12, 0, 0, 0);
+    const dow = weekStartDate.getDay();
+    const diffToMonday = dow === 0 ? -6 : 1 - dow;
+    weekStartDate.setDate(weekStartDate.getDate() + diffToMonday);
+    weekStartDate.setHours(0, 0, 0, 0);
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    const weekStart = formatDate(weekStartDate);
+    const weekEnd = formatDate(weekEndDate);
+
+    const userWeekCount = context.existingBookings.user.filter(
+      (b) => countable(b) && b.bookingDate >= weekStart && b.bookingDate <= weekEnd
+    ).length;
+    const householdWeekCount = context.existingBookings.household.filter(
+      (b) => countable(b) && b.bookingDate >= weekStart && b.bookingDate <= weekEnd
+    ).length;
+
+    const weeklyIndividual = resolveWeeklyIndividualFromBookingRules(context.facility);
+    if (weeklyIndividual.enabled && weeklyIndividual.limit > 0 && userWeekCount >= weeklyIndividual.limit) {
+      const limit = weeklyIndividual.limit;
+      out.push({
+        ruleCode: 'SIMPLE-WEEK-USER',
+        ruleName: 'Courts Per Week (Individual)',
+        passed: false,
+        severity: 'error',
+        message: `You have reached your weekly booking limit of ${limit}`
+      });
+    }
+
+    const enforceHousehold = config.restrictionType === 'address' && !!context.household;
+    if (
+      enforceHousehold &&
+      config.userLimits?.perWeekHousehold?.enabled &&
+      householdWeekCount >= Number(config.userLimits.perWeekHousehold.limit || 0)
+    ) {
+      const limit = Number(config.userLimits.perWeekHousehold.limit || 0);
+      out.push({
+        ruleCode: 'SIMPLE-WEEK-HOUSEHOLD',
+        ruleName: 'Courts Per Week (Household)',
+        passed: false,
+        severity: 'error',
+        message: `Your household has reached its weekly booking limit of ${limit}`
+      });
+    }
+
+    return out;
   }
 
   private evaluateSimplifiedRules(context: RuleContext): EvaluationResult | null {
@@ -313,7 +381,9 @@ export class RulesEngine {
 
     const countable = (b: any) => b.status === 'confirmed';
     const requestDay = context.request.bookingDate;
-    const weekStartDate = new Date(context.currentDateTime);
+    // Count the week that contains the reservation date (not "today" only).
+    const [wy, wm, wd] = context.request.bookingDate.split('-').map(Number);
+    const weekStartDate = new Date(wy, wm - 1, wd, 12, 0, 0, 0);
     const dow = weekStartDate.getDay(); // 0=Sun..6=Sat
     const diffToMonday = dow === 0 ? -6 : 1 - dow;
     weekStartDate.setDate(weekStartDate.getDate() + diffToMonday);
@@ -323,9 +393,7 @@ export class RulesEngine {
     const weekStart = formatDate(weekStartDate);
     const weekEnd = formatDate(weekEndDate);
     const userDayCount = context.existingBookings.user.filter((b) => countable(b) && b.bookingDate === requestDay).length;
-    const userWeekCount = context.existingBookings.user.filter((b) => countable(b) && b.bookingDate >= weekStart && b.bookingDate <= weekEnd).length;
     const householdDayCount = context.existingBookings.household.filter((b) => countable(b) && b.bookingDate === requestDay).length;
-    const householdWeekCount = context.existingBookings.household.filter((b) => countable(b) && b.bookingDate >= weekStart && b.bookingDate <= weekEnd).length;
 
     if (config.userLimits?.perDayIndividual?.enabled && userDayCount >= Number(config.userLimits.perDayIndividual.limit || 0)) {
       const limit = Number(config.userLimits.perDayIndividual.limit || 0);
@@ -337,16 +405,7 @@ export class RulesEngine {
         message: `You have reached your daily booking limit of ${limit}`
       });
     }
-    if (config.userLimits?.perWeekIndividual?.enabled && userWeekCount >= Number(config.userLimits.perWeekIndividual.limit || 0)) {
-      const limit = Number(config.userLimits.perWeekIndividual.limit || 0);
-      blockers.push({
-        ruleCode: 'SIMPLE-WEEK-USER',
-        ruleName: 'Courts Per Week (Individual)',
-        passed: false,
-        severity: 'error',
-        message: `You have reached your weekly booking limit of ${limit}`
-      });
-    }
+    blockers.push(...this.weeklyLimitsFromSimplifiedConfig(context));
 
     const enforceHousehold = config.restrictionType === 'address' && !!context.household;
     if (enforceHousehold && config.userLimits?.perDayHousehold?.enabled && householdDayCount >= Number(config.userLimits.perDayHousehold.limit || 0)) {
@@ -357,16 +416,6 @@ export class RulesEngine {
         passed: false,
         severity: 'error',
         message: `Your household has reached its daily booking limit of ${limit}`
-      });
-    }
-    if (enforceHousehold && config.userLimits?.perWeekHousehold?.enabled && householdWeekCount >= Number(config.userLimits.perWeekHousehold.limit || 0)) {
-      const limit = Number(config.userLimits.perWeekHousehold.limit || 0);
-      blockers.push({
-        ruleCode: 'SIMPLE-WEEK-HOUSEHOLD',
-        ruleName: 'Courts Per Week (Household)',
-        passed: false,
-        severity: 'error',
-        message: `Your household has reached its weekly booking limit of ${limit}`
       });
     }
 

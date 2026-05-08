@@ -53,6 +53,10 @@ function promoteSnakeCaseBookingRuleKeys(raw: Record<string, unknown>): void {
   const copyIfAbsent = (camel: string, snake: string) => {
     if (raw[camel] == null && raw[snake] != null) raw[camel] = raw[snake];
   };
+  copyIfAbsent('courtsPerDayUser', 'courts_per_day_user');
+  copyIfAbsent('courtsPerDayUserEnabled', 'courts_per_day_user_enabled');
+  copyIfAbsent('courtsPerDayHousehold', 'courts_per_day_household');
+  copyIfAbsent('courtsPerDayHouseholdEnabled', 'courts_per_day_household_enabled');
   copyIfAbsent('courtsPerWeekUser', 'courts_per_week_user');
   copyIfAbsent('maxBookingsPerWeek', 'max_bookings_per_week');
   copyIfAbsent('courtsPerWeekUserEnabled', 'courts_per_week_user_enabled');
@@ -107,6 +111,25 @@ function alignNestedWeeklyIndividualFromFlat(raw: Record<string, unknown>): void
   const userLimits = (raw.userLimits || {}) as Record<string, unknown>;
   const prev = (userLimits.perWeekIndividual || {}) as Record<string, unknown>;
   userLimits.perWeekIndividual = {
+    ...prev,
+    limit,
+    ...(enabled !== undefined ? { enabled } : {}),
+  };
+  raw.userLimits = userLimits;
+}
+
+function alignNestedDailyIndividualFromFlat(raw: Record<string, unknown>): void {
+  const limit = tryPositiveInt(raw.courtsPerDayUser);
+  if (limit === undefined) return;
+
+  let enabled: boolean | undefined;
+  if (raw.courtsPerDayUserEnabled !== undefined && raw.courtsPerDayUserEnabled !== null) {
+    enabled = !!raw.courtsPerDayUserEnabled;
+  }
+
+  const userLimits = (raw.userLimits || {}) as Record<string, unknown>;
+  const prev = (userLimits.perDayIndividual || {}) as Record<string, unknown>;
+  userLimits.perDayIndividual = {
     ...prev,
     limit,
     ...(enabled !== undefined ? { enabled } : {}),
@@ -172,6 +195,41 @@ export function resolveWeeklyIndividualFromBookingRules(facility: {
 
   if (!rawSpecifiedEnabled && acc002?.isEnabled) {
     enabled = true;
+  }
+
+  return { enabled, limit };
+}
+
+export function resolveDailyIndividualFromBookingRules(facility: {
+  simplifiedBookingRules?: SimplifiedBookingRules;
+  bookingRulesRaw?: Record<string, unknown> | null;
+}): { enabled: boolean; limit: number } {
+  const raw = facility.bookingRulesRaw;
+  const norm = facility.simplifiedBookingRules;
+
+  let enabled = !!norm?.userLimits?.perDayIndividual?.enabled;
+  let limit = tryPositiveInt(norm?.userLimits?.perDayIndividual?.limit) ?? 0;
+
+  if (raw && typeof raw === 'object') {
+    if (raw.courtsPerDayUserEnabled !== undefined && raw.courtsPerDayUserEnabled !== null) {
+      enabled = !!raw.courtsPerDayUserEnabled;
+    } else {
+      const nestedEn = (raw.userLimits as Record<string, unknown> | undefined)?.perDayIndividual as
+        | { enabled?: unknown }
+        | undefined;
+      if (nestedEn && nestedEn.enabled !== undefined && nestedEn.enabled !== null) {
+        enabled = !!nestedEn.enabled;
+      }
+    }
+
+    const fromFlatUser = tryPositiveInt(raw.courtsPerDayUser);
+    const nestedLim = tryPositiveInt(
+      ((raw.userLimits as Record<string, unknown> | undefined)?.perDayIndividual as { limit?: unknown } | undefined)?.limit
+    );
+    const resolved = fromFlatUser ?? nestedLim;
+    if (resolved !== undefined) {
+      limit = resolved;
+    }
   }
 
   return { enabled, limit };
@@ -606,7 +664,9 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
         enabled: raw.courtsPerDayUserEnabled !== undefined
           ? !!raw.courtsPerDayUserEnabled
           : !!existingPerDayIndividual.enabled,
-        limit: toNumber(raw.courtsPerDayUser !== undefined ? raw.courtsPerDayUser : existingPerDayIndividual.limit, 0)
+        limit:
+          firstPositiveLimit(raw.courtsPerDayUser, existingPerDayIndividual.limit) ||
+          toNumber(existingPerDayIndividual.limit, 0)
       },
       perDayHousehold: {
         enabled: raw.courtsPerDayHouseholdEnabled !== undefined
@@ -855,6 +915,7 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
         const rawObj = parsed as Record<string, unknown>;
         promoteSnakeCaseBookingRuleKeys(rawObj);
         alignNestedWeeklyIndividualFromFlat(rawObj);
+        alignNestedDailyIndividualFromFlat(rawObj);
         bookingRulesRaw = rawObj;
       }
       simplifiedBookingRules = normalizeSimplifiedBookingRules(parsed);

@@ -1328,7 +1328,7 @@ export function CourtCalendarView() {
                           borderBottom: isHourMark ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
                         }}
                       >
-                        <span className={`text-xs ${isHourMark ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                        <span className={`text-xs whitespace-nowrap ${isHourMark ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
                           {time30}
                         </span>
                       </td>

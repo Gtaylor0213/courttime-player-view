@@ -1031,6 +1031,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '500',
+    textAlign: 'right',
   },
   pastText: {
     color: Colors.textMuted,

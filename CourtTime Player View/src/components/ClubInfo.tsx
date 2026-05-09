@@ -8,9 +8,9 @@ import { Badge } from './ui/badge';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { facilitiesApi, playerProfileApi, facilityLocationsApi } from '../api/client';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
-
 
 interface FacilityData {
   id: string;
@@ -106,7 +106,7 @@ export function ClubInfo() {
         let zipCode = rawFacility.zipCode || '';
 
         // If address is stored as a single field, try to parse it
-        if (!streetAddress && rawFacility.address) {
+        if (!streetAddress && rawFacility.address && typeof rawFacility.address === 'string') {
           const addressParts = rawFacility.address.split(',').map((p: string) => p.trim());
           if (addressParts.length >= 1) streetAddress = addressParts[0];
           if (addressParts.length >= 2) city = addressParts[1];
@@ -122,6 +122,27 @@ export function ClubInfo() {
         if (typeof parsedBookingRules === 'string') {
           try { parsedBookingRules = JSON.parse(parsedBookingRules); } catch { parsedBookingRules = null; }
         }
+        if (parsedBookingRules && typeof parsedBookingRules === 'object' && parsedBookingRules.peakHoursSlots != null) {
+          const ph = parsedBookingRules.peakHoursSlots;
+          if (typeof ph === 'string' && ph.trim()) {
+            try {
+              const p = JSON.parse(ph);
+              if (Array.isArray(p)) parsedBookingRules.peakHoursSlots = p;
+            } catch { /* keep string */ }
+          }
+        }
+
+        let operatingHours = rawFacility.operatingHours ?? {};
+        if (typeof operatingHours === 'string' && operatingHours.trim()) {
+          try {
+            operatingHours = JSON.parse(operatingHours);
+          } catch {
+            operatingHours = {};
+          }
+        }
+        if (operatingHours == null || typeof operatingHours !== 'object') {
+          operatingHours = {};
+        }
 
         const facilityData: FacilityData = {
           id: rawFacility.id,
@@ -136,7 +157,7 @@ export function ClubInfo() {
           phone: rawFacility.phone || '',
           email: rawFacility.email || '',
           website: rawFacility.website || '',
-          operatingHours: rawFacility.operatingHours || {},
+          operatingHours,
           logoUrl: rawFacility.logoUrl || '',
           memberCount: rawFacility.memberCount,
           generalRules: rawFacility.generalRules || '',
@@ -174,16 +195,41 @@ export function ClubInfo() {
     }
   };
 
-  const formatOperatingHours = (hours: any): string => {
-    if (!hours || typeof hours !== 'object') return 'Hours not available';
+  const renderRuleValue = (value: any): string | null => {
+    const s = safeDisplayText(value);
+    return s === '' ? null : s;
+  };
 
-    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    const formattedDays = days
-      .filter(day => hours[day])
-      .map(day => `${day.charAt(0).toUpperCase() + day.slice(1)}: ${hours[day]}`)
-      .join(', ');
+  const renderSafeText = (value: any): string => safeDisplayText(value);
 
-    return formattedDays || 'Hours not available';
+  /** Hours label for max booking duration; aligns with admin `maxReservationDuration` (minutes) and legacy flat keys. */
+  const getMaxBookingDurationHoursLabel = (bookingRules: any): string | null => {
+    if (!bookingRules || typeof bookingRules !== 'object') return null;
+    const mrd = bookingRules.maxReservationDuration;
+    if (mrd && typeof mrd === 'object') {
+      if (mrd.enabled === false) return null;
+      const limitMin = Number(mrd.limit);
+      if (Number.isFinite(limitMin) && limitMin > 0 && mrd.enabled !== false) {
+        const hours = limitMin / 60;
+        const label = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
+        return renderRuleValue(label);
+      }
+    }
+    if (bookingRules.maxReservationDurationEnabled === false) return null;
+    if (bookingRules.maxReservationDurationEnabled === true) {
+      const flatMin = Number(bookingRules.maxReservationDurationMinutes);
+      if (Number.isFinite(flatMin) && flatMin > 0) {
+        const totalMin = flatMin <= 12 ? Math.round(flatMin * 60) : Math.round(flatMin);
+        const hours = totalMin / 60;
+        const label = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
+        return renderRuleValue(label);
+      }
+    }
+    if (bookingRules.maxBookingDurationUnlimited === true) return null;
+    if (bookingRules.maxBookingDurationUnlimited === false) {
+      return renderRuleValue(bookingRules.maxBookingDurationHours);
+    }
+    return null;
   };
 
   if (loading) {
@@ -218,6 +264,24 @@ export function ClubInfo() {
       memberFacilities.some((f: any) => f.facilityId === clubId && f.status === 'active') ||
       (user?.memberFacilities?.includes(clubId!) ?? false)
   );
+
+  const facilityName = safeDisplayText(facility.name) || 'Club';
+  const facilityType = safeDisplayText(facility.type) || 'Tennis Facility';
+  const peakHoursSlotsList = (() => {
+    const raw = facility.bookingRules?.peakHoursSlots;
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string' && raw.trim()) {
+      try {
+        const p = JSON.parse(raw);
+        return Array.isArray(p) ? p : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })();
+
+  const maxBookingDurationHoursDisplay = getMaxBookingDurationHoursLabel(facility.bookingRules);
 
   return (
     <>
@@ -259,14 +323,14 @@ export function ClubInfo() {
                   {facility.logoUrl ? (
                     <img
                       src={facility.logoUrl}
-                      alt={`${facility.name} logo`}
+                      alt={`${facilityName} logo`}
                       className="w-full h-48 object-cover rounded-lg border border-gray-200"
                     />
                   ) : (
                     <div className="w-full h-48 bg-gradient-to-br from-green-500 to-green-700 rounded-lg flex items-center justify-center text-white">
                       <div className="text-center">
                         <Users className="h-16 w-16 mx-auto mb-2" />
-                        <p className="font-medium">{facility.name}</p>
+                        <p className="font-medium">{facilityName}</p>
                       </div>
                     </div>
                   )}
@@ -274,9 +338,9 @@ export function ClubInfo() {
                 <div className="md:w-2/3">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h1 className="text-2xl font-semibold mb-2">{facility.name}</h1>
+                      <h1 className="text-2xl font-semibold mb-2">{facilityName}</h1>
                       <div className="flex items-center gap-2 mb-3">
-                        <Badge variant="secondary">{facility.type}</Badge>
+                        <Badge variant="secondary">{facilityType}</Badge>
                         {facility.memberCount && (
                           <Badge variant="outline">
                             <Users className="h-3 w-3 mr-1" />
@@ -291,7 +355,7 @@ export function ClubInfo() {
                   </div>
                   {canViewClubDescription ? (
                     facility.description ? (
-                      <p className="text-gray-600 mb-4">{facility.description}</p>
+                      <p className="text-gray-600 mb-4">{safeDisplayText(facility.description)}</p>
                     ) : null
                   ) : (
                     <p className="text-gray-500 mb-4">Join this facility to view the club description</p>
@@ -303,12 +367,12 @@ export function ClubInfo() {
                       <Calendar className="h-4 w-4 mr-2" />
                       Book Court
                     </Button>
-                    <Button variant="outline" onClick={() => navigate(`/bulletin-board?clubId=${facility.id}&clubName=${encodeURIComponent(facility.name)}`)}>
+                    <Button variant="outline" onClick={() => navigate(`/bulletin-board?clubId=${facility.id}&clubName=${encodeURIComponent(facilityName)}`)}>
                       <Clipboard className="h-4 w-4 mr-2" />
                       Bulletin Board
                     </Button>
-                    {facility.phone && (
-                      <Button variant="outline" onClick={() => window.open(`tel:${facility.phone}`)}>
+                    {safeDisplayText(facility.phone) && (
+                      <Button variant="outline" onClick={() => window.open(`tel:${safeDisplayText(facility.phone)}`)}>
                         <Phone className="h-4 w-4 mr-2" />
                         Call Club
                       </Button>
@@ -330,48 +394,48 @@ export function ClubInfo() {
                 {isMember && secondaryLocations.length > 0 && (
                   <div className="space-y-3 pb-3 border-b border-gray-100">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {facility.primaryLocationLabel || 'Main Location'}
+                      {safeDisplayText(facility.primaryLocationLabel) || 'Main Location'}
                     </p>
                   </div>
                 )}
-                {(facility.streetAddress || facility.city) && (
+                {(safeDisplayText(facility.streetAddress) || safeDisplayText(facility.city)) && (
                   <div className="flex items-start">
                     <MapPin className="h-4 w-4 text-gray-400 mr-3 mt-1" />
                     <div>
-                      {facility.primaryLocationLabel && (
+                      {safeDisplayText(facility.primaryLocationLabel) && (
                         <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                          {facility.primaryLocationLabel}
+                          {safeDisplayText(facility.primaryLocationLabel)}
                         </p>
                       )}
-                      {facility.streetAddress && <p>{facility.streetAddress}</p>}
+                      {safeDisplayText(facility.streetAddress) && <p>{safeDisplayText(facility.streetAddress)}</p>}
                       <p className="text-sm text-gray-600">
-                        {[facility.city, facility.state].filter(Boolean).join(', ')}
-                        {facility.zipCode && ` ${facility.zipCode}`}
+                        {[safeDisplayText(facility.city), safeDisplayText(facility.state)].filter(Boolean).join(', ')}
+                        {safeDisplayText(facility.zipCode) && ` ${safeDisplayText(facility.zipCode)}`}
                       </p>
                     </div>
                   </div>
                 )}
-                {facility.phone && (
+                {safeDisplayText(facility.phone) && (
                   <div className="flex items-center">
                     <Phone className="h-4 w-4 text-gray-400 mr-3" />
-                    <a href={`tel:${facility.phone}`} className="text-green-600 hover:underline">
-                      {facility.phone}
+                    <a href={`tel:${safeDisplayText(facility.phone)}`} className="text-green-600 hover:underline">
+                      {safeDisplayText(facility.phone)}
                     </a>
                   </div>
                 )}
-                {facility.email && (
+                {safeDisplayText(facility.email) && (
                   <div className="flex items-center">
                     <Mail className="h-4 w-4 text-gray-400 mr-3" />
-                    <a href={`mailto:${facility.email}`} className="text-green-600 hover:underline">
-                      {facility.email}
+                    <a href={`mailto:${safeDisplayText(facility.email)}`} className="text-green-600 hover:underline">
+                      {safeDisplayText(facility.email)}
                     </a>
                   </div>
                 )}
-                {facility.website && (
+                {safeDisplayText(facility.website) && (
                   <div className="flex items-center">
                     <Globe className="h-4 w-4 text-gray-400 mr-3" />
-                    <a href={facility.website} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">
-                      {facility.website}
+                    <a href={safeDisplayText(facility.website)} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">
+                      {safeDisplayText(facility.website)}
                     </a>
                   </div>
                 )}
@@ -390,10 +454,12 @@ export function ClubInfo() {
                 <CardContent className="space-y-4">
                   {secondaryLocations.map((loc: any) => (
                     <div key={loc.id} className="space-y-0.5">
-                      <p className="font-medium text-sm">{loc.locationName}</p>
-                      <p className="text-sm text-gray-600">{loc.streetAddress}</p>
-                      <p className="text-sm text-gray-600">{loc.city}, {loc.state} {loc.zipCode}</p>
-                      {loc.phone && <p className="text-sm text-gray-500">{loc.phone}</p>}
+                      <p className="font-medium text-sm">{safeDisplayText(loc.locationName)}</p>
+                      <p className="text-sm text-gray-600">{safeDisplayText(loc.streetAddress)}</p>
+                      <p className="text-sm text-gray-600">
+                        {safeDisplayText(loc.city)}, {safeDisplayText(loc.state)} {safeDisplayText(loc.zipCode)}
+                      </p>
+                      {safeDisplayText(loc.phone) && <p className="text-sm text-gray-500">{safeDisplayText(loc.phone)}</p>}
                     </div>
                   ))}
                 </CardContent>
@@ -414,21 +480,41 @@ export function ClubInfo() {
                     {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
                       const hours = facility.operatingHours[day];
                       let hoursDisplay = 'Closed';
-                      if (hours) {
+                      if (hours != null && hours !== '') {
                         if (typeof hours === 'string') {
-                          hoursDisplay = hours;
+                          hoursDisplay = safeDisplayText(hours) || 'Closed';
                         } else if (typeof hours === 'object') {
-                          if (hours.closed) {
+                          const h = hours as Record<string, unknown>;
+                          const closedRaw = h.closed;
+                          const closedTruthy =
+                            closedRaw === true ||
+                            closedRaw === 1 ||
+                            (typeof closedRaw === 'string' &&
+                              ['true', 'yes', '1'].includes(closedRaw.trim().toLowerCase()));
+                          if (closedTruthy) {
                             hoursDisplay = 'Closed';
-                          } else if (hours.open && hours.close) {
-                            const fmt = (t: string) => {
-                              const [h, m] = t.split(':').map(Number);
-                              const period = h >= 12 ? 'PM' : 'AM';
-                              const h12 = h % 12 || 12;
-                              return m ? `${h12}:${m.toString().padStart(2, '0')} ${period}` : `${h12} ${period}`;
-                            };
-                            hoursDisplay = `${fmt(hours.open)} - ${fmt(hours.close)}`;
+                          } else {
+                            const open = h.open ?? h.openTime ?? h.open_time;
+                            const close = h.close ?? h.closeTime ?? h.close_time;
+                            if (open != null && close != null) {
+                              const fmt = (t: unknown) => {
+                                const s = safeDisplayText(t).trim();
+                                if (!s) return '';
+                                const [hh, mm] = s.split(':').map(Number);
+                                if (!Number.isFinite(hh)) return s;
+                                const period = hh >= 12 ? 'PM' : 'AM';
+                                const h12 = hh % 12 || 12;
+                                return Number.isFinite(mm)
+                                  ? `${h12}:${String(mm).padStart(2, '0')} ${period}`
+                                  : `${h12} ${period}`;
+                              };
+                              const a = fmt(open);
+                              const b = fmt(close);
+                              if (a && b) hoursDisplay = `${a} - ${b}`;
+                            }
                           }
+                        } else {
+                          hoursDisplay = safeDisplayText(hours) || 'Closed';
                         }
                       }
                       return (
@@ -458,27 +544,27 @@ export function ClubInfo() {
                   {/* General rules text */}
                   {facility.generalRules && (
                     <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{facility.generalRules}</p>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{renderSafeText(facility.generalRules)}</p>
                     </div>
                   )}
                   {/* Structured rules from booking configuration */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    {(facility.bookingRules?.advanceBookingDaysUnlimited === false && facility.bookingRules?.advanceBookingDays) && (
+                    {(facility.bookingRules?.advanceBookingDaysUnlimited === false && renderRuleValue(facility.bookingRules?.advanceBookingDays)) && (
                       <div className="flex items-start gap-2">
                         <span className="font-medium text-gray-700 min-w-[180px]">Book up to:</span>
-                        <span className="text-gray-600">{facility.bookingRules.advanceBookingDays} days in advance</span>
+                        <span className="text-gray-600">{renderRuleValue(facility.bookingRules.advanceBookingDays)} days in advance</span>
                       </div>
                     )}
-                    {(facility.bookingRules?.maxBookingDurationUnlimited === false && facility.bookingRules?.maxBookingDurationHours) && (
+                    {maxBookingDurationHoursDisplay && (
                       <div className="flex items-start gap-2">
                         <span className="font-medium text-gray-700 min-w-[180px]">Max booking duration:</span>
-                        <span className="text-gray-600">{facility.bookingRules.maxBookingDurationHours} hours</span>
+                        <span className="text-gray-600">{maxBookingDurationHoursDisplay} hours</span>
                       </div>
                     )}
-                    {(facility.bookingRules?.maxBookingsPerWeekUnlimited === false && facility.bookingRules?.maxBookingsPerWeek) && (
+                    {(facility.bookingRules?.maxBookingsPerWeekUnlimited === false && renderRuleValue(facility.bookingRules?.maxBookingsPerWeek)) && (
                       <div className="flex items-start gap-2">
                         <span className="font-medium text-gray-700 min-w-[180px]">Max bookings per week:</span>
-                        <span className="text-gray-600">{facility.bookingRules.maxBookingsPerWeek}</span>
+                        <span className="text-gray-600">{renderRuleValue(facility.bookingRules.maxBookingsPerWeek)}</span>
                       </div>
                     )}
                     {facility.bookingRules?.noOverlappingReservations && (
@@ -489,27 +575,32 @@ export function ClubInfo() {
                     )}
                   </div>
                   {/* Peak hours */}
-                  {facility.bookingRules?.hasPeakHours && facility.bookingRules?.peakHoursSlots?.length > 0 && (
+                  {facility.bookingRules?.hasPeakHours && peakHoursSlotsList.length > 0 && (
                     <div>
                       <p className="font-medium text-gray-700 mb-2">Peak Hours</p>
                       <div className="space-y-2">
-                        {facility.bookingRules.peakHoursSlots.map((slot: any, idx: number) => {
+                        {peakHoursSlotsList.map((slot: any, idx: number) => {
                           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                          const days = (slot.days || []).map((d: number) => dayNames[d]).join(', ');
-                          const fmt = (t: string) => {
-                            if (!t) return '';
-                            const [h, m] = t.split(':').map(Number);
+                          const dayList = Array.isArray(slot.days) ? slot.days : [];
+                          const days = dayList.map((d: number) => dayNames[d]).join(', ');
+                          const fmt = (t: unknown) => {
+                            const s = safeDisplayText(t).trim();
+                            if (!s) return '';
+                            const [h, m] = s.split(':').map(Number);
+                            if (!Number.isFinite(h)) return s;
                             const period = h >= 12 ? 'PM' : 'AM';
-                            return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${period}`;
+                            return Number.isFinite(m)
+                              ? `${h % 12 || 12}:${String(m).padStart(2, '0')} ${period}`
+                              : `${h % 12 || 12} ${period}`;
                           };
                           return (
                             <div key={idx} className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
                               <p className="font-medium text-amber-800">{fmt(slot.startTime)} – {fmt(slot.endTime)}{days ? ` · ${days}` : ''}</p>
                               {!slot.rules?.maxBookingsPerDayUnlimited && slot.rules?.maxBookingsPerDay && (
-                                <p className="text-amber-700 mt-1">Max {slot.rules.maxBookingsPerDay} booking(s) per day during peak hours</p>
+                                <p className="text-amber-700 mt-1">Max {renderSafeText(slot.rules.maxBookingsPerDay)} booking(s) per day during peak hours</p>
                               )}
                               {!slot.rules?.maxDurationUnlimited && slot.rules?.maxDurationHours && (
-                                <p className="text-amber-700">Max duration: {slot.rules.maxDurationHours} hours</p>
+                                <p className="text-amber-700">Max duration: {renderSafeText(slot.rules.maxDurationHours)} hours</p>
                               )}
                             </div>
                           );
@@ -534,10 +625,10 @@ export function ClubInfo() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {facility.courts.map((court) => (
                       <div key={court.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-center">
-                        <p className="font-medium text-sm">{court.name}</p>
-                        <Badge variant="outline" className="mt-1 text-[10px]">{court.courtType}</Badge>
+                        <p className="font-medium text-sm">{safeDisplayText(court.name)}</p>
+                        <Badge variant="outline" className="mt-1 text-[10px]">{safeDisplayText(court.courtType)}</Badge>
                         <p className="text-xs text-gray-500 mt-1">
-                          {court.surfaceType} • {court.isIndoor ? 'Indoor' : 'Outdoor'}
+                          {safeDisplayText(court.surfaceType)} • {court.isIndoor ? 'Indoor' : 'Outdoor'}
                           {court.hasLights && ' • Lights'}
                         </p>
                       </div>

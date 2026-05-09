@@ -183,6 +183,22 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
     merged.maxBookingsPerWeekHouseholdUnlimited = !weekHh.enabled;
   }
 
+  // Mirror max reservation duration into legacy flat keys on every save (same idea as weekly caps).
+  // Player Club Info and older readers use maxBookingDurationHours / maxBookingDurationUnlimited;
+  // without this, facilities.booking_rules keeps stale hours while nested maxReservationDuration
+  // (and CRT-005) reflect the real cap.
+  const mrd = merged.maxReservationDuration;
+  if (mrd && typeof mrd === 'object') {
+    merged.maxReservationDurationEnabled = !!mrd.enabled;
+    merged.maxBookingDurationUnlimited = !mrd.enabled;
+    if (mrd.enabled && typeof mrd.limit === 'number' && mrd.limit > 0) {
+      merged.maxReservationDurationMinutes = String(Math.round(mrd.limit));
+      const hours = mrd.limit / 60;
+      merged.maxBookingDurationHours =
+        Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
+    }
+  }
+
   return merged;
 }
 

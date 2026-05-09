@@ -728,7 +728,8 @@ export function FacilityManagement() {
                 : defaultBookingRules.allowedBookingTypes,
               maxReservationDurationMinutes: String(
                 normalizeDurationMinutes(
-                  parsedSimplified?.maxReservationDurationMinutes,
+                  parsedSimplified?.maxReservationDurationMinutes ??
+                    parsedSimplified?.maxReservationDuration?.limit,
                   parsedSimplified?.maxBookingDurationHours,
                   Number(defaultBookingRules.maxReservationDurationMinutes) || 120
                 )

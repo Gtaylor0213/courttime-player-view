@@ -96,7 +96,7 @@ export function AboutPage() {
             <FeatureCard
               icon={<Shield className="h-8 w-8 text-green-600" />}
               title="Booking Rules & Policies"
-              description="Set custom rules for booking limits, advance booking windows, cancellation policies, peak hours, and more."
+              description="Set custom rules for booking limits, advance booking windows, peak hours, and more."
             />
             <FeatureCard
               icon={<BarChart3 className="h-8 w-8 text-green-600" />}
@@ -143,7 +143,7 @@ export function AboutPage() {
             <StepItem
               number={4}
               title="Set Booking Rules"
-              description="Customize booking limits, cancellation policies, peak hour restrictions, and other rules that fit your community."
+              description="Customize booking limits, peak hour restrictions, and other rules that fit your community."
             />
             <StepItem
               number={5}

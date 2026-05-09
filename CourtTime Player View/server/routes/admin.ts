@@ -66,7 +66,6 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
   };
 
   const existingDaysInAdvance = bookingRules.daysInAdvance || {};
-  const existingCancellationPolicy = bookingRules.cancellationPolicy || {};
   const existingMaxReservationDuration = bookingRules.maxReservationDuration || {};
   const existingUserLimits = bookingRules.userLimits || {};
   const existingPerWeekIndividual = existingUserLimits.perWeekIndividual || {};
@@ -100,9 +99,6 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
         false
       ),
       limit: pickNumber(bookingRules.daysInAdvance, bookingRules.advanceBookingDays, toNumber(existingDaysInAdvance.limit, 14)),
-    },
-    cancellationPolicy: {
-      enabled: toBoolean(bookingRules.cancellationPolicyEnabled, toBoolean(existingCancellationPolicy.enabled, false)),
     },
     maxReservationDuration: {
       enabled: maxReservationDurationEnabled,
@@ -1049,6 +1045,39 @@ router.patch('/bookings/:bookingId/status', async (req, res) => {
         success: false,
         error: 'Invalid status. Must be: confirmed, cancelled, or completed'
       });
+    }
+
+    if (status === 'cancelled') {
+      const existing = await query(`
+        SELECT
+          TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
+          b.end_time as "endTime",
+          COALESCE(f.timezone, 'America/New_York') as timezone
+        FROM bookings b
+        JOIN facilities f ON f.id = b.facility_id
+        WHERE b.id = $1
+      `, [bookingId]);
+
+      if (existing.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Booking not found'
+        });
+      }
+
+      const booking = existing.rows[0];
+      const { getFacilityLocalNow } = await import('../../src/services/rulesEngine/RuleContext');
+      const now = getFacilityLocalNow(booking.timezone);
+      const [year, month, day] = booking.bookingDate.split('-').map(Number);
+      const [hour, minute] = booking.endTime.split(':').map(Number);
+      const reservationEnd = new Date(year, month - 1, day, hour, minute, 0);
+
+      if (now > reservationEnd) {
+        return res.status(400).json({
+          success: false,
+          error: 'This reservation has already ended and cannot be cancelled'
+        });
+      }
     }
 
     const result = await query(`

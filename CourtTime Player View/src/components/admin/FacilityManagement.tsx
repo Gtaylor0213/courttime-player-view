@@ -61,7 +61,6 @@ interface BookingRules {
   restrictionType: 'account' | 'address';
   daysInAdvanceEnabled: boolean;
   daysInAdvance: string;
-  cancellationPolicyEnabled: boolean;
   maxReservationDurationEnabled: boolean;
   maxReservationDurationMinutes: string;
   courtsPerWeekUserEnabled: boolean;
@@ -78,8 +77,6 @@ interface BookingRules {
   maxBookingDurationUnlimited: boolean;
   advanceBookingDays: string;
   advanceBookingDaysUnlimited: boolean;
-  cancellationNoticeHours: string;
-  cancellationNoticeUnlimited: boolean;
   restrictionsApplyToAdmins: boolean;
   adminMaxBookingsPerWeek: string;
   adminMaxBookingsUnlimited: boolean;
@@ -87,8 +84,6 @@ interface BookingRules {
   adminMaxDurationUnlimited: boolean;
   adminAdvanceBookingDays: string;
   adminAdvanceBookingUnlimited: boolean;
-  adminCancellationNoticeHours: string;
-  adminCancellationUnlimited: boolean;
   hasPeakHours: boolean;
   peakHoursApplyToAdmins: boolean;
   peakHoursSlots: PeakHourSlot[];
@@ -141,9 +136,6 @@ interface BookingRules {
   courtReleaseTimeEnabled: boolean;
   courtReleaseTime: string;
   courtReleaseDaysAhead: string;
-  // CRT-012: Court cancellation deadline
-  courtCancellationDeadlineEnabled: boolean;
-  courtCancellationDeadlineMinutes: string;
   // HH-001: Max members per address
   householdMaxMembersEnabled: boolean;
   householdMaxMembers: string;
@@ -403,7 +395,6 @@ export function FacilityManagement() {
     restrictionType: 'account',
     daysInAdvanceEnabled: true,
     daysInAdvance: '7',
-    cancellationPolicyEnabled: true,
     maxReservationDurationEnabled: true,
     maxReservationDurationMinutes: '120',
     courtsPerWeekUserEnabled: true,
@@ -420,8 +411,6 @@ export function FacilityManagement() {
     maxBookingDurationUnlimited: false,
     advanceBookingDays: '14',
     advanceBookingDaysUnlimited: false,
-    cancellationNoticeHours: '24',
-    cancellationNoticeUnlimited: false,
     restrictionsApplyToAdmins: false,
     adminMaxBookingsPerWeek: '10',
     adminMaxBookingsUnlimited: true,
@@ -429,8 +418,6 @@ export function FacilityManagement() {
     adminMaxDurationUnlimited: true,
     adminAdvanceBookingDays: '30',
     adminAdvanceBookingUnlimited: true,
-    adminCancellationNoticeHours: '1',
-    adminCancellationUnlimited: true,
     hasPeakHours: false,
     peakHoursApplyToAdmins: true,
     peakHoursSlots: [],
@@ -473,8 +460,6 @@ export function FacilityManagement() {
     courtReleaseTimeEnabled: false,
     courtReleaseTime: '07:00',
     courtReleaseDaysAhead: '7',
-    courtCancellationDeadlineEnabled: false,
-    courtCancellationDeadlineMinutes: '60',
     householdMaxMembersEnabled: false,
     householdMaxMembers: '6',
     householdMaxActiveEnabled: false,
@@ -823,7 +808,6 @@ export function FacilityManagement() {
               restrictionType: parsedSimplified?.restrictionType || facility.restrictionType || 'account',
               daysInAdvanceEnabled: parsedSimplified?.daysInAdvance?.enabled ?? defaultBookingRules.daysInAdvanceEnabled,
               daysInAdvance: String(parsedSimplified?.daysInAdvance?.limit ?? defaultBookingRules.daysInAdvance),
-              cancellationPolicyEnabled: parsedSimplified?.cancellationPolicy?.enabled ?? defaultBookingRules.cancellationPolicyEnabled,
               maxReservationDurationEnabled: parsedSimplified?.maxReservationDuration?.enabled ?? defaultBookingRules.maxReservationDurationEnabled,
               maxReservationDurationMinutes: String(
                 normalizeDurationMinutes(
@@ -886,8 +870,6 @@ export function FacilityManagement() {
               maxBookingDurationUnlimited: facility.maxBookingDurationHours === -1,
               advanceBookingDays: facility.advanceBookingDays === -1 ? '14' : String(facility.advanceBookingDays || '14'),
               advanceBookingDaysUnlimited: facility.advanceBookingDays === -1,
-              cancellationNoticeHours: facility.cancellationNoticeHours === 0 ? '24' : String(facility.cancellationNoticeHours || '24'),
-              cancellationNoticeUnlimited: facility.cancellationNoticeHours === 0,
               restrictionsApplyToAdmins: false,
               adminMaxBookingsPerWeek: String(facility.adminRestrictions?.maxBookingsPerWeek || '10'),
               adminMaxBookingsUnlimited: facility.adminRestrictions?.maxBookingsPerWeek === -1,
@@ -895,8 +877,6 @@ export function FacilityManagement() {
               adminMaxDurationUnlimited: facility.adminRestrictions?.maxBookingDurationHours === -1,
               adminAdvanceBookingDays: String(facility.adminRestrictions?.advanceBookingDays || '30'),
               adminAdvanceBookingUnlimited: facility.adminRestrictions?.advanceBookingDays === -1,
-              adminCancellationNoticeHours: String(facility.adminRestrictions?.cancellationNoticeHours || '1'),
-              adminCancellationUnlimited: facility.adminRestrictions?.cancellationNoticeHours === 0,
               hasPeakHours: !!facility.peakHoursPolicy?.enabled,
               peakHoursApplyToAdmins: true,
               peakHoursSlots: normalizedPeakHoursSlots,

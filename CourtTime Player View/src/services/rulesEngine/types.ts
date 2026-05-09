@@ -190,7 +190,6 @@ export interface SimplifiedDailyHoursConfig {
 export interface SimplifiedBookingRules {
   restrictionType: 'account' | 'address';
   daysInAdvance: SimplifiedRuleWithLimit;
-  cancellationPolicy: { enabled: boolean };
   maxReservationDuration: SimplifiedRuleWithLimit;
   userLimits: {
     perWeekIndividual: SimplifiedRuleWithLimit;
@@ -464,12 +463,6 @@ export interface ACC006Config {
   min_minutes_before_start: number;
 }
 
-export interface ACC008Config {
-  late_cancel_cutoff_minutes: number;
-  penalty_type: 'strike' | 'warning';
-  penalty_value: number;
-}
-
 export interface ACC009Config {
   strike_threshold: number;
   strike_window_days: number;
@@ -526,12 +519,6 @@ export interface CRT010Config {
 export interface CRT011Config {
   release_time_local: string;
   days_ahead: number;
-}
-
-export interface CRT012Config {
-  cancel_cutoff_minutes: number;
-  penalty_type: 'strike' | 'warning' | 'block_cancel';
-  penalty_value: number;
 }
 
 export interface HH001Config {

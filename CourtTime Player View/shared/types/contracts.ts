@@ -27,7 +27,6 @@ export interface Facility {
   amenities?: string[];
   operatingHours?: OpeningHours;
   generalRules?: string;
-  cancellationPolicy?: string;
   bookingRules?: string;
   status?: "active" | "pending" | "suspended" | "closed";
   logoUrl?: string;

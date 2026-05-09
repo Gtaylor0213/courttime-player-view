@@ -404,7 +404,7 @@ export async function updateCourt(courtId: string, data: Record<string, any>): P
 export async function updateFacility(facilityId: string, data: Record<string, any>): Promise<any> {
   const allowedFields = [
     'name', 'type', 'description', 'street_address', 'city', 'state', 'zip_code',
-    'phone', 'email', 'operating_hours', 'general_rules', 'cancellation_policy',
+    'phone', 'email', 'operating_hours', 'general_rules',
     'booking_rules', 'status'
   ];
   const sets: string[] = [];

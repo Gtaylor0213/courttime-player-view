@@ -902,7 +902,6 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
 
   // Merge both shapes so newer admin fields override stale nested values.
   const existingDaysInAdvance = raw.daysInAdvance || {};
-  const existingCancellationPolicy = raw.cancellationPolicy || {};
   const existingMaxReservationDuration = raw.maxReservationDuration || {};
   const existingUserLimits = raw.userLimits || {};
   const existingPerWeekIndividual = existingUserLimits.perWeekIndividual || {};
@@ -937,9 +936,6 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
       daysInAdvance: {
         enabled: !!existingDaysInAdvance.enabled,
         limit: toNumber(existingDaysInAdvance.limit, 14),
-      },
-      cancellationPolicy: {
-        enabled: !!existingCancellationPolicy.enabled,
       },
       maxReservationDuration: {
         enabled: !!existingMaxReservationDuration.enabled,
@@ -998,11 +994,6 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
         false
       ),
       limit: pickNumber(raw.daysInAdvance, raw.advanceBookingDays, toNumber(existingDaysInAdvance.limit, 14))
-    },
-    cancellationPolicy: {
-      enabled: raw.cancellationPolicyEnabled !== undefined
-        ? !!raw.cancellationPolicyEnabled
-        : !!existingCancellationPolicy.enabled
     },
     maxReservationDuration: {
       enabled: pickEnabled(

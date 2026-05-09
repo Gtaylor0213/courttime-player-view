@@ -131,6 +131,7 @@ export function ReservationManagementModal({
   if (!reservation) return null;
 
   const isOwnReservation = user?.id === reservation.userId;
+  const isFacilityAdmin = !!user?.adminFacilities?.includes(reservation.facilityId);
 
   // Format date for display
   const formatDate = (dateStr: string) => {
@@ -156,6 +157,9 @@ export function ReservationManagementModal({
     const reservationEndDateTime = new Date(`${reservation.bookingDate}T${reservation.endTime}`);
     return reservationEndDateTime < new Date();
   };
+  const canCancelReservation = (isOwnReservation || isFacilityAdmin) &&
+    reservation.status !== 'cancelled' &&
+    !isPastReservation();
 
   // Handle cancel reservation
   const handleCancel = async () => {
@@ -450,16 +454,18 @@ export function ReservationManagementModal({
                 >
                   Close
                 </Button>
-                {isOwnReservation && reservation.status !== 'cancelled' && !isPastReservation() && (
+                {canCancelReservation && (
                   <>
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsEditing(true)}
-                      className="flex-1 sm:flex-none sm:min-w-[100px]"
-                    >
-                      <Edit2 className="h-4 w-4 mr-1" />
-                      Modify
-                    </Button>
+                    {isOwnReservation && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsEditing(true)}
+                        className="flex-1 sm:flex-none sm:min-w-[100px]"
+                      >
+                        <Edit2 className="h-4 w-4 mr-1" />
+                        Modify
+                      </Button>
+                    )}
                     <Button
                       variant="destructive"
                       onClick={() => setShowCancelConfirm(true)}

@@ -1097,25 +1097,41 @@ export async function cancelBooking(
         b.facility_id as "facilityId",
         TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
         b.start_time as "startTime",
+        b.end_time as "endTime",
         b.user_id as "userId"
       FROM bookings b
-      WHERE b.id = $1 AND b.user_id = $2 AND b.status != 'cancelled'`,
-      [bookingId, userId]
+      WHERE b.id = $1 AND b.status != 'cancelled'`,
+      [bookingId]
     );
 
     if (bookingResult.rows.length === 0) {
+      return {
+        success: false,
+        error: 'Booking not found'
+      };
+    }
+
+    const booking = bookingResult.rows[0];
+    const isOwner = booking.userId === userId;
+    const adminResult = isOwner ? { rows: [] } : await query(
+      `SELECT 1 FROM facility_admins
+       WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+       LIMIT 1`,
+      [userId, booking.facilityId]
+    );
+    const isFacilityAdmin = adminResult.rows.length > 0;
+
+    if (!isOwner && !isFacilityAdmin) {
       return {
         success: false,
         error: 'Booking not found or unauthorized'
       };
     }
 
-    const booking = bookingResult.rows[0];
-
     // Evaluate cancellation rules
     const cancellationEval = await rulesEngine.evaluateCancellation({
       bookingId,
-      userId,
+      userId: booking.userId,
       facilityId: booking.facilityId,
       reason
     });
@@ -1153,7 +1169,7 @@ export async function cancelBooking(
     // Record cancellation
     const cancellationId = await recordCancellation(
       bookingId,
-      userId,
+      booking.userId,
       booking.facilityId,
       bookingStart,
       minutesBeforeStart,
@@ -1165,7 +1181,7 @@ export async function cancelBooking(
     let strikeId: string | undefined;
     if (cancellationEval.strikeWillBeIssued) {
       strikeId = await issueStrike(
-        userId,
+        booking.userId,
         booking.facilityId,
         'late_cancel',
         `Late cancellation: canceled ${minutesBeforeStart} minutes before start`,

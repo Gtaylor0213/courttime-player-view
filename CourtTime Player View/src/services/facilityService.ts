@@ -98,13 +98,12 @@ export interface FacilityCreateData {
   description?: string;
   operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
   generalRules?: string;
-  cancellationPolicy?: string;
   bookingRules?: string;
 }
 
 export interface FacilityRuleData {
   facilityId: string;
-  ruleType: 'booking_limit' | 'cancellation_policy' | 'usage_rules' | 'peak_hours';
+  ruleType: 'booking_limit' | 'usage_rules' | 'peak_hours';
   ruleName: string;
   ruleDescription?: string;
   ruleConfig: Record<string, any>;
@@ -290,14 +289,12 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
           facility.maxBookingsPerWeek = config.max_bookings_per_week;
           facility.maxBookingDurationHours = config.max_duration_hours;
           facility.advanceBookingDays = config.advance_booking_days;
-          facility.cancellationNoticeHours = config.cancellation_notice_hours;
           facility.restrictionsApplyToAdmins = config.applies_to_admins !== false;
         } else if (rule.ruleType === 'admin_booking_limit') {
           facility.adminRestrictions = {
             maxBookingsPerWeek: config.max_bookings_per_week,
             maxBookingDurationHours: config.max_duration_hours,
             advanceBookingDays: config.advance_booking_days,
-            cancellationNoticeHours: config.cancellation_notice_hours,
           };
         } else if (rule.ruleType === 'peak_hours') {
           facility.peakHoursPolicy = {
@@ -405,13 +402,12 @@ export async function createFacilityWithAdmin(
     const facilityResult = await client.query(
       `INSERT INTO facilities (
         id, name, type, address, phone, email, contact_name, description,
-        operating_hours, general_rules, cancellation_policy, booking_rules, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active')
+        operating_hours, general_rules, booking_rules, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
       RETURNING
         id, name, type, address, phone, email, contact_name as "contactName",
         description, operating_hours as "operatingHours",
-        general_rules as "generalRules", cancellation_policy as "cancellationPolicy",
-        booking_rules as "bookingRules", status, created_at as "createdAt"`,
+        general_rules as "generalRules", booking_rules as "bookingRules", status, created_at as "createdAt"`,
       [
         facilityId,
         facilityData.name,
@@ -423,7 +419,6 @@ export async function createFacilityWithAdmin(
         facilityData.description || null,
         facilityData.operatingHours ? JSON.stringify(facilityData.operatingHours) : null,
         facilityData.generalRules || null,
-        facilityData.cancellationPolicy || null,
         facilityData.bookingRules || null,
       ]
     );
@@ -510,10 +505,6 @@ export async function updateFacility(
     fields.push(`general_rules = $${paramCount++}`);
     values.push(updates.generalRules);
   }
-  if (updates.cancellationPolicy !== undefined) {
-    fields.push(`cancellation_policy = $${paramCount++}`);
-    values.push(updates.cancellationPolicy);
-  }
   if (updates.bookingRules !== undefined) {
     fields.push(`booking_rules = $${paramCount++}`);
     values.push(updates.bookingRules);
@@ -532,8 +523,7 @@ export async function updateFacility(
      RETURNING
        id, name, type, address, phone, email, contact_name as "contactName",
        description, operating_hours as "operatingHours", timezone,
-       general_rules as "generalRules", cancellation_policy as "cancellationPolicy",
-       booking_rules as "bookingRules", status, created_at as "createdAt"`,
+       general_rules as "generalRules", booking_rules as "bookingRules", status, created_at as "createdAt"`,
     values
   );
 
@@ -835,7 +825,6 @@ export interface FacilityRegistrationData {
   maxBookingsPerWeek: number; // -1 means unlimited
   maxBookingDurationHours: number; // -1 means unlimited
   advanceBookingDays: number; // -1 means unlimited
-  cancellationNoticeHours: number; // 0 means no notice required
 
   // Admin restrictions (optional)
   restrictionsApplyToAdmins?: boolean;
@@ -843,7 +832,6 @@ export interface FacilityRegistrationData {
     maxBookingsPerWeek: number;
     maxBookingDurationHours: number;
     advanceBookingDays: number;
-    cancellationNoticeHours: number;
   };
 
   // Peak hours policy (optional) - with slot definitions and selected days
@@ -992,14 +980,13 @@ export async function registerFacility(
       `INSERT INTO facilities (
         id, name, type, street_address, city, state, zip_code, address,
         primary_location_label, phone, email, contact_name, description, operating_hours, timezone,
-        general_rules, cancellation_policy, booking_rules, logo_url, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'active')
+        general_rules, booking_rules, logo_url, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'active')
       RETURNING
         id, name, type, street_address as "streetAddress", city, state, zip_code as "zipCode",
         address, primary_location_label as "primaryLocationLabel", phone, email, contact_name as "contactName", description,
         operating_hours as "operatingHours", timezone, general_rules as "generalRules",
-        cancellation_policy as "cancellationPolicy", booking_rules as "bookingRules",
-        logo_url as "logoUrl", status, created_at as "createdAt"`,
+        booking_rules as "bookingRules", logo_url as "logoUrl", status, created_at as "createdAt"`,
       [
         facilityId,
         data.facilityName,
@@ -1017,7 +1004,6 @@ export async function registerFacility(
         JSON.stringify(data.operatingHours),
         data.timezone || 'America/New_York',
         data.generalRules,
-        data.cancellationPolicy || null,
         data.bookingRules || null,
         data.facilityImage || null,
       ]
@@ -1085,7 +1071,6 @@ export async function registerFacility(
           max_bookings_per_week: data.maxBookingsPerWeek,
           max_duration_hours: data.maxBookingDurationHours,
           advance_booking_days: data.advanceBookingDays,
-          cancellation_notice_hours: data.cancellationNoticeHours,
           applies_to_admins: data.restrictionsApplyToAdmins !== false,
         }),
         superAdminUserId,
@@ -1103,7 +1088,6 @@ export async function registerFacility(
             max_bookings_per_week: data.adminRestrictions.maxBookingsPerWeek,
             max_duration_hours: data.adminRestrictions.maxBookingDurationHours,
             advance_booking_days: data.adminRestrictions.advanceBookingDays,
-            cancellation_notice_hours: data.adminRestrictions.cancellationNoticeHours,
           }),
           superAdminUserId,
         ]

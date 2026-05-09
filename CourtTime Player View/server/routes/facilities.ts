@@ -172,7 +172,6 @@ router.post('/register', async (req, res, next) => {
       maxBookingsPerWeek,
       maxBookingDurationHours,
       advanceBookingDays,
-      cancellationNoticeHours,
 
       // Admin restrictions
       restrictionsApplyToAdmins,
@@ -271,7 +270,6 @@ router.post('/register', async (req, res, next) => {
       maxBookingsPerWeek: parseInt(maxBookingsPerWeek) || 3,
       maxBookingDurationHours: parseFloat(maxBookingDurationHours) || 2,
       advanceBookingDays: parseInt(advanceBookingDays) || 14,
-      cancellationNoticeHours: parseInt(cancellationNoticeHours) || 0,
       restrictionsApplyToAdmins: restrictionsApplyToAdmins !== false,
       adminRestrictions: adminRestrictions || undefined,
       peakHoursPolicy: peakHoursPolicy || undefined,

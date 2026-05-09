@@ -14,8 +14,6 @@ export interface AdminRestrictions {
   maxDurationUnlimited: boolean;
   advanceBookingDays: string;
   advanceBookingUnlimited: boolean;
-  cancellationNoticeHours: string;
-  cancellationUnlimited: boolean;
 }
 
 export interface PeakHoursRestrictions {
@@ -155,7 +153,7 @@ export const RULE_METADATA: RuleMeta[] = [
     ],
   },
 
-  // Cancellation & No-Show Rules
+  // No-Show Rules
   {
     code: 'ACC-009',
     name: 'No-Show / Strike System',
@@ -280,7 +278,6 @@ export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
   'ACC-004': { enabled: true, config: { allow_overlap: false, overlap_grace_minutes: 0 } },
   'ACC-005': { enabled: true, config: { max_days_ahead: 14 } },
   'ACC-006': { enabled: false, config: { min_minutes_before_start: 0 } },
-  'ACC-008': { enabled: false, config: { late_cancel_cutoff_minutes: 0, penalty_type: 'warning', penalty_value: 0 } },
   'ACC-009': { enabled: true, config: { strike_threshold: 3, strike_window_days: 30, lockout_days: 7 } },
   'ACC-010': { enabled: false, config: { max_prime_per_week: 3, window_type: 'calendar_week' } },
   'ACC-011': { enabled: true, config: { max_actions: 10, window_seconds: 60, action_types: ['create', 'cancel'] } },
@@ -291,7 +288,6 @@ export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
   'CRT-008': { enabled: false, config: { allowed_types: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'] } },
   'CRT-010': { enabled: false, config: { max_per_week_per_account: 3, window_type: 'calendar_week' } },
   'CRT-011': { enabled: false, config: { release_time_local: '07:00', days_ahead: 3 } },
-  'CRT-012': { enabled: false, config: { cancel_cutoff_minutes: 0, penalty_type: 'warning', penalty_value: 0 } },
   'HH-001': { enabled: false, config: { max_members: 6, verification_method: 'admin_approval' } },
   'HH-002': { enabled: false, config: { max_active_household: 4 } },
   'HH-003': { enabled: false, config: { max_prime_per_week_household: 3, window_type: 'calendar_week' } },
@@ -310,8 +306,6 @@ export const DEFAULT_RULES_CONFIG: RulesConfig = {
     maxDurationUnlimited: true,
     advanceBookingDays: '30',
     advanceBookingUnlimited: true,
-    cancellationNoticeHours: '1',
-    cancellationUnlimited: true,
   },
 
   hasPeakHours: false,
@@ -348,7 +342,7 @@ export const CATEGORIES = {
     instruction: 'Control how members book courts. Enabled rules are enforced automatically \u2014 disabled rules are ignored. All values are pre-set with recommended defaults.',
   },
   cancellation: {
-    title: 'Cancellation & No-Show Rules',
+    title: 'No-Show Rules',
     instruction: 'Manage no-show accountability. The strike system tracks no-shows and can temporarily suspend repeat offenders.',
   },
   court: {

@@ -175,7 +175,6 @@ export const facilitiesApi = {
     maxBookingsPerWeek: string;
     maxBookingDurationHours: string;
     advanceBookingDays: string;
-    cancellationNoticeHours: string;
 
     // Admin restrictions (optional, if different from regular members)
     restrictionsApplyToAdmins?: boolean;
@@ -183,7 +182,6 @@ export const facilitiesApi = {
       maxBookingsPerWeek: number;
       maxBookingDurationHours: number;
       advanceBookingDays: number;
-      cancellationNoticeHours: number;
     };
 
     // Peak hours policy (optional) - with slot definitions and selected days

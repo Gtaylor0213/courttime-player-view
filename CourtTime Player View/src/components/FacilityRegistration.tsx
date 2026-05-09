@@ -1064,7 +1064,6 @@ export function FacilityRegistration() {
           ? String((formData.rulesConfig.rules['CRT-005'].config.max_duration_minutes || 120) / 60) : '-1',
         advanceBookingDays: formData.rulesConfig.rules['ACC-005']?.enabled
           ? String(formData.rulesConfig.rules['ACC-005'].config.max_days_ahead || 14) : '-1',
-        cancellationNoticeHours: '0',
 
         // Admin restrictions
         restrictionsApplyToAdmins: formData.rulesConfig.restrictionsApplyToAdmins,
@@ -1072,7 +1071,6 @@ export function FacilityRegistration() {
           maxBookingsPerWeek: formData.rulesConfig.adminRestrictions.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.adminRestrictions.maxBookingsPerWeek),
           maxBookingDurationHours: formData.rulesConfig.adminRestrictions.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.adminRestrictions.maxDurationHours),
           advanceBookingDays: formData.rulesConfig.adminRestrictions.advanceBookingUnlimited ? -1 : parseInt(formData.rulesConfig.adminRestrictions.advanceBookingDays),
-          cancellationNoticeHours: 0,
         } : undefined,
 
         // Peak hours policy - with per-day time slots

@@ -47,6 +47,7 @@ export function ReservationDetailsModal({
   if (!reservation) return null;
 
   const isOwnReservation = user?.id === reservation.userId;
+  const isFacilityAdmin = !!user?.adminFacilities?.includes(reservation.facilityId);
 
   // Format date for display
   const formatDate = (dateStr: string) => {
@@ -72,6 +73,10 @@ export function ReservationDetailsModal({
     const reservationEndDateTime = parseLocalDate(`${reservation.bookingDate}T${reservation.endTime}`);
     return reservationEndDateTime < new Date();
   };
+  const canCancelReservation = (isOwnReservation || isFacilityAdmin) &&
+    reservation.status !== 'cancelled' &&
+    !isPastReservation() &&
+    !!onCancelReservation;
 
   // Handle cancel reservation
   const handleCancel = async () => {
@@ -203,10 +208,7 @@ export function ReservationDetailsModal({
             >
               Close
             </Button>
-            {isOwnReservation &&
-             reservation.status !== 'cancelled' &&
-             !isPastReservation() &&
-             onCancelReservation && (
+            {canCancelReservation && (
               <Button
                 variant="destructive"
                 onClick={() => setShowCancelConfirm(true)}

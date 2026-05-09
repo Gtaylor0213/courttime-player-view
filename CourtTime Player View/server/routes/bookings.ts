@@ -287,6 +287,7 @@ router.delete('/:bookingId', async (req, res, next) => {
     // Create notification for booking cancellation
     if (booking) {
       try {
+        const notificationRecipientId = booking.userId || (userId as string);
         const facilityQuery = await pool.query('SELECT name FROM facilities WHERE id = $1', [booking.facilityId]);
         const courtQuery = await pool.query('SELECT name FROM courts WHERE id = $1', [booking.courtId]);
 
@@ -296,7 +297,7 @@ router.delete('/:bookingId', async (req, res, next) => {
         const startDateTime = new Date(`${booking.bookingDate}T${booking.startTime}`);
 
         await notificationService.notifyBookingCancelled(
-          userId as string,
+          notificationRecipientId,
           facilityName,
           courtName,
           startDateTime,
@@ -306,7 +307,7 @@ router.delete('/:bookingId', async (req, res, next) => {
         // Send cancellation email (fire-and-forget)
         const userQuery = await pool.query(
           'SELECT email, full_name as "fullName" FROM users WHERE id = $1',
-          [userId]
+          [notificationRecipientId]
         );
         const userInfo = userQuery.rows[0];
         if (userInfo) {
@@ -315,7 +316,7 @@ router.delete('/:bookingId', async (req, res, next) => {
           sendBookingCancellationEmail(
             userInfo.email, userInfo.fullName, booking.facilityId, facilityName,
             courtName, dateFormatted, startFormatted, (reason as string) || 'Cancelled by user',
-            userId as string
+            notificationRecipientId
           ).catch(err => console.error('Error sending cancellation email:', err));
         }
       } catch (notificationError) {

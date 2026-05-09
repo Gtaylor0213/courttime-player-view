@@ -160,6 +160,26 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
     merged.maxBookingsPerWeekUnlimited = !ind.enabled;
   }
 
+  const dayInd = merged.userLimits?.perDayIndividual;
+  if (dayInd) {
+    merged.courtsPerDayUser = String(Number(dayInd.limit) || 0);
+    merged.courtsPerDayUserEnabled = !!dayInd.enabled;
+  }
+
+  const dayHh = merged.userLimits?.perDayHousehold;
+  if (dayHh) {
+    merged.courtsPerDayHousehold = String(Number(dayHh.limit) || 0);
+    merged.courtsPerDayHouseholdEnabled = !!dayHh.enabled;
+  }
+
+  const weekHh = merged.userLimits?.perWeekHousehold;
+  if (weekHh) {
+    merged.courtsPerWeekHousehold = String(Number(weekHh.limit) || 0);
+    merged.courtsPerWeekHouseholdEnabled = !!weekHh.enabled;
+    merged.maxBookingsPerWeekHousehold = String(Number(weekHh.limit) || 0);
+    merged.maxBookingsPerWeekHouseholdUnlimited = !weekHh.enabled;
+  }
+
   return merged;
 }
 

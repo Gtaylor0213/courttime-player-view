@@ -688,9 +688,32 @@ export function AdminBooking() {
             notes: finalNotes || undefined,
             instances: bookingRequests
           })]
-        : await Promise.all(
-            bookingRequests.map(req => bookingApi.create(req))
-          );
+        : await (async () => {
+            const out: Awaited<ReturnType<typeof bookingApi.create>>[] = [];
+            const prior: Array<{
+              bookingDate: string;
+              courtId: string;
+              startTime: string;
+              endTime: string;
+              durationMinutes: number;
+            }> = [];
+            for (const req of bookingRequests) {
+              const res = await bookingApi.create({
+                ...req,
+                provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
+              });
+              out.push(res);
+              if (!res.success) break;
+              prior.push({
+                bookingDate: req.bookingDate,
+                courtId: req.courtId,
+                startTime: req.startTime,
+                endTime: req.endTime,
+                durationMinutes: req.durationMinutes
+              });
+            }
+            return out;
+          })();
 
       const failedBookings = results.filter(r => !r.success);
       const successfulBookings = results.filter(r => r.success);

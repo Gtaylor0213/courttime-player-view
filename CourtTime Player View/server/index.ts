@@ -86,6 +86,7 @@ app.use(cors({
     const allowed = [
       process.env.APP_URL,
       'http://localhost:5173',
+      'http://127.0.0.1:5173',
       'http://localhost:8081',
     ].filter(Boolean);
     // Allow requests with no origin (mobile apps, curl, etc.)
@@ -149,9 +150,28 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
+/** Identifies the running server build (set by many hosts in CI; compare to `git rev-parse HEAD`). */
+function deployFingerprint(): { commit?: string; deployId?: string } {
+  const commit =
+    process.env.RENDER_GIT_COMMIT ||
+    process.env.GITHUB_SHA ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.CF_PAGES_COMMIT_SHA ||
+    process.env.SOURCE_VERSION ||
+    process.env.KOYEB_GIT_SHA ||
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    undefined;
+  const deployId = process.env.RENDER_DEPLOY_ID || process.env.RAILWAY_DEPLOYMENT_ID || undefined;
+  return { commit, deployId };
+}
+
+// Health check (public — use to verify production picked up the latest deploy)
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    ...deployFingerprint(),
+  });
 });
 
 // API Routes — public (no auth required)

@@ -9,7 +9,9 @@ import {
   buildCancellationContext,
   getFacilityLocalNow,
   resolveDailyIndividualFromBookingRules,
-  resolveWeeklyIndividualFromBookingRules
+  resolveWeeklyIndividualFromBookingRules,
+  resolveDailyHouseholdFromBookingRules,
+  resolveWeeklyHouseholdFromBookingRules
 } from './RuleContext';
 import {
   BookingRequest,
@@ -300,11 +302,8 @@ export class RulesEngine {
     context: RuleContext,
     includeWeekly: boolean = true
   ): RuleResult[] {
-    const config = context.facility.simplifiedBookingRules;
-    if (!config) return [];
-
     const out: RuleResult[] = [];
-    const countable = (b: { status: string }) => b.status === 'confirmed';
+    const countable = (b: { status: string }) => b.status !== 'cancelled';
     const requestDay = context.request.bookingDate;
     const [wy, wm, wd] = context.request.bookingDate.split('-').map(Number);
     const weekStartDate = new Date(wy, wm - 1, wd, 12, 0, 0, 0);
@@ -356,13 +355,16 @@ export class RulesEngine {
       }
     }
 
-    const enforceHousehold = config.restrictionType === 'address' && !!context.household;
+    // Household caps apply to all members at an address when toggles are on and the booker
+    // belongs to a household — independent of restrictionType (account vs address).
+    const dailyHousehold = resolveDailyHouseholdFromBookingRules(context.facility);
     if (
-      enforceHousehold &&
-      config.userLimits?.perDayHousehold?.enabled &&
-      householdDayCount >= Number(config.userLimits.perDayHousehold.limit || 0)
+      context.household &&
+      dailyHousehold.enabled &&
+      dailyHousehold.limit > 0 &&
+      householdDayCount >= dailyHousehold.limit
     ) {
-      const limit = Number(config.userLimits.perDayHousehold.limit || 0);
+      const limit = dailyHousehold.limit;
       out.push({
         ruleCode: 'SIMPLE-DAY-HOUSEHOLD',
         ruleName: 'Courts Per Day (Household)',
@@ -372,13 +374,15 @@ export class RulesEngine {
       });
     }
 
+    // Household weekly cap is separate from ACC-002 (individual weekly); do not skip when ACC-002 is on.
+    const weeklyHousehold = resolveWeeklyHouseholdFromBookingRules(context.facility);
     if (
-      includeWeekly &&
-      enforceHousehold &&
-      config.userLimits?.perWeekHousehold?.enabled &&
-      householdWeekCount >= Number(config.userLimits.perWeekHousehold.limit || 0)
+      context.household &&
+      weeklyHousehold.enabled &&
+      weeklyHousehold.limit > 0 &&
+      householdWeekCount >= weeklyHousehold.limit
     ) {
-      const limit = Number(config.userLimits.perWeekHousehold.limit || 0);
+      const limit = weeklyHousehold.limit;
       out.push({
         ruleCode: 'SIMPLE-WEEK-HOUSEHOLD',
         ruleName: 'Courts Per Week (Household)',
@@ -434,7 +438,7 @@ export class RulesEngine {
       }
     }
 
-    const countable = (b: any) => b.status === 'confirmed';
+    const countable = (b: { status: string }) => b.status !== 'cancelled';
     const requestDay = context.request.bookingDate;
     // Count the week that contains the reservation date (not "today" only).
     const [wy, wm, wd] = context.request.bookingDate.split('-').map(Number);

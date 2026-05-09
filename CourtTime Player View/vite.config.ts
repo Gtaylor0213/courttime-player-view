@@ -1,10 +1,34 @@
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'path';
 
-  import { defineConfig } from 'vite';
-  import react from '@vitejs/plugin-react-swc';
-  import tailwindcss from '@tailwindcss/vite';
-  import path from 'path';
+function proxyToApi(target: string) {
+  return {
+    target,
+    changeOrigin: true,
+    configure: (proxy) => {
+      proxy.on('error', (err: NodeJS.ErrnoException) => {
+        console.error(
+          `\n[Vite proxy] Cannot reach API at ${target} (${err.code ?? err.message}).`,
+        );
+        console.error(
+          '  → Run `npm run dev` (starts API + Vite) or `npm run dev:server` in another terminal.',
+        );
+        console.error(
+          '  → Ensure `.env` has DATABASE_URL so the API can start (copy from .env.example).\n',
+        );
+      });
+    },
+  };
+}
 
-  export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  /** Backend for `npm run dev:client` — browser only talks to Vite; Vite forwards /api and /health here. */
+  const devApiProxy = env.VITE_DEV_API_PROXY || 'http://127.0.0.1:3001';
+
+  return {
     plugins: [tailwindcss(), react()],
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
@@ -37,11 +61,14 @@
       outDir: 'build',
     },
     server: {
-      // Bind IPv4 explicitly — some setups only expose [::1], which breaks
-      // "localhost" / 127.0.0.1 in the browser with "connection failed".
       host: '127.0.0.1',
       port: 5173,
       strictPort: false,
       open: true,
+      proxy: {
+        '/api': proxyToApi(devApiProxy),
+        '/health': proxyToApi(devApiProxy),
+      },
     },
-  });
+  };
+});

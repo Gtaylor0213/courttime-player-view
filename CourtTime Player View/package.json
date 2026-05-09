@@ -57,7 +57,7 @@
     "vite": "6.3.5"
   },
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"vite\"",
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev:server\" \"vite\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "server": "node scripts/start-server.js",

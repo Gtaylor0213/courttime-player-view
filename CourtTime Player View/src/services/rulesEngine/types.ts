@@ -7,6 +7,15 @@
 // BOOKING REQUEST
 // =====================================================
 
+/** Same-request bookings not yet in DB (e.g. earlier instances in a recurring batch). */
+export interface ProvisionalBookingSlice {
+  bookingDate: string;
+  courtId: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes?: number;
+}
+
 export interface BookingRequest {
   userId: string;
   courtId: string;
@@ -18,6 +27,8 @@ export interface BookingRequest {
   bookingType?: string;      // match, practice, lesson, etc.
   activityType?: string;     // For CRT-008
   notes?: string;
+  /** Count toward daily/weekly/household caps when validating a batch create */
+  provisionalSameRequestBookings?: ProvisionalBookingSlice[];
 }
 
 export interface CancellationRequest {

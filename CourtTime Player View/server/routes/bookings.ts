@@ -137,7 +137,8 @@ router.post('/', async (req, res, next) => {
       endTime,
       durationMinutes,
       bookingType,
-      notes
+      notes,
+      provisionalSameRequestBookings
     } = req.body;
 
     // Validation
@@ -157,7 +158,10 @@ router.post('/', async (req, res, next) => {
       endTime,
       durationMinutes,
       bookingType,
-      notes
+      notes,
+      provisionalSameRequestBookings: Array.isArray(provisionalSameRequestBookings)
+        ? provisionalSameRequestBookings
+        : undefined
     });
 
     if (!result.success) {

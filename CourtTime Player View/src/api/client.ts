@@ -5,9 +5,11 @@
 
 import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../shared/api/core';
 
-// In production, use empty string for same-origin API calls.
-// In development, fallback to localhost:3001.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+// Dev: always same-origin so Vite can proxy `/api` (ignores stray VITE_API_BASE_URL in .env).
+// Production: same-origin by default, or set VITE_API_BASE_URL at build time if API is on another host.
+const API_BASE_URL = import.meta.env.DEV
+  ? ''
+  : (import.meta.env.VITE_API_BASE_URL ?? '');
 
 export type ApiResponse<T = any> = SharedApiResponse<T>;
 
@@ -526,6 +528,13 @@ export const bookingApi = {
     durationMinutes: number;
     bookingType?: string;
     notes?: string;
+    provisionalSameRequestBookings?: Array<{
+      bookingDate: string;
+      courtId: string;
+      startTime: string;
+      endTime: string;
+      durationMinutes?: number;
+    }>;
   }) => {
     return apiRequest('/api/bookings', {
       method: 'POST',

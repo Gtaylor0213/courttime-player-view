@@ -6,6 +6,7 @@
 import { query } from '../../database/connection';
 import {
   BookingRequest,
+  ProvisionalBookingSlice,
   RuleContext,
   UserWithTier,
   MembershipTier,
@@ -65,6 +66,10 @@ function promoteSnakeCaseBookingRuleKeys(raw: Record<string, unknown>): void {
   copyIfAbsent('maxBookingsPerWeekHousehold', 'max_bookings_per_week_household');
   copyIfAbsent('courtsPerWeekHouseholdEnabled', 'courts_per_week_household_enabled');
   copyIfAbsent('maxBookingsPerWeekHouseholdUnlimited', 'max_bookings_per_week_household_unlimited');
+  copyIfAbsent('maxBookingsPerDayHousehold', 'max_bookings_per_day_household');
+  copyIfAbsent('maxBookingsPerDayHouseholdUnlimited', 'max_bookings_per_day_household_unlimited');
+  copyIfAbsent('maxBookingsPerDay', 'max_bookings_per_day');
+  copyIfAbsent('maxBookingsPerDayUnlimited', 'max_bookings_per_day_unlimited');
 
   if (raw.userLimits == null && raw.user_limits != null && typeof raw.user_limits === 'object') {
     raw.userLimits = raw.user_limits;
@@ -80,6 +85,50 @@ function promoteSnakeCaseBookingRuleKeys(raw: Record<string, unknown>): void {
 
 function copyNested(parent: Record<string, unknown>, camel: string, snake: string): void {
   if (parent[camel] == null && parent[snake] != null) parent[camel] = parent[snake];
+}
+
+/**
+ * Nested-only or legacy JSON often stores a positive limit without `enabled: true` / flat toggles.
+ * If we treated that as "off", caps never enforced. Only infer "on" when nothing explicitly
+ * disables (toggle false, unlimited flag, or nested enabled: false).
+ */
+function inferSimplifiedCapEnabledFromRaw(args: {
+  enabled: boolean;
+  limit: number;
+  raw: Record<string, unknown> | null | undefined;
+  kind: 'dayUser' | 'dayHousehold' | 'weekHousehold';
+}): boolean {
+  const { enabled, limit, raw, kind } = args;
+  if (limit <= 0 || enabled) return enabled;
+  const explicitOff = (() => {
+    if (!raw || typeof raw !== 'object') return false;
+    const nested =
+      kind === 'dayUser'
+        ? ((raw.userLimits as Record<string, unknown> | undefined)?.perDayIndividual as
+            | { enabled?: unknown }
+            | undefined)
+        : kind === 'dayHousehold'
+          ? ((raw.userLimits as Record<string, unknown> | undefined)?.perDayHousehold as
+              | { enabled?: unknown }
+              | undefined)
+          : ((raw.userLimits as Record<string, unknown> | undefined)?.perWeekHousehold as
+              | { enabled?: unknown }
+              | undefined);
+    if (nested?.enabled === false) return true;
+    if (kind === 'dayUser') {
+      return raw.courtsPerDayUserEnabled === false || raw.maxBookingsPerDayUnlimited === true;
+    }
+    if (kind === 'dayHousehold') {
+      return (
+        raw.courtsPerDayHouseholdEnabled === false || raw.maxBookingsPerDayHouseholdUnlimited === true
+      );
+    }
+    return (
+      raw.courtsPerWeekHouseholdEnabled === false || raw.maxBookingsPerWeekHouseholdUnlimited === true
+    );
+  })();
+  if (explicitOff) return false;
+  return true;
 }
 
 /**
@@ -130,6 +179,57 @@ function alignNestedDailyIndividualFromFlat(raw: Record<string, unknown>): void 
   const userLimits = (raw.userLimits || {}) as Record<string, unknown>;
   const prev = (userLimits.perDayIndividual || {}) as Record<string, unknown>;
   userLimits.perDayIndividual = {
+    ...prev,
+    limit,
+    ...(enabled !== undefined ? { enabled } : {}),
+  };
+  raw.userLimits = userLimits;
+}
+
+function alignNestedWeeklyHouseholdFromFlat(raw: Record<string, unknown>): void {
+  const fromH = tryPositiveInt(raw.courtsPerWeekHousehold);
+  const fromMaxH = tryPositiveInt(raw.maxBookingsPerWeekHousehold);
+  const limit = fromH ?? fromMaxH;
+  if (limit === undefined) return;
+
+  let enabled: boolean | undefined;
+  if (raw.courtsPerWeekHouseholdEnabled !== undefined && raw.courtsPerWeekHouseholdEnabled !== null) {
+    enabled = !!raw.courtsPerWeekHouseholdEnabled;
+  } else if (
+    raw.maxBookingsPerWeekHouseholdUnlimited !== undefined &&
+    raw.maxBookingsPerWeekHouseholdUnlimited !== null
+  ) {
+    enabled = !raw.maxBookingsPerWeekHouseholdUnlimited;
+  }
+
+  const userLimits = (raw.userLimits || {}) as Record<string, unknown>;
+  const prev = (userLimits.perWeekHousehold || {}) as Record<string, unknown>;
+  userLimits.perWeekHousehold = {
+    ...prev,
+    limit,
+    ...(enabled !== undefined ? { enabled } : {}),
+  };
+  raw.userLimits = userLimits;
+}
+
+function alignNestedDailyHouseholdFromFlat(raw: Record<string, unknown>): void {
+  const limit =
+    tryPositiveInt(raw.courtsPerDayHousehold) ?? tryPositiveInt(raw.maxBookingsPerDayHousehold);
+  if (limit === undefined) return;
+
+  let enabled: boolean | undefined;
+  if (raw.courtsPerDayHouseholdEnabled !== undefined && raw.courtsPerDayHouseholdEnabled !== null) {
+    enabled = !!raw.courtsPerDayHouseholdEnabled;
+  } else if (
+    raw.maxBookingsPerDayHouseholdUnlimited !== undefined &&
+    raw.maxBookingsPerDayHouseholdUnlimited !== null
+  ) {
+    enabled = !raw.maxBookingsPerDayHouseholdUnlimited;
+  }
+
+  const userLimits = (raw.userLimits || {}) as Record<string, unknown>;
+  const prev = (userLimits.perDayHousehold || {}) as Record<string, unknown>;
+  userLimits.perDayHousehold = {
     ...prev,
     limit,
     ...(enabled !== undefined ? { enabled } : {}),
@@ -213,6 +313,8 @@ export function resolveDailyIndividualFromBookingRules(facility: {
   if (raw && typeof raw === 'object') {
     if (raw.courtsPerDayUserEnabled !== undefined && raw.courtsPerDayUserEnabled !== null) {
       enabled = !!raw.courtsPerDayUserEnabled;
+    } else if (raw.maxBookingsPerDayUnlimited !== undefined && raw.maxBookingsPerDayUnlimited !== null) {
+      enabled = !raw.maxBookingsPerDayUnlimited;
     } else {
       const nestedEn = (raw.userLimits as Record<string, unknown> | undefined)?.perDayIndividual as
         | { enabled?: unknown }
@@ -223,16 +325,149 @@ export function resolveDailyIndividualFromBookingRules(facility: {
     }
 
     const fromFlatUser = tryPositiveInt(raw.courtsPerDayUser);
+    const fromLegacyDay = tryPositiveInt(raw.maxBookingsPerDay);
     const nestedLim = tryPositiveInt(
       ((raw.userLimits as Record<string, unknown> | undefined)?.perDayIndividual as { limit?: unknown } | undefined)?.limit
     );
-    const resolved = fromFlatUser ?? nestedLim;
+    const resolved = fromFlatUser ?? nestedLim ?? fromLegacyDay;
     if (resolved !== undefined) {
       limit = resolved;
     }
   }
 
+  enabled = inferSimplifiedCapEnabledFromRaw({ enabled, limit, raw: raw ?? null, kind: 'dayUser' });
   return { enabled, limit };
+}
+
+/**
+ * Courts per week for the household (address), from booking_rules flat + nested fields.
+ */
+export function resolveWeeklyHouseholdFromBookingRules(facility: {
+  simplifiedBookingRules?: SimplifiedBookingRules;
+  bookingRulesRaw?: Record<string, unknown> | null;
+}): { enabled: boolean; limit: number } {
+  const raw = facility.bookingRulesRaw;
+  const norm = facility.simplifiedBookingRules;
+
+  let enabled = !!norm?.userLimits?.perWeekHousehold?.enabled;
+  let limit = tryPositiveInt(norm?.userLimits?.perWeekHousehold?.limit) ?? 0;
+
+  if (raw && typeof raw === 'object') {
+    if (raw.courtsPerWeekHouseholdEnabled !== undefined && raw.courtsPerWeekHouseholdEnabled !== null) {
+      enabled = !!raw.courtsPerWeekHouseholdEnabled;
+    } else if (
+      raw.maxBookingsPerWeekHouseholdUnlimited !== undefined &&
+      raw.maxBookingsPerWeekHouseholdUnlimited !== null
+    ) {
+      enabled = !raw.maxBookingsPerWeekHouseholdUnlimited;
+    } else {
+      const nestedEn = (raw.userLimits as Record<string, unknown> | undefined)?.perWeekHousehold as
+        | { enabled?: unknown }
+        | undefined;
+      if (nestedEn && nestedEn.enabled !== undefined && nestedEn.enabled !== null) {
+        enabled = !!nestedEn.enabled;
+      }
+    }
+
+    const fromFlatH = tryPositiveInt(raw.courtsPerWeekHousehold);
+    const fromFlatMaxH = tryPositiveInt(raw.maxBookingsPerWeekHousehold);
+    const nestedLim = tryPositiveInt(
+      ((raw.userLimits as Record<string, unknown> | undefined)?.perWeekHousehold as { limit?: unknown } | undefined)
+        ?.limit
+    );
+    const resolved = fromFlatH ?? nestedLim ?? fromFlatMaxH;
+    if (resolved !== undefined) {
+      limit = resolved;
+    }
+  }
+
+  enabled = inferSimplifiedCapEnabledFromRaw({ enabled, limit, raw: raw ?? null, kind: 'weekHousehold' });
+  return { enabled, limit };
+}
+
+/**
+ * Courts per day for the household (address), from booking_rules flat + nested fields.
+ */
+export function resolveDailyHouseholdFromBookingRules(facility: {
+  simplifiedBookingRules?: SimplifiedBookingRules;
+  bookingRulesRaw?: Record<string, unknown> | null;
+}): { enabled: boolean; limit: number } {
+  const raw = facility.bookingRulesRaw;
+  const norm = facility.simplifiedBookingRules;
+
+  let enabled = !!norm?.userLimits?.perDayHousehold?.enabled;
+  let limit = tryPositiveInt(norm?.userLimits?.perDayHousehold?.limit) ?? 0;
+
+  if (raw && typeof raw === 'object') {
+    if (raw.courtsPerDayHouseholdEnabled !== undefined && raw.courtsPerDayHouseholdEnabled !== null) {
+      enabled = !!raw.courtsPerDayHouseholdEnabled;
+    } else if (
+      raw.maxBookingsPerDayHouseholdUnlimited !== undefined &&
+      raw.maxBookingsPerDayHouseholdUnlimited !== null
+    ) {
+      enabled = !raw.maxBookingsPerDayHouseholdUnlimited;
+    } else {
+      const nestedEn = (raw.userLimits as Record<string, unknown> | undefined)?.perDayHousehold as
+        | { enabled?: unknown }
+        | undefined;
+      if (nestedEn && nestedEn.enabled !== undefined && nestedEn.enabled !== null) {
+        enabled = !!nestedEn.enabled;
+      }
+    }
+
+    const fromFlat = tryPositiveInt(raw.courtsPerDayHousehold);
+    const fromLegacy = tryPositiveInt(raw.maxBookingsPerDayHousehold);
+    const nestedLim = tryPositiveInt(
+      ((raw.userLimits as Record<string, unknown> | undefined)?.perDayHousehold as { limit?: unknown } | undefined)
+        ?.limit
+    );
+    const resolved = fromFlat ?? nestedLim ?? fromLegacy;
+    if (resolved !== undefined) {
+      limit = resolved;
+    }
+  }
+
+  enabled = inferSimplifiedCapEnabledFromRaw({ enabled, limit, raw: raw ?? null, kind: 'dayHousehold' });
+  return { enabled, limit };
+}
+
+/**
+ * Parse `facilities.booking_rules` the same way as fetchFacilityWithRules (for enforcement outside the rules engine).
+ */
+export function parseStoredFacilityBookingRules(bookingRulesCell: unknown): {
+  bookingRulesRaw: Record<string, unknown> | null;
+  simplifiedBookingRules?: SimplifiedBookingRules;
+} {
+  let simplifiedBookingRules: SimplifiedBookingRules | undefined;
+  let bookingRulesRaw: Record<string, unknown> | null = null;
+  if (!bookingRulesCell) {
+    return { bookingRulesRaw: null, simplifiedBookingRules: undefined };
+  }
+  try {
+    let parsed: unknown =
+      typeof bookingRulesCell === 'string' ? JSON.parse(bookingRulesCell) : bookingRulesCell;
+    // Unwrap double-encoded JSON (some stores / migrations stringify twice).
+    while (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        break;
+      }
+    }
+    if (parsed && typeof parsed === 'object') {
+      const rawObj = parsed as Record<string, unknown>;
+      promoteSnakeCaseBookingRuleKeys(rawObj);
+      alignNestedWeeklyIndividualFromFlat(rawObj);
+      alignNestedDailyIndividualFromFlat(rawObj);
+      alignNestedWeeklyHouseholdFromFlat(rawObj);
+      alignNestedDailyHouseholdFromFlat(rawObj);
+      bookingRulesRaw = rawObj;
+    }
+    simplifiedBookingRules = normalizeSimplifiedBookingRules(parsed);
+  } catch (error) {
+    console.warn('Failed to parse facility booking_rules JSON:', error);
+  }
+  return { bookingRulesRaw, simplifiedBookingRules };
 }
 
 const ALLOWED_RULE_CODES = [
@@ -281,6 +516,30 @@ export function getFacilityLocalNow(timezone: string): Date {
   );
 }
 
+/** Synthetic rows so batch/recurring validations count earlier instances not yet inserted. */
+function provisionalRowsForUser(
+  request: BookingRequest,
+  slices: ProvisionalBookingSlice[]
+): BookingWithDetails[] {
+  const epoch = new Date(0);
+  return slices.map((slice, index) => ({
+    id: `__provisional__${index}`,
+    courtId: slice.courtId,
+    userId: request.userId,
+    facilityId: request.facilityId,
+    bookingDate: slice.bookingDate,
+    startTime: slice.startTime,
+    endTime: slice.endTime,
+    durationMinutes: slice.durationMinutes ?? request.durationMinutes,
+    status: 'confirmed' as const,
+    isPrimeTime: false,
+    checkedIn: false,
+    noShowMarked: false,
+    createdAt: epoch,
+    updatedAt: epoch,
+  }));
+}
+
 /**
  * Build the complete rule context for a booking request
  */
@@ -316,6 +575,17 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     householdBookings = await fetchHouseholdBookings(household.id);
   }
 
+  let mergedUserBookings = userBookings;
+  let mergedHouseholdBookings = householdBookings;
+  const prov = request.provisionalSameRequestBookings;
+  if (prov?.length) {
+    const extra = provisionalRowsForUser(request, prov);
+    mergedUserBookings = [...userBookings, ...extra];
+    if (household) {
+      mergedHouseholdBookings = [...householdBookings, ...extra];
+    }
+  }
+
   const slotsFromRuleEngine = extractPeakHoursSlotsFromRuleConfigs(facility.rules || []);
   const combinedPeakHoursSlots = mergePeakHoursSlots(peakHoursSlots, slotsFromRuleEngine);
 
@@ -349,8 +619,8 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     facility,
     household: household || undefined,
     existingBookings: {
-      user: userBookings,
-      household: householdBookings,
+      user: mergedUserBookings,
+      household: mergedHouseholdBookings,
       court: courtBookings
     },
     strikes,
@@ -559,7 +829,10 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
     'maxReservationDurationEnabled' in raw ||
     'maxReservationDurationMinutes' in raw ||
     'daysInAdvanceEnabled' in raw ||
-    'courtsPerWeekUserEnabled' in raw;
+    'courtsPerWeekUserEnabled' in raw ||
+    'courtsPerDayUserEnabled' in raw ||
+    'courtsPerWeekHouseholdEnabled' in raw ||
+    'courtsPerDayHouseholdEnabled' in raw;
 
   const hasNestedNormalizedShape =
     !!raw.userLimits &&
@@ -905,25 +1178,9 @@ async function fetchFacilityWithRules(facilityId: string): Promise<FacilityWithR
   }
 
   const facility = facilityResult.rows[0];
-  let simplifiedBookingRules: SimplifiedBookingRules | undefined;
-  let bookingRulesRaw: Record<string, unknown> | null = null;
-  if (facility.bookingRules) {
-    try {
-      const parsed = typeof facility.bookingRules === 'string'
-        ? JSON.parse(facility.bookingRules)
-        : facility.bookingRules;
-      if (parsed && typeof parsed === 'object') {
-        const rawObj = parsed as Record<string, unknown>;
-        promoteSnakeCaseBookingRuleKeys(rawObj);
-        alignNestedWeeklyIndividualFromFlat(rawObj);
-        alignNestedDailyIndividualFromFlat(rawObj);
-        bookingRulesRaw = rawObj;
-      }
-      simplifiedBookingRules = normalizeSimplifiedBookingRules(parsed);
-    } catch (error) {
-      console.warn('Failed to parse facility booking_rules JSON:', error);
-    }
-  }
+  const { bookingRulesRaw, simplifiedBookingRules } = parseStoredFacilityBookingRules(
+    facility.bookingRules
+  );
 
   // Fetch configured rules
   const rulesResult = await query(
@@ -1049,7 +1306,7 @@ async function fetchUserBookings(
     JOIN courts c ON b.court_id = c.id
     WHERE b.user_id = $1
       AND b.facility_id = $2
-      AND b.booking_date >= CURRENT_DATE - INTERVAL '21 days'
+      AND b.booking_date >= CURRENT_DATE - INTERVAL '800 days'
       AND b.status != 'cancelled'
     ORDER BY b.booking_date, b.start_time`,
     [userId, facilityId]
@@ -1088,7 +1345,7 @@ async function fetchHouseholdBookings(householdId: string): Promise<BookingWithD
     JOIN users u ON b.user_id = u.id
     JOIN household_members hm ON b.user_id = hm.user_id
     WHERE hm.household_id = $1
-      AND b.booking_date >= CURRENT_DATE - INTERVAL '21 days'
+      AND b.booking_date >= CURRENT_DATE - INTERVAL '800 days'
       AND b.status != 'cancelled'
     ORDER BY b.booking_date, b.start_time`,
     [householdId]

@@ -1,7 +1,266 @@
 import { query, transaction } from '../database/connection';
-import { rulesEngine, EvaluationResult, RuleResult, BookingRequest } from './rulesEngine';
+import {
+  rulesEngine,
+  EvaluationResult,
+  RuleResult,
+  BookingRequest,
+  ProvisionalBookingSlice
+} from './rulesEngine';
+import {
+  parseStoredFacilityBookingRules,
+  resolveDailyIndividualFromBookingRules,
+  resolveWeeklyIndividualFromBookingRules,
+  resolveDailyHouseholdFromBookingRules,
+  resolveWeeklyHouseholdFromBookingRules
+} from './rulesEngine/RuleContext';
 import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
+
+/**
+ * Serialize booking creates per user + facility so concurrent multi-court POSTs
+ * (e.g. Promise.all from Quick Reserve) each see prior rows after commits.
+ */
+const bookingCreationTail = new Map<string, Promise<unknown>>();
+
+function enqueueBookingCreation<T>(
+  userId: string,
+  facilityId: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const key = `${userId}:${facilityId}`;
+  const prev = bookingCreationTail.get(key) ?? Promise.resolve();
+  const run = prev.then(() => fn());
+  bookingCreationTail.set(key, run.then(() => undefined, () => undefined));
+  return run;
+}
+
+function mondayWeekBoundsYmd(bookingDateYmd: string): { weekStart: string; weekEnd: string } {
+  const [wy, wm, wd] = bookingDateYmd.split('-').map(Number);
+  const weekStartDate = new Date(wy, wm - 1, wd, 12, 0, 0, 0);
+  const dow = weekStartDate.getDay();
+  const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  weekStartDate.setDate(weekStartDate.getDate() + diffToMonday);
+  weekStartDate.setHours(0, 0, 0, 0);
+  const weekEndDate = new Date(weekStartDate);
+  weekEndDate.setDate(weekStartDate.getDate() + 6);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { weekStart: fmt(weekStartDate), weekEnd: fmt(weekEndDate) };
+}
+
+/** Provisional slices not yet persisted (avoids double-count with DB after sequential creates). */
+async function countProvisionalsNotInDb(
+  userId: string,
+  facilityId: string,
+  prov: ProvisionalBookingSlice[],
+  predicate: (p: ProvisionalBookingSlice) => boolean
+): Promise<number> {
+  const relevant = prov.filter(predicate);
+  let n = 0;
+  for (const p of relevant) {
+    const r = await query(
+      `SELECT 1 FROM bookings
+       WHERE user_id = $1 AND facility_id = $2 AND booking_date = $3::date
+         AND court_id = $4 AND start_time = $5 AND end_time = $6
+         AND status != 'cancelled'
+       LIMIT 1`,
+      [userId, facilityId, p.bookingDate, p.courtId, p.startTime, p.endTime]
+    );
+    if (r.rows.length === 0) n++;
+  }
+  return n;
+}
+
+/**
+ * DB-backed caps from facilities.booking_rules (safety net if the rules engine path misses limits).
+ */
+async function assertHardBookingRuleCaps(bookingData: {
+  userId: string;
+  facilityId: string;
+  bookingDate: string;
+  provisionalSameRequestBookings?: ProvisionalBookingSlice[];
+}): Promise<BookingResult | null> {
+  const facRow = await query(
+    `SELECT booking_rules AS "bookingRules" FROM facilities WHERE id = $1`,
+    [bookingData.facilityId]
+  );
+  const { bookingRulesRaw, simplifiedBookingRules } = parseStoredFacilityBookingRules(
+    facRow.rows[0]?.bookingRules
+  );
+  const facilityLike = { bookingRulesRaw, simplifiedBookingRules };
+  const prov = bookingData.provisionalSameRequestBookings ?? [];
+  const day = bookingData.bookingDate;
+  const provisionalForDay = await countProvisionalsNotInDb(
+    bookingData.userId,
+    bookingData.facilityId,
+    prov,
+    (p) => p.bookingDate === day
+  );
+
+  const userDayRes = await query(
+    `SELECT COUNT(*)::int AS c FROM bookings
+     WHERE user_id = $1 AND facility_id = $2 AND booking_date = $3::date AND status != 'cancelled'`,
+    [bookingData.userId, bookingData.facilityId, day]
+  );
+  const userDayCount = Number(userDayRes.rows[0]?.c ?? 0) + provisionalForDay;
+
+  const dailyInd = resolveDailyIndividualFromBookingRules(facilityLike);
+  if (dailyInd.enabled && dailyInd.limit > 0 && userDayCount >= dailyInd.limit) {
+    const v = {
+      ruleCode: 'SIMPLE-DAY-USER',
+      ruleName: 'Courts Per Day (Individual)',
+      passed: false as const,
+      severity: 'error' as const,
+      message: `You have reached your daily booking limit of ${dailyInd.limit}`
+    };
+    return {
+      success: false,
+      error: v.message,
+      ruleViolations: [v],
+      warnings: [],
+      isPrimeTime: false
+    };
+  }
+
+  const { weekStart, weekEnd } = mondayWeekBoundsYmd(bookingData.bookingDate);
+  const provInWeek = await countProvisionalsNotInDb(
+    bookingData.userId,
+    bookingData.facilityId,
+    prov,
+    (p) => p.bookingDate >= weekStart && p.bookingDate <= weekEnd
+  );
+
+  const userWeekRes = await query(
+    `SELECT COUNT(*)::int AS c FROM bookings
+     WHERE user_id = $1 AND facility_id = $2
+       AND booking_date >= $3::date AND booking_date <= $4::date
+       AND status != 'cancelled'`,
+    [bookingData.userId, bookingData.facilityId, weekStart, weekEnd]
+  );
+  const userWeekCount = Number(userWeekRes.rows[0]?.c ?? 0) + provInWeek;
+
+  const weeklyInd = resolveWeeklyIndividualFromBookingRules(facilityLike);
+  if (weeklyInd.enabled && weeklyInd.limit > 0 && userWeekCount >= weeklyInd.limit) {
+    const v = {
+      ruleCode: 'SIMPLE-WEEK-USER',
+      ruleName: 'Courts Per Week (Individual)',
+      passed: false as const,
+      severity: 'error' as const,
+      message: `You have reached your weekly booking limit of ${weeklyInd.limit}`
+    };
+    return {
+      success: false,
+      error: v.message,
+      ruleViolations: [v],
+      warnings: [],
+      isPrimeTime: false
+    };
+  }
+
+  const hh = await query(
+    `SELECT hg.id AS id FROM household_groups hg
+     INNER JOIN household_members hm ON hm.household_id = hg.id
+     WHERE hm.user_id = $1 AND hg.facility_id = $2
+     LIMIT 1`,
+    [bookingData.userId, bookingData.facilityId]
+  );
+  const householdId = hh.rows[0]?.id as string | undefined;
+
+  const dailyHh = resolveDailyHouseholdFromBookingRules(facilityLike);
+  const weeklyHh = resolveWeeklyHouseholdFromBookingRules(facilityLike);
+
+  if (householdId) {
+    const hhDayRes = await query(
+      `SELECT COUNT(*)::int AS c FROM bookings b
+       INNER JOIN household_members hm ON b.user_id = hm.user_id
+       WHERE hm.household_id = $1 AND b.facility_id = $2
+         AND b.booking_date = $3::date AND b.status != 'cancelled'`,
+      [householdId, bookingData.facilityId, day]
+    );
+    const householdDayCount = Number(hhDayRes.rows[0]?.c ?? 0) + provisionalForDay;
+
+    if (dailyHh.enabled && dailyHh.limit > 0 && householdDayCount >= dailyHh.limit) {
+      const v = {
+        ruleCode: 'SIMPLE-DAY-HOUSEHOLD',
+        ruleName: 'Courts Per Day (Household)',
+        passed: false as const,
+        severity: 'error' as const,
+        message: `Your household has reached its daily booking limit of ${dailyHh.limit}`
+      };
+      return {
+        success: false,
+        error: v.message,
+        ruleViolations: [v],
+        warnings: [],
+        isPrimeTime: false
+      };
+    }
+
+    const hhWeekRes = await query(
+      `SELECT COUNT(*)::int AS c FROM bookings b
+       INNER JOIN household_members hm ON b.user_id = hm.user_id
+       WHERE hm.household_id = $1 AND b.facility_id = $2
+         AND b.booking_date >= $3::date AND b.booking_date <= $4::date
+         AND b.status != 'cancelled'`,
+      [householdId, bookingData.facilityId, weekStart, weekEnd]
+    );
+    const householdWeekCount = Number(hhWeekRes.rows[0]?.c ?? 0) + provInWeek;
+
+    if (weeklyHh.enabled && weeklyHh.limit > 0 && householdWeekCount >= weeklyHh.limit) {
+      const v = {
+        ruleCode: 'SIMPLE-WEEK-HOUSEHOLD',
+        ruleName: 'Courts Per Week (Household)',
+        passed: false as const,
+        severity: 'error' as const,
+        message: `Your household has reached its weekly booking limit of ${weeklyHh.limit}`
+      };
+      return {
+        success: false,
+        error: v.message,
+        ruleViolations: [v],
+        warnings: [],
+        isPrimeTime: false
+      };
+    }
+  } else if (dailyHh.enabled || weeklyHh.enabled) {
+    // Household limits are configured but this user is not in household_groups yet:
+    // enforce against this member only so caps are not silently ignored.
+    if (dailyHh.enabled && dailyHh.limit > 0 && userDayCount >= dailyHh.limit) {
+      const v = {
+        ruleCode: 'SIMPLE-DAY-HOUSEHOLD',
+        ruleName: 'Courts Per Day (Household)',
+        passed: false as const,
+        severity: 'error' as const,
+        message: `Your household has reached its daily booking limit of ${dailyHh.limit}. Add members under Households to share this cap across everyone at your address.`
+      };
+      return {
+        success: false,
+        error: v.message,
+        ruleViolations: [v],
+        warnings: [],
+        isPrimeTime: false
+      };
+    }
+    if (weeklyHh.enabled && weeklyHh.limit > 0 && userWeekCount >= weeklyHh.limit) {
+      const v = {
+        ruleCode: 'SIMPLE-WEEK-HOUSEHOLD',
+        ruleName: 'Courts Per Week (Household)',
+        passed: false as const,
+        severity: 'error' as const,
+        message: `Your household has reached its weekly booking limit of ${weeklyHh.limit}. Add members under Households to share this cap across everyone at your address.`
+      };
+      return {
+        success: false,
+        error: v.message,
+        ruleViolations: [v],
+        warnings: [],
+        isPrimeTime: false
+      };
+    }
+  }
+
+  return null;
+}
 
 export interface Booking {
   id: string;
@@ -217,6 +476,8 @@ export async function validateBooking(bookingData: {
   durationMinutes: number;
   bookingType?: string;
   activityType?: string;
+  /** Earlier instances in the same multi-create/recurring request (not in DB yet) */
+  provisionalSameRequestBookings?: ProvisionalBookingSlice[];
 }): Promise<EvaluationResult> {
   const walkUpCourt = await query(
     `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
@@ -239,6 +500,23 @@ export async function validateBooking(bookingData: {
     };
   }
 
+  const hardCap = await assertHardBookingRuleCaps({
+    userId: bookingData.userId,
+    facilityId: bookingData.facilityId,
+    bookingDate: bookingData.bookingDate,
+    provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings
+  });
+  if (hardCap?.ruleViolations?.length) {
+    const blockers = hardCap.ruleViolations;
+    return {
+      allowed: false,
+      results: blockers,
+      blockers,
+      warnings: [],
+      isPrimeTime: false
+    };
+  }
+
   const request: BookingRequest = {
     userId: bookingData.userId,
     courtId: bookingData.courtId,
@@ -248,7 +526,8 @@ export async function validateBooking(bookingData: {
     endTime: bookingData.endTime,
     durationMinutes: bookingData.durationMinutes,
     bookingType: bookingData.bookingType,
-    activityType: bookingData.activityType
+    activityType: bookingData.activityType,
+    provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings
   };
 
   return rulesEngine.validate(request);
@@ -270,6 +549,27 @@ export async function createBooking(bookingData: {
   activityType?: string;
   notes?: string;
   skipRulesValidation?: boolean;  // For admin override
+  provisionalSameRequestBookings?: ProvisionalBookingSlice[];
+}): Promise<BookingResult> {
+  return enqueueBookingCreation(bookingData.userId, bookingData.facilityId, () =>
+    createBookingCore(bookingData)
+  );
+}
+
+async function createBookingCore(bookingData: {
+  courtId: string;
+  userId: string;
+  facilityId: string;
+  seriesId?: string;
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  bookingType?: string;
+  activityType?: string;
+  notes?: string;
+  skipRulesValidation?: boolean;
+  provisionalSameRequestBookings?: ProvisionalBookingSlice[];
 }): Promise<BookingResult> {
   try {
     const walkUpCourt = await query(
@@ -288,19 +588,18 @@ export async function createBooking(bookingData: {
 
     // Evaluate booking rules (unless skipped for admin override)
     if (!bookingData.skipRulesValidation) {
-      const request: BookingRequest = {
-        userId: bookingData.userId,
+      const evaluation = await validateBooking({
         courtId: bookingData.courtId,
+        userId: bookingData.userId,
         facilityId: bookingData.facilityId,
         bookingDate: bookingData.bookingDate,
         startTime: bookingData.startTime,
         endTime: bookingData.endTime,
         durationMinutes: bookingData.durationMinutes,
         bookingType: bookingData.bookingType,
-        activityType: bookingData.activityType
-      };
-
-      const evaluation = await rulesEngine.evaluate(request);
+        activityType: bookingData.activityType,
+        provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings
+      });
 
       if (!evaluation.allowed) {
         return {
@@ -443,9 +742,18 @@ async function hasBookingConflict(
 export async function createRecurringBookingSeries(
   payload: RecurringSeriesRequest
 ): Promise<BookingResult & { seriesId?: string; bookings?: Booking[] }> {
+  return enqueueBookingCreation(payload.userId, payload.facilityId, () =>
+    createRecurringBookingSeriesCore(payload)
+  );
+}
+
+async function createRecurringBookingSeriesCore(
+  payload: RecurringSeriesRequest
+): Promise<BookingResult & { seriesId?: string; bookings?: Booking[] }> {
   try {
     const blockers: RuleResult[] = [];
     const warnings: RuleResult[] = [];
+    const priorInThisRequest: ProvisionalBookingSlice[] = [];
 
     for (const instance of payload.instances) {
       const walkUpCourt = await query(
@@ -467,7 +775,9 @@ export async function createRecurringBookingSeries(
         startTime: instance.startTime,
         endTime: instance.endTime,
         durationMinutes: instance.durationMinutes,
-        bookingType: payload.bookingType
+        bookingType: payload.bookingType,
+        provisionalSameRequestBookings:
+          priorInThisRequest.length > 0 ? [...priorInThisRequest] : undefined
       });
 
       if (!validation.allowed) {
@@ -476,6 +786,14 @@ export async function createRecurringBookingSeries(
       if (validation.warnings?.length) {
         warnings.push(...validation.warnings);
       }
+
+      priorInThisRequest.push({
+        bookingDate: instance.bookingDate,
+        courtId: instance.courtId,
+        startTime: instance.startTime,
+        endTime: instance.endTime,
+        durationMinutes: instance.durationMinutes
+      });
 
       const hasConflict = await hasBookingConflict(
         instance.courtId,

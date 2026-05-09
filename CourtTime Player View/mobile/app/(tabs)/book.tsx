@@ -611,6 +611,14 @@ export default function BookCourtScreen() {
     let firstViolations: RuleViolation[] | null = null;
     let firstWarnings: RuleViolation[] = [];
 
+    const priorInThisRequest: Array<{
+      bookingDate: string;
+      courtId: string;
+      startTime: string;
+      endTime: string;
+      durationMinutes: number;
+    }> = [];
+
     for (const courtId of allCourtIds) {
       const bookingData = {
         courtId,
@@ -622,6 +630,9 @@ export default function BookCourtScreen() {
         durationMinutes: calcDuration(startTime, endTime),
         bookingType,
         notes: bookingNotes.trim() || undefined,
+        ...(priorInThisRequest.length > 0
+          ? { provisionalSameRequestBookings: [...priorInThisRequest] }
+          : {}),
       };
 
       console.log('[book.confirm] POST /api/bookings', { courtId, bookingData });
@@ -644,6 +655,14 @@ export default function BookCourtScreen() {
         }
         break;
       }
+
+      priorInThisRequest.push({
+        bookingDate: selectedDate,
+        courtId,
+        startTime,
+        endTime,
+        durationMinutes: calcDuration(startTime, endTime),
+      });
     }
 
     if (allSuccess) {

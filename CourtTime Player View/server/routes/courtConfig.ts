@@ -5,6 +5,12 @@
 
 import express from 'express';
 import { query } from '../../src/database/connection';
+import {
+  getOperatingHoursForDay,
+  parseOperatingHoursInput,
+  isTruthyClosed,
+} from '../../shared/utils/operatingHours';
+import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 
 const router = express.Router();
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
@@ -12,35 +18,7 @@ const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'frid
 function getFacilityDayConfig(rawOperatingHours: any, dayOfWeek: number): any {
   if (!rawOperatingHours || typeof rawOperatingHours !== 'object') return null;
   const dayName = DAY_NAMES[dayOfWeek];
-  const shortName = dayName.slice(0, 3);
-  const numericKeys = [String(dayOfWeek), dayOfWeek];
-  for (const key of numericKeys) {
-    const byNumber = (rawOperatingHours as any)[key as any];
-    if (byNumber && typeof byNumber === 'object') return byNumber;
-  }
-  const variants = [
-    dayName,
-    dayName.toUpperCase(),
-    dayName[0].toUpperCase() + dayName.slice(1),
-    shortName,
-    shortName.toUpperCase(),
-    shortName[0].toUpperCase() + shortName.slice(1),
-  ];
-
-  for (const key of variants) {
-    if (rawOperatingHours[key] && typeof rawOperatingHours[key] === 'object') {
-      return rawOperatingHours[key];
-    }
-  }
-
-  for (const [key, value] of Object.entries(rawOperatingHours)) {
-    if (!value || typeof value !== 'object') continue;
-    const normalizedKey = String(key).toLowerCase().trim();
-    if (normalizedKey === dayName || normalizedKey.startsWith(shortName)) {
-      return value;
-    }
-  }
-  return null;
+  return getOperatingHoursForDay(parseOperatingHoursInput(rawOperatingHours), dayName) ?? null;
 }
 
 function toHHMM(value: any, fallback: string): string {
@@ -76,7 +54,13 @@ router.get('/facility/:facilityId', async (req, res, next) => {
     const dayOfWeek = new Date(`${targetDate}T00:00:00`).getDay();
 
     const courtsResult = await query(
-      `SELECT id, name
+      `SELECT
+         id,
+         name,
+         court_number as "courtNumber",
+         court_type as "courtType",
+         parent_court_id as "parentCourtId",
+         is_split_court as "isSplitCourt"
        FROM courts
        WHERE facility_id = $1`,
       [facilityId]
@@ -88,15 +72,34 @@ router.get('/facility/:facilityId', async (req, res, next) => {
        LIMIT 1`,
       [facilityId]
     );
-    const operatingHours = facilityResult.rows[0]?.operating_hours || {};
+    const operatingHours = parseOperatingHoursInput(facilityResult.rows[0]?.operating_hours || {});
     const facilityDayConfig = getFacilityDayConfig(operatingHours, dayOfWeek) || {};
-    const facilityClosed = Boolean(facilityDayConfig?.closed) || facilityDayConfig?.isOpen === false || facilityDayConfig?.is_open === false;
+    const facilityClosed =
+      isTruthyClosed(facilityDayConfig?.closed) ||
+      isTruthyClosed(facilityDayConfig?.isClosed) ||
+      isTruthyClosed(facilityDayConfig?.is_closed) ||
+      facilityDayConfig?.isOpen === false ||
+      facilityDayConfig?.is_open === false ||
+      (typeof facilityDayConfig?.isOpen === 'string' &&
+        facilityDayConfig.isOpen.trim().toLowerCase() === 'false') ||
+      (typeof facilityDayConfig?.is_open === 'string' &&
+        String(facilityDayConfig.is_open).trim().toLowerCase() === 'false');
     const facilityOpenTime = toHHMM(
-      facilityDayConfig?.open || facilityDayConfig?.openTime || facilityDayConfig?.open_time,
+      facilityDayConfig?.open ||
+        facilityDayConfig?.openTime ||
+        facilityDayConfig?.open_time ||
+        facilityDayConfig?.start ||
+        facilityDayConfig?.startTime ||
+        facilityDayConfig?.start_time,
       '08:00'
     );
     const facilityCloseTime = toHHMM(
-      facilityDayConfig?.close || facilityDayConfig?.closeTime || facilityDayConfig?.close_time,
+      facilityDayConfig?.close ||
+        facilityDayConfig?.closeTime ||
+        facilityDayConfig?.close_time ||
+        facilityDayConfig?.end ||
+        facilityDayConfig?.endTime ||
+        facilityDayConfig?.end_time,
       '20:00'
     );
 
@@ -118,7 +121,7 @@ router.get('/facility/:facilityId', async (req, res, next) => {
     const configByCourtId = new Map<string, any>();
     configResult.rows.forEach((row) => configByCourtId.set(row.courtId, row));
 
-    const courtConfigs = courtsResult.rows.map((court) => {
+    const courtConfigs = sortCourtsForDisplay(courtsResult.rows).map((court) => {
       const config = configByCourtId.get(court.id);
       return {
         courtId: court.id,
@@ -172,16 +175,37 @@ router.get('/:courtId/schedule', async (req, res, next) => {
         `SELECT c.facility_id, f.operating_hours FROM courts c JOIN facilities f ON c.facility_id = f.id WHERE c.id = $1`,
         [courtId]
       );
-      const opHours = courtResult.rows[0]?.operating_hours || {};
+      const opHours = parseOperatingHoursInput(courtResult.rows[0]?.operating_hours || {});
       const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
       const defaults = Array.from({ length: 7 }, (_, i) => {
-        const dayConfig = opHours[dayNames[i]];
+        const dayConfig = getOperatingHoursForDay(opHours, dayNames[i]) as any;
+        const closed =
+          !dayConfig ||
+          isTruthyClosed(dayConfig?.closed) ||
+          isTruthyClosed(dayConfig?.isClosed) ||
+          isTruthyClosed(dayConfig?.is_closed) ||
+          dayConfig?.isOpen === false ||
+          dayConfig?.is_open === false;
         return {
           day_of_week: i,
-          is_open: dayConfig ? !dayConfig.closed : true,
-          open_time: dayConfig?.open || '08:00',
-          close_time: dayConfig?.close || '20:00',
+          is_open: dayConfig ? !closed : true,
+          open_time:
+            dayConfig?.open ||
+            dayConfig?.openTime ||
+            dayConfig?.open_time ||
+            dayConfig?.start ||
+            dayConfig?.startTime ||
+            dayConfig?.start_time ||
+            '08:00',
+          close_time:
+            dayConfig?.close ||
+            dayConfig?.closeTime ||
+            dayConfig?.close_time ||
+            dayConfig?.end ||
+            dayConfig?.endTime ||
+            dayConfig?.end_time ||
+            '20:00',
           prime_time_start: null,
           prime_time_end: null,
           prime_time_max_duration: null,
@@ -679,15 +703,34 @@ router.get('/:courtId/availability', async (req, res, next) => {
        LIMIT 1`,
       [courtId]
     );
-    const operatingHours = facilityResult.rows[0]?.operating_hours || {};
+    const operatingHours = parseOperatingHoursInput(facilityResult.rows[0]?.operating_hours || {});
     const facilityDayConfig = getFacilityDayConfig(operatingHours, dayOfWeek) || {};
-    const facilityClosed = Boolean(facilityDayConfig?.closed) || facilityDayConfig?.isOpen === false || facilityDayConfig?.is_open === false;
+    const facilityClosed =
+      isTruthyClosed(facilityDayConfig?.closed) ||
+      isTruthyClosed(facilityDayConfig?.isClosed) ||
+      isTruthyClosed(facilityDayConfig?.is_closed) ||
+      facilityDayConfig?.isOpen === false ||
+      facilityDayConfig?.is_open === false ||
+      (typeof facilityDayConfig?.isOpen === 'string' &&
+        facilityDayConfig.isOpen.trim().toLowerCase() === 'false') ||
+      (typeof facilityDayConfig?.is_open === 'string' &&
+        String(facilityDayConfig.is_open).trim().toLowerCase() === 'false');
     const facilityOpenTime = toHHMM(
-      facilityDayConfig?.open || facilityDayConfig?.openTime || facilityDayConfig?.open_time,
+      facilityDayConfig?.open ||
+        facilityDayConfig?.openTime ||
+        facilityDayConfig?.open_time ||
+        facilityDayConfig?.start ||
+        facilityDayConfig?.startTime ||
+        facilityDayConfig?.start_time,
       '08:00'
     );
     const facilityCloseTime = toHHMM(
-      facilityDayConfig?.close || facilityDayConfig?.closeTime || facilityDayConfig?.close_time,
+      facilityDayConfig?.close ||
+        facilityDayConfig?.closeTime ||
+        facilityDayConfig?.close_time ||
+        facilityDayConfig?.end ||
+        facilityDayConfig?.endTime ||
+        facilityDayConfig?.end_time,
       '20:00'
     );
 

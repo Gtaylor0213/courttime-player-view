@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Bell, Calendar, MapPin, Clock, AlertCircle, Check, X, CheckCheck } from 'lucide-react';
 import { useNotifications, Notification } from '../contexts/NotificationContext';
+import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 
 interface NotificationDropdownProps {
   children: React.ReactNode;
@@ -115,24 +116,30 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <p className={`text-sm font-medium truncate ${notification.read ? 'text-gray-600' : 'text-gray-900'}`}>
-                          {notification.title}
+                          {safeDisplayText(notification.title) || 'Notification'}
                         </p>
                         <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
                           {getTimeAgo(notification.timestamp)}
                         </span>
                       </div>
                       <p className={`text-xs line-clamp-2 ${notification.read ? 'text-gray-500' : 'text-gray-700'}`}>
-                        {notification.message}
+                        {safeDisplayText(notification.message)}
                       </p>
                       {notification.relatedReservation && (
                         <div className="mt-2 text-xs text-gray-500 bg-gray-100 rounded p-2">
                           <div className="flex items-center gap-1 mb-1">
                             <MapPin className="h-3 w-3" />
-                            <span className="truncate">{notification.relatedReservation.facility}</span>
+                            <span className="truncate">{safeDisplayText(notification.relatedReservation.facility)}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            <span>{notification.relatedReservation.court} • {notification.relatedReservation.date} • {notification.relatedReservation.time}</span>
+                            <span>
+                              {safeDisplayText(notification.relatedReservation.court)}
+                              {' • '}
+                              {safeDisplayText(notification.relatedReservation.date)}
+                              {' • '}
+                              {safeDisplayText(notification.relatedReservation.time)}
+                            </span>
                           </div>
                         </div>
                       )}

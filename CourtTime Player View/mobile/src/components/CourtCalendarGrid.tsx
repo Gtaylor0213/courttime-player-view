@@ -19,6 +19,7 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
 import type { Court } from '../types/database';
 import { BookingSkeleton } from './LoadingSkeleton';
 import { createPollingTransport } from '../../../shared/api/sync';
+import { getOperatingHoursForDay, isTruthyClosed } from '../../../shared/utils/operatingHours';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -59,35 +60,7 @@ const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'frid
 function getFacilityDayConfig(rawOperatingHours: any, dayIndex: number): any {
   if (!rawOperatingHours || typeof rawOperatingHours !== 'object') return null;
   const dayName = DAY_NAMES[dayIndex];
-  const shortName = dayName.slice(0, 3);
-  const numericKeys = [String(dayIndex), dayIndex];
-  for (const key of numericKeys) {
-    const byNumber = (rawOperatingHours as any)[key as any];
-    if (byNumber && typeof byNumber === 'object') return byNumber;
-  }
-  const variants = [
-    dayName,
-    dayName.toUpperCase(),
-    dayName[0].toUpperCase() + dayName.slice(1),
-    shortName,
-    shortName.toUpperCase(),
-    shortName[0].toUpperCase() + shortName.slice(1),
-  ];
-
-  for (const key of variants) {
-    if (rawOperatingHours[key] && typeof rawOperatingHours[key] === 'object') {
-      return rawOperatingHours[key];
-    }
-  }
-
-  for (const [key, value] of Object.entries(rawOperatingHours)) {
-    if (typeof value !== 'object' || !value) continue;
-    const normalizedKey = String(key).toLowerCase().trim();
-    if (normalizedKey === dayName || normalizedKey.startsWith(shortName)) {
-      return value;
-    }
-  }
-  return null;
+  return getOperatingHoursForDay(rawOperatingHours, dayName) ?? null;
 }
 
 function parseTimeToMinutesSafe(value: string | undefined | null): number | null {
@@ -226,10 +199,24 @@ export function CourtCalendarGrid({
     const facilityOperatingHours = facility?.operatingHours || facility?.operating_hours || null;
     const dayConfig = getFacilityDayConfig(facilityOperatingHours, dayIndex);
     if (dayConfig && typeof dayConfig === 'object') {
-      const open = normalizeHHMM(dayConfig.open || dayConfig.openTime || dayConfig.open_time, '08:00');
-      const close = normalizeHHMM(dayConfig.close || dayConfig.closeTime || dayConfig.close_time, '20:00');
+      const open = normalizeHHMM(
+        dayConfig.open || dayConfig.openTime || dayConfig.open_time || dayConfig.start || dayConfig.startTime || dayConfig.start_time,
+        '08:00'
+      );
+      const close = normalizeHHMM(
+        dayConfig.close || dayConfig.closeTime || dayConfig.close_time || dayConfig.end || dayConfig.endTime || dayConfig.end_time,
+        '20:00'
+      );
+      const closed =
+        isTruthyClosed(dayConfig.closed) ||
+        isTruthyClosed(dayConfig.isClosed) ||
+        isTruthyClosed(dayConfig.is_closed) ||
+        dayConfig.isOpen === false ||
+        dayConfig.is_open === false ||
+        (typeof dayConfig.isOpen === 'string' && dayConfig.isOpen.trim().toLowerCase() === 'false') ||
+        (typeof dayConfig.is_open === 'string' && String(dayConfig.is_open).trim().toLowerCase() === 'false');
       setFacilityDayHours({
-        isOpen: !(Boolean(dayConfig.closed) || dayConfig.isOpen === false || dayConfig.is_open === false),
+        isOpen: !closed,
         open,
         close,
       });

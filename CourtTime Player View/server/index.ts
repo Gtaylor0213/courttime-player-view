@@ -9,11 +9,24 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 import { testConnection, closePool } from '../src/database/connection';
 import { processBulletinMinParticipantCancellations } from '../src/services/bulletinBoardService';
 
-// Load environment variables
-dotenv.config();
+/** Load `.env`, then fill gaps from `.env.development`, then override with `.env.local`. */
+function loadProjectEnv() {
+  const root = path.resolve(process.cwd());
+  const load = (name: string, override: boolean) => {
+    const full = path.join(root, name);
+    if (!fs.existsSync(full)) return;
+    dotenv.config({ path: full, override });
+  };
+  load('.env', false);
+  load('.env.development', false);
+  load('.env.local', true);
+}
+
+loadProjectEnv();
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -228,6 +241,12 @@ if (process.env.NODE_ENV === 'production') {
 async function startServer() {
   try {
     console.log('🚀 Starting CourtTime API Server...\n');
+
+    if (!process.env.JWT_SECRET?.trim()) {
+      console.error('\n❌ FATAL: JWT_SECRET is not set.');
+      console.error('   Copy .env.example to .env (or add JWT_SECRET to .env.local) and try again.\n');
+      process.exit(1);
+    }
 
     // Test database connection with retries
     const connected = await testConnection();

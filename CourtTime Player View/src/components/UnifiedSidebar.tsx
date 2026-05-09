@@ -10,6 +10,7 @@ import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png'
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { facilitiesApi } from '../api/client';
+import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import { cn } from './ui/utils';
 
 interface Club {
@@ -62,7 +63,7 @@ export function UnifiedSidebar({
           if (response.success && response.data?.facility) {
             facilitiesData.push({
               id: response.data.facility.id,
-              name: response.data.facility.name
+              name: safeDisplayText(response.data.facility.name) || 'Club',
             });
           }
         }
@@ -215,7 +216,7 @@ export function UnifiedSidebar({
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="right">
-                      <p>{memberFacilities.find(f => f.id === selectedFacilityId)?.name || 'Switch facility'}</p>
+                      <p>{safeDisplayText(memberFacilities.find(f => f.id === selectedFacilityId)?.name) || 'Switch facility'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -233,7 +234,7 @@ export function UnifiedSidebar({
                 <SelectContent>
                   {memberFacilities.map((facility) => (
                     <SelectItem key={facility.id} value={facility.id}>
-                      {facility.name}
+                      {safeDisplayText(facility.name) || 'Club'}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -319,7 +320,7 @@ export function UnifiedSidebar({
                   <SidebarButton
                     onClick={() => handleNav(`/club/${selectedClub.id}`)}
                     icon={Building2}
-                    label={selectedClub.name}
+                    label={safeDisplayText(selectedClub.name) || 'Club'}
                     isActive={currentPage === 'club-info'}
                   />
                 );

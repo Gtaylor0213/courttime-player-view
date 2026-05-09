@@ -25,6 +25,7 @@ const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 56;
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
+import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 
 // Helper to get current time components in a given timezone
 const getTimeComponents = (tz: string = 'America/New_York'): { hours: number; minutes: number; date: Date } => {
@@ -183,19 +184,39 @@ export function CourtCalendarView() {
             // Fetch courts for this facility
             const courtsResponse = await facilitiesApi.getCourts(facilityId);
             const courts = courtsResponse.success && courtsResponse.data?.courts
-              ? courtsResponse.data.courts
-                  .filter((court: any) => {
-                    const s = (court.status || 'available').toLowerCase();
-                    return s === 'available' || s === 'active';
-                  })
-                  .map((court: any) => ({
-                    id: court.id,
-                    name: court.name,
-                    type: court.courtType?.toLowerCase() || 'tennis',
-                    parentCourtId: court.parentCourtId || null,
-                    isSplitCourt: court.isSplitCourt || false,
-                    isWalkUp: court.isWalkUp === true,
-                  }))
+              ? sortCourtsForDisplay(
+                  courtsResponse.data.courts
+                    .filter((court: any) => {
+                      const s = (court.status || 'available').toLowerCase();
+                      return s === 'available' || s === 'active';
+                    })
+                    .map((court: any) => ({
+                      id: court.id,
+                      name: court.name,
+                      courtType: court.courtType ?? court.court_type,
+                      courtNumber:
+                        typeof court.courtNumber === 'number'
+                          ? court.courtNumber
+                          : typeof court.court_number === 'number'
+                            ? court.court_number
+                            : court.courtNumber != null
+                              ? parseInt(String(court.courtNumber), 10)
+                              : court.court_number != null
+                                ? parseInt(String(court.court_number), 10)
+                                : undefined,
+                      type: (court.courtType ?? court.court_type)?.toLowerCase?.() || 'tennis',
+                      parentCourtId: court.parentCourtId ?? court.parent_court_id ?? null,
+                      isSplitCourt: court.isSplitCourt || court.is_split_court || false,
+                      isWalkUp: court.isWalkUp === true || court.is_walk_up === true,
+                    }))
+                ).map((court) => ({
+                  id: court.id,
+                  name: court.name,
+                  type: court.type,
+                  parentCourtId: court.parentCourtId,
+                  isSplitCourt: court.isSplitCourt,
+                  isWalkUp: court.isWalkUp,
+                }))
               : [];
 
             facilitiesData.push({
@@ -627,8 +648,11 @@ export function CourtCalendarView() {
     return currentMinutes >= slotEndMinutes;
   }, [selectedDate, currentTime, isToday, facilityTimezone]);
 
-  // Filter courts based on selected court type
-  const allCourts = currentFacility?.courts || [];
+  // Filter courts based on selected court type (re-sort so column order is always correct)
+  const allCourts = React.useMemo(
+    () => sortCourtsForDisplay([...(currentFacility?.courts || [])]),
+    [currentFacility?.courts]
+  );
   const filteredCourts = React.useMemo(() => {
     // If no court type is selected, show all courts
     if (selectedCourtType === null) {

@@ -28,6 +28,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
+import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
@@ -257,7 +258,15 @@ export default function BookCourtScreen() {
         const status = String(c.status || '').toLowerCase();
         return status === '' || status === 'available' || status === 'active';
       });
-      setCourts(availableish.filter((c: Court) => !c.isWalkUp));
+      const sorted = sortCourtsForDisplay(
+        availableish.map((c: any) => ({
+          ...c,
+          courtType: c.courtType ?? c.court_type,
+          courtNumber: c.courtNumber ?? c.court_number,
+          parentCourtId: c.parentCourtId ?? c.parent_court_id ?? null,
+        }))
+      );
+      setCourts(sorted.filter((c: Court) => !c.isWalkUp));
     }
   }, [facilityId, selectedDate]);
 

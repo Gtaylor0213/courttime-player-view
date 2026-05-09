@@ -1,5 +1,6 @@
 import { query, transaction } from '../database/connection';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+import { parseOperatingHoursInput } from '../../shared/utils/operatingHours';
 import { Facility, Court } from '../types/database';
 import type { PoolClient } from 'pg';
 import { recordPayment } from './paymentService';
@@ -250,6 +251,7 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
     }
 
     const facility = result.rows[0];
+    facility.operatingHours = parseOperatingHoursInput(facility.operatingHours);
 
     // Fetch contacts from facility_contacts table
     try {

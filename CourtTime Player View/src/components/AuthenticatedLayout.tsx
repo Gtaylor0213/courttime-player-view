@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { Menu, AlertTriangle } from 'lucide-react';
 import { cn } from './ui/utils';
+import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 function getCurrentPage(pathname: string): string {
@@ -72,7 +73,7 @@ export function AuthenticatedLayout() {
                 <p className="font-medium">Membership Suspended</p>
                 {user.suspendedFacilities.map((sf) => (
                   <p key={sf.facilityId} className="mt-1">
-                    Your membership at <strong>{sf.facilityName}</strong> is suspended
+                    Your membership at <strong>{safeDisplayText(sf.facilityName) || 'this facility'}</strong> is suspended
                     {sf.suspendedUntil ? ` until ${new Date(sf.suspendedUntil).toLocaleDateString()}` : ''}.
                     Contact the facility for assistance.
                   </p>

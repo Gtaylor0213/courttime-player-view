@@ -43,11 +43,12 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
     return Number.isFinite(n) ? n : fallback;
   };
   const pickNumber = (primary: any, secondary: any, fallback: number): number => {
-    const p = Number(primary);
-    if (Number.isFinite(p)) return p;
-    const s = Number(secondary);
-    if (Number.isFinite(s)) return s;
-    return fallback;
+    const tryNum = (v: any): number | undefined => {
+      if (v === undefined || v === null || v === '') return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    return tryNum(primary) ?? tryNum(secondary) ?? fallback;
   };
   const firstPositiveWeeklyLimit = (...candidates: any[]): number => {
     for (const v of candidates) {

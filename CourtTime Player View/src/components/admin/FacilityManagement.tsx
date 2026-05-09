@@ -861,6 +861,8 @@ export function FacilityManagement() {
           // backend enforcement paths use the same updated value.
           maxBookingsPerWeek: facilityData.bookingRules.courtsPerWeekUser,
           maxBookingsPerWeekUnlimited: !facilityData.bookingRules.courtsPerWeekUserEnabled,
+          advanceBookingDays: facilityData.bookingRules.daysInAdvance,
+          advanceBookingDaysUnlimited: !facilityData.bookingRules.daysInAdvanceEnabled,
           restrictionsApplyToAdmins: false,
           peakHoursApplyToAdmins: false,
           weekendPolicyApplyToAdmins: false,
@@ -1659,6 +1661,22 @@ export function FacilityManagement() {
       const mappedCodes = Object.keys(RULE_STATE_MAP).filter((code) => !skippedCodes.has(code));
 
       for (const code of mappedCodes) {
+        if (code === 'ACC-005') {
+          const advanceEnabled = !!rules.daysInAdvanceEnabled;
+          const raw = rules.daysInAdvance;
+          const parsed =
+            raw === undefined || raw === null || String(raw).trim() === ''
+              ? NaN
+              : parseInt(String(raw).trim(), 10);
+          const limit = Number.isFinite(parsed) && parsed > 0 ? parsed : 7;
+          ruleConfigs.push({
+            ruleCode: 'ACC-005',
+            isEnabled: advanceEnabled,
+            ruleConfig: { max_days_ahead: limit },
+          });
+          continue;
+        }
+
         const map = RULE_STATE_MAP[code];
         if (!map) continue;
 
@@ -1853,9 +1871,12 @@ export function FacilityManagement() {
 
           const acc005 = ruleMap.get('ACC-005') as any;
           if (acc005?.facilityConfig) {
+            updated.bookingRules.daysInAdvanceEnabled = !!acc005.isEnabled;
             updated.bookingRules.advanceBookingDaysUnlimited = !acc005.isEnabled;
             if (acc005.effectiveConfig?.max_days_ahead !== undefined) {
-              updated.bookingRules.advanceBookingDays = String(acc005.effectiveConfig.max_days_ahead);
+              const v = String(acc005.effectiveConfig.max_days_ahead);
+              updated.bookingRules.daysInAdvance = v;
+              updated.bookingRules.advanceBookingDays = v;
             }
           }
 
@@ -1924,7 +1945,7 @@ export function FacilityManagement() {
     'ACC-002': { enabledField: 'maxBookingsPerWeekUnlimited', invertEnabled: true, configMap: { max_per_week: { field: 'maxBookingsPerWeek' } } },
     'ACC-003': { enabledField: 'maxHoursPerWeekEnabled', configMap: { max_minutes_per_week: { field: 'maxHoursPerWeek', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
     'ACC-004': { enabledField: 'noOverlappingReservations', configMap: {} },
-    'ACC-005': { enabledField: 'advanceBookingDaysUnlimited', invertEnabled: true, configMap: { max_days_ahead: { field: 'advanceBookingDays' } } },
+    'ACC-005': { enabledField: 'daysInAdvanceEnabled', configMap: { max_days_ahead: { field: 'daysInAdvance' } } },
     'ACC-009': { enabledField: 'strikeSystemEnabled', configMap: { strike_threshold: { field: 'strikeThreshold' }, strike_window_days: { field: 'strikeWindowDays' }, lockout_days: { field: 'strikeLockoutDays' } } },
     'ACC-010': { enabledField: 'peakHoursRestrictions.maxBookingsUnlimited', invertEnabled: true, configMap: { max_prime_per_week: { field: 'peakHoursRestrictions.maxBookingsPerWeek' } } },
     'ACC-011': { enabledField: 'rateLimitEnabled', configMap: { max_actions: { field: 'rateLimitMaxActions' }, window_seconds: { field: 'rateLimitWindowSeconds' } } },

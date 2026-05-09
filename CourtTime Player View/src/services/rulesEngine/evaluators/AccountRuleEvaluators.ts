@@ -21,7 +21,10 @@ import {
   formatDate,
   timeRangesOverlap,
   addDays,
-  getDayOfWeek
+  getDayOfWeek,
+  getTodayYmdInTimeZone,
+  diffCalendarDaysYmd,
+  addCalendarDaysYmd
 } from '../utils/timeUtils';
 import { resolveWeeklyIndividualFromBookingRules } from '../RuleContext';
 import { countPrimeTimeBookings } from '../utils/primeTimeUtils';
@@ -219,31 +222,36 @@ const ACC005: RuleEvaluator = {
   category: 'account',
 
   async evaluate(context: RuleContext, config: ACC005Config): Promise<RuleResult> {
-    const maxDaysAhead = context.user.tier?.advanceBookingDays
-      ?? config.max_days_ahead
-      ?? 365;
+    const cfgRaw = Number(config.max_days_ahead);
+    const facilityCap =
+      Number.isFinite(cfgRaw) && cfgRaw > 0 ? Math.floor(cfgRaw) : 365;
+    const tierRaw = context.user.tier?.advanceBookingDays;
+    const tierN = tierRaw != null && tierRaw !== '' ? Number(tierRaw) : NaN;
+    const maxDaysAhead =
+      Number.isFinite(tierN) && tierN > 0
+        ? Math.min(facilityCap, Math.floor(tierN))
+        : facilityCap;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const bookingDate = new Date(context.request.bookingDate);
-    bookingDate.setHours(0, 0, 0, 0);
-
-    const daysAhead = Math.ceil((bookingDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const tz = context.facility.timezone || 'America/New_York';
+    const facilityTodayYmd = getTodayYmdInTimeZone(tz);
+    const bookingYmd = context.request.bookingDate;
+    const daysAhead = diffCalendarDaysYmd(facilityTodayYmd, bookingYmd);
 
     if (daysAhead > maxDaysAhead) {
-      const earliestAllowed = addDays(today, maxDaysAhead);
+      const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead);
 
       return {
         ruleCode: 'ACC-005',
         ruleName: 'Advance Booking Window',
         passed: false,
         severity: 'error',
-        message: `You can only book up to ${maxDaysAhead} days in advance.`,
+        message: `You can book up to ${maxDaysAhead} days in advance. Latest bookable date: ${lastBookableYmd}.`,
         details: {
           maxDaysAhead,
           requestedDaysAhead: daysAhead,
-          earliestAllowedDate: formatDate(earliestAllowed)
+          lastBookableDate: lastBookableYmd,
+          // Legacy DB templates still use this key; same calendar day as lastBookableYmd.
+          earliestAllowedDate: lastBookableYmd
         }
       };
     }

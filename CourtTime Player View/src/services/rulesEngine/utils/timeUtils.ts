@@ -119,6 +119,47 @@ export function combineDateAndTime(dateStr: string, timeStr: string): Date {
 }
 
 /**
+ * Today's calendar date (YYYY-MM-DD) in an IANA timezone — avoids mixing facility
+ * calendar days with the server's local Date interpretation.
+ */
+export function getTodayYmdInTimeZone(timeZone: string, instant: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '01';
+  const y = get('year');
+  const m = get('month').padStart(2, '0');
+  const d = get('day').padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Whole calendar days between two YYYY-MM-DD strings (Gregorian, UTC midnight math — no DST skew).
+ */
+export function diffCalendarDaysYmd(fromYmd: string, toYmd: string): number {
+  const [y1, m1, d1] = fromYmd.split('-').map(Number);
+  const [y2, m2, d2] = toYmd.split('-').map(Number);
+  const t1 = Date.UTC(y1, m1 - 1, d1);
+  const t2 = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((t2 - t1) / 86400000);
+}
+
+/** Add N calendar days to a YYYY-MM-DD string. */
+export function addCalendarDaysYmd(ymd: string, deltaDays: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const ms = Date.UTC(y, m - 1, d) + deltaDays * 86400000;
+  const x = new Date(ms);
+  const yy = x.getUTCFullYear();
+  const mm = String(x.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(x.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+/**
  * Format date as YYYY-MM-DD
  */
 export function formatDate(date: Date): string {

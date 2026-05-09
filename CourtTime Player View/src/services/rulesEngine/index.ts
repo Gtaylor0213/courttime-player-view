@@ -22,7 +22,16 @@ import {
   FacilityRuleConfig,
   RuleEvaluator
 } from './types';
-import { combineDateAndTime, formatDate, getDayOfWeek, minutesBetween, timeRangesOverlap } from './utils/timeUtils';
+import {
+  combineDateAndTime,
+  formatDate,
+  getDayOfWeek,
+  getTodayYmdInTimeZone,
+  diffCalendarDaysYmd,
+  addCalendarDaysYmd,
+  minutesBetween,
+  timeRangesOverlap
+} from './utils/timeUtils';
 
 // Import evaluators
 import { accountEvaluators } from './evaluators/AccountRuleEvaluators';
@@ -387,22 +396,23 @@ export class RulesEngine {
     if (!config) return null;
 
     const blockers: RuleResult[] = [];
-    const nowDate = new Date(context.currentDateTime);
-    const requestDate = new Date(context.request.bookingDate);
-    requestDate.setHours(0, 0, 0, 0);
-    nowDate.setHours(0, 0, 0, 0);
+    const tz = context.facility.timezone || 'America/New_York';
+    const facilityTodayYmd = getTodayYmdInTimeZone(tz);
 
     if (config.daysInAdvance?.enabled) {
-      const maxDaysAhead = Number(config.daysInAdvance.limit) || 0;
-      const daysAhead = Math.ceil((requestDate.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysAhead > maxDaysAhead) {
-        blockers.push({
-          ruleCode: 'SIMPLE-ADVANCE',
-          ruleName: 'Days in Advance',
-          passed: false,
-          severity: 'error',
-          message: `You can only book up to ${maxDaysAhead} days in advance`
-        });
+      const maxDaysAhead = Number(config.daysInAdvance.limit);
+      if (Number.isFinite(maxDaysAhead) && maxDaysAhead > 0) {
+        const daysAhead = diffCalendarDaysYmd(facilityTodayYmd, context.request.bookingDate);
+        if (daysAhead > maxDaysAhead) {
+          const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead);
+          blockers.push({
+            ruleCode: 'SIMPLE-ADVANCE',
+            ruleName: 'Days in Advance',
+            passed: false,
+            severity: 'error',
+            message: `You can book up to ${maxDaysAhead} days in advance. Latest bookable date: ${lastBookableYmd}.`
+          });
+        }
       }
     }
 

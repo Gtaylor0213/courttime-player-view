@@ -1577,7 +1577,8 @@ router.post('/email-blast/:facilityId', async (req, res) => {
           member.fullName,
           subject,
           message,
-          facilityName
+          facilityName,
+          member.userId
         );
 
         normalizedResults.push({

@@ -1358,7 +1358,7 @@ async function sendStrikeNotifications(
     const facilityName = facilityResult.rows[0]?.name || 'your facility';
 
     // Send email notification
-    await sendStrikeIssuedEmail(user.email, user.fullName, strikeType, reason, facilityName, expiresAt);
+    await sendStrikeIssuedEmail(user.email, user.fullName, strikeType, reason, facilityId, facilityName, expiresAt, userId);
 
     // Create in-app notification
     await notificationService.notifyStrikeIssued(userId, facilityName, strikeType, reason);
@@ -1386,7 +1386,7 @@ async function sendStrikeNotifications(
 
     if (activeCount >= threshold) {
       const lockoutEndsAt = new Date(Date.now() + lockoutDays * 24 * 60 * 60 * 1000).toISOString();
-      await sendLockoutEmail(user.email, user.fullName, facilityName, lockoutEndsAt);
+      await sendLockoutEmail(user.email, user.fullName, facilityId, facilityName, lockoutEndsAt, userId);
       await notificationService.notifyAccountLockedOut(userId, facilityName, lockoutEndsAt);
     }
   } catch (error) {

@@ -688,7 +688,7 @@ export async function processBulletinMinParticipantCancellations(): Promise<numb
   let cancelledCount = 0;
   for (const post of dueResult.rows) {
     const participantsResult = await query(
-      `SELECT u.email, u.full_name as "fullName"
+      `SELECT u.id as "userId", u.email, u.full_name as "fullName"
        FROM bulletin_drill_signups bds
        JOIN users u ON u.id = bds.user_id
        WHERE bds.bulletin_post_id = $1`,
@@ -713,7 +713,8 @@ export async function processBulletinMinParticipantCancellations(): Promise<numb
         eventType,
         eventDateTimeLabel,
         post.minParticipants,
-        post.registeredParticipants
+        post.registeredParticipants,
+        participant.userId
       );
     }
 

@@ -20,10 +20,20 @@ interface EmailSendResult {
   response?: unknown;
 }
 
+async function shouldSendEmailToUser(userId: string | undefined): Promise<boolean> {
+  if (!userId) return true;
+  const { isEmailNotificationsEnabled } = await import('./userPreferencesService');
+  return isEmailNotificationsEnabled(userId);
+}
+
 /**
  * Send an email via Resend
  */
-async function sendEmail(to: string, subject: string, html: string): Promise<EmailSendResult> {
+async function sendEmail(to: string, subject: string, html: string, userId?: string): Promise<EmailSendResult> {
+  if (!(await shouldSendEmailToUser(userId))) {
+    return { success: true, status: null };
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('RESEND_API_KEY is not set - skipping email');
@@ -128,8 +138,13 @@ async function sendTemplatedEmail(
   facilityId: string,
   facilityName: string,
   templateType: string,
-  variables: Record<string, string>
+  variables: Record<string, string>,
+  userId?: string
 ): Promise<boolean> {
+  if (!(await shouldSendEmailToUser(userId))) {
+    return true;
+  }
+
   const defaults = EMAIL_TEMPLATE_TYPES[templateType];
   if (!defaults) {
     console.error(`Unknown template type: ${templateType}`);
@@ -151,7 +166,7 @@ async function sendTemplatedEmail(
   const renderedBody = renderTemplate(bodyTemplate, variables);
   const fullHtml = wrapInEmailLayout(renderedBody, facilityName);
 
-  const result = await sendEmail(to, renderedSubject, fullHtml);
+  const result = await sendEmail(to, renderedSubject, fullHtml, userId);
   return result.success;
 }
 
@@ -171,17 +186,25 @@ export async function sendBookingConfirmationEmail(
   bookingDate: string,
   startTime: string,
   endTime: string,
-  bookingType: string
+  bookingType: string,
+  userId?: string
 ): Promise<boolean> {
-  return sendTemplatedEmail(email, facilityId, facilityName, 'booking_confirmation', {
-    playerName: fullName,
+  return sendTemplatedEmail(
+    email,
+    facilityId,
     facilityName,
-    courtName,
-    date: bookingDate,
-    startTime,
-    endTime,
-    bookingType,
-  });
+    'booking_confirmation',
+    {
+      playerName: fullName,
+      facilityName,
+      courtName,
+      date: bookingDate,
+      startTime,
+      endTime,
+      bookingType,
+    },
+    userId
+  );
 }
 
 /**
@@ -195,16 +218,24 @@ export async function sendBookingCancellationEmail(
   courtName: string,
   bookingDate: string,
   startTime: string,
-  reason: string
+  reason: string,
+  userId?: string
 ): Promise<boolean> {
-  return sendTemplatedEmail(email, facilityId, facilityName, 'booking_cancellation', {
-    playerName: fullName,
+  return sendTemplatedEmail(
+    email,
+    facilityId,
     facilityName,
-    courtName,
-    date: bookingDate,
-    startTime,
-    reason,
-  });
+    'booking_cancellation',
+    {
+      playerName: fullName,
+      facilityName,
+      courtName,
+      date: bookingDate,
+      startTime,
+      reason,
+    },
+    userId
+  );
 }
 
 // =====================================================
@@ -231,20 +262,28 @@ export async function sendStrikeIssuedEmail(
   reason: string,
   facilityId: string,
   facilityName: string,
-  expiresAt?: string | null
+  expiresAt?: string | null,
+  userId?: string
 ): Promise<boolean> {
   const typeLabel = formatStrikeType(strikeType);
   const expiryDate = expiresAt
     ? `This strike expires on ${new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`
     : '';
 
-  return sendTemplatedEmail(email, facilityId, facilityName, 'strike_issued', {
-    playerName: fullName,
+  return sendTemplatedEmail(
+    email,
+    facilityId,
     facilityName,
-    strikeType: typeLabel,
-    strikeReason: reason,
-    expiryDate,
-  });
+    'strike_issued',
+    {
+      playerName: fullName,
+      facilityName,
+      strikeType: typeLabel,
+      strikeReason: reason,
+      expiryDate,
+    },
+    userId
+  );
 }
 
 /**
@@ -255,13 +294,21 @@ export async function sendStrikeRevokedEmail(
   fullName: string,
   facilityId: string,
   facilityName: string,
-  revokeReason?: string
+  revokeReason?: string,
+  userId?: string
 ): Promise<boolean> {
-  return sendTemplatedEmail(email, facilityId, facilityName, 'strike_revoked', {
-    playerName: fullName,
+  return sendTemplatedEmail(
+    email,
+    facilityId,
     facilityName,
-    revokeReason: revokeReason ? `Reason: ${revokeReason}` : '',
-  });
+    'strike_revoked',
+    {
+      playerName: fullName,
+      facilityName,
+      revokeReason: revokeReason ? `Reason: ${revokeReason}` : '',
+    },
+    userId
+  );
 }
 
 /**
@@ -272,17 +319,25 @@ export async function sendLockoutEmail(
   fullName: string,
   facilityId: string,
   facilityName: string,
-  lockoutEndsAt?: string | null
+  lockoutEndsAt?: string | null,
+  userId?: string
 ): Promise<boolean> {
   const lockoutEndDate = lockoutEndsAt
     ? `Your booking privileges will be restored on ${new Date(lockoutEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`
     : 'Please contact your facility administrator for more information.';
 
-  return sendTemplatedEmail(email, facilityId, facilityName, 'account_lockout', {
-    playerName: fullName,
+  return sendTemplatedEmail(
+    email,
+    facilityId,
     facilityName,
-    lockoutEndDate,
-  });
+    'account_lockout',
+    {
+      playerName: fullName,
+      facilityName,
+      lockoutEndDate,
+    },
+    userId
+  );
 }
 
 // =====================================================
@@ -297,7 +352,8 @@ export async function sendAnnouncementEmail(
   fullName: string,
   subject: string,
   messageBody: string,
-  facilityName: string
+  facilityName: string,
+  userId?: string
 ): Promise<EmailSendResult> {
   const htmlMessage = messageBody.replace(/\n/g, '<br>');
   const bodyContent = `
@@ -306,7 +362,7 @@ export async function sendAnnouncementEmail(
   `;
   const fullHtml = wrapInEmailLayout(bodyContent, facilityName);
 
-  return sendEmail(email, `${subject} - ${facilityName}`, fullHtml);
+  return sendEmail(email, `${subject} - ${facilityName}`, fullHtml, userId);
 }
 
 /**
@@ -320,7 +376,8 @@ export async function sendBulletinMinParticipantsNotMetEmail(
   eventType: string,
   eventDateTimeLabel: string,
   minParticipants: number,
-  registeredParticipants: number
+  registeredParticipants: number,
+  userId?: string
 ): Promise<EmailSendResult> {
   const bodyContent = `
     <p style="color: #374151; margin-top: 0;">Hi ${fullName},</p>
@@ -333,5 +390,5 @@ export async function sendBulletinMinParticipantsNotMetEmail(
     <p style="color: #6b7280; font-size: 14px;">Please check the bulletin board for future postings.</p>
   `;
   const html = wrapInEmailLayout(bodyContent, facilityName);
-  return sendEmail(email, `${eventType} Cancelled - ${eventTitle}`, html);
+  return sendEmail(email, `${eventType} Cancelled - ${eventTitle}`, html, userId);
 }

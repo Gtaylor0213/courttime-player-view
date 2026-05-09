@@ -3,16 +3,17 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { ReservationManagementModal } from './ReservationManagementModal';
-import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, LogOut } from 'lucide-react';
+import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, LogOut, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
-import { playerProfileApi, facilitiesApi, strikesApi, membersApi, usersApi } from '../api/client';
+import { playerProfileApi, facilitiesApi, strikesApi, membersApi, usersApi, userPreferencesApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -51,6 +52,8 @@ export function PlayerProfile() {
   // Account deletion
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean | null>(null);
+
   const [profileData, setProfileData] = useState({
     firstName: '',
     lastName: '',
@@ -73,6 +76,27 @@ export function PlayerProfile() {
     if (user?.id) {
       loadProfile();
     }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await userPreferencesApi.getNotifications();
+        if (cancelled) return;
+        if (res.success && res.data?.preferences) {
+          setEmailNotificationsEnabled(res.data.preferences.emailNotificationsEnabled !== false);
+        } else {
+          setEmailNotificationsEnabled(true);
+        }
+      } catch {
+        if (!cancelled) setEmailNotificationsEnabled(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   // Update profile data when user changes
@@ -231,6 +255,20 @@ export function PlayerProfile() {
       toast.error('Failed to save profile');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEmailNotificationsChange = async (enabled: boolean) => {
+    if (!user?.id || emailNotificationsEnabled === null) return;
+    const previous = emailNotificationsEnabled;
+    setEmailNotificationsEnabled(enabled);
+    const res = await userPreferencesApi.updateNotifications({ emailNotificationsEnabled: enabled });
+    if (!res.success) {
+      setEmailNotificationsEnabled(previous);
+      toast.error(res.error || 'Could not update email notification preference');
+    } else {
+      const next = res.data?.preferences?.emailNotificationsEnabled;
+      setEmailNotificationsEnabled(next !== false);
     }
   };
 
@@ -505,6 +543,43 @@ export function PlayerProfile() {
               )}
             </div>
           </div>
+
+          {/* Full width: on small screens the grid stacks the photo/facilities column first, which hides this if it only lives in column 2 */}
+          <Card className="mb-8 border-green-200/80 shadow-sm" id="notification-preferences">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-green-700" />
+                Notification preferences
+              </CardTitle>
+              <CardDescription>
+                Email is the only notification channel today. Turn this off if you do not want booking updates, facility messages, and other alerts sent to your inbox. In-app alerts are unchanged.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
+                <div className="space-y-0.5 min-w-0">
+                  <Label htmlFor="email-notifications" className="text-base font-medium text-gray-900">
+                    Email notifications
+                  </Label>
+                  <p className="text-sm text-gray-600">
+                    {emailNotificationsEnabled === null
+                      ? 'Loading…'
+                      : emailNotificationsEnabled
+                        ? 'On — we may email you about your account and bookings.'
+                        : 'Off — we will not send you emails.'}
+                  </p>
+                </div>
+                <Switch
+                  id="email-notifications"
+                  className="shrink-0"
+                  checked={emailNotificationsEnabled ?? true}
+                  onCheckedChange={handleEmailNotificationsChange}
+                  disabled={emailNotificationsEnabled === null}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Profile Picture & Basic Info */}
             <div className="lg:col-span-1">

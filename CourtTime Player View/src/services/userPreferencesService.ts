@@ -1,6 +1,7 @@
 import { query } from '../database/connection';
 
 export interface NotificationPreferences {
+  emailNotificationsEnabled: boolean;
   pushEnabled: boolean;
   pushBookingUpdates: boolean;
   pushBookingReminders: boolean;
@@ -10,6 +11,7 @@ export interface NotificationPreferences {
 }
 
 const DEFAULT_PREFS: NotificationPreferences = {
+  emailNotificationsEnabled: true,
   pushEnabled: true,
   pushBookingUpdates: true,
   pushBookingReminders: true,
@@ -18,13 +20,28 @@ const DEFAULT_PREFS: NotificationPreferences = {
   pushWeather: true,
 };
 
+let emailNotificationsColumnReady = false;
+
+async function ensureEmailNotificationsColumn(): Promise<void> {
+  if (emailNotificationsColumnReady) return;
+
+  await query(
+    `ALTER TABLE user_preferences
+       ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN NOT NULL DEFAULT true`
+  );
+  emailNotificationsColumnReady = true;
+}
+
 /**
  * Get notification preferences for a user.
  * Returns defaults (all enabled) if the user has no preferences row yet.
  */
 export async function getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
+  await ensureEmailNotificationsColumn();
+
   const result = await query(
     `SELECT
+        COALESCE(email_notifications_enabled, true) as "emailNotificationsEnabled",
         push_enabled            as "pushEnabled",
         push_booking_updates    as "pushBookingUpdates",
         push_booking_reminders  as "pushBookingReminders",
@@ -47,7 +64,10 @@ export async function updateNotificationPreferences(
   userId: string,
   updates: Partial<NotificationPreferences>
 ): Promise<NotificationPreferences> {
+  await ensureEmailNotificationsColumn();
+
   const colMap: Record<keyof NotificationPreferences, string> = {
+    emailNotificationsEnabled: 'email_notifications_enabled',
     pushEnabled: 'push_enabled',
     pushBookingUpdates: 'push_booking_updates',
     pushBookingReminders: 'push_booking_reminders',
@@ -56,7 +76,10 @@ export async function updateNotificationPreferences(
     pushWeather: 'push_weather',
   };
 
-  const entries = Object.entries(updates).filter(([_, v]) => typeof v === 'boolean') as Array<[keyof NotificationPreferences, boolean]>;
+  const entries = Object.entries(updates).filter(
+    ([key, value]) =>
+      typeof value === 'boolean' && Object.prototype.hasOwnProperty.call(colMap, key)
+  ) as Array<[keyof NotificationPreferences, boolean]>;
   if (entries.length === 0) return getNotificationPreferences(userId);
 
   // Ensure a row exists for this user
@@ -86,6 +109,11 @@ export async function updateNotificationPreferences(
  * Map a notification type string to the preference column that gates it.
  * Returns null for types that should always send (none currently — defensive).
  */
+export async function isEmailNotificationsEnabled(userId: string): Promise<boolean> {
+  const prefs = await getNotificationPreferences(userId);
+  return prefs.emailNotificationsEnabled;
+}
+
 export function preferenceKeyForType(type: string): keyof NotificationPreferences | null {
   switch (type) {
     case 'booking_confirmed':

@@ -201,7 +201,8 @@ router.post('/', async (req, res, next) => {
         const endFormatted = new Date(`${bookingDate}T${endTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
         sendBookingConfirmationEmail(
           userInfo.email, userInfo.fullName, facilityId, facilityName,
-          courtName, dateFormatted, startFormatted, endFormatted, bookingType || 'General'
+          courtName, dateFormatted, startFormatted, endFormatted, bookingType || 'General',
+          userId
         ).catch(err => console.error('Error sending booking confirmation email:', err));
       }
     } catch (notificationError) {
@@ -313,7 +314,8 @@ router.delete('/:bookingId', async (req, res, next) => {
           const startFormatted = new Date(`${booking.bookingDate}T${booking.startTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           sendBookingCancellationEmail(
             userInfo.email, userInfo.fullName, booking.facilityId, facilityName,
-            courtName, dateFormatted, startFormatted, (reason as string) || 'Cancelled by user'
+            courtName, dateFormatted, startFormatted, (reason as string) || 'Cancelled by user',
+            userId as string
           ).catch(err => console.error('Error sending cancellation email:', err));
         }
       } catch (notificationError) {

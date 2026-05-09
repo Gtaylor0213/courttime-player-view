@@ -339,6 +339,20 @@ export const membersApi = {
   },
 };
 
+// User preferences (notifications, etc.)
+export const userPreferencesApi = {
+  getNotifications: async () => {
+    return apiRequest('/api/user-preferences/notifications');
+  },
+
+  updateNotifications: async (updates: Record<string, boolean>) => {
+    return apiRequest('/api/user-preferences/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+};
+
 // Player Profile API
 export const playerProfileApi = {
   getProfile: async (userId: string) => {

@@ -26,6 +26,7 @@ import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 export const ErrorBoundary = createRouteErrorBoundary('Notification Settings');
 
 interface NotificationPreferences {
+  emailNotificationsEnabled: boolean;
   pushEnabled: boolean;
   pushBookingUpdates: boolean;
   pushBookingReminders: boolean;
@@ -136,6 +137,20 @@ export default function NotificationSettingsScreen() {
         }}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={[styles.masterRow, { marginBottom: Spacing.md }]}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>Email notifications</Text>
+            <Text style={styles.rowDescription}>
+              Booking updates, facility messages, and other emails to your account address. In-app alerts are unchanged.
+            </Text>
+          </View>
+          <Switch
+            value={prefs.emailNotificationsEnabled}
+            onValueChange={(v) => toggle('emailNotificationsEnabled', v)}
+            trackColor={{ false: Colors.border, true: Colors.primary }}
+          />
+        </View>
+
         {/* Master toggle */}
         <View style={styles.masterRow}>
           <View style={styles.rowText}>
@@ -176,7 +191,7 @@ export default function NotificationSettingsScreen() {
         </View>
 
         <Text style={styles.footnote}>
-          Some critical messages (e.g. account suspension) may still be delivered via email regardless of push settings.
+          Turn off email above to stop transactional emails. Push categories only affect alerts on this device.
         </Text>
       </ScrollView>
     </>

@@ -8,7 +8,7 @@ const router = express.Router();
 
 /**
  * GET /api/user-preferences/notifications
- * Returns the authenticated user's push notification preferences.
+ * Returns the authenticated user's notification preferences (email + push categories).
  */
 router.get('/notifications', async (req, res, next) => {
   try {

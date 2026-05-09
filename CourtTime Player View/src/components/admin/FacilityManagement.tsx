@@ -783,6 +783,39 @@ export function FacilityManagement() {
                     : typeof parsedSimplified?.userLimits?.perWeekIndividual?.enabled === 'boolean'
                       ? !parsedSimplified.userLimits.perWeekIndividual.enabled
                       : defaultBookingRules.maxBookingsPerWeekUnlimited,
+              // Saved JSON uses nested `daysInAdvance: { enabled, limit }`; spreading parsedSimplified
+              // otherwise leaves an object here and the number input renders empty.
+              daysInAdvanceEnabled:
+                typeof parsedSimplified?.daysInAdvanceEnabled === 'boolean'
+                  ? parsedSimplified.daysInAdvanceEnabled
+                  : typeof parsedSimplified?.daysInAdvance === 'object' &&
+                      parsedSimplified.daysInAdvance !== null &&
+                      typeof (parsedSimplified.daysInAdvance as { enabled?: boolean }).enabled === 'boolean'
+                    ? !!(parsedSimplified.daysInAdvance as { enabled: boolean }).enabled
+                    : typeof parsedSimplified?.advanceBookingDaysUnlimited === 'boolean'
+                      ? !parsedSimplified.advanceBookingDaysUnlimited
+                      : defaultBookingRules.daysInAdvanceEnabled,
+              daysInAdvance: (() => {
+                const nested = parsedSimplified?.daysInAdvance;
+                if (nested && typeof nested === 'object' && nested !== null && 'limit' in nested) {
+                  const lim = (nested as { limit?: unknown }).limit;
+                  if (lim !== undefined && lim !== null && String(lim).trim() !== '') {
+                    return String(lim);
+                  }
+                }
+                if (
+                  parsedSimplified?.daysInAdvance !== undefined &&
+                  parsedSimplified?.daysInAdvance !== null &&
+                  typeof parsedSimplified.daysInAdvance !== 'object'
+                ) {
+                  return String(parsedSimplified.daysInAdvance);
+                }
+                const adv = parsedSimplified?.advanceBookingDays;
+                if (adv !== undefined && adv !== null && String(adv).trim() !== '') {
+                  return String(adv);
+                }
+                return defaultBookingRules.daysInAdvance;
+              })(),
             }
           : {
               generalRules: facility.generalRules || '',

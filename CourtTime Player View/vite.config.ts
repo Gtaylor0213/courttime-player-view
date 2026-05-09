@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   /** Backend for `npm run dev:client` — browser only talks to Vite; Vite forwards /api and /health here. */
   const devApiProxy = env.VITE_DEV_API_PROXY || 'http://127.0.0.1:3001';
+  const devWebPort = Number(env.VITE_DEV_PORT) || 5173;
 
   return {
     plugins: [tailwindcss(), react()],
@@ -62,7 +63,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '127.0.0.1',
-      port: 5173,
+      port: devWebPort,
       strictPort: false,
       open: true,
       proxy: {

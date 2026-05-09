@@ -13,6 +13,7 @@ import {
   resolveDailyHouseholdFromBookingRules,
   resolveWeeklyHouseholdFromBookingRules
 } from './rulesEngine/RuleContext';
+import type { FacilityRuleConfig } from './rulesEngine/types';
 import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
 
@@ -87,7 +88,38 @@ async function assertHardBookingRuleCaps(bookingData: {
   const { bookingRulesRaw, simplifiedBookingRules } = parseStoredFacilityBookingRules(
     facRow.rows[0]?.bookingRules
   );
-  const facilityLike = { bookingRulesRaw, simplifiedBookingRules };
+
+  let acc002ForCaps: FacilityRuleConfig[] | undefined;
+  try {
+    const acc002Res = await query(
+      `SELECT frc.rule_config AS "ruleConfig"
+       FROM facility_rule_configs frc
+       INNER JOIN booking_rule_definitions brd ON brd.id = frc.rule_definition_id
+       WHERE frc.facility_id = $1 AND brd.rule_code = 'ACC-002' AND frc.is_enabled = true
+       LIMIT 1`,
+      [bookingData.facilityId]
+    );
+    if (acc002Res.rows.length > 0) {
+      const rc = acc002Res.rows[0].ruleConfig;
+      acc002ForCaps = [
+        {
+          id: '',
+          facilityId: bookingData.facilityId,
+          ruleDefinitionId: '',
+          ruleCode: 'ACC-002',
+          ruleCategory: 'account',
+          ruleName: 'Max Reservations Per Week',
+          ruleConfig: typeof rc === 'string' ? JSON.parse(rc) : rc,
+          isEnabled: true,
+          priority: 0
+        }
+      ];
+    }
+  } catch {
+    acc002ForCaps = undefined;
+  }
+
+  const facilityLike = { bookingRulesRaw, simplifiedBookingRules, rules: acc002ForCaps };
   const prov = bookingData.provisionalSameRequestBookings ?? [];
   const day = bookingData.bookingDate;
   const provisionalForDay = await countProvisionalsNotInDb(

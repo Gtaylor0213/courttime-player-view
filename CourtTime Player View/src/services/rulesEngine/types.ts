@@ -200,6 +200,8 @@ export interface SimplifiedBookingRules {
   };
   facilityHours?: Record<string, SimplifiedDailyHoursConfig>;
   hasPeakHours?: boolean;
+  /** When false, facility admins bypass peak-hour caps (stored on `facilities.booking_rules`). */
+  peakHoursApplyToAdmins?: boolean;
   peakHoursSlots?: Array<{
     id: string;
     startTime: string;
@@ -212,6 +214,10 @@ export interface SimplifiedBookingRules {
       maxBookingsPerDayUnlimited: boolean;
       maxBookingsPerWeek: string;
       maxBookingsPerWeekUnlimited: boolean;
+      maxBookingsPerDayHousehold?: string;
+      maxBookingsPerDayHouseholdUnlimited?: boolean;
+      maxBookingsPerWeekHousehold?: string;
+      maxBookingsPerWeekHouseholdUnlimited?: boolean;
       maxDurationHours: string;
       maxDurationUnlimited: boolean;
     };
@@ -220,6 +226,7 @@ export interface SimplifiedBookingRules {
 
 export interface PeakHoursSlotRules {
   maxBookingsPerDay?: number;
+  maxBookingsPerDayHousehold?: number;
   maxBookingsPerWeek?: number;
   maxBookingsPerWeekHousehold?: number;
   /**
@@ -433,6 +440,9 @@ export interface ACC002Config {
   max_per_week: number;
   window_type: WindowType;
   include_canceled: boolean;
+  /** Optional daily cap (also synced from admin booking rules). */
+  max_per_day?: number;
+  max_per_day_enabled?: boolean;
 }
 
 export interface ACC003Config {

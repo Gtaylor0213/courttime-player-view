@@ -432,7 +432,7 @@ export function FacilityManagement() {
     adminCancellationNoticeHours: '1',
     adminCancellationUnlimited: true,
     hasPeakHours: false,
-    peakHoursApplyToAdmins: false,
+    peakHoursApplyToAdmins: true,
     peakHoursSlots: [],
     peakHoursRestrictions: {
       maxBookingsPerWeek: '2',
@@ -673,13 +673,26 @@ export function FacilityManagement() {
           parsedSimplified = null;
         }
 
-        const hasFlatSavedRules = !!parsedSimplified && typeof parsedSimplified === 'object' && (
-          'daysInAdvanceEnabled' in parsedSimplified ||
-          'maxBookingsPerWeekUnlimited' in parsedSimplified ||
-          'peakHoursSlots' in parsedSimplified ||
-          'hasPeakHours' in parsedSimplified ||
-          'peakHoursRestrictions' in parsedSimplified
-        );
+        // Detect admin-saved JSON: previously only a few keys triggered the "flat" path. Payloads from
+        // normalizeBookingRulesPayload often omit those (e.g. only userLimits + courtsPerDayUser), which
+        // incorrectly fell through to the legacy branch and replaced caps with defaults (1/day, 8/hh week).
+        const hasFlatSavedRules =
+          !!parsedSimplified &&
+          typeof parsedSimplified === 'object' &&
+          ('daysInAdvanceEnabled' in parsedSimplified ||
+            'maxBookingsPerWeekUnlimited' in parsedSimplified ||
+            'peakHoursSlots' in parsedSimplified ||
+            'hasPeakHours' in parsedSimplified ||
+            'peakHoursRestrictions' in parsedSimplified ||
+            'courtsPerWeekUserEnabled' in parsedSimplified ||
+            'courtsPerWeekUser' in parsedSimplified ||
+            'courtsPerWeekHouseholdEnabled' in parsedSimplified ||
+            'courtsPerWeekHousehold' in parsedSimplified ||
+            'courtsPerDayUserEnabled' in parsedSimplified ||
+            'courtsPerDayUser' in parsedSimplified ||
+            'courtsPerDayHouseholdEnabled' in parsedSimplified ||
+            'courtsPerDayHousehold' in parsedSimplified ||
+            'userLimits' in parsedSimplified);
         const normalizeDurationMinutes = (rawMinutes: any, rawHours: any, fallback: number) => {
           const mins = Number(rawMinutes);
           if (Number.isFinite(mins) && mins > 0) {
@@ -720,6 +733,56 @@ export function FacilityManagement() {
                   Number(defaultBookingRules.maxReservationDurationMinutes) || 120
                 )
               ),
+              courtsPerWeekUserEnabled:
+                parsedSimplified?.courtsPerWeekUserEnabled ??
+                parsedSimplified?.userLimits?.perWeekIndividual?.enabled ??
+                defaultBookingRules.courtsPerWeekUserEnabled,
+              courtsPerWeekUser: String(
+                parsedSimplified?.courtsPerWeekUser ??
+                  parsedSimplified?.userLimits?.perWeekIndividual?.limit ??
+                  defaultBookingRules.courtsPerWeekUser
+              ),
+              courtsPerWeekHouseholdEnabled:
+                parsedSimplified?.courtsPerWeekHouseholdEnabled ??
+                parsedSimplified?.userLimits?.perWeekHousehold?.enabled ??
+                defaultBookingRules.courtsPerWeekHouseholdEnabled,
+              courtsPerWeekHousehold: String(
+                parsedSimplified?.courtsPerWeekHousehold ??
+                  parsedSimplified?.userLimits?.perWeekHousehold?.limit ??
+                  defaultBookingRules.courtsPerWeekHousehold
+              ),
+              courtsPerDayUserEnabled:
+                parsedSimplified?.courtsPerDayUserEnabled ??
+                parsedSimplified?.userLimits?.perDayIndividual?.enabled ??
+                defaultBookingRules.courtsPerDayUserEnabled,
+              courtsPerDayUser: String(
+                parsedSimplified?.courtsPerDayUser ??
+                  parsedSimplified?.userLimits?.perDayIndividual?.limit ??
+                  defaultBookingRules.courtsPerDayUser
+              ),
+              courtsPerDayHouseholdEnabled:
+                parsedSimplified?.courtsPerDayHouseholdEnabled ??
+                parsedSimplified?.userLimits?.perDayHousehold?.enabled ??
+                defaultBookingRules.courtsPerDayHouseholdEnabled,
+              courtsPerDayHousehold: String(
+                parsedSimplified?.courtsPerDayHousehold ??
+                  parsedSimplified?.userLimits?.perDayHousehold?.limit ??
+                  defaultBookingRules.courtsPerDayHousehold
+              ),
+              maxBookingsPerWeek: String(
+                parsedSimplified?.maxBookingsPerWeek ??
+                  parsedSimplified?.courtsPerWeekUser ??
+                  parsedSimplified?.userLimits?.perWeekIndividual?.limit ??
+                  defaultBookingRules.maxBookingsPerWeek
+              ),
+              maxBookingsPerWeekUnlimited:
+                typeof parsedSimplified?.maxBookingsPerWeekUnlimited === 'boolean'
+                  ? parsedSimplified.maxBookingsPerWeekUnlimited
+                  : typeof parsedSimplified?.courtsPerWeekUserEnabled === 'boolean'
+                    ? !parsedSimplified.courtsPerWeekUserEnabled
+                    : typeof parsedSimplified?.userLimits?.perWeekIndividual?.enabled === 'boolean'
+                      ? !parsedSimplified.userLimits.perWeekIndividual.enabled
+                      : defaultBookingRules.maxBookingsPerWeekUnlimited,
             }
           : {
               generalRules: facility.generalRules || '',
@@ -735,16 +798,56 @@ export function FacilityManagement() {
                   Number(defaultBookingRules.maxReservationDurationMinutes) || 120
                 )
               ),
-              courtsPerWeekUserEnabled: parsedSimplified?.userLimits?.perWeekIndividual?.enabled ?? defaultBookingRules.courtsPerWeekUserEnabled,
-              courtsPerWeekUser: String(parsedSimplified?.userLimits?.perWeekIndividual?.limit ?? defaultBookingRules.courtsPerWeekUser),
-              courtsPerWeekHouseholdEnabled: parsedSimplified?.userLimits?.perWeekHousehold?.enabled ?? defaultBookingRules.courtsPerWeekHouseholdEnabled,
-              courtsPerWeekHousehold: String(parsedSimplified?.userLimits?.perWeekHousehold?.limit ?? defaultBookingRules.courtsPerWeekHousehold),
-              courtsPerDayUserEnabled: parsedSimplified?.userLimits?.perDayIndividual?.enabled ?? defaultBookingRules.courtsPerDayUserEnabled,
-              courtsPerDayUser: String(parsedSimplified?.userLimits?.perDayIndividual?.limit ?? defaultBookingRules.courtsPerDayUser),
-              courtsPerDayHouseholdEnabled: parsedSimplified?.userLimits?.perDayHousehold?.enabled ?? defaultBookingRules.courtsPerDayHouseholdEnabled,
-              courtsPerDayHousehold: String(parsedSimplified?.userLimits?.perDayHousehold?.limit ?? defaultBookingRules.courtsPerDayHousehold),
-              maxBookingsPerWeek: facility.maxBookingsPerWeek === -1 ? '3' : String(facility.maxBookingsPerWeek || '3'),
-              maxBookingsPerWeekUnlimited: facility.maxBookingsPerWeek === -1,
+              courtsPerWeekUserEnabled:
+                parsedSimplified?.courtsPerWeekUserEnabled ??
+                parsedSimplified?.userLimits?.perWeekIndividual?.enabled ??
+                defaultBookingRules.courtsPerWeekUserEnabled,
+              courtsPerWeekUser: String(
+                parsedSimplified?.courtsPerWeekUser ??
+                  parsedSimplified?.userLimits?.perWeekIndividual?.limit ??
+                  defaultBookingRules.courtsPerWeekUser
+              ),
+              courtsPerWeekHouseholdEnabled:
+                parsedSimplified?.courtsPerWeekHouseholdEnabled ??
+                parsedSimplified?.userLimits?.perWeekHousehold?.enabled ??
+                defaultBookingRules.courtsPerWeekHouseholdEnabled,
+              courtsPerWeekHousehold: String(
+                parsedSimplified?.courtsPerWeekHousehold ??
+                  parsedSimplified?.userLimits?.perWeekHousehold?.limit ??
+                  defaultBookingRules.courtsPerWeekHousehold
+              ),
+              courtsPerDayUserEnabled:
+                parsedSimplified?.courtsPerDayUserEnabled ??
+                parsedSimplified?.userLimits?.perDayIndividual?.enabled ??
+                defaultBookingRules.courtsPerDayUserEnabled,
+              courtsPerDayUser: String(
+                parsedSimplified?.courtsPerDayUser ??
+                  parsedSimplified?.userLimits?.perDayIndividual?.limit ??
+                  defaultBookingRules.courtsPerDayUser
+              ),
+              courtsPerDayHouseholdEnabled:
+                parsedSimplified?.courtsPerDayHouseholdEnabled ??
+                parsedSimplified?.userLimits?.perDayHousehold?.enabled ??
+                defaultBookingRules.courtsPerDayHouseholdEnabled,
+              courtsPerDayHousehold: String(
+                parsedSimplified?.courtsPerDayHousehold ??
+                  parsedSimplified?.userLimits?.perDayHousehold?.limit ??
+                  defaultBookingRules.courtsPerDayHousehold
+              ),
+              maxBookingsPerWeek: String(
+                parsedSimplified?.maxBookingsPerWeek ??
+                  parsedSimplified?.courtsPerWeekUser ??
+                  parsedSimplified?.userLimits?.perWeekIndividual?.limit ??
+                  (facility.maxBookingsPerWeek === -1 ? '3' : String(facility.maxBookingsPerWeek || '3'))
+              ),
+              maxBookingsPerWeekUnlimited:
+                typeof parsedSimplified?.maxBookingsPerWeekUnlimited === 'boolean'
+                  ? parsedSimplified.maxBookingsPerWeekUnlimited
+                  : typeof parsedSimplified?.courtsPerWeekUserEnabled === 'boolean'
+                    ? !parsedSimplified.courtsPerWeekUserEnabled
+                    : typeof parsedSimplified?.userLimits?.perWeekIndividual?.enabled === 'boolean'
+                      ? !parsedSimplified.userLimits.perWeekIndividual.enabled
+                      : facility.maxBookingsPerWeek === -1,
               maxBookingDurationHours: facility.maxBookingDurationHours === -1 ? '2' : String(facility.maxBookingDurationHours || '2'),
               maxBookingDurationUnlimited: facility.maxBookingDurationHours === -1,
               advanceBookingDays: facility.advanceBookingDays === -1 ? '14' : String(facility.advanceBookingDays || '14'),
@@ -761,7 +864,7 @@ export function FacilityManagement() {
               adminCancellationNoticeHours: String(facility.adminRestrictions?.cancellationNoticeHours || '1'),
               adminCancellationUnlimited: facility.adminRestrictions?.cancellationNoticeHours === 0,
               hasPeakHours: !!facility.peakHoursPolicy?.enabled,
-              peakHoursApplyToAdmins: false,
+              peakHoursApplyToAdmins: true,
               peakHoursSlots: normalizedPeakHoursSlots,
               peakHoursRestrictions: {
                 maxBookingsPerWeek: String(facility.peakHoursPolicy?.maxBookingsPerWeek || '2'),
@@ -863,9 +966,10 @@ export function FacilityManagement() {
           maxBookingsPerWeekUnlimited: !facilityData.bookingRules.courtsPerWeekUserEnabled,
           advanceBookingDays: facilityData.bookingRules.daysInAdvance,
           advanceBookingDaysUnlimited: !facilityData.bookingRules.daysInAdvanceEnabled,
-          restrictionsApplyToAdmins: false,
-          peakHoursApplyToAdmins: false,
-          weekendPolicyApplyToAdmins: false,
+          restrictionsApplyToAdmins: facilityData.bookingRules.restrictionsApplyToAdmins ?? false,
+          // When true, peak caps apply to facility admins too; false = admins exempt (legacy saves often had this forced off).
+          peakHoursApplyToAdmins: facilityData.bookingRules.peakHoursApplyToAdmins ?? true,
+          weekendPolicyApplyToAdmins: facilityData.bookingRules.weekendPolicyApplyToAdmins ?? false,
         },
       };
       const response = await adminApi.updateFacility(currentFacilityId, payload);
@@ -1710,18 +1814,28 @@ export function FacilityManagement() {
 
         // Preserve expected default fields for common rules when values are missing.
         if (code === 'ACC-002') {
-          // ACC-002 should always mirror the "Courts Per Week (Individual)" controls.
-          // These are the fields admins edit in Booking Management.
+          // Mirror Booking Management: weekly individual + daily individual caps share ACC-002.
+          // Previously only weekly was synced here, so bulk update stripped max_per_day_* right after
+          // PATCH saved them — daily limits never stuck in the rules engine.
           const weeklyEnabled = !!rules.courtsPerWeekUserEnabled;
-          const weeklyLimit = parseInt(rules.courtsPerWeekUser, 10) || 1;
+          const weeklyLimit = parseInt(String(rules.courtsPerWeekUser), 10) || 1;
+          const dailyEnabled =
+            !!rules.courtsPerDayUserEnabled && (parseInt(String(rules.courtsPerDayUser), 10) || 0) > 0;
+          const dailyLimit = Math.max(1, parseInt(String(rules.courtsPerDayUser), 10) || 1);
+          const ruleOn = weeklyEnabled || dailyEnabled;
+          const ruleConfig: Record<string, any> = {
+            window_type: 'calendar_week',
+            include_canceled: false,
+          };
+          if (weeklyEnabled && weeklyLimit > 0) {
+            ruleConfig.max_per_week = weeklyLimit;
+          }
+          ruleConfig.max_per_day_enabled = dailyEnabled;
+          ruleConfig.max_per_day = dailyEnabled ? dailyLimit : 0;
           ruleConfigs.push({
             ruleCode: code,
-            isEnabled: weeklyEnabled,
-            ruleConfig: {
-              max_per_week: weeklyLimit,
-              window_type: 'calendar_week',
-              include_canceled: false,
-            },
+            isEnabled: ruleOn,
+            ruleConfig,
           });
           continue;
         }
@@ -1811,87 +1925,21 @@ export function FacilityManagement() {
         setFacilityData(prev => {
           const updated = { ...prev, bookingRules: { ...prev.bookingRules } };
 
-          const acc010 = ruleMap.get('ACC-010') as any;
-          if (acc010?.facilityConfig) {
-            updated.bookingRules.peakHoursRestrictions = {
-              ...updated.bookingRules.peakHoursRestrictions,
-              maxBookingsUnlimited: !acc010.isEnabled,
-            };
-            if (acc010.effectiveConfig?.max_prime_per_week) {
-              updated.bookingRules.peakHoursRestrictions.maxBookingsPerWeek = String(acc010.effectiveConfig.max_prime_per_week);
-            }
-          }
+          // Do not overlay Booking Management or Peak Policy fields from the rules engine here.
+          // Those values are loaded from `facilities.booking_rules` in loadFacilityData() and are the
+          // source of truth for the admin UI. Pushing engine state on top caused toggles and numbers
+          // to jump (partial ACC-002, CRT round-trip, coercion) without the user editing anything.
+          // Save already runs syncBookingRulesToEngine() so the DB stays aligned when admins save.
 
-          const crt001 = ruleMap.get('CRT-001') as any;
-          if (crt001 && crt001.facilityConfig && crt001.isEnabled) {
-            updated.bookingRules.hasPeakHours = true;
-            const windows = crt001.effectiveConfig?.peak_windows || crt001.effectiveConfig?.prime_windows;
-            if (Array.isArray(windows)) {
-              updated.bookingRules.peakHoursSlots = windows.map((w: any) => normalizePeakHoursSlot({
-                id: w.id || `slot-${w.start_time}-${w.end_time}`,
-                startTime: w.start_time,
-                endTime: w.end_time,
-                days: Array.isArray(w.days)
-                  ? w.days
-                  : (typeof w.day_of_week === 'number' ? [w.day_of_week] : []),
-                appliesToAllCourts: w.applies_to_all_courts !== false,
-                selectedCourtIds: w.selected_court_ids || [],
-                rules: {
-                  max_bookings_per_day: w.rules?.max_bookings_per_day,
-                  max_bookings_per_day_household: w.rules?.max_bookings_per_day_household,
-                  max_bookings_per_week: w.rules?.max_bookings_per_week,
-                  max_bookings_per_week_household: w.rules?.max_bookings_per_week_household,
-                  max_duration_hours: w.rules?.max_duration_hours,
-                }
-              }));
-            }
-          }
-
-          const crt002 = ruleMap.get('CRT-002') as any;
-          if (crt002?.facilityConfig) {
-            updated.bookingRules.peakHoursRestrictions = {
-              ...updated.bookingRules.peakHoursRestrictions,
-              maxDurationUnlimited: !crt002.isEnabled,
-            };
-            if (crt002.effectiveConfig?.max_minutes_prime) {
-              updated.bookingRules.peakHoursRestrictions.maxDurationHours = String(crt002.effectiveConfig.max_minutes_prime / 60);
-            }
-          }
-
-          const acc002 = ruleMap.get('ACC-002') as any;
-          if (acc002?.facilityConfig) {
-            updated.bookingRules.maxBookingsPerWeekUnlimited = !acc002.isEnabled;
-            updated.bookingRules.courtsPerWeekUserEnabled = !!acc002.isEnabled;
-            if (acc002.effectiveConfig?.max_per_week !== undefined) {
-              const weeklyLimit = String(acc002.effectiveConfig.max_per_week);
-              updated.bookingRules.maxBookingsPerWeek = weeklyLimit;
-              updated.bookingRules.courtsPerWeekUser = weeklyLimit;
-            }
-          }
-
-          const acc005 = ruleMap.get('ACC-005') as any;
-          if (acc005?.facilityConfig) {
-            updated.bookingRules.daysInAdvanceEnabled = !!acc005.isEnabled;
-            updated.bookingRules.advanceBookingDaysUnlimited = !acc005.isEnabled;
-            if (acc005.effectiveConfig?.max_days_ahead !== undefined) {
-              const v = String(acc005.effectiveConfig.max_days_ahead);
-              updated.bookingRules.daysInAdvance = v;
-              updated.bookingRules.advanceBookingDays = v;
-            }
-          }
-
-          const crt005 = ruleMap.get('CRT-005') as any;
-          if (crt005?.facilityConfig) {
-            updated.bookingRules.maxReservationDurationEnabled = !!crt005.isEnabled;
-            updated.bookingRules.maxBookingDurationUnlimited = !crt005.isEnabled;
-            if (crt005.effectiveConfig?.max_duration_minutes !== undefined) {
-              updated.bookingRules.maxReservationDurationMinutes = String(crt005.effectiveConfig.max_duration_minutes);
-              updated.bookingRules.maxBookingDurationHours = String(crt005.effectiveConfig.max_duration_minutes / 60);
-            }
-          }
-
-          // Overlay all metadata-driven rules so edited values stay consistent with engine state.
-          const skippedCodes = new Set(['ACC-010', 'CRT-001', 'CRT-002']);
+          // Overlay only metadata-driven rule cards (strikes, buffers, etc.), not booking_rules mirrors.
+          const skippedCodes = new Set([
+            'ACC-002',
+            'ACC-005',
+            'ACC-010',
+            'CRT-001',
+            'CRT-002',
+            'CRT-005',
+          ]);
           for (const [code, map] of Object.entries(RULE_STATE_MAP)) {
             if (skippedCodes.has(code)) continue;
             const effective = ruleMap.get(code) as any;
@@ -2038,6 +2086,7 @@ export function FacilityManagement() {
             <p className="text-xs text-gray-500 mt-0.5">{meta.description}</p>
           </div>
           <Switch
+            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
             checked={enabled}
             onCheckedChange={(checked: boolean) => setRuleEnabled(meta.code, checked)}
             disabled={!isEditing}
@@ -3011,7 +3060,12 @@ export function FacilityManagement() {
                     </div>
                     <div className="flex items-center justify-between">
                       <Label>Enable</Label>
-                      <Switch checked={facilityData.bookingRules.daysInAdvanceEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('daysInAdvanceEnabled', v)} disabled={!isEditing} />
+                      <Switch
+                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+                        checked={facilityData.bookingRules.daysInAdvanceEnabled}
+                        onCheckedChange={(v: boolean) => handleBookingRulesChange('daysInAdvanceEnabled', v)}
+                        disabled={!isEditing}
+                      />
                     </div>
                     <Input type="number" min="0" value={facilityData.bookingRules.daysInAdvance} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('daysInAdvance', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.daysInAdvanceEnabled} />
                   </CardContent>
@@ -3033,7 +3087,12 @@ export function FacilityManagement() {
                     </div>
                     <div className="flex items-center justify-between">
                       <Label>Enable</Label>
-                      <Switch checked={facilityData.bookingRules.maxReservationDurationEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('maxReservationDurationEnabled', v)} disabled={!isEditing} />
+                      <Switch
+                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+                        checked={facilityData.bookingRules.maxReservationDurationEnabled}
+                        onCheckedChange={(v: boolean) => handleBookingRulesChange('maxReservationDurationEnabled', v)}
+                        disabled={!isEditing}
+                      />
                     </div>
                     {(() => {
                       const totalMinutes = Number(facilityData.bookingRules.maxReservationDurationMinutes) || 0;
@@ -3074,28 +3133,48 @@ export function FacilityManagement() {
                     <div className="space-y-2">
                       <Label>Courts Per Week (Individual)</Label>
                       <div className="flex gap-2 items-center">
-                        <Switch checked={facilityData.bookingRules.courtsPerWeekUserEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekUserEnabled', v)} disabled={!isEditing} />
+                        <Switch
+                          className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+                          checked={facilityData.bookingRules.courtsPerWeekUserEnabled}
+                          onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekUserEnabled', v)}
+                          disabled={!isEditing}
+                        />
                         <Input type="number" min="1" value={facilityData.bookingRules.courtsPerWeekUser} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerWeekUser', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerWeekUserEnabled} />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label>Courts Per Day (Individual)</Label>
                       <div className="flex gap-2 items-center">
-                        <Switch checked={facilityData.bookingRules.courtsPerDayUserEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayUserEnabled', v)} disabled={!isEditing} />
+                        <Switch
+                          className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+                          checked={facilityData.bookingRules.courtsPerDayUserEnabled}
+                          onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayUserEnabled', v)}
+                          disabled={!isEditing}
+                        />
                         <Input type="number" min="1" value={facilityData.bookingRules.courtsPerDayUser} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerDayUser', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerDayUserEnabled} />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label>Courts Per Week (Household)</Label>
                       <div className="flex gap-2 items-center">
-                        <Switch checked={facilityData.bookingRules.courtsPerWeekHouseholdEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekHouseholdEnabled', v)} disabled={!isEditing} />
+                        <Switch
+                          className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+                          checked={facilityData.bookingRules.courtsPerWeekHouseholdEnabled}
+                          onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekHouseholdEnabled', v)}
+                          disabled={!isEditing}
+                        />
                         <Input type="number" min="1" value={facilityData.bookingRules.courtsPerWeekHousehold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerWeekHousehold', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerWeekHouseholdEnabled} />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label>Courts Per Day (Household)</Label>
                       <div className="flex gap-2 items-center">
-                        <Switch checked={facilityData.bookingRules.courtsPerDayHouseholdEnabled} onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayHouseholdEnabled', v)} disabled={!isEditing} />
+                        <Switch
+                          className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+                          checked={facilityData.bookingRules.courtsPerDayHouseholdEnabled}
+                          onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayHouseholdEnabled', v)}
+                          disabled={!isEditing}
+                        />
                         <Input type="number" min="1" value={facilityData.bookingRules.courtsPerDayHousehold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerDayHousehold', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerDayHouseholdEnabled} />
                       </div>
                     </div>
@@ -3111,6 +3190,7 @@ export function FacilityManagement() {
                         Peak Hours Policy
                       </span>
                       <Switch
+                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
                         checked={facilityData.bookingRules.hasPeakHours}
                         onCheckedChange={(checked: boolean) => handleBookingRulesChange('hasPeakHours', checked)}
                         disabled={!isEditing}
@@ -3188,6 +3268,7 @@ export function FacilityManagement() {
                                       <div className="flex items-center justify-between">
                                         <Label className="text-xs">Enable</Label>
                                         <Switch
+                                          className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
                                           checked={!slot.rules.maxDurationUnlimited}
                                           onCheckedChange={(checked: boolean) =>
                                             updatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', !checked)
@@ -3216,6 +3297,7 @@ export function FacilityManagement() {
                                         <Label className="text-xs">Courts Per Day (Individual)</Label>
                                         <div className="flex items-center gap-2">
                                           <Switch
+                                            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
                                             checked={!slot.rules.maxBookingsPerDayUnlimited}
                                             onCheckedChange={(checked: boolean) =>
                                               updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', !checked)
@@ -3238,6 +3320,7 @@ export function FacilityManagement() {
                                         <Label className="text-xs">Courts Per Week (Individual)</Label>
                                         <div className="flex items-center gap-2">
                                           <Switch
+                                            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
                                             checked={!slot.rules.maxBookingsPerWeekUnlimited}
                                             onCheckedChange={(checked: boolean) =>
                                               updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', !checked)
@@ -3260,6 +3343,7 @@ export function FacilityManagement() {
                                         <Label className="text-xs">Courts Per Week (Household)</Label>
                                         <div className="flex items-center gap-2">
                                           <Switch
+                                            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
                                             checked={!slot.rules.maxBookingsPerWeekHouseholdUnlimited}
                                             onCheckedChange={(checked: boolean) =>
                                               updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', !checked)
@@ -3282,6 +3366,7 @@ export function FacilityManagement() {
                                         <Label className="text-xs">Courts Per Day (Household)</Label>
                                         <div className="flex items-center gap-2">
                                           <Switch
+                                            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
                                             checked={!slot.rules.maxBookingsPerDayHouseholdUnlimited}
                                             onCheckedChange={(checked: boolean) =>
                                               updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHouseholdUnlimited', !checked)

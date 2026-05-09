@@ -58,6 +58,7 @@
   },
   "scripts": {
     "dev": "concurrently -n api,web -c blue,magenta \"npm run dev:server\" \"vite\"",
+    "dev:alt": "concurrently -n api,web -c blue,magenta \"PORT=3002 npm run dev:server\" \"VITE_DEV_PORT=5174 VITE_DEV_API_PROXY=http://127.0.0.1:3002 vite\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "server": "node scripts/start-server.js",

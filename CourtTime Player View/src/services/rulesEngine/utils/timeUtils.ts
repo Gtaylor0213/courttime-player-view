@@ -213,6 +213,20 @@ export function getDayOfWeek(dateStr: string): number {
 }
 
 /**
+ * Normalize peak-slot / API day lists to integers 0–6 (Sun–Sat).
+ * JSON often has string weekdays; `days.includes(getDayOfWeek())` would otherwise fail.
+ */
+export function coerceDayOfWeekList(days: unknown): number[] {
+  if (!Array.isArray(days)) return [];
+  const out: number[] = [];
+  for (const d of days) {
+    const n = typeof d === 'string' ? parseInt(d, 10) : Number(d);
+    if (Number.isInteger(n) && n >= 0 && n <= 6) out.push(n);
+  }
+  return out;
+}
+
+/**
  * Add days to a date
  */
 export function addDays(date: Date, days: number): Date {

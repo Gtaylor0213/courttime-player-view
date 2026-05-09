@@ -8,6 +8,7 @@ import {
   buildRuleContext,
   buildCancellationContext,
   getFacilityLocalNow,
+  getPeakHoursSlotsForEnforcement,
   resolveDailyIndividualFromBookingRules,
   resolveWeeklyIndividualFromBookingRules,
   resolveDailyHouseholdFromBookingRules,
@@ -26,6 +27,7 @@ import {
 } from './types';
 import {
   combineDateAndTime,
+  coerceDayOfWeekList,
   formatDate,
   getDayOfWeek,
   getTodayYmdInTimeZone,
@@ -257,6 +259,7 @@ export class RulesEngine {
       // and keep weekly limits in force when ACC-002 is absent or not tier-applicable.
       const hasApplicableAcc002 = rules.some((r) => r.ruleCode === 'ACC-002');
       results.push(...this.dailyAndWeeklyLimitsFromSimplifiedConfig(context, !hasApplicableAcc002));
+      results.push(...this.peakHourLimitsFromAdminBookingRules(context));
 
       // Compile final result
       const blockers = results.filter(r => !r.passed && r.severity === 'error');
@@ -395,6 +398,205 @@ export class RulesEngine {
     return out;
   }
 
+  /**
+   * Peak-hour caps from `facilities.booking_rules` (hasPeakHours + peakHoursSlots).
+   * Must run even when other rule-engine rows exist — those facilities previously skipped
+   * `evaluateSimplifiedRules` entirely, so peak limits were never enforced.
+   */
+  private peakHourLimitsFromAdminBookingRules(context: RuleContext): RuleResult[] {
+    // Prefer merged slots (booking_rules + CRT-001 + legacy facility_rules). Enforcement used to
+    // read only `getPeakHoursSlotsForEnforcement`, so peak windows stored only in rule configs
+    // never applied daily/weekly/duration caps.
+    const fromMerged = context.peakHoursSlots;
+    const fromBookingRules = getPeakHoursSlotsForEnforcement(context.facility);
+    const peakSlots =
+      fromMerged.length > 0 ? fromMerged : (fromBookingRules ?? []);
+    if (peakSlots.length === 0) {
+      return [];
+    }
+
+    const raw = context.facility.bookingRulesRaw;
+    const norm = context.facility.simplifiedBookingRules;
+    const peakAppliesToAdmins =
+      norm?.peakHoursApplyToAdmins !== false &&
+      raw?.peakHoursApplyToAdmins !== false &&
+      raw?.peak_hours_apply_to_admins !== false;
+    if (context.user.isFacilityAdmin && !peakAppliesToAdmins) {
+      return [];
+    }
+
+    // Slot caps must always be evaluated from CRT-001 / booking_rules windows. Previously we skipped
+    // weekly slot limits when ACC-010/HH-003 rows existed on the facility, but those rows are not
+    // filtered by tier/court here — ACC-010 can be absent from the applicable rule list yet still
+    // suppress SIMPLE-PEAK-WEEK. ACC-010 also no-ops when isPrimeTime is false, leaving no weekly cap.
+    const skipPeakDuration = context.facility.rules?.some((r) => r.ruleCode === 'CRT-002');
+
+    const out: RuleResult[] = [];
+    const countable = (b: { status: string }) => b.status !== 'cancelled';
+    const requestDay = context.request.bookingDate;
+    const dayOfWeek = getDayOfWeek(context.request.bookingDate);
+    const [wy, wm, wd] = context.request.bookingDate.split('-').map(Number);
+    const weekStartDate = new Date(wy, wm - 1, wd, 12, 0, 0, 0);
+    const dow0 = weekStartDate.getDay();
+    const diffToMonday = dow0 === 0 ? -6 : 1 - dow0;
+    weekStartDate.setDate(weekStartDate.getDate() + diffToMonday);
+    weekStartDate.setHours(0, 0, 0, 0);
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    const weekStart = formatDate(weekStartDate);
+    const weekEnd = formatDate(weekEndDate);
+
+    const hhBookings = context.household
+      ? context.existingBookings.household
+      : context.existingBookings.user;
+
+    const truthyUnlimited = (flag: unknown): boolean =>
+      flag === true ||
+      flag === 1 ||
+      (typeof flag === 'string' && flag.toLowerCase() === 'true');
+    const rawUnlimited = (flag: unknown, limit: unknown): boolean =>
+      truthyUnlimited(flag) || limit === -1 || limit === '-1';
+
+    const applicableSlots = peakSlots.filter((slot: any) => {
+      const days = coerceDayOfWeekList(slot.days);
+      if (!days.includes(dayOfWeek)) return false;
+      const appliesAll = slot.appliesToAllCourts !== false && slot.applies_to_all_courts !== false;
+      const courtIds: string[] = Array.isArray(slot.selectedCourtIds)
+        ? slot.selectedCourtIds
+        : Array.isArray(slot.selected_court_ids)
+          ? slot.selected_court_ids
+          : [];
+      if (!appliesAll && !courtIds.includes(context.court.id)) return false;
+      const start = slot.startTime || slot.start_time;
+      const end = slot.endTime || slot.end_time;
+      return timeRangesOverlap(context.request.startTime, context.request.endTime, start, end);
+    });
+
+    for (const slot of applicableSlots) {
+      const slotDays = coerceDayOfWeekList(slot.days);
+      const slotStart = slot.startTime || slot.start_time;
+      const slotEnd = slot.endTime || slot.end_time;
+      const appliesAllCourts = slot.appliesToAllCourts !== false && slot.applies_to_all_courts !== false;
+      const selCourtIds: string[] = Array.isArray(slot.selectedCourtIds)
+        ? slot.selectedCourtIds
+        : Array.isArray(slot.selected_court_ids)
+          ? slot.selected_court_ids
+          : [];
+      const r = (slot.rules ?? {}) as Record<string, any>;
+      const maxDayRaw = r.maxBookingsPerDay ?? r.max_bookings_per_day;
+      const maxWeekRaw = r.maxBookingsPerWeek ?? r.max_bookings_per_week;
+      const maxDayHhRaw = r.maxBookingsPerDayHousehold ?? r.max_bookings_per_day_household;
+      const maxWeekHhRaw = r.maxBookingsPerWeekHousehold ?? r.max_bookings_per_week_household;
+      const maxDurRaw = r.maxDurationHours ?? r.max_duration_hours;
+      const maxDayUnlimited =
+        rawUnlimited(r.maxBookingsPerDayUnlimited, maxDayRaw) ||
+        rawUnlimited(r.max_bookings_per_day_unlimited, maxDayRaw);
+      const maxWeekUnlimited =
+        rawUnlimited(r.maxBookingsPerWeekUnlimited, maxWeekRaw) ||
+        rawUnlimited(r.max_bookings_per_week_unlimited, maxWeekRaw);
+      const maxDayHhUnlimited =
+        rawUnlimited(r.maxBookingsPerDayHouseholdUnlimited, maxDayHhRaw) ||
+        rawUnlimited(r.max_bookings_per_day_household_unlimited, maxDayHhRaw);
+      const maxWeekHhUnlimited =
+        rawUnlimited(r.maxBookingsPerWeekHouseholdUnlimited, maxWeekHhRaw) ||
+        rawUnlimited(r.max_bookings_per_week_household_unlimited, maxWeekHhRaw);
+      const maxDurUnlimited =
+        rawUnlimited(r.maxDurationUnlimited, maxDurRaw) ||
+        rawUnlimited(r.max_duration_unlimited, maxDurRaw);
+
+      const peakBookings = context.existingBookings.user.filter((b) => {
+        if (!countable(b)) return false;
+        if (b.bookingDate < weekStart || b.bookingDate > weekEnd) return false;
+        if (!slotDays.includes(getDayOfWeek(b.bookingDate))) return false;
+        if (!appliesAllCourts && !selCourtIds.includes(b.courtId)) return false;
+        return timeRangesOverlap(b.startTime, b.endTime, slotStart, slotEnd);
+      });
+      const peakDayCount = peakBookings.filter((b) => b.bookingDate === requestDay).length;
+      const peakWeekCount = peakBookings.length;
+
+      if (!maxDayUnlimited) {
+        const maxDay = Number(maxDayRaw ?? 0);
+        if (maxDay > 0 && peakDayCount >= maxDay) {
+          out.push({
+            ruleCode: 'SIMPLE-PEAK-DAY',
+            ruleName: 'Peak Hours Rules',
+            passed: false,
+            severity: 'error',
+            message: 'You have reached your peak hours booking limit'
+          });
+          continue;
+        }
+      }
+
+      if (!maxWeekUnlimited) {
+        const maxWeek = Number(maxWeekRaw ?? 0);
+        if (maxWeek > 0 && peakWeekCount >= maxWeek) {
+          out.push({
+            ruleCode: 'SIMPLE-PEAK-WEEK',
+            ruleName: 'Peak Hours Rules',
+            passed: false,
+            severity: 'error',
+            message: 'You have reached your peak hours booking limit'
+          });
+          continue;
+        }
+      }
+
+      const peakHhBookings = hhBookings.filter((b) => {
+        if (!countable(b)) return false;
+        if (b.bookingDate < weekStart || b.bookingDate > weekEnd) return false;
+        if (!slotDays.includes(getDayOfWeek(b.bookingDate))) return false;
+        if (!appliesAllCourts && !selCourtIds.includes(b.courtId)) return false;
+        return timeRangesOverlap(b.startTime, b.endTime, slotStart, slotEnd);
+      });
+      const peakHhDayCount = peakHhBookings.filter((b) => b.bookingDate === requestDay).length;
+      const peakHhWeekCount = peakHhBookings.length;
+
+      if (!maxDayHhUnlimited) {
+        const maxDayHh = Number(maxDayHhRaw ?? 0);
+        if (maxDayHh > 0 && peakHhDayCount >= maxDayHh) {
+          out.push({
+            ruleCode: 'SIMPLE-PEAK-DAY-HOUSEHOLD',
+            ruleName: 'Peak Hours Rules (Household)',
+            passed: false,
+            severity: 'error',
+            message: 'Your household has reached its peak hours booking limit for this day'
+          });
+          continue;
+        }
+      }
+
+      if (!maxWeekHhUnlimited) {
+        const maxWeekHh = Number(maxWeekHhRaw ?? 0);
+        if (maxWeekHh > 0 && peakHhWeekCount >= maxWeekHh) {
+          out.push({
+            ruleCode: 'SIMPLE-PEAK-WEEK-HOUSEHOLD',
+            ruleName: 'Peak Hours Rules (Household)',
+            passed: false,
+            severity: 'error',
+            message: 'Your household has reached its peak hours booking limit for this week'
+          });
+          continue;
+        }
+      }
+
+      if (!skipPeakDuration && !maxDurUnlimited) {
+        const maxPeakMinutes = Math.round((Number(maxDurRaw ?? 0) || 0) * 60);
+        if (maxPeakMinutes > 0 && context.request.durationMinutes > maxPeakMinutes) {
+          out.push({
+            ruleCode: 'SIMPLE-PEAK-DURATION',
+            ruleName: 'Peak Hours Rules',
+            passed: false,
+            severity: 'error',
+            message: 'You have reached your peak hours booking limit'
+          });
+        }
+      }
+    }
+
+    return out;
+  }
+
   private evaluateSimplifiedRules(context: RuleContext): EvaluationResult | null {
     const config = context.facility.simplifiedBookingRules;
     if (!config) return null;
@@ -420,8 +622,6 @@ export class RulesEngine {
       }
     }
 
-    const dayOfWeek = getDayOfWeek(context.request.bookingDate);
-
     if (config.maxReservationDuration?.enabled) {
       const maxDuration = Number(config.maxReservationDuration.limit) || 0;
       if (maxDuration > 0 && context.request.durationMinutes > maxDuration) {
@@ -438,81 +638,8 @@ export class RulesEngine {
       }
     }
 
-    const countable = (b: { status: string }) => b.status !== 'cancelled';
-    const requestDay = context.request.bookingDate;
-    // Count the week that contains the reservation date (not "today" only).
-    const [wy, wm, wd] = context.request.bookingDate.split('-').map(Number);
-    const weekStartDate = new Date(wy, wm - 1, wd, 12, 0, 0, 0);
-    const dow = weekStartDate.getDay(); // 0=Sun..6=Sat
-    const diffToMonday = dow === 0 ? -6 : 1 - dow;
-    weekStartDate.setDate(weekStartDate.getDate() + diffToMonday);
-    weekStartDate.setHours(0, 0, 0, 0);
-    const weekEndDate = new Date(weekStartDate);
-    weekEndDate.setDate(weekStartDate.getDate() + 6);
-    const weekStart = formatDate(weekStartDate);
-    const weekEnd = formatDate(weekEndDate);
     blockers.push(...this.dailyAndWeeklyLimitsFromSimplifiedConfig(context, true));
-
-    if (config.hasPeakHours && Array.isArray(config.peakHoursSlots)) {
-      const applicableSlots = config.peakHoursSlots.filter((slot) => {
-        if (!slot.days?.includes(dayOfWeek)) return false;
-        if (!slot.appliesToAllCourts && !slot.selectedCourtIds?.includes(context.court.id)) return false;
-        return timeRangesOverlap(context.request.startTime, context.request.endTime, slot.startTime, slot.endTime);
-      });
-
-      for (const slot of applicableSlots) {
-        const peakBookings = context.existingBookings.user.filter((b) => {
-          if (!countable(b)) return false;
-          if (b.bookingDate < weekStart || b.bookingDate > weekEnd) return false;
-          if (!slot.days.includes(getDayOfWeek(b.bookingDate))) return false;
-          if (!slot.appliesToAllCourts && !slot.selectedCourtIds?.includes(b.courtId)) return false;
-          return timeRangesOverlap(b.startTime, b.endTime, slot.startTime, slot.endTime);
-        });
-        const peakDayCount = peakBookings.filter((b) => b.bookingDate === requestDay).length;
-        const peakWeekCount = peakBookings.length;
-
-        if (!slot.rules.maxBookingsPerDayUnlimited) {
-          const maxDay = Number(slot.rules.maxBookingsPerDay || 0);
-          if (maxDay > 0 && peakDayCount >= maxDay) {
-            blockers.push({
-              ruleCode: 'SIMPLE-PEAK-DAY',
-              ruleName: 'Peak Hours Rules',
-              passed: false,
-              severity: 'error',
-              message: 'You have reached your peak hours booking limit'
-            });
-            continue;
-          }
-        }
-
-        if (!slot.rules.maxBookingsPerWeekUnlimited) {
-          const maxWeek = Number(slot.rules.maxBookingsPerWeek || 0);
-          if (maxWeek > 0 && peakWeekCount >= maxWeek) {
-            blockers.push({
-              ruleCode: 'SIMPLE-PEAK-WEEK',
-              ruleName: 'Peak Hours Rules',
-              passed: false,
-              severity: 'error',
-              message: 'You have reached your peak hours booking limit'
-            });
-            continue;
-          }
-        }
-
-        if (!slot.rules.maxDurationUnlimited) {
-          const maxPeakMinutes = Math.round((Number(slot.rules.maxDurationHours || 0) || 0) * 60);
-          if (maxPeakMinutes > 0 && context.request.durationMinutes > maxPeakMinutes) {
-            blockers.push({
-              ruleCode: 'SIMPLE-PEAK-DURATION',
-              ruleName: 'Peak Hours Rules',
-              passed: false,
-              severity: 'error',
-              message: 'You have reached your peak hours booking limit'
-            });
-          }
-        }
-      }
-    }
+    blockers.push(...this.peakHourLimitsFromAdminBookingRules(context));
 
     return {
       allowed: blockers.length === 0,

@@ -15,7 +15,13 @@ import {
   countHouseholdPrimeTimeBookings,
   countHouseholdMembers
 } from '../utils/householdUtils';
-import { formatDate, getDayOfWeek, getTimeWindow, timeRangesOverlap } from '../utils/timeUtils';
+import {
+  coerceDayOfWeekList,
+  formatDate,
+  getDayOfWeek,
+  getTimeWindow,
+  timeRangesOverlap
+} from '../utils/timeUtils';
 
 function householdBookingMatchesPeakSlot(
   booking: { bookingDate: string; startTime: string; endTime: string; courtId: string; status: string },
@@ -23,7 +29,7 @@ function householdBookingMatchesPeakSlot(
 ): boolean {
   if (!slot || booking.status === 'cancelled') return false;
   const bookingDay = getDayOfWeek(booking.bookingDate);
-  if (!slot.days.includes(bookingDay)) return false;
+  if (!coerceDayOfWeekList(slot.days).includes(bookingDay)) return false;
   if (!slot.appliesToAllCourts && !slot.selectedCourtIds.includes(booking.courtId)) return false;
   return timeRangesOverlap(booking.startTime, booking.endTime, slot.startTime, slot.endTime);
 }

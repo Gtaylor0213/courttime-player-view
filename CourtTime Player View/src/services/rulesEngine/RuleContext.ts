@@ -24,7 +24,7 @@ import {
   AccountStrike,
   BookingCancellation
 } from './types';
-import { getDayOfWeek, timeRangesOverlap } from './utils/timeUtils';
+import { coerceDayOfWeekList, getDayOfWeek, timeRangesOverlap } from './utils/timeUtils';
 
 function coerceRuleConfigRecord(config: unknown): Record<string, unknown> {
   if (config == null) return {};
@@ -81,6 +81,10 @@ function promoteSnakeCaseBookingRuleKeys(raw: Record<string, unknown>): void {
     copyNested(ul, 'perDayIndividual', 'per_day_individual');
     copyNested(ul, 'perDayHousehold', 'per_day_household');
   }
+
+  copyIfAbsent('hasPeakHours', 'has_peak_hours');
+  copyIfAbsent('peakHoursSlots', 'peak_hours_slots');
+  copyIfAbsent('peakHoursApplyToAdmins', 'peak_hours_apply_to_admins');
 }
 
 function copyNested(parent: Record<string, unknown>, camel: string, snake: string): void {
@@ -174,6 +178,11 @@ function alignNestedDailyIndividualFromFlat(raw: Record<string, unknown>): void 
   let enabled: boolean | undefined;
   if (raw.courtsPerDayUserEnabled !== undefined && raw.courtsPerDayUserEnabled !== null) {
     enabled = !!raw.courtsPerDayUserEnabled;
+  } else if (
+    raw.maxBookingsPerDayUnlimited !== undefined &&
+    raw.maxBookingsPerDayUnlimited !== null
+  ) {
+    enabled = !raw.maxBookingsPerDayUnlimited;
   }
 
   const userLimits = (raw.userLimits || {}) as Record<string, unknown>;
@@ -293,7 +302,7 @@ export function resolveWeeklyIndividualFromBookingRules(facility: {
     }
   }
 
-  if (!rawSpecifiedEnabled && acc002?.isEnabled) {
+  if (!rawSpecifiedEnabled && acc002?.isEnabled && engineLimit !== undefined) {
     enabled = true;
   }
 
@@ -303,6 +312,7 @@ export function resolveWeeklyIndividualFromBookingRules(facility: {
 export function resolveDailyIndividualFromBookingRules(facility: {
   simplifiedBookingRules?: SimplifiedBookingRules;
   bookingRulesRaw?: Record<string, unknown> | null;
+  rules?: FacilityRuleConfig[];
 }): { enabled: boolean; limit: number } {
   const raw = facility.bookingRulesRaw;
   const norm = facility.simplifiedBookingRules;
@@ -332,6 +342,21 @@ export function resolveDailyIndividualFromBookingRules(facility: {
     const resolved = fromFlatUser ?? nestedLim ?? fromLegacyDay;
     if (resolved !== undefined) {
       limit = resolved;
+    }
+  }
+
+  const acc002 = facility.rules?.find((r) => r.ruleCode === 'ACC-002' && r.isEnabled);
+  const accCfg = acc002 ? coerceRuleConfigRecord(acc002.ruleConfig) : {};
+  if (accCfg.max_per_day_enabled === true) {
+    const m = Number(accCfg.max_per_day);
+    if (Number.isFinite(m) && m > 0) {
+      const lim = Math.floor(m);
+      if (!enabled || limit <= 0) {
+        enabled = true;
+        limit = lim;
+      } else {
+        limit = Math.min(limit, lim);
+      }
     }
   }
 
@@ -587,7 +612,9 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
   }
 
   const slotsFromRuleEngine = extractPeakHoursSlotsFromRuleConfigs(facility.rules || []);
-  const combinedPeakHoursSlots = mergePeakHoursSlots(peakHoursSlots, slotsFromRuleEngine);
+  const basePeakSlots = mergePeakHoursSlots(peakHoursSlots, slotsFromRuleEngine);
+  const slotsFromSimplified = peakHoursSlotsFromSimplifiedBookingRules(facility.simplifiedBookingRules);
+  const combinedPeakHoursSlots = mergePeakHoursSlots(slotsFromSimplified, basePeakSlots);
 
   const activePeakHoursSlot = findApplicablePeakHoursSlot(
     combinedPeakHoursSlots,
@@ -633,6 +660,55 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
   };
 }
 
+/**
+ * Peak slots saved on `facilities.booking_rules` (admin "simplified" shape).
+ * When `hasPeakHours` is off, returns [] so stale slot arrays are ignored.
+ */
+export function peakHoursSlotsFromSimplifiedBookingRules(
+  simplified: SimplifiedBookingRules | undefined
+): PeakHoursSlot[] {
+  if (!simplified?.hasPeakHours || !Array.isArray(simplified.peakHoursSlots)) {
+    return [];
+  }
+
+  const isUnlimitedFlag = (u: unknown): boolean =>
+    u === true || u === 1 || (typeof u === 'string' && u.toLowerCase() === 'true');
+
+  const asLimit = (unlimited: unknown, raw: unknown): number | undefined => {
+    if (isUnlimitedFlag(unlimited)) return -1;
+    if (raw === null || raw === undefined || raw === '') return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  return simplified.peakHoursSlots
+    .map((slot) => {
+      const r = slot.rules;
+      return {
+        id: String(slot.id),
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        days: coerceDayOfWeekList(slot.days),
+        appliesToAllCourts: slot.appliesToAllCourts !== false,
+        selectedCourtIds: Array.isArray(slot.selectedCourtIds) ? slot.selectedCourtIds : [],
+        rules: {
+          maxBookingsPerDay: asLimit(r.maxBookingsPerDayUnlimited, r.maxBookingsPerDay),
+          maxBookingsPerDayHousehold: asLimit(
+            r.maxBookingsPerDayHouseholdUnlimited,
+            r.maxBookingsPerDayHousehold
+          ),
+          maxBookingsPerWeek: asLimit(r.maxBookingsPerWeekUnlimited, r.maxBookingsPerWeek),
+          maxBookingsPerWeekHousehold: asLimit(
+            r.maxBookingsPerWeekHouseholdUnlimited,
+            r.maxBookingsPerWeekHousehold
+          ),
+          maxDurationHours: asLimit(r.maxDurationUnlimited, r.maxDurationHours)
+        }
+      };
+    })
+    .filter((slot) => slot.startTime && slot.endTime && slot.days.length > 0);
+}
+
 function findApplicablePeakHoursSlot(
   slots: PeakHoursSlot[],
   courtId: string,
@@ -643,7 +719,8 @@ function findApplicablePeakHoursSlot(
   const day = getDayOfWeek(bookingDate);
   return (
     slots.find((slot) => {
-      if (!slot.days.includes(day)) return false;
+      const slotDays = coerceDayOfWeekList(slot.days);
+      if (!slotDays.includes(day)) return false;
       if (!slot.appliesToAllCourts && !slot.selectedCourtIds.includes(courtId)) return false;
       return timeRangesOverlap(startTime, endTime, slot.startTime, slot.endTime);
     }) || null
@@ -669,6 +746,9 @@ function normalizePeakHoursSlots(rawConfig: any): PeakHoursSlot[] {
         : (Array.isArray(slot.selected_court_ids) ? slot.selected_court_ids : []),
       rules: {
         maxBookingsPerDay: toOptionalNumber(slot.rules?.maxBookingsPerDay ?? slot.rules?.max_bookings_per_day),
+        maxBookingsPerDayHousehold: toOptionalNumber(
+          slot.rules?.maxBookingsPerDayHousehold ?? slot.rules?.max_bookings_per_day_household
+        ),
         maxBookingsPerWeek: toOptionalNumber(slot.rules?.maxBookingsPerWeek ?? slot.rules?.max_bookings_per_week),
         maxBookingsPerWeekHousehold: toOptionalNumber(slot.rules?.maxBookingsPerWeekHousehold ?? slot.rules?.max_bookings_per_week_household),
         maxDurationHours: toOptionalNumber(slot.rules?.maxDurationHours ?? slot.rules?.max_duration_hours),
@@ -703,6 +783,9 @@ function normalizePeakHoursSlots(rawConfig: any): PeakHoursSlot[] {
             : (Array.isArray(slot.selected_court_ids) ? slot.selected_court_ids : []),
           rules: {
             maxBookingsPerDay: toOptionalNumber(slot.rules?.maxBookingsPerDay ?? slot.rules?.max_bookings_per_day),
+            maxBookingsPerDayHousehold: toOptionalNumber(
+              slot.rules?.maxBookingsPerDayHousehold ?? slot.rules?.max_bookings_per_day_household
+            ),
             maxBookingsPerWeek: toOptionalNumber(slot.rules?.maxBookingsPerWeek ?? slot.rules?.max_bookings_per_week),
             maxBookingsPerWeekHousehold: toOptionalNumber(slot.rules?.maxBookingsPerWeekHousehold ?? slot.rules?.max_bookings_per_week_household),
             maxDurationHours: toOptionalNumber(slot.rules?.maxDurationHours ?? slot.rules?.max_duration_hours),
@@ -761,6 +844,9 @@ function extractPeakHoursSlotsFromRuleConfigs(rules: FacilityRuleConfig[]): Peak
       : (Array.isArray(w.selectedCourtIds) ? w.selectedCourtIds : []),
     rules: {
       maxBookingsPerDay: toOptionalNumber(w.rules?.max_bookings_per_day ?? w.rules?.maxBookingsPerDay),
+      maxBookingsPerDayHousehold: toOptionalNumber(
+        w.rules?.max_bookings_per_day_household ?? w.rules?.maxBookingsPerDayHousehold
+      ),
       maxBookingsPerWeek: toOptionalNumber(w.rules?.max_bookings_per_week ?? w.rules?.maxBookingsPerWeek),
       maxBookingsPerWeekHousehold: toOptionalNumber(w.rules?.max_bookings_per_week_household ?? w.rules?.maxBookingsPerWeekHousehold),
       maxDurationHours: toOptionalNumber(w.rules?.max_duration_hours ?? w.rules?.maxDurationHours),
@@ -832,7 +918,11 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
     'courtsPerWeekUserEnabled' in raw ||
     'courtsPerDayUserEnabled' in raw ||
     'courtsPerWeekHouseholdEnabled' in raw ||
-    'courtsPerDayHouseholdEnabled' in raw;
+    'courtsPerDayHouseholdEnabled' in raw ||
+    'hasPeakHours' in raw ||
+    'has_peak_hours' in raw ||
+    Array.isArray(raw.peakHoursSlots) ||
+    Array.isArray(raw.peak_hours_slots);
 
   const hasNestedNormalizedShape =
     !!raw.userLimits &&
@@ -873,8 +963,21 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
           limit: toNumber(existingPerDayHousehold.limit, 0),
         },
       },
-      hasPeakHours: !!raw.hasPeakHours,
-      peakHoursSlots: Array.isArray(raw.peakHoursSlots) ? raw.peakHoursSlots : [],
+      hasPeakHours:
+        !!(raw.hasPeakHours || raw.has_peak_hours) ||
+        (Array.isArray(raw.peakHoursSlots) && raw.peakHoursSlots.length > 0) ||
+        (Array.isArray(raw.peak_hours_slots) && raw.peak_hours_slots.length > 0),
+      peakHoursSlots: Array.isArray(raw.peakHoursSlots)
+        ? raw.peakHoursSlots
+        : Array.isArray(raw.peak_hours_slots)
+          ? raw.peak_hours_slots
+          : [],
+      peakHoursApplyToAdmins:
+        raw.peakHoursApplyToAdmins === false || raw.peak_hours_apply_to_admins === false
+          ? false
+          : raw.peakHoursApplyToAdmins === true ||
+              raw.peak_hours_apply_to_admins === true ||
+              undefined,
     };
   }
 
@@ -949,9 +1052,58 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
         limit: toNumber(raw.courtsPerDayHousehold !== undefined ? raw.courtsPerDayHousehold : existingPerDayHousehold.limit, 0)
       }
     },
-    hasPeakHours: !!raw.hasPeakHours,
-    peakHoursSlots: Array.isArray(raw.peakHoursSlots) ? raw.peakHoursSlots : []
+    hasPeakHours:
+      !!(raw.hasPeakHours || raw.has_peak_hours) ||
+      (Array.isArray(raw.peakHoursSlots) && raw.peakHoursSlots.length > 0) ||
+      (Array.isArray(raw.peak_hours_slots) && raw.peak_hours_slots.length > 0),
+    peakHoursSlots: Array.isArray(raw.peakHoursSlots)
+      ? raw.peakHoursSlots
+      : Array.isArray(raw.peak_hours_slots)
+        ? raw.peak_hours_slots
+        : [],
+    peakHoursApplyToAdmins:
+      raw.peakHoursApplyToAdmins === false || raw.peak_hours_apply_to_admins === false
+        ? false
+        : raw.peakHoursApplyToAdmins === true ||
+            raw.peak_hours_apply_to_admins === true ||
+            undefined
   };
+}
+
+/**
+ * Peak slots when the policy is on: prefers normalized `simplifiedBookingRules`, else reads raw
+ * `booking_rules` (handles normalize returning undefined or omitting peak).
+ */
+export function getPeakHoursSlotsForEnforcement(facility: {
+  simplifiedBookingRules?: SimplifiedBookingRules;
+  bookingRulesRaw?: Record<string, unknown> | null;
+}): NonNullable<SimplifiedBookingRules['peakHoursSlots']> | null {
+  const norm = facility.simplifiedBookingRules;
+  const raw = facility.bookingRulesRaw;
+
+  /** Align with `normalizeSimplifiedBookingRules`: when normalize failed, infer from raw slots/flags. */
+  let peakOn = false;
+  if (norm) {
+    peakOn = !!norm.hasPeakHours;
+  } else if (raw && typeof raw === 'object') {
+    peakOn = !!(
+      raw.hasPeakHours ||
+      raw.has_peak_hours ||
+      (Array.isArray(raw.peakHoursSlots) && raw.peakHoursSlots.length > 0) ||
+      (Array.isArray(raw.peak_hours_slots) && raw.peak_hours_slots.length > 0)
+    );
+  }
+
+  if (!peakOn) return null;
+
+  if (Array.isArray(norm?.peakHoursSlots) && norm.peakHoursSlots.length > 0) {
+    return norm.peakHoursSlots;
+  }
+  const fromRaw = raw?.peakHoursSlots ?? raw?.peak_hours_slots;
+  if (Array.isArray(fromRaw) && fromRaw.length > 0) {
+    return fromRaw as NonNullable<SimplifiedBookingRules['peakHoursSlots']>;
+  }
+  return null;
 }
 
 /**

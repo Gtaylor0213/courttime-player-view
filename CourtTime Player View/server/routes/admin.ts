@@ -110,11 +110,13 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
     },
     userLimits: {
       perWeekIndividual: {
+        // Same argument order as daysInAdvance / maxReservationDuration: flat toggle, nested
+        // fallback, then "unlimited" flag (inverted by pickEnabled). Do not pass nested `enabled`
+        // as the unlimited slot — that inverted it and flipped weekly caps off on every save.
         enabled: pickEnabled(
           bookingRules.courtsPerWeekUserEnabled,
-          bookingRules.maxBookingsPerWeekUnlimited !== undefined ? !bookingRules.maxBookingsPerWeekUnlimited : undefined,
           existingPerWeekIndividual.enabled,
-          undefined,
+          bookingRules.maxBookingsPerWeekUnlimited,
           false
         ),
         limit:
@@ -164,6 +166,7 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
   if (dayInd) {
     merged.courtsPerDayUser = String(Number(dayInd.limit) || 0);
     merged.courtsPerDayUserEnabled = !!dayInd.enabled;
+    merged.maxBookingsPerDayUnlimited = !dayInd.enabled;
   }
 
   const dayHh = merged.userLimits?.perDayHousehold;
@@ -472,7 +475,7 @@ router.patch('/facilities/:facilityId', async (req, res) => {
           }
         }
 
-        // Keep ACC-002 (weekly cap) in sync from normalized booking rules so enforcement matches admin saves
+        // Keep ACC-002 (weekly + daily caps) in sync from normalized booking rules so enforcement matches admin saves
         // even if the client bulk rules API is skipped or fails.
         const acc002Def = await query(
           `SELECT id FROM booking_rule_definitions WHERE rule_code = 'ACC-002' LIMIT 1`
@@ -481,8 +484,47 @@ router.patch('/facilities/:facilityId', async (req, res) => {
           const acc002RuleDefinitionId = acc002Def.rows[0].id;
           const weeklyEnabled = !!normalizedBookingRules.userLimits?.perWeekIndividual?.enabled;
           const weeklyLimit = Number(normalizedBookingRules.userLimits?.perWeekIndividual?.limit) || 1;
+          const dayInd = normalizedBookingRules.userLimits?.perDayIndividual;
+          const dailyEnabled = !!dayInd?.enabled && (Number(dayInd.limit) || 0) > 0;
+          const dailyLimit = Math.max(1, Number(dayInd?.limit) || 1);
 
-          if (weeklyEnabled && weeklyLimit > 0) {
+          const weeklyOn = weeklyEnabled && weeklyLimit > 0;
+
+          const prevRow = await query(
+            `SELECT rule_config AS "ruleConfig" FROM facility_rule_configs
+             WHERE facility_id = $1 AND rule_definition_id = $2`,
+            [facilityId, acc002RuleDefinitionId]
+          );
+          let prevCfg: Record<string, unknown> = {};
+          const rawPrev = prevRow.rows[0]?.ruleConfig;
+          if (rawPrev && typeof rawPrev === 'object') {
+            prevCfg = rawPrev as Record<string, unknown>;
+          } else if (typeof rawPrev === 'string') {
+            try {
+              prevCfg = JSON.parse(rawPrev) as Record<string, unknown>;
+            } catch {
+              prevCfg = {};
+            }
+          }
+
+          if (!weeklyOn && !dailyEnabled) {
+            await query(
+              `DELETE FROM facility_rule_configs
+               WHERE facility_id = $1 AND rule_definition_id = $2`,
+              [facilityId, acc002RuleDefinitionId]
+            );
+          } else {
+            const nextCfg: Record<string, unknown> = { ...prevCfg };
+            if (weeklyOn) {
+              nextCfg.max_per_week = weeklyLimit;
+              nextCfg.window_type = 'calendar_week';
+              nextCfg.include_canceled = false;
+            } else {
+              delete nextCfg.max_per_week;
+            }
+            nextCfg.max_per_day_enabled = dailyEnabled;
+            nextCfg.max_per_day = dailyEnabled ? dailyLimit : 0;
+
             await query(
               `INSERT INTO facility_rule_configs (facility_id, rule_definition_id, rule_config, is_enabled)
                VALUES ($1, $2, $3::jsonb, true)
@@ -491,23 +533,104 @@ router.patch('/facilities/:facilityId', async (req, res) => {
                  rule_config = EXCLUDED.rule_config,
                  is_enabled = true,
                  updated_at = CURRENT_TIMESTAMP`,
-              [
-                facilityId,
-                acc002RuleDefinitionId,
-                JSON.stringify({
-                  max_per_week: weeklyLimit,
-                  window_type: 'calendar_week',
-                  include_canceled: false,
-                }),
-              ]
-            );
-          } else {
-            await query(
-              `DELETE FROM facility_rule_configs
-               WHERE facility_id = $1 AND rule_definition_id = $2`,
-              [facilityId, acc002RuleDefinitionId]
+              [facilityId, acc002RuleDefinitionId, JSON.stringify(nextCfg)]
             );
           }
+        }
+
+        // Peak policy in facility_rule_configs must match facilities.booking_rules so enforcement works
+        // even if the admin client's /api/rules/.../bulk call fails or is blocked.
+        const truthyUnlimitedPeak = (v: any) =>
+          v === true || v === 1 || (typeof v === 'string' && v.toLowerCase() === 'true');
+        const buildPeakWindowsForEngine = (br: any) => {
+          const slots = Array.isArray(br.peakHoursSlots) ? br.peakHoursSlots : [];
+          return slots.map((slot: any) => {
+            const slotRules = slot.rules ?? {};
+            const g = (c: string, s: string) => slotRules[c] ?? slotRules[s];
+            const u = (x: any) => truthyUnlimitedPeak(x);
+            const maxDay = g('maxBookingsPerDayUnlimited', 'max_bookings_per_day_unlimited');
+            const valDay = g('maxBookingsPerDay', 'max_bookings_per_day');
+            const maxDayH = g('maxBookingsPerDayHouseholdUnlimited', 'max_bookings_per_day_household_unlimited');
+            const valDayH = g('maxBookingsPerDayHousehold', 'max_bookings_per_day_household');
+            const maxW = g('maxBookingsPerWeekUnlimited', 'max_bookings_per_week_unlimited');
+            const valW = g('maxBookingsPerWeek', 'max_bookings_per_week');
+            const maxWH = g('maxBookingsPerWeekHouseholdUnlimited', 'max_bookings_per_week_household_unlimited');
+            const valWH = g('maxBookingsPerWeekHousehold', 'max_bookings_per_week_household');
+            const maxD = g('maxDurationUnlimited', 'max_duration_unlimited');
+            const valD = g('maxDurationHours', 'max_duration_hours');
+            return {
+              id: slot.id,
+              days: Array.isArray(slot.days) ? slot.days : [],
+              start_time: slot.startTime ?? slot.start_time ?? '17:00',
+              end_time: slot.endTime ?? slot.end_time ?? '20:00',
+              applies_to_all_courts: slot.appliesToAllCourts !== false && slot.applies_to_all_courts !== false,
+              selected_court_ids:
+                slot.appliesToAllCourts === false || slot.applies_to_all_courts === false
+                  ? (slot.selectedCourtIds || slot.selected_court_ids || [])
+                  : [],
+              rules: {
+                max_bookings_per_day: u(maxDay) ? -1 : (parseInt(String(valDay), 10) || 1),
+                max_bookings_per_day_household: u(maxDayH) ? -1 : (parseInt(String(valDayH), 10) || 1),
+                max_bookings_per_week: u(maxW) ? -1 : (parseInt(String(valW), 10) || 2),
+                max_bookings_per_week_household: u(maxWH) ? -1 : (parseInt(String(valWH), 10) || 2),
+                max_duration_hours: u(maxD) ? -1 : (parseFloat(String(valD)) || 1.5),
+              },
+            };
+          });
+        };
+        const upsertFacilityRuleByCode = async (
+          ruleCode: string,
+          config: Record<string, unknown>,
+          enabled: boolean
+        ) => {
+          const def = await query(
+            `SELECT id FROM booking_rule_definitions WHERE rule_code = $1 LIMIT 1`,
+            [ruleCode]
+          );
+          if (def.rows.length === 0) return;
+          const ruleDefinitionId = def.rows[0].id;
+          if (!enabled) {
+            await query(
+              `DELETE FROM facility_rule_configs WHERE facility_id = $1 AND rule_definition_id = $2`,
+              [facilityId, ruleDefinitionId]
+            );
+            return;
+          }
+          await query(
+            `INSERT INTO facility_rule_configs (facility_id, rule_definition_id, rule_config, is_enabled)
+             VALUES ($1, $2, $3::jsonb, true)
+             ON CONFLICT (facility_id, rule_definition_id)
+             DO UPDATE SET
+               rule_config = EXCLUDED.rule_config,
+               is_enabled = true,
+               updated_at = CURRENT_TIMESTAMP`,
+            [facilityId, ruleDefinitionId, JSON.stringify(config)]
+          );
+        };
+
+        const peakRestNorm = normalizedBookingRules.peakHoursRestrictions || {};
+        const aggWeekUnlimited = truthyUnlimitedPeak(peakRestNorm.maxBookingsUnlimited);
+        const aggDurUnlimited = truthyUnlimitedPeak(peakRestNorm.maxDurationUnlimited);
+        const aggWeekLimit = parseInt(String(peakRestNorm.maxBookingsPerWeek ?? 2), 10) || 2;
+        const aggDurHours = parseFloat(String(peakRestNorm.maxDurationHours ?? 1.5)) || 1.5;
+
+        if (!normalizedBookingRules.hasPeakHours) {
+          await upsertFacilityRuleByCode('CRT-001', {}, false);
+          await upsertFacilityRuleByCode('ACC-010', {}, false);
+          await upsertFacilityRuleByCode('CRT-002', {}, false);
+        } else {
+          const peakWindows = buildPeakWindowsForEngine(normalizedBookingRules);
+          await upsertFacilityRuleByCode('CRT-001', { peak_windows: peakWindows }, true);
+          await upsertFacilityRuleByCode(
+            'ACC-010',
+            { max_prime_per_week: aggWeekLimit, window_type: 'calendar_week' },
+            !aggWeekUnlimited
+          );
+          await upsertFacilityRuleByCode(
+            'CRT-002',
+            { max_minutes_prime: Math.round(aggDurHours * 60) },
+            !aggDurUnlimited
+          );
         }
 
         // Remove legacy policy rows from this section

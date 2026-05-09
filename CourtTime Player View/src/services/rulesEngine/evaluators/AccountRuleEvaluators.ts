@@ -24,7 +24,8 @@ import {
   getDayOfWeek,
   getTodayYmdInTimeZone,
   diffCalendarDaysYmd,
-  addCalendarDaysYmd
+  addCalendarDaysYmd,
+  coerceDayOfWeekList
 } from '../utils/timeUtils';
 import { resolveWeeklyIndividualFromBookingRules } from '../RuleContext';
 import { countPrimeTimeBookings } from '../utils/primeTimeUtils';
@@ -35,7 +36,7 @@ function bookingMatchesPeakSlot(
 ): boolean {
   if (!slot || booking.status === 'cancelled') return false;
   const bookingDay = getDayOfWeek(booking.bookingDate);
-  if (!slot.days.includes(bookingDay)) return false;
+  if (!coerceDayOfWeekList(slot.days).includes(bookingDay)) return false;
   if (!slot.appliesToAllCourts && !slot.selectedCourtIds.includes(booking.courtId)) return false;
   return timeRangesOverlap(booking.startTime, booking.endTime, slot.startTime, slot.endTime);
 }
@@ -85,48 +86,71 @@ const ACC002: RuleEvaluator = {
   category: 'account',
 
   async evaluate(context: RuleContext, config: ACC002Config): Promise<RuleResult> {
+    const cfg = config as ACC002Config;
+
     const resolved = resolveWeeklyIndividualFromBookingRules(context.facility);
-    if (!resolved.enabled) {
-      return { ruleCode: 'ACC-002', ruleName: 'Max Reservations Per Week', passed: true, severity: 'error' };
+    if (resolved.enabled) {
+      let maxPerWeek = resolved.limit > 0 ? resolved.limit : Number(cfg.max_per_week);
+
+      if (!Number.isFinite(maxPerWeek) || maxPerWeek <= 0) {
+        maxPerWeek = Number(context.user.tier?.maxReservationsPerWeek);
+      }
+      if (!Number.isFinite(maxPerWeek) || maxPerWeek <= 0) {
+        maxPerWeek = 999;
+      }
+
+      const windowType = cfg.window_type || 'calendar_week';
+      const includeCanceled = cfg.include_canceled || false;
+
+      const [by, bm, bd] = context.request.bookingDate.split('-').map(Number);
+      const referenceDate = new Date(by, bm - 1, bd, 12, 0, 0, 0);
+
+      const window = getTimeWindow(windowType, referenceDate);
+      const windowStart = formatDate(window.startDate);
+      const windowEnd = formatDate(window.endDate);
+
+      const weeklyCount = context.existingBookings.user.filter(b => {
+        if (b.bookingDate < windowStart || b.bookingDate > windowEnd) return false;
+        if (!includeCanceled && b.status === 'cancelled') return false;
+        return true;
+      }).length;
+
+      if (weeklyCount >= maxPerWeek) {
+        const nextEligible = window.endDate;
+        nextEligible.setDate(nextEligible.getDate() + 1);
+        return {
+          ruleCode: 'ACC-002',
+          ruleName: 'Max Reservations Per Week',
+          passed: false,
+          severity: 'error',
+          message: `Weekly booking limit reached (${weeklyCount}/${maxPerWeek}). Next eligible: ${formatDate(nextEligible)}.`,
+          details: { current: weeklyCount, max: maxPerWeek, nextEligibleDate: formatDate(nextEligible) }
+        };
+      }
     }
 
-    let maxPerWeek = resolved.limit > 0 ? resolved.limit : Number(config.max_per_week);
-
-    if (!Number.isFinite(maxPerWeek) || maxPerWeek <= 0) {
-      maxPerWeek = Number(context.user.tier?.maxReservationsPerWeek);
+    let dayCap = 0;
+    if (cfg.max_per_day_enabled === true) {
+      const m = Number(cfg.max_per_day);
+      if (Number.isFinite(m) && m > 0) {
+        dayCap = Math.floor(m);
+      }
     }
-    if (!Number.isFinite(maxPerWeek) || maxPerWeek <= 0) {
-      maxPerWeek = 999;
-    }
 
-    const windowType = config.window_type || 'calendar_week';
-    const includeCanceled = config.include_canceled || false;
-
-    // Week for the reservation being validated (facility-local calendar date), not server UTC "now".
-    const [by, bm, bd] = context.request.bookingDate.split('-').map(Number);
-    const referenceDate = new Date(by, bm - 1, bd, 12, 0, 0, 0);
-
-    const window = getTimeWindow(windowType, referenceDate);
-    const windowStart = formatDate(window.startDate);
-    const windowEnd = formatDate(window.endDate);
-
-    const weeklyCount = context.existingBookings.user.filter(b => {
-      if (b.bookingDate < windowStart || b.bookingDate > windowEnd) return false;
-      if (!includeCanceled && b.status === 'cancelled') return false;
-      return true;
-    }).length;
-
-    if (weeklyCount >= maxPerWeek) {
-      const nextEligible = window.endDate;
-      nextEligible.setDate(nextEligible.getDate() + 1);
-      return {
-        ruleCode: 'ACC-002',
-        ruleName: 'Max Reservations Per Week',
-        passed: false,
-        severity: 'error',
-        message: `Weekly booking limit reached (${weeklyCount}/${maxPerWeek}). Next eligible: ${formatDate(nextEligible)}.`,
-        details: { current: weeklyCount, max: maxPerWeek, nextEligibleDate: formatDate(nextEligible) }
-      };
+    if (dayCap > 0) {
+      const dayCount = context.existingBookings.user.filter(
+        (b) => b.bookingDate === context.request.bookingDate && b.status !== 'cancelled'
+      ).length;
+      if (dayCount >= dayCap) {
+        return {
+          ruleCode: 'ACC-002',
+          ruleName: 'Max Reservations Per Day',
+          passed: false,
+          severity: 'error',
+          message: `Daily booking limit reached (${dayCount}/${dayCap}).`,
+          details: { current: dayCount, max: dayCap }
+        };
+      }
     }
 
     return { ruleCode: 'ACC-002', ruleName: 'Max Reservations Per Week', passed: true, severity: 'error' };

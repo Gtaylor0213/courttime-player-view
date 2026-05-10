@@ -12,7 +12,7 @@ import {
 import { query } from '../../src/database/connection';
 
 const router = express.Router();
-const signupEnabledCategories = new Set(['drill', 'social', 'clinic', 'tournament']);
+const signupEnabledCategories = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
 
 /**
  * GET /api/bulletin-board/:facilityId
@@ -139,7 +139,7 @@ router.delete('/:postId/signup/:memberUserId', async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Post not found' });
     }
     if (!signupEnabledCategories.has(postResult.rows[0].category)) {
-      return res.status(400).json({ success: false, error: 'Signup management is only available for drill/social/clinic/tournament posts' });
+      return res.status(400).json({ success: false, error: 'Signup management is only available for event/drill/social/clinic/tournament posts' });
     }
 
     const adminResult = await query(

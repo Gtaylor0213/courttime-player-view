@@ -2,7 +2,7 @@ import { query, transaction } from '../database/connection';
 import { notificationService } from './notificationService';
 import { sendBulletinMinParticipantsNotMetEmail } from './emailService';
 
-const SIGNUP_CATEGORIES = ['drill', 'social', 'clinic', 'tournament'] as const;
+const SIGNUP_CATEGORIES = ['event', 'drill', 'social', 'clinic', 'tournament'] as const;
 
 /**
  * Bulletin Board Service
@@ -646,6 +646,8 @@ export async function removeDrillSignupByAdmin(postId: string, memberUserId: str
 
 function toEventTypeLabel(category: string): string {
   switch (category) {
+    case 'event':
+      return 'Event';
     case 'drill':
       return 'Drill';
     case 'social':
@@ -678,7 +680,7 @@ export async function processBulletinMinParticipantCancellations(): Promise<numb
        AND COALESCE(bp.cancel_if_min_not_met, false) = true
        AND bp.drill_start_at IS NOT NULL
        AND bp.drill_start_at <= CURRENT_TIMESTAMP
-       AND bp.category IN ('drill', 'social', 'clinic', 'tournament')
+       AND bp.category IN ('event', 'drill', 'social', 'clinic', 'tournament')
        AND bp.cancellation_notified_at IS NULL
      GROUP BY bp.id, bp.title, bp.category, bp.facility_id, f.name, bp.drill_start_at, bp.min_participants
      HAVING COUNT(bds.id) < bp.min_participants`,

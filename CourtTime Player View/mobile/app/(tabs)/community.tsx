@@ -66,7 +66,7 @@ const BULLETIN_TYPE_COLORS: Record<string, string> = {
   tournament: Colors.warning, social: Colors.purple, drill: Colors.cyan,
 };
 const ACTIVE_FEED_POLL_MS = 5000;
-const SIGNUP_EVENT_CATEGORIES = new Set(['drill', 'social', 'clinic', 'tournament']);
+const SIGNUP_EVENT_CATEGORIES = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
 
 function formatRelativeTime(iso: string | undefined): string {
   if (!iso) return '';

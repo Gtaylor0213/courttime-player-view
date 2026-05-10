@@ -64,7 +64,7 @@ const typeColors: Record<string, string> = {
   announcement: 'bg-orange-500'
   ,drill: 'bg-blue-500'
 };
-const eventSignupTypes = new Set(['drill', 'social', 'clinic', 'tournament']);
+const eventSignupTypes = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
 const recurringEligibleTypes = new Set(['drill', 'clinic']);
 
 export function BulletinBoard() {
@@ -601,6 +601,13 @@ export function BulletinBoard() {
                       announcement: 'bg-orange-50 border-orange-100',
                       drill: 'bg-blue-50 border-blue-100'
                     }[post.type] || 'bg-gray-50 border-gray-100';
+                    const confirmedSignups = (post.participants || []).filter((p) => p.status === 'confirmed');
+                    const isAdminForPostFacility = adminFacilities.some((f: any) => f.facilityId === post.facilityId);
+                    const showSignupRosterOnCard =
+                      eventSignupTypes.has(post.type) &&
+                      (post.drillShowParticipants || isAdminForPostFacility) &&
+                      confirmedSignups.length > 0;
+                    const rosterListSize = Math.min(Math.max(confirmedSignups.length, 2), 6);
 
                     return (
                       <Card
@@ -647,6 +654,32 @@ export function BulletinBoard() {
                           {eventSignupTypes.has(post.type) && post.drillStartAt && (
                             <div className="text-xs text-gray-600 mb-2">
                               {new Date(post.drillStartAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            </div>
+                          )}
+
+                          {showSignupRosterOnCard && (
+                            <div
+                              className="mb-3"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <label className="mb-1 block text-xs font-medium text-gray-700">
+                                Signed up so far ({confirmedSignups.length})
+                              </label>
+                              <select
+                                className="w-full rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-800 shadow-sm disabled:cursor-default disabled:opacity-100"
+                                size={rosterListSize}
+                                disabled
+                                aria-readonly="true"
+                                tabIndex={-1}
+                                title="Who has signed up"
+                              >
+                                {confirmedSignups.map((p) => (
+                                  <option key={p.userId} value={p.userId}>
+                                    {p.fullName}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                           )}
 

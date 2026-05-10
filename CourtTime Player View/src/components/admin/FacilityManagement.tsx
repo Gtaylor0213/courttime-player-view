@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -965,13 +965,17 @@ export function FacilityManagement() {
     }
   };
 
-  const handleSave = async () => {
+  const performSave = async (options?: { closeEditor?: boolean; toastMessage?: string }) => {
     if (!currentFacilityId) return;
+
+    const closeEditor = options?.closeEditor ?? true;
+    const toastMessage = options?.toastMessage;
 
     try {
       setSaving(true);
+      const { facilityImage: _facilityImage, ...serializableFacility } = facilityData;
       const payload = {
-        ...facilityData,
+        ...serializableFacility,
         bookingRules: {
           ...facilityData.bookingRules,
           // Keep legacy and current weekly-limit fields aligned so all
@@ -991,13 +995,18 @@ export function FacilityManagement() {
       if (response.success) {
         const rulesOk = await syncBookingRulesToEngine(payload.bookingRules);
         if (rulesOk) {
-          toast.success('Facility updated successfully');
+          toast.success(toastMessage ?? 'Facility updated successfully');
         } else {
           toast.error('Facility saved, but booking rules failed to sync to the rules engine. Try again or contact support.');
         }
-        setIsEditing(false);
+        if (closeEditor) {
+          setIsEditing(false);
+        }
         setOriginalData(payload);
-        setFacilityData(payload);
+        setFacilityData((prev) => ({
+          ...payload,
+          facilityImage: closeEditor ? null : prev.facilityImage,
+        }));
       } else {
         toast.error(response.error || 'Failed to update facility');
       }
@@ -1007,6 +1016,10 @@ export function FacilityManagement() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = () => {
+    void performSave({ closeEditor: true });
   };
 
   const handleCancel = () => {
@@ -2193,6 +2206,42 @@ export function FacilityManagement() {
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
   };
 
+  const renderSectionSaveFooter = (sectionLabel: string) =>
+    isEditing ? (
+      <CardFooter className="justify-end border-t">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void performSave({
+              closeEditor: false,
+              toastMessage: `${sectionLabel} saved`,
+            });
+          }}
+          disabled={saving}
+          title="Saves your current pending edits for this facility (same as Save Changes at the top)."
+        >
+          <Save className="h-4 w-4 mr-2" />
+          {saving ? 'Saving...' : `Save ${sectionLabel}`}
+        </Button>
+      </CardFooter>
+    ) : null;
+
+  const renderTabFooterSaveBar = () =>
+    isEditing ? (
+      <div className="flex flex-wrap justify-end gap-2 pt-4 mt-4 border-t">
+        <Button variant="outline" onClick={handleCancel} disabled={saving}>
+          <X className="h-4 w-4 mr-2" />
+          Cancel
+        </Button>
+        <Button onClick={handleSave} disabled={saving}>
+          <Save className="h-4 w-4 mr-2" />
+          {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
+      </div>
+    ) : null;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -2290,6 +2339,7 @@ export function FacilityManagement() {
                       />
                     </div>
                   </CardContent>
+                  {renderSectionSaveFooter('basic information')}
                 </Card>
 
                 {/* Facility Logo/Image */}
@@ -2367,6 +2417,7 @@ export function FacilityManagement() {
                       )}
                     </div>
                   </CardContent>
+                  {renderSectionSaveFooter('facility logo')}
                 </Card>
 
                 {/* Location Information */}
@@ -2466,6 +2517,7 @@ export function FacilityManagement() {
                       </div>
                     </div>
                   </CardContent>
+                  {renderSectionSaveFooter('location details')}
                 </Card>
 
                 {/* Secondary Facility Locations */}
@@ -2757,6 +2809,7 @@ export function FacilityManagement() {
                       </div>
                     )}
                   </CardContent>
+                  {renderSectionSaveFooter('operating hours & timezone')}
                 </Card>
 
                 {/* Primary Contact */}
@@ -2801,6 +2854,7 @@ export function FacilityManagement() {
                       />
                     </div>
                   </CardContent>
+                  {renderSectionSaveFooter('primary contact')}
                 </Card>
 
                 {/* Secondary Contacts */}
@@ -2862,6 +2916,7 @@ export function FacilityManagement() {
                       </Button>
                     )}
                   </CardContent>
+                  {renderSectionSaveFooter('secondary contacts')}
                 </Card>
 
                 {/* Address Whitelist */}
@@ -2974,6 +3029,7 @@ export function FacilityManagement() {
                 </Card>
 
               </div>
+              {renderTabFooterSaveBar()}
             </TabsContent>
 
             {/* Booking Rules Tab */}
@@ -3024,6 +3080,7 @@ export function FacilityManagement() {
                       />
                     </div>
                   </CardContent>
+                  {renderSectionSaveFooter('general rules')}
                 </Card>
 
                 <Card>
@@ -3056,6 +3113,7 @@ export function FacilityManagement() {
                       </SelectContent>
                     </Select>
                   </CardContent>
+                  {renderSectionSaveFooter('restriction type')}
                 </Card>
 
                 <Card>
@@ -3083,6 +3141,7 @@ export function FacilityManagement() {
                     </div>
                     <Input type="number" min="0" value={facilityData.bookingRules.daysInAdvance} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('daysInAdvance', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.daysInAdvanceEnabled} />
                   </CardContent>
+                  {renderSectionSaveFooter('days in advance')}
                 </Card>
 
                 <Card>
@@ -3134,6 +3193,7 @@ export function FacilityManagement() {
                       );
                     })()}
                   </CardContent>
+                  {renderSectionSaveFooter('max reservation duration')}
                 </Card>
 
                 <Card>
@@ -3193,6 +3253,7 @@ export function FacilityManagement() {
                       </div>
                     </div>
                   </CardContent>
+                  {renderSectionSaveFooter('user-based limits')}
                 </Card>
 
                 {/* Peak Hours Policy */}
@@ -3411,8 +3472,10 @@ export function FacilityManagement() {
                       </div>
                     </CardContent>
                   )}
+                  {renderSectionSaveFooter('peak hours policy')}
                 </Card>
               </div>
+              {renderTabFooterSaveBar()}
             </TabsContent>
 
             {/* Court Management Tab */}

@@ -279,6 +279,12 @@ export function UnifiedSidebar({
                   label="Communication"
                   isActive={currentPage === 'communication'}
                 />
+                <SidebarButton
+                  onClick={() => handleNav('/bulletin-board')}
+                  icon={MessageSquare}
+                  label="Bulletin Board"
+                  isActive={currentPage === 'bulletin-board'}
+                />
               </div>
             </div>
           )}
@@ -306,12 +312,14 @@ export function UnifiedSidebar({
                 label="Messages"
                 isActive={currentPage === 'messages'}
               />
-              <SidebarButton
-                onClick={() => handleNav('/bulletin-board')}
-                icon={MessageSquare}
-                label="Bulletin Board"
-                isActive={currentPage === 'bulletin-board'}
-              />
+              {!user?.adminFacilities?.includes(selectedFacilityId) && (
+                <SidebarButton
+                  onClick={() => handleNav('/bulletin-board')}
+                  icon={MessageSquare}
+                  label="Bulletin Board"
+                  isActive={currentPage === 'bulletin-board'}
+                />
+              )}
               {/* Selected Club Info */}
               {!loadingFacilities && (() => {
                 const selectedClub = memberFacilities.find(f => f.id === selectedFacilityId);

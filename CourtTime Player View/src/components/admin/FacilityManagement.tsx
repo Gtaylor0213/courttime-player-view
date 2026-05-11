@@ -2359,6 +2359,20 @@ export function FacilityManagement() {
                             src={facilityData.facilityImagePreview || facilityData.logoUrl}
                             alt="Facility Logo"
                             className="w-32 h-32 object-cover rounded-lg border border-gray-200"
+                            onError={() => {
+                              // A previously saved blob: URL (or otherwise unreachable URL)
+                              // can no longer be loaded. Clear it so we show the empty-state
+                              // placeholder instead of a broken-image icon.
+                              if (facilityData.facilityImagePreview && facilityData.facilityImagePreview.startsWith('blob:')) {
+                                URL.revokeObjectURL(facilityData.facilityImagePreview);
+                              }
+                              setFacilityData(prev => ({
+                                ...prev,
+                                logoUrl: prev.logoUrl && prev.logoUrl.startsWith('blob:') ? '' : prev.logoUrl,
+                                facilityImagePreview: '',
+                                facilityImage: null,
+                              }));
+                            }}
                           />
                           {isEditing && (
                             <Button
@@ -2388,18 +2402,42 @@ export function FacilityManagement() {
                             accept="image/*"
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                               const file = e.target.files?.[0];
-                              if (file) {
-                                if (facilityData.facilityImagePreview && facilityData.facilityImagePreview.startsWith('blob:')) {
-                                  URL.revokeObjectURL(facilityData.facilityImagePreview);
-                                }
-                                const previewUrl = URL.createObjectURL(file);
-                                setFacilityData({
-                                  ...facilityData,
-                                  facilityImage: file,
-                                  facilityImagePreview: previewUrl,
-                                  logoUrl: previewUrl
-                                });
+                              if (!file) return;
+
+                              if (!file.type.startsWith('image/')) {
+                                toast.error('Please select an image file');
+                                e.target.value = '';
+                                return;
                               }
+                              if (file.size > 5 * 1024 * 1024) {
+                                toast.error('Image size must be less than 5MB');
+                                e.target.value = '';
+                                return;
+                              }
+
+                              if (facilityData.facilityImagePreview && facilityData.facilityImagePreview.startsWith('blob:')) {
+                                URL.revokeObjectURL(facilityData.facilityImagePreview);
+                              }
+
+                              // Read as a base64 data URL so the logo persists across
+                              // reloads. (Blob URLs are only valid in the tab that
+                              // created them, which caused saved logos to break.)
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                const dataUrl = reader.result as string;
+                                setFacilityData(prev => ({
+                                  ...prev,
+                                  facilityImage: file,
+                                  facilityImagePreview: dataUrl,
+                                  logoUrl: dataUrl,
+                                }));
+                              };
+                              reader.onerror = () => {
+                                toast.error('Failed to read image file');
+                              };
+                              reader.readAsDataURL(file);
+
+                              e.target.value = '';
                             }}
                             className="hidden"
                             id="facilityLogo"

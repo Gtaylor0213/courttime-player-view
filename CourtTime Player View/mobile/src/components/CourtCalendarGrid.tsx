@@ -14,6 +14,7 @@ import {
   InteractionManager,
   TouchableOpacity,
 } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import { api } from '../api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
 import type { Court } from '../types/database';
@@ -29,6 +30,7 @@ const DEFAULT_SLOT_MINUTES = 30;
 const COURTS_PER_PAGE = 4;
 const ACTIVE_DAY_POLL_MS = 5000;
 const DRAG_ARM_DELAY_MS = 180;
+const BOOKED_SLOT_TAP_MAX_MOVEMENT_PX = 8;
 
 /** Normalize YYYY-M-D vs YYYY-MM-DD so "today" checks match Book / MiniCalendar. */
 function normalizeYmd(value: string): string | null {
@@ -209,6 +211,12 @@ export function CourtCalendarGrid({
   /** Same payload as dragSelection, updated synchronously — RN can fire parent onTouchEnd before state from onTouchStart commits. */
   const dragSelectionRef = useRef<DragSelection | null>(null);
   const dragStartRef = useRef<{ pageX: number; pageY: number; startRow: number } | null>(null);
+  const bookedTouchStartRef = useRef<{
+    pageX: number;
+    pageY: number;
+    bookingId: string | undefined;
+    courtId: string;
+  } | null>(null);
   /** When true, current touch intent is horizontal page swipe, so cell tap/drag should be ignored. */
   const horizontalSwipeRef = useRef(false);
   /** Drag select only starts after a short hold so vertical swipes still scroll naturally. */
@@ -663,6 +671,28 @@ export function CourtCalendarGrid({
     onInteractionLockChange?.(false);
   };
 
+  const handleBookedTouchStart = (court: Court, booking: Booking, pageX: number, pageY: number) => {
+    bookedTouchStartRef.current = {
+      pageX,
+      pageY,
+      bookingId: booking.id,
+      courtId: court.id,
+    };
+  };
+
+  const handleBookedTouchEnd = (court: Court, booking: Booking, e: GestureResponderEvent) => {
+    const start = bookedTouchStartRef.current;
+    bookedTouchStartRef.current = null;
+    if (!start || start.courtId !== court.id || start.bookingId !== booking.id) return;
+
+    const deltaX = e.nativeEvent.pageX - start.pageX;
+    const deltaY = e.nativeEvent.pageY - start.pageY;
+    const movedDistance = Math.hypot(deltaX, deltaY);
+    if (movedDistance > BOOKED_SLOT_TAP_MAX_MOVEMENT_PX) return;
+
+    onBookedSlotPress?.(court, booking);
+  };
+
   // Handle touch events for tap + drag selection
   const handleTouchStart = (
     targetPageIndex: number,
@@ -733,6 +763,7 @@ export function CourtCalendarGrid({
       isDragging.current = false;
       horizontalSwipeRef.current = false;
       dragArmedRef.current = false;
+      bookedTouchStartRef.current = null;
       setDragSelection(null);
       releaseInteractionLocks();
     }
@@ -918,6 +949,12 @@ export function CourtCalendarGrid({
                             accessibilityLabel={`${court.name} ${formatFullTime(time + ':00')}`}
                             accessibilityState={{ disabled: past || Boolean(booked) }}
                             onTouchStart={(e) => {
+                              if (booked) {
+                                if (booked.bookingType !== 'blocked') {
+                                  handleBookedTouchStart(court, booked, e.nativeEvent.pageX, e.nativeEvent.pageY);
+                                }
+                                return;
+                              }
                               handleTouchStart(
                                 renderPageIndex,
                                 courtIndex,
@@ -926,15 +963,18 @@ export function CourtCalendarGrid({
                                 e.nativeEvent.pageY
                               );
                             }}
-                            onTouchEnd={() => {
+                            onTouchEnd={(e) => {
                               if (booked) {
                                 if (booked.bookingType === 'blocked') return;
-                                onBookedSlotPress?.(court, booked);
+                                handleBookedTouchEnd(court, booked, e);
                                 return;
                               }
                               handleTouchEnd();
                             }}
-                            onTouchCancel={handleTouchEnd}
+                            onTouchCancel={() => {
+                              bookedTouchStartRef.current = null;
+                              handleTouchEnd();
+                            }}
                             onTouchMove={(e) => {
                               const cur = dragSelectionRef.current;
                               if (!cur || !dragStartRef.current) return;

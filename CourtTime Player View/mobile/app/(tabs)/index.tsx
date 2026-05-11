@@ -15,12 +15,13 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../src/utils/alert';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Gradients, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { EditBookingModal } from '../../src/components/EditBookingModal';
 import { QuickBook } from '../../src/components/QuickBook';
@@ -130,10 +131,21 @@ export default function HomeScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
     >
       <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
-      <View style={styles.welcome}>
-        <Text style={styles.greeting}>
-          Welcome back, {user?.firstName || 'Player'}!
-        </Text>
+      <View style={styles.welcomeOuter}>
+        <LinearGradient
+          colors={[...Gradients.homeHero]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.welcome}
+        >
+          <View style={styles.welcomeBlobA} />
+          <View style={styles.welcomeBlobB} />
+          <Text style={styles.greetingEyebrow}>Home</Text>
+          <Text style={styles.greeting}>
+            Welcome back, {user?.firstName || 'Player'}
+          </Text>
+          <Text style={styles.greetingSub}>Here is a quick snapshot of your club.</Text>
+        </LinearGradient>
       </View>
 
       {/* Lockout Banner */}
@@ -167,16 +179,22 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={styles.actionCard}
           onPress={() => router.push('/(tabs)/book')}
+          activeOpacity={0.88}
         >
-          <Text style={styles.actionEmoji}>{'\u{1F3BE}'}</Text>
+          <View style={[styles.actionIconWrap, styles.actionIconWrapPrimary]}>
+            <Text style={styles.actionEmoji}>{'\u{1F3BE}'}</Text>
+          </View>
           <Text style={styles.actionLabel}>Book a Court</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.actionCard}
           onPress={() => router.push('/(tabs)/community')}
+          activeOpacity={0.88}
         >
-          <Ionicons name="people" size={28} color={Colors.primary} />
+          <View style={styles.actionIconWrap}>
+            <Ionicons name="people" size={24} color={Colors.primary} />
+          </View>
           <Text style={styles.actionLabel}>Community</Text>
         </TouchableOpacity>
 
@@ -184,8 +202,11 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => router.push({ pathname: '/club-info', params: { facilityId } })}
+            activeOpacity={0.88}
           >
-            <Ionicons name="information-circle" size={28} color={Colors.primary} />
+            <View style={styles.actionIconWrap}>
+              <Ionicons name="information-circle" size={24} color={Colors.primary} />
+            </View>
             <Text style={styles.actionLabel}>Club Info</Text>
           </TouchableOpacity>
         )}
@@ -195,7 +216,9 @@ export default function HomeScreen() {
       {user && facilityId && !lockout?.isLockedOut && (
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Ionicons name="flash" size={18} color={Colors.primary} />
+            <View style={styles.sectionIconBadge}>
+              <Ionicons name="flash" size={16} color={Colors.primary} />
+            </View>
             <Text style={styles.sectionTitle}>Quick Book</Text>
           </View>
           <QuickBook
@@ -217,7 +240,12 @@ export default function HomeScreen() {
 
       {/* Upcoming Bookings */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionIconBadge}>
+            <Ionicons name="calendar" size={16} color={Colors.primary} />
+          </View>
+          <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
+        </View>
         {bookings.length === 0 ? (
           <EmptyState
             icon="calendar-clear-outline"
@@ -268,7 +296,12 @@ export default function HomeScreen() {
 
       {/* Bulletin Board */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Bulletin Board</Text>
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionIconBadge}>
+            <Ionicons name="megaphone" size={16} color={Colors.primary} />
+          </View>
+          <Text style={styles.sectionTitle}>Bulletin Board</Text>
+        </View>
         {bulletins.length === 0 ? (
           <EmptyState
             icon="megaphone-outline"
@@ -361,15 +394,62 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.surface,
   },
+  welcomeOuter: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 10,
+  },
   welcome: {
-    backgroundColor: Colors.primary,
-    padding: Spacing.lg,
-    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    overflow: 'hidden',
+  },
+  welcomeBlobA: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    top: -70,
+    right: -60,
+  },
+  welcomeBlobB: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(143,255,212,0.25)',
+    bottom: -20,
+    left: -30,
+  },
+  greetingEyebrow: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
+    color: 'rgba(255,255,255,0.72)',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.xs,
   },
   greeting: {
-    fontSize: FontSize.xl,
-    fontWeight: '700',
+    fontSize: FontSize.xxl,
+    fontFamily: FontFamily.bold,
     color: Colors.textInverse,
+    letterSpacing: -0.3,
+    lineHeight: 30,
+  },
+  greetingSub: {
+    marginTop: Spacing.sm,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.88)',
+    lineHeight: 20,
   },
   lockoutBanner: {
     flexDirection: 'row',
@@ -414,44 +494,71 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: 'row',
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
     gap: Spacing.sm,
   },
   actionCard: {
     flex: 1,
     backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
     shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  actionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionIconWrapPrimary: {
+    backgroundColor: Colors.primary + '1A',
   },
   actionEmoji: {
-    fontSize: 28,
+    fontSize: 26,
   },
   actionLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
+    textAlign: 'center',
   },
   section: {
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.lg,
   },
   sectionTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
-    marginBottom: Spacing.sm,
+    marginBottom: 0,
+    flex: 1,
+    letterSpacing: -0.2,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  sectionIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   violationsOverlay: {
     flex: 1,
@@ -514,11 +621,18 @@ const styles = StyleSheet.create({
   },
   bookingCard: {
     backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   bookingHeader: {
     flexDirection: 'row',
@@ -583,9 +697,16 @@ const styles = StyleSheet.create({
   },
   bulletinCard: {
     backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
   bulletinTitle: {
     fontSize: FontSize.md,

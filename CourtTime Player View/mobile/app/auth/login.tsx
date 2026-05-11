@@ -13,9 +13,11 @@ import {
   Image,
 } from 'react-native';
 import { Link } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
+import { Colors, Gradients, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
@@ -49,26 +51,33 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.flex}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+    <View style={styles.root}>
+      <StatusBar style="light" />
+      <LinearGradient colors={[...Gradients.login]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <View style={[styles.blob, styles.blob1]} />
+      <View style={[styles.blob, styles.blob2]} />
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.flex}
         >
-          <View style={styles.header}>
-            <Image
-              source={require('../../assets/splash-logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-              accessibilityLabel="CourtTime logo"
-            />
-            <Text style={styles.subtitle}>Book courts. Find partners. Play better.</Text>
-          </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.header}>
+              <View style={styles.logoCard}>
+                <Image
+                  source={require('../../assets/splash-logo.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                  accessibilityLabel="CourtTime logo"
+                />
+              </View>
+              <Text style={styles.tagline}>Book courts · Find partners · Play better</Text>
+            </View>
 
-          <Card style={styles.formCard}>
+            <Card style={styles.formCard}>
             <View style={styles.form}>
               {error ? (
                 <View style={styles.errorBox}>
@@ -124,16 +133,40 @@ export default function LoginScreen() {
               Admin features are available on the web app.
             </Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#022018',
+  },
+  safe: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  blob: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.35,
+  },
+  blob1: {
+    width: 280,
+    height: 280,
+    backgroundColor: '#4FFFB0',
+    top: -80,
+    right: -100,
+  },
+  blob2: {
+    width: 220,
+    height: 220,
+    backgroundColor: '#0EA5E9',
+    bottom: 120,
+    left: -90,
   },
   flex: {
     flex: 1,
@@ -148,20 +181,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xl,
   },
+  logoCard: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 12,
+    marginBottom: Spacing.md,
+  },
   logoImage: {
     width: 220,
-    height: 64,
-    marginBottom: Spacing.xs,
+    height: 56,
   },
-  subtitle: {
+  tagline: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
-    fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.92)',
+    fontFamily: FontFamily.medium,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   formCard: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+    elevation: 16,
   },
   form: {
     gap: Spacing.md,
@@ -219,11 +272,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: Spacing.lg,
     paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.25)',
   },
   adminNoteText: {
-    color: Colors.textMuted,
+    color: 'rgba(255,255,255,0.65)',
     fontSize: FontSize.xs,
     fontFamily: FontFamily.regular,
   },

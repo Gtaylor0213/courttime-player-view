@@ -18,13 +18,13 @@ export function Card({ style, padded = true, ...props }: CardProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
     shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.85,
+    shadowRadius: 12,
     elevation: 2,
   },
   padded: {

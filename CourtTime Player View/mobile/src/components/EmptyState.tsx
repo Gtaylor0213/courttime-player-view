@@ -19,7 +19,9 @@ interface EmptyStateProps {
 export function EmptyState({ icon, title, description, actionLabel, onAction }: EmptyStateProps) {
   return (
     <View style={styles.container}>
-      <Ionicons name={icon} size={56} color={Colors.textMuted} />
+      <View style={styles.iconRing}>
+        <Ionicons name={icon} size={40} color={Colors.primary} />
+      </View>
       <Text style={styles.title}>{title}</Text>
       {description && <Text style={styles.description}>{description}</Text>}
       {actionLabel && onAction && (
@@ -37,9 +39,23 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.md,
     gap: Spacing.md,
     backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  iconRing: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: Colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
   },
   title: {
     fontSize: FontSize.xl,

@@ -20,13 +20,14 @@ import {
 } from 'react-native';
 import { showAlert } from '../../src/utils/alert';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
 import { TimePicker, PICKER_HEIGHT } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
+import { Colors, Gradients, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
 import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
@@ -874,7 +875,12 @@ export default function BookCourtScreen() {
       )}
 
       {/* ── Calendar ── */}
-      <View style={styles.calendarSection}>
+      <LinearGradient
+        colors={[...Gradients.bookCalendar]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.calendarSection}
+      >
         <View style={styles.dayNavRow}>
           <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(-1)}>
             <Ionicons name="chevron-back" size={18} color={Colors.primary} />
@@ -921,7 +927,7 @@ export default function BookCourtScreen() {
             minDate={getTodayString()}
           />
         )}
-      </View>
+      </LinearGradient>
 
       {/* ══════ CALENDAR GRID (Website-style default view) ══════ */}
       {facilityId && (
@@ -1364,8 +1370,18 @@ const styles = StyleSheet.create({
 
   // ── Calendar ──
   calendarSection: {
-    backgroundColor: Colors.card,
-    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.primary + '22',
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 4,
   },
   dayNavRow: {
     flexDirection: 'row',
@@ -1380,9 +1396,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.card,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.primary + '30',
   },
   datePill: {
     flex: 1,
@@ -1390,9 +1406,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.xs,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    borderWidth: 1.5,
+    borderColor: Colors.primary + '35',
     borderRadius: BorderRadius.full,
     paddingVertical: Spacing.sm,
     minHeight: TouchTarget.min,

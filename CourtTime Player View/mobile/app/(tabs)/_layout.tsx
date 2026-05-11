@@ -4,11 +4,13 @@
  */
 
 import React, { useMemo } from 'react';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontFamily, FontSize, Spacing } from '../../src/constants/theme';
+import { Colors, FontFamily, FontSize, Gradients, Spacing } from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -48,20 +50,26 @@ export default function TabLayout() {
   const screenOptions = useMemo(
     () => ({
       sceneStyle: { backgroundColor: Colors.surface },
-      tabBarActiveTintColor: Colors.primary,
-      tabBarInactiveTintColor: Colors.textMuted,
+      tabBarActiveTintColor: Colors.chromeAccent,
+      tabBarInactiveTintColor: Colors.chromeTextMuted,
       freezeOnBlur: false,
+      tabBarBackground: () => (
+        <View style={StyleSheet.absoluteFill}>
+          <LinearGradient colors={[...Gradients.tabBar]} style={StyleSheet.absoluteFill} />
+        </View>
+      ),
       // Do not set a fixed tabBar height — it can clip touch targets vs. safe area / font scale.
       tabBarStyle: [
         styles.tabBar,
         {
-          paddingBottom: Math.max(insets.bottom, 10),
-          paddingTop: 8,
+          paddingBottom: Math.max(insets.bottom, 12),
+          paddingTop: 10,
+          backgroundColor: 'transparent',
         },
       ],
       tabBarLabelStyle: styles.tabLabel,
       headerStyle: styles.header,
-      headerTintColor: Colors.text,
+      headerTintColor: Colors.chromeText,
       headerTitleStyle: styles.headerTitle,
       /** Left-aligned title uses most of the bar width so long club names are not clipped in a narrow center slot */
       headerTitleAlign: 'left' as const,
@@ -72,7 +80,9 @@ export default function TabLayout() {
   );
 
   return (
-    <Tabs initialRouteName="book" detachInactiveScreens={false} screenOptions={screenOptions}>
+    <>
+      <StatusBar style="light" />
+      <Tabs initialRouteName="book" detachInactiveScreens={false} screenOptions={screenOptions}>
       <Tabs.Screen
         name="book"
         options={{
@@ -123,34 +133,40 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: Colors.card,
-    borderTopColor: Colors.border,
-    borderTopWidth: 1,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -3 },
-    elevation: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.chromeChipBorder,
+    shadowColor: '#000',
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 20,
   },
   tabLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.bold,
+    fontSize: 10,
+    fontFamily: FontFamily.semiBold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   header: {
-    backgroundColor: Colors.card,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    backgroundColor: Colors.chromeBackground,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.chromeBorder,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
   headerTitle: {
-    color: Colors.text,
+    color: Colors.chromeText,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.md,
   },

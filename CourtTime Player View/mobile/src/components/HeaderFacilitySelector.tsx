@@ -91,7 +91,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
             <CachedImage uri={currentFacility.logoUrl} style={styles.logo} />
           ) : (
             <View style={styles.logoFallback}>
-              <Ionicons name="business-outline" size={14} color={Colors.primary} />
+              <Ionicons name="business-outline" size={14} color={Colors.chromeAccent} />
             </View>
           )}
         </View>
@@ -100,7 +100,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
             {facilityName}
           </Text>
         </View>
-        <Ionicons name="chevron-down" size={14} color={Colors.textSecondary} />
+        <Ionicons name="chevron-down" size={14} color={Colors.chromeTextMuted} />
       </TouchableOpacity>
 
       <Modal
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   titleStatic: {
-    color: Colors.text,
+    color: Colors.chromeText,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
     lineHeight: 17,
@@ -185,9 +185,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.chromeChipBg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.chromeChipBorder,
     minHeight: 36,
   },
   logoSlot: {
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary + '12',
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
   titleFlex: {
     flex: 1,
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonText: {
-    color: Colors.text,
+    color: Colors.chromeText,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
     flexShrink: 1,

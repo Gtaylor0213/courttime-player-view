@@ -15,12 +15,15 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
 import type { Court } from '../types/database';
 import { BookingSkeleton } from './LoadingSkeleton';
+import { EmptyState } from './EmptyState';
 import { createPollingTransport } from '../../../shared/api/sync';
 import { getOperatingHoursForDay, isTruthyClosed } from '../../../shared/utils/operatingHours';
+import { userFacingApiMessage, type ApiFailureShape } from '../utils/apiUserMessages';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -190,6 +193,20 @@ interface Props {
   onRequestToday?: () => void;
 }
 
+interface GridLoadError {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+}
+
+function toGridLoadError(res: ApiFailureShape, title: string): GridLoadError {
+  return {
+    icon: res.errorCategory === 'offline' ? 'cloud-offline-outline' : 'alert-circle-outline',
+    title,
+    description: userFacingApiMessage(res),
+  };
+}
+
 export function CourtCalendarGrid({
   courts,
   selectedDate,
@@ -208,6 +225,7 @@ export function CourtCalendarGrid({
   /** Disables inner + parent scroll while a cell gesture is active (refs alone do not re-render scrollEnabled). */
   const [touchCaptureActive, setTouchCaptureActive] = useState(false);
   const [facilityDayHours, setFacilityDayHours] = useState<FacilityDayHours | null>(null);
+  const [loadError, setLoadError] = useState<GridLoadError | null>(null);
   /** Same payload as dragSelection, updated synchronously — RN can fire parent onTouchEnd before state from onTouchStart commits. */
   const dragSelectionRef = useRef<DragSelection | null>(null);
   const dragStartRef = useRef<{ pageX: number; pageY: number; startRow: number } | null>(null);
@@ -288,8 +306,15 @@ export function CourtCalendarGrid({
 
   // Fetch availability for all courts on selected date
   const fetchAvailability = useCallback(async () => {
-    if (courts.length === 0) return;
+    if (courts.length === 0) {
+      setCourtData([]);
+      setFacilityDayHours(null);
+      setLoadError(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setLoadError(null);
     console.log('[book-grid] fetch day view', {
       selectedDate,
       facilityId,
@@ -315,6 +340,22 @@ export function CourtCalendarGrid({
       facilityErrorCategory: facilityRes.errorCategory,
       facilityError: facilityRes.error,
     });
+
+    if (!bookingsRes.success || !configRes.success) {
+      const criticalFailure = !bookingsRes.success ? bookingsRes : configRes;
+      setCourtData([]);
+      setFacilityDayHours(null);
+      setLoadError(
+        toGridLoadError(
+          criticalFailure,
+          criticalFailure.errorCategory === 'offline'
+            ? 'You are offline'
+            : 'Could not load booking availability'
+        )
+      );
+      setLoading(false);
+      return;
+    }
 
     const dateObj = new Date(`${selectedDate}T00:00:00`);
     const dayIndex = dateObj.getDay();
@@ -737,25 +778,12 @@ export function CourtCalendarGrid({
       dragSelectionRef.current = null;
 
       if (isDragging.current && !selectionHasConflict(sel)) {
-        const globalCourtIndex = sel.pageIndex * COURTS_PER_PAGE + sel.courtIndex;
-        const court = courts[globalCourtIndex];
         const startRow = Math.min(sel.startRow, sel.endRow);
         const endRow = Math.max(sel.startRow, sel.endRow);
-        const startTime = timeRows[startRow] + ':00';
-        const endTime = getRowEndTime(endRow) + ':00';
-
-        if (court) {
-          void onBookingSelected(court, startTime, endTime);
-        }
+        openSelectedRange(sel.pageIndex, sel.courtIndex, startRow, endRow);
       } else if (!dragMoved.current) {
         // Treat as single-tap selection when finger did not move enough to drag.
-        const globalCourtIndex = sel.pageIndex * COURTS_PER_PAGE + sel.courtIndex;
-        const court = courts[globalCourtIndex];
-        const startTime = timeRows[sel.startRow] + ':00';
-        const endTime = getRowEndTime(sel.startRow) + ':00';
-        if (court) {
-          void onBookingSelected(court, startTime, endTime);
-        }
+        openSelectedRange(sel.pageIndex, sel.courtIndex, sel.startRow, sel.startRow);
       }
     } finally {
       dragStartRef.current = null;
@@ -800,23 +828,65 @@ export function CourtCalendarGrid({
     return span;
   };
 
+  const openSelectedRange = useCallback(
+    (targetPageIndex: number, courtIndex: number, startRow: number, endRow: number) => {
+      const globalCourtIndex = targetPageIndex * COURTS_PER_PAGE + courtIndex;
+      const court = courts[globalCourtIndex];
+      if (!court) return;
+
+      const resolvedStartRow = Math.min(startRow, endRow);
+      const resolvedEndRow = Math.max(startRow, endRow);
+      const startTime = timeRows[resolvedStartRow] + ':00';
+      const endTime = getRowEndTime(resolvedEndRow) + ':00';
+
+      void onBookingSelected(court, startTime, endTime);
+    },
+    [courts, getRowEndTime, onBookingSelected, timeRows]
+  );
+
+  const openBookedSlotDetails = useCallback(
+    (court: Court, booking: Booking) => {
+      if (booking.bookingType === 'blocked') return;
+      onBookedSlotPress?.(court, booking);
+    },
+    [onBookedSlotPress]
+  );
+
   if (loading) {
     return <BookingSkeleton />;
   }
 
+  if (loadError) {
+    return (
+      <EmptyState
+        icon={loadError.icon}
+        title={loadError.title}
+        description={loadError.description}
+        actionLabel="Try again"
+        onAction={() => {
+          void fetchAvailability();
+        }}
+      />
+    );
+  }
+
   if (courts.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>No courts available</Text>
-      </View>
+      <EmptyState
+        icon="tennisball-outline"
+        title="No courts available"
+        description="This club does not have any reservable courts available right now."
+      />
     );
   }
 
   if (timeRows.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Facility is closed on this date</Text>
-      </View>
+      <EmptyState
+        icon="moon-outline"
+        title="Facility is closed on this date"
+        description="Choose another date to see court availability."
+      />
     );
   }
 
@@ -936,6 +1006,22 @@ export function CourtCalendarGrid({
                         const selected = isSelected(renderPageIndex, courtIndex, rowIndex);
                         const bookingStart = isBookingStart(renderPageIndex, courtIndex, rowIndex);
                         const span = bookingStart ? getBookingRowSpan(renderPageIndex, courtIndex, rowIndex, bookingStart) : 0;
+                        const fullTimeLabel = formatFullTime(time + ':00');
+                        const cellDisabled = isBlockedSlot || (past && !booked);
+                        const accessibilityLabel = booked
+                          ? isBlockedSlot
+                            ? `${court.name} at ${fullTimeLabel}. Unavailable because a related court is booked.`
+                            : `${court.name} at ${fullTimeLabel}. Booked ${bookingStart?.bookingType || booked.bookingType || 'reservation'} from ${formatFullTime(booked.startTime)} to ${formatFullTime(booked.endTime)}.`
+                          : past
+                            ? `${court.name} at ${fullTimeLabel}. Past time slot.`
+                            : `${court.name} at ${fullTimeLabel}. Available to book.`;
+                        const accessibilityHint = booked
+                          ? isBlockedSlot
+                            ? 'This slot is unavailable.'
+                            : 'Double tap to view booking details.'
+                          : past
+                            ? 'Past time slots cannot be booked.'
+                            : 'Double tap to book this time or long press and drag to select a longer booking.';
 
                         return (
                           <View
@@ -950,9 +1036,28 @@ export function CourtCalendarGrid({
                               selected && styles.cellSelected,
                               selected && dragSelection && selectionHasConflict(dragSelection) && styles.cellConflict,
                             ]}
+                            accessible
                             accessibilityRole="button"
-                            accessibilityLabel={`${court.name} ${formatFullTime(time + ':00')}`}
-                            accessibilityState={{ disabled: past || Boolean(booked) }}
+                            accessibilityLabel={accessibilityLabel}
+                            accessibilityHint={accessibilityHint}
+                            accessibilityState={{ disabled: cellDisabled, selected }}
+                            accessibilityActions={
+                              cellDisabled
+                                ? undefined
+                                : [
+                                    {
+                                      name: 'activate',
+                                      label: booked ? 'View booking details' : 'Book this time slot',
+                                    },
+                                  ]
+                            }
+                            onAccessibilityAction={() => {
+                              if (booked) {
+                                openBookedSlotDetails(court, booked);
+                                return;
+                              }
+                              openSelectedRange(renderPageIndex, courtIndex, rowIndex, rowIndex);
+                            }}
                             onTouchStart={(e) => {
                               if (booked) {
                                 if (booked.bookingType !== 'blocked') {
@@ -1040,8 +1145,7 @@ export function CourtCalendarGrid({
                                   bookingStart.bookingType === 'blocked' && styles.bookingBlockBlocked,
                                   { height: span * ROW_HEIGHT - 2 },
                                 ]}
-                                accessibilityRole="button"
-                                accessibilityLabel={`View booking details on ${court.name}`}
+                                accessible={false}
                               >
                                 <Text style={styles.bookingBlockText} numberOfLines={1}>
                                   {bookingStart.bookingType === 'blocked' ? 'Blocked' : (bookingStart.bookingType || 'Booked')}

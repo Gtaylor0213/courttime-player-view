@@ -148,6 +148,7 @@ export default function NotificationSettingsScreen() {
             value={prefs.emailNotificationsEnabled}
             onValueChange={(v) => toggle('emailNotificationsEnabled', v)}
             trackColor={{ false: Colors.border, true: Colors.primary }}
+            accessibilityLabel="Email notifications"
           />
         </View>
 
@@ -163,6 +164,7 @@ export default function NotificationSettingsScreen() {
             value={prefs.pushEnabled}
             onValueChange={(v) => toggle('pushEnabled', v)}
             trackColor={{ false: Colors.border, true: Colors.primary }}
+            accessibilityLabel="Push notifications"
           />
         </View>
 
@@ -183,6 +185,7 @@ export default function NotificationSettingsScreen() {
                   onValueChange={(v) => toggle(cfg.key, v)}
                   disabled={!prefs.pushEnabled}
                   trackColor={{ false: Colors.border, true: Colors.primary }}
+                  accessibilityLabel={cfg.title}
                 />
               </View>
               {idx < CATEGORY_TOGGLES.length - 1 && <View style={styles.divider} />}

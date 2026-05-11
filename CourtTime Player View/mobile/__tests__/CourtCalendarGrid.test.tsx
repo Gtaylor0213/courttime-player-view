@@ -1,6 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { describe, it, expect, jest } from '@jest/globals';
+import { Text } from 'react-native';
 import { CourtCalendarGrid } from '../src/components/CourtCalendarGrid';
 import { api } from '../src/api/client';
 
@@ -45,7 +46,7 @@ describe('CourtCalendarGrid', () => {
       await Promise.resolve();
     });
 
-    const textNodes = (tree!.root.findAllByType('Text') || []).map((n: any) => n.props.children).flat();
+    const textNodes = (tree!.root.findAllByType(Text) || []).map((n: any) => n.props.children).flat();
     expect(textNodes).toContain('Court 1');
     expect(textNodes).toContain('Court 2');
     expect(textNodes).not.toContain('No courts available');

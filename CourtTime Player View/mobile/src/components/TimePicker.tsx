@@ -91,6 +91,9 @@ export function TimePicker({ times, selectedTime, onSelect, label }: TimePickerP
                   scrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
                   lastSyncedIndexRef.current = index;
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={`${label} time ${formatTime(item)}`}
+                accessibilityState={{ selected: isSelected }}
               >
                 <Text style={[styles.itemText, isSelected && styles.itemTextSelected]}>
                   {formatTime(item)}

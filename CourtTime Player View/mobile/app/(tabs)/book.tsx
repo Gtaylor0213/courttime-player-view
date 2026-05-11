@@ -36,6 +36,11 @@ import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
 import { Card } from '../../src/components/Card';
 import type { BookingWithDetails } from '../../src/types/database';
+import { OfflineBanner } from '../../src/components/OfflineBanner';
+import { EmptyState } from '../../src/components/EmptyState';
+import { useOfflineApi } from '../../src/hooks/useOfflineApi';
+import { addBookingToDeviceCalendar } from '../../src/utils/deviceCalendar';
+import { userFacingApiMessage, type ApiFailureShape } from '../../src/utils/apiUserMessages';
 
 export const ErrorBoundary = createRouteErrorBoundary('Book');
 
@@ -164,13 +169,18 @@ interface RuleViolation {
   ruleCode: string;
   ruleName: string;
   message: string;
-  severity: string;
+  severity?: string;
+}
+
+function bookingTypeLabel(typeKey: string): string {
+  return BOOKING_TYPES.find((type) => type.key === typeKey)?.label ?? typeKey;
 }
 
 export default function BookCourtScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const params = useLocalSearchParams<{ facilityId?: string; bookingDate?: string; bookingId?: string }>();
   const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate } = useAuth();
+  const { bannerState, lastCachedAt, retryConnectivity } = useOfflineApi();
   const facilityList = facilities ?? [];
   const currentFacilityName = facilityList.find(f => f.id === facilityId)?.name;
   /** Avoid applying slot results from a stale availability request after the user picks another court on the grid. */
@@ -213,6 +223,7 @@ export default function BookCourtScreen() {
   const [warnings, setWarnings] = useState<RuleViolation[]>([]);
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
   const [selectedCalendarBooking, setSelectedCalendarBooking] = useState<BookingWithDetails | null>(null);
+  const [courtLoadError, setCourtLoadError] = useState<ApiFailureShape | null>(null);
 
   function getTodayString() {
     const d = new Date();
@@ -247,6 +258,63 @@ export default function BookCourtScreen() {
     selectedCourtIdRef.current = selectedCourt?.id ?? null;
   }, [selectedCourt?.id]);
 
+  const offerAddToCalendar = useCallback(
+    (message: string, details: { title: string; bookingDate: string; startTime: string; endTime: string; location?: string; notes?: string } | null) => {
+      if (!details || Platform.OS === 'web') {
+        showAlert('Booked!', message);
+        return;
+      }
+
+      showAlert('Booked!', `${message}\n\nAdd it to your device calendar?`, [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Add to Calendar',
+          onPress: async () => {
+            const result = await addBookingToDeviceCalendar({
+              ...details,
+              alarmMinutesBefore: 30,
+            });
+
+            if (result.success) {
+              showAlert('Added to Calendar', 'This booking was added to your device calendar.');
+              return;
+            }
+
+            if (result.reason === 'permission_denied') {
+              showAlert(
+                'Calendar access denied',
+                'Your booking is confirmed. To add future bookings, allow calendar access in your device settings.'
+              );
+              return;
+            }
+
+            if (result.reason === 'no_writable_calendar') {
+              showAlert(
+                'No writable calendar found',
+                'Your booking is confirmed, but CourtTime could not find a calendar it can write to on this device.'
+              );
+              return;
+            }
+
+            if (result.reason === 'unsupported') {
+              showAlert(
+                'Calendar not supported',
+                'Your booking is confirmed, but calendar integration is not available on this device.'
+              );
+              return;
+            }
+
+            showAlert(
+              'Could not add to calendar',
+              'Your booking is confirmed, but CourtTime could not add it to your device calendar.'
+            );
+          },
+        },
+      ]);
+    },
+    []
+  );
+
   useEffect(() => {
     if (modalKind !== null) {
       return;
@@ -266,7 +334,11 @@ export default function BookCourtScreen() {
 
   // ── Fetch courts ──
   const fetchCourts = useCallback(async () => {
-    if (!facilityId) return;
+    if (!facilityId) {
+      setCourts([]);
+      setCourtLoadError(null);
+      return;
+    }
     console.log('[book] fetch courts', {
       facilityId,
       selectedDate,
@@ -295,7 +367,11 @@ export default function BookCourtScreen() {
           parentCourtId: c.parentCourtId ?? c.parent_court_id ?? null,
         }))
       );
-      setCourts(sorted.filter((c: Court) => !c.isWalkUp));
+      setCourts(sorted.filter((c: any) => !c.isWalkUp) as Court[]);
+      setCourtLoadError(null);
+    } else {
+      setCourts([]);
+      setCourtLoadError(res);
     }
   }, [facilityId, selectedDate]);
 
@@ -324,6 +400,8 @@ export default function BookCourtScreen() {
     if (res.success && res.data) {
       const data = res.data as AvailabilityResponse;
       setTimeSlots(buildTimeSlotsFromAvailability(data, selectedDate, getTodayString()));
+    } else {
+      setTimeSlots([]);
     }
   }, [selectedCourt, selectedDate]);
 
@@ -356,12 +434,13 @@ export default function BookCourtScreen() {
       const res = await api.get(`/api/court-config/${court.id}/availability?date=${selectedDate}`);
 
       let slots: TimeSlot[] = [];
-      if (res.success && res.data) {
-        slots = buildTimeSlotsFromAvailability(
-          res.data as AvailabilityResponse,
-          selectedDate,
-          getTodayString()
-        );
+      if (!res.success) {
+        showApiErrorAlert(res, 'Could not load open times');
+        return;
+      }
+
+      if (res.data) {
+        slots = buildTimeSlotsFromAvailability(res.data as AvailabilityResponse, selectedDate, getTodayString());
       }
 
       const starts = slots.filter((s) => s.available).map((s) => s.startTime.slice(0, 5));
@@ -712,7 +791,25 @@ export default function BookCourtScreen() {
         allCourtIds.length > 1
           ? `${primaryName} (+ ${allCourtIds.length - 1} more) on ${selectedDateLabel} at ${timeLabel}.`
           : `${primaryName} on ${selectedDateLabel} at ${timeLabel}.`;
-      showAlert('Booked!', bookedBody);
+      offerAddToCalendar(
+        bookedBody,
+        allCourtIds.length === 1
+          ? {
+              title: currentFacilityName ? `${currentFacilityName} - ${primaryName}` : `Court booking - ${primaryName}`,
+              bookingDate: selectedDate,
+              startTime,
+              endTime,
+              location: currentFacilityName,
+              notes: [
+                'Booked from CourtTime.',
+                `Booking type: ${bookingTypeLabel(bookingType)}.`,
+                bookingNotes.trim() ? `Notes: ${bookingNotes.trim()}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n'),
+            }
+          : null
+      );
       fetchTimeSlots();
     } else if (firstViolations) {
       hapticError();
@@ -750,7 +847,24 @@ export default function BookCourtScreen() {
     setModalKind(null);
     if (res.success) {
       hapticSuccess();
-      showAlert('Booked!', 'Booking created with admin override.');
+      offerAddToCalendar(
+        'Booking created with admin override.',
+        {
+          title: currentFacilityName ? `${currentFacilityName} - ${selectedCourt.name}` : `Court booking - ${selectedCourt.name}`,
+          bookingDate: selectedDate,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+          location: currentFacilityName,
+          notes: [
+            'Booked from CourtTime.',
+            `Booking type: ${bookingTypeLabel(bookingType)}.`,
+            bookingNotes.trim() ? `Notes: ${bookingNotes.trim()}` : null,
+            'Created with admin override.',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        }
+      );
       fetchTimeSlots();
     } else {
       showAlert('Override Failed', res.error || 'Could not complete booking.');
@@ -888,6 +1002,7 @@ export default function BookCourtScreen() {
         nestedScrollEnabled
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
       >
+      <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
       {!facilityId && (
         <View style={styles.noFacility}>
           <Ionicons name="warning-outline" size={20} color={Colors.warning} />
@@ -970,7 +1085,17 @@ export default function BookCourtScreen() {
       ) : null}
 
       {/* ══════ CALENDAR GRID (Website-style default view) ══════ */}
-      {facilityId && (
+      {facilityId && courtLoadError ? (
+        <EmptyState
+          icon={courtLoadError.errorCategory === 'offline' ? 'cloud-offline-outline' : 'alert-circle-outline'}
+          title={courtLoadError.errorCategory === 'offline' ? 'You are offline' : 'Could not load courts'}
+          description={userFacingApiMessage(courtLoadError)}
+          actionLabel="Try again"
+          onAction={() => {
+            void fetchCourts();
+          }}
+        />
+      ) : facilityId ? (
         <CourtCalendarGrid
           courts={courts}
           selectedDate={selectedDate}
@@ -980,7 +1105,7 @@ export default function BookCourtScreen() {
           onInteractionLockChange={onCalendarInteractionLock}
           onRequestToday={onRequestTodayForGrid}
         />
-      )}
+      ) : null}
 
       <View style={{ height: Spacing.xl }} />
       </ScrollView>
@@ -1080,6 +1205,9 @@ export default function BookCourtScreen() {
                         key={bt.key}
                         style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
                         onPress={() => setBookingType(bt.key)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${bt.label} booking type`}
+                        accessibilityState={{ selected: bookingType === bt.key }}
                       >
                         <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
                           {bt.label}
@@ -1112,6 +1240,9 @@ export default function BookCourtScreen() {
                             key={court.id}
                             style={[styles.typeChip, additionalCourtIds.includes(court.id) && styles.typeChipSelected]}
                             onPress={() => toggleAdditionalCourt(court.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Add ${court.name} to this booking`}
+                            accessibilityState={{ selected: additionalCourtIds.includes(court.id) }}
                           >
                             <Text style={[styles.typeChipText, additionalCourtIds.includes(court.id) && styles.typeChipTextSelected]}>
                               {court.name}
@@ -1145,6 +1276,9 @@ export default function BookCourtScreen() {
                           <TouchableOpacity
                             style={[styles.typeChip, !recurringBookingEnabled && styles.typeChipSelected]}
                             onPress={() => setRecurringBookingEnabled(false)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Create a one time booking"
+                            accessibilityState={{ selected: !recurringBookingEnabled }}
                           >
                             <Text style={[styles.typeChipText, !recurringBookingEnabled && styles.typeChipTextSelected]}>
                               One-time
@@ -1153,6 +1287,9 @@ export default function BookCourtScreen() {
                           <TouchableOpacity
                             style={[styles.typeChip, recurringBookingEnabled && styles.typeChipSelected]}
                             onPress={() => setRecurringBookingEnabled(true)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Create a weekly recurring booking"
+                            accessibilityState={{ selected: recurringBookingEnabled }}
                           >
                             <Text style={[styles.typeChipText, recurringBookingEnabled && styles.typeChipTextSelected]}>
                               Weekly recurring
@@ -1168,6 +1305,9 @@ export default function BookCourtScreen() {
                                   key={day}
                                   style={[styles.weekChip, recurringDays.includes(day) && styles.weekChipSelected]}
                                   onPress={() => toggleRecurringDay(day)}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Repeat on ${day}`}
+                                  accessibilityState={{ selected: recurringDays.includes(day) }}
                                 >
                                   <Text style={[styles.weekChipText, recurringDays.includes(day) && styles.weekChipTextSelected]}>
                                     {day.slice(0, 3)}
@@ -1210,6 +1350,7 @@ export default function BookCourtScreen() {
                   value={bookingNotes}
                   onChangeText={setBookingNotes}
                   placeholder="Special requests or notes..."
+                  accessibilityLabel="Booking notes"
                   multiline
                   maxLength={200}
                 />

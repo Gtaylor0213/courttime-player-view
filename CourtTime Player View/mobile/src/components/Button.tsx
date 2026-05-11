@@ -6,13 +6,12 @@ import {
   Text,
   View,
   ViewStyle,
-  type AccessibilityProps,
 } from 'react-native';
 import { Colors, BorderRadius, Spacing, FontSize, FontFamily, TouchTarget } from '../constants/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'warning';
 
-interface ButtonProps extends Pick<AccessibilityProps, 'accessibilityLabel' | 'testID'> {
+interface ButtonProps {
   title: string;
   onPress: () => void;
   variant?: ButtonVariant;
@@ -21,6 +20,8 @@ interface ButtonProps extends Pick<AccessibilityProps, 'accessibilityLabel' | 't
   /** Shown to the left of the title when not loading */
   leftIcon?: React.ReactNode;
   style?: ViewStyle;
+  accessibilityLabel?: string;
+  testID?: string;
 }
 
 export function Button({

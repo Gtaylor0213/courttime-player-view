@@ -374,11 +374,11 @@ export default function ProfileScreen() {
         <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <View style={styles.editHeader}>
-            <TouchableOpacity onPress={cancelEdit} disabled={saving}>
+            <TouchableOpacity onPress={cancelEdit} disabled={saving} accessibilityRole="button" accessibilityLabel="Cancel profile editing">
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.editTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={handleSave} disabled={saving}>
+            <TouchableOpacity onPress={handleSave} disabled={saving} accessibilityRole="button" accessibilityLabel="Save profile changes">
               {saving ? (
                 <ActivityIndicator size="small" color={Colors.primary} />
               ) : (
@@ -389,14 +389,14 @@ export default function ProfileScreen() {
 
           {/* Avatar */}
           <View style={styles.editAvatarSection}>
-            <TouchableOpacity onPress={handlePickImage} style={styles.avatarLarge}>
+            <TouchableOpacity onPress={handlePickImage} style={styles.avatarLarge} accessibilityRole="button" accessibilityLabel="Change profile photo">
               {avatarSource ? (
                 <CachedImage uri={avatarSource} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarText}>{getInitials()}</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={handlePickImage}>
+            <TouchableOpacity onPress={handlePickImage} accessibilityRole="button" accessibilityLabel="Choose a different profile photo">
               <Text style={styles.changePhotoText}>Change Photo</Text>
             </TouchableOpacity>
           </View>
@@ -467,7 +467,7 @@ export default function ProfileScreen() {
                 <TouchableOpacity
                   style={styles.formInput}
                   onPress={() => {
-                    showAlert('Select State', undefined, US_STATES.map(s => ({
+                    showAlert('Select State', '', US_STATES.map(s => ({
                       text: s,
                       onPress: () => setState(s),
                     })));
@@ -594,7 +594,7 @@ export default function ProfileScreen() {
             <Text style={styles.skillText}>{profile.skillLevel}</Text>
           </View>
         )}
-        <TouchableOpacity style={styles.editButton} onPress={enterEditMode}>
+        <TouchableOpacity style={styles.editButton} onPress={enterEditMode} accessibilityRole="button" accessibilityLabel="Edit profile">
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
@@ -661,7 +661,7 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
           <Text style={styles.sectionTitle}>My Facilities</Text>
-          <TouchableOpacity onPress={() => setShowFindFacility(true)}>
+          <TouchableOpacity onPress={() => setShowFindFacility(true)} accessibilityRole="button" accessibilityLabel="Find a facility to join">
             <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' }}>+ Find Facility</Text>
           </TouchableOpacity>
         </View>
@@ -669,7 +669,7 @@ export default function ProfileScreen() {
           <View style={styles.detailCard}>
             <View style={{ padding: Spacing.lg, alignItems: 'center' }}>
               <Text style={{ color: Colors.textMuted, fontSize: FontSize.sm }}>You're not a member of any facility yet.</Text>
-              <TouchableOpacity onPress={() => setShowFindFacility(true)} style={{ marginTop: Spacing.sm }}>
+              <TouchableOpacity onPress={() => setShowFindFacility(true)} style={{ marginTop: Spacing.sm }} accessibilityRole="button" accessibilityLabel="Find a facility to join">
                 <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' }}>Find a facility to join</Text>
               </TouchableOpacity>
             </View>
@@ -681,7 +681,7 @@ export default function ProfileScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: Colors.text }}>{fac.name}</Text>
                 </View>
-                <TouchableOpacity onPress={() => handleLeaveFacility(fac.id, fac.name)}>
+                <TouchableOpacity onPress={() => handleLeaveFacility(fac.id, fac.name)} accessibilityRole="button" accessibilityLabel={`Leave ${fac.name}`}>
                   <Text style={{ color: Colors.error, fontSize: FontSize.xs, fontWeight: '600' }}>Leave</Text>
                 </TouchableOpacity>
               </View>
@@ -694,7 +694,7 @@ export default function ProfileScreen() {
       <Modal visible={showFindFacility} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowFindFacility(false)}>
         <View style={{ flex: 1, backgroundColor: Colors.surface }}>
           <View style={styles.editHeader}>
-            <TouchableOpacity onPress={() => { setShowFindFacility(false); setSearchQuery(''); setSearchResults([]); }}>
+            <TouchableOpacity onPress={() => { setShowFindFacility(false); setSearchQuery(''); setSearchResults([]); }} accessibilityRole="button" accessibilityLabel="Close facility search">
               <Text style={styles.cancelText}>Close</Text>
             </TouchableOpacity>
             <Text style={styles.editTitle}>Find Facility</Text>
@@ -706,6 +706,7 @@ export default function ProfileScreen() {
               value={searchQuery}
               onChangeText={handleSearchFacilities}
               placeholder="Search by facility name..."
+              accessibilityLabel="Search facilities"
               placeholderTextColor={Colors.textMuted}
               autoFocus
             />
@@ -728,6 +729,8 @@ export default function ProfileScreen() {
                     style={{ backgroundColor: Colors.primary, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md }}
                     onPress={() => handleRequestJoin({ id: item.id, name: item.name })}
                     disabled={requestingJoin === item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Request to join ${item.name}`}
                   >
                     <Text style={{ color: Colors.textInverse, fontSize: FontSize.xs, fontWeight: '600' }}>
                       {requestingJoin === item.id ? 'Sending...' : 'Request to Join'}
@@ -748,7 +751,7 @@ export default function ProfileScreen() {
       >
         <View style={{ flex: 1, backgroundColor: Colors.surface }}>
           <View style={styles.editHeader}>
-            <TouchableOpacity onPress={() => setTermsModalVisible(false)}>
+            <TouchableOpacity onPress={() => setTermsModalVisible(false)} accessibilityRole="button" accessibilityLabel="Close terms and conditions">
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.editTitle}>Terms & Conditions</Text>
@@ -794,6 +797,9 @@ export default function ProfileScreen() {
               style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md, opacity: hasScrolledToBottom ? 1 : 0.5 }}
               disabled={!hasScrolledToBottom}
               onPress={() => setTermsAccepted((prev) => !prev)}
+              accessibilityRole="checkbox"
+              accessibilityLabel="Accept terms and conditions"
+              accessibilityState={{ checked: termsAccepted, disabled: !hasScrolledToBottom }}
             >
               <View
                 style={{
@@ -827,6 +833,8 @@ export default function ProfileScreen() {
                 if (!joinFacilityDraft) return;
                 submitJoinRequest(joinFacilityDraft.id, true);
               }}
+              accessibilityRole="button"
+              accessibilityLabel={joinFacilityDraft ? `Accept terms and request to join ${joinFacilityDraft.name}` : 'Accept terms and request to join'}
             >
               <Text style={{ color: Colors.textInverse, fontSize: FontSize.sm, fontWeight: '700' }}>
                 {joinFacilityDraft && requestingJoin === joinFacilityDraft.id ? 'Sending...' : 'Accept & Request to Join'}
@@ -897,11 +905,14 @@ export default function ProfileScreen() {
             onValueChange={handleEmailNotificationsChange}
             disabled={emailNotificationsEnabled === null}
             trackColor={{ false: Colors.border, true: Colors.primary }}
+            accessibilityLabel="Email notifications"
           />
         </View>
         <TouchableOpacity
           style={styles.settingsRow}
           onPress={() => router.push('/notification-settings')}
+          accessibilityRole="button"
+          accessibilityLabel="Open push notification settings"
         >
           <View style={styles.settingsIconBox}>
             <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
@@ -916,7 +927,7 @@ export default function ProfileScreen() {
 
       {/* Logout */}
       <View style={styles.section}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel="Sign out">
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>

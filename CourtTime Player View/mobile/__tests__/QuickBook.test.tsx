@@ -1,6 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { describe, it, expect, jest } from '@jest/globals';
+import { Text } from 'react-native';
 import { QuickBook } from '../src/components/QuickBook';
 import { api } from '../src/api/client';
 
@@ -56,7 +57,7 @@ describe('QuickBook', () => {
       await Promise.resolve();
     });
 
-    const textNodes = (tree!.root.findAllByType('Text') || [])
+    const textNodes = (tree!.root.findAllByType(Text) || [])
       .map((n: any) => n.props.children)
       .flat();
 

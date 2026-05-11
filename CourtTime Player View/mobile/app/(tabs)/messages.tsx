@@ -27,6 +27,9 @@ import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { CachedImage } from '../../src/components/CachedImage';
 import { useMessageUnread } from '../../src/contexts/MessageUnreadContext';
+import { OfflineBanner } from '../../src/components/OfflineBanner';
+import { useOfflineApi } from '../../src/hooks/useOfflineApi';
+import { userFacingApiMessage } from '../../src/utils/apiUserMessages';
 
 export const ErrorBoundary = createRouteErrorBoundary('Messages');
 
@@ -71,6 +74,7 @@ export default function MessagesScreen() {
   }>();
   const { user, facilityId, facilities, setFacilityId } = useAuth();
   const { syncUnreadState } = useMessageUnread();
+  const { bannerState, lastCachedAt, fetchWithCache, retryConnectivity } = useOfflineApi();
   const routeFacilityId = asRouteParam(params.facilityId);
   const routeConversationId = asRouteParam(params.conversationId);
 
@@ -78,6 +82,7 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
 
   // Active conversation state
   const [activeConversation, setActiveConversation] = useState<ConversationItem | null>(null);
@@ -85,12 +90,14 @@ export default function MessagesScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const messagesListRef = useRef<FlatList<MessageItem>>(null);
+  const [threadLoadError, setThreadLoadError] = useState<string | null>(null);
 
   // New message modal state
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [members, setMembers] = useState<MemberItem[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [memberLoadError, setMemberLoadError] = useState<string | null>(null);
 
   const clearDeepLinkParams = useCallback(() => {
     router.setParams({
@@ -101,10 +108,18 @@ export default function MessagesScreen() {
 
   // ── Fetch conversations ──
   const fetchConversations = useCallback(async () => {
-    if (!user || !facilityId) return;
+    if (!user || !facilityId) {
+      setConversations([]);
+      setConversationLoadError(null);
+      setLoading(false);
+      return;
+    }
 
-    const res = await api.get(`/api/messages/conversations/${facilityId}/${user.id}`);
-    if (res.success && res.data) {
+    const res = await fetchWithCache<{ conversations?: ConversationItem[]; data?: { conversations?: ConversationItem[] } }>(
+      `message_conversations_${facilityId}_${user.id}`,
+      `/api/messages/conversations/${facilityId}/${user.id}`
+    );
+    if (res.data) {
       // Server wraps as { success, data: { conversations } }, so unwrap one level
       const convos = res.data.conversations || res.data.data?.conversations || [];
       const normalized = convos.map((convo: any) => ({
@@ -116,9 +131,19 @@ export default function MessagesScreen() {
       }));
       setConversations(normalized);
       syncUnreadState(normalized);
+      setConversationLoadError(null);
+    } else {
+      setConversations([]);
+      setConversationLoadError(
+        userFacingApiMessage({
+          success: false,
+          error: res.error,
+          errorCategory: res.errorCategory,
+        })
+      );
     }
     setLoading(false);
-  }, [user, facilityId, syncUnreadState]);
+  }, [user, facilityId, fetchWithCache, syncUnreadState]);
 
   useEffect(() => {
     fetchConversations();
@@ -138,10 +163,23 @@ export default function MessagesScreen() {
 
   // ── Fetch messages for a conversation ──
   const fetchMessages = useCallback(async (conversationId: string) => {
-    const res = await api.get(`/api/messages/${conversationId}`);
-    if (res.success && res.data) {
+    const res = await fetchWithCache<{ messages?: MessageItem[]; data?: { messages?: MessageItem[] } }>(
+      `messages_${conversationId}`,
+      `/api/messages/${conversationId}`
+    );
+    if (res.data) {
       const msgs = res.data.messages || res.data.data?.messages || [];
       setMessages(msgs);
+      setThreadLoadError(null);
+    } else {
+      setMessages([]);
+      setThreadLoadError(
+        userFacingApiMessage({
+          success: false,
+          error: res.error,
+          errorCategory: res.errorCategory,
+        })
+      );
     }
 
     // Mark as read
@@ -155,10 +193,11 @@ export default function MessagesScreen() {
       });
       api.patch(`/api/messages/${conversationId}/read`, { userId: user.id });
     }
-  }, [syncUnreadState, user]);
+  }, [fetchWithCache, syncUnreadState, user]);
 
   const openConversation = useCallback((convo: ConversationItem) => {
     setActiveConversation(convo);
+    setThreadLoadError(null);
     fetchMessages(convo.id);
   }, [fetchMessages]);
 
@@ -219,6 +258,7 @@ export default function MessagesScreen() {
   async function fetchMembers() {
     if (!facilityId) return;
     setLoadingMembers(true);
+    setMemberLoadError(null);
     const res = await api.get(`/api/members/${facilityId}`);
     if (res.success && res.data) {
       const memberList = Array.isArray(res.data) ? res.data : res.data.members || [];
@@ -228,6 +268,9 @@ export default function MessagesScreen() {
         profileImageUrl: member.profileImageUrl || member.profile_image_url,
       }));
       setMembers(normalized.filter((m: MemberItem) => m.userId !== user?.id && (!m.status || m.status === 'active')));
+    } else {
+      setMembers([]);
+      setMemberLoadError(userFacingApiMessage(res));
     }
     setLoadingMembers(false);
   }
@@ -235,6 +278,7 @@ export default function MessagesScreen() {
   function openNewMessage() {
     fetchMembers();
     setMemberSearch('');
+    setMemberLoadError(null);
     setShowNewMessage(true);
   }
 
@@ -263,6 +307,7 @@ export default function MessagesScreen() {
       lastMessage: null,
       unreadCount: 0,
     });
+    setThreadLoadError(null);
     setMessages([]);
   }
 
@@ -315,7 +360,11 @@ export default function MessagesScreen() {
   const renderMessageItem = useCallback(({ item }: { item: MessageItem }) => {
     const isMe = item.senderId === user?.id;
     return (
-      <View style={[styles.messageBubbleRow, isMe && styles.messageBubbleRowMe]}>
+      <View
+        style={[styles.messageBubbleRow, isMe && styles.messageBubbleRowMe]}
+        accessible
+        accessibilityLabel={`${isMe ? 'You' : activeConversation?.otherUser.name || 'Member'} said ${item.messageText}. ${formatDate(item.createdAt)}.`}
+      >
         <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
           <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
             {item.messageText}
@@ -326,7 +375,7 @@ export default function MessagesScreen() {
         </View>
       </View>
     );
-  }, [user?.id]);
+  }, [activeConversation?.otherUser.name, user?.id]);
 
   // ── RENDER: Message Thread View ──
   if (activeConversation) {
@@ -336,6 +385,7 @@ export default function MessagesScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={90}
       >
+        <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
         {/* Thread Header */}
         <View style={styles.threadHeader}>
           <TouchableOpacity
@@ -346,6 +396,8 @@ export default function MessagesScreen() {
               setMessages([]);
               fetchConversations();
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Back to conversations"
           >
             <Text style={styles.backText}>{'\u2190'} Back</Text>
           </TouchableOpacity>
@@ -378,9 +430,15 @@ export default function MessagesScreen() {
           onContentSizeChange={() => messagesListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
             <EmptyState
-              icon="chatbubble-ellipses-outline"
-              title="No messages yet"
-              description={`Start the conversation with ${activeConversation.otherUser.name}.`}
+              icon={threadLoadError ? 'alert-circle-outline' : 'chatbubble-ellipses-outline'}
+              title={threadLoadError ? 'Could not load messages' : 'No messages yet'}
+              description={
+                threadLoadError
+                  ? threadLoadError
+                  : `Start the conversation with ${activeConversation.otherUser.name}.`
+              }
+              actionLabel={threadLoadError ? 'Try again' : undefined}
+              onAction={threadLoadError ? () => void fetchMessages(activeConversation.id) : undefined}
             />
           }
           renderItem={renderMessageItem}
@@ -393,6 +451,7 @@ export default function MessagesScreen() {
             value={newMessage}
             onChangeText={setNewMessage}
             placeholder="Type a message..."
+            accessibilityLabel="Message input"
             multiline
             maxLength={1000}
           />
@@ -401,6 +460,7 @@ export default function MessagesScreen() {
             onPress={activeConversation.id ? handleSend : handleSendNewConversation}
             disabled={!newMessage.trim() || sending}
             loading={sending}
+            accessibilityLabel="Send message"
             style={styles.sendButton}
           />
         </View>
@@ -412,16 +472,31 @@ export default function MessagesScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
+        <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
         <ConversationSkeleton />
+      </View>
+    );
+  }
+
+  if (!facilityId) {
+    return (
+      <View style={styles.container}>
+        <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
+        <EmptyState
+          icon="mail-open-outline"
+          title="Choose a club to view messages"
+          description="Select one of your clubs from the header to see facility conversations and member messages."
+        />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
       {/* New Message Button */}
       <View style={styles.newMessageButtonWrap}>
-        <Button title="+ New Message" onPress={openNewMessage} />
+        <Button title="+ New Message" onPress={openNewMessage} accessibilityLabel="Start a new message" />
       </View>
 
       <FlatList
@@ -433,15 +508,24 @@ export default function MessagesScreen() {
         contentContainerStyle={conversations.length === 0 ? styles.centered : undefined}
         ListEmptyComponent={
           <EmptyState
-            icon="mail-open-outline"
-            title="No messages yet"
-            description='Tap "+ New Message" to start a conversation with a facility member.'
-            actionLabel="Start a conversation"
-            onAction={openNewMessage}
+            icon={conversationLoadError ? 'alert-circle-outline' : 'mail-open-outline'}
+            title={conversationLoadError ? 'Could not load conversations' : 'No messages yet'}
+            description={
+              conversationLoadError
+                ? conversationLoadError
+                : 'Tap "+ New Message" to start a conversation with a facility member.'
+            }
+            actionLabel={conversationLoadError ? 'Try again' : 'Start a conversation'}
+            onAction={conversationLoadError ? () => void fetchConversations() : openNewMessage}
           />
         }
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.conversationItem} onPress={() => openConversation(item)}>
+          <TouchableOpacity
+            style={styles.conversationItem}
+            onPress={() => openConversation(item)}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.otherUser.name}. ${item.unreadCount > 0 ? `${item.unreadCount} unread message${item.unreadCount === 1 ? '' : 's'}.` : 'No unread messages.'} ${item.lastMessage?.text ? `Last message: ${item.lastMessage.text}.` : 'No messages yet.'}`}
+          >
             <View style={styles.avatar}>
               {item.otherUser.profileImageUrl ? (
                 <CachedImage uri={item.otherUser.profileImageUrl} style={styles.avatarImage} />
@@ -475,7 +559,11 @@ export default function MessagesScreen() {
       <Modal visible={showNewMessage} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowNewMessage(false)}>
+            <TouchableOpacity
+              onPress={() => setShowNewMessage(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close new message"
+            >
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>New Message</Text>
@@ -487,6 +575,7 @@ export default function MessagesScreen() {
             value={memberSearch}
             onChangeText={setMemberSearch}
             placeholder="Search members..."
+            accessibilityLabel="Search members"
             autoFocus
           />
 
@@ -500,15 +589,23 @@ export default function MessagesScreen() {
               keyExtractor={(item) => item.userId}
               ListEmptyComponent={
                 <EmptyState
-                  icon="people-outline"
-                  title="No members found"
-                  description="Try a different search or check back when more players join your facility."
+                  icon={memberLoadError ? 'alert-circle-outline' : 'people-outline'}
+                  title={memberLoadError ? 'Could not load members' : 'No members found'}
+                  description={
+                    memberLoadError
+                      ? memberLoadError
+                      : 'Try a different search or check back when more players join your facility.'
+                  }
+                  actionLabel={memberLoadError ? 'Try again' : undefined}
+                  onAction={memberLoadError ? () => void fetchMembers() : undefined}
                 />
               }
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.memberItem}
                   onPress={() => startConversation(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Start a conversation with ${item.fullName}${item.skillLevel ? `. Skill level ${item.skillLevel}.` : '.'}`}
                 >
                   <View style={styles.avatar}>
                     {item.profileImageUrl ? (

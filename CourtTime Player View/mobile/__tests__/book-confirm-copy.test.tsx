@@ -5,6 +5,39 @@ import { TouchableOpacity, Text, Modal, Pressable } from 'react-native';
 import BookCourtScreen from '../app/(tabs)/book';
 import { api } from '../src/api/client';
 
+jest.mock('expo-calendar', () => ({
+  requestCalendarPermissionsAsync: jest.fn(),
+  getDefaultCalendarAsync: jest.fn(),
+  getCalendarsAsync: jest.fn(),
+  createEventAsync: jest.fn(),
+  EntityTypes: { EVENT: 'event' },
+  CalendarAccessLevel: {
+    OWNER: 'owner',
+    EDITOR: 'editor',
+    CONTRIBUTOR: 'contributor',
+  },
+}));
+
+jest.mock('@react-native-async-storage/async-storage', () => {
+  const storage = new Map<string, string>();
+
+  return {
+    __esModule: true,
+    default: {
+      getItem: jest.fn((key: string) => Promise.resolve(storage.get(key) ?? null)),
+      setItem: jest.fn((key: string, value: string) => {
+        storage.set(key, value);
+        return Promise.resolve();
+      }),
+      removeItem: jest.fn((key: string) => {
+        storage.delete(key);
+        return Promise.resolve();
+      }),
+      __reset: () => storage.clear(),
+    },
+  };
+});
+
 jest.mock('../src/contexts/AuthContext', () => ({
   useAuth: jest.fn(() => ({
     user: {
@@ -48,6 +81,14 @@ jest.mock('../src/components/CourtCalendarGrid', () => {
 
 jest.mock('../src/utils/alert', () => ({ showAlert: jest.fn(), showApiErrorAlert: jest.fn() }));
 jest.mock('../src/utils/haptics', () => ({ hapticSuccess: jest.fn(), hapticError: jest.fn() }));
+jest.mock('../src/hooks/useOfflineApi', () => ({
+  useOfflineApi: jest.fn(() => ({
+    bannerState: 'online',
+    lastCachedAt: null,
+    fetchWithCache: jest.fn(),
+    retryConnectivity: jest.fn(),
+  })),
+}));
 
 function collectText(node: unknown): string[] {
   const out: string[] = [];
@@ -113,6 +154,7 @@ describe('BookCourtScreen booking modal confirm copy', () => {
   let getSpy: jest.SpiedFunction<typeof api.get>;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     getSpy = jest.spyOn(api, 'get').mockImplementation(async (url: string) => {
       if (url.includes('/api/facilities/') && url.includes('/courts')) {
         return {
@@ -255,5 +297,52 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       selectedBookDate: '2026-05-04',
       setSelectedBookDate: jest.fn(),
     }));
+  });
+
+  it('offers Add to Calendar after a successful single-court booking', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    jest.setSystemTime(new Date('2026-05-04T07:00:00'));
+
+    const { showAlert } = require('../src/utils/alert');
+    const postSpy = jest.spyOn(api, 'post').mockResolvedValue({ success: true, data: {} });
+
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<BookCourtScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await pressByTestId(tree!, 'open-booking-modal');
+    });
+
+    await act(async () => {
+      pressTouchableContainingText(tree!, 'Confirm Booking');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const bookedCall = (showAlert as jest.Mock).mock.calls.find((call: unknown[]) => call[0] === 'Booked!');
+
+    expect(postSpy).toHaveBeenCalledWith(
+      '/api/bookings',
+      expect.objectContaining({
+        courtId: 'court-1',
+        facilityId: 'facility-1',
+        userId: 'user-1',
+      })
+    );
+    expect(bookedCall).toBeTruthy();
+    expect(bookedCall?.[1]).toContain('Add it to your device calendar?');
+    expect(bookedCall?.[2]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Not now' }),
+        expect.objectContaining({ text: 'Add to Calendar' }),
+      ])
+    );
+
+    postSpy.mockRestore();
+    jest.useRealTimers();
   });
 });

@@ -44,6 +44,13 @@
           "color": "#1a5f2a"
         }
       ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "CourtTime can add your confirmed bookings to your calendar when you choose Add to Calendar.",
+          "remindersPermission": "CourtTime can add booking reminders to your calendar when you choose Add to Calendar."
+        }
+      ],
       "@react-native-community/datetimepicker"
     ]
   }

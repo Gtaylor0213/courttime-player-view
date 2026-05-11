@@ -36,7 +36,6 @@ function renderNavTabButton(props: Record<string, unknown>) {
       accessibilityState={accessibilityState as never}
       testID={testID as never}
       hitSlop={{ top: 10, bottom: 14, left: 6, right: 6 }}
-      collapsable={false}
     >
       {children as React.ReactNode}
     </TouchableOpacity>

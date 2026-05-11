@@ -1227,9 +1227,6 @@ export function CourtCalendarView() {
                   <NotificationBell />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600">Facility:</span>
-                  <span className="text-sm font-semibold text-gray-900">{currentFacility?.name || 'Loading...'}</span>
-
                   {/* Info Popover */}
                   <Popover>
                     <PopoverTrigger asChild>

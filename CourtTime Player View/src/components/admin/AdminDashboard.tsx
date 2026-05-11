@@ -423,8 +423,8 @@ export function AdminDashboard() {
                           onClick={() => navigate('/admin/booking')}
                           className="w-full text-left p-3 rounded-lg hover:bg-gray-100 transition-colors"
                         >
-                          <div className="font-medium">Create Booking</div>
-                          <div className="text-sm text-gray-600">Book a court for a member</div>
+                          <div className="font-medium">Create Reservation</div>
+                          <div className="text-sm text-gray-600">Reserve a court for a member</div>
                         </button>
                         <button
                           onClick={() => navigate('/admin/members')}

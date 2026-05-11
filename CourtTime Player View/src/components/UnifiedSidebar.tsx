@@ -262,16 +262,16 @@ export function UnifiedSidebar({
                   isActive={currentPage === 'facility-management' || currentPage === 'court-management'}
                 />
                 <SidebarButton
-                  onClick={() => handleNav('/admin/bookings')}
-                  icon={BookOpen}
-                  label="Booking Management"
-                  isActive={currentPage === 'booking-management' || currentPage === 'admin-booking'}
-                />
-                <SidebarButton
                   onClick={() => handleNav('/admin/members')}
                   icon={UserCog}
                   label="Member Management"
                   isActive={currentPage === 'member-management' || currentPage === 'household-management'}
+                />
+                <SidebarButton
+                  onClick={() => handleNav('/admin/bookings')}
+                  icon={BookOpen}
+                  label="Reservations"
+                  isActive={currentPage === 'booking-management' || currentPage === 'admin-booking'}
                 />
                 <SidebarButton
                   onClick={() => handleNav('/admin/communication')}

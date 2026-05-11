@@ -168,7 +168,7 @@ export function BookingManagement() {
   };
 
   const handleCancelBooking = async (id: string) => {
-    if (!confirm('Are you sure you want to cancel this booking?')) return;
+    if (!confirm('Are you sure you want to cancel this reservation?')) return;
 
     try {
       const response = await adminApi.updateBookingStatus(id, 'cancelled');
@@ -176,11 +176,11 @@ export function BookingManagement() {
         toast.success('Booking cancelled successfully');
         await loadBookings();
       } else {
-        toast.error(response.error || 'Failed to cancel booking');
+        toast.error(response.error || 'Failed to cancel reservation');
       }
     } catch (error: any) {
       console.error('Error cancelling booking:', error);
-      toast.error('Failed to cancel booking');
+      toast.error('Failed to cancel reservation');
     }
   };
 
@@ -191,11 +191,11 @@ export function BookingManagement() {
         toast.success('Booking marked as completed');
         await loadBookings();
       } else {
-        toast.error(response.error || 'Failed to update booking');
+        toast.error(response.error || 'Failed to update reservation');
       }
     } catch (error: any) {
       console.error('Error updating booking:', error);
-      toast.error('Failed to update booking');
+      toast.error('Failed to update reservation');
     }
   };
 
@@ -379,7 +379,7 @@ export function BookingManagement() {
   };
 
   const handleDeleteSeries = async (seriesId: string) => {
-    if (!confirm('Delete all bookings in this recurring series?')) return;
+    if (!confirm('Delete all reservations in this recurring series?')) return;
     const response = await adminApi.deleteBookingSeries(seriesId);
     if (response.success) {
       toast.success('Recurring series deleted');
@@ -445,7 +445,7 @@ export function BookingManagement() {
           });
 
       if (!response.success) {
-        toast.error(response.error || 'Failed to update recurring booking');
+        toast.error(response.error || 'Failed to update recurring reservation');
         return;
       }
 
@@ -473,13 +473,13 @@ export function BookingManagement() {
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-medium text-gray-900">Booking Management</h1>
+            <h1 className="text-2xl font-medium text-gray-900">Reservations</h1>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="flex">
-              <TabsTrigger value="bookings" className="px-4">Bookings</TabsTrigger>
-              <TabsTrigger value="admin-booking" className="px-4">Create Booking</TabsTrigger>
+              <TabsTrigger value="bookings" className="px-4">Reservations</TabsTrigger>
+              <TabsTrigger value="admin-booking" className="px-4">Create Reservation</TabsTrigger>
             </TabsList>
 
             <TabsContent value="bookings" className="space-y-6">
@@ -487,8 +487,8 @@ export function BookingManagement() {
           {/* Filters */}
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Filter Bookings</CardTitle>
-              <CardDescription>Search and filter bookings by member, court, date, or status</CardDescription>
+              <CardTitle>Filter Reservations</CardTitle>
+              <CardDescription>Search and filter reservations by member, court, date, or status</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -563,7 +563,7 @@ export function BookingManagement() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">
-                  Bookings ({filteredBookings.length})
+                  Reservations ({filteredBookings.length})
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <Label className="text-sm text-gray-500">Show:</Label>
@@ -631,7 +631,7 @@ export function BookingManagement() {
                     {paginatedBookings.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                          No bookings found matching your filters.
+                          No reservations found matching your filters.
                         </td>
                       </tr>
                     ) : (
@@ -872,8 +872,8 @@ export function BookingManagement() {
             <DialogTitle>{seriesEditMode === 'all' ? 'Edit Entire Recurring Series' : 'Edit Selected Dates'}</DialogTitle>
             <DialogDescription>
               {seriesEditMode === 'all'
-                ? 'These changes will apply to every booking in this recurring series.'
-                : `These changes will apply to ${seriesEditBookingIds.length} selected booking date(s).`}
+                ? 'These changes will apply to every reservation in this recurring series.'
+                : `These changes will apply to ${seriesEditBookingIds.length} selected reservation date(s).`}
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -890,7 +890,7 @@ export function BookingManagement() {
               <Input id="series-duration" type="number" min={1} value={seriesEditDurationMinutes} onChange={(e) => setSeriesEditDurationMinutes(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="series-type">Booking Type (optional)</Label>
+              <Label htmlFor="series-type">Reservation Type (optional)</Label>
               <Input id="series-type" value={seriesEditBookingType} onChange={(e) => setSeriesEditBookingType(e.target.value)} />
             </div>
             <div className="space-y-2 md:col-span-2">

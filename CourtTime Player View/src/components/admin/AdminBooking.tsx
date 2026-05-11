@@ -608,11 +608,11 @@ export function AdminBooking() {
     // Validate advanced booking
     if (advancedBooking) {
       if (recurringDays.length === 0) {
-        toast.error('Please select at least one day of the week for recurring bookings');
+        toast.error('Please select at least one day of the week for recurring reservations');
         return;
       }
       if (!recurringEndDate) {
-        toast.error('Please select an end date for recurring bookings');
+        toast.error('Please select an end date for recurring reservations');
         return;
       }
       if (new Date(recurringEndDate) < new Date(selectedDate)) {
@@ -660,7 +660,7 @@ export function AdminBooking() {
       const bookingUserId = isWalkIn ? user?.id : selectedMemberId;
 
       if (!bookingUserId) {
-        toast.error('Unable to determine user for booking');
+        toast.error('Unable to determine user for reservation');
         return;
       }
 
@@ -722,7 +722,7 @@ export function AdminBooking() {
         if (failedBookings.length > 0) {
           toast.success(`${successfulBookings.length} bookings created. ${failedBookings.length} failed (conflicts).`);
         } else {
-          toast.success(`${successfulBookings.length} booking(s) created successfully!`);
+          toast.success(`${successfulBookings.length} reservation(s) created successfully!`);
         }
 
         // Reset form
@@ -738,11 +738,11 @@ export function AdminBooking() {
         setRecurringEndDate('');
         setAdditionalCourtIds([]);
       } else {
-        toast.error('Failed to create bookings. There may be conflicts with existing reservations.');
+        toast.error('Failed to create reservations. There may be conflicts with existing reservations.');
       }
     } catch (error) {
       console.error('Booking error:', error);
-      toast.error('An error occurred while creating the booking(s)');
+      toast.error('An error occurred while creating the reservation(s)');
     } finally {
       setIsSubmitting(false);
     }
@@ -756,10 +756,10 @@ export function AdminBooking() {
           <div className="mb-8">
             <h1 className="text-2xl font-medium text-gray-900 flex items-center gap-2">
               <Zap className="h-6 w-6 text-green-600" />
-              Create Booking
+              Create Reservation
             </h1>
             <p className="text-gray-600 mt-2">
-              Auto-fills for the soonest available date and time. Book a court for a member or walk-in guest.
+              Auto-fills for the soonest available date and time. Reserve a court for a member or walk-in guest.
             </p>
           </div>
 
@@ -767,7 +767,7 @@ export function AdminBooking() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
-                Booking Details
+                Reservation Details
               </CardTitle>
               <CardDescription>Select facility, member, court, and time</CardDescription>
             </CardHeader>
@@ -1027,7 +1027,7 @@ export function AdminBooking() {
                           >
                             <div className="font-medium text-sm">{court.name}</div>
                             <div className={`text-xs ${court.isAvailable ? isSelected ? 'text-green-600' : 'text-gray-500' : 'text-red-500'}`}>
-                              {court.isAvailable ? (isSelected ? 'Selected' : 'Available') : 'Booked'}
+                              {court.isAvailable ? (isSelected ? 'Selected' : 'Available') : 'Reserved'}
                             </div>
                           </button>
                         );
@@ -1047,7 +1047,7 @@ export function AdminBooking() {
                     onCheckedChange={(checked) => setAdvancedBooking(checked === true)}
                   />
                   <Label htmlFor="advanced-booking" className="text-sm font-medium cursor-pointer">
-                    Advanced Booking (Recurring)
+                    Recurring Reservation
                   </Label>
                 </div>
 
@@ -1088,12 +1088,12 @@ export function AdminBooking() {
 
                     {recurringDays.length > 0 && recurringEndDate && (
                       <div className="text-xs text-gray-600 bg-green-50 p-2 rounded border border-green-200">
-                        <span className="font-medium">Will create bookings:</span>
+                        <span className="font-medium">Will create reservations:</span>
                         <div className="mt-1">
                           Every {recurringDays.join(', ')} from {parseLocalDate(selectedDate).toLocaleDateString()} to {parseLocalDate(recurringEndDate).toLocaleDateString()}
                         </div>
                         <div className="mt-1 font-medium">
-                          Total bookings: {generateRecurringDates().length * allSelectedCourts.length}
+                          Total reservations: {generateRecurringDates().length * allSelectedCourts.length}
                           {allSelectedCourts.length > 1 && ` (${generateRecurringDates().length} dates × ${allSelectedCourts.length} courts)`}
                         </div>
                       </div>
@@ -1125,7 +1125,7 @@ export function AdminBooking() {
                     className="flex-1"
                   >
                     <Save className="h-4 w-4 mr-2" />
-                    {isSubmitting ? 'Creating...' : allSelectedCourts.length > 1 ? `Book ${allSelectedCourts.length} Courts` : 'Create Booking'}
+                    {isSubmitting ? 'Creating...' : allSelectedCourts.length > 1 ? `Reserve ${allSelectedCourts.length} Courts` : 'Create Reservation'}
                   </Button>
                 </div>
               </form>
@@ -1141,8 +1141,8 @@ export function AdminBooking() {
               <ul className="space-y-2 text-sm text-gray-600">
                 <li>• The form auto-fills with the soonest available court and time</li>
                 <li>• Use walk-in option for guests who aren't members</li>
-                <li>• Enable advanced booking to create recurring reservations</li>
-                <li>• Courts show real-time availability based on existing bookings</li>
+                <li>• Enable recurring reservations for repeating court time</li>
+                <li>• Courts show real-time availability based on existing reservations</li>
               </ul>
             </CardContent>
           </Card>

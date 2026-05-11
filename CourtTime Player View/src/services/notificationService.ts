@@ -121,7 +121,7 @@ export const notificationService = {
     const query = `
       INSERT INTO notifications (user_id, title, message, type, action_url)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING id
+      RETURNING id, created_at
     `;
 
     try {
@@ -134,10 +134,17 @@ export const notificationService = {
         options?.actionUrl || null
       ]);
 
-      // Fire-and-forget: send push notification to user's registered devices
-      sendPushNotifications(userId, title, message, type, options?.pushData).catch(() => {});
+      const notificationId = result.rows[0].id as string;
+      const notificationCreatedAt = new Date(result.rows[0].created_at).toISOString();
 
-      return result.rows[0].id;
+      // Fire-and-forget: send push notification to user's registered devices
+      sendPushNotifications(userId, title, message, type, {
+        notificationId,
+        notificationCreatedAt,
+        pushData: options?.pushData,
+      }).catch(() => {});
+
+      return notificationId;
     } catch (error) {
       console.error('Error creating notification:', error);
       throw error;
@@ -472,7 +479,11 @@ async function sendPushNotifications(
   title: string,
   body: string,
   type: string,
-  pushData?: Record<string, string>
+  options?: {
+    notificationId: string;
+    notificationCreatedAt: string;
+    pushData?: Record<string, string>;
+  }
 ): Promise<void> {
   try {
     // Honor user notification preferences before pushing
@@ -489,7 +500,12 @@ async function sendPushNotifications(
 
     if (result.rows.length === 0) return;
 
-    const dataPayload: Record<string, string> = { type, ...sanitizePushData(pushData) };
+    const dataPayload: Record<string, string> = {
+      type,
+      notificationId: options?.notificationId ?? '',
+      notificationCreatedAt: options?.notificationCreatedAt ?? '',
+      ...sanitizePushData(options?.pushData),
+    };
 
     const messages = result.rows
       .filter((row: any) => row.push_token.startsWith('ExponentPushToken['))

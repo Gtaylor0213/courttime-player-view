@@ -7,7 +7,7 @@ import { Sentry, hasSentryDsn } from '../src/utils/sentry';
  * Wraps the entire app with AuthProvider and handles auth-based routing
  */
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -19,49 +19,15 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
+import {
+  getNotificationData,
+  isStartupNotificationResponseFresh,
+  markNotificationResponseHandled,
+  navigateFromNotificationData,
+  wasNotificationResponseHandledRecently,
+} from '../src/utils/notificationNavigation';
 
 export const ErrorBoundary = createRouteErrorBoundary('App Shell');
-
-const BOOKING_PUSH_TYPES = new Set([
-  'booking_confirmed',
-  'booking_cancelled',
-  'booking_reminder',
-  'court_change',
-  'reservation_confirmed',
-  'reservation_cancelled',
-  'reservation_reminder',
-]);
-
-function navigateFromNotificationData(
-  router: ReturnType<typeof useRouter>,
-  raw: Record<string, unknown> | undefined
-) {
-  if (!raw || typeof raw !== 'object') {
-    router.push('/(tabs)/community');
-    return;
-  }
-  const t = String(raw.type ?? '');
-  const facilityId = raw.facilityId != null ? String(raw.facilityId) : undefined;
-  const bookingDate = raw.bookingDate != null ? String(raw.bookingDate) : undefined;
-  const bookingId = raw.bookingId != null ? String(raw.bookingId) : undefined;
-
-  if (BOOKING_PUSH_TYPES.has(t)) {
-    router.push({
-      pathname: '/(tabs)/book',
-      params: {
-        ...(facilityId ? { facilityId } : {}),
-        ...(bookingDate ? { bookingDate } : {}),
-        ...(bookingId ? { bookingId } : {}),
-      },
-    });
-    return;
-  }
-  if (t === 'message') {
-    router.push('/(tabs)/messages');
-    return;
-  }
-  router.push('/(tabs)/community');
-}
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading, pendingTermsAcceptances } = useAuth();
@@ -69,6 +35,43 @@ function RootLayoutNav() {
   const router = useRouter();
   /** Only the top segment — avoids re-running this effect on every in-tab route change (can interrupt tab presses). */
   const rootSegment = segments[0];
+
+  const clearLastNotificationResponse = useCallback(async () => {
+    try {
+      await Notifications.clearLastNotificationResponseAsync();
+    } catch {
+      // Older cached responses should never block the current session.
+    }
+  }, []);
+
+  const handleNotificationResponse = useCallback(
+    async (
+      response: Notifications.NotificationResponse | null,
+      source: 'startup' | 'listener'
+    ) => {
+      if (!response) return;
+
+      if (source === 'startup') {
+        if (!isStartupNotificationResponseFresh(response)) {
+          await clearLastNotificationResponse();
+          return;
+        }
+
+        if (await wasNotificationResponseHandledRecently(response)) {
+          await clearLastNotificationResponse();
+          return;
+        }
+      }
+
+      navigateFromNotificationData(router, getNotificationData(response));
+
+      await Promise.allSettled([
+        markNotificationResponseHandled(response),
+        clearLastNotificationResponse(),
+      ]);
+    },
+    [clearLastNotificationResponse, router]
+  );
 
   useEffect(() => {
     if (isLoading) return;
@@ -86,12 +89,23 @@ function RootLayoutNav() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
+    let cancelled = false;
+
+    void (async () => {
+      const response = await Notifications.getLastNotificationResponseAsync();
+      if (cancelled) return;
+      await handleNotificationResponse(response, 'startup');
+    })();
+
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      navigateFromNotificationData(router, response.notification.request.content.data as Record<string, unknown>);
+      void handleNotificationResponse(response, 'listener');
     });
 
-    return () => subscription.remove();
-  }, [router]);
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [handleNotificationResponse]);
 
   if (isLoading) {
     return (

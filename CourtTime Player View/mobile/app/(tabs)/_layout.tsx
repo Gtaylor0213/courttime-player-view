@@ -14,6 +14,7 @@ import { Colors, FontFamily, FontSize, Gradients, Spacing } from '../../src/cons
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { MessageUnreadProvider, useMessageUnread } from '../../src/contexts/MessageUnreadContext';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
 
@@ -42,9 +43,10 @@ function renderNavTabButton(props: Record<string, unknown>) {
   );
 }
 
-export default function TabLayout() {
+function TabsShell() {
   const insets = useSafeAreaInsets();
   const { user, facilityId } = useAuth();
+  const { hasUnreadMessages } = useMessageUnread();
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
   const screenOptions = useMemo(
@@ -111,7 +113,12 @@ export default function TabLayout() {
         name="messages"
         options={{
           title: 'Messages',
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <View style={styles.tabIconWrap}>
+              <Ionicons name="chatbubbles" size={size} color={color} />
+              {hasUnreadMessages ? <View style={styles.messagesUnreadDot} /> : null}
+            </View>
+          ),
           headerTitle: () => <HeaderFacilitySelector fallbackTitle="Messages" />,
         }}
       />
@@ -137,6 +144,14 @@ export default function TabLayout() {
   );
 }
 
+export default function TabLayout() {
+  return (
+    <MessageUnreadProvider>
+      <TabsShell />
+    </MessageUnreadProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   tabBar: {
     borderTopLeftRadius: 24,
@@ -154,6 +169,23 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semiBold,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
+  },
+  tabIconWrap: {
+    minWidth: 28,
+    minHeight: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messagesUnreadDot: {
+    position: 'absolute',
+    top: -1,
+    right: -5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.error,
+    borderWidth: 1.5,
+    borderColor: Colors.chromeBackground,
   },
   header: {
     backgroundColor: Colors.chromeBackground,

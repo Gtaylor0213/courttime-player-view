@@ -26,6 +26,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { CachedImage } from '../../src/components/CachedImage';
+import { useMessageUnread } from '../../src/contexts/MessageUnreadContext';
 
 export const ErrorBoundary = createRouteErrorBoundary('Messages');
 
@@ -69,6 +70,7 @@ export default function MessagesScreen() {
     conversationId?: string | string[];
   }>();
   const { user, facilityId, facilities, setFacilityId } = useAuth();
+  const { syncUnreadState } = useMessageUnread();
   const routeFacilityId = asRouteParam(params.facilityId);
   const routeConversationId = asRouteParam(params.conversationId);
 
@@ -113,9 +115,10 @@ export default function MessagesScreen() {
         },
       }));
       setConversations(normalized);
+      syncUnreadState(normalized);
     }
     setLoading(false);
-  }, [user, facilityId]);
+  }, [user, facilityId, syncUnreadState]);
 
   useEffect(() => {
     fetchConversations();
@@ -143,9 +146,16 @@ export default function MessagesScreen() {
 
     // Mark as read
     if (user) {
+      setConversations(prev => {
+        const next = prev.map(convo =>
+          convo.id === conversationId ? { ...convo, unreadCount: 0 } : convo
+        );
+        syncUnreadState(next);
+        return next;
+      });
       api.patch(`/api/messages/${conversationId}/read`, { userId: user.id });
     }
-  }, [user]);
+  }, [syncUnreadState, user]);
 
   const openConversation = useCallback((convo: ConversationItem) => {
     setActiveConversation(convo);

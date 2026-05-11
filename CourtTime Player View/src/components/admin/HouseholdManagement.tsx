@@ -19,6 +19,7 @@ interface HouseholdMember {
   email: string;
   status?: 'active' | 'pending' | 'expired' | 'suspended';
   membershipType?: string;
+  isFacilityAdmin?: boolean;
 }
 
 interface HouseholdRecord {
@@ -26,6 +27,8 @@ interface HouseholdRecord {
   address: string;
   lastName: string;
   members: HouseholdMember[];
+  /** One member per row — missing address or last name for address-based grouping */
+  isUngrouped?: boolean;
 }
 
 export function HouseholdManagement() {
@@ -53,19 +56,33 @@ export function HouseholdManagement() {
           const address = (member.streetAddress || '').trim();
           const fullName = (member.fullName || '').trim();
           const parsedLastName = fullName.split(' ').slice(1).join(' ').trim();
-          const lastName = (parsedLastName || '').toLowerCase();
+          const lastNameKey = parsedLastName.toLowerCase();
+          const canGroupByAddress = Boolean(address && parsedLastName);
 
-          if (!address || !lastName) {
-            continue;
+          let householdKey: string;
+          let recordAddress: string;
+          let recordLastName: string;
+          let isUngrouped: boolean;
+
+          if (canGroupByAddress) {
+            householdKey = `${address.toLowerCase()}||${lastNameKey}`;
+            recordAddress = address;
+            recordLastName = parsedLastName;
+            isUngrouped = false;
+          } else {
+            householdKey = `__ungrouped:${member.userId}`;
+            recordAddress = address || 'No address on file';
+            recordLastName = parsedLastName;
+            isUngrouped = true;
           }
 
-          const householdKey = `${address.toLowerCase()}||${lastName}`;
           if (!groupedHouseholds.has(householdKey)) {
             groupedHouseholds.set(householdKey, {
               id: householdKey,
-              address,
-              lastName: parsedLastName,
+              address: recordAddress,
+              lastName: recordLastName,
               members: [],
+              isUngrouped,
             });
           }
 
@@ -77,11 +94,23 @@ export function HouseholdManagement() {
             email: member.email || '',
             status: member.status,
             membershipType: member.membershipType,
+            isFacilityAdmin: Boolean(member.isFacilityAdmin),
           });
         }
 
-        const householdsList = Array.from(groupedHouseholds.values())
-          .sort((a, b) => a.address.localeCompare(b.address));
+        const householdsList = Array.from(groupedHouseholds.values()).sort((a, b) => {
+          if (a.isUngrouped !== b.isUngrouped) {
+            return a.isUngrouped ? 1 : -1;
+          }
+          if (a.isUngrouped && b.isUngrouped) {
+            const na = a.members[0]?.fullName || a.members[0]?.email || '';
+            const nb = b.members[0]?.fullName || b.members[0]?.email || '';
+            return na.localeCompare(nb);
+          }
+          const addr = a.address.localeCompare(b.address);
+          if (addr !== 0) return addr;
+          return (a.lastName || '').localeCompare(b.lastName || '');
+        });
         setHouseholds(householdsList);
       } else {
         setHouseholds([]);
@@ -202,7 +231,11 @@ export function HouseholdManagement() {
                               )}
                             </div>
                             <div className="text-xs text-gray-500 mt-0.5">
-                              {household.lastName ? `${household.lastName} household` : 'Household group'}
+                              {household.isUngrouped
+                                ? 'Add street address and full name to include in address-based households'
+                                : household.lastName
+                                  ? `${household.lastName} household`
+                                  : 'Household group'}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 ml-2">
@@ -254,6 +287,11 @@ export function HouseholdManagement() {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2">
+                                      {member.isFacilityAdmin && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-green-700 border-green-600">
+                                          Admin
+                                        </Badge>
+                                      )}
                                       {member.status && (
                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
                                           {member.status}

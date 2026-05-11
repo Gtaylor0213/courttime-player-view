@@ -243,6 +243,7 @@ export function CourtCalendarGrid({
   const isDragging = useRef(false);
   const dragMoved = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
+  const fetchRequestIdRef = useRef(0);
   const selectedYmd = useMemo(() => normalizeYmd(selectedDate) ?? selectedDate, [selectedDate]);
 
   const totalPages = Math.ceil(courts.length / COURTS_PER_PAGE);
@@ -305,16 +306,26 @@ export function CourtCalendarGrid({
   }, [selectedDate]);
 
   // Fetch availability for all courts on selected date
-  const fetchAvailability = useCallback(async () => {
+  const fetchAvailability = useCallback(async (options?: { background?: boolean }) => {
+    const background = options?.background === true;
+    const requestId = ++fetchRequestIdRef.current;
+
     if (courts.length === 0) {
+      if (requestId !== fetchRequestIdRef.current) return;
       setCourtData([]);
       setFacilityDayHours(null);
       setLoadError(null);
-      setLoading(false);
+      if (!background) {
+        setLoading(false);
+      }
       return;
     }
-    setLoading(true);
-    setLoadError(null);
+
+    if (!background) {
+      setLoading(true);
+      setLoadError(null);
+    }
+
     console.log('[book-grid] fetch day view', {
       selectedDate,
       facilityId,
@@ -339,9 +350,20 @@ export function CourtCalendarGrid({
       facilitySuccess: facilityRes.success,
       facilityErrorCategory: facilityRes.errorCategory,
       facilityError: facilityRes.error,
+      background,
     });
 
     if (!bookingsRes.success || !configRes.success) {
+      if (requestId !== fetchRequestIdRef.current) return;
+
+      if (background) {
+        console.log('[book-grid] background refresh failed; keeping existing grid data', {
+          bookingsErrorCategory: bookingsRes.errorCategory,
+          configErrorCategory: configRes.errorCategory,
+        });
+        return;
+      }
+
       const criticalFailure = !bookingsRes.success ? bookingsRes : configRes;
       setCourtData([]);
       setFacilityDayHours(null);
@@ -364,6 +386,7 @@ export function CourtCalendarGrid({
       : null;
     const facilityOperatingHours = facility?.operatingHours || facility?.operating_hours || null;
     const dayConfig = getFacilityDayConfig(facilityOperatingHours, dayIndex);
+    if (requestId !== fetchRequestIdRef.current) return;
     setFacilityDayHours(parseDayConfigBounds(dayConfig));
 
     const bookingsList = bookingsRes.success
@@ -478,12 +501,16 @@ export function CourtCalendarGrid({
       };
     });
 
+    if (requestId !== fetchRequestIdRef.current) return;
     setCourtData(results);
-    setLoading(false);
+    setLoadError(null);
+    if (!background) {
+      setLoading(false);
+    }
   }, [courts, selectedDate, facilityId]);
 
   useEffect(() => {
-    fetchAvailability();
+    void fetchAvailability();
   }, [fetchAvailability]);
 
   useEffect(() => {
@@ -493,11 +520,16 @@ export function CourtCalendarGrid({
   }, [onInteractionLockChange]);
 
   useEffect(() => {
+    if (selectedYmd !== localTodayYmd()) {
+      return;
+    }
+
     const stopPolling = createPollingTransport(ACTIVE_DAY_POLL_MS).subscribe(() => {
-      fetchAvailability();
+      void fetchAvailability({ background: true });
     });
+
     return stopPolling;
-  }, [fetchAvailability]);
+  }, [fetchAvailability, selectedYmd]);
 
   /**
    * Vertical size of the time column (one row per slot). Used for scroll math and iOS content height.

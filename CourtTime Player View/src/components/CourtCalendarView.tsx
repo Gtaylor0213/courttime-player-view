@@ -19,8 +19,8 @@ import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User,
 import { Calendar as CalendarPicker } from './ui/calendar';
 
 // Layout constants
-const ROW_HEIGHT = 60;            // 30-min visible row height
-const SUB_SLOT_HEIGHT = 30;       // 15-min subdivision height
+const ROW_HEIGHT = 50;            // 30-min visible row height
+const SUB_SLOT_HEIGHT = 25;       // 15-min subdivision height
 const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 56;
@@ -1337,7 +1337,9 @@ export function CourtCalendarView() {
               </thead>
               <tbody>
                 {visibleTimeSlots.map((time30, visibleIdx) => {
-                  const isHourMark = time30.endsWith(':00 AM') || time30.endsWith(':00 PM');
+                  const isHourLabel = time30.endsWith(':00 AM') || time30.endsWith(':00 PM');
+                  const rowStartMinute = parseInt(time30.split(' ')[0].split(':')[1], 10);
+                  const rowEndsOnHour = Number.isFinite(rowStartMinute) && ((rowStartMinute + 30) % 60 === 0);
                   const topTime = allTimeSlots[visibleIdx * 2];
                   const bottomTime = allTimeSlots[visibleIdx * 2 + 1];
 
@@ -1348,11 +1350,17 @@ export function CourtCalendarView() {
                         className="sticky left-0 z-10 bg-green-50 border-r border-green-100 px-2"
                         style={{
                           width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth,
-                          textAlign: 'right', verticalAlign: 'top', paddingTop: 4,
-                          borderBottom: isHourMark ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
+                          textAlign: 'right', verticalAlign: 'top', paddingTop: 4, position: 'relative',
+                          borderBottom: rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
                         }}
                       >
-                        <span className={`text-xs whitespace-nowrap ${isHourMark ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                        {bottomTime && (
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-gray-200"
+                            style={{ top: effectiveSubSlotHeight }}
+                          />
+                        )}
+                        <span className={`text-xs whitespace-nowrap ${isHourLabel ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
                           {time30}
                         </span>
                       </td>
@@ -1378,9 +1386,15 @@ export function CourtCalendarView() {
                             style={{
                               width: effectiveCourtWidth, minWidth: effectiveCourtWidth,
                               height: effectiveRowHeight, verticalAlign: 'top',
-                              borderBottom: isHourMark ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
+                              borderBottom: rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
                             }}
                           >
+                            {bottomTime && (
+                              <div
+                                className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-gray-200"
+                                style={{ top: effectiveSubSlotHeight }}
+                              />
+                            )}
                             {/* Top half (first 15 min) */}
                             <div
                               className={`absolute top-0 left-0 right-0

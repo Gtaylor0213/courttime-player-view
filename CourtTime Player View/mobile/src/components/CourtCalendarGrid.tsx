@@ -93,6 +93,56 @@ function normalizeHHMM(value: string | undefined | null, fallback: string): stri
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+/** Resolve a single day's facility hours from API (object or legacy "8:00 AM – 10:00 PM" string). */
+function parseDayConfigBounds(dayConfig: unknown): FacilityDayHours | null {
+  if (dayConfig == null) return null;
+
+  if (typeof dayConfig === 'string') {
+    const trimmed = dayConfig.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'closed') {
+      return { isOpen: false, open: '08:00', close: '20:00' };
+    }
+    const parts = trimmed.split(/\s*[–—-]\s*/);
+    if (parts.length < 2) return null;
+    const open = normalizeHHMM(parts[0]!.trim(), '08:00');
+    const close = normalizeHHMM(parts[1]!.trim(), '20:00');
+    return { isOpen: true, open, close };
+  }
+
+  if (typeof dayConfig !== 'object') return null;
+  const dc = dayConfig as Record<string, unknown>;
+  const closed =
+    isTruthyClosed(dc.closed) ||
+    isTruthyClosed(dc.isClosed) ||
+    isTruthyClosed(dc.is_closed) ||
+    dc.isOpen === false ||
+    dc.is_open === false ||
+    (typeof dc.isOpen === 'string' && dc.isOpen.trim().toLowerCase() === 'false') ||
+    (typeof dc.is_open === 'string' && String(dc.is_open).trim().toLowerCase() === 'false');
+  if (closed) {
+    return { isOpen: false, open: '08:00', close: '20:00' };
+  }
+  const open = normalizeHHMM(
+    (dc.open ??
+      dc.openTime ??
+      dc.open_time ??
+      dc.start ??
+      dc.startTime ??
+      dc.start_time) as string | undefined,
+    '08:00'
+  );
+  const close = normalizeHHMM(
+    (dc.close ??
+      dc.closeTime ??
+      dc.close_time ??
+      dc.end ??
+      dc.endTime ??
+      dc.end_time) as string | undefined,
+    '20:00'
+  );
+  return { isOpen: true, open, close };
+}
+
 function bookingsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   const aS = parseTimeToMinutesSafe(aStart);
   const aE = parseTimeToMinutesSafe(aEnd);
@@ -151,6 +201,52 @@ export function CourtCalendarGrid({
   const totalPages = Math.ceil(courts.length / COURTS_PER_PAGE);
   const pageCourts = courts.slice(pageIndex * COURTS_PER_PAGE, (pageIndex + 1) * COURTS_PER_PAGE);
   const openCourtData = useMemo(() => courtData.filter((d) => d.isOpen), [courtData]);
+
+  /** Facility + per-court bounds so the grid never ends before published operating hours (courts can lag by one slot). */
+  const mergedScheduleBounds = useMemo(() => {
+    if (facilityDayHours && !facilityDayHours.isOpen) return null;
+
+    const courtOpens = openCourtData
+      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.open))
+      .filter((v): v is number => v !== null);
+    const courtCloses = openCourtData
+      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.close))
+      .filter((v): v is number => v !== null);
+    const courtOpenMin = courtOpens.length ? Math.min(...courtOpens) : null;
+    const courtCloseMax = courtCloses.length ? Math.max(...courtCloses) : null;
+
+    const fo = facilityDayHours ? parseTimeToMinutesSafe(facilityDayHours.open) : null;
+    const fc = facilityDayHours ? parseTimeToMinutesSafe(facilityDayHours.close) : null;
+
+    const openMinutes =
+      fo !== null && courtOpenMin !== null ? Math.max(fo, courtOpenMin) : (fo ?? courtOpenMin);
+    const closeMinutes =
+      fc !== null && courtCloseMax !== null ? Math.max(fc, courtCloseMax) : (fc ?? courtCloseMax);
+
+    if (openMinutes === null || closeMinutes === null || closeMinutes <= openMinutes) return null;
+    return { openMinutes, closeMinutes };
+  }, [facilityDayHours, openCourtData]);
+
+  const timeRows = useMemo(() => {
+    if (!mergedScheduleBounds) return [];
+    const { openMinutes, closeMinutes } = mergedScheduleBounds;
+    const rows: string[] = [];
+    let minutes = openMinutes;
+    while (minutes < closeMinutes) {
+      rows.push(
+        `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+      );
+      minutes += slotStepMinutes;
+    }
+    return rows;
+  }, [mergedScheduleBounds, slotStepMinutes]);
+
+  const mergedCloseHHMM = useMemo(() => {
+    if (!mergedScheduleBounds) return null;
+    const m = mergedScheduleBounds.closeMinutes;
+    return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  }, [mergedScheduleBounds]);
+
   /** Fixed gutters between court columns so borders do not shrink column width math */
   const COURT_COLUMN_GUTTER = Spacing.xs;
   const courtTrackWidth = SCREEN_WIDTH - TIME_LABEL_WIDTH;
@@ -198,31 +294,7 @@ export function CourtCalendarGrid({
       : null;
     const facilityOperatingHours = facility?.operatingHours || facility?.operating_hours || null;
     const dayConfig = getFacilityDayConfig(facilityOperatingHours, dayIndex);
-    if (dayConfig && typeof dayConfig === 'object') {
-      const open = normalizeHHMM(
-        dayConfig.open || dayConfig.openTime || dayConfig.open_time || dayConfig.start || dayConfig.startTime || dayConfig.start_time,
-        '08:00'
-      );
-      const close = normalizeHHMM(
-        dayConfig.close || dayConfig.closeTime || dayConfig.close_time || dayConfig.end || dayConfig.endTime || dayConfig.end_time,
-        '20:00'
-      );
-      const closed =
-        isTruthyClosed(dayConfig.closed) ||
-        isTruthyClosed(dayConfig.isClosed) ||
-        isTruthyClosed(dayConfig.is_closed) ||
-        dayConfig.isOpen === false ||
-        dayConfig.is_open === false ||
-        (typeof dayConfig.isOpen === 'string' && dayConfig.isOpen.trim().toLowerCase() === 'false') ||
-        (typeof dayConfig.is_open === 'string' && String(dayConfig.is_open).trim().toLowerCase() === 'false');
-      setFacilityDayHours({
-        isOpen: !closed,
-        open,
-        close,
-      });
-    } else {
-      setFacilityDayHours(null);
-    }
+    setFacilityDayHours(parseDayConfigBounds(dayConfig));
 
     const bookingsList = bookingsRes.success
       ? (Array.isArray((bookingsRes.data as any)?.bookings) ? (bookingsRes.data as any).bookings : [])
@@ -357,47 +429,6 @@ export function CourtCalendarGrid({
     return stopPolling;
   }, [fetchAvailability]);
 
-  // Generate time rows from operating hours
-  const getTimeRows = (): string[] => {
-    if (facilityDayHours && !facilityDayHours.isOpen) return [];
-    if (openCourtData.length === 0 && !facilityDayHours) return [];
-    if (facilityDayHours) {
-      const openMinutes = parseTimeToMinutesSafe(facilityDayHours.open);
-      const closeMinutes = parseTimeToMinutesSafe(facilityDayHours.close);
-      if (openMinutes === null || closeMinutes === null || closeMinutes <= openMinutes) return [];
-      const rows: string[] = [];
-      let minutes = openMinutes;
-      while (minutes < closeMinutes) {
-        rows.push(`${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`);
-        minutes += slotStepMinutes;
-      }
-      return rows;
-    }
-    const openCandidates = openCourtData
-      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.open))
-      .filter((v): v is number => v !== null);
-    const closeCandidates = openCourtData
-      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.close))
-      .filter((v): v is number => v !== null);
-    if (openCandidates.length === 0 || closeCandidates.length === 0) return [];
-    const openMinutes = openCandidates.length > 0 ? Math.min(...openCandidates) : 8 * 60;
-    const closeMinutes = closeCandidates.length > 0 ? Math.max(...closeCandidates) : 21 * 60;
-    const openH = Math.floor(openMinutes / 60);
-    const openM = openMinutes % 60;
-    const closeH = Math.floor(closeMinutes / 60);
-    const closeM = closeMinutes % 60;
-    const rows: string[] = [];
-    let h = openH, m = openM;
-    while (h < closeH || (h === closeH && m < closeM)) {
-      rows.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-      m += slotStepMinutes;
-      if (m >= 60) { h += Math.floor(m / 60); m = m % 60; }
-    }
-    return rows;
-  };
-
-  const timeRows = getTimeRows();
-
   /** Avoid flex:1 in a parent ScrollView — it can confuse layout/touches; bound grid height instead. */
   const gridScrollMinHeight = useMemo(() => {
     const rowsH = timeRows.length * ROW_HEIGHT + 100;
@@ -488,15 +519,18 @@ export function CourtCalendarGrid({
   }, [loading, scrollToCurrentTime, timeRows.length, pageIndex, selectedDate]);
 
   // Get the row end time (next slot or closing)
-  const getRowEndTime = (rowIndex: number): string => {
-    if (rowIndex + 1 < timeRows.length) return timeRows[rowIndex + 1];
-    if (facilityDayHours?.close) return facilityDayHours.close;
-    const closeCandidates = openCourtData
-      .map((d) => parseTimeToMinutesSafe(d.operatingHours?.close))
-      .filter((v): v is number => v !== null);
-    const closeMinutes = closeCandidates.length > 0 ? Math.max(...closeCandidates) : 21 * 60;
-    return `${String(Math.floor(closeMinutes / 60)).padStart(2, '0')}:${String(closeMinutes % 60).padStart(2, '0')}`;
-  };
+  const getRowEndTime = useCallback(
+    (rowIndex: number): string => {
+      if (rowIndex + 1 < timeRows.length) return timeRows[rowIndex + 1]!;
+      if (mergedCloseHHMM) return mergedCloseHHMM;
+      const closeCandidates = openCourtData
+        .map((d) => parseTimeToMinutesSafe(d.operatingHours?.close))
+        .filter((v): v is number => v !== null);
+      const closeMinutes = closeCandidates.length > 0 ? Math.max(...closeCandidates) : 21 * 60;
+      return `${String(Math.floor(closeMinutes / 60)).padStart(2, '0')}:${String(closeMinutes % 60).padStart(2, '0')}`;
+    },
+    [timeRows, mergedCloseHHMM, openCourtData]
+  );
 
   // Check if drag selection range has any bookings
   const selectionHasConflict = (sel: DragSelection): boolean => {

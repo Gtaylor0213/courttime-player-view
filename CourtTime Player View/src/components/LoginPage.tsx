@@ -39,27 +39,27 @@ export function LoginPage() {
       {/* Left side - Hero section */}
       <div className="hidden lg:flex lg:w-1/2 relative">
         <ImageWithFallback
-          src="https://images.unsplash.com/photo-1668507911709-0249e832618d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0ZW5uaXMlMjBjb3VydCUyMG91dGRvb3IlMjBzcG9ydHN8ZW58MXx8fHwxNzU4NzU5NDY3fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
+          src="https://images.unsplash.com/photo-1622668460389-f92e9ed21616?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixlib=rb-4.1.0&q=80&w=1080"
           alt="Tennis court"
           className="absolute inset-0 w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-black/40" />
-        <div className="relative z-10 flex flex-col justify-center items-center px-12 text-white text-center">
+        <div className="absolute inset-0 z-10 flex flex-col justify-center items-center px-12 text-white text-center">
           <h1 className="text-4xl font-bold mb-6">CourtTime</h1>
           <p className="text-xl mb-8 leading-relaxed max-w-lg">
             Book your favorite courts with ease. From tennis to pickleball, 
             find and reserve the perfect space for your game.
           </p>
-          <div className="space-y-4 text-left">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col items-center space-y-4 text-center">
+            <div className="flex items-center justify-center gap-3">
               <div className="w-2 h-2 bg-green-400 rounded-full" />
               <span>Instant booking confirmation</span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center gap-3">
               <div className="w-2 h-2 bg-green-400 rounded-full" />
               <span>Real-time availability</span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center gap-3">
               <div className="w-2 h-2 bg-green-400 rounded-full" />
               <span>Easy cancellation & rescheduling</span>
             </div>

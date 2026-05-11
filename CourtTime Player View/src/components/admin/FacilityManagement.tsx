@@ -478,6 +478,34 @@ export function FacilityManagement() {
     sunday: { open: '09:00', close: '18:00', closed: false },
   };
 
+  const isUnlimitedRuleValue = (value: unknown) => value === -1 || value === '-1';
+
+  const toRuleInputValue = (value: unknown, fallback: string) => {
+    if (isUnlimitedRuleValue(value) || value == null || value === '') {
+      return fallback;
+    }
+
+    return String(value);
+  };
+
+  const normalizePeakHoursRestrictions = (rules: any = {}): BookingRules['peakHoursRestrictions'] => {
+    const maxBookingsPerWeekRaw = rules.maxBookingsPerWeek ?? rules.max_bookings_per_week;
+    const maxDurationHoursRaw = rules.maxDurationHours ?? rules.max_duration_hours;
+
+    return {
+      maxBookingsPerWeek: toRuleInputValue(
+        maxBookingsPerWeekRaw,
+        defaultBookingRules.peakHoursRestrictions.maxBookingsPerWeek
+      ),
+      maxBookingsUnlimited: rules.maxBookingsUnlimited === true || isUnlimitedRuleValue(maxBookingsPerWeekRaw),
+      maxDurationHours: toRuleInputValue(
+        maxDurationHoursRaw,
+        defaultBookingRules.peakHoursRestrictions.maxDurationHours
+      ),
+      maxDurationUnlimited: rules.maxDurationUnlimited === true || isUnlimitedRuleValue(maxDurationHoursRaw),
+    };
+  };
+
   const [expandedPeakHourSlots, setExpandedPeakHourSlots] = useState<Record<string, boolean>>({});
   const [facilityData, setFacilityData] = useState<FacilityData>({
     name: '',
@@ -703,10 +731,7 @@ export function FacilityManagement() {
               peakHoursSlots: Array.isArray(parsedSimplified?.peakHoursSlots)
                 ? parsedSimplified.peakHoursSlots.map((slot: any) => normalizePeakHoursSlot(slot))
                 : normalizedPeakHoursSlots,
-              peakHoursRestrictions: {
-                ...defaultBookingRules.peakHoursRestrictions,
-                ...(parsedSimplified?.peakHoursRestrictions || {}),
-              },
+              peakHoursRestrictions: normalizePeakHoursRestrictions(parsedSimplified?.peakHoursRestrictions),
               weekendPolicy: {
                 ...defaultBookingRules.weekendPolicy,
                 ...(parsedSimplified?.weekendPolicy || {}),
@@ -883,12 +908,10 @@ export function FacilityManagement() {
               hasPeakHours: !!facility.peakHoursPolicy?.enabled,
               peakHoursApplyToAdmins: false,
               peakHoursSlots: normalizedPeakHoursSlots,
-              peakHoursRestrictions: {
-                maxBookingsPerWeek: String(facility.peakHoursPolicy?.maxBookingsPerWeek || '2'),
-                maxBookingsUnlimited: facility.peakHoursPolicy?.maxBookingsPerWeek === -1,
-                maxDurationHours: String(facility.peakHoursPolicy?.maxDurationHours || '1.5'),
-                maxDurationUnlimited: facility.peakHoursPolicy?.maxDurationHours === -1,
-              },
+              peakHoursRestrictions: normalizePeakHoursRestrictions({
+                maxBookingsPerWeek: facility.peakHoursPolicy?.maxBookingsPerWeek,
+                maxDurationHours: facility.peakHoursPolicy?.maxDurationHours,
+              }),
               hasWeekendPolicy: !!facility.weekendPolicy?.enabled,
               weekendPolicyApplyToAdmins: false,
               weekendPolicy: {
@@ -1160,16 +1183,18 @@ export function FacilityManagement() {
       ? slot.selectedCourtIds
       : (Array.isArray(slot.selected_court_ids) ? slot.selected_court_ids : []),
     rules: {
-      maxBookingsPerDay: String(maxBookingsPerDayRaw ?? defaultPeakHoursSlotRules.maxBookingsPerDay),
-      maxBookingsPerDayUnlimited: slotRules.maxBookingsPerDayUnlimited === true || maxBookingsPerDayRaw === -1,
-      maxBookingsPerDayHousehold: String(maxBookingsPerDayHouseholdRaw ?? defaultPeakHoursSlotRules.maxBookingsPerDayHousehold),
-      maxBookingsPerDayHouseholdUnlimited: slotRules.maxBookingsPerDayHouseholdUnlimited === true || maxBookingsPerDayHouseholdRaw === -1,
-      maxBookingsPerWeek: String(maxBookingsPerWeekRaw ?? defaultPeakHoursSlotRules.maxBookingsPerWeek),
-      maxBookingsPerWeekUnlimited: slotRules.maxBookingsPerWeekUnlimited === true || maxBookingsPerWeekRaw === -1,
-      maxBookingsPerWeekHousehold: String(maxBookingsPerWeekHouseholdRaw ?? defaultPeakHoursSlotRules.maxBookingsPerWeekHousehold),
-      maxBookingsPerWeekHouseholdUnlimited: slotRules.maxBookingsPerWeekHouseholdUnlimited === true || maxBookingsPerWeekHouseholdRaw === -1,
-      maxDurationHours: String(maxDurationHoursRaw ?? defaultPeakHoursSlotRules.maxDurationHours),
-      maxDurationUnlimited: slotRules.maxDurationUnlimited === true || maxDurationHoursRaw === -1,
+      maxBookingsPerDay: toRuleInputValue(maxBookingsPerDayRaw, defaultPeakHoursSlotRules.maxBookingsPerDay),
+      maxBookingsPerDayUnlimited: slotRules.maxBookingsPerDayUnlimited === true || isUnlimitedRuleValue(maxBookingsPerDayRaw),
+      maxBookingsPerDayHousehold: toRuleInputValue(maxBookingsPerDayHouseholdRaw, defaultPeakHoursSlotRules.maxBookingsPerDayHousehold),
+      maxBookingsPerDayHouseholdUnlimited:
+        slotRules.maxBookingsPerDayHouseholdUnlimited === true || isUnlimitedRuleValue(maxBookingsPerDayHouseholdRaw),
+      maxBookingsPerWeek: toRuleInputValue(maxBookingsPerWeekRaw, defaultPeakHoursSlotRules.maxBookingsPerWeek),
+      maxBookingsPerWeekUnlimited: slotRules.maxBookingsPerWeekUnlimited === true || isUnlimitedRuleValue(maxBookingsPerWeekRaw),
+      maxBookingsPerWeekHousehold: toRuleInputValue(maxBookingsPerWeekHouseholdRaw, defaultPeakHoursSlotRules.maxBookingsPerWeekHousehold),
+      maxBookingsPerWeekHouseholdUnlimited:
+        slotRules.maxBookingsPerWeekHouseholdUnlimited === true || isUnlimitedRuleValue(maxBookingsPerWeekHouseholdRaw),
+      maxDurationHours: toRuleInputValue(maxDurationHoursRaw, defaultPeakHoursSlotRules.maxDurationHours),
+      maxDurationUnlimited: slotRules.maxDurationUnlimited === true || isUnlimitedRuleValue(maxDurationHoursRaw),
     }
     };
   };
@@ -3397,7 +3422,7 @@ export function FacilityManagement() {
                                           min="0.5"
                                           step="0.5"
                                           className="w-24 h-8"
-                                          value={slot.rules.maxDurationHours}
+                                          value={slot.rules.maxDurationUnlimited ? '' : slot.rules.maxDurationHours}
                                           disabled={!isEditing || slot.rules.maxDurationUnlimited}
                                           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                                             updatePeakHourSlotRule(slot.id, 'maxDurationHours', e.target.value)
@@ -3423,7 +3448,7 @@ export function FacilityManagement() {
                                             type="number"
                                             min="1"
                                             className="w-24 h-8"
-                                            value={slot.rules.maxBookingsPerDay}
+                                            value={slot.rules.maxBookingsPerDayUnlimited ? '' : slot.rules.maxBookingsPerDay}
                                             disabled={!isEditing || slot.rules.maxBookingsPerDayUnlimited}
                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                                               updatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', e.target.value)
@@ -3446,7 +3471,7 @@ export function FacilityManagement() {
                                             type="number"
                                             min="1"
                                             className="w-24 h-8"
-                                            value={slot.rules.maxBookingsPerWeek}
+                                            value={slot.rules.maxBookingsPerWeekUnlimited ? '' : slot.rules.maxBookingsPerWeek}
                                             disabled={!isEditing || slot.rules.maxBookingsPerWeekUnlimited}
                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                                               updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', e.target.value)
@@ -3469,7 +3494,7 @@ export function FacilityManagement() {
                                             type="number"
                                             min="1"
                                             className="w-24 h-8"
-                                            value={slot.rules.maxBookingsPerWeekHousehold}
+                                            value={slot.rules.maxBookingsPerWeekHouseholdUnlimited ? '' : slot.rules.maxBookingsPerWeekHousehold}
                                             disabled={!isEditing || slot.rules.maxBookingsPerWeekHouseholdUnlimited}
                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                                               updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', e.target.value)
@@ -3492,7 +3517,7 @@ export function FacilityManagement() {
                                             type="number"
                                             min="1"
                                             className="w-24 h-8"
-                                            value={slot.rules.maxBookingsPerDayHousehold}
+                                            value={slot.rules.maxBookingsPerDayHouseholdUnlimited ? '' : slot.rules.maxBookingsPerDayHousehold}
                                             disabled={!isEditing || slot.rules.maxBookingsPerDayHouseholdUnlimited}
                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                                               updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHousehold', e.target.value)

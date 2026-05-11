@@ -9,8 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import NetInfo from '@react-native-community/netinfo';
-import { Platform } from 'react-native';
-import { api, ApiErrorCategory, ApiResponse } from '../api/client';
+import { api, API_BASE_URL, ApiErrorCategory, ApiResponse } from '../api/client';
 import { getCachedDataWithMeta, setCachedData, queueAction, getActionQueue, removeActionFromQueue } from '../utils/offlineCache';
 
 type ConnectivityBannerState = 'offline' | 'backend_unreachable' | 'online';
@@ -20,9 +19,7 @@ export function useOfflineApi() {
   const [bannerState, setBannerState] = useState<ConnectivityBannerState>('online');
   const [lastCachedAt, setLastCachedAt] = useState<number | null>(null);
 
-  const fallbackApiBase = Platform.OS === 'android' ? 'http://10.0.2.2:3001' : 'http://localhost:3001';
-  const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || fallbackApiBase;
-  const healthUrl = `${apiBaseUrl.replace(/\/$/, '')}/health`;
+  const healthUrl = `${API_BASE_URL.replace(/\/$/, '')}/health`;
 
   useEffect(() => {
     NetInfo.configure({

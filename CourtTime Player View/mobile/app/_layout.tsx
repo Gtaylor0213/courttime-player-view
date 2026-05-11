@@ -1,6 +1,7 @@
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import '../src/registerTextDefaults';
+import { Sentry, hasSentryDsn } from '../src/utils/sentry';
 /**
  * Root Layout
  * Wraps the entire app with AuthProvider and handles auth-based routing
@@ -128,7 +129,7 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -167,3 +168,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
 });
+
+export default hasSentryDsn ? Sentry.wrap(RootLayout) : RootLayout;

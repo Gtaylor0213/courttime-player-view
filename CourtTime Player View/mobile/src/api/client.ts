@@ -9,12 +9,10 @@ import NetInfo from '@react-native-community/netinfo';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../../shared/api/core';
+import { resolveApiBaseUrl } from './baseUrl';
+import { APP_ENV, PRODUCTION_API_URL, stripTrailingSlashes } from '../config/runtime';
 
 const API_PORT = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
-
-function stripTrailingSlashes(url: string): string {
-  return url.replace(/\/+$/, '');
-}
 
 /** True when Metro is reachable only via a tunnel hostname (cannot reach your LAN API). */
 function isTunnelMetroHost(hostUri: string): boolean {
@@ -48,7 +46,7 @@ function tryParseHostFromScriptUrl(): string | null {
  * then Expo debugger / host URIs. Skips tunnel hosts so we fall through to production URL.
  */
 function getDevLanApiBaseUrl(): string | null {
-  if (!__DEV__) return null;
+  if (APP_ENV !== 'development') return null;
 
   const fromScript = tryParseHostFromScriptUrl();
   if (fromScript && !isTunnelMetroHost(fromScript)) {
@@ -57,6 +55,10 @@ function getDevLanApiBaseUrl(): string | null {
 
   if (Platform.OS === 'android' && !Device.isDevice) {
     return `http://10.0.2.2:${API_PORT}`;
+  }
+
+  if (Platform.OS === 'ios' && !Device.isDevice) {
+    return `http://localhost:${API_PORT}`;
   }
 
   const hostUri =
@@ -76,35 +78,32 @@ function getDevLanApiBaseUrl(): string | null {
   return null;
 }
 
-function getProductionApiBaseUrl(): string | null {
-  const fromExtra = Constants.expoConfig?.extra?.productionApiUrl;
-  if (typeof fromExtra === 'string' && fromExtra.trim()) {
-    return stripTrailingSlashes(fromExtra.trim());
-  }
-  return null;
-}
-
 const DEFAULT_LOCAL_API_URL =
   Platform.OS === 'android' ? `http://10.0.2.2:${API_PORT}` : `http://localhost:${API_PORT}`;
 
 /**
  * 1. EXPO_PUBLIC_API_URL — explicit override (any mode).
- * 2. __DEV__ — LAN / script-derived API host (Expo Go on Wi‑Fi; not tunnel).
- * 3. Production default from app.config.js `extra.productionApiUrl` (tunnel + release).
- * 4. Last resort localhost / 10.0.2.2.
+ * 2. Development builds — LAN / simulator host (Expo Go on Wi-Fi; not tunnel).
+ * 3. Preview / production builds — baked-in public API URL from app config.
+ * 4. Development-only localhost / 10.0.2.2 fallback.
  */
-const explicitUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-const API_BASE_URL = stripTrailingSlashes(
-  explicitUrl ||
-    getDevLanApiBaseUrl() ||
-    getProductionApiBaseUrl() ||
-    DEFAULT_LOCAL_API_URL
-);
+const explicitUrl = process.env.EXPO_PUBLIC_API_URL;
+export const API_BASE_URL = resolveApiBaseUrl({
+  appEnv: APP_ENV,
+  explicitUrl,
+  devApiUrl: getDevLanApiBaseUrl(),
+  productionApiUrl: PRODUCTION_API_URL,
+  defaultLocalApiUrl: DEFAULT_LOCAL_API_URL,
+});
 
 if (__DEV__ && Platform.OS !== 'web') {
   const hostUri = Constants.expoConfig?.hostUri;
   const tunnel = hostUri ? isTunnelMetroHost(hostUri) : false;
-  console.log('[CourtTime] API_BASE_URL =', API_BASE_URL, tunnel ? '(tunnel → production or override)' : '');
+  console.log(
+    '[CourtTime] API_BASE_URL =',
+    API_BASE_URL,
+    tunnel ? '(tunnel -> production or explicit public override)' : ''
+  );
 }
 
 const REQUEST_TIMEOUT_MS = 15000;

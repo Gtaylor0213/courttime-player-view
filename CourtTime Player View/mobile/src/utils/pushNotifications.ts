@@ -9,11 +9,14 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { api } from '../api/client';
 import { Colors } from '../constants/theme';
+import { EAS_PROJECT_ID } from '../config/runtime';
 
 // Configure how notifications appear when app is in foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -44,9 +47,8 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
   // Get Expo push token (projectId must be an EAS UUID, not the app slug)
   try {
-    const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
     const candidate =
-      extra?.eas?.projectId ?? (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId;
+      (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId ?? EAS_PROJECT_ID;
     const uuidRe =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     const projectId = typeof candidate === 'string' && uuidRe.test(candidate) ? candidate : undefined;

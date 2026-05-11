@@ -270,10 +270,20 @@ router.post('/register', async (req, res, next) => {
       maxBookingsPerWeek: parseInt(maxBookingsPerWeek) || 3,
       maxBookingDurationHours: parseFloat(maxBookingDurationHours) || 2,
       advanceBookingDays: parseInt(advanceBookingDays) || 14,
-      restrictionsApplyToAdmins: restrictionsApplyToAdmins !== false,
-      adminRestrictions: adminRestrictions || undefined,
-      peakHoursPolicy: peakHoursPolicy || undefined,
-      weekendPolicy: weekendPolicy || undefined,
+      restrictionsApplyToAdmins: false,
+      adminRestrictions: undefined,
+      peakHoursPolicy: peakHoursPolicy
+        ? {
+            ...peakHoursPolicy,
+            applyToAdmins: false,
+          }
+        : undefined,
+      weekendPolicy: weekendPolicy
+        ? {
+            ...weekendPolicy,
+            applyToAdmins: false,
+          }
+        : undefined,
       courts: courts.map((court: any) => ({
         name: court.name,
         courtNumber: parseInt(court.courtNumber),

@@ -309,7 +309,7 @@ export const DEFAULT_RULES_CONFIG: RulesConfig = {
   },
 
   hasPeakHours: false,
-  peakHoursApplyToAdmins: true,
+  peakHoursApplyToAdmins: false,
   peakHoursSlots: [],
   peakHoursRestrictions: {
     maxBookingsPerWeek: '2',
@@ -319,7 +319,7 @@ export const DEFAULT_RULES_CONFIG: RulesConfig = {
   },
 
   hasWeekendPolicy: false,
-  weekendPolicyApplyToAdmins: true,
+  weekendPolicyApplyToAdmins: false,
   weekendPolicy: {
     maxBookingsPerWeekend: '2',
     maxBookingsUnlimited: false,

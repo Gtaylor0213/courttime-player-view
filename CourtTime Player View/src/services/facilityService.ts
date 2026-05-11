@@ -289,23 +289,17 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
           facility.maxBookingsPerWeek = config.max_bookings_per_week;
           facility.maxBookingDurationHours = config.max_duration_hours;
           facility.advanceBookingDays = config.advance_booking_days;
-          facility.restrictionsApplyToAdmins = config.applies_to_admins !== false;
-        } else if (rule.ruleType === 'admin_booking_limit') {
-          facility.adminRestrictions = {
-            maxBookingsPerWeek: config.max_bookings_per_week,
-            maxBookingDurationHours: config.max_duration_hours,
-            advanceBookingDays: config.advance_booking_days,
-          };
+          facility.restrictionsApplyToAdmins = false;
         } else if (rule.ruleType === 'peak_hours') {
           facility.peakHoursPolicy = {
             enabled: true,
-            applyToAdmins: config.apply_to_admins !== false,
+            applyToAdmins: false,
             timeSlots: config.time_slots || {},
           };
         } else if (rule.ruleType === 'weekend_policy') {
           facility.weekendPolicy = {
             enabled: true,
-            applyToAdmins: config.apply_to_admins !== false,
+            applyToAdmins: false,
             maxBookingsPerWeekend: config.max_bookings_per_weekend,
             maxDurationHours: config.max_duration_hours,
             advanceBookingDays: config.advance_booking_days,
@@ -1071,28 +1065,11 @@ export async function registerFacility(
           max_bookings_per_week: data.maxBookingsPerWeek,
           max_duration_hours: data.maxBookingDurationHours,
           advance_booking_days: data.advanceBookingDays,
-          applies_to_admins: data.restrictionsApplyToAdmins !== false,
+          applies_to_admins: false,
         }),
         superAdminUserId,
       ]
     );
-
-    // Admin-specific restrictions (if different from regular members)
-    if (data.restrictionsApplyToAdmins === false && data.adminRestrictions) {
-      await client.query(
-        `INSERT INTO facility_rules (facility_id, rule_type, rule_name, rule_description, rule_config, created_by)
-         VALUES ($1, 'admin_booking_limit', 'Admin Booking Limits', 'Booking limits for facility administrators', $2, $3)`,
-        [
-          facilityId,
-          JSON.stringify({
-            max_bookings_per_week: data.adminRestrictions.maxBookingsPerWeek,
-            max_duration_hours: data.adminRestrictions.maxBookingDurationHours,
-            advance_booking_days: data.adminRestrictions.advanceBookingDays,
-          }),
-          superAdminUserId,
-        ]
-      );
-    }
 
     // Peak hours policy - with per-slot restrictions and court targeting
     if (data.peakHoursPolicy?.enabled) {
@@ -1114,7 +1091,7 @@ export async function registerFacility(
         [
           facilityId,
           JSON.stringify({
-            apply_to_admins: data.peakHoursPolicy.applyToAdmins !== false,
+            apply_to_admins: false,
             time_slots: cleanedTimeSlots,
           }),
           superAdminUserId,
@@ -1130,7 +1107,7 @@ export async function registerFacility(
         [
           facilityId,
           JSON.stringify({
-            apply_to_admins: data.weekendPolicy.applyToAdmins !== false,
+            apply_to_admins: false,
             max_bookings_per_weekend: data.weekendPolicy.maxBookingsPerWeekend,
             max_duration_hours: data.weekendPolicy.maxDurationHours,
             advance_booking_days: data.weekendPolicy.advanceBookingDays,

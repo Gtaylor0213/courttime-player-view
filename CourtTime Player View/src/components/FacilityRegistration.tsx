@@ -1065,13 +1065,9 @@ export function FacilityRegistration() {
         advanceBookingDays: formData.rulesConfig.rules['ACC-005']?.enabled
           ? String(formData.rulesConfig.rules['ACC-005'].config.max_days_ahead || 14) : '-1',
 
-        // Admin restrictions
-        restrictionsApplyToAdmins: formData.rulesConfig.restrictionsApplyToAdmins,
-        adminRestrictions: !formData.rulesConfig.restrictionsApplyToAdmins ? {
-          maxBookingsPerWeek: formData.rulesConfig.adminRestrictions.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.adminRestrictions.maxBookingsPerWeek),
-          maxBookingDurationHours: formData.rulesConfig.adminRestrictions.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.adminRestrictions.maxDurationHours),
-          advanceBookingDays: formData.rulesConfig.adminRestrictions.advanceBookingUnlimited ? -1 : parseInt(formData.rulesConfig.adminRestrictions.advanceBookingDays),
-        } : undefined,
+        // Facility admins always bypass booking rules.
+        restrictionsApplyToAdmins: false,
+        adminRestrictions: undefined,
 
         // Peak hours policy - with per-day time slots
         peakHoursPolicy: formData.rulesConfig.hasPeakHours ? {
@@ -1097,7 +1093,7 @@ export function FacilityRegistration() {
         // Weekend policy
         weekendPolicy: formData.rulesConfig.hasWeekendPolicy ? {
           enabled: true,
-          applyToAdmins: formData.rulesConfig.weekendPolicyApplyToAdmins,
+          applyToAdmins: false,
           maxBookingsPerWeekend: formData.rulesConfig.weekendPolicy.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.weekendPolicy.maxBookingsPerWeekend),
           maxDurationHours: formData.rulesConfig.weekendPolicy.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.weekendPolicy.maxDurationHours),
           advanceBookingDays: formData.rulesConfig.weekendPolicy.advanceBookingUnlimited ? -1 : parseInt(formData.rulesConfig.weekendPolicy.advanceBookingDays),
@@ -3117,9 +3113,6 @@ export function FacilityRegistration() {
             </div>
           </div>
 
-          {!formData.rulesConfig.restrictionsApplyToAdmins && (
-            <div><span className="font-medium">Admin Overrides:</span> Custom admin restrictions configured</div>
-          )}
           {formData.rulesConfig.hasPeakHours && (
             <div><span className="font-medium">Peak Hours:</span> Configured with custom time slots</div>
           )}

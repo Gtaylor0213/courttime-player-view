@@ -49,6 +49,29 @@ function mondayWeekBoundsYmd(bookingDateYmd: string): { weekStart: string; weekE
   return { weekStart: fmt(weekStartDate), weekEnd: fmt(weekEndDate) };
 }
 
+async function isFacilityAdminUser(userId: string, facilityId: string): Promise<boolean> {
+  const result = await query(
+    `SELECT
+       COALESCE(
+         (
+           SELECT fm.is_facility_admin
+           FROM facility_memberships fm
+           WHERE fm.user_id = $1 AND fm.facility_id = $2
+           LIMIT 1
+         ),
+         false
+       ) OR EXISTS(
+         SELECT 1
+         FROM facility_admins fa
+         WHERE fa.user_id = $1
+           AND fa.facility_id = $2
+           AND fa.status = 'active'
+       ) AS "isFacilityAdmin"`,
+    [userId, facilityId]
+  );
+  return !!result.rows[0]?.isFacilityAdmin;
+}
+
 /** Provisional slices not yet persisted (avoids double-count with DB after sequential creates). */
 async function countProvisionalsNotInDb(
   userId: string,
@@ -88,6 +111,9 @@ async function assertHardBookingRuleCaps(bookingData: {
   const { bookingRulesRaw, simplifiedBookingRules } = parseStoredFacilityBookingRules(
     facRow.rows[0]?.bookingRules
   );
+  if (await isFacilityAdminUser(bookingData.userId, bookingData.facilityId)) {
+    return null;
+  }
 
   let acc002ForCaps: FacilityRuleConfig[] | undefined;
   try {
@@ -122,6 +148,23 @@ async function assertHardBookingRuleCaps(bookingData: {
   const facilityLike = { bookingRulesRaw, simplifiedBookingRules, rules: acc002ForCaps };
   const prov = bookingData.provisionalSameRequestBookings ?? [];
   const day = bookingData.bookingDate;
+  const { weekStart, weekEnd } = mondayWeekBoundsYmd(bookingData.bookingDate);
+  const provInWeek = await countProvisionalsNotInDb(
+    bookingData.userId,
+    bookingData.facilityId,
+    prov,
+    (p) => p.bookingDate >= weekStart && p.bookingDate <= weekEnd
+  );
+
+  const userWeekRes = await query(
+    `SELECT COUNT(*)::int AS c FROM bookings
+     WHERE user_id = $1 AND facility_id = $2
+       AND booking_date >= $3::date AND booking_date <= $4::date
+       AND status != 'cancelled'`,
+    [bookingData.userId, bookingData.facilityId, weekStart, weekEnd]
+  );
+  const userWeekCount = Number(userWeekRes.rows[0]?.c ?? 0) + provInWeek;
+
   const provisionalForDay = await countProvisionalsNotInDb(
     bookingData.userId,
     bookingData.facilityId,
@@ -153,23 +196,6 @@ async function assertHardBookingRuleCaps(bookingData: {
       isPrimeTime: false
     };
   }
-
-  const { weekStart, weekEnd } = mondayWeekBoundsYmd(bookingData.bookingDate);
-  const provInWeek = await countProvisionalsNotInDb(
-    bookingData.userId,
-    bookingData.facilityId,
-    prov,
-    (p) => p.bookingDate >= weekStart && p.bookingDate <= weekEnd
-  );
-
-  const userWeekRes = await query(
-    `SELECT COUNT(*)::int AS c FROM bookings
-     WHERE user_id = $1 AND facility_id = $2
-       AND booking_date >= $3::date AND booking_date <= $4::date
-       AND status != 'cancelled'`,
-    [bookingData.userId, bookingData.facilityId, weekStart, weekEnd]
-  );
-  const userWeekCount = Number(userWeekRes.rows[0]?.c ?? 0) + provInWeek;
 
   const weeklyInd = resolveWeeklyIndividualFromBookingRules(facilityLike);
   if (weeklyInd.enabled && weeklyInd.limit > 0 && userWeekCount >= weeklyInd.limit) {

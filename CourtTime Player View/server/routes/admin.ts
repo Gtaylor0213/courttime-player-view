@@ -91,6 +91,9 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
   const merged: Record<string, any> = {
     ...bookingRules,
     restrictionType: bookingRules.restrictionType === 'address' ? 'address' : 'account',
+    restrictionsApplyToAdmins: false,
+    peakHoursApplyToAdmins: false,
+    weekendPolicyApplyToAdmins: false,
     daysInAdvance: {
       enabled: pickEnabled(
         bookingRules.daysInAdvanceEnabled,
@@ -194,6 +197,8 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
         Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
     }
   }
+
+  delete merged.adminRestrictions;
 
   return merged;
 }

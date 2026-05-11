@@ -419,7 +419,7 @@ export function FacilityManagement() {
     adminAdvanceBookingDays: '30',
     adminAdvanceBookingUnlimited: true,
     hasPeakHours: false,
-    peakHoursApplyToAdmins: true,
+    peakHoursApplyToAdmins: false,
     peakHoursSlots: [],
     peakHoursRestrictions: {
       maxBookingsPerWeek: '2',
@@ -695,6 +695,9 @@ export function FacilityManagement() {
           ? {
               ...defaultBookingRules,
               ...parsedSimplified,
+              restrictionsApplyToAdmins: false,
+              peakHoursApplyToAdmins: false,
+              weekendPolicyApplyToAdmins: false,
               generalRules: facility.generalRules || parsedSimplified?.generalRules || '',
               restrictionType: parsedSimplified?.restrictionType || facility.restrictionType || defaultBookingRules.restrictionType,
               peakHoursSlots: Array.isArray(parsedSimplified?.peakHoursSlots)
@@ -878,7 +881,7 @@ export function FacilityManagement() {
               adminAdvanceBookingDays: String(facility.adminRestrictions?.advanceBookingDays || '30'),
               adminAdvanceBookingUnlimited: facility.adminRestrictions?.advanceBookingDays === -1,
               hasPeakHours: !!facility.peakHoursPolicy?.enabled,
-              peakHoursApplyToAdmins: true,
+              peakHoursApplyToAdmins: false,
               peakHoursSlots: normalizedPeakHoursSlots,
               peakHoursRestrictions: {
                 maxBookingsPerWeek: String(facility.peakHoursPolicy?.maxBookingsPerWeek || '2'),
@@ -984,10 +987,9 @@ export function FacilityManagement() {
           maxBookingsPerWeekUnlimited: !facilityData.bookingRules.courtsPerWeekUserEnabled,
           advanceBookingDays: facilityData.bookingRules.daysInAdvance,
           advanceBookingDaysUnlimited: !facilityData.bookingRules.daysInAdvanceEnabled,
-          restrictionsApplyToAdmins: facilityData.bookingRules.restrictionsApplyToAdmins ?? false,
-          // When true, peak caps apply to facility admins too; false = admins exempt (legacy saves often had this forced off).
-          peakHoursApplyToAdmins: facilityData.bookingRules.peakHoursApplyToAdmins ?? true,
-          weekendPolicyApplyToAdmins: facilityData.bookingRules.weekendPolicyApplyToAdmins ?? false,
+          restrictionsApplyToAdmins: false,
+          peakHoursApplyToAdmins: false,
+          weekendPolicyApplyToAdmins: false,
         },
       };
       const response = await adminApi.updateFacility(currentFacilityId, payload);

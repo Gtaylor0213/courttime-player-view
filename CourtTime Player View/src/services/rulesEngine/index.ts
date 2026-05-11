@@ -31,8 +31,6 @@ import {
   formatDate,
   getDayOfWeek,
   getTodayYmdInTimeZone,
-  diffCalendarDaysYmd,
-  addCalendarDaysYmd,
   minutesBetween,
   timeRangesOverlap
 } from './utils/timeUtils';
@@ -216,6 +214,17 @@ export class RulesEngine {
       }
 
       // === End pre-rule hard blocks ===
+
+      // Facility admins always bypass player reservation rules.
+      if (context.user.isFacilityAdmin) {
+        return {
+          allowed: true,
+          results: [],
+          blockers: [],
+          warnings: [],
+          isPrimeTime: context.isPrimeTime
+        };
+      }
 
       // Use legacy simplified rules only as a fallback when no configured
       // rules-engine entries exist for this facility.

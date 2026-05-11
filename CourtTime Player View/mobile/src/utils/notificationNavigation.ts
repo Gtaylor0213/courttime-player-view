@@ -41,6 +41,7 @@ export function getNotificationHref(raw: NotificationData): Href {
   const facilityId = asNonEmptyString(raw.facilityId);
   const bookingDate = asNonEmptyString(raw.bookingDate);
   const bookingId = asNonEmptyString(raw.bookingId);
+  const conversationId = asNonEmptyString(raw.conversationId);
 
   if (BOOKING_PUSH_TYPES.has(type)) {
     return {
@@ -54,6 +55,16 @@ export function getNotificationHref(raw: NotificationData): Href {
   }
 
   if (type === 'message') {
+    if (facilityId || conversationId) {
+      return {
+        pathname: '/(tabs)/messages',
+        params: {
+          ...(facilityId ? { facilityId } : {}),
+          ...(conversationId ? { conversationId } : {}),
+        },
+      };
+    }
+
     return '/(tabs)/messages';
   }
 

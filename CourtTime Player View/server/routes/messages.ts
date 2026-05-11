@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { query } from '../../src/database/connection';
+import { notificationService } from '../../src/services/notificationService';
 
 const router = express.Router();
 
@@ -209,6 +210,33 @@ router.post('/', async (req, res) => {
         is_read as "isRead",
         created_at as "createdAt"
     `, [conversationId, senderId, messageText]);
+
+    if (recipientId !== senderId) {
+      void (async () => {
+        try {
+          const senderResult = await query(
+            `SELECT full_name FROM users WHERE id = $1`,
+            [senderId]
+          );
+
+          const senderName = senderResult.rows[0]?.full_name || 'A facility member';
+
+          await notificationService.notifyMessageReceived(
+            recipientId,
+            senderName,
+            messageResult.rows[0].messageText,
+            {
+              conversationId,
+              facilityId,
+              messageId: messageResult.rows[0].id,
+              senderId,
+            }
+          );
+        } catch (notificationError) {
+          console.error('Error creating message notification:', notificationError);
+        }
+      })();
+    }
 
     res.json({
       success: true,

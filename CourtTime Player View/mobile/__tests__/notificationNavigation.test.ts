@@ -72,7 +72,23 @@ describe('notification navigation', () => {
     });
   });
 
-  it('routes message notifications to Messages', () => {
+  it('routes message notifications to the correct thread when payload context is present', () => {
+    expect(
+      getNotificationHref({
+        type: 'message',
+        facilityId: 'facility-123',
+        conversationId: 'conversation-789',
+      })
+    ).toEqual({
+      pathname: '/(tabs)/messages',
+      params: {
+        facilityId: 'facility-123',
+        conversationId: 'conversation-789',
+      },
+    });
+  });
+
+  it('still routes bare message notifications to Messages', () => {
     expect(getNotificationHref({ type: 'message' })).toBe('/(tabs)/messages');
   });
 

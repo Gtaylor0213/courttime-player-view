@@ -14,6 +14,51 @@ export interface DBNotification {
   related_booking_id?: string;
 }
 
+export interface BookingPushContext {
+  bookingId: string;
+  facilityId: string;
+  bookingDate: string;
+  courtId?: string;
+}
+
+export interface MessagePushContext {
+  conversationId: string;
+  facilityId: string;
+  messageId?: string;
+  senderId?: string;
+}
+
+function buildBookingPushData(
+  pushContext?: BookingPushContext,
+  options?: { includeCourtId?: boolean }
+): Record<string, string> | undefined {
+  if (!pushContext) return undefined;
+
+  return {
+    bookingId: pushContext.bookingId,
+    facilityId: pushContext.facilityId,
+    bookingDate: pushContext.bookingDate,
+    ...(options?.includeCourtId && pushContext.courtId ? { courtId: pushContext.courtId } : {}),
+  };
+}
+
+function buildMessagePushData(pushContext?: MessagePushContext): Record<string, string> | undefined {
+  if (!pushContext) return undefined;
+
+  return {
+    conversationId: pushContext.conversationId,
+    facilityId: pushContext.facilityId,
+    ...(pushContext.messageId ? { messageId: pushContext.messageId } : {}),
+    ...(pushContext.senderId ? { senderId: pushContext.senderId } : {}),
+  };
+}
+
+function getMessagePreview(messageText: string): string {
+  const normalized = messageText.trim().replace(/\s+/g, ' ');
+  if (normalized.length <= 140) return normalized;
+  return `${normalized.slice(0, 137)}...`;
+}
+
 export const notificationService = {
   // Get all notifications for a user
   async getNotifications(userId: string): Promise<Notification[]> {
@@ -235,6 +280,7 @@ export const notificationService = {
       'booking_cancelled': 'reservation_cancelled',
       'booking_reminder': 'reservation_reminder',
       'court_change': 'court_change',
+      'message': 'facility_announcement',
       'payment': 'payment_received',
       'announcement': 'facility_announcement',
       'weather': 'weather_alert',
@@ -296,26 +342,20 @@ export const notificationService = {
     courtName: string,
     startTime: Date,
     endTime: Date,
-    pushContext?: { bookingId: string; facilityId: string; bookingDate: string; courtId: string }
+    pushContext?: BookingPushContext
   ): Promise<string> {
     const title = 'Court Reservation Confirmed';
     const message = `Your ${courtName} booking at ${facilityName} has been confirmed for ${this.formatDate(startTime)} at ${this.formatTimeRange(startTime, endTime)}.`;
-
-    const pushData = pushContext
-      ? {
-          bookingId: pushContext.bookingId,
-          facilityId: pushContext.facilityId,
-          bookingDate: pushContext.bookingDate,
-          courtId: pushContext.courtId,
-        }
-      : undefined;
 
     return this.createNotification(
       userId,
       title,
       message,
       'booking_confirmed',
-      { priority: 'high', pushData }
+      {
+        priority: 'high',
+        pushData: buildBookingPushData(pushContext, { includeCourtId: true }),
+      }
     );
   },
 
@@ -325,25 +365,20 @@ export const notificationService = {
     courtName: string,
     startTime: Date,
     reason?: string,
-    pushContext?: { bookingId: string; facilityId: string; bookingDate: string }
+    pushContext?: BookingPushContext
   ): Promise<string> {
     const title = 'Reservation Cancelled';
     const message = `Your ${courtName} booking at ${facilityName} for ${this.formatDate(startTime)} has been cancelled${reason ? `: ${reason}` : '.'}.`;
-
-    const pushData = pushContext
-      ? {
-          bookingId: pushContext.bookingId,
-          facilityId: pushContext.facilityId,
-          bookingDate: pushContext.bookingDate,
-        }
-      : undefined;
 
     return this.createNotification(
       userId,
       title,
       message,
       'booking_cancelled',
-      { priority: 'medium', pushData }
+      {
+        priority: 'medium',
+        pushData: buildBookingPushData(pushContext),
+      }
     );
   },
 
@@ -353,26 +388,20 @@ export const notificationService = {
     courtName: string,
     startTime: Date,
     hoursUntil: number,
-    pushContext?: { bookingId: string; facilityId: string; bookingDate: string; courtId: string }
+    pushContext?: BookingPushContext
   ): Promise<string> {
     const title = 'Court Session Starting Soon';
     const message = `Your ${courtName} session at ${facilityName} starts in ${hoursUntil} hour${hoursUntil !== 1 ? 's' : ''}.`;
-
-    const pushData = pushContext
-      ? {
-          bookingId: pushContext.bookingId,
-          facilityId: pushContext.facilityId,
-          bookingDate: pushContext.bookingDate,
-          courtId: pushContext.courtId,
-        }
-      : undefined;
 
     return this.createNotification(
       userId,
       title,
       message,
       'booking_reminder',
-      { priority: 'high', pushData }
+      {
+        priority: 'high',
+        pushData: buildBookingPushData(pushContext, { includeCourtId: true }),
+      }
     );
   },
 
@@ -382,26 +411,42 @@ export const notificationService = {
     oldCourtName: string,
     newCourtName: string,
     startTime: Date,
-    pushContext?: { bookingId: string; facilityId: string; bookingDate: string; courtId: string }
+    pushContext?: BookingPushContext
   ): Promise<string> {
     const title = 'Court Assignment Changed';
     const message = `Your reservation at ${facilityName} for ${this.formatDate(startTime)} has been moved from ${oldCourtName} to ${newCourtName}.`;
-
-    const pushData = pushContext
-      ? {
-          bookingId: pushContext.bookingId,
-          facilityId: pushContext.facilityId,
-          bookingDate: pushContext.bookingDate,
-          courtId: pushContext.courtId,
-        }
-      : undefined;
 
     return this.createNotification(
       userId,
       title,
       message,
       'court_change',
-      { priority: 'medium', pushData }
+      {
+        priority: 'medium',
+        pushData: buildBookingPushData(pushContext, { includeCourtId: true }),
+      }
+    );
+  },
+
+  async notifyMessageReceived(
+    userId: string,
+    senderName: string,
+    messageText: string,
+    pushContext: MessagePushContext
+  ): Promise<string> {
+    const title = `New message from ${senderName}`;
+    const message = getMessagePreview(messageText);
+
+    return this.createNotification(
+      userId,
+      title,
+      message,
+      'message',
+      {
+        actionUrl: '/messages',
+        priority: 'medium',
+        pushData: buildMessagePushData(pushContext),
+      }
     );
   },
 

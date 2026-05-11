@@ -15,9 +15,10 @@ import {
   Platform,
   Modal,
 } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
+import { showApiErrorAlert } from '../../src/utils/alert';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import { ConversationSkeleton } from '../../src/components/LoadingSkeleton';
 import { EmptyState } from '../../src/components/EmptyState';
@@ -53,8 +54,23 @@ interface MemberItem {
   status?: 'active' | 'pending' | 'expired' | 'suspended';
 }
 
+function asRouteParam(value: string | string[] | undefined): string | undefined {
+  const next = Array.isArray(value) ? value[0] : value;
+  if (typeof next !== 'string') return undefined;
+
+  const trimmed = next.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export default function MessagesScreen() {
-  const { user, facilityId } = useAuth();
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    facilityId?: string | string[];
+    conversationId?: string | string[];
+  }>();
+  const { user, facilityId, facilities, setFacilityId } = useAuth();
+  const routeFacilityId = asRouteParam(params.facilityId);
+  const routeConversationId = asRouteParam(params.conversationId);
 
   // Conversation list state
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -73,6 +89,13 @@ export default function MessagesScreen() {
   const [members, setMembers] = useState<MemberItem[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
+
+  const clearDeepLinkParams = useCallback(() => {
+    router.setParams({
+      facilityId: undefined,
+      conversationId: undefined,
+    });
+  }, [router]);
 
   // ── Fetch conversations ──
   const fetchConversations = useCallback(async () => {
@@ -98,6 +121,12 @@ export default function MessagesScreen() {
     fetchConversations();
   }, [fetchConversations]);
 
+  useEffect(() => {
+    if (!routeFacilityId || facilityId === routeFacilityId) return;
+    if (!facilities.some(facility => facility.id === routeFacilityId)) return;
+    setFacilityId(routeFacilityId);
+  }, [routeFacilityId, facilityId, facilities, setFacilityId]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchConversations();
@@ -122,6 +151,34 @@ export default function MessagesScreen() {
     setActiveConversation(convo);
     fetchMessages(convo.id);
   }, [fetchMessages]);
+
+  useEffect(() => {
+    if (!routeConversationId) return;
+    if (routeFacilityId && routeFacilityId !== facilityId) return;
+
+    const targetConversation = conversations.find(convo => convo.id === routeConversationId);
+    if (!targetConversation) {
+      if (!loading) {
+        clearDeepLinkParams();
+      }
+      return;
+    }
+
+    if (activeConversation?.id !== routeConversationId) {
+      openConversation(targetConversation);
+    }
+
+    clearDeepLinkParams();
+  }, [
+    routeConversationId,
+    routeFacilityId,
+    facilityId,
+    conversations,
+    loading,
+    activeConversation?.id,
+    openConversation,
+    clearDeepLinkParams,
+  ]);
 
   // ── Send a message ──
   async function handleSend() {
@@ -274,6 +331,7 @@ export default function MessagesScreen() {
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => {
+              clearDeepLinkParams();
               setActiveConversation(null);
               setMessages([]);
               fetchConversations();

@@ -30,6 +30,23 @@ const COURTS_PER_PAGE = 4;
 const ACTIVE_DAY_POLL_MS = 5000;
 const DRAG_ARM_DELAY_MS = 180;
 
+/** Normalize YYYY-M-D vs YYYY-MM-DD so "today" checks match Book / MiniCalendar. */
+function normalizeYmd(value: string): string | null {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(value).trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function localTodayYmd(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 interface Booking {
   id?: string;
   userId?: string;
@@ -167,6 +184,8 @@ interface Props {
   onBookedSlotPress?: (court: Court, booking: Booking) => void;
   /** While true, parent screen should disable its ScrollView so nested grid drags are not stolen. */
   onInteractionLockChange?: (locked: boolean) => void;
+  /** When "Now" is tapped while another day is selected, parent should switch to today; then the grid auto-scrolls after load. */
+  onRequestToday?: () => void;
 }
 
 export function CourtCalendarGrid({
@@ -176,6 +195,7 @@ export function CourtCalendarGrid({
   onBookingSelected,
   onBookedSlotPress,
   onInteractionLockChange,
+  onRequestToday,
 }: Props) {
   const [courtData, setCourtData] = useState<CourtAvailability[]>([]);
   /** Must match facility slot duration so row times align with booking modal / API. */
@@ -197,6 +217,7 @@ export function CourtCalendarGrid({
   const isDragging = useRef(false);
   const dragMoved = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
+  const selectedYmd = useMemo(() => normalizeYmd(selectedDate) ?? selectedDate, [selectedDate]);
 
   const totalPages = Math.ceil(courts.length / COURTS_PER_PAGE);
   const pageCourts = courts.slice(pageIndex * COURTS_PER_PAGE, (pageIndex + 1) * COURTS_PER_PAGE);
@@ -429,11 +450,21 @@ export function CourtCalendarGrid({
     return stopPolling;
   }, [fetchAvailability]);
 
-  /** Avoid flex:1 in a parent ScrollView — it can confuse layout/touches; bound grid height instead. */
-  const gridScrollMinHeight = useMemo(() => {
-    const rowsH = timeRows.length * ROW_HEIGHT + 100;
-    return Math.min(SCREEN_HEIGHT * 0.52, Math.max(280, rowsH));
-  }, [timeRows.length]);
+  /**
+   * Vertical size of the time column (one row per slot). Used for scroll math and iOS content height.
+   */
+  const gridContentHeight = useMemo(() => timeRows.length * ROW_HEIGHT, [timeRows.length]);
+
+  /**
+   * Fixed viewport for the day grid. On iOS, a nested vertical ScrollView with only minHeight often
+   * expands to full content height inside Book's outer ScrollView — then there is nothing to scroll
+   * internally and scrollTo is a no-op. Hard-cap height so the grid always scrolls inside this box.
+   */
+  const gridViewportHeight = useMemo(() => {
+    const cap = SCREEN_HEIGHT * 0.52;
+    const h = gridContentHeight;
+    return Math.min(cap, Math.max(280, Math.min(h, cap)));
+  }, [gridContentHeight]);
 
   const formatTimeLabel = (time: string) => {
     const [h, m] = time.split(':').map(Number);
@@ -451,8 +482,8 @@ export function CourtCalendarGrid({
 
   const currentTimeIndicatorY = useMemo(() => {
     const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    if (selectedDate !== today || timeRows.length === 0) return null;
+    const today = localTodayYmd();
+    if (selectedYmd !== today || timeRows.length === 0) return null;
     const firstRowMinutes = parseTimeToMinutesSafe(timeRows[0]);
     if (firstRowMinutes === null) return null;
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -462,7 +493,7 @@ export function CourtCalendarGrid({
     const maxY = Math.max(0, timeRows.length * ROW_HEIGHT - 1);
     if (y > maxY) return null;
     return y;
-  }, [selectedDate, timeRows, slotStepMinutes]);
+  }, [selectedYmd, timeRows, slotStepMinutes]);
 
   // Check if a time row is booked for a court
   const isBooked = (targetPageIndex: number, courtIndex: number, rowIndex: number): Booking | null => {
@@ -487,8 +518,8 @@ export function CourtCalendarGrid({
   // Check if a row is in the past
   const isPast = (rowIndex: number): boolean => {
     const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    if (selectedDate !== today) return selectedDate < today;
+    const today = localTodayYmd();
+    if (selectedYmd !== today) return selectedYmd < today;
     const rowTime = timeRows[rowIndex];
     if (!rowTime) return false;
     const rowMinutes = parseTimeToMinutesSafe(rowTime);
@@ -498,25 +529,110 @@ export function CourtCalendarGrid({
     return h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
   };
 
-  const scrollToCurrentTime = useCallback(() => {
+  const scrollToCurrentTime = useCallback((options?: { fromUserTap?: boolean; reliable?: boolean }) => {
     if (loading || !scrollRef.current) return;
     if (timeRows.length === 0) return;
-    const firstFutureRowIndex = timeRows.findIndex((_, rowIndex) => !isPast(rowIndex));
-    const targetRowIndex = firstFutureRowIndex >= 0 ? Math.max(0, firstFutureRowIndex - 1) : 0;
-    const scrollY = targetRowIndex * ROW_HEIGHT;
-    scrollRef.current.scrollTo({ y: scrollY, animated: false });
-  }, [loading, selectedDate, timeRows, isPast]);
+
+    // Only clear capture on explicit "Now" — onContentSizeChange also calls this handler,
+    // and unconditional setState there fights layout and tests.
+    if (options?.fromUserTap) {
+      if (dragArmTimerRef.current) {
+        clearTimeout(dragArmTimerRef.current);
+        dragArmTimerRef.current = null;
+      }
+      dragArmedRef.current = false;
+      dragSelectionRef.current = null;
+      setDragSelection(null);
+      setTouchCaptureActive(false);
+      onInteractionLockChange?.(false);
+    }
+
+    const rowIsPast = (rowIndex: number): boolean => {
+      const now = new Date();
+      const today = localTodayYmd();
+      if (selectedYmd !== today) return selectedYmd < today;
+      const rowTime = timeRows[rowIndex];
+      if (!rowTime) return false;
+      const rowMinutes = parseTimeToMinutesSafe(rowTime);
+      if (rowMinutes === null) return false;
+      const h = Math.floor(rowMinutes / 60);
+      const m = rowMinutes % 60;
+      return h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
+    };
+
+    const firstFutureRowIndex = timeRows.findIndex((_, rowIndex) => !rowIsPast(rowIndex));
+    let scrollY: number;
+    if (currentTimeIndicatorY !== null) {
+      const lead = Math.min(ROW_HEIGHT * 2, Math.max(48, gridViewportHeight * 0.22));
+      scrollY = Math.max(0, currentTimeIndicatorY - lead);
+    } else if (firstFutureRowIndex >= 0) {
+      scrollY = Math.max(0, firstFutureRowIndex - 1) * ROW_HEIGHT;
+    } else {
+      const today = localTodayYmd();
+      if (selectedYmd === today) {
+        scrollY = Math.max(0, gridContentHeight - gridViewportHeight);
+      } else {
+        scrollY = 0;
+      }
+    }
+
+    const maxOffset = Math.max(0, gridContentHeight - gridViewportHeight);
+    scrollY = Math.min(Math.max(0, scrollY), maxOffset);
+
+    const applyScroll = () => {
+      scrollRef.current?.scrollTo({ x: 0, y: scrollY, animated: Boolean(options?.fromUserTap) });
+    };
+
+    // iOS: first scrollTo often runs before native contentSize is final (esp. after date change +
+    // fetch). Immediate applyScroll no-ops; deferred retries + onContentSizeChange with reliable
+    // fixes "stuck at top" on today.
+    const useReliableTiming = Boolean(options?.fromUserTap || options?.reliable);
+    if (useReliableTiming) {
+      InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            applyScroll();
+            setTimeout(applyScroll, 50);
+            setTimeout(applyScroll, 160);
+            setTimeout(applyScroll, 320);
+            setTimeout(applyScroll, 520);
+            setTimeout(applyScroll, 800);
+          });
+        });
+      });
+    } else {
+      applyScroll();
+    }
+  }, [
+    loading,
+    selectedYmd,
+    timeRows,
+    currentTimeIndicatorY,
+    gridViewportHeight,
+    gridContentHeight,
+    onInteractionLockChange,
+  ]);
+
+  const handleNowPress = useCallback(() => {
+    const today = localTodayYmd();
+    if (selectedYmd !== today && onRequestToday) {
+      onRequestToday();
+      return;
+    }
+    scrollToCurrentTime({ fromUserTap: true });
+  }, [selectedYmd, onRequestToday, scrollToCurrentTime]);
 
   useEffect(() => {
     if (loading) return;
+    const isToday = selectedYmd === localTodayYmd();
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-        scrollToCurrentTime();
-        setTimeout(scrollToCurrentTime, 140);
+        scrollToCurrentTime(isToday ? { reliable: true } : undefined);
+        setTimeout(() => scrollToCurrentTime(isToday ? { reliable: true } : undefined), 140);
       });
     });
     return () => task.cancel();
-  }, [loading, scrollToCurrentTime, timeRows.length, pageIndex, selectedDate]);
+  }, [loading, scrollToCurrentTime, timeRows.length, pageIndex, selectedYmd]);
 
   // Get the row end time (next slot or closing)
   const getRowEndTime = useCallback(
@@ -681,7 +797,7 @@ export function CourtCalendarGrid({
           Courts {pageIndex * COURTS_PER_PAGE + 1}-{Math.min((pageIndex + 1) * COURTS_PER_PAGE, courts.length)} of {courts.length}
         </Text>
         <View style={styles.pageIndicatorRight}>
-          <TouchableOpacity style={styles.nowButton} onPress={scrollToCurrentTime}>
+          <TouchableOpacity style={styles.nowButton} onPress={handleNowPress}>
             <Text style={styles.nowButtonText}>Now</Text>
           </TouchableOpacity>
           {totalPages > 1 && (
@@ -728,22 +844,28 @@ export function CourtCalendarGrid({
         })}
       </View>
 
-      {/* Scrollable time grid */}
-      <ScrollView
-        ref={scrollRef}
-        style={[styles.gridScroll, { minHeight: gridScrollMinHeight }]}
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={scrollToCurrentTime}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-        nestedScrollEnabled
-        scrollEnabled={!touchCaptureActive}
-      >
-        {/* Horizontal swipe wrapper */}
+      {/* Fixed-height wrapper: iOS nested ScrollView must not grow to full content or scrollTo does nothing */}
+      <View style={[styles.gridScrollViewport, { height: gridViewportHeight }]}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.gridScrollFill}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() =>
+            scrollToCurrentTime(selectedYmd === localTodayYmd() ? { reliable: true } : undefined)
+          }
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          nestedScrollEnabled
+          scrollEnabled={!touchCaptureActive}
+          removeClippedSubviews={false}
+        >
+        {/* Horizontal swipe wrapper — explicit height so vertical contentSize matches row math */}
         <ScrollView
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          style={{ height: gridContentHeight }}
+          contentContainerStyle={{ minHeight: gridContentHeight }}
           onMomentumScrollEnd={(e) => {
             const nextPage = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
             setPageIndex(Math.max(0, Math.min(totalPages - 1, nextPage)));
@@ -917,7 +1039,8 @@ export function CourtCalendarGrid({
             );
           })}
         </ScrollView>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {/* Drag hint */}
       {!dragSelection && (
@@ -1034,8 +1157,13 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // Grid (height comes from minHeight in component — not flex:1 inside Book's ScrollView)
-  gridScroll: {},
+  gridScrollViewport: {
+    alignSelf: 'stretch',
+    maxWidth: '100%',
+  },
+  gridScrollFill: {
+    flex: 1,
+  },
   row: {
     flexDirection: 'row',
     height: ROW_HEIGHT,

@@ -178,6 +178,11 @@ export default function BookCourtScreen() {
     setCalendarScrollLocked(locked);
   }, []);
 
+  const onRequestTodayForGrid = useCallback(() => {
+    setSelectedDate(getTodayString());
+    setSelectedCourt(null);
+  }, []);
+
   // Booking / rule violations: single modal kind so only one native Modal is active
   const [modalKind, setModalKind] = useState<BookModalKind>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
@@ -927,6 +932,7 @@ export default function BookCourtScreen() {
           onBookingSelected={handleCalendarGridSelection}
           onBookedSlotPress={onBookedSlotPress}
           onInteractionLockChange={onCalendarInteractionLock}
+          onRequestToday={onRequestTodayForGrid}
         />
       )}
 

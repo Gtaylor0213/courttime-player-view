@@ -2185,7 +2185,7 @@ export function FacilityRegistration() {
                     <SelectValue placeholder="Select facility type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="HOA Tennis & Pickleball Courts">HOA Tennis & Pickleball Courts</SelectItem>
+                    <SelectItem value="HOA">HOA</SelectItem>
                     <SelectItem value="Tennis Club">Tennis Club</SelectItem>
                     <SelectItem value="Pickleball Club">Pickleball Club</SelectItem>
                     <SelectItem value="Racquet Club">Racquet Club</SelectItem>

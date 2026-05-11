@@ -95,6 +95,7 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
+                accessibilityLabel="Email address"
               />
 
               <Text style={styles.label}>Password</Text>
@@ -106,6 +107,7 @@ export default function LoginScreen() {
                 placeholderTextColor={Colors.textMuted}
                 secureTextEntry
                 autoComplete="password"
+                accessibilityLabel="Password"
               />
 
               <Button

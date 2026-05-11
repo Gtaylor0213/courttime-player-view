@@ -21,6 +21,47 @@ import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('App Shell');
 
+const BOOKING_PUSH_TYPES = new Set([
+  'booking_confirmed',
+  'booking_cancelled',
+  'booking_reminder',
+  'court_change',
+  'reservation_confirmed',
+  'reservation_cancelled',
+  'reservation_reminder',
+]);
+
+function navigateFromNotificationData(
+  router: ReturnType<typeof useRouter>,
+  raw: Record<string, unknown> | undefined
+) {
+  if (!raw || typeof raw !== 'object') {
+    router.push('/(tabs)/community');
+    return;
+  }
+  const t = String(raw.type ?? '');
+  const facilityId = raw.facilityId != null ? String(raw.facilityId) : undefined;
+  const bookingDate = raw.bookingDate != null ? String(raw.bookingDate) : undefined;
+  const bookingId = raw.bookingId != null ? String(raw.bookingId) : undefined;
+
+  if (BOOKING_PUSH_TYPES.has(t)) {
+    router.push({
+      pathname: '/(tabs)/book',
+      params: {
+        ...(facilityId ? { facilityId } : {}),
+        ...(bookingDate ? { bookingDate } : {}),
+        ...(bookingId ? { bookingId } : {}),
+      },
+    });
+    return;
+  }
+  if (t === 'message') {
+    router.push('/(tabs)/messages');
+    return;
+  }
+  router.push('/(tabs)/community');
+}
+
 function RootLayoutNav() {
   const { isAuthenticated, isLoading, pendingTermsAcceptances } = useAuth();
   const segments = useSegments();
@@ -45,14 +86,7 @@ function RootLayoutNav() {
     if (Platform.OS === 'web') return;
 
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data;
-      if (data?.type === 'reservation_confirmed' || data?.type === 'reservation_cancelled' || data?.type === 'reservation_reminder') {
-        router.push('/(tabs)/book');
-      } else if (data?.type === 'message') {
-        router.push('/(tabs)/messages');
-      } else {
-        router.push('/(tabs)/community');
-      }
+      navigateFromNotificationData(router, response.notification.request.content.data as Record<string, unknown>);
     });
 
     return () => subscription.remove();

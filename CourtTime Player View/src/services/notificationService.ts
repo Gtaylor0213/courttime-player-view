@@ -114,6 +114,8 @@ export const notificationService = {
     options?: {
       actionUrl?: string;
       priority?: 'low' | 'medium' | 'high';
+      /** Merged into Expo push `data` (string values only). */
+      pushData?: Record<string, string>;
     }
   ): Promise<string> {
     const query = `
@@ -133,7 +135,7 @@ export const notificationService = {
       ]);
 
       // Fire-and-forget: send push notification to user's registered devices
-      sendPushNotifications(userId, title, message, type).catch(() => {});
+      sendPushNotifications(userId, title, message, type, options?.pushData).catch(() => {});
 
       return result.rows[0].id;
     } catch (error) {
@@ -286,17 +288,27 @@ export const notificationService = {
     facilityName: string,
     courtName: string,
     startTime: Date,
-    endTime: Date
+    endTime: Date,
+    pushContext?: { bookingId: string; facilityId: string; bookingDate: string; courtId: string }
   ): Promise<string> {
     const title = 'Court Reservation Confirmed';
     const message = `Your ${courtName} booking at ${facilityName} has been confirmed for ${this.formatDate(startTime)} at ${this.formatTimeRange(startTime, endTime)}.`;
+
+    const pushData = pushContext
+      ? {
+          bookingId: pushContext.bookingId,
+          facilityId: pushContext.facilityId,
+          bookingDate: pushContext.bookingDate,
+          courtId: pushContext.courtId,
+        }
+      : undefined;
 
     return this.createNotification(
       userId,
       title,
       message,
       'booking_confirmed',
-      { priority: 'high' }
+      { priority: 'high', pushData }
     );
   },
 
@@ -305,17 +317,26 @@ export const notificationService = {
     facilityName: string,
     courtName: string,
     startTime: Date,
-    reason?: string
+    reason?: string,
+    pushContext?: { bookingId: string; facilityId: string; bookingDate: string }
   ): Promise<string> {
     const title = 'Reservation Cancelled';
     const message = `Your ${courtName} booking at ${facilityName} for ${this.formatDate(startTime)} has been cancelled${reason ? `: ${reason}` : '.'}.`;
+
+    const pushData = pushContext
+      ? {
+          bookingId: pushContext.bookingId,
+          facilityId: pushContext.facilityId,
+          bookingDate: pushContext.bookingDate,
+        }
+      : undefined;
 
     return this.createNotification(
       userId,
       title,
       message,
       'booking_cancelled',
-      { priority: 'medium' }
+      { priority: 'medium', pushData }
     );
   },
 
@@ -324,17 +345,27 @@ export const notificationService = {
     facilityName: string,
     courtName: string,
     startTime: Date,
-    hoursUntil: number
+    hoursUntil: number,
+    pushContext?: { bookingId: string; facilityId: string; bookingDate: string; courtId: string }
   ): Promise<string> {
     const title = 'Court Session Starting Soon';
     const message = `Your ${courtName} session at ${facilityName} starts in ${hoursUntil} hour${hoursUntil !== 1 ? 's' : ''}.`;
+
+    const pushData = pushContext
+      ? {
+          bookingId: pushContext.bookingId,
+          facilityId: pushContext.facilityId,
+          bookingDate: pushContext.bookingDate,
+          courtId: pushContext.courtId,
+        }
+      : undefined;
 
     return this.createNotification(
       userId,
       title,
       message,
       'booking_reminder',
-      { priority: 'high' }
+      { priority: 'high', pushData }
     );
   },
 
@@ -343,17 +374,27 @@ export const notificationService = {
     facilityName: string,
     oldCourtName: string,
     newCourtName: string,
-    startTime: Date
+    startTime: Date,
+    pushContext?: { bookingId: string; facilityId: string; bookingDate: string; courtId: string }
   ): Promise<string> {
     const title = 'Court Assignment Changed';
     const message = `Your reservation at ${facilityName} for ${this.formatDate(startTime)} has been moved from ${oldCourtName} to ${newCourtName}.`;
+
+    const pushData = pushContext
+      ? {
+          bookingId: pushContext.bookingId,
+          facilityId: pushContext.facilityId,
+          bookingDate: pushContext.bookingDate,
+          courtId: pushContext.courtId,
+        }
+      : undefined;
 
     return this.createNotification(
       userId,
       title,
       message,
       'court_change',
-      { priority: 'medium' }
+      { priority: 'medium', pushData }
     );
   },
 
@@ -417,7 +458,22 @@ export const notificationService = {
  * Send push notifications to all registered devices for a user via Expo Push API.
  * Fire-and-forget — failures are logged but don't block notification creation.
  */
-async function sendPushNotifications(userId: string, title: string, body: string, type: string): Promise<void> {
+function sanitizePushData(extra?: Record<string, string>): Record<string, string> {
+  if (!extra) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(extra)) {
+    if (v != null && v !== '') out[k] = String(v);
+  }
+  return out;
+}
+
+async function sendPushNotifications(
+  userId: string,
+  title: string,
+  body: string,
+  type: string,
+  pushData?: Record<string, string>
+): Promise<void> {
   try {
     // Honor user notification preferences before pushing
     const { getNotificationPreferences, preferenceKeyForType } = await import('./userPreferencesService');
@@ -433,6 +489,8 @@ async function sendPushNotifications(userId: string, title: string, body: string
 
     if (result.rows.length === 0) return;
 
+    const dataPayload: Record<string, string> = { type, ...sanitizePushData(pushData) };
+
     const messages = result.rows
       .filter((row: any) => row.push_token.startsWith('ExponentPushToken['))
       .map((row: any) => ({
@@ -440,7 +498,7 @@ async function sendPushNotifications(userId: string, title: string, body: string
         sound: 'default' as const,
         title,
         body,
-        data: { type },
+        data: dataPayload,
       }));
 
     if (messages.length === 0) return;

@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { showAlert } from '../src/utils/alert';
+import { showApiErrorAlert } from '../src/utils/alert';
 import { api } from '../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
@@ -89,7 +89,7 @@ export default function NotificationSettingsScreen() {
     if (res.success && res.data?.preferences) {
       setPrefs(res.data.preferences);
     } else {
-      showAlert('Error', res.error || 'Could not load notification settings.');
+      showApiErrorAlert(res);
     }
     setLoading(false);
   }
@@ -104,7 +104,7 @@ export default function NotificationSettingsScreen() {
     if (!res.success) {
       // Revert
       setPrefs(p => (p ? { ...p, [key]: previous } : p));
-      showAlert('Error', res.error || 'Could not save preference.');
+      showApiErrorAlert(res);
     } else if (res.data?.preferences) {
       setPrefs(res.data.preferences);
     }

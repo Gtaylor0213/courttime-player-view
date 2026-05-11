@@ -181,12 +181,21 @@ router.post('/', async (req, res, next) => {
       const startDateTime = new Date(`${bookingDate}T${startTime}`);
       const endDateTime = new Date(`${bookingDate}T${endTime}`);
 
+      const created = result.booking;
       await notificationService.notifyBookingConfirmed(
         userId,
         facilityName,
         courtName,
         startDateTime,
-        endDateTime
+        endDateTime,
+        created?.id
+          ? {
+              bookingId: created.id,
+              facilityId,
+              bookingDate,
+              courtId,
+            }
+          : undefined
       );
 
       // Send confirmation email (fire-and-forget)
@@ -301,7 +310,12 @@ router.delete('/:bookingId', async (req, res, next) => {
           facilityName,
           courtName,
           startDateTime,
-          'Cancelled by user'
+          'Cancelled by user',
+          {
+            bookingId,
+            facilityId: booking.facilityId,
+            bookingDate: booking.bookingDate,
+          }
         );
 
         // Send cancellation email (fire-and-forget)

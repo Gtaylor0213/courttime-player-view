@@ -3,6 +3,8 @@
  */
 
 import { Alert, Platform } from 'react-native';
+import type { ApiFailureShape } from './apiUserMessages';
+import { userFacingApiMessage } from './apiUserMessages';
 
 interface AlertButton {
   text: string;
@@ -30,4 +32,17 @@ export function showAlert(title: string, message: string, buttons?: AlertButton[
   } else {
     Alert.alert(title, message, buttons);
   }
+}
+
+/** Single place for failed API responses — title reflects auth vs generic errors. */
+export function showApiErrorAlert(res: ApiFailureShape, title: string = 'Error'): void {
+  if (res.success) return;
+  const message = userFacingApiMessage(res);
+  const resolvedTitle =
+    res.errorCategory === 'unauthorized'
+      ? 'Session expired'
+      : res.errorCategory === 'offline'
+        ? 'Offline'
+        : title;
+  showAlert(resolvedTitle, message);
 }

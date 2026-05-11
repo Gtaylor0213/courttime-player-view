@@ -222,6 +222,8 @@ export const apiRequest = buildApiRequest<ApiErrorCategory>({
         : `Unable to reach CourtTime right now (${API_BASE_URL}). Please try again.`,
 });
 
+export { userFacingApiMessage } from '../utils/apiUserMessages';
+
 // ── Terms & Conditions ──
 
 export interface PendingTermsAcceptance {

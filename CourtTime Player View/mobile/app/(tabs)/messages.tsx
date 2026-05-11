@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { showAlert } from '../../src/utils/alert';
+import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import { ConversationSkeleton } from '../../src/components/LoadingSkeleton';
 import { EmptyState } from '../../src/components/EmptyState';
@@ -144,7 +144,7 @@ export default function MessagesScreen() {
       setNewMessage('');
       setMessages(prev => [...prev, newMsg]);
     } else {
-      showAlert('Could not send', res.error || 'Message failed to send. Please try again.');
+      showApiErrorAlert(res, 'Could not send');
     }
   }
 
@@ -221,7 +221,7 @@ export default function MessagesScreen() {
       }
       fetchConversations(); // Refresh the list so this convo shows up
     } else {
-      showAlert('Could not send', res.error || 'Message failed to send. Please try again.');
+      showApiErrorAlert(res, 'Could not send');
     }
   }
 

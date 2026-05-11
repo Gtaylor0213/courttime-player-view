@@ -18,7 +18,8 @@ import {
   LayoutAnimation,
   useWindowDimensions,
 } from 'react-native';
-import { showAlert } from '../../src/utils/alert';
+import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
+import { useLocalSearchParams } from 'expo-router';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,12 @@ import type { BookingWithDetails } from '../../src/types/database';
 export const ErrorBoundary = createRouteErrorBoundary('Book');
 
 type BookModalKind = 'booking' | 'violations' | null;
+
+function paramString(v: string | string[] | undefined): string | undefined {
+  if (v == null) return undefined;
+  const s = Array.isArray(v) ? v[0] : v;
+  return typeof s === 'string' && s.length > 0 ? s : undefined;
+}
 
 function formatTimeForToast(startHHMM: string): string {
   if (!startHHMM || !startHHMM.includes(':')) return startHHMM || '';
@@ -162,7 +169,10 @@ interface RuleViolation {
 
 export default function BookCourtScreen() {
   const { height: windowHeight } = useWindowDimensions();
-  const { user, facilityId, selectedBookDate, setSelectedBookDate } = useAuth();
+  const params = useLocalSearchParams<{ facilityId?: string; bookingDate?: string; bookingId?: string }>();
+  const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate } = useAuth();
+  const facilityList = facilities ?? [];
+  const currentFacilityName = facilityList.find(f => f.id === facilityId)?.name;
   /** Avoid applying slot results from a stale availability request after the user picks another court on the grid. */
   const selectedCourtIdRef = useRef<string | null>(null);
   const [courts, setCourts] = useState<Court[]>([]);
@@ -208,6 +218,19 @@ export default function BookCourtScreen() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
+
+  useEffect(() => {
+    const fid = paramString(params.facilityId);
+    const bdate = paramString(params.bookingDate);
+    if (fid && facilityList.some(f => f.id === fid)) {
+      setFacilityId(fid);
+    }
+    if (bdate && /^\d{4}-\d{2}-\d{2}$/.test(bdate)) {
+      setSelectedBookDate(bdate);
+      setSelectedDate(bdate);
+      setSelectedCourt(null);
+    }
+  }, [params.facilityId, params.bookingDate, facilityList, setFacilityId, setSelectedBookDate]);
 
   useEffect(() => {
     if (selectedBookDate && selectedBookDate !== selectedDate) {
@@ -853,7 +876,7 @@ export default function BookCourtScreen() {
       fetchCourts();
       fetchTimeSlots();
     } else {
-      showAlert('Error', res.error || 'Could not cancel booking');
+      showApiErrorAlert(res, 'Could not cancel');
     }
   };
 
@@ -882,7 +905,12 @@ export default function BookCourtScreen() {
         style={styles.calendarSection}
       >
         <View style={styles.dayNavRow}>
-          <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(-1)}>
+          <TouchableOpacity
+            style={styles.dayArrow}
+            onPress={() => stepDate(-1)}
+            accessibilityRole="button"
+            accessibilityLabel="Previous day"
+          >
             <Ionicons name="chevron-back" size={18} color={Colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
@@ -899,7 +927,12 @@ export default function BookCourtScreen() {
               color={Colors.textMuted}
             />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.dayArrow} onPress={() => stepDate(1)}>
+          <TouchableOpacity
+            style={styles.dayArrow}
+            onPress={() => stepDate(1)}
+            accessibilityRole="button"
+            accessibilityLabel="Next day"
+          >
             <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
           </TouchableOpacity>
         </View>
@@ -928,6 +961,13 @@ export default function BookCourtScreen() {
           />
         )}
       </LinearGradient>
+
+      {facilityId && currentFacilityName ? (
+        <Text
+          style={styles.bookingContextLine}
+          accessibilityRole="text"
+        >{`Booking at ${currentFacilityName}`}</Text>
+      ) : null}
 
       {/* ══════ CALENDAR GRID (Website-style default view) ══════ */}
       {facilityId && (
@@ -1382,6 +1422,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 14,
     elevation: 4,
+  },
+  bookingContextLine: {
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.xs,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.medium,
+    color: Colors.textSecondary,
   },
   dayNavRow: {
     flexDirection: 'row',

@@ -828,7 +828,12 @@ export function CourtCalendarGrid({
           Courts {pageIndex * COURTS_PER_PAGE + 1}-{Math.min((pageIndex + 1) * COURTS_PER_PAGE, courts.length)} of {courts.length}
         </Text>
         <View style={styles.pageIndicatorRight}>
-          <TouchableOpacity style={styles.nowButton} onPress={handleNowPress}>
+          <TouchableOpacity
+            style={styles.nowButton}
+            onPress={handleNowPress}
+            accessibilityRole="button"
+            accessibilityLabel="Scroll to current time"
+          >
             <Text style={styles.nowButtonText}>Now</Text>
           </TouchableOpacity>
           {totalPages > 1 && (

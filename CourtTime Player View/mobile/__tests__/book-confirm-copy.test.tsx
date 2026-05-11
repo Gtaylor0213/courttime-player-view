@@ -12,6 +12,8 @@ jest.mock('../src/contexts/AuthContext', () => ({
       adminFacilities: ['facility-1'],
     },
     facilityId: 'facility-1',
+    facilities: [{ id: 'facility-1', name: 'Test Club' }],
+    setFacilityId: jest.fn(),
     selectedBookDate: '2026-05-04',
     setSelectedBookDate: jest.fn(),
   })),
@@ -44,7 +46,7 @@ jest.mock('../src/components/CourtCalendarGrid', () => {
   };
 });
 
-jest.mock('../src/utils/alert', () => ({ showAlert: jest.fn() }));
+jest.mock('../src/utils/alert', () => ({ showAlert: jest.fn(), showApiErrorAlert: jest.fn() }));
 jest.mock('../src/utils/haptics', () => ({ hapticSuccess: jest.fn(), hapticError: jest.fn() }));
 
 function collectText(node: unknown): string[] {
@@ -170,6 +172,12 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     expect(texts).not.toContain('Book 2 Courts');
 
     await act(async () => {
+      const expand = tree!.root.findByProps({ accessibilityLabel: 'Expand additional courts' });
+      expand.props.onPress?.();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
       pressTouchableContainingText(tree!, 'Court 2');
       await Promise.resolve();
     });
@@ -200,6 +208,8 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     (useAuth as jest.Mock).mockImplementation(() => ({
       user: { id: 'user-1', adminFacilities: [] },
       facilityId: 'facility-1',
+      facilities: [{ id: 'facility-1', name: 'Test Club' }],
+      setFacilityId: jest.fn(),
       selectedBookDate: '2026-01-15',
       setSelectedBookDate: jest.fn(),
     }));

@@ -23,7 +23,7 @@ const ROW_HEIGHT = 50;            // 30-min visible row height
 const SUB_SLOT_HEIGHT = 25;       // 15-min subdivision height
 const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
-const HEADER_HEIGHT = 56;
+const HEADER_HEIGHT = 38;
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 
@@ -133,7 +133,7 @@ export function CourtCalendarView() {
   const effectiveSubSlotHeight = isMobile ? 40 : SUB_SLOT_HEIGHT;
   const effectiveRowHeight = isMobile ? 80 : ROW_HEIGHT;
   const effectiveTimeColWidth = isMobile ? 56 : TIME_COL_WIDTH;
-  const effectiveHeaderHeight = isMobile ? 48 : HEADER_HEIGHT;
+  const effectiveHeaderHeight = isMobile ? 34 : HEADER_HEIGHT;
 
   // Peak-hours config per court: courtId -> schedule array
   const [primeTimeConfigs, setPrimeTimeConfigs] = useState<Record<string, any[]>>({});
@@ -1049,7 +1049,7 @@ export function CourtCalendarView() {
 
     const container = calendarScrollRef.current;
     const containerHeight = container.clientHeight;
-    const headerHeight = 56; // Header row height
+    const headerHeight = measuredHeaderHeight;
 
     // Scroll so the current time line is visible (position adjusted for header)
     const actualPosition = currentTimeLinePosition + headerHeight;
@@ -1058,7 +1058,7 @@ export function CourtCalendarView() {
       top: scrollPosition,
       behavior: 'smooth'
     });
-  }, [currentTimeLinePosition]);
+  }, [currentTimeLinePosition, measuredHeaderHeight]);
 
   // Trigger auto-scroll on mount (page navigation)
   useEffect(() => {
@@ -1320,11 +1320,13 @@ export function CourtCalendarView() {
                   {courts.map((court, index) => (
                     <th
                       key={index}
-                      className="sticky top-0 z-30 bg-gradient-to-b from-green-600 to-green-700 text-white border-r border-b-2 border-green-800 last:border-r-0 p-3 text-left font-normal"
+                      className="sticky top-0 z-30 bg-gradient-to-b from-green-600 to-green-700 text-white border-r border-b-2 border-green-800 last:border-r-0 px-2 py-1 text-left font-normal"
                       style={{ width: effectiveCourtWidth, minWidth: effectiveCourtWidth, height: effectiveHeaderHeight, verticalAlign: 'middle' }}
                     >
-                      <div className="font-semibold text-sm text-white">{court.name}</div>
-                      <div className="text-xs text-green-200 mt-0.5 capitalize">
+                      <div className="truncate font-semibold text-xs leading-tight text-white">
+                        {court.name}
+                      </div>
+                      <div className="truncate text-[10px] leading-none text-green-200 capitalize">
                         {court.type}
                         {court.isWalkUp ? ' - Walk-up' : ''}
                       </div>

@@ -1895,14 +1895,31 @@ router.get('/terms/:facilityId', async (req, res) => {
 router.put('/terms/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
-    const { contentHtml } = req.body;
+    const { contentHtml, requiredReviewSeconds, attachments } = req.body;
 
     if (!contentHtml || typeof contentHtml !== 'string' || !contentHtml.trim()) {
       return res.status(400).json({ success: false, error: 'contentHtml is required' });
     }
 
+    const normalizedRequiredReviewSeconds = Number.isFinite(Number(requiredReviewSeconds))
+      ? Math.floor(Number(requiredReviewSeconds))
+      : 0;
+    if (normalizedRequiredReviewSeconds < 0) {
+      return res.status(400).json({ success: false, error: 'requiredReviewSeconds must be 0 or greater' });
+    }
+
+    if (attachments != null && !Array.isArray(attachments)) {
+      return res.status(400).json({ success: false, error: 'attachments must be an array when provided' });
+    }
+
     const createdBy = req.user?.userId;
-    const version = await publishTermsVersion(facilityId, contentHtml, createdBy);
+    const version = await publishTermsVersion(
+      facilityId,
+      contentHtml,
+      createdBy,
+      normalizedRequiredReviewSeconds,
+      attachments || []
+    );
 
     res.json({
       success: true,

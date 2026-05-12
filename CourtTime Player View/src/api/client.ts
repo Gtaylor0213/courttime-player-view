@@ -13,6 +13,13 @@ const API_BASE_URL = import.meta.env.DEV
 
 export type ApiResponse<T = any> = SharedApiResponse<T>;
 
+export interface TermsAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 const apiRequest = buildApiRequest({
   baseUrl: API_BASE_URL,
   getToken: () => localStorage.getItem('auth_token'),
@@ -169,6 +176,8 @@ export const facilitiesApi = {
     // Facility Rules
     generalRules: string;
     termsAndConditions?: string;
+    termsAttachments?: TermsAttachment[];
+    requiredReviewSeconds?: number;
 
     // Restriction settings
     restrictionType: 'account' | 'address';
@@ -825,10 +834,15 @@ export const adminApi = {
     return apiRequest(`/api/admin/terms/${facilityId}`);
   },
 
-  publishTerms: async (facilityId: string, contentHtml: string) => {
+  publishTerms: async (
+    facilityId: string,
+    contentHtml: string,
+    requiredReviewSeconds: number = 0,
+    attachments: TermsAttachment[] = []
+  ) => {
     return apiRequest(`/api/admin/terms/${facilityId}`, {
       method: 'PUT',
-      body: JSON.stringify({ contentHtml }),
+      body: JSON.stringify({ contentHtml, requiredReviewSeconds, attachments }),
     });
   },
 

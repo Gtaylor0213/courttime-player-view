@@ -18,6 +18,7 @@ import {
   Modal,
   FlatList,
   Switch,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +26,7 @@ import { useRouter } from 'expo-router';
 import { showAlert } from '../../src/utils/alert';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
+import type { TermsAttachment } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import type { PlayerProfile } from '../../src/types/database';
 import { CachedImage } from '../../src/components/CachedImage';
@@ -53,6 +55,8 @@ interface FacilityTermsVersion {
   id: string;
   versionNumber: number;
   contentHtml: string;
+  attachments: TermsAttachment[];
+  requiredReviewSeconds: number;
   publishedAt: string;
 }
 
@@ -110,7 +114,18 @@ export default function ProfileScreen() {
   const [joinTerms, setJoinTerms] = useState<FacilityTermsVersion | null>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [reviewSecondsRemaining, setReviewSecondsRemaining] = useState(0);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!termsModalVisible || reviewSecondsRemaining <= 0) return;
+
+    const timeoutId = setTimeout(() => {
+      setReviewSecondsRemaining((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [termsModalVisible, reviewSecondsRemaining]);
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
@@ -279,6 +294,7 @@ export default function ProfileScreen() {
       setJoinTerms(null);
       setHasScrolledToBottom(false);
       setTermsAccepted(false);
+      setReviewSecondsRemaining(0);
       setSearchQuery('');
       setSearchResults([]);
     } else {
@@ -300,10 +316,13 @@ export default function ProfileScreen() {
       id: terms.id,
       versionNumber: Number(terms.versionNumber),
       contentHtml: terms.contentHtml,
+      attachments: Array.isArray(terms.attachments) ? terms.attachments : [],
+      requiredReviewSeconds: Number(terms.requiredReviewSeconds) || 0,
       publishedAt: terms.publishedAt,
     });
     setHasScrolledToBottom(false);
     setTermsAccepted(false);
+    setReviewSecondsRemaining(Number(terms.requiredReviewSeconds) || 0);
     setTermsModalVisible(true);
   };
 
@@ -747,11 +766,21 @@ export default function ProfileScreen() {
         visible={termsModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setTermsModalVisible(false)}
+        onRequestClose={() => {
+          setTermsModalVisible(false);
+          setReviewSecondsRemaining(0);
+        }}
       >
         <View style={{ flex: 1, backgroundColor: Colors.surface }}>
           <View style={styles.editHeader}>
-            <TouchableOpacity onPress={() => setTermsModalVisible(false)} accessibilityRole="button" accessibilityLabel="Close terms and conditions">
+            <TouchableOpacity
+              onPress={() => {
+                setTermsModalVisible(false);
+                setReviewSecondsRemaining(0);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Close terms and conditions"
+            >
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.editTitle}>Terms & Conditions</Text>
@@ -787,19 +816,64 @@ export default function ProfileScreen() {
               </ScrollView>
             </View>
 
+            {joinTerms?.attachments.length ? (
+              <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+                <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: Colors.text }}>
+                  PDF Attachments
+                </Text>
+                {joinTerms.attachments.map((attachment) => (
+                  <TouchableOpacity
+                    key={attachment.id}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: Colors.border,
+                      borderRadius: BorderRadius.md,
+                      backgroundColor: Colors.card,
+                      paddingHorizontal: Spacing.md,
+                      paddingVertical: Spacing.sm,
+                    }}
+                    onPress={async () => {
+                      try {
+                        await Linking.openURL(attachment.dataUrl);
+                      } catch (error) {
+                        console.error('Failed to open terms attachment:', error);
+                        showAlert('Error', `Could not open ${attachment.fileName}.`);
+                      }
+                    }}
+                  >
+                    <Text style={{ fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' }}>
+                      {attachment.fileName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+
             {!hasScrolledToBottom && (
               <Text style={{ marginTop: Spacing.sm, color: Colors.textMuted, fontSize: FontSize.xs }}>
                 Scroll to the bottom to enable acceptance.
               </Text>
             )}
 
+            {reviewSecondsRemaining > 0 && (
+              <Text style={{ marginTop: Spacing.sm, color: Colors.textMuted, fontSize: FontSize.xs }}>
+                Review time remaining: {reviewSecondsRemaining} second{reviewSecondsRemaining === 1 ? '' : 's'}.
+              </Text>
+            )}
+
             <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md, opacity: hasScrolledToBottom ? 1 : 0.5 }}
-              disabled={!hasScrolledToBottom}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.sm,
+                marginTop: Spacing.md,
+                opacity: hasScrolledToBottom && reviewSecondsRemaining === 0 ? 1 : 0.5,
+              }}
+              disabled={!hasScrolledToBottom || reviewSecondsRemaining > 0}
               onPress={() => setTermsAccepted((prev) => !prev)}
               accessibilityRole="checkbox"
               accessibilityLabel="Accept terms and conditions"
-              accessibilityState={{ checked: termsAccepted, disabled: !hasScrolledToBottom }}
+              accessibilityState={{ checked: termsAccepted, disabled: !hasScrolledToBottom || reviewSecondsRemaining > 0 }}
             >
               <View
                 style={{
@@ -823,12 +897,12 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={{
                 marginTop: Spacing.md,
-                backgroundColor: hasScrolledToBottom && termsAccepted ? Colors.primary : Colors.textMuted,
+                backgroundColor: hasScrolledToBottom && reviewSecondsRemaining === 0 && termsAccepted ? Colors.primary : Colors.textMuted,
                 paddingVertical: Spacing.md,
                 borderRadius: BorderRadius.md,
                 alignItems: 'center',
               }}
-              disabled={!joinFacilityDraft || !hasScrolledToBottom || !termsAccepted || requestingJoin === joinFacilityDraft.id}
+              disabled={!joinFacilityDraft || !hasScrolledToBottom || reviewSecondsRemaining > 0 || !termsAccepted || requestingJoin === joinFacilityDraft.id}
               onPress={() => {
                 if (!joinFacilityDraft) return;
                 submitJoinRequest(joinFacilityDraft.id, true);

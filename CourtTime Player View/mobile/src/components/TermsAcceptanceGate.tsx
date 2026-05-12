@@ -4,8 +4,8 @@
  * Blocks the rest of the app until each pending facility's terms are accepted.
  */
 
-import { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +35,7 @@ export function TermsAcceptanceGate() {
   const { pendingTermsAcceptances, acceptTermsAndContinue, logout } = useAuth();
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [reviewSecondsRemaining, setReviewSecondsRemaining] = useState(0);
 
   const current = pendingTermsAcceptances[0];
   const plainText = useMemo(
@@ -42,10 +43,25 @@ export function TermsAcceptanceGate() {
     [current?.contentHtml]
   );
 
+  useEffect(() => {
+    setAgreed(false);
+    setReviewSecondsRemaining(Math.max(0, Number(current?.requiredReviewSeconds) || 0));
+  }, [current?.facilityId, current?.currentVersionNumber, current?.requiredReviewSeconds]);
+
+  useEffect(() => {
+    if (reviewSecondsRemaining <= 0) return;
+
+    const timeoutId = setTimeout(() => {
+      setReviewSecondsRemaining((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [reviewSecondsRemaining]);
+
   if (!current) return null;
 
   const handleAccept = async () => {
-    if (!agreed || submitting) return;
+    if (!agreed || submitting || reviewSecondsRemaining > 0) return;
     setSubmitting(true);
     const ok = await acceptTermsAndContinue(current.facilityId);
     if (ok) {
@@ -76,11 +92,46 @@ export function TermsAcceptanceGate() {
         <Text style={styles.contentText}>{plainText}</Text>
       </ScrollView>
 
+      {current.attachments.length > 0 && (
+        <View style={styles.attachmentsSection}>
+          <Text style={styles.attachmentsTitle}>PDF Attachments</Text>
+          {current.attachments.map((attachment) => (
+            <Pressable
+              key={attachment.id}
+              style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressedOpacity]}
+              onPress={async () => {
+                try {
+                  await Linking.openURL(attachment.dataUrl);
+                } catch (error) {
+                  console.error('Failed to open terms attachment:', error);
+                  showAlert('Error', `Could not open ${attachment.fileName}.`);
+                }
+              }}
+            >
+              <Text style={styles.attachmentText}>{attachment.fileName}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {reviewSecondsRemaining > 0 && (
+        <Text style={styles.reviewTimer}>
+          Review time remaining: {reviewSecondsRemaining} second{reviewSecondsRemaining === 1 ? '' : 's'}.
+        </Text>
+      )}
+
       <Pressable
-        style={({ pressed }) => [styles.checkboxRow, pressed && styles.pressedOpacity]}
-        onPress={() => setAgreed(!agreed)}
+        style={({ pressed }) => [
+          styles.checkboxRow,
+          reviewSecondsRemaining > 0 && styles.checkboxRowDisabled,
+          pressed && styles.pressedOpacity,
+        ]}
+        onPress={() => {
+          if (reviewSecondsRemaining > 0) return;
+          setAgreed(!agreed);
+        }}
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: agreed }}
+        accessibilityState={{ checked: agreed, disabled: reviewSecondsRemaining > 0 }}
       >
         <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
           {agreed && <Ionicons name="checkmark" size={18} color={Colors.textInverse} />}
@@ -93,7 +144,7 @@ export function TermsAcceptanceGate() {
       <Button
         title="Accept & Continue"
         onPress={handleAccept}
-        disabled={!agreed}
+        disabled={!agreed || reviewSecondsRemaining > 0}
         loading={submitting}
       />
 
@@ -152,12 +203,43 @@ const styles = StyleSheet.create({
     color: Colors.text,
     lineHeight: 22,
   },
+  reviewTimer: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
+    marginBottom: Spacing.sm,
+  },
+  attachmentsSection: {
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  attachmentsTitle: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bold,
+    color: Colors.text,
+  },
+  attachmentButton: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.card,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  attachmentText: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
+    color: Colors.primary,
+  },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
     marginBottom: Spacing.md,
     minHeight: TouchTarget.min,
+  },
+  checkboxRowDisabled: {
+    opacity: 0.5,
   },
   pressedOpacity: {
     opacity: 0.85,

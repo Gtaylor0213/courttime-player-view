@@ -168,6 +168,8 @@ router.post('/register', async (req, res, next) => {
       // Facility Rules
       generalRules,
       termsAndConditions,
+      termsAttachments,
+      requiredReviewSeconds,
       restrictionType,
       maxBookingsPerWeek,
       maxBookingDurationHours,
@@ -229,6 +231,23 @@ router.post('/register', async (req, res, next) => {
       });
     }
 
+    const normalizedRequiredReviewSeconds = Number.isFinite(Number(requiredReviewSeconds))
+      ? Math.floor(Number(requiredReviewSeconds))
+      : 0;
+    if (normalizedRequiredReviewSeconds < 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Required review time must be 0 or greater'
+      });
+    }
+
+    if (termsAttachments != null && !Array.isArray(termsAttachments)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Terms attachments must be an array when provided'
+      });
+    }
+
     // If no existing user, admin credentials are required
     if (!existingUserId && (!adminEmail || !adminPassword || !adminFullName)) {
       return res.status(400).json({
@@ -266,6 +285,8 @@ router.post('/register', async (req, res, next) => {
       operatingHours: operatingHours || {},
       generalRules: generalRules || '',
       termsAndConditions: termsAndConditions?.trim() || undefined,
+      termsAttachments: termsAndConditions?.trim() ? termsAttachments || [] : [],
+      requiredReviewSeconds: termsAndConditions?.trim() ? normalizedRequiredReviewSeconds : 0,
       restrictionType: restrictionType || 'account',
       maxBookingsPerWeek: parseInt(maxBookingsPerWeek) || 3,
       maxBookingDurationHours: parseFloat(maxBookingDurationHours) || 2,

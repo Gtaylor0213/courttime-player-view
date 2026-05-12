@@ -225,12 +225,21 @@ export { userFacingApiMessage } from '../utils/apiUserMessages';
 
 // ── Terms & Conditions ──
 
+export interface TermsAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 export interface PendingTermsAcceptance {
   facilityId: string;
   facilityName: string;
   currentVersionId: string;
   currentVersionNumber: number;
   contentHtml: string;
+  attachments: TermsAttachment[];
+  requiredReviewSeconds: number;
   publishedAt: string;
   acceptedVersionNumber: number | null;
   acceptedAt: string | null;

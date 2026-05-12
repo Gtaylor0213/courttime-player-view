@@ -4,6 +4,7 @@ import { parseOperatingHoursInput } from '../../shared/utils/operatingHours';
 import { Facility, Court } from '../types/database';
 import type { PoolClient } from 'pg';
 import { recordPayment } from './paymentService';
+import type { TermsAttachment } from './termsService';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const ALLOWED_BOOKING_RULE_CODES = new Set([
@@ -813,6 +814,8 @@ export interface FacilityRegistrationData {
   // Facility Rules
   generalRules: string;
   termsAndConditions?: string;
+  termsAttachments?: TermsAttachment[];
+  requiredReviewSeconds?: number;
 
   // Restriction settings
   restrictionType: 'account' | 'address';
@@ -1007,14 +1010,32 @@ export async function registerFacility(
 
     // 3b. Publish initial Terms & Conditions if provided during registration.
     if (data.termsAndConditions && data.termsAndConditions.trim()) {
+      const requiredReviewSeconds = Number.isFinite(data.requiredReviewSeconds)
+        ? Math.max(0, Math.floor(data.requiredReviewSeconds || 0))
+        : 0;
+      const termsAttachments = Array.isArray(data.termsAttachments)
+        ? data.termsAttachments.filter((attachment) =>
+            attachment.fileName &&
+            attachment.mimeType === 'application/pdf' &&
+            attachment.dataUrl.startsWith('data:application/pdf;base64,')
+          )
+        : [];
       await client.query(
         `INSERT INTO facility_terms_conditions_versions (
           facility_id,
           version_number,
           content_html,
+          attachments_json,
+          required_review_seconds,
           created_by
-        ) VALUES ($1, 1, $2, $3)`,
-        [facilityId, data.termsAndConditions.trim(), superAdminUserId]
+        ) VALUES ($1, 1, $2, $3, $4, $5)`,
+        [
+          facilityId,
+          data.termsAndConditions.trim(),
+          JSON.stringify(termsAttachments),
+          requiredReviewSeconds,
+          superAdminUserId
+        ]
       );
     }
 

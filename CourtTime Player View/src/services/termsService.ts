@@ -1,11 +1,21 @@
 import { query, transaction } from '../database/connection';
 import type { PoolClient } from 'pg';
+import { randomUUID } from 'crypto';
+
+export interface TermsAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+}
 
 export interface TermsVersion {
   id: string;
   facilityId: string;
   versionNumber: number;
   contentHtml: string;
+  attachments: TermsAttachment[];
+  requiredReviewSeconds: number;
   publishedAt: string;
   createdBy?: string;
   createdAt: string;
@@ -18,9 +28,28 @@ export interface PendingTermsAcceptance {
   currentVersionId: string;
   currentVersionNumber: number;
   contentHtml: string;
+  attachments: TermsAttachment[];
+  requiredReviewSeconds: number;
   publishedAt: string;
   acceptedVersionNumber: number | null;
   acceptedAt: string | null;
+}
+
+function normalizeTermsAttachments(rawAttachments: any): TermsAttachment[] {
+  if (!Array.isArray(rawAttachments)) return [];
+
+  return rawAttachments
+    .map((attachment: any) => ({
+      id: typeof attachment?.id === 'string' && attachment.id.trim() ? attachment.id.trim() : randomUUID(),
+      fileName: typeof attachment?.fileName === 'string' ? attachment.fileName.trim() : '',
+      mimeType: typeof attachment?.mimeType === 'string' ? attachment.mimeType.trim() : '',
+      dataUrl: typeof attachment?.dataUrl === 'string' ? attachment.dataUrl.trim() : '',
+    }))
+    .filter((attachment) =>
+      attachment.fileName &&
+      attachment.mimeType === 'application/pdf' &&
+      attachment.dataUrl.startsWith('data:application/pdf;base64,')
+    );
 }
 
 function mapTermsVersion(row: any): TermsVersion {
@@ -29,6 +58,8 @@ function mapTermsVersion(row: any): TermsVersion {
     facilityId: row.facilityId,
     versionNumber: Number(row.versionNumber),
     contentHtml: row.contentHtml,
+    attachments: normalizeTermsAttachments(row.attachmentsJson),
+    requiredReviewSeconds: Number(row.requiredReviewSeconds || 0),
     publishedAt: row.publishedAt,
     createdBy: row.createdBy || undefined,
     createdAt: row.createdAt,
@@ -43,6 +74,8 @@ export async function getCurrentTermsVersion(facilityId: string): Promise<TermsV
       facility_id as "facilityId",
       version_number as "versionNumber",
       content_html as "contentHtml",
+      attachments_json as "attachmentsJson",
+      required_review_seconds as "requiredReviewSeconds",
       published_at as "publishedAt",
       created_by as "createdBy",
       created_at as "createdAt",
@@ -65,6 +98,8 @@ export async function getTermsVersionHistory(facilityId: string): Promise<TermsV
       facility_id as "facilityId",
       version_number as "versionNumber",
       content_html as "contentHtml",
+      attachments_json as "attachmentsJson",
+      required_review_seconds as "requiredReviewSeconds",
       published_at as "publishedAt",
       created_by as "createdBy",
       created_at as "createdAt",
@@ -91,28 +126,45 @@ async function getNextTermsVersionNumber(client: PoolClient, facilityId: string)
 export async function publishTermsVersion(
   facilityId: string,
   contentHtml: string,
-  createdBy?: string
+  createdBy?: string,
+  requiredReviewSeconds: number = 0,
+  attachments: TermsAttachment[] = []
 ): Promise<TermsVersion> {
   return transaction(async (client) => {
     const nextVersion = await getNextTermsVersionNumber(client, facilityId);
+    const normalizedRequiredReviewSeconds = Number.isFinite(requiredReviewSeconds)
+      ? Math.max(0, Math.floor(requiredReviewSeconds))
+      : 0;
+    const normalizedAttachments = normalizeTermsAttachments(attachments);
 
     const insertResult = await client.query(
       `INSERT INTO facility_terms_conditions_versions (
         facility_id,
         version_number,
         content_html,
+        attachments_json,
+        required_review_seconds,
         created_by
-      ) VALUES ($1, $2, $3, $4)
+      ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING
         id,
         facility_id as "facilityId",
         version_number as "versionNumber",
         content_html as "contentHtml",
+        attachments_json as "attachmentsJson",
+        required_review_seconds as "requiredReviewSeconds",
         published_at as "publishedAt",
         created_by as "createdBy",
         created_at as "createdAt",
         updated_at as "updatedAt"`,
-      [facilityId, nextVersion, contentHtml, createdBy || null]
+      [
+        facilityId,
+        nextVersion,
+        contentHtml,
+        JSON.stringify(normalizedAttachments),
+        normalizedRequiredReviewSeconds,
+        createdBy || null
+      ]
     );
 
     await client.query(
@@ -134,13 +186,15 @@ export async function getUserPendingTermsAcceptances(userId: string): Promise<Pe
       tv.id as "currentVersionId",
       tv.version_number as "currentVersionNumber",
       tv.content_html as "contentHtml",
+      tv.attachments_json as "attachmentsJson",
+      tv.required_review_seconds as "requiredReviewSeconds",
       tv.published_at as "publishedAt",
       mta.version_number as "acceptedVersionNumber",
       mta.accepted_at as "acceptedAt"
      FROM facility_memberships fm
      JOIN facilities f ON f.id = fm.facility_id
      JOIN LATERAL (
-       SELECT id, version_number, content_html, published_at
+       SELECT id, version_number, content_html, attachments_json, required_review_seconds, published_at
        FROM facility_terms_conditions_versions
        WHERE facility_id = fm.facility_id
        ORDER BY version_number DESC
@@ -166,6 +220,8 @@ export async function getUserPendingTermsAcceptances(userId: string): Promise<Pe
     currentVersionId: row.currentVersionId,
     currentVersionNumber: Number(row.currentVersionNumber),
     contentHtml: row.contentHtml,
+    attachments: normalizeTermsAttachments(row.attachmentsJson),
+    requiredReviewSeconds: Number(row.requiredReviewSeconds || 0),
     publishedAt: row.publishedAt,
     acceptedVersionNumber: row.acceptedVersionNumber != null ? Number(row.acceptedVersionNumber) : null,
     acceptedAt: row.acceptedAt ?? null,

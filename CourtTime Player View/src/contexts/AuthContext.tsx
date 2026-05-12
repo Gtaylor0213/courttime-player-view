@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner@2.0.3';
 import { authApi } from '../api/client';
+import type { TermsAttachment } from '../api/client';
 import type { AuthResponseShape, AuthUserShape } from '../../shared/types';
 
 export interface User extends Omit<AuthUserShape, 'memberFacilities' | 'adminFacilities'> {
@@ -70,6 +71,8 @@ export interface PendingTermsAcceptance {
   currentVersionId: string;
   currentVersionNumber: number;
   contentHtml: string;
+  attachments: TermsAttachment[];
+  requiredReviewSeconds: number;
   publishedAt: string;
   acceptedVersionNumber: number | null;
   acceptedAt: string | null;

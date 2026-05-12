@@ -229,11 +229,19 @@ export interface FacilityUsageStats {
 // TERMS & CONDITIONS
 // =====================================================
 
+export interface TermsAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 export interface FacilityTermsConditionsVersion {
   id: string;
   facilityId: string;
   versionNumber: number;
   contentHtml: string;
+  attachments: TermsAttachment[];
   publishedAt: Date;
   createdBy?: string;
   createdAt: Date;

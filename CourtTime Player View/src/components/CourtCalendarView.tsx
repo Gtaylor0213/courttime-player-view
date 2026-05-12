@@ -124,6 +124,7 @@ export function CourtCalendarView() {
   const [zoomLevel, setZoomLevel] = useState(100); // percentage: 50-200
   const [userSetZoom, setUserSetZoom] = useState(false); // tracks if user manually zoomed
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [mobileControlsExpanded, setMobileControlsExpanded] = useState(false);
   const [scrollTrigger, setScrollTrigger] = useState(0); // forces auto-scroll on mount
 
   // Computed court column width based on zoom
@@ -783,6 +784,18 @@ export function CourtCalendarView() {
 
   // Use fetched bookings from API
   const bookings = bookingsData;
+  const hasPeakHoursLegend = useMemo(
+    () => Object.values(primeTimeConfigs).some((schedule: any) =>
+      (schedule as any[]).some((c: any) => (c.primeTimeStart || c.prime_time_start))
+    ),
+    [primeTimeConfigs]
+  );
+  const selectedCourtTypeLabel = selectedCourtType
+    ? `${selectedCourtType.charAt(0).toUpperCase()}${selectedCourtType.slice(1)}`
+    : 'All courts';
+  const displayedCourtsLabel = displayedCourtsCount !== null
+    ? `${Math.min(displayedCourtsCount, filteredCourts.length)} shown`
+    : `${filteredCourts.length} courts`;
 
   // Compute booking overlay blocks for the overlay layer
   const bookingOverlays = useMemo(() => {
@@ -1135,131 +1148,49 @@ export function CourtCalendarView() {
         {/* Controls Header */}
         <div className="flex-shrink-0 z-40 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
           <div className="px-3 md:px-4 py-2">
-            {/* Top Row: Facility Name, Court Type Filter, Courts, Zoom, Bell */}
-            <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
-              <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                <h3 className="text-base md:text-lg font-medium w-full md:w-auto">{currentFacility?.name}</h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600 hidden md:inline">Court Type:</span>
-                  <div className="flex gap-1">
-                    <Button
-                      variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => { setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis'); setUserSetZoom(false); }}
-                    >
-                      Tennis
-                    </Button>
-                    <Button
-                      variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => { setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball'); setUserSetZoom(false); }}
-                    >
-                      Pickleball
-                    </Button>
+            <div className="md:hidden">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-medium truncate">{currentFacility?.name}</h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                    <span>{selectedCourtTypeLabel}</span>
+                    <span className="text-gray-400">•</span>
+                    <span>{displayedCourtsLabel}</span>
+                    {hasPeakHoursLegend && (
+                      <>
+                        <span className="text-gray-400">•</span>
+                        <span className="inline-flex items-center gap-1">
+                          <span className="h-2.5 w-2.5 rounded-sm bg-purple-100 border border-purple-300" />
+                          Peak Hours
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                {/* Court Display Count */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600 hidden md:inline">Courts:</span>
-                  <Select
-                    value={displayedCourtsCount?.toString() || 'all'}
-                    onValueChange={(v) => { setDisplayedCourtsCount(v === 'all' ? null : parseInt(v)); setUserSetZoom(false); }}
-                  >
-                    <SelectTrigger className="w-[90px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="4">4</SelectItem>
-                      <SelectItem value="6">6</SelectItem>
-                      <SelectItem value="all">All ({filteredCourts.length})</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Zoom Controls - hidden on mobile */}
-                <div className="hidden md:flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-gray-600">Zoom:</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 w-9 md:h-7 md:w-7 p-0"
-                    onClick={() => { setUserSetZoom(true); setZoomLevel(prev => Math.max(50, prev - 10)); }}
-                    disabled={zoomLevel <= 50}
-                  >
-                    <ZoomOut className="h-3.5 w-3.5" />
-                  </Button>
-                  <span className="text-xs font-medium text-gray-700 min-w-[36px] text-center">{zoomLevel}%</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 w-9 md:h-7 md:w-7 p-0"
-                    onClick={() => { setUserSetZoom(true); setZoomLevel(prev => Math.min(200, prev + 10)); }}
-                    disabled={zoomLevel >= 200}
-                  >
-                    <ZoomIn className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-
-                {/* Peak-Hours Legend */}
-                {Object.values(primeTimeConfigs).some((schedule: any) =>
-                  (schedule as any[]).some((c: any) => (c.primeTimeStart || c.prime_time_start))
-                ) && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm bg-purple-100 border border-purple-300" />
-                    <span className="text-xs text-gray-500">Peak Hours</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Right side: Notification Bell — desktop only */}
-              <div className="hidden md:block">
-                <NotificationBell />
-              </div>
-            </div>
-
-            {/* Bottom Row: Facility info, Quick Reserve, Date Navigation */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
-              <div className="flex items-center gap-3">
-                {/* Bell on mobile — moved here for better fit */}
-                <div className="md:hidden">
                   <NotificationBell />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => setMobileControlsExpanded(prev => !prev)}
+                    aria-expanded={mobileControlsExpanded}
+                    aria-controls="mobile-calendar-controls"
+                  >
+                    Controls
+                    <ChevronDown className={`h-4 w-4 transition-transform ${mobileControlsExpanded ? 'rotate-180' : ''}`} />
+                  </Button>
                 </div>
-                <div className="flex items-center gap-2">
-                  {/* Info Popover */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-9 w-9 md:h-6 md:w-6 p-0 rounded-full">
-                        <Info className="h-4 w-4 text-gray-500" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-2rem)] max-w-80">
-                      <p className="text-sm text-gray-700">
-                        Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
-                      </p>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <Button
-                  onClick={() => setShowQuickReserve(true)}
-                  className="flex items-center gap-2 px-4 py-1.5 font-medium shadow-md"
-                  size="sm"
-                >
-                  <Calendar className="h-4 w-4" />
-                  Quick Reserve
-                </Button>
               </div>
 
-              {/* Date Navigation with Picker */}
-              <div className="flex items-center gap-2">
+              <div className="mt-2 flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
                   <PopoverTrigger asChild>
-                    <Button variant="ghost" className="text-center min-w-0 md:min-w-[200px] font-medium hover:bg-gray-100 text-sm">
+                    <Button variant="ghost" className="flex-1 min-w-0 justify-center text-center font-medium hover:bg-gray-100 text-sm">
                       {formatDate(selectedDate)}
                     </Button>
                   </PopoverTrigger>
@@ -1280,6 +1211,221 @@ export function CourtCalendarView() {
                 <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
+              </div>
+
+              {mobileControlsExpanded && (
+                <div
+                  id="mobile-calendar-controls"
+                  className="mt-3 rounded-lg border border-green-200 bg-white/80 p-3 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-9 w-9 p-0 rounded-full">
+                          <Info className="h-4 w-4 text-gray-500" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[calc(100vw-2rem)] max-w-80">
+                        <p className="text-sm text-gray-700">
+                          Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
+                        </p>
+                      </PopoverContent>
+                    </Popover>
+
+                    <Button
+                      onClick={() => setShowQuickReserve(true)}
+                      className="flex-1 font-medium shadow-md"
+                      size="sm"
+                    >
+                      <Calendar className="h-4 w-4" />
+                      Quick Reserve
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Court Type</p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => { setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis'); setUserSetZoom(false); }}
+                      >
+                        Tennis
+                      </Button>
+                      <Button
+                        variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => { setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball'); setUserSetZoom(false); }}
+                      >
+                        Pickleball
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Visible Courts</p>
+                    <Select
+                      value={displayedCourtsCount?.toString() || 'all'}
+                      onValueChange={(v) => { setDisplayedCourtsCount(v === 'all' ? null : parseInt(v)); setUserSetZoom(false); }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2">2</SelectItem>
+                        <SelectItem value="4">4</SelectItem>
+                        <SelectItem value="6">6</SelectItem>
+                        <SelectItem value="all">All ({filteredCourts.length})</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="hidden md:block">
+              {/* Top Row: Facility Name, Court Type Filter, Courts, Zoom, Bell */}
+              <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
+                <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                  <h3 className="text-base md:text-lg font-medium w-full md:w-auto">{currentFacility?.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-600 hidden md:inline">Court Type:</span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => { setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis'); setUserSetZoom(false); }}
+                      >
+                        Tennis
+                      </Button>
+                      <Button
+                        variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => { setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball'); setUserSetZoom(false); }}
+                      >
+                        Pickleball
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Court Display Count */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-600 hidden md:inline">Courts:</span>
+                    <Select
+                      value={displayedCourtsCount?.toString() || 'all'}
+                      onValueChange={(v) => { setDisplayedCourtsCount(v === 'all' ? null : parseInt(v)); setUserSetZoom(false); }}
+                    >
+                      <SelectTrigger className="w-[90px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2">2</SelectItem>
+                        <SelectItem value="4">4</SelectItem>
+                        <SelectItem value="6">6</SelectItem>
+                        <SelectItem value="all">All ({filteredCourts.length})</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Zoom Controls - hidden on mobile */}
+                  <div className="hidden md:flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-gray-600">Zoom:</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 w-9 md:h-7 md:w-7 p-0"
+                      onClick={() => { setUserSetZoom(true); setZoomLevel(prev => Math.max(50, prev - 10)); }}
+                      disabled={zoomLevel <= 50}
+                    >
+                      <ZoomOut className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="text-xs font-medium text-gray-700 min-w-[36px] text-center">{zoomLevel}%</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 w-9 md:h-7 md:w-7 p-0"
+                      onClick={() => { setUserSetZoom(true); setZoomLevel(prev => Math.min(200, prev + 10)); }}
+                      disabled={zoomLevel >= 200}
+                    >
+                      <ZoomIn className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+
+                  {/* Peak-Hours Legend */}
+                  {hasPeakHoursLegend && (
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm bg-purple-100 border border-purple-300" />
+                      <span className="text-xs text-gray-500">Peak Hours</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right side: Notification Bell — desktop only */}
+                <div className="hidden md:block">
+                  <NotificationBell />
+                </div>
+              </div>
+
+              {/* Bottom Row: Facility info, Quick Reserve, Date Navigation */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    {/* Info Popover */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-9 w-9 md:h-6 md:w-6 p-0 rounded-full">
+                          <Info className="h-4 w-4 text-gray-500" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[calc(100vw-2rem)] max-w-80">
+                        <p className="text-sm text-gray-700">
+                          Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
+                        </p>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <Button
+                    onClick={() => setShowQuickReserve(true)}
+                    className="flex items-center gap-2 px-4 py-1.5 font-medium shadow-md"
+                    size="sm"
+                  >
+                    <Calendar className="h-4 w-4" />
+                    Quick Reserve
+                  </Button>
+                </div>
+
+                {/* Date Navigation with Picker */}
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" className="text-center min-w-0 md:min-w-[200px] font-medium hover:bg-gray-100 text-sm">
+                        {formatDate(selectedDate)}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="center">
+                      <CalendarPicker
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={(date: Date | undefined) => {
+                          if (date) {
+                            setSelectedDate(date);
+                            setDatePickerOpen(false);
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

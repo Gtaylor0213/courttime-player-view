@@ -193,6 +193,7 @@ export default function BookCourtScreen() {
   const [booking, setBooking] = useState(false);
   const [quickReserving, setQuickReserving] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
+  const [topInfoExpanded, setTopInfoExpanded] = useState(false);
   /** When the day grid has a finger down, disable the outer Book ScrollView so it does not steal vertical drags. */
   const [calendarScrollLocked, setCalendarScrollLocked] = useState(false);
   const onCalendarInteractionLock = useCallback((locked: boolean) => {
@@ -1052,16 +1053,42 @@ export default function BookCourtScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.quickReserveRow}>
-          <Button
-            title="Quick Reserve"
-            onPress={handleQuickReserve}
-            disabled={!facilityId}
-            loading={quickReserving}
-            leftIcon={<Ionicons name="flash" size={14} color={Colors.textInverse} />}
-            style={styles.quickReserveButton}
-          />
+        <View style={styles.compactToolsRow}>
+          <Text
+            style={styles.compactToolsText}
+            numberOfLines={1}
+            accessibilityRole="text"
+          >
+            {facilityId && currentFacilityName ? `Booking at ${currentFacilityName}` : 'Choose a club to book'}
+          </Text>
+          <TouchableOpacity
+            style={styles.compactToolsToggle}
+            onPress={() => setTopInfoExpanded((value) => !value)}
+            accessibilityRole="button"
+            accessibilityLabel={`${topInfoExpanded ? 'Hide' : 'Show'} booking tools`}
+            accessibilityState={{ expanded: topInfoExpanded }}
+          >
+            <Text style={styles.compactToolsToggleText}>{topInfoExpanded ? 'Less' : 'More'}</Text>
+            <Ionicons
+              name={topInfoExpanded ? 'chevron-up' : 'chevron-down'}
+              size={14}
+              color={Colors.textMuted}
+            />
+          </TouchableOpacity>
         </View>
+
+        {topInfoExpanded && (
+          <View style={styles.quickReserveRow}>
+            <Button
+              title="Quick Reserve"
+              onPress={handleQuickReserve}
+              disabled={!facilityId}
+              loading={quickReserving}
+              leftIcon={<Ionicons name="flash" size={14} color={Colors.textInverse} />}
+              style={styles.quickReserveButton}
+            />
+          </View>
+        )}
 
         {calendarExpanded && (
           <MiniCalendar
@@ -1076,13 +1103,6 @@ export default function BookCourtScreen() {
           />
         )}
       </LinearGradient>
-
-      {facilityId && currentFacilityName ? (
-        <Text
-          style={styles.bookingContextLine}
-          accessibilityRole="text"
-        >{`Booking at ${currentFacilityName}`}</Text>
-      ) : null}
 
       {/* ══════ CALENDAR GRID (Website-style default view) ══════ */}
       {facilityId && courtLoadError ? (
@@ -1564,13 +1584,6 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 4,
   },
-  bookingContextLine: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.xs,
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-    color: Colors.textSecondary,
-  },
   dayNavRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1617,6 +1630,37 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     minHeight: 36,
     paddingVertical: 5,
+  },
+  compactToolsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  compactToolsText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.medium,
+    color: Colors.textSecondary,
+  },
+  compactToolsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: TouchTarget.min,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  compactToolsToggleText: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.medium,
+    color: Colors.textSecondary,
   },
   modalIconHit: {
     minWidth: TouchTarget.min,

@@ -1304,7 +1304,7 @@ export function FacilityRegistration() {
             }
 
             return (
-              <div key={stepNumber} className="flex-1 flex items-center">
+              <div key={stepNumber} className="flex-1 flex items-start">
                 <div className="flex flex-col items-center flex-1">
                   <div
                     role="button"
@@ -1333,7 +1333,7 @@ export function FacilityRegistration() {
                 </div>
                 {stepNumber < totalSteps && (
                   <div
-                    className="flex-1 mx-2 transition-colors"
+                    className="flex-1 mx-2 mt-5 transition-colors"
                     style={{ backgroundColor: isVisited ? '#166534' : '#d1d5db', height: '2px' }}
                   />
                 )}

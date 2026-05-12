@@ -43,6 +43,8 @@ export interface PlayerProfileWithUser {
   memberFacilities?: Array<{
     facilityId: string;
     facilityName: string;
+    type?: string;
+    facilityType?: string;
     membershipType: string;
     status: string;
     isFacilityAdmin: boolean;
@@ -88,6 +90,8 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfileWit
       `SELECT
         f.id as "facilityId",
         f.name as "facilityName",
+        f.type,
+        f.type as "facilityType",
         fm.membership_type as "membershipType",
         fm.status,
         CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin"

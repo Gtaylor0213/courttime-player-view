@@ -147,7 +147,7 @@ export function ClubInfo() {
         const facilityData: FacilityData = {
           id: rawFacility.id,
           name: rawFacility.name || '',
-          type: rawFacility.type || 'Tennis Facility',
+          type: rawFacility.type || rawFacility.facilityType || 'Tennis Facility',
           description: rawFacility.description || '',
           primaryLocationLabel: rawFacility.primaryLocationLabel || '',
           streetAddress,

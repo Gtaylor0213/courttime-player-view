@@ -984,7 +984,7 @@ export function FacilityManagement() {
 
         const data: FacilityData = {
           name: facility.name || '',
-          type: facility.type || 'Tennis Facility',
+          type: facility.type || facility.facilityType || 'Tennis Facility',
           primaryLocationLabel: facility.primaryLocationLabel || '',
           streetAddress,
           city,

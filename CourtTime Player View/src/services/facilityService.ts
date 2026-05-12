@@ -135,6 +135,7 @@ export async function getAllFacilities(): Promise<Facility[]> {
         id,
         name,
         type,
+        type as "facilityType",
         primary_location_label as "primaryLocationLabel",
         address,
         street_address as "streetAddress",
@@ -197,6 +198,7 @@ export async function searchFacilities(searchQuery: string): Promise<any[]> {
       id: row.id,
       name: row.name,
       type: row.type || 'Facility',
+      facilityType: row.type || 'Facility',
       location: row.street_address || row.address || 'Location not specified',
       streetAddress: row.street_address,
       city: row.city,
@@ -224,6 +226,7 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
         id,
         name,
         type,
+        type as "facilityType",
         primary_location_label as "primaryLocationLabel",
         address,
         street_address as "streetAddress",
@@ -361,6 +364,7 @@ export async function getFacilitiesWithStats(): Promise<any[]> {
         f.id,
         f.name,
         f.type,
+        f.type as "facilityType",
         f.description,
         COUNT(DISTINCT c.id) as total_courts,
         COUNT(DISTINCT fm.user_id) FILTER (WHERE fm.status = 'active') as active_members,
@@ -400,7 +404,7 @@ export async function createFacilityWithAdmin(
         operating_hours, general_rules, booking_rules, status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
       RETURNING
-        id, name, type, address, phone, email, contact_name as "contactName",
+        id, name, type, type as "facilityType", address, phone, email, contact_name as "contactName",
         description, operating_hours as "operatingHours",
         general_rules as "generalRules", booking_rules as "bookingRules", status, created_at as "createdAt"`,
       [
@@ -516,7 +520,7 @@ export async function updateFacility(
      SET ${fields.join(', ')}
      WHERE id = $${paramCount}
      RETURNING
-       id, name, type, address, phone, email, contact_name as "contactName",
+       id, name, type, type as "facilityType", address, phone, email, contact_name as "contactName",
        description, operating_hours as "operatingHours", timezone,
        general_rules as "generalRules", booking_rules as "bookingRules", status, created_at as "createdAt"`,
     values
@@ -988,7 +992,7 @@ export async function registerFacility(
         general_rules, booking_rules, logo_url, status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'active')
       RETURNING
-        id, name, type, street_address as "streetAddress", city, state, zip_code as "zipCode",
+        id, name, type, type as "facilityType", street_address as "streetAddress", city, state, zip_code as "zipCode",
         address, primary_location_label as "primaryLocationLabel", phone, email, contact_name as "contactName", description,
         operating_hours as "operatingHours", timezone, general_rules as "generalRules",
         booking_rules as "bookingRules", logo_url as "logoUrl", status, created_at as "createdAt"`,
@@ -1350,6 +1354,7 @@ export async function registerFacility(
     const userData = userResult ? userResult.rows[0] : null;
     if (userData) {
       userData.memberFacilities = [facilityId];
+      userData.adminFacilities = [facilityId];
       userData.userType = 'admin';
     }
 

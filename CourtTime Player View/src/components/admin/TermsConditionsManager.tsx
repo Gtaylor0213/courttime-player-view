@@ -52,7 +52,13 @@ export function TermsConditionsManager() {
       ]);
 
       if (termsResponse.success && termsResponse.data?.data) {
-        const current = termsResponse.data.data.currentVersion || null;
+        const current = termsResponse.data.data.currentVersion
+          ? {
+              ...termsResponse.data.data.currentVersion,
+              attachments: termsResponse.data.data.currentVersion.attachments || [],
+              requiredReviewSeconds: termsResponse.data.data.currentVersion.requiredReviewSeconds || 0,
+            }
+          : null;
         setCurrentVersion(current);
         setContentHtml(current?.contentHtml || '');
         setAttachments(current?.attachments || []);
@@ -186,7 +192,7 @@ export function TermsConditionsManager() {
             <p className="text-xs text-gray-500">
               Current version: {currentVersion.versionNumber} (published {new Date(currentVersion.publishedAt).toLocaleString()})
               {currentVersion.requiredReviewSeconds > 0 ? ` · ${currentVersion.requiredReviewSeconds}s required review` : ''}
-              {currentVersion.attachments.length > 0 ? ` · ${currentVersion.attachments.length} PDF attachment${currentVersion.attachments.length === 1 ? '' : 's'}` : ''}
+              {(currentVersion.attachments?.length || 0) > 0 ? ` · ${currentVersion.attachments.length} PDF attachment${currentVersion.attachments.length === 1 ? '' : 's'}` : ''}
             </p>
           )}
         </CardHeader>

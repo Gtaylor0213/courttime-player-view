@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
@@ -35,6 +35,7 @@ export function UnifiedSidebar({
 }: UnifiedSidebarProps) {
   const { user } = useAuth();
   const { selectedFacilityId, setSelectedFacilityId, sidebarOpen, setSidebarOpen } = useAppContext();
+  const location = useLocation();
   const navigate = useNavigate();
   const [memberFacilities, setMemberFacilities] = React.useState<Club[]>([]);
   const [loadingFacilities, setLoadingFacilities] = React.useState(true);
@@ -93,6 +94,22 @@ export function UnifiedSidebar({
   // Navigate and auto-close sidebar on mobile
   const handleNav = (path: string) => {
     navigate(path);
+    setSidebarOpen(false);
+  };
+
+  const handleFacilityChange = (nextFacilityId: string) => {
+    if (!nextFacilityId || nextFacilityId === selectedFacilityId) {
+      setSidebarOpen(false);
+      return;
+    }
+
+    setSelectedFacilityId(nextFacilityId);
+
+    if (location.pathname !== '/calendar') {
+      handleNav('/calendar');
+      return;
+    }
+
     setSidebarOpen(false);
   };
 
@@ -208,7 +225,7 @@ export function UnifiedSidebar({
                         onClick={() => {
                           const currentIndex = memberFacilities.findIndex(f => f.id === selectedFacilityId);
                           const nextIndex = (currentIndex + 1) % memberFacilities.length;
-                          setSelectedFacilityId(memberFacilities[nextIndex].id);
+                          handleFacilityChange(memberFacilities[nextIndex].id);
                         }}
                         className="w-full rounded-lg px-3 py-2 flex items-center justify-center hover:bg-gray-100 transition-colors"
                       >
@@ -226,7 +243,7 @@ export function UnifiedSidebar({
           {/* Facility selector — expanded view (desktop expanded + mobile always) */}
           {!loadingFacilities && memberFacilities.length >= 2 && (
             <div className={cn(isCollapsed && 'md:hidden')}>
-              <Select value={selectedFacilityId} onValueChange={setSelectedFacilityId}>
+              <Select value={selectedFacilityId} onValueChange={handleFacilityChange}>
                 <SelectTrigger className="w-full h-9 text-sm bg-green-50 border-green-200">
                   <Building2 className="h-3.5 w-3.5 mr-2 text-green-600 flex-shrink-0" />
                   <SelectValue placeholder="Select facility" />

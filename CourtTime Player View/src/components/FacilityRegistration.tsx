@@ -74,6 +74,16 @@ const US_STATES = [
 
 const MAX_TERMS_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
 
+const ERROR_FIELD_TARGETS: Record<string, string> = {
+  step1Mode: 'step1ModeSelection',
+  primaryContactName: 'primaryContactName',
+  primaryContactPhone: 'primaryContactPhone',
+  primaryContactEmail: 'primaryContactEmail',
+  generalRules: 'generalRules',
+  restrictionType: 'restrictionTypeGroup',
+  courts: 'courtsSection',
+};
+
 export function FacilityRegistration() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
@@ -168,6 +178,7 @@ export function FacilityRegistration() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [pendingErrorField, setPendingErrorField] = useState<string | null>(null);
   const [courtFormMode, setCourtFormMode] = useState<'individual' | 'bulk'>('individual');
   const [bulkCourtData, setBulkCourtData] = useState({
     count: '1',
@@ -257,6 +268,45 @@ export function FacilityRegistration() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!pendingErrorField) return;
+
+    let frameOne = 0;
+    let frameTwo = 0;
+
+    frameOne = window.requestAnimationFrame(() => {
+      frameTwo = window.requestAnimationFrame(() => {
+        const targetId = ERROR_FIELD_TARGETS[pendingErrorField] ?? pendingErrorField;
+        const element = document.getElementById(targetId);
+
+        if (!element) {
+          setPendingErrorField(null);
+          return;
+        }
+
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        const focusTarget =
+          element instanceof HTMLInputElement ||
+          element instanceof HTMLTextAreaElement ||
+          element instanceof HTMLSelectElement ||
+          element instanceof HTMLButtonElement
+            ? element
+            : element.querySelector<HTMLElement>(
+                'input, textarea, button, [role="combobox"], [tabindex]:not([tabindex="-1"])',
+              );
+
+        focusTarget?.focus({ preventScroll: true });
+        setPendingErrorField(null);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameOne);
+      window.cancelAnimationFrame(frameTwo);
+    };
+  }, [currentStep, pendingErrorField]);
+
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -287,6 +337,14 @@ export function FacilityRegistration() {
       ...prev,
       rulesConfig: { ...prev.rulesConfig, ...updates },
     }));
+
+    if (updates.generalRules !== undefined && errors.generalRules) {
+      setErrors(prev => ({ ...prev, generalRules: '' }));
+    }
+
+    if (updates.restrictionType !== undefined && errors.restrictionType) {
+      setErrors(prev => ({ ...prev, restrictionType: '' }));
+    }
   };
 
   const handleRuleEntryChange = (ruleCode: string, updates: Partial<RuleEntry>) => {
@@ -327,6 +385,17 @@ export function FacilityRegistration() {
         [field]: value
       }
     }));
+
+    const errorKeyByField: Record<string, string> = {
+      name: 'primaryContactName',
+      phone: 'primaryContactPhone',
+      email: 'primaryContactEmail',
+    };
+
+    const errorKey = errorKeyByField[field];
+    if (errorKey && errors[errorKey]) {
+      setErrors(prev => ({ ...prev, [errorKey]: '' }));
+    }
   };
 
   // Add a secondary contact
@@ -872,9 +941,15 @@ export function FacilityRegistration() {
   };
 
   // Validate all steps and return combined errors with the first invalid step
-  const validateAllSteps = (): { isValid: boolean; errors: Record<string, string>; firstInvalidStep: number | null } => {
+  const validateAllSteps = (): {
+    isValid: boolean;
+    errors: Record<string, string>;
+    firstInvalidStep: number | null;
+    firstInvalidField: string | null;
+  } => {
     const allErrors: Record<string, string> = {};
     let firstInvalidStep: number | null = null;
+    let firstInvalidField: string | null = null;
 
     for (let step = 1; step <= totalSteps; step++) {
       const stepErrors = getStepErrors(step);
@@ -882,6 +957,7 @@ export function FacilityRegistration() {
         Object.assign(allErrors, stepErrors);
         if (firstInvalidStep === null) {
           firstInvalidStep = step;
+          firstInvalidField = Object.keys(stepErrors)[0] ?? null;
         }
       }
     }
@@ -889,7 +965,8 @@ export function FacilityRegistration() {
     return {
       isValid: Object.keys(allErrors).length === 0,
       errors: allErrors,
-      firstInvalidStep
+      firstInvalidStep,
+      firstInvalidField
     };
   };
 
@@ -935,6 +1012,10 @@ export function FacilityRegistration() {
       ...prev,
       courts: [...prev.courts, newCourt]
     }));
+
+    if (errors.courts) {
+      setErrors(prev => ({ ...prev, courts: '' }));
+    }
   };
 
   const addBulkCourts = () => {
@@ -965,6 +1046,10 @@ export function FacilityRegistration() {
       ...prev,
       courts: [...prev.courts, ...newCourts]
     }));
+
+    if (errors.courts) {
+      setErrors(prev => ({ ...prev, courts: '' }));
+    }
 
     toast.success(`Added ${count} courts successfully`);
     setCourtFormMode('individual');
@@ -1031,6 +1116,9 @@ export function FacilityRegistration() {
 
     if (!validation.isValid) {
       setErrors(validation.errors);
+      if (validation.firstInvalidField) {
+        setPendingErrorField(validation.firstInvalidField);
+      }
       if (validation.firstInvalidStep !== null) {
         setCurrentStep(validation.firstInvalidStep);
         toast.error('Please complete all required fields before submitting');
@@ -1707,7 +1795,12 @@ export function FacilityRegistration() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div
+            id="step1ModeSelection"
+            className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${
+              errors.step1Mode ? 'rounded-lg border border-red-500 p-2' : ''
+            }`}
+          >
             <Card
               className="cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
               onClick={() => setStep1Mode('create')}
@@ -1738,6 +1831,7 @@ export function FacilityRegistration() {
               </CardContent>
             </Card>
           </div>
+          {errors.step1Mode && <p className="text-sm text-red-500">{errors.step1Mode}</p>}
         </div>
       );
     }
@@ -2098,6 +2192,7 @@ export function FacilityRegistration() {
                   value={formData.facilityName}
                   onChange={(e) => handleInputChange('facilityName', e.target.value)}
                   placeholder="Sunrise Valley Tennis Courts"
+                  className={errors.facilityName ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
                 {errors.facilityName && (
                   <p className="text-sm text-red-600 mt-1">{errors.facilityName}</p>
@@ -2121,6 +2216,7 @@ export function FacilityRegistration() {
                   value={formData.streetAddress}
                   onChange={(e) => handleInputChange('streetAddress', e.target.value)}
                   placeholder="123 Main Street"
+                  className={errors.streetAddress ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
                 {errors.streetAddress && (
                   <p className="text-sm text-red-600 mt-1">{errors.streetAddress}</p>
@@ -2134,6 +2230,7 @@ export function FacilityRegistration() {
                   value={formData.city}
                   onChange={(e) => handleInputChange('city', e.target.value)}
                   placeholder="Richmond"
+                  className={errors.city ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
                 {errors.city && (
                   <p className="text-sm text-red-600 mt-1">{errors.city}</p>
@@ -2147,7 +2244,10 @@ export function FacilityRegistration() {
                     value={formData.state}
                     onValueChange={(value) => handleInputChange('state', value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger
+                      id="state"
+                      className={errors.state ? 'border-red-500 focus:ring-red-500' : ''}
+                    >
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2167,6 +2267,7 @@ export function FacilityRegistration() {
                     value={formData.zipCode}
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
                     placeholder="23220"
+                    className={errors.zipCode ? 'border-red-500 focus-visible:ring-red-500' : ''}
                   />
                   {errors.zipCode && (
                     <p className="text-sm text-red-600 mt-1">{errors.zipCode}</p>
@@ -2182,6 +2283,7 @@ export function FacilityRegistration() {
                   value={formData.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
                   placeholder="(804) 555-1234"
+                  className={errors.phone ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
                 {errors.phone && (
                   <p className="text-sm text-red-600 mt-1">{errors.phone}</p>
@@ -2196,6 +2298,7 @@ export function FacilityRegistration() {
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   placeholder="info@facility.com"
+                  className={errors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
                 {errors.email && (
                   <p className="text-sm text-red-600 mt-1">{errors.email}</p>
@@ -2248,7 +2351,10 @@ export function FacilityRegistration() {
                   value={formData.facilityType}
                   onValueChange={(value) => handleInputChange('facilityType', value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    id="facilityType"
+                    className={errors.facilityType ? 'border-red-500 focus:ring-red-500' : ''}
+                  >
                     <SelectValue placeholder="Select facility type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2488,6 +2594,7 @@ export function FacilityRegistration() {
                 value={formData.primaryContact.name}
                 onChange={(e) => handlePrimaryContactChange('name', e.target.value)}
                 placeholder="John Smith"
+                className={errors.primaryContactName ? 'border-red-500 focus-visible:ring-red-500' : ''}
               />
               {errors.primaryContactName && (
                 <p className="text-sm text-red-600 mt-1">{errors.primaryContactName}</p>
@@ -2502,6 +2609,7 @@ export function FacilityRegistration() {
                 value={formData.primaryContact.phone}
                 onChange={(e) => handlePrimaryContactChange('phone', e.target.value)}
                 placeholder="(804) 555-1234"
+                className={errors.primaryContactPhone ? 'border-red-500 focus-visible:ring-red-500' : ''}
               />
               {errors.primaryContactPhone && (
                 <p className="text-sm text-red-600 mt-1">{errors.primaryContactPhone}</p>
@@ -2516,6 +2624,7 @@ export function FacilityRegistration() {
                 value={formData.primaryContact.email}
                 onChange={(e) => handlePrimaryContactChange('email', e.target.value)}
                 placeholder="contact@facility.com"
+                className={errors.primaryContactEmail ? 'border-red-500 focus-visible:ring-red-500' : ''}
               />
               {errors.primaryContactEmail && (
                 <p className="text-sm text-red-600 mt-1">{errors.primaryContactEmail}</p>
@@ -2740,7 +2849,7 @@ export function FacilityRegistration() {
   );
 
   const renderStep4Courts = () => (
-    <div className="space-y-6">
+    <div id="courtsSection" className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-4">Court Setup</h3>
         <p className="text-sm text-gray-600 mb-6">

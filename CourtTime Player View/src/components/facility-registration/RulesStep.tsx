@@ -161,19 +161,27 @@ export function RulesStep({
             text="Set general facility policies and choose whether to restrict bookings by individual account or by household address."
           />
           <div>
-            <Label>General Usage Rules *</Label>
+            <Label htmlFor="generalRules">General Usage Rules *</Label>
             <Textarea
+              id="generalRules"
               placeholder="Enter your facility's general rules (e.g., dress code, equipment, guest policy, cleanup expectations...)"
               value={rulesConfig.generalRules}
               onChange={(e) => onRulesChange({ generalRules: e.target.value })}
-              className="mt-1 min-h-[100px]"
+              className={`mt-1 min-h-[100px] ${
+                errors.generalRules ? 'border-red-500 focus-visible:ring-red-500' : ''
+              }`}
             />
             {errors.generalRules && (
               <p className="text-sm text-red-500 mt-1">{errors.generalRules}</p>
             )}
           </div>
 
-          <div>
+          <div
+            id="restrictionTypeGroup"
+            className={`rounded-lg border p-3 ${
+              errors.restrictionType ? 'border-red-500 bg-red-50/50' : 'border-transparent'
+            }`}
+          >
             <Label className="mb-2 block">Restriction Type</Label>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -204,6 +212,9 @@ export function RulesStep({
                 ? 'Each user account has independent booking limits.'
                 : 'Booking limits are shared across all accounts at the same address.'}
             </p>
+            {errors.restrictionType && (
+              <p className="text-sm text-red-500 mt-2">{errors.restrictionType}</p>
+            )}
           </div>
         </CardContent>
       </Card>

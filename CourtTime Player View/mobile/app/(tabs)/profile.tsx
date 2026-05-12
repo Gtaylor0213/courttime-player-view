@@ -115,6 +115,7 @@ export default function ProfileScreen() {
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [reviewSecondsRemaining, setReviewSecondsRemaining] = useState(0);
+  const [downloadedAttachmentIds, setDownloadedAttachmentIds] = useState<string[]>([]);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -295,6 +296,7 @@ export default function ProfileScreen() {
       setHasScrolledToBottom(false);
       setTermsAccepted(false);
       setReviewSecondsRemaining(0);
+      setDownloadedAttachmentIds([]);
       setSearchQuery('');
       setSearchResults([]);
     } else {
@@ -323,8 +325,16 @@ export default function ProfileScreen() {
     setHasScrolledToBottom(false);
     setTermsAccepted(false);
     setReviewSecondsRemaining(Number(terms.requiredReviewSeconds) || 0);
+    setDownloadedAttachmentIds([]);
     setTermsModalVisible(true);
   };
+
+  const allJoinTermsAttachmentsDownloaded = joinTerms
+    ? joinTerms.attachments.every((attachment) => downloadedAttachmentIds.includes(attachment.id))
+    : true;
+  const joinTermsAttachmentsStillRequired = Boolean(
+    joinTerms && joinTerms.attachments.length > 0 && !allJoinTermsAttachmentsDownloaded
+  );
 
   const handleLeaveFacility = (facilityId: string, facilityName: string) => {
     if (!user) return;
@@ -769,6 +779,7 @@ export default function ProfileScreen() {
         onRequestClose={() => {
           setTermsModalVisible(false);
           setReviewSecondsRemaining(0);
+          setDownloadedAttachmentIds([]);
         }}
       >
         <View style={{ flex: 1, backgroundColor: Colors.surface }}>
@@ -777,6 +788,7 @@ export default function ProfileScreen() {
               onPress={() => {
                 setTermsModalVisible(false);
                 setReviewSecondsRemaining(0);
+                setDownloadedAttachmentIds([]);
               }}
               accessibilityRole="button"
               accessibilityLabel="Close terms and conditions"
@@ -835,6 +847,9 @@ export default function ProfileScreen() {
                     onPress={async () => {
                       try {
                         await Linking.openURL(attachment.dataUrl);
+                        setDownloadedAttachmentIds((prev) => (
+                          prev.includes(attachment.id) ? prev : [...prev, attachment.id]
+                        ));
                       } catch (error) {
                         console.error('Failed to open terms attachment:', error);
                         showAlert('Error', `Could not open ${attachment.fileName}.`);
@@ -842,12 +857,20 @@ export default function ProfileScreen() {
                     }}
                   >
                     <Text style={{ fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' }}>
-                      {attachment.fileName}
+                      {downloadedAttachmentIds.includes(attachment.id)
+                        ? `${attachment.fileName} (downloaded)`
+                        : attachment.fileName}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             ) : null}
+
+            {joinTermsAttachmentsStillRequired && (
+              <Text style={{ marginTop: Spacing.sm, color: Colors.textMuted, fontSize: FontSize.xs }}>
+                Download all attached PDFs to enable acceptance.
+              </Text>
+            )}
 
             {!hasScrolledToBottom && (
               <Text style={{ marginTop: Spacing.sm, color: Colors.textMuted, fontSize: FontSize.xs }}>
@@ -867,13 +890,13 @@ export default function ProfileScreen() {
                 alignItems: 'center',
                 gap: Spacing.sm,
                 marginTop: Spacing.md,
-                opacity: hasScrolledToBottom && reviewSecondsRemaining === 0 ? 1 : 0.5,
+                opacity: hasScrolledToBottom && reviewSecondsRemaining === 0 && !joinTermsAttachmentsStillRequired ? 1 : 0.5,
               }}
-              disabled={!hasScrolledToBottom || reviewSecondsRemaining > 0}
+              disabled={!hasScrolledToBottom || reviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired}
               onPress={() => setTermsAccepted((prev) => !prev)}
               accessibilityRole="checkbox"
               accessibilityLabel="Accept terms and conditions"
-              accessibilityState={{ checked: termsAccepted, disabled: !hasScrolledToBottom || reviewSecondsRemaining > 0 }}
+              accessibilityState={{ checked: termsAccepted, disabled: !hasScrolledToBottom || reviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired }}
             >
               <View
                 style={{
@@ -897,12 +920,12 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={{
                 marginTop: Spacing.md,
-                backgroundColor: hasScrolledToBottom && reviewSecondsRemaining === 0 && termsAccepted ? Colors.primary : Colors.textMuted,
+                backgroundColor: hasScrolledToBottom && reviewSecondsRemaining === 0 && !joinTermsAttachmentsStillRequired && termsAccepted ? Colors.primary : Colors.textMuted,
                 paddingVertical: Spacing.md,
                 borderRadius: BorderRadius.md,
                 alignItems: 'center',
               }}
-              disabled={!joinFacilityDraft || !hasScrolledToBottom || reviewSecondsRemaining > 0 || !termsAccepted || requestingJoin === joinFacilityDraft.id}
+              disabled={!joinFacilityDraft || !hasScrolledToBottom || reviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired || !termsAccepted || requestingJoin === joinFacilityDraft.id}
               onPress={() => {
                 if (!joinFacilityDraft) return;
                 submitJoinRequest(joinFacilityDraft.id, true);

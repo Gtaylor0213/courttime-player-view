@@ -10,6 +10,7 @@ export function TermsAcceptanceGate() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reviewSecondsRemaining, setReviewSecondsRemaining] = useState(0);
+  const [downloadedAttachmentIds, setDownloadedAttachmentIds] = useState<string[]>([]);
 
   const current = pendingTermsAcceptances[0];
   const sanitizedHtml = useMemo(
@@ -20,6 +21,7 @@ export function TermsAcceptanceGate() {
   useEffect(() => {
     setAgreed(false);
     setReviewSecondsRemaining(Math.max(0, Number(current?.requiredReviewSeconds) || 0));
+    setDownloadedAttachmentIds([]);
   }, [current?.facilityId, current?.currentVersionNumber, current?.requiredReviewSeconds]);
 
   useEffect(() => {
@@ -34,8 +36,13 @@ export function TermsAcceptanceGate() {
 
   if (!current) return null;
 
+  const allAttachmentsDownloaded = current.attachments.every((attachment) =>
+    downloadedAttachmentIds.includes(attachment.id)
+  );
+  const attachmentsStillRequired = current.attachments.length > 0 && !allAttachmentsDownloaded;
+
   const handleAccept = async () => {
-    if (!agreed || submitting || reviewSecondsRemaining > 0) return;
+    if (!agreed || submitting || reviewSecondsRemaining > 0 || attachmentsStillRequired) return;
     setSubmitting(true);
     const ok = await acceptTermsAndContinue(current.facilityId);
     if (ok) setAgreed(false);
@@ -70,12 +77,23 @@ export function TermsAcceptanceGate() {
                       href={attachment.dataUrl}
                       download={attachment.fileName}
                       className="block text-sm text-blue-600 hover:underline"
+                      onClick={() => {
+                        setDownloadedAttachmentIds((prev) => (
+                          prev.includes(attachment.id) ? prev : [...prev, attachment.id]
+                        ));
+                      }}
                     >
-                      {attachment.fileName}
+                      {downloadedAttachmentIds.includes(attachment.id) ? `${attachment.fileName} (downloaded)` : attachment.fileName}
                     </a>
                   ))}
                 </div>
               </div>
+            )}
+
+            {attachmentsStillRequired && (
+              <p className="text-xs text-gray-500">
+                Download all attached PDFs to enable acceptance.
+              </p>
             )}
 
             {reviewSecondsRemaining > 0 && (
@@ -89,7 +107,7 @@ export function TermsAcceptanceGate() {
                 id="terms-agree"
                 checked={agreed}
                 onCheckedChange={(checked) => setAgreed(Boolean(checked))}
-                disabled={reviewSecondsRemaining > 0}
+                disabled={reviewSecondsRemaining > 0 || attachmentsStillRequired}
               />
               <label htmlFor="terms-agree" className="text-sm leading-5">
                 I have read and agree to the Terms & Conditions
@@ -97,7 +115,7 @@ export function TermsAcceptanceGate() {
             </div>
 
             <div className="flex justify-end">
-              <Button onClick={handleAccept} disabled={!agreed || submitting || reviewSecondsRemaining > 0}>
+              <Button onClick={handleAccept} disabled={!agreed || submitting || reviewSecondsRemaining > 0 || attachmentsStillRequired}>
                 {submitting ? 'Accepting...' : 'Accept & Continue'}
               </Button>
             </div>

@@ -36,6 +36,7 @@ export function TermsAcceptanceGate() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reviewSecondsRemaining, setReviewSecondsRemaining] = useState(0);
+  const [downloadedAttachmentIds, setDownloadedAttachmentIds] = useState<string[]>([]);
 
   const current = pendingTermsAcceptances[0];
   const plainText = useMemo(
@@ -46,6 +47,7 @@ export function TermsAcceptanceGate() {
   useEffect(() => {
     setAgreed(false);
     setReviewSecondsRemaining(Math.max(0, Number(current?.requiredReviewSeconds) || 0));
+    setDownloadedAttachmentIds([]);
   }, [current?.facilityId, current?.currentVersionNumber, current?.requiredReviewSeconds]);
 
   useEffect(() => {
@@ -60,8 +62,13 @@ export function TermsAcceptanceGate() {
 
   if (!current) return null;
 
+  const allAttachmentsDownloaded = current.attachments.every((attachment) =>
+    downloadedAttachmentIds.includes(attachment.id)
+  );
+  const attachmentsStillRequired = current.attachments.length > 0 && !allAttachmentsDownloaded;
+
   const handleAccept = async () => {
-    if (!agreed || submitting || reviewSecondsRemaining > 0) return;
+    if (!agreed || submitting || reviewSecondsRemaining > 0 || attachmentsStillRequired) return;
     setSubmitting(true);
     const ok = await acceptTermsAndContinue(current.facilityId);
     if (ok) {
@@ -102,16 +109,29 @@ export function TermsAcceptanceGate() {
               onPress={async () => {
                 try {
                   await Linking.openURL(attachment.dataUrl);
+                  setDownloadedAttachmentIds((prev) => (
+                    prev.includes(attachment.id) ? prev : [...prev, attachment.id]
+                  ));
                 } catch (error) {
                   console.error('Failed to open terms attachment:', error);
                   showAlert('Error', `Could not open ${attachment.fileName}.`);
                 }
               }}
             >
-              <Text style={styles.attachmentText}>{attachment.fileName}</Text>
+              <Text style={styles.attachmentText}>
+                {downloadedAttachmentIds.includes(attachment.id)
+                  ? `${attachment.fileName} (downloaded)`
+                  : attachment.fileName}
+              </Text>
             </Pressable>
           ))}
         </View>
+      )}
+
+      {attachmentsStillRequired && (
+        <Text style={styles.reviewTimer}>
+          Download all attached PDFs to enable acceptance.
+        </Text>
       )}
 
       {reviewSecondsRemaining > 0 && (
@@ -123,15 +143,15 @@ export function TermsAcceptanceGate() {
       <Pressable
         style={({ pressed }) => [
           styles.checkboxRow,
-          reviewSecondsRemaining > 0 && styles.checkboxRowDisabled,
+          (reviewSecondsRemaining > 0 || attachmentsStillRequired) && styles.checkboxRowDisabled,
           pressed && styles.pressedOpacity,
         ]}
         onPress={() => {
-          if (reviewSecondsRemaining > 0) return;
+          if (reviewSecondsRemaining > 0 || attachmentsStillRequired) return;
           setAgreed(!agreed);
         }}
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: agreed, disabled: reviewSecondsRemaining > 0 }}
+        accessibilityState={{ checked: agreed, disabled: reviewSecondsRemaining > 0 || attachmentsStillRequired }}
       >
         <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
           {agreed && <Ionicons name="checkmark" size={18} color={Colors.textInverse} />}
@@ -144,7 +164,7 @@ export function TermsAcceptanceGate() {
       <Button
         title="Accept & Continue"
         onPress={handleAccept}
-        disabled={!agreed || reviewSecondsRemaining > 0}
+        disabled={!agreed || reviewSecondsRemaining > 0 || attachmentsStillRequired}
         loading={submitting}
       />
 

@@ -42,6 +42,7 @@ export function PlayerProfile() {
   const [joinTermsScrolledToBottom, setJoinTermsScrolledToBottom] = useState(false);
   const [joinTermsAccepted, setJoinTermsAccepted] = useState(false);
   const [joinTermsReviewSecondsRemaining, setJoinTermsReviewSecondsRemaining] = useState(0);
+  const [joinTermsDownloadedAttachmentIds, setJoinTermsDownloadedAttachmentIds] = useState<string[]>([]);
 
   // Upcoming reservations
   const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
@@ -67,6 +68,13 @@ export function PlayerProfile() {
 
     return () => window.clearTimeout(timeoutId);
   }, [joinTermsModal, joinTermsReviewSecondsRemaining]);
+
+  const allJoinTermsAttachmentsDownloaded = joinTermsModal
+    ? joinTermsModal.attachments.every((attachment) => joinTermsDownloadedAttachmentIds.includes(attachment.id))
+    : true;
+  const joinTermsAttachmentsStillRequired = Boolean(
+    joinTermsModal && joinTermsModal.attachments.length > 0 && !allJoinTermsAttachmentsDownloaded
+  );
 
   const [profileData, setProfileData] = useState({
     firstName: '',
@@ -329,6 +337,7 @@ export function PlayerProfile() {
         setJoinTermsScrolledToBottom(false);
         setJoinTermsAccepted(false);
         setJoinTermsReviewSecondsRemaining(0);
+        setJoinTermsDownloadedAttachmentIds([]);
         loadProfile();
       } else {
         toast.error(response.error || 'Failed to request membership');
@@ -369,6 +378,7 @@ export function PlayerProfile() {
         setJoinTermsScrolledToBottom(false);
         setJoinTermsAccepted(false);
         setJoinTermsReviewSecondsRemaining(Number(terms.requiredReviewSeconds) || 0);
+        setJoinTermsDownloadedAttachmentIds([]);
         return;
       }
 
@@ -1211,8 +1221,15 @@ export function PlayerProfile() {
                         href={attachment.dataUrl}
                         download={attachment.fileName}
                         className="block text-sm text-blue-600 hover:underline"
+                        onClick={() => {
+                          setJoinTermsDownloadedAttachmentIds((prev) => (
+                            prev.includes(attachment.id) ? prev : [...prev, attachment.id]
+                          ));
+                        }}
                       >
-                        {attachment.fileName}
+                        {joinTermsDownloadedAttachmentIds.includes(attachment.id)
+                          ? `${attachment.fileName} (downloaded)`
+                          : attachment.fileName}
                       </a>
                     ))}
                   </div>
@@ -1229,11 +1246,17 @@ export function PlayerProfile() {
                 </p>
               )}
 
-              <label className={`flex items-center gap-2 text-sm ${(!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0) ? 'opacity-50' : ''}`}>
+              {joinTermsAttachmentsStillRequired && (
+                <p className="text-xs text-gray-500">
+                  Download all attached PDFs to enable acceptance.
+                </p>
+              )}
+
+              <label className={`flex items-center gap-2 text-sm ${(!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired) ? 'opacity-50' : ''}`}>
                 <input
                   type="checkbox"
                   checked={joinTermsAccepted}
-                  disabled={!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0}
+                  disabled={!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired}
                   onChange={(e) => setJoinTermsAccepted(e.target.checked)}
                 />
                 I have read and accept these Terms & Conditions
@@ -1247,12 +1270,13 @@ export function PlayerProfile() {
                     setJoinTermsScrolledToBottom(false);
                     setJoinTermsAccepted(false);
                     setJoinTermsReviewSecondsRemaining(0);
+                    setJoinTermsDownloadedAttachmentIds([]);
                   }}
                 >
                   Cancel
                 </Button>
                 <Button
-                  disabled={!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0 || !joinTermsAccepted || requestingMembership === joinTermsModal.facilityId}
+                  disabled={!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired || !joinTermsAccepted || requestingMembership === joinTermsModal.facilityId}
                   onClick={() => submitMembershipRequest(joinTermsModal.facilityId, joinTermsModal.facilityName, true)}
                 >
                   {requestingMembership === joinTermsModal.facilityId ? 'Requesting...' : 'Accept & Request'}

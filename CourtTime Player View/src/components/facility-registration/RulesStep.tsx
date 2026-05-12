@@ -273,13 +273,33 @@ export function RulesStep({
                 <Input
                   type="number"
                   className="w-24 h-8 text-sm"
-                  min={15}
-                  max={480}
-                  step={15}
-                  value={rules['CRT-005']?.config?.max_duration_minutes ?? ''}
-                  onChange={(e) => onRuleConfigFieldChange('CRT-005', 'max_duration_minutes', parseFloat(e.target.value))}
+                  min={0.25}
+                  max={8}
+                  step={0.25}
+                  value={(() => {
+                    const rawMinutes = rules['CRT-005']?.config?.max_duration_minutes;
+                    const minutes = Number(rawMinutes);
+                    if (!Number.isFinite(minutes) || minutes <= 0) {
+                      return '';
+                    }
+                    const hours = minutes / 60;
+                    return Number.isInteger(hours) ? String(hours) : String(hours);
+                  })()}
+                  onChange={(e) => {
+                    const rawHours = e.target.value;
+                    if (rawHours === '') {
+                      onRuleConfigFieldChange('CRT-005', 'max_duration_minutes', '');
+                      return;
+                    }
+                    const hours = parseFloat(rawHours);
+                    onRuleConfigFieldChange(
+                      'CRT-005',
+                      'max_duration_minutes',
+                      Number.isFinite(hours) ? Math.round(hours * 60) : ''
+                    );
+                  }}
                 />
-                <span className="text-xs text-gray-500">minutes</span>
+                <span className="text-xs text-gray-500">hours</span>
               </div>
             )}
           </div>

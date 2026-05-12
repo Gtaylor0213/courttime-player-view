@@ -119,10 +119,6 @@ interface BookingRules {
   strikeThreshold: string;
   strikeWindowDays: string;
   strikeLockoutDays: string;
-  // ACC-011: Rate limiting
-  rateLimitEnabled: boolean;
-  rateLimitMaxActions: string;
-  rateLimitWindowSeconds: string;
   // CRT-007: Buffer time between reservations
   bufferTimeEnabled: boolean;
   bufferTimeMinutes: string;
@@ -393,79 +389,76 @@ export function FacilityManagement() {
   const defaultBookingRules: BookingRules = {
     generalRules: '',
     restrictionType: 'account',
-    daysInAdvanceEnabled: true,
-    daysInAdvance: '7',
-    maxReservationDurationEnabled: true,
-    maxReservationDurationMinutes: '120',
-    courtsPerWeekUserEnabled: true,
-    courtsPerWeekUser: '5',
-    courtsPerWeekHouseholdEnabled: true,
-    courtsPerWeekHousehold: '8',
-    courtsPerDayUserEnabled: true,
-    courtsPerDayUser: '1',
-    courtsPerDayHouseholdEnabled: true,
-    courtsPerDayHousehold: '2',
-    maxBookingsPerWeek: '3',
-    maxBookingsPerWeekUnlimited: false,
-    maxBookingDurationHours: '2',
-    maxBookingDurationUnlimited: false,
-    advanceBookingDays: '14',
-    advanceBookingDaysUnlimited: false,
+    daysInAdvanceEnabled: false,
+    daysInAdvance: '',
+    maxReservationDurationEnabled: false,
+    maxReservationDurationMinutes: '',
+    courtsPerWeekUserEnabled: false,
+    courtsPerWeekUser: '',
+    courtsPerWeekHouseholdEnabled: false,
+    courtsPerWeekHousehold: '',
+    courtsPerDayUserEnabled: false,
+    courtsPerDayUser: '',
+    courtsPerDayHouseholdEnabled: false,
+    courtsPerDayHousehold: '',
+    maxBookingsPerWeek: '',
+    maxBookingsPerWeekUnlimited: true,
+    maxBookingDurationHours: '',
+    maxBookingDurationUnlimited: true,
+    advanceBookingDays: '',
+    advanceBookingDaysUnlimited: true,
     restrictionsApplyToAdmins: false,
-    adminMaxBookingsPerWeek: '10',
+    adminMaxBookingsPerWeek: '',
     adminMaxBookingsUnlimited: true,
-    adminMaxBookingDurationHours: '4',
+    adminMaxBookingDurationHours: '',
     adminMaxDurationUnlimited: true,
-    adminAdvanceBookingDays: '30',
+    adminAdvanceBookingDays: '',
     adminAdvanceBookingUnlimited: true,
     hasPeakHours: false,
     peakHoursApplyToAdmins: false,
     peakHoursSlots: [],
     peakHoursRestrictions: {
-      maxBookingsPerWeek: '2',
-      maxBookingsUnlimited: false,
-      maxDurationHours: '1.5',
-      maxDurationUnlimited: false,
+      maxBookingsPerWeek: '',
+      maxBookingsUnlimited: true,
+      maxDurationHours: '',
+      maxDurationUnlimited: true,
     },
     hasWeekendPolicy: false,
     weekendPolicyApplyToAdmins: false,
     weekendPolicy: {
-      maxBookingsPerWeekend: '2',
-      maxBookingsUnlimited: false,
-      maxDurationHours: '2',
-      maxDurationUnlimited: false,
-      advanceBookingDays: '7',
-      advanceBookingUnlimited: false,
+      maxBookingsPerWeekend: '',
+      maxBookingsUnlimited: true,
+      maxDurationHours: '',
+      maxDurationUnlimited: true,
+      advanceBookingDays: '',
+      advanceBookingUnlimited: true,
     },
     maxActiveReservationsEnabled: false,
-    maxActiveReservations: '3',
+    maxActiveReservations: '',
     maxHoursPerWeekEnabled: false,
-    maxHoursPerWeek: '10',
-    noOverlappingReservations: true,
+    maxHoursPerWeek: '',
+    noOverlappingReservations: false,
     minimumLeadTimeEnabled: false,
-    minimumLeadTimeMinutes: '60',
+    minimumLeadTimeMinutes: '',
     strikeSystemEnabled: false,
-    strikeThreshold: '3',
-    strikeWindowDays: '30',
-    strikeLockoutDays: '7',
-    rateLimitEnabled: false,
-    rateLimitMaxActions: '10',
-    rateLimitWindowSeconds: '60',
+    strikeThreshold: '',
+    strikeWindowDays: '',
+    strikeLockoutDays: '',
     bufferTimeEnabled: false,
-    bufferTimeMinutes: '15',
+    bufferTimeMinutes: '',
     allowedBookingTypesEnabled: false,
     allowedBookingTypes: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'],
     courtWeeklyCapEnabled: false,
-    courtWeeklyCap: '5',
+    courtWeeklyCap: '',
     courtReleaseTimeEnabled: false,
-    courtReleaseTime: '07:00',
-    courtReleaseDaysAhead: '7',
+    courtReleaseTime: '',
+    courtReleaseDaysAhead: '',
     householdMaxMembersEnabled: false,
-    householdMaxMembers: '6',
+    householdMaxMembers: '',
     householdMaxActiveEnabled: false,
-    householdMaxActive: '4',
+    householdMaxActive: '',
     householdPrimeCapEnabled: false,
-    householdPrimeCap: '3',
+    householdPrimeCap: '',
   };
 
   const defaultOperatingHours = {
@@ -718,6 +711,20 @@ export function FacilityManagement() {
           }
           return fallback;
         };
+        const hasPositiveRuleValue = (value: any) => {
+          const n = Number(value);
+          return Number.isFinite(n) && n > 0;
+        };
+        const normalizeDurationInputValue = (rawMinutes: any, rawHours: any) => {
+          if (hasPositiveRuleValue(rawMinutes)) {
+            const mins = Number(rawMinutes);
+            return String(mins <= 12 ? Math.round(mins * 60) : Math.round(mins));
+          }
+          if (hasPositiveRuleValue(rawHours)) {
+            return String(Math.round(Number(rawHours) * 60));
+          }
+          return '';
+        };
 
         const bookingRules: BookingRules = hasFlatSavedRules
           ? {
@@ -739,18 +746,33 @@ export function FacilityManagement() {
               allowedBookingTypes: Array.isArray(parsedSimplified?.allowedBookingTypes)
                 ? parsedSimplified.allowedBookingTypes
                 : defaultBookingRules.allowedBookingTypes,
-              maxReservationDurationMinutes: String(
-                normalizeDurationMinutes(
-                  parsedSimplified?.maxReservationDurationMinutes ??
-                    parsedSimplified?.maxReservationDuration?.limit,
-                  parsedSimplified?.maxBookingDurationHours,
-                  Number(defaultBookingRules.maxReservationDurationMinutes) || 120
-                )
+              maxReservationDurationEnabled:
+                typeof parsedSimplified?.maxReservationDurationEnabled === 'boolean'
+                  ? parsedSimplified.maxReservationDurationEnabled
+                  : typeof parsedSimplified?.maxReservationDuration === 'object' &&
+                      parsedSimplified.maxReservationDuration !== null &&
+                      typeof (parsedSimplified.maxReservationDuration as { enabled?: boolean }).enabled === 'boolean'
+                    ? !!(parsedSimplified.maxReservationDuration as { enabled: boolean }).enabled
+                    : typeof parsedSimplified?.maxBookingDurationUnlimited === 'boolean'
+                      ? !parsedSimplified.maxBookingDurationUnlimited
+                      : hasPositiveRuleValue(
+                          parsedSimplified?.maxReservationDurationMinutes ??
+                            parsedSimplified?.maxReservationDuration?.limit ??
+                            parsedSimplified?.maxBookingDurationHours
+                        ),
+              maxReservationDurationMinutes: normalizeDurationInputValue(
+                parsedSimplified?.maxReservationDurationMinutes ??
+                  parsedSimplified?.maxReservationDuration?.limit,
+                parsedSimplified?.maxBookingDurationHours
               ),
               courtsPerWeekUserEnabled:
                 parsedSimplified?.courtsPerWeekUserEnabled ??
                 parsedSimplified?.userLimits?.perWeekIndividual?.enabled ??
-                defaultBookingRules.courtsPerWeekUserEnabled,
+                hasPositiveRuleValue(
+                  parsedSimplified?.courtsPerWeekUser ??
+                    parsedSimplified?.userLimits?.perWeekIndividual?.limit ??
+                    parsedSimplified?.maxBookingsPerWeek
+                ),
               courtsPerWeekUser: String(
                 parsedSimplified?.courtsPerWeekUser ??
                   parsedSimplified?.userLimits?.perWeekIndividual?.limit ??
@@ -759,7 +781,10 @@ export function FacilityManagement() {
               courtsPerWeekHouseholdEnabled:
                 parsedSimplified?.courtsPerWeekHouseholdEnabled ??
                 parsedSimplified?.userLimits?.perWeekHousehold?.enabled ??
-                defaultBookingRules.courtsPerWeekHouseholdEnabled,
+                hasPositiveRuleValue(
+                  parsedSimplified?.courtsPerWeekHousehold ??
+                    parsedSimplified?.userLimits?.perWeekHousehold?.limit
+                ),
               courtsPerWeekHousehold: String(
                 parsedSimplified?.courtsPerWeekHousehold ??
                   parsedSimplified?.userLimits?.perWeekHousehold?.limit ??
@@ -768,7 +793,10 @@ export function FacilityManagement() {
               courtsPerDayUserEnabled:
                 parsedSimplified?.courtsPerDayUserEnabled ??
                 parsedSimplified?.userLimits?.perDayIndividual?.enabled ??
-                defaultBookingRules.courtsPerDayUserEnabled,
+                hasPositiveRuleValue(
+                  parsedSimplified?.courtsPerDayUser ??
+                    parsedSimplified?.userLimits?.perDayIndividual?.limit
+                ),
               courtsPerDayUser: String(
                 parsedSimplified?.courtsPerDayUser ??
                   parsedSimplified?.userLimits?.perDayIndividual?.limit ??
@@ -777,7 +805,10 @@ export function FacilityManagement() {
               courtsPerDayHouseholdEnabled:
                 parsedSimplified?.courtsPerDayHouseholdEnabled ??
                 parsedSimplified?.userLimits?.perDayHousehold?.enabled ??
-                defaultBookingRules.courtsPerDayHouseholdEnabled,
+                hasPositiveRuleValue(
+                  parsedSimplified?.courtsPerDayHousehold ??
+                    parsedSimplified?.userLimits?.perDayHousehold?.limit
+                ),
               courtsPerDayHousehold: String(
                 parsedSimplified?.courtsPerDayHousehold ??
                   parsedSimplified?.userLimits?.perDayHousehold?.limit ??
@@ -808,7 +839,11 @@ export function FacilityManagement() {
                     ? !!(parsedSimplified.daysInAdvance as { enabled: boolean }).enabled
                     : typeof parsedSimplified?.advanceBookingDaysUnlimited === 'boolean'
                       ? !parsedSimplified.advanceBookingDaysUnlimited
-                      : defaultBookingRules.daysInAdvanceEnabled,
+                      : hasPositiveRuleValue(
+                          typeof parsedSimplified?.daysInAdvance === 'object'
+                            ? parsedSimplified?.daysInAdvance?.limit
+                            : parsedSimplified?.daysInAdvance ?? parsedSimplified?.advanceBookingDays
+                        ),
               daysInAdvance: (() => {
                 const nested = parsedSimplified?.daysInAdvance;
                 if (nested && typeof nested === 'object' && nested !== null && 'limit' in nested) {
@@ -934,9 +969,6 @@ export function FacilityManagement() {
               strikeThreshold: defaultBookingRules.strikeThreshold,
               strikeWindowDays: defaultBookingRules.strikeWindowDays,
               strikeLockoutDays: defaultBookingRules.strikeLockoutDays,
-              rateLimitEnabled: defaultBookingRules.rateLimitEnabled,
-              rateLimitMaxActions: defaultBookingRules.rateLimitMaxActions,
-              rateLimitWindowSeconds: defaultBookingRules.rateLimitWindowSeconds,
               courtWeeklyCapEnabled: defaultBookingRules.courtWeeklyCapEnabled,
               courtWeeklyCap: defaultBookingRules.courtWeeklyCap,
               courtReleaseTimeEnabled: defaultBookingRules.courtReleaseTimeEnabled,
@@ -2050,7 +2082,6 @@ export function FacilityManagement() {
     'ACC-005': { enabledField: 'daysInAdvanceEnabled', configMap: { max_days_ahead: { field: 'daysInAdvance' } } },
     'ACC-009': { enabledField: 'strikeSystemEnabled', configMap: { strike_threshold: { field: 'strikeThreshold' }, strike_window_days: { field: 'strikeWindowDays' }, lockout_days: { field: 'strikeLockoutDays' } } },
     'ACC-010': { enabledField: 'peakHoursRestrictions.maxBookingsUnlimited', invertEnabled: true, configMap: { max_prime_per_week: { field: 'peakHoursRestrictions.maxBookingsPerWeek' } } },
-    'ACC-011': { enabledField: 'rateLimitEnabled', configMap: { max_actions: { field: 'rateLimitMaxActions' }, window_seconds: { field: 'rateLimitWindowSeconds' } } },
     'CRT-002': { enabledField: 'peakHoursRestrictions.maxDurationUnlimited', invertEnabled: true, configMap: { max_minutes_prime: { field: 'peakHoursRestrictions.maxDurationHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
     'CRT-005': { enabledField: 'maxReservationDurationEnabled', configMap: { max_duration_minutes: { field: 'maxReservationDurationMinutes', fromDb: (v: number) => v, toDb: (v: number) => v } } },
     'CRT-007': { enabledField: 'bufferTimeEnabled', configMap: { buffer_minutes: { field: 'bufferTimeMinutes' } } },

@@ -813,6 +813,7 @@ export interface FacilityRegistrationData {
 
   // Facility Rules
   generalRules: string;
+  bookingRules?: string;
   termsAndConditions?: string;
   termsAttachments?: TermsAttachment[];
   requiredReviewSeconds?: number;
@@ -871,6 +872,13 @@ export interface FacilityRegistrationData {
   // Address Whitelist
   hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }>;
   accountsPerAddress?: number;
+
+  // Rules engine configs
+  ruleConfigs?: Array<{
+    ruleCode: string;
+    isEnabled: boolean;
+    ruleConfig: Record<string, any>;
+  }>;
 
   // Admin profile fields (for both new and existing users)
   adminProfilePicture?: string;

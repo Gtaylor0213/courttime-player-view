@@ -23,7 +23,7 @@ import * as XLSX from 'xlsx';
 import { facilitiesApi, paymentsApi } from '../api/client';
 import type { TermsAttachment } from '../api/client';
 import { RulesStep } from './facility-registration/RulesStep';
-import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG, RULE_METADATA } from './facility-registration/rule-defaults';
+import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG } from './facility-registration/rule-defaults';
 
 interface Court {
   id: string;
@@ -374,6 +374,106 @@ export function FacilityRegistration() {
         },
       },
     }));
+  };
+
+  const getRuleEntry = (rulesConfig: RulesConfig, ruleCode: string): RuleEntry => (
+    rulesConfig.rules[ruleCode] || { enabled: false, config: {} }
+  );
+
+  const hasValue = (value: unknown): boolean => {
+    if (value === undefined || value === null) return false;
+    if (typeof value === 'number' && !Number.isFinite(value)) return false;
+    return String(value).trim() !== '';
+  };
+
+  const toStringOrBlank = (value: unknown): string => (
+    hasValue(value) ? String(value).trim() : ''
+  );
+
+  const formatHoursFromMinutes = (value: unknown): string => {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes) || minutes <= 0) return '';
+    const hours = minutes / 60;
+    return Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
+  };
+
+  const buildRegistrationBookingRules = (rulesConfig: RulesConfig) => {
+    const daysInAdvanceRule = getRuleEntry(rulesConfig, 'ACC-005');
+    const maxReservationDurationRule = getRuleEntry(rulesConfig, 'CRT-005');
+    const weeklyIndividualRule = getRuleEntry(rulesConfig, 'ACC-002');
+    const householdRule = getRuleEntry(rulesConfig, 'HH-003');
+
+    const daysInAdvance = daysInAdvanceRule.enabled
+      ? toStringOrBlank(daysInAdvanceRule.config.max_days_ahead)
+      : '';
+    const maxReservationDurationMinutes = maxReservationDurationRule.enabled
+      ? toStringOrBlank(maxReservationDurationRule.config.max_duration_minutes)
+      : '';
+    const courtsPerWeekUser = weeklyIndividualRule.enabled
+      ? toStringOrBlank(weeklyIndividualRule.config.max_per_week)
+      : '';
+    const courtsPerDayUserEnabled = !!weeklyIndividualRule.config.max_per_day_enabled;
+    const courtsPerDayUser = courtsPerDayUserEnabled
+      ? toStringOrBlank(weeklyIndividualRule.config.max_per_day)
+      : '';
+    const courtsPerWeekHousehold = householdRule.enabled
+      ? toStringOrBlank(
+          householdRule.config.max_per_week_household ?? householdRule.config.max_prime_per_week_household
+        )
+      : '';
+    const courtsPerDayHouseholdEnabled = !!householdRule.config.max_per_day_household_enabled;
+    const courtsPerDayHousehold = courtsPerDayHouseholdEnabled
+      ? toStringOrBlank(householdRule.config.max_per_day_household)
+      : '';
+
+    return {
+      generalRules: rulesConfig.generalRules,
+      restrictionType: rulesConfig.restrictionType,
+      daysInAdvanceEnabled: !!daysInAdvanceRule.enabled,
+      daysInAdvance,
+      maxReservationDurationEnabled: !!maxReservationDurationRule.enabled,
+      maxReservationDurationMinutes,
+      courtsPerWeekUserEnabled: !!weeklyIndividualRule.enabled,
+      courtsPerWeekUser,
+      courtsPerWeekHouseholdEnabled: !!householdRule.enabled,
+      courtsPerWeekHousehold,
+      courtsPerDayUserEnabled,
+      courtsPerDayUser,
+      courtsPerDayHouseholdEnabled,
+      courtsPerDayHousehold,
+      maxBookingsPerWeek: courtsPerWeekUser,
+      maxBookingsPerWeekUnlimited: !weeklyIndividualRule.enabled,
+      maxBookingDurationHours: formatHoursFromMinutes(maxReservationDurationMinutes),
+      maxBookingDurationUnlimited: !maxReservationDurationRule.enabled,
+      advanceBookingDays: daysInAdvance,
+      advanceBookingDaysUnlimited: !daysInAdvanceRule.enabled,
+      restrictionsApplyToAdmins: false,
+      adminMaxBookingsPerWeek: '',
+      adminMaxBookingsUnlimited: true,
+      adminMaxBookingDurationHours: '',
+      adminMaxDurationUnlimited: true,
+      adminAdvanceBookingDays: '',
+      adminAdvanceBookingUnlimited: true,
+      hasPeakHours: rulesConfig.hasPeakHours,
+      peakHoursApplyToAdmins: false,
+      peakHoursSlots: rulesConfig.peakHoursSlots,
+      peakHoursRestrictions: {
+        maxBookingsPerWeek: '',
+        maxBookingsUnlimited: true,
+        maxDurationHours: '',
+        maxDurationUnlimited: true,
+      },
+      hasWeekendPolicy: rulesConfig.hasWeekendPolicy,
+      weekendPolicyApplyToAdmins: false,
+      weekendPolicy: {
+        maxBookingsPerWeekend: '',
+        maxBookingsUnlimited: true,
+        maxDurationHours: '',
+        maxDurationUnlimited: true,
+        advanceBookingDays: '',
+        advanceBookingUnlimited: true,
+      },
+    };
   };
 
   // Handle primary contact changes
@@ -930,6 +1030,38 @@ export function FacilityRegistration() {
     if (step === rulesStep) {
       if (!formData.rulesConfig.generalRules.trim()) stepErrors.generalRules = 'General rules are required';
       if (!formData.rulesConfig.restrictionType) stepErrors.restrictionType = 'Please select how restrictions apply';
+
+      const daysInAdvanceRule = getRuleEntry(formData.rulesConfig, 'ACC-005');
+      const maxReservationDurationRule = getRuleEntry(formData.rulesConfig, 'CRT-005');
+      const weeklyIndividualRule = getRuleEntry(formData.rulesConfig, 'ACC-002');
+      const householdRule = getRuleEntry(formData.rulesConfig, 'HH-003');
+
+      if (daysInAdvanceRule.enabled && !hasValue(daysInAdvanceRule.config.max_days_ahead)) {
+        stepErrors.daysInAdvance = 'Enter a days-in-advance value or turn that rule off';
+      }
+
+      if (maxReservationDurationRule.enabled && !hasValue(maxReservationDurationRule.config.max_duration_minutes)) {
+        stepErrors.maxReservationDurationMinutes = 'Enter a max reservation duration or turn that rule off';
+      }
+
+      if (weeklyIndividualRule.enabled && !hasValue(weeklyIndividualRule.config.max_per_week)) {
+        stepErrors.courtsPerWeekUser = 'Enter an individual weekly limit or turn that rule off';
+      }
+
+      if (weeklyIndividualRule.config.max_per_day_enabled && !hasValue(weeklyIndividualRule.config.max_per_day)) {
+        stepErrors.courtsPerDayUser = 'Enter an individual daily limit or turn that rule off';
+      }
+
+      if (
+        householdRule.enabled &&
+        !hasValue(householdRule.config.max_per_week_household ?? householdRule.config.max_prime_per_week_household)
+      ) {
+        stepErrors.courtsPerWeekHousehold = 'Enter a household weekly limit or turn that rule off';
+      }
+
+      if (householdRule.config.max_per_day_household_enabled && !hasValue(householdRule.config.max_per_day_household)) {
+        stepErrors.courtsPerDayHousehold = 'Enter a household daily limit or turn that rule off';
+      }
     }
 
     return stepErrors;
@@ -1129,6 +1261,8 @@ export function FacilityRegistration() {
     setIsSubmitting(true);
 
     try {
+      const bookingRulesPayload = buildRegistrationBookingRules(formData.rulesConfig);
+
       // Prepare registration data
       const registrationData = {
         // Facility Administrator Account (if creating new user — not logged in)
@@ -1210,15 +1344,22 @@ export function FacilityRegistration() {
         requiredReviewSeconds: formData.enableTermsAndConditions && formData.termsAndConditions.trim()
           ? Math.max(0, Math.floor(Number(formData.requiredReviewSeconds) || 0))
           : 0,
+        bookingRules: bookingRulesPayload,
 
         // Restriction settings - map from rules engine entries for backward compatibility
         restrictionType: formData.rulesConfig.restrictionType,
-        maxBookingsPerWeek: formData.rulesConfig.rules['ACC-002']?.enabled
-          ? String(formData.rulesConfig.rules['ACC-002'].config.max_per_week || 10) : '-1',
-        maxBookingDurationHours: formData.rulesConfig.rules['CRT-005']?.enabled
-          ? String((formData.rulesConfig.rules['CRT-005'].config.max_duration_minutes || 120) / 60) : '-1',
-        advanceBookingDays: formData.rulesConfig.rules['ACC-005']?.enabled
-          ? String(formData.rulesConfig.rules['ACC-005'].config.max_days_ahead || 14) : '-1',
+        maxBookingsPerWeek:
+          bookingRulesPayload.courtsPerWeekUserEnabled && hasValue(bookingRulesPayload.courtsPerWeekUser)
+            ? bookingRulesPayload.courtsPerWeekUser
+            : '-1',
+        maxBookingDurationHours:
+          bookingRulesPayload.maxReservationDurationEnabled && hasValue(bookingRulesPayload.maxBookingDurationHours)
+            ? bookingRulesPayload.maxBookingDurationHours
+            : '-1',
+        advanceBookingDays:
+          bookingRulesPayload.daysInAdvanceEnabled && hasValue(bookingRulesPayload.daysInAdvance)
+            ? bookingRulesPayload.daysInAdvance
+            : '-1',
 
         // Facility admins always bypass booking rules.
         restrictionsApplyToAdmins: false,
@@ -1259,7 +1400,10 @@ export function FacilityRegistration() {
           .filter(([key]) => /^(ACC|CRT|HH)-\d{3}$/.test(key))
           .map(([ruleCode, entry]) => ({
             ruleCode,
-            isEnabled: entry.enabled,
+            isEnabled:
+              entry.enabled ||
+              (ruleCode === 'ACC-002' && !!entry.config.max_per_day_enabled) ||
+              (ruleCode === 'HH-003' && !!entry.config.max_per_day_household_enabled),
             ruleConfig: entry.config,
           })),
 
@@ -3174,7 +3318,57 @@ export function FacilityRegistration() {
     </div>
   );
 
-  const renderStep6Review = () => (
+  const renderStep6Review = () => {
+    const bookingRulesReview = buildRegistrationBookingRules(formData.rulesConfig);
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const reviewRuleRows = [
+      {
+        label: 'Days in Advance',
+        enabled: bookingRulesReview.daysInAdvanceEnabled,
+        value: bookingRulesReview.daysInAdvance ? `${bookingRulesReview.daysInAdvance} day(s)` : '',
+      },
+      {
+        label: 'Max Reservation Duration',
+        enabled: bookingRulesReview.maxReservationDurationEnabled,
+        value: bookingRulesReview.maxBookingDurationHours
+          ? `${bookingRulesReview.maxBookingDurationHours} hour(s)`
+          : '',
+      },
+      {
+        label: 'Courts Per Week (Individual)',
+        enabled: bookingRulesReview.courtsPerWeekUserEnabled,
+        value: bookingRulesReview.courtsPerWeekUser,
+      },
+      {
+        label: 'Courts Per Day (Individual)',
+        enabled: bookingRulesReview.courtsPerDayUserEnabled,
+        value: bookingRulesReview.courtsPerDayUser,
+      },
+      {
+        label: 'Courts Per Week (Household)',
+        enabled: bookingRulesReview.courtsPerWeekHouseholdEnabled,
+        value: bookingRulesReview.courtsPerWeekHousehold,
+      },
+      {
+        label: 'Courts Per Day (Household)',
+        enabled: bookingRulesReview.courtsPerDayHouseholdEnabled,
+        value: bookingRulesReview.courtsPerDayHousehold,
+      },
+    ];
+    const peakHoursSummaries = formData.rulesConfig.peakHoursSlots.map((slot, index) => {
+      const days = slot.days
+        .slice()
+        .sort((a, b) => a - b)
+        .map((day) => dayLabels[day] || '?')
+        .join(', ');
+      const parts = [
+        `${slot.startTime || '--:--'}-${slot.endTime || '--:--'}`,
+        days || 'No days selected',
+      ];
+      return `Slot ${index + 1}: ${parts.join(' · ')}`;
+    });
+
+    return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-4">Review & Submit</h3>
@@ -3324,31 +3518,31 @@ export function FacilityRegistration() {
           <div><span className="font-medium">Restriction Type:</span> {formData.rulesConfig.restrictionType === 'account' ? 'Per Account' : 'Per Address'}</div>
 
           <div className="mt-2">
-            <span className="font-medium block mb-1">Enabled Rules:</span>
+            <span className="font-medium block mb-1">Rules From Setup:</span>
             <div className="space-y-1 pl-2">
-              {Object.entries(formData.rulesConfig.rules)
-                .filter(([, entry]) => entry.enabled)
-                .map(([code, entry]) => {
-                  const meta = RULE_METADATA.find(m => m.code === code);
-                  if (!meta) return null;
-                  const configSummary = meta.fields.map(f => {
-                    const val = entry.config[f.key];
-                    if (val === undefined) return null;
-                    const displayVal = f.key === 'max_minutes_per_week' ? `${val / 60} hrs` : `${val}${f.suffix ? ` ${f.suffix}` : ''}`;
-                    return `${f.label}: ${displayVal}`;
-                  }).filter(Boolean).join(', ');
-                  return (
-                    <div key={code} className="text-gray-600">
-                      <span className="text-gray-800">{meta.name}</span>
-                      {configSummary && <span className="text-gray-500"> ({configSummary})</span>}
-                    </div>
-                  );
-                })}
+              {reviewRuleRows.map((rule) => (
+                <div key={rule.label} className="text-gray-600">
+                  <span className="text-gray-800">{rule.label}:</span>{' '}
+                  {rule.enabled
+                    ? (rule.value || 'Configured')
+                    : 'Off'}
+                </div>
+              ))}
             </div>
           </div>
 
           {formData.rulesConfig.hasPeakHours && (
-            <div><span className="font-medium">Peak Hours:</span> Configured with custom time slots</div>
+            <div>
+              <span className="font-medium">Peak Hours:</span>{' '}
+              {peakHoursSummaries.length > 0 ? `${peakHoursSummaries.length} slot(s) configured` : 'Enabled with no slots yet'}
+              {peakHoursSummaries.length > 0 && (
+                <div className="space-y-1 pl-2 mt-1 text-gray-600">
+                  {peakHoursSummaries.map((summary) => (
+                    <div key={summary}>{summary}</div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           {formData.rulesConfig.hasWeekendPolicy && (
             <div><span className="font-medium">Weekend Policy:</span> Custom weekend limits configured</div>
@@ -3378,7 +3572,8 @@ export function FacilityRegistration() {
         </AlertDescription>
       </Alert>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">

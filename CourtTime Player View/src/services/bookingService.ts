@@ -641,9 +641,6 @@ async function createBookingCore(bookingData: {
       };
     }
 
-    // Record rate limit action
-    await recordRateLimitAction(bookingData.userId, bookingData.facilityId, 'create');
-
     // Evaluate booking rules (unless skipped for admin override)
     if (!bookingData.skipRulesValidation) {
       const evaluation = await validateBooking({
@@ -1169,9 +1166,6 @@ export async function cancelBooking(
       };
     }
 
-    // Record rate limit action
-    await recordRateLimitAction(userId, booking.facilityId, 'cancel');
-
     // Calculate minutes before start (use facility timezone for accurate comparison)
     const facilityTzResult = await query('SELECT timezone FROM facilities WHERE id = $1', [booking.facilityId]);
     const facilityTz = facilityTzResult.rows[0]?.timezone || 'America/New_York';
@@ -1281,26 +1275,6 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
 // =====================================================
 // HELPER FUNCTIONS FOR RULES ENGINE
 // =====================================================
-
-/**
- * Record a rate limit action
- */
-async function recordRateLimitAction(
-  userId: string,
-  facilityId: string,
-  actionType: 'create' | 'cancel' | 'modify' | 'waitlist_join'
-): Promise<void> {
-  try {
-    await query(
-      `INSERT INTO booking_rate_limits (user_id, facility_id, action_type)
-       VALUES ($1, $2, $3)`,
-      [userId, facilityId, actionType]
-    );
-  } catch (error) {
-    // Don't fail the booking if rate limit recording fails
-    console.error('Failed to record rate limit action:', error);
-  }
-}
 
 /**
  * Record a booking cancellation

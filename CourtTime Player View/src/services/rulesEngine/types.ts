@@ -474,12 +474,6 @@ export interface ACC010Config {
   window_type: WindowType;
 }
 
-export interface ACC011Config {
-  max_actions: number;
-  window_seconds: number;
-  action_types: string[];
-}
-
 export interface CRT002Config {
   max_minutes_prime: number;
 }

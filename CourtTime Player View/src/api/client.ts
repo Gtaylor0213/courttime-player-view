@@ -175,6 +175,7 @@ export const facilitiesApi = {
 
     // Facility Rules
     generalRules: string;
+    bookingRules?: Record<string, any>;
     termsAndConditions?: string;
     termsAttachments?: TermsAttachment[];
     requiredReviewSeconds?: number;

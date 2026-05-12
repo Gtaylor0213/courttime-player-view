@@ -1,5 +1,5 @@
 /**
- * Account Rule Evaluators (ACC-001 to ACC-011)
+ * Account Rule Evaluators (ACC-001 to ACC-010)
  */
 
 import { query } from '../../../database/connection';
@@ -13,8 +13,7 @@ import {
   ACC004Config,
   ACC005Config,
   ACC009Config,
-  ACC010Config,
-  ACC011Config
+  ACC010Config
 } from '../types';
 import {
   getTimeWindow,
@@ -387,50 +386,6 @@ const ACC010: RuleEvaluator = {
   }
 };
 
-/**
- * ACC-011: Rate Limit Reservation Actions
- */
-const ACC011: RuleEvaluator = {
-  ruleCode: 'ACC-011',
-  ruleName: 'Rate Limit Reservation Actions',
-  category: 'account',
-
-  async evaluate(context: RuleContext, config: ACC011Config): Promise<RuleResult> {
-    const maxActions = config.max_actions || 10;
-    const windowSeconds = config.window_seconds || 60;
-
-    // Query rate limit table
-    const result = await query(
-      `SELECT COUNT(*) as count
-       FROM booking_rate_limits
-       WHERE user_id = $1
-         AND facility_id = $2
-         AND action_type = 'create'
-         AND action_timestamp > NOW() - make_interval(secs => $3)`,
-      [context.user.id, context.facility.id, windowSeconds]
-    );
-
-    const recentActions = parseInt(result.rows[0]?.count || '0', 10);
-
-    if (recentActions >= maxActions) {
-      return {
-        ruleCode: 'ACC-011',
-        ruleName: 'Rate Limit Reservation Actions',
-        passed: false,
-        severity: 'error',
-        message: `Too many booking actions. Please wait ${windowSeconds} seconds before trying again.`,
-        details: {
-          recentActions,
-          maxActions,
-          retryAfterSeconds: windowSeconds
-        }
-      };
-    }
-
-    return { ruleCode: 'ACC-011', ruleName: 'Rate Limit Reservation Actions', passed: true, severity: 'error' };
-  }
-};
-
 // Export all account evaluators
 export const accountEvaluators: RuleEvaluator[] = [
   ACC001,
@@ -439,6 +394,5 @@ export const accountEvaluators: RuleEvaluator[] = [
   ACC004,
   ACC005,
   ACC009,
-  ACC010,
-  ACC011
+  ACC010
 ];

@@ -167,6 +167,7 @@ router.post('/register', async (req, res, next) => {
 
       // Facility Rules
       generalRules,
+      bookingRules,
       termsAndConditions,
       termsAttachments,
       requiredReviewSeconds,
@@ -191,6 +192,9 @@ router.post('/register', async (req, res, next) => {
 
       // Address Whitelist
       hoaAddresses,
+
+      // Rules engine configs
+      ruleConfigs,
 
       // Existing user ID (if already logged in)
       existingUserId,
@@ -284,6 +288,7 @@ router.post('/register', async (req, res, next) => {
       ) || [],
       operatingHours: operatingHours || {},
       generalRules: generalRules || '',
+      bookingRules: bookingRules ? JSON.stringify(bookingRules) : undefined,
       termsAndConditions: termsAndConditions?.trim() || undefined,
       termsAttachments: termsAndConditions?.trim() ? termsAttachments || [] : [],
       requiredReviewSeconds: termsAndConditions?.trim() ? normalizedRequiredReviewSeconds : 0,
@@ -316,6 +321,7 @@ router.post('/register', async (req, res, next) => {
         canSplit: court.canSplit || false,
         splitConfig: court.splitConfig
       })),
+      ruleConfigs: Array.isArray(ruleConfigs) ? ruleConfigs : undefined,
       adminInvites: adminInvites?.map((invite: any) => invite.email || invite).filter(Boolean),
       hoaAddresses: hoaAddresses || undefined,
 

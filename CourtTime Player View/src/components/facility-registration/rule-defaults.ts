@@ -165,17 +165,6 @@ export const RULE_METADATA: RuleMeta[] = [
       { key: 'lockout_days', label: 'Lockout Duration', type: 'number', min: 1, max: 365, suffix: 'days' },
     ],
   },
-  {
-    code: 'ACC-011',
-    name: 'Rate Limit Actions',
-    description: 'Prevents rapid-fire booking/cancellation actions to reduce abuse.',
-    category: 'cancellation',
-    fields: [
-      { key: 'max_actions', label: 'Max Actions', type: 'number', min: 1, max: 100 },
-      { key: 'window_seconds', label: 'Time Window', type: 'number', min: 10, max: 600, suffix: 'seconds' },
-    ],
-  },
-
   // Court Scheduling Rules
   {
     code: 'CRT-002',
@@ -272,25 +261,41 @@ export const RULE_METADATA: RuleMeta[] = [
 
 // Default rule configurations
 export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
-  'ACC-001': { enabled: true, config: { max_active_reservations: 5, count_states: ['confirmed', 'pending'] } },
-  'ACC-002': { enabled: true, config: { max_per_week: 10, window_type: 'calendar_week', include_canceled: false } },
-  'ACC-003': { enabled: false, config: { max_minutes_per_week: 600, window_type: 'calendar_week' } },
-  'ACC-004': { enabled: true, config: { allow_overlap: false, overlap_grace_minutes: 0 } },
-  'ACC-005': { enabled: true, config: { max_days_ahead: 14 } },
-  'ACC-006': { enabled: false, config: { min_minutes_before_start: 0 } },
-  'ACC-009': { enabled: true, config: { strike_threshold: 3, strike_window_days: 30, lockout_days: 7 } },
-  'ACC-010': { enabled: false, config: { max_prime_per_week: 3, window_type: 'calendar_week' } },
-  'ACC-011': { enabled: true, config: { max_actions: 10, window_seconds: 60, action_types: ['create', 'cancel'] } },
-  'CRT-002': { enabled: true, config: { max_minutes_prime: 60 } },
+  'ACC-001': { enabled: false, config: { max_active_reservations: '', count_states: ['confirmed', 'pending'] } },
+  'ACC-002': {
+    enabled: false,
+    config: {
+      max_per_week: '',
+      window_type: 'calendar_week',
+      include_canceled: false,
+      max_per_day_enabled: false,
+      max_per_day: '',
+    },
+  },
+  'ACC-003': { enabled: false, config: { max_minutes_per_week: '', window_type: 'calendar_week' } },
+  'ACC-004': { enabled: false, config: { allow_overlap: false, overlap_grace_minutes: 0 } },
+  'ACC-005': { enabled: false, config: { max_days_ahead: '' } },
+  'ACC-006': { enabled: false, config: { min_minutes_before_start: '' } },
+  'ACC-009': { enabled: false, config: { strike_threshold: '', strike_window_days: '', lockout_days: '' } },
+  'ACC-010': { enabled: false, config: { max_prime_per_week: '', window_type: 'calendar_week' } },
+  'CRT-002': { enabled: false, config: { max_minutes_prime: '' } },
   'CRT-003': { enabled: false, config: { allowed_tiers: [], allow_admin_override: true } },
-  'CRT-005': { enabled: true, config: { max_duration_minutes: 120 } },
-  'CRT-007': { enabled: false, config: { buffer_minutes: 15 } },
+  'CRT-005': { enabled: false, config: { max_duration_minutes: '' } },
+  'CRT-007': { enabled: false, config: { buffer_minutes: '' } },
   'CRT-008': { enabled: false, config: { allowed_types: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'] } },
-  'CRT-010': { enabled: false, config: { max_per_week_per_account: 3, window_type: 'calendar_week' } },
-  'CRT-011': { enabled: false, config: { release_time_local: '07:00', days_ahead: 3 } },
-  'HH-001': { enabled: false, config: { max_members: 6, verification_method: 'admin_approval' } },
-  'HH-002': { enabled: false, config: { max_active_household: 4 } },
-  'HH-003': { enabled: false, config: { max_prime_per_week_household: 3, window_type: 'calendar_week' } },
+  'CRT-010': { enabled: false, config: { max_per_week_per_account: '', window_type: 'calendar_week' } },
+  'CRT-011': { enabled: false, config: { release_time_local: '', days_ahead: '' } },
+  'HH-001': { enabled: false, config: { max_members: '', verification_method: 'admin_approval' } },
+  'HH-002': { enabled: false, config: { max_active_household: '' } },
+  'HH-003': {
+    enabled: false,
+    config: {
+      max_per_week_household: '',
+      max_per_day_household_enabled: false,
+      max_per_day_household: '',
+      window_type: 'calendar_week',
+    },
+  },
 };
 
 export const DEFAULT_RULES_CONFIG: RulesConfig = {
@@ -339,7 +344,7 @@ export function getRulesByCategory(category: RuleMeta['category']): RuleMeta[] {
 export const CATEGORIES = {
   account: {
     title: 'Account Booking Rules',
-    instruction: 'Control how members book courts. Enabled rules are enforced automatically \u2014 disabled rules are ignored. All values are pre-set with recommended defaults.',
+    instruction: 'Control how members book courts. Leave a rule off to disable it, or turn it on and enter the exact value you want enforced.',
   },
   cancellation: {
     title: 'No-Show Rules',

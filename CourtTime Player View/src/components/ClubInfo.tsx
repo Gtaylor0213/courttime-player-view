@@ -390,14 +390,6 @@ export function ClubInfo() {
                 <CardTitle>Contact Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Secondary locations (members only) */}
-                {isMember && secondaryLocations.length > 0 && (
-                  <div className="space-y-3 pb-3 border-b border-gray-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {safeDisplayText(facility.primaryLocationLabel) || 'Main Location'}
-                    </p>
-                  </div>
-                )}
                 {(safeDisplayText(facility.streetAddress) || safeDisplayText(facility.city)) && (
                   <div className="flex items-start">
                     <MapPin className="h-4 w-4 text-gray-400 mr-3 mt-1" />

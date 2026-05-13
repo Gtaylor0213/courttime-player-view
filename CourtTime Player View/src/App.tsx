@@ -37,6 +37,11 @@ import { AdminCommunication } from './components/admin/AdminCommunication';
 // Support Console
 import { SupportConsole } from './components/developer';
 
+// Legal pages (public, no auth)
+import { PrivacyPolicyPage } from './components/legal/PrivacyPolicyPage';
+import { TermsOfServicePage } from './components/legal/TermsOfServicePage';
+import { AccountDeletionPage } from './components/legal/AccountDeletionPage';
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -51,6 +56,11 @@ export default function App() {
             <Route path="/register/facility" element={<FacilityRegistration />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+
+            {/* Legal pages — required public URLs for App Store / Play Store submission */}
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms" element={<TermsOfServicePage />} />
+            <Route path="/delete-account" element={<AccountDeletionPage />} />
 
             {/* Support Console route - bypasses auth */}
             <Route path="/developer/*" element={<SupportConsole />} />

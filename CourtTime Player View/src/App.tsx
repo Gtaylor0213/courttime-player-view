@@ -41,6 +41,7 @@ import { SupportConsole } from './components/developer';
 import { PrivacyPolicyPage } from './components/legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from './components/legal/TermsOfServicePage';
 import { AccountDeletionPage } from './components/legal/AccountDeletionPage';
+import { SupportPage } from './components/legal/SupportPage';
 
 export default function App() {
   return (
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
             <Route path="/terms" element={<TermsOfServicePage />} />
             <Route path="/delete-account" element={<AccountDeletionPage />} />
+            <Route path="/support" element={<SupportPage />} />
 
             {/* Support Console route - bypasses auth */}
             <Route path="/developer/*" element={<SupportConsole />} />

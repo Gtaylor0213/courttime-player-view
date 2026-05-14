@@ -27,15 +27,10 @@ const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 38;
 
-/** Touch: movement from origin past this (px) before hold window ends → scroll (quick pan). */
-const CALENDAR_TOUCH_FAST_SCROLL_PX = 14;
-/** Touch: only classify that early movement as scroll if the gesture is younger than this (ms). */
-const CALENDAR_TOUCH_FAST_SCROLL_MS = 170;
-/** Touch: finger must stay this still (max distance from origin, px) through the hold window to arm drag-select. */
-const CALENDAR_TOUCH_STILL_PEAK_PX = 16;
-/** Touch: hold at least this long (ms) before drag-select can arm (still peak must stay under STILL_PEAK). */
-const CALENDAR_TOUCH_HOLD_MS = 200;
-
+/** Touch: cancel drag-arm timer if finger moves farther than this (Chebyshev px from touchstart) before the arm delay. */
+const CALENDAR_TOUCH_CANCEL_ARM_CHEB_PX = 8;
+/** Touch: after this long with finger still enough, drag-to-select arms (matches native app feel). */
+const CALENDAR_TOUCH_ARM_DELAY_MS = 180;
 /** Normalize client coordinates for mouse, pointer, or touch events. */
 function getEventCoords(e: { clientX?: number; clientY?: number; touches?: TouchList; changedTouches?: TouchList }): {
   clientX: number;
@@ -171,8 +166,8 @@ export function CourtCalendarView() {
     startY: number;
     startTime: number;
     phase: CalendarFingerPhase;
-    /** Max distance from (startX,startY) seen while phase === 'undecided' (updated after scroll-fast check). */
-    peakUndecidedDist: number;
+    /** Fires after ARM_DELAY if finger stayed within CANCEL_ARM_CHEB_PX (native-style arm). */
+    intentTimer: ReturnType<typeof setTimeout> | null;
     captureTarget: HTMLElement;
     /** Pointer Events touch only — capture once we enter selecting. */
     pointerCaptureOnSelect: boolean;
@@ -1128,6 +1123,13 @@ export function CourtCalendarView() {
       const isFingerTouch = transport === 'touch-native' || pointerType === 'touch';
       const deferFingerPhase = isFingerTouch && !!captureTarget;
 
+      const clearIntentTimer = (g: NonNullable<typeof calendarTouchGestureRef.current>) => {
+        if (g.intentTimer != null) {
+          clearTimeout(g.intentTimer);
+          g.intentTimer = null;
+        }
+      };
+
       if (transport === 'pointer' && pointerType === 'mouse') {
         calendarTouchGestureRef.current = null;
         if (captureTarget?.setPointerCapture) {
@@ -1143,8 +1145,8 @@ export function CourtCalendarView() {
           startX: startClientX,
           startY: startClientY,
           startTime: Date.now(),
-          phase: 'undecided',
-          peakUndecidedDist: 0,
+          phase: 'undecided' as CalendarFingerPhase,
+          intentTimer: null as ReturnType<typeof setTimeout> | null,
           captureTarget,
           pointerCaptureOnSelect: transport === 'pointer' && pointerType === 'touch',
         };
@@ -1220,39 +1222,35 @@ export function CourtCalendarView() {
           return;
         }
 
-        // undecided
-        const elapsed = Date.now() - g.startTime;
-        const deltaX = Math.abs(clientX - g.startX);
-        const deltaY = Math.abs(clientY - g.startY);
-        const totalMovement = Math.hypot(deltaX, deltaY);
+        // undecided — mirror native grid: cancel arm timer if finger moves past threshold (then scroll).
+        const cheb = Math.max(Math.abs(clientX - g.startX), Math.abs(clientY - g.startY));
 
-        if (totalMovement > CALENDAR_TOUCH_FAST_SCROLL_PX && elapsed < CALENDAR_TOUCH_FAST_SCROLL_MS) {
-          g.phase = 'scrolling';
-          return;
-        }
-
-        const peakBefore = g.peakUndecidedDist;
-        g.peakUndecidedDist = Math.max(g.peakUndecidedDist, totalMovement);
-
-        if (elapsed >= CALENDAR_TOUCH_HOLD_MS) {
-          if (peakBefore <= CALENDAR_TOUCH_STILL_PEAK_PX) {
-            g.phase = 'selecting';
-            if (g.pointerCaptureOnSelect) {
-              try {
-                g.captureTarget.setPointerCapture(g.pointerId);
-              } catch {
-                // ignore
-              }
-            }
-            beginDragFromPoint(g.startX, g.startY);
-            updateSlotsFromPoint(clientX, clientY);
-            ev.preventDefault();
-            return;
-          }
+        if (cheb > CALENDAR_TOUCH_CANCEL_ARM_CHEB_PX) {
+          clearIntentTimer(g);
           g.phase = 'scrolling';
           return;
         }
       };
+
+      if (deferFingerPhase) {
+        const gesture = calendarTouchGestureRef.current;
+        if (gesture) {
+          gesture.intentTimer = setTimeout(() => {
+            const cur = calendarTouchGestureRef.current;
+            if (!cur || cur !== gesture || cur.phase !== 'undecided') return;
+            cur.phase = 'selecting';
+            cur.intentTimer = null;
+            if (cur.pointerCaptureOnSelect) {
+              try {
+                cur.captureTarget.setPointerCapture(cur.pointerId);
+              } catch {
+                // ignore
+              }
+            }
+            beginDragFromPoint(cur.startX, cur.startY);
+          }, CALENDAR_TOUCH_ARM_DELAY_MS);
+        }
+      }
 
       if (transport === 'pointer') {
         const onMove = (ev: PointerEvent) => {
@@ -1272,6 +1270,7 @@ export function CourtCalendarView() {
             return;
           }
           const gs = calendarTouchGestureRef.current;
+          if (gs) clearIntentTimer(gs);
           const phase = gs?.phase;
           calendarTouchGestureRef.current = null;
           if (phase === 'selecting') {
@@ -1294,6 +1293,8 @@ export function CourtCalendarView() {
         window.addEventListener('pointerup', onUp, true);
         window.addEventListener('pointercancel', onUp, true);
         pointerDragCleanupRef.current = () => {
+          const g = calendarTouchGestureRef.current;
+          if (g) clearIntentTimer(g);
           window.removeEventListener('pointermove', onMove, true);
           window.removeEventListener('pointerup', onUp, true);
           window.removeEventListener('pointercancel', onUp, true);
@@ -1316,6 +1317,7 @@ export function CourtCalendarView() {
         window.removeEventListener('touchcancel', onTouchEnd, true);
         pointerDragCleanupRef.current = null;
         const gs = calendarTouchGestureRef.current;
+        if (gs) clearIntentTimer(gs);
         const phase = gs?.phase;
         calendarTouchGestureRef.current = null;
 
@@ -1342,6 +1344,8 @@ export function CourtCalendarView() {
       window.addEventListener('touchend', onTouchEnd, true);
       window.addEventListener('touchcancel', onTouchEnd, true);
       pointerDragCleanupRef.current = () => {
+        const g = calendarTouchGestureRef.current;
+        if (g) clearIntentTimer(g);
         window.removeEventListener('touchmove', onTouchMove, true);
         window.removeEventListener('touchend', onTouchEnd, true);
         window.removeEventListener('touchcancel', onTouchEnd, true);

@@ -15,7 +15,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, usersApi, bookingApi, courtConfigApi } from '../api/client';
 import { parseLocalDate } from '../utils/dateUtils';
 import { toast } from 'sonner';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
@@ -119,7 +119,7 @@ export function CourtCalendarView() {
   const navigate = useNavigate();
   const { selectedFacilityId = 'sunrise-valley' } = useAppContext();
   const { unreadCount } = useNotifications();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const selectedFacility = selectedFacilityId;
   const [selectedView, setSelectedView] = useState('week');
@@ -229,11 +229,16 @@ export function CourtCalendarView() {
   // Fetch only facilities the user is a member of
   useEffect(() => {
     const fetchFacilities = async () => {
+      if (authLoading) {
+        return;
+      }
+
       const allFacilityIds = Array.from(new Set([
         ...(user?.memberFacilities || []),
       ]));
 
       if (allFacilityIds.length === 0) {
+        setMemberFacilities([]);
         setLoadingFacilities(false);
         return;
       }
@@ -307,7 +312,7 @@ export function CourtCalendarView() {
     };
 
     fetchFacilities();
-  }, [user?.memberFacilities]);
+  }, [user?.memberFacilities, authLoading]);
 
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async () => {
@@ -1516,8 +1521,15 @@ export function CourtCalendarView() {
       {/* Main Content */}
       <div className="h-screen flex flex-col overflow-hidden">
         {/* Controls - Sticky Header */}
-        {memberFacilities.length === 0 ? (
-          // Show "no membership" message when user has no facilities
+        {authLoading || loadingFacilities ? (
+          <div className="flex flex-1 items-center justify-center px-3 md:px-6 py-12">
+            <div className="flex flex-col items-center gap-3 text-gray-600">
+              <Loader2 className="h-10 w-10 animate-spin text-green-600" aria-hidden />
+              <p className="text-sm font-medium">Loading calendar…</p>
+            </div>
+          </div>
+        ) : memberFacilities.length === 0 ? (
+          // Show "no membership" message when user has no facilities (auth resolved and fetch complete)
           <div className="px-3 md:px-6 py-6">
           <Card>
             <CardContent className="p-4 md:p-8">

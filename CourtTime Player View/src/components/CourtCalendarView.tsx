@@ -32,6 +32,23 @@ const CALENDAR_TOUCH_ARM_PX = 5;
 /** Touch: if vertical movement exceeds this (px) and beats horizontal, treat as calendar scroll — not booking. */
 const CALENDAR_TOUCH_SCROLL_VERTICAL_PX = 10;
 
+/** Normalize client coordinates for mouse, pointer, or touch events. */
+function getEventCoords(e: { clientX?: number; clientY?: number; touches?: TouchList; changedTouches?: TouchList }): {
+  clientX: number;
+  clientY: number;
+} | null {
+  if (e.touches && e.touches.length > 0) {
+    return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  }
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
+  }
+  if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+    return { clientX: e.clientX, clientY: e.clientY };
+  }
+  return null;
+}
+
 type CourtDayOperatingBounds = { isOpen: boolean; openMin: number; closeMin: number };
 
 function parseApiTimeToMinutes(value: unknown): number | null {
@@ -149,7 +166,14 @@ export function CourtCalendarView() {
     captureTarget: HTMLElement;
     armed: boolean;
     aborted: boolean;
+    /** When true, apply touch scroll-vs-drag heuristics before arming. */
+    deferScrollVsDrag: boolean;
+    /** Pointer Events touch only — avoid setPointerCapture(0) for touch-native drags. */
+    pointerCaptureOnArm: boolean;
   } | null>(null);
+  /** Native touchstart already began slot tracking; skip duplicate pointerdown (touch). */
+  const suppressPointerDownForTouchRef = useRef(false);
+  const handlePointerDragEndRef = useRef<() => void>(() => {});
 
   // Quick reserve popup state
   const [showQuickReserve, setShowQuickReserve] = useState(false);
@@ -1070,7 +1094,204 @@ export function CourtCalendarView() {
     setDragState(cleared);
   };
 
+  handlePointerDragEndRef.current = handlePointerDragEnd;
+
+  type SlotDragTransport = 'pointer' | 'touch-native';
+
+  const startSlotDragTracking = useCallback(
+    (
+      courtName: string,
+      time: string,
+      startClientX: number,
+      startClientY: number,
+      transport: SlotDragTransport,
+      opts: {
+        pointerId?: number;
+        pointerType?: string;
+        captureTarget: HTMLElement | null;
+        activeTouchId?: number;
+      }
+    ) => {
+      const { pointerId = 0, pointerType = 'mouse', captureTarget, activeTouchId } = opts;
+      const isFingerTouch = transport === 'touch-native' || pointerType === 'touch';
+      const deferScrollVsDrag = isFingerTouch;
+
+      if (transport === 'pointer' && pointerType === 'mouse') {
+        calendarTouchGestureRef.current = null;
+        if (captureTarget?.setPointerCapture) {
+          try {
+            captureTarget.setPointerCapture(pointerId);
+          } catch {
+            // Invalid state / duplicate capture — window listeners still handle drag end.
+          }
+        }
+      } else if (isFingerTouch && captureTarget) {
+        calendarTouchGestureRef.current = {
+          pointerId,
+          startX: startClientX,
+          startY: startClientY,
+          captureTarget,
+          armed: false,
+          aborted: false,
+          deferScrollVsDrag,
+          pointerCaptureOnArm: transport === 'pointer' && pointerType === 'touch',
+        };
+      } else {
+        calendarTouchGestureRef.current = null;
+        if (captureTarget?.setPointerCapture && transport === 'pointer') {
+          try {
+            captureTarget.setPointerCapture(pointerId);
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      pointerDragCleanupRef.current?.();
+      pointerDragCleanupRef.current = null;
+
+      const next = {
+        isDragging: true,
+        startCell: { court: courtName, time },
+        endCell: { court: courtName, time },
+        selectedCells: new Set([`${courtName}|${time}`]),
+      };
+      dragStateRef.current = next;
+      setDragState(next);
+
+      const processMove = (clientX: number, clientY: number, doPreventDefault: () => void) => {
+        const touchG = calendarTouchGestureRef.current;
+        if (touchG?.deferScrollVsDrag && !touchG.aborted) {
+          const dx = clientX - touchG.startX;
+          const dy = clientY - touchG.startY;
+          if (!touchG.armed) {
+            if (
+              Math.abs(dy) > CALENDAR_TOUCH_SCROLL_VERTICAL_PX &&
+              Math.abs(dy) > Math.abs(dx)
+            ) {
+              touchG.aborted = true;
+              pointerDragCleanupRef.current?.();
+              pointerDragCleanupRef.current = null;
+              suppressPointerDownForTouchRef.current = false;
+              const cleared = {
+                isDragging: false,
+                startCell: null as { court: string; time: string } | null,
+                endCell: null as { court: string; time: string } | null,
+                selectedCells: new Set<string>(),
+              };
+              dragStateRef.current = cleared;
+              setDragState(cleared);
+              return;
+            }
+            const armDist2 = CALENDAR_TOUCH_ARM_PX * CALENDAR_TOUCH_ARM_PX;
+            if (dx * dx + dy * dy < armDist2) {
+              return;
+            }
+            touchG.armed = true;
+            if (touchG.pointerCaptureOnArm) {
+              try {
+                touchG.captureTarget.setPointerCapture(touchG.pointerId);
+              } catch {
+                // ignore
+              }
+            }
+          }
+        }
+
+        const el = document.elementFromPoint(clientX, clientY);
+        const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
+        if (!slot) return;
+        const c = slot.getAttribute('data-slot-court');
+        const t = slot.getAttribute('data-slot-time');
+        if (!c || !t) return;
+        extendDragSelection(c, t);
+        doPreventDefault();
+      };
+
+      if (transport === 'pointer') {
+        const onMove = (ev: PointerEvent) => {
+          if (ev.pointerId !== pointerId) return;
+          const coords = getEventCoords(ev);
+          if (!coords) return;
+          processMove(coords.clientX, coords.clientY, () => ev.preventDefault());
+        };
+        const onUp = (ev: PointerEvent) => {
+          if (ev.pointerId !== pointerId) return;
+          window.removeEventListener('pointermove', onMove, true);
+          window.removeEventListener('pointerup', onUp, true);
+          window.removeEventListener('pointercancel', onUp, true);
+          pointerDragCleanupRef.current = null;
+          const gs = calendarTouchGestureRef.current;
+          const touchAborted = gs?.aborted === true;
+          calendarTouchGestureRef.current = null;
+          if (touchAborted) {
+            return;
+          }
+          handlePointerDragEndRef.current();
+        };
+        window.addEventListener('pointermove', onMove, { capture: true, passive: false });
+        window.addEventListener('pointerup', onUp, true);
+        window.addEventListener('pointercancel', onUp, true);
+        pointerDragCleanupRef.current = () => {
+          window.removeEventListener('pointermove', onMove, true);
+          window.removeEventListener('pointerup', onUp, true);
+          window.removeEventListener('pointercancel', onUp, true);
+        };
+        return;
+      }
+
+      const touchId = activeTouchId as number;
+      const onTouchMove = (ev: TouchEvent) => {
+        ev.preventDefault();
+        const touch = Array.from(ev.touches).find((finger) => finger.identifier === touchId);
+        if (!touch) return;
+        processMove(touch.clientX, touch.clientY, () => ev.preventDefault());
+      };
+      const onTouchEnd = (ev: TouchEvent) => {
+        const endedHere = Array.from(ev.changedTouches).some((finger) => finger.identifier === touchId);
+        if (!endedHere) return;
+        window.removeEventListener('touchmove', onTouchMove, true);
+        window.removeEventListener('touchend', onTouchEnd, true);
+        window.removeEventListener('touchcancel', onTouchEnd, true);
+        pointerDragCleanupRef.current = null;
+        const coords = getEventCoords(ev);
+        if (coords && !calendarTouchGestureRef.current?.aborted) {
+          const el = document.elementFromPoint(coords.clientX, coords.clientY);
+          const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
+          if (slot) {
+            const c = slot.getAttribute('data-slot-court');
+            const t = slot.getAttribute('data-slot-time');
+            if (c && t) extendDragSelection(c, t);
+          }
+        }
+        const gs = calendarTouchGestureRef.current;
+        const touchAborted = gs?.aborted === true;
+        calendarTouchGestureRef.current = null;
+        if (touchAborted) {
+          suppressPointerDownForTouchRef.current = false;
+          return;
+        }
+        handlePointerDragEndRef.current();
+        suppressPointerDownForTouchRef.current = false;
+      };
+      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+      window.addEventListener('touchend', onTouchEnd, true);
+      window.addEventListener('touchcancel', onTouchEnd, true);
+      pointerDragCleanupRef.current = () => {
+        window.removeEventListener('touchmove', onTouchMove, true);
+        window.removeEventListener('touchend', onTouchEnd, true);
+        window.removeEventListener('touchcancel', onTouchEnd, true);
+      };
+    },
+    [extendDragSelection, setDragState]
+  );
+
   const handlePointerDown = (courtName: string, time: string, event: React.PointerEvent) => {
+    if (event.pointerType === 'touch' && suppressPointerDownForTouchRef.current) {
+      suppressPointerDownForTouchRef.current = false;
+      return;
+    }
+
     const booking = bookings[courtName as keyof typeof bookings]?.[time];
     if (booking) return;
 
@@ -1082,111 +1303,52 @@ export function CourtCalendarView() {
     }
 
     const captureTarget = event.currentTarget as HTMLElement | null;
-    const isFingerTouch = event.pointerType === 'touch';
-
-    if (isFingerTouch && captureTarget) {
-      calendarTouchGestureRef.current = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        captureTarget,
-        armed: false,
-        aborted: false,
-      };
-    } else {
-      calendarTouchGestureRef.current = null;
-      if (captureTarget?.setPointerCapture) {
-        try {
-          captureTarget.setPointerCapture(event.pointerId);
-        } catch {
-          // Invalid state / duplicate capture — window listeners still handle drag end.
-        }
-      }
-    }
-
-    pointerDragCleanupRef.current?.();
-    pointerDragCleanupRef.current = null;
-
-    const next = {
-      isDragging: true,
-      startCell: { court: courtName, time },
-      endCell: { court: courtName, time },
-      selectedCells: new Set([`${courtName}|${time}`])
-    };
-    dragStateRef.current = next;
-    setDragState(next);
-
-    const pointerId = event.pointerId;
-    const onMove = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return;
-
-      const touchG = calendarTouchGestureRef.current;
-      if (touchG && ev.pointerType === 'touch' && !touchG.aborted) {
-        const dx = ev.clientX - touchG.startX;
-        const dy = ev.clientY - touchG.startY;
-        if (!touchG.armed) {
-          if (
-            Math.abs(dy) > CALENDAR_TOUCH_SCROLL_VERTICAL_PX &&
-            Math.abs(dy) > Math.abs(dx)
-          ) {
-            touchG.aborted = true;
-            pointerDragCleanupRef.current?.();
-            pointerDragCleanupRef.current = null;
-            const cleared = {
-              isDragging: false,
-              startCell: null as { court: string; time: string } | null,
-              endCell: null as { court: string; time: string } | null,
-              selectedCells: new Set<string>(),
-            };
-            dragStateRef.current = cleared;
-            setDragState(cleared);
-            return;
-          }
-          const armDist2 = CALENDAR_TOUCH_ARM_PX * CALENDAR_TOUCH_ARM_PX;
-          if (dx * dx + dy * dy < armDist2) {
-            return;
-          }
-          touchG.armed = true;
-          try {
-            touchG.captureTarget.setPointerCapture(ev.pointerId);
-          } catch {
-            // ignore
-          }
-        }
-      }
-
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
-      if (!slot) return;
-      const c = slot.getAttribute('data-slot-court');
-      const t = slot.getAttribute('data-slot-time');
-      if (!c || !t) return;
-      extendDragSelection(c, t);
-      ev.preventDefault();
-    };
-    const onUp = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return;
-      window.removeEventListener('pointermove', onMove, true);
-      window.removeEventListener('pointerup', onUp, true);
-      window.removeEventListener('pointercancel', onUp, true);
-      pointerDragCleanupRef.current = null;
-      const gs = calendarTouchGestureRef.current;
-      const touchAborted = gs?.aborted === true;
-      calendarTouchGestureRef.current = null;
-      if (touchAborted) {
-        return;
-      }
-      handlePointerDragEnd();
-    };
-    window.addEventListener('pointermove', onMove, { capture: true, passive: false });
-    window.addEventListener('pointerup', onUp, true);
-    window.addEventListener('pointercancel', onUp, true);
-    pointerDragCleanupRef.current = () => {
-      window.removeEventListener('pointermove', onMove, true);
-      window.removeEventListener('pointerup', onUp, true);
-      window.removeEventListener('pointercancel', onUp, true);
-    };
+    startSlotDragTracking(courtName, time, event.clientX, event.clientY, 'pointer', {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      captureTarget,
+    });
   };
+
+  useEffect(() => {
+    const root = calendarScrollRef.current;
+    if (!root || courts.length === 0) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const slot = (e.target as HTMLElement | null)?.closest?.('[data-slot-court][data-slot-time]');
+      if (!slot || !root.contains(slot)) return;
+
+      const courtName = slot.getAttribute('data-slot-court');
+      const time = slot.getAttribute('data-slot-time');
+      if (!courtName || !time) return;
+
+      const booking = bookings[courtName as keyof typeof bookings]?.[time];
+      if (booking) return;
+
+      const courtObj = courts.find((c) => c.name === courtName);
+      if (courtObj?.isWalkUp) return;
+      if (courtObj?.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) return;
+      if (isPastTime(time)) return;
+      const slotBooking = bookings[courtName as keyof typeof bookings]?.[time];
+      const blocked = slotBooking?.type === 'blocked';
+      if (blocked) return;
+
+      const coords = getEventCoords(e);
+      if (!coords) return;
+
+      e.preventDefault();
+      suppressPointerDownForTouchRef.current = true;
+      const touchId = e.touches[0].identifier;
+      startSlotDragTracking(courtName, time, coords.clientX, coords.clientY, 'touch-native', {
+        captureTarget: slot as HTMLElement,
+        activeTouchId: touchId,
+      });
+    };
+
+    root.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+    return () => root.removeEventListener('touchstart', onTouchStart, true);
+  }, [bookings, courts, isCourtSlotOutsideOperatingHours, isPastTime, startSlotDragTracking]);
 
   useEffect(() => () => pointerDragCleanupRef.current?.(), []);
 

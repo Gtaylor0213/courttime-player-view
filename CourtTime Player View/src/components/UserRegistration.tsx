@@ -494,7 +494,7 @@ export function UserRegistration() {
             <div>
               <h3 className="flex items-center gap-2 mb-4">
                 <Building className="h-5 w-5" />
-                Request Facility Membership (Optional)
+                Request Facility Membership
               </h3>
               <p className="text-sm text-gray-600 mb-6">
                 Search for facilities in your area and request membership to start booking courts.
@@ -705,7 +705,8 @@ export function UserRegistration() {
                 </CardTitle>
                 <CardDescription>
                   {currentStep === 1 && 'Enter your personal information and address to create your account'}
-                  {currentStep === 2 && 'Optional facility membership requests'}
+                  {currentStep === 2 &&
+                    'Search for facilities in your area and request membership to start booking courts.'}
                 </CardDescription>
               </CardHeader>
               <CardContent>

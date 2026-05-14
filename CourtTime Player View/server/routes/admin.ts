@@ -17,6 +17,8 @@ import {
   getTermsVersionHistory,
   publishTermsVersion
 } from '../../src/services/termsService';
+import { replaceAllCourtOperatingConfigsForFacility } from '../../src/services/courtOperatingConfigSync';
+import { facilityOperatingHoursScheduleFingerprint } from '../../shared/utils/operatingHours';
 
 const router = express.Router();
 
@@ -346,6 +348,17 @@ router.patch('/facilities/:facilityId', async (req, res) => {
       bookingRules
     } = req.body;
 
+    let priorOperatingHoursFingerprint: string | undefined;
+    if (operatingHours !== undefined) {
+      const priorHoursRow = await query(
+        `SELECT operating_hours FROM facilities WHERE id = $1`,
+        [facilityId]
+      );
+      priorOperatingHoursFingerprint = facilityOperatingHoursScheduleFingerprint(
+        priorHoursRow.rows[0]?.operating_hours
+      );
+    }
+
     const normalizedBookingRules = normalizeBookingRulesPayload(bookingRules);
     // Extract generalRules from bookingRules if provided
     const generalRules = normalizedBookingRules?.generalRules ?? null;
@@ -654,6 +667,23 @@ router.patch('/facilities/:facilityId', async (req, res) => {
         await query(`DELETE FROM facility_rules WHERE facility_id = $1 AND rule_type IN ('peak_hours', 'weekend_policy')`, [facilityId]);
       } catch (rulesErr) {
         console.error('Error saving facility rules:', rulesErr);
+      }
+    }
+
+    if (operatingHours !== undefined) {
+      const nextFp = facilityOperatingHoursScheduleFingerprint(operatingHours);
+      if (priorOperatingHoursFingerprint !== nextFp) {
+        try {
+          await replaceAllCourtOperatingConfigsForFacility(facilityId, operatingHours);
+        } catch (syncErr: any) {
+          console.error('Court schedule sync from facility operating hours failed:', syncErr);
+          return res.status(500).json({
+            success: false,
+            error:
+              syncErr?.message ||
+              'Failed to update court schedules from facility hours. Try again, or set hours per court under Court Management.',
+          });
+        }
       }
     }
 

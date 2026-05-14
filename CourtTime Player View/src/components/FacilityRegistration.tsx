@@ -2811,7 +2811,10 @@ export function FacilityRegistration() {
       <Separator className="my-6" />
 
       <div>
-        <h4 className="font-semibold mb-4">Operating Hours</h4>
+        <h4 className="font-semibold mb-4">Court hours (default for all courts)</h4>
+        <p className="text-sm text-gray-600 mb-3">
+          Sets the weekly open and close times stored in Court Management for every court. You can customize individual courts later under Facility Management → Court Management.
+        </p>
         <div className="space-y-3">
           {Object.keys(formData.operatingHours).map((day) => {
             const hours = formData.operatingHours[day as keyof typeof formData.operatingHours];

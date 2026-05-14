@@ -5,6 +5,7 @@ import { Facility, Court } from '../types/database';
 import type { PoolClient } from 'pg';
 import { recordPayment } from './paymentService';
 import type { TermsAttachment } from './termsService';
+import { replaceAllCourtOperatingConfigsForFacilityWithClient } from './courtOperatingConfigSync';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const ALLOWED_BOOKING_RULE_CODES = new Set([
@@ -1230,6 +1231,9 @@ export async function registerFacility(
         }
       }
     }
+
+    // 7b. Seed court_operating_config from facility operating hours (same data Court Management edits)
+    await replaceAllCourtOperatingConfigsForFacilityWithClient(client, facilityId, data.operatingHours);
 
     // 8. Store facility contacts
     // First, add primary contact

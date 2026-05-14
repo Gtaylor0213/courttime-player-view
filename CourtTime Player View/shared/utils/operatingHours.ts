@@ -239,3 +239,108 @@ export function getTodayHoursMessage(
 
   return 'Closed today — please check with the club for reopening hours.';
 }
+
+/** JavaScript weekday order: 0 = Sunday … 6 = Saturday (matches court_operating_config.day_of_week). */
+const SUNDAY_FIRST_DAY_NAMES = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+
+/** Normalize times like "8:00", "08:00:00", "8:00 AM" to HH:MM (24h). */
+export function normalizeWallTimeToHHMM(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) return fallback;
+  const ampmMatch = normalized.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)/);
+  if (ampmMatch) {
+    let h = Number(ampmMatch[1]);
+    const m = Number(ampmMatch[2]);
+    const suffix = ampmMatch[3];
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return fallback;
+    if (suffix === 'PM' && h !== 12) h += 12;
+    if (suffix === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+  const match = normalized.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return fallback;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return fallback;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export type CourtOperatingScheduleRow = {
+  day_of_week: number;
+  is_open: boolean;
+  open_time: string;
+  close_time: string;
+  prime_time_start: string | null;
+  prime_time_end: string | null;
+  prime_time_max_duration: number;
+  slot_duration: number;
+  min_duration: number;
+  max_duration: number;
+  buffer_before: number;
+  buffer_after: number;
+};
+
+/**
+ * Build a 7-day court_operating_config payload from facility weekly operating_hours.
+ * Matches server defaults in courtConfig GET when no per-court rows exist.
+ */
+export function buildCourtScheduleRowsFromFacilityOperatingHours(
+  rawOperatingHours: unknown
+): CourtOperatingScheduleRow[] {
+  const opHours = parseOperatingHoursInput(rawOperatingHours);
+
+  return SUNDAY_FIRST_DAY_NAMES.map((dayName, i) => {
+    const dayConfig = getOperatingHoursForDay(opHours, dayName) as Record<string, unknown> | string | null | undefined;
+    const closed =
+      !dayConfig ||
+      typeof dayConfig === 'string' ||
+      isTruthyClosed((dayConfig as any)?.closed) ||
+      isTruthyClosed((dayConfig as any)?.isClosed) ||
+      isTruthyClosed((dayConfig as any)?.is_closed) ||
+      (dayConfig as any)?.isOpen === false ||
+      (dayConfig as any)?.is_open === false ||
+      (typeof (dayConfig as any)?.isOpen === 'string' &&
+        String((dayConfig as any).isOpen).trim().toLowerCase() === 'false') ||
+      (typeof (dayConfig as any)?.is_open === 'string' &&
+        String((dayConfig as any).is_open).trim().toLowerCase() === 'false');
+
+    const dc = typeof dayConfig === 'object' && dayConfig ? (dayConfig as Record<string, unknown>) : {};
+    const open_time = normalizeWallTimeToHHMM(
+      dc.open ?? dc.openTime ?? dc.open_time ?? dc.start ?? dc.startTime ?? dc.start_time,
+      '08:00'
+    );
+    const close_time = normalizeWallTimeToHHMM(
+      dc.close ?? dc.closeTime ?? dc.close_time ?? dc.end ?? dc.endTime ?? dc.end_time,
+      '20:00'
+    );
+
+    return {
+      day_of_week: i,
+      is_open: !closed,
+      open_time,
+      close_time,
+      prime_time_start: null,
+      prime_time_end: null,
+      prime_time_max_duration: 90,
+      slot_duration: 30,
+      min_duration: 30,
+      max_duration: 120,
+      buffer_before: 0,
+      buffer_after: 5,
+    };
+  });
+}
+
+/** Stable fingerprint to detect whether weekly hours changed (for syncing courts). */
+export function facilityOperatingHoursScheduleFingerprint(raw: unknown): string {
+  return JSON.stringify(buildCourtScheduleRowsFromFacilityOperatingHours(raw));
+}

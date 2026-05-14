@@ -1067,6 +1067,17 @@ export function CourtCalendarView() {
       event.preventDefault();
     }
 
+    // Mobile: keep this pointer targeted at the slot so pointerup/cancel still completes
+    // the booking gesture instead of being lost to the scroll container.
+    const captureTarget = event.currentTarget as HTMLElement | null;
+    if (captureTarget?.setPointerCapture) {
+      try {
+        captureTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Invalid state / duplicate capture — window listeners still handle drag end.
+      }
+    }
+
     pointerDragCleanupRef.current?.();
     pointerDragCleanupRef.current = null;
 
@@ -1682,7 +1693,7 @@ export function CourtCalendarView() {
                             <div
                               data-slot-court={court.name}
                               data-slot-time={topTime}
-                              className={`absolute top-0 left-0 right-0
+                              className={`absolute top-0 left-0 right-0 touch-manipulation
                                 ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                                 ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
                                 ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
@@ -1723,7 +1734,7 @@ export function CourtCalendarView() {
                               <div
                                 data-slot-court={court.name}
                                 data-slot-time={bottomTime}
-                                className={`absolute left-0 right-0
+                                className={`absolute left-0 right-0 touch-manipulation
                                   ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                                   ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
                                   ${!isWalkUpCourt && !bottomOutsideCourt && bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}

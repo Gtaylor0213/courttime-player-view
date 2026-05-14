@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -14,7 +14,6 @@ import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { playerProfileApi, facilitiesApi, strikesApi, membersApi, usersApi, userPreferencesApi } from '../api/client';
-import type { TermsAttachment } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -25,6 +24,7 @@ export function PlayerProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const joinTermsScrollRef = useRef<HTMLDivElement>(null);
 
   // Facility search
   const [facilitySearchQuery, setFacilitySearchQuery] = useState('');
@@ -36,13 +36,9 @@ export function PlayerProfile() {
     facilityId: string;
     facilityName: string;
     termsHtml: string;
-    attachments: TermsAttachment[];
-    requiredReviewSeconds: number;
   } | null>(null);
   const [joinTermsScrolledToBottom, setJoinTermsScrolledToBottom] = useState(false);
   const [joinTermsAccepted, setJoinTermsAccepted] = useState(false);
-  const [joinTermsReviewSecondsRemaining, setJoinTermsReviewSecondsRemaining] = useState(0);
-  const [joinTermsDownloadedAttachmentIds, setJoinTermsDownloadedAttachmentIds] = useState<string[]>([]);
 
   // Upcoming reservations
   const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
@@ -58,23 +54,6 @@ export function PlayerProfile() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!joinTermsModal || joinTermsReviewSecondsRemaining <= 0) return;
-
-    const timeoutId = window.setTimeout(() => {
-      setJoinTermsReviewSecondsRemaining((prev) => Math.max(0, prev - 1));
-    }, 1000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [joinTermsModal, joinTermsReviewSecondsRemaining]);
-
-  const allJoinTermsAttachmentsDownloaded = joinTermsModal
-    ? joinTermsModal.attachments.every((attachment) => joinTermsDownloadedAttachmentIds.includes(attachment.id))
-    : true;
-  const joinTermsAttachmentsStillRequired = Boolean(
-    joinTermsModal && joinTermsModal.attachments.length > 0 && !allJoinTermsAttachmentsDownloaded
-  );
 
   const [profileData, setProfileData] = useState({
     firstName: '',
@@ -132,6 +111,14 @@ export function PlayerProfile() {
       }));
     }
   }, [user]);
+
+  useLayoutEffect(() => {
+    if (!joinTermsModal) return;
+    const el = joinTermsScrollRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    setJoinTermsScrolledToBottom(el.scrollHeight <= el.clientHeight + 8);
+  }, [joinTermsModal?.facilityId, joinTermsModal?.termsHtml]);
 
   const loadProfile = async () => {
     if (!user?.id) return;
@@ -336,8 +323,6 @@ export function PlayerProfile() {
         setJoinTermsModal(null);
         setJoinTermsScrolledToBottom(false);
         setJoinTermsAccepted(false);
-        setJoinTermsReviewSecondsRemaining(0);
-        setJoinTermsDownloadedAttachmentIds([]);
         loadProfile();
       } else {
         toast.error(response.error || 'Failed to request membership');
@@ -372,13 +357,9 @@ export function PlayerProfile() {
           facilityId,
           facilityName,
           termsHtml: terms.contentHtml,
-          attachments: Array.isArray(terms.attachments) ? terms.attachments : [],
-          requiredReviewSeconds: Number(terms.requiredReviewSeconds) || 0,
         });
         setJoinTermsScrolledToBottom(false);
         setJoinTermsAccepted(false);
-        setJoinTermsReviewSecondsRemaining(Number(terms.requiredReviewSeconds) || 0);
-        setJoinTermsDownloadedAttachmentIds([]);
         return;
       }
 
@@ -1201,6 +1182,7 @@ export function PlayerProfile() {
             </CardHeader>
             <CardContent className="space-y-4 overflow-hidden">
               <div
+                ref={joinTermsScrollRef}
                 className="h-72 overflow-y-auto border rounded-md p-3 text-sm"
                 onScroll={(e) => {
                   const target = e.currentTarget;
@@ -1211,52 +1193,15 @@ export function PlayerProfile() {
                 <div dangerouslySetInnerHTML={{ __html: joinTermsModal.termsHtml }} />
               </div>
 
-              {joinTermsModal.attachments.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">PDF Attachments</p>
-                  <div className="rounded-md border p-3 space-y-2">
-                    {joinTermsModal.attachments.map((attachment) => (
-                      <a
-                        key={attachment.id}
-                        href={attachment.dataUrl}
-                        download={attachment.fileName}
-                        className="block text-sm text-blue-600 hover:underline"
-                        onClick={() => {
-                          setJoinTermsDownloadedAttachmentIds((prev) => (
-                            prev.includes(attachment.id) ? prev : [...prev, attachment.id]
-                          ));
-                        }}
-                      >
-                        {joinTermsDownloadedAttachmentIds.includes(attachment.id)
-                          ? `${attachment.fileName} (downloaded)`
-                          : attachment.fileName}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {!joinTermsScrolledToBottom && (
                 <p className="text-xs text-gray-500">Scroll to the bottom to enable acceptance.</p>
               )}
 
-              {joinTermsReviewSecondsRemaining > 0 && (
-                <p className="text-xs text-gray-500">
-                  Review time remaining: {joinTermsReviewSecondsRemaining} second{joinTermsReviewSecondsRemaining === 1 ? '' : 's'}.
-                </p>
-              )}
-
-              {joinTermsAttachmentsStillRequired && (
-                <p className="text-xs text-gray-500">
-                  Download all attached PDFs to enable acceptance.
-                </p>
-              )}
-
-              <label className={`flex items-center gap-2 text-sm ${(!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired) ? 'opacity-50' : ''}`}>
+              <label className={`flex items-center gap-2 text-sm ${!joinTermsScrolledToBottom ? 'opacity-50' : ''}`}>
                 <input
                   type="checkbox"
                   checked={joinTermsAccepted}
-                  disabled={!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired}
+                  disabled={!joinTermsScrolledToBottom}
                   onChange={(e) => setJoinTermsAccepted(e.target.checked)}
                 />
                 I have read and accept these Terms & Conditions
@@ -1269,14 +1214,12 @@ export function PlayerProfile() {
                     setJoinTermsModal(null);
                     setJoinTermsScrolledToBottom(false);
                     setJoinTermsAccepted(false);
-                    setJoinTermsReviewSecondsRemaining(0);
-                    setJoinTermsDownloadedAttachmentIds([]);
                   }}
                 >
                   Cancel
                 </Button>
                 <Button
-                  disabled={!joinTermsScrolledToBottom || joinTermsReviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired || !joinTermsAccepted || requestingMembership === joinTermsModal.facilityId}
+                  disabled={!joinTermsScrolledToBottom || !joinTermsAccepted || requestingMembership === joinTermsModal.facilityId}
                   onClick={() => submitMembershipRequest(joinTermsModal.facilityId, joinTermsModal.facilityName, true)}
                 >
                   {requestingMembership === joinTermsModal.facilityId ? 'Requesting...' : 'Accept & Request'}

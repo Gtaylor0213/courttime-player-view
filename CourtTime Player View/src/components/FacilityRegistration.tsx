@@ -21,7 +21,6 @@ import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png'
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { facilitiesApi, paymentsApi } from '../api/client';
-import type { TermsAttachment } from '../api/client';
 import { RulesStep } from './facility-registration/RulesStep';
 import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG } from './facility-registration/rule-defaults';
 
@@ -71,8 +70,6 @@ const US_STATES = [
   'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
   'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
 ];
-
-const MAX_TERMS_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
 
 const ERROR_FIELD_TARGETS: Record<string, string> = {
   step1Mode: 'step1ModeSelection',
@@ -167,8 +164,6 @@ export function FacilityRegistration() {
     rulesConfig: { ...DEFAULT_RULES_CONFIG } as RulesConfig,
     enableTermsAndConditions: false,
     termsAndConditions: '',
-    termsAttachments: [] as TermsAttachment[],
-    requiredReviewSeconds: 0,
 
     // Step 4: Courts (will be filled dynamically)
     courts: [] as Court[],
@@ -630,62 +625,6 @@ export function FacilityRegistration() {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const readFileAsDataUrl = (file: File): Promise<string> => (
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-      reader.readAsDataURL(file);
-    })
-  );
-
-  const handleTermsAttachmentsChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = '';
-
-    if (!files.length) return;
-
-    const validFiles = files.filter((file) => {
-      if (file.type !== 'application/pdf') {
-        toast.error(`${file.name} is not a PDF`);
-        return false;
-      }
-      if (file.size > MAX_TERMS_ATTACHMENT_SIZE_BYTES) {
-        toast.error(`${file.name} must be smaller than 10MB`);
-        return false;
-      }
-      return true;
-    });
-
-    if (!validFiles.length) return;
-
-    try {
-      const attachments = await Promise.all(
-        validFiles.map(async (file, index) => ({
-          id: `terms-${Date.now()}-${index}`,
-          fileName: file.name,
-          mimeType: file.type,
-          dataUrl: await readFileAsDataUrl(file),
-        }))
-      );
-
-      setFormData((prev) => ({
-        ...prev,
-        termsAttachments: [...prev.termsAttachments, ...attachments],
-      }));
-    } catch (error) {
-      console.error('Error reading terms attachments:', error);
-      toast.error('Failed to add one or more PDF attachments');
-    }
-  };
-
-  const removeTermsAttachment = (attachmentId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      termsAttachments: prev.termsAttachments.filter((attachment) => attachment.id !== attachmentId),
-    }));
   };
 
   // Handle login during facility registration
@@ -1339,11 +1278,9 @@ export function FacilityRegistration() {
           ? formData.termsAndConditions.trim()
           : undefined,
         termsAttachments: formData.enableTermsAndConditions && formData.termsAndConditions.trim()
-          ? formData.termsAttachments
+          ? []
           : [],
-        requiredReviewSeconds: formData.enableTermsAndConditions && formData.termsAndConditions.trim()
-          ? Math.max(0, Math.floor(Number(formData.requiredReviewSeconds) || 0))
-          : 0,
+        requiredReviewSeconds: 0,
         bookingRules: bookingRulesPayload,
 
         // Restriction settings - map from rules engine entries for backward compatibility
@@ -2520,7 +2457,7 @@ export function FacilityRegistration() {
                   <div>
                     <Label htmlFor="enableTermsAndConditions">Terms & Conditions (Optional)</Label>
                     <p className="text-xs text-gray-500 mt-1">
-                      If enabled, players must accept these terms before submitting a join request.
+                      If enabled, paste your terms below. Players must scroll through the full text and accept before they can request to join.
                     </p>
                   </div>
                   <Switch
@@ -2532,57 +2469,14 @@ export function FacilityRegistration() {
 
                 {formData.enableTermsAndConditions && (
                   <div className="space-y-2">
-                    <Label htmlFor="termsAndConditions">Terms Text</Label>
+                    <Label htmlFor="termsAndConditions">Terms (paste text)</Label>
                     <Textarea
                       id="termsAndConditions"
                       value={formData.termsAndConditions}
                       onChange={(e) => handleInputChange('termsAndConditions', e.target.value)}
-                      placeholder="Enter your facility terms and conditions..."
+                      placeholder="Paste your facility terms and conditions (plain text or HTML)..."
                       className="min-h-[180px]"
                     />
-                    <div className="space-y-2">
-                      <Label htmlFor="termsAttachments">PDF Attachments</Label>
-                      <Input
-                        id="termsAttachments"
-                        type="file"
-                        accept="application/pdf"
-                        multiple
-                        onChange={handleTermsAttachmentsChange}
-                      />
-                      <p className="text-xs text-gray-500">
-                        Optional. Attach one or more PDF files that players can download while reviewing the terms.
-                      </p>
-                      {formData.termsAttachments.length > 0 && (
-                        <div className="space-y-2 rounded-md border p-3">
-                          {formData.termsAttachments.map((attachment) => (
-                            <div key={attachment.id} className="flex items-center justify-between gap-3 text-sm">
-                              <span className="truncate">{attachment.fileName}</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeTermsAttachment(attachment.id)}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="requiredReviewSeconds">Required Review Time (Seconds)</Label>
-                      <Input
-                        id="requiredReviewSeconds"
-                        type="number"
-                        min="0"
-                        value={formData.requiredReviewSeconds}
-                        onChange={(e) => handleInputChange('requiredReviewSeconds', Math.max(0, parseInt(e.target.value || '0', 10) || 0))}
-                      />
-                      <p className="text-xs text-gray-500">
-                        Optional. Set to 0 to allow immediate acceptance once the player has reviewed the terms.
-                      </p>
-                    </div>
                   </div>
                 )}
               </div>
@@ -3435,21 +3329,6 @@ export function FacilityRegistration() {
             <div>
               <span className="font-medium">Terms & Conditions:</span>
               <p className="text-gray-600 mt-1 whitespace-pre-line">{formData.termsAndConditions}</p>
-              {formData.termsAttachments.length > 0 && (
-                <div className="mt-2 text-gray-600">
-                  <span className="font-medium">PDF attachments:</span>
-                  <ul className="list-disc pl-5 mt-1">
-                    {formData.termsAttachments.map((attachment) => (
-                      <li key={attachment.id}>{attachment.fileName}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {Number(formData.requiredReviewSeconds) > 0 && (
-                <p className="text-gray-600 mt-2">
-                  <span className="font-medium">Required review time:</span> {formData.requiredReviewSeconds} seconds
-                </p>
-              )}
             </div>
           )}
           {formData.addressWhitelistFileName && <div><span className="font-medium">Address Whitelist:</span> {formData.addressWhitelistFileName}</div>}

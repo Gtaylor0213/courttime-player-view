@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Checkbox } from './ui/checkbox';
@@ -9,8 +9,8 @@ export function TermsAcceptanceGate() {
   const { pendingTermsAcceptances, acceptTermsAndContinue } = useAuth();
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [reviewSecondsRemaining, setReviewSecondsRemaining] = useState(0);
-  const [downloadedAttachmentIds, setDownloadedAttachmentIds] = useState<string[]>([]);
+  const [scrolledToBottom, setScrolledToBottom] = useState(false);
+  const termsScrollRef = useRef<HTMLDivElement>(null);
 
   const current = pendingTermsAcceptances[0];
   const sanitizedHtml = useMemo(
@@ -18,36 +18,39 @@ export function TermsAcceptanceGate() {
     [current?.contentHtml]
   );
 
-  useEffect(() => {
+  // Reset + detect "no scroll needed" in one layout pass. A separate useEffect(false) after this
+  // would undo short-content acceptance (React runs all useLayoutEffect before useEffect).
+  useLayoutEffect(() => {
     setAgreed(false);
-    setReviewSecondsRemaining(Math.max(0, Number(current?.requiredReviewSeconds) || 0));
-    setDownloadedAttachmentIds([]);
-  }, [current?.facilityId, current?.currentVersionNumber, current?.requiredReviewSeconds]);
+    if (!current) {
+      setScrolledToBottom(false);
+      return;
+    }
+    const el = termsScrollRef.current;
+    if (!el) {
+      setScrolledToBottom(false);
+      return;
+    }
+    el.scrollTop = 0;
+    setScrolledToBottom(el.scrollHeight <= el.clientHeight + 8);
+  }, [sanitizedHtml, current?.facilityId, current?.currentVersionNumber]);
 
-  useEffect(() => {
-    if (reviewSecondsRemaining <= 0) return;
-
-    const timeoutId = window.setTimeout(() => {
-      setReviewSecondsRemaining((prev) => Math.max(0, prev - 1));
-    }, 1000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [reviewSecondsRemaining]);
-
-  if (!current) return null;
-
-  const allAttachmentsDownloaded = current.attachments.every((attachment) =>
-    downloadedAttachmentIds.includes(attachment.id)
-  );
-  const attachmentsStillRequired = current.attachments.length > 0 && !allAttachmentsDownloaded;
+  const handleScrollTerms = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const reachedBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+    if (reachedBottom) setScrolledToBottom(true);
+  };
 
   const handleAccept = async () => {
-    if (!agreed || submitting || reviewSecondsRemaining > 0 || attachmentsStillRequired) return;
+    if (!current) return;
+    if (!agreed || submitting || !scrolledToBottom) return;
     setSubmitting(true);
     const ok = await acceptTermsAndContinue(current.facilityId);
     if (ok) setAgreed(false);
     setSubmitting(false);
   };
+
+  if (!current) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -63,42 +66,17 @@ export function TermsAcceptanceGate() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="max-h-[55vh] overflow-y-auto rounded-md border bg-white p-4">
+            <div
+              ref={termsScrollRef}
+              className="max-h-[55vh] overflow-y-auto rounded-md border bg-white p-4"
+              onScroll={handleScrollTerms}
+            >
               <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
             </div>
 
-            {current.attachments.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">PDF Attachments</p>
-                <div className="rounded-md border p-3 space-y-2">
-                  {current.attachments.map((attachment) => (
-                    <a
-                      key={attachment.id}
-                      href={attachment.dataUrl}
-                      download={attachment.fileName}
-                      className="block text-sm text-blue-600 hover:underline"
-                      onClick={() => {
-                        setDownloadedAttachmentIds((prev) => (
-                          prev.includes(attachment.id) ? prev : [...prev, attachment.id]
-                        ));
-                      }}
-                    >
-                      {downloadedAttachmentIds.includes(attachment.id) ? `${attachment.fileName} (downloaded)` : attachment.fileName}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {attachmentsStillRequired && (
+            {!scrolledToBottom && (
               <p className="text-xs text-gray-500">
-                Download all attached PDFs to enable acceptance.
-              </p>
-            )}
-
-            {reviewSecondsRemaining > 0 && (
-              <p className="text-xs text-gray-500">
-                Review time remaining: {reviewSecondsRemaining} second{reviewSecondsRemaining === 1 ? '' : 's'}.
+                Scroll to the bottom of the terms to enable acceptance.
               </p>
             )}
 
@@ -107,7 +85,7 @@ export function TermsAcceptanceGate() {
                 id="terms-agree"
                 checked={agreed}
                 onCheckedChange={(checked) => setAgreed(Boolean(checked))}
-                disabled={reviewSecondsRemaining > 0 || attachmentsStillRequired}
+                disabled={!scrolledToBottom}
               />
               <label htmlFor="terms-agree" className="text-sm leading-5">
                 I have read and agree to the Terms & Conditions
@@ -115,7 +93,7 @@ export function TermsAcceptanceGate() {
             </div>
 
             <div className="flex justify-end">
-              <Button onClick={handleAccept} disabled={!agreed || submitting || reviewSecondsRemaining > 0 || attachmentsStillRequired}>
+              <Button onClick={handleAccept} disabled={!agreed || submitting || !scrolledToBottom}>
                 {submitting ? 'Accepting...' : 'Accept & Continue'}
               </Button>
             </div>

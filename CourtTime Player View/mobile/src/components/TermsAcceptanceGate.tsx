@@ -4,16 +4,14 @@
  * Blocks the rest of the app until each pending facility's terms are accepted.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
 import { useAuth } from '../contexts/AuthContext';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../constants/theme';
 import { Button } from './Button';
 
-// Strip HTML tags and decode common entities for plain-text rendering.
-// Preserves block-level structure by mapping <p>, <br>, <li> to line breaks.
 function htmlToPlainText(html: string): string {
   if (!html) return '';
   return html
@@ -31,12 +29,19 @@ function htmlToPlainText(html: string): string {
     .trim();
 }
 
+function tryMarkNoScrollNeeded(viewportH: number, contentH: number, setScrolled: (v: boolean) => void) {
+  if (viewportH > 0 && contentH > 0 && contentH <= viewportH + 8) {
+    setScrolled(true);
+  }
+}
+
 export function TermsAcceptanceGate() {
   const { pendingTermsAcceptances, acceptTermsAndContinue, logout } = useAuth();
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [reviewSecondsRemaining, setReviewSecondsRemaining] = useState(0);
-  const [downloadedAttachmentIds, setDownloadedAttachmentIds] = useState<string[]>([]);
+  const [scrolledToBottom, setScrolledToBottom] = useState(false);
+  const viewportHRef = useRef(0);
+  const contentHRef = useRef(0);
 
   const current = pendingTermsAcceptances[0];
   const plainText = useMemo(
@@ -44,31 +49,19 @@ export function TermsAcceptanceGate() {
     [current?.contentHtml]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setAgreed(false);
-    setReviewSecondsRemaining(Math.max(0, Number(current?.requiredReviewSeconds) || 0));
-    setDownloadedAttachmentIds([]);
-  }, [current?.facilityId, current?.currentVersionNumber, current?.requiredReviewSeconds]);
-
-  useEffect(() => {
-    if (reviewSecondsRemaining <= 0) return;
-
-    const timeoutId = setTimeout(() => {
-      setReviewSecondsRemaining((prev) => Math.max(0, prev - 1));
-    }, 1000);
-
-    return () => clearTimeout(timeoutId);
-  }, [reviewSecondsRemaining]);
+    setScrolledToBottom(false);
+    viewportHRef.current = 0;
+    contentHRef.current = 0;
+  }, [current?.facilityId, current?.currentVersionNumber]);
 
   if (!current) return null;
 
-  const allAttachmentsDownloaded = current.attachments.every((attachment) =>
-    downloadedAttachmentIds.includes(attachment.id)
-  );
-  const attachmentsStillRequired = current.attachments.length > 0 && !allAttachmentsDownloaded;
+  const scrollKey = `${current.facilityId}-${current.currentVersionNumber}`;
 
   const handleAccept = async () => {
-    if (!agreed || submitting || reviewSecondsRemaining > 0 || attachmentsStillRequired) return;
+    if (!agreed || submitting || !scrolledToBottom) return;
     setSubmitting(true);
     const ok = await acceptTermsAndContinue(current.facilityId);
     if (ok) {
@@ -95,63 +88,48 @@ export function TermsAcceptanceGate() {
         </Text>
       </View>
 
-      <ScrollView style={styles.contentBox} contentContainerStyle={styles.contentInner}>
+      <ScrollView
+        key={scrollKey}
+        style={styles.contentBox}
+        contentContainerStyle={styles.contentInner}
+        onLayout={(e) => {
+          viewportHRef.current = e.nativeEvent.layout.height;
+          tryMarkNoScrollNeeded(viewportHRef.current, contentHRef.current, setScrolledToBottom);
+        }}
+        onContentSizeChange={(_, h) => {
+          contentHRef.current = h;
+          tryMarkNoScrollNeeded(viewportHRef.current, contentHRef.current, setScrolledToBottom);
+        }}
+        onScroll={({ nativeEvent }) => {
+          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+          const padding = 24;
+          const reachedBottom =
+            layoutMeasurement.height + contentOffset.y >= contentSize.height - padding;
+          if (reachedBottom) setScrolledToBottom(true);
+        }}
+        scrollEventThrottle={16}
+      >
         <Text style={styles.contentText}>{plainText}</Text>
       </ScrollView>
 
-      {current.attachments.length > 0 && (
-        <View style={styles.attachmentsSection}>
-          <Text style={styles.attachmentsTitle}>PDF Attachments</Text>
-          {current.attachments.map((attachment) => (
-            <Pressable
-              key={attachment.id}
-              style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressedOpacity]}
-              onPress={async () => {
-                try {
-                  await Linking.openURL(attachment.dataUrl);
-                  setDownloadedAttachmentIds((prev) => (
-                    prev.includes(attachment.id) ? prev : [...prev, attachment.id]
-                  ));
-                } catch (error) {
-                  console.error('Failed to open terms attachment:', error);
-                  showAlert('Error', `Could not open ${attachment.fileName}.`);
-                }
-              }}
-            >
-              <Text style={styles.attachmentText}>
-                {downloadedAttachmentIds.includes(attachment.id)
-                  ? `${attachment.fileName} (downloaded)`
-                  : attachment.fileName}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      {attachmentsStillRequired && (
-        <Text style={styles.reviewTimer}>
-          Download all attached PDFs to enable acceptance.
-        </Text>
-      )}
-
-      {reviewSecondsRemaining > 0 && (
-        <Text style={styles.reviewTimer}>
-          Review time remaining: {reviewSecondsRemaining} second{reviewSecondsRemaining === 1 ? '' : 's'}.
+      {!scrolledToBottom && (
+        <Text style={styles.hint}>
+          Scroll to the bottom of the terms to enable acceptance.
         </Text>
       )}
 
       <Pressable
         style={({ pressed }) => [
           styles.checkboxRow,
-          (reviewSecondsRemaining > 0 || attachmentsStillRequired) && styles.checkboxRowDisabled,
+          !scrolledToBottom && styles.checkboxRowDisabled,
           pressed && styles.pressedOpacity,
         ]}
         onPress={() => {
-          if (reviewSecondsRemaining > 0 || attachmentsStillRequired) return;
+          if (!scrolledToBottom) return;
           setAgreed(!agreed);
         }}
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: agreed, disabled: reviewSecondsRemaining > 0 || attachmentsStillRequired }}
+        accessibilityState={{ checked: agreed, disabled: !scrolledToBottom }}
       >
         <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
           {agreed && <Ionicons name="checkmark" size={18} color={Colors.textInverse} />}
@@ -164,7 +142,7 @@ export function TermsAcceptanceGate() {
       <Button
         title="Accept & Continue"
         onPress={handleAccept}
-        disabled={!agreed || reviewSecondsRemaining > 0 || attachmentsStillRequired}
+        disabled={!agreed || submitting || !scrolledToBottom}
         loading={submitting}
       />
 
@@ -223,33 +201,11 @@ const styles = StyleSheet.create({
     color: Colors.text,
     lineHeight: 22,
   },
-  reviewTimer: {
+  hint: {
     fontSize: FontSize.xs,
     fontFamily: FontFamily.regular,
     color: Colors.textMuted,
     marginBottom: Spacing.sm,
-  },
-  attachmentsSection: {
-    marginBottom: Spacing.md,
-    gap: Spacing.sm,
-  },
-  attachmentsTitle: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-    color: Colors.text,
-  },
-  attachmentButton: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  attachmentText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.regular,
-    color: Colors.primary,
   },
   checkboxRow: {
     flexDirection: 'row',

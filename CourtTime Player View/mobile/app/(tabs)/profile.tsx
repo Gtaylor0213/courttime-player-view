@@ -3,7 +3,7 @@
  * View and edit player profile, preferences, and logout
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,6 @@ import {
   Modal,
   FlatList,
   Switch,
-  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,7 +25,6 @@ import { useRouter } from 'expo-router';
 import { showAlert } from '../../src/utils/alert';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import type { TermsAttachment } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import type { PlayerProfile } from '../../src/types/database';
 import { CachedImage } from '../../src/components/CachedImage';
@@ -55,8 +53,6 @@ interface FacilityTermsVersion {
   id: string;
   versionNumber: number;
   contentHtml: string;
-  attachments: TermsAttachment[];
-  requiredReviewSeconds: number;
   publishedAt: string;
 }
 
@@ -75,6 +71,16 @@ function htmlToPlainText(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function tryMarkJoinTermsFitWithoutScroll(
+  viewportH: number,
+  contentH: number,
+  setScrolled: (v: boolean) => void
+) {
+  if (viewportH > 0 && contentH > 0 && contentH <= viewportH + 8) {
+    setScrolled(true);
+  }
 }
 
 export default function ProfileScreen() {
@@ -114,19 +120,9 @@ export default function ProfileScreen() {
   const [joinTerms, setJoinTerms] = useState<FacilityTermsVersion | null>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [reviewSecondsRemaining, setReviewSecondsRemaining] = useState(0);
-  const [downloadedAttachmentIds, setDownloadedAttachmentIds] = useState<string[]>([]);
+  const joinTermsViewportRef = useRef(0);
+  const joinTermsContentRef = useRef(0);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!termsModalVisible || reviewSecondsRemaining <= 0) return;
-
-    const timeoutId = setTimeout(() => {
-      setReviewSecondsRemaining((prev) => Math.max(0, prev - 1));
-    }, 1000);
-
-    return () => clearTimeout(timeoutId);
-  }, [termsModalVisible, reviewSecondsRemaining]);
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
@@ -295,8 +291,8 @@ export default function ProfileScreen() {
       setJoinTerms(null);
       setHasScrolledToBottom(false);
       setTermsAccepted(false);
-      setReviewSecondsRemaining(0);
-      setDownloadedAttachmentIds([]);
+      joinTermsViewportRef.current = 0;
+      joinTermsContentRef.current = 0;
       setSearchQuery('');
       setSearchResults([]);
     } else {
@@ -318,23 +314,14 @@ export default function ProfileScreen() {
       id: terms.id,
       versionNumber: Number(terms.versionNumber),
       contentHtml: terms.contentHtml,
-      attachments: Array.isArray(terms.attachments) ? terms.attachments : [],
-      requiredReviewSeconds: Number(terms.requiredReviewSeconds) || 0,
       publishedAt: terms.publishedAt,
     });
     setHasScrolledToBottom(false);
     setTermsAccepted(false);
-    setReviewSecondsRemaining(Number(terms.requiredReviewSeconds) || 0);
-    setDownloadedAttachmentIds([]);
+    joinTermsViewportRef.current = 0;
+    joinTermsContentRef.current = 0;
     setTermsModalVisible(true);
   };
-
-  const allJoinTermsAttachmentsDownloaded = joinTerms
-    ? joinTerms.attachments.every((attachment) => downloadedAttachmentIds.includes(attachment.id))
-    : true;
-  const joinTermsAttachmentsStillRequired = Boolean(
-    joinTerms && joinTerms.attachments.length > 0 && !allJoinTermsAttachmentsDownloaded
-  );
 
   const handleLeaveFacility = (facilityId: string, facilityName: string) => {
     if (!user) return;
@@ -778,8 +765,8 @@ export default function ProfileScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => {
           setTermsModalVisible(false);
-          setReviewSecondsRemaining(0);
-          setDownloadedAttachmentIds([]);
+          joinTermsViewportRef.current = 0;
+          joinTermsContentRef.current = 0;
         }}
       >
         <View style={{ flex: 1, backgroundColor: Colors.surface }}>
@@ -787,8 +774,8 @@ export default function ProfileScreen() {
             <TouchableOpacity
               onPress={() => {
                 setTermsModalVisible(false);
-                setReviewSecondsRemaining(0);
-                setDownloadedAttachmentIds([]);
+                joinTermsViewportRef.current = 0;
+                joinTermsContentRef.current = 0;
               }}
               accessibilityRole="button"
               accessibilityLabel="Close terms and conditions"
@@ -811,8 +798,25 @@ export default function ProfileScreen() {
 
             <View style={{ marginTop: Spacing.md, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, backgroundColor: Colors.card, flex: 1 }}>
               <ScrollView
+                key={joinTerms ? `${joinTerms.id}-${joinTerms.versionNumber}` : 'terms'}
                 style={{ flex: 1 }}
                 contentContainerStyle={{ padding: Spacing.md }}
+                onLayout={(e) => {
+                  joinTermsViewportRef.current = e.nativeEvent.layout.height;
+                  tryMarkJoinTermsFitWithoutScroll(
+                    joinTermsViewportRef.current,
+                    joinTermsContentRef.current,
+                    setHasScrolledToBottom
+                  );
+                }}
+                onContentSizeChange={(_, h) => {
+                  joinTermsContentRef.current = h;
+                  tryMarkJoinTermsFitWithoutScroll(
+                    joinTermsViewportRef.current,
+                    joinTermsContentRef.current,
+                    setHasScrolledToBottom
+                  );
+                }}
                 onScroll={({ nativeEvent }) => {
                   const padding = 24;
                   const reachedBottom =
@@ -828,59 +832,9 @@ export default function ProfileScreen() {
               </ScrollView>
             </View>
 
-            {joinTerms?.attachments.length ? (
-              <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-                <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: Colors.text }}>
-                  PDF Attachments
-                </Text>
-                {joinTerms.attachments.map((attachment) => (
-                  <TouchableOpacity
-                    key={attachment.id}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: Colors.border,
-                      borderRadius: BorderRadius.md,
-                      backgroundColor: Colors.card,
-                      paddingHorizontal: Spacing.md,
-                      paddingVertical: Spacing.sm,
-                    }}
-                    onPress={async () => {
-                      try {
-                        await Linking.openURL(attachment.dataUrl);
-                        setDownloadedAttachmentIds((prev) => (
-                          prev.includes(attachment.id) ? prev : [...prev, attachment.id]
-                        ));
-                      } catch (error) {
-                        console.error('Failed to open terms attachment:', error);
-                        showAlert('Error', `Could not open ${attachment.fileName}.`);
-                      }
-                    }}
-                  >
-                    <Text style={{ fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' }}>
-                      {downloadedAttachmentIds.includes(attachment.id)
-                        ? `${attachment.fileName} (downloaded)`
-                        : attachment.fileName}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null}
-
-            {joinTermsAttachmentsStillRequired && (
-              <Text style={{ marginTop: Spacing.sm, color: Colors.textMuted, fontSize: FontSize.xs }}>
-                Download all attached PDFs to enable acceptance.
-              </Text>
-            )}
-
             {!hasScrolledToBottom && (
               <Text style={{ marginTop: Spacing.sm, color: Colors.textMuted, fontSize: FontSize.xs }}>
                 Scroll to the bottom to enable acceptance.
-              </Text>
-            )}
-
-            {reviewSecondsRemaining > 0 && (
-              <Text style={{ marginTop: Spacing.sm, color: Colors.textMuted, fontSize: FontSize.xs }}>
-                Review time remaining: {reviewSecondsRemaining} second{reviewSecondsRemaining === 1 ? '' : 's'}.
               </Text>
             )}
 
@@ -890,13 +844,13 @@ export default function ProfileScreen() {
                 alignItems: 'center',
                 gap: Spacing.sm,
                 marginTop: Spacing.md,
-                opacity: hasScrolledToBottom && reviewSecondsRemaining === 0 && !joinTermsAttachmentsStillRequired ? 1 : 0.5,
+                opacity: hasScrolledToBottom ? 1 : 0.5,
               }}
-              disabled={!hasScrolledToBottom || reviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired}
+              disabled={!hasScrolledToBottom}
               onPress={() => setTermsAccepted((prev) => !prev)}
               accessibilityRole="checkbox"
               accessibilityLabel="Accept terms and conditions"
-              accessibilityState={{ checked: termsAccepted, disabled: !hasScrolledToBottom || reviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired }}
+              accessibilityState={{ checked: termsAccepted, disabled: !hasScrolledToBottom }}
             >
               <View
                 style={{
@@ -920,12 +874,12 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={{
                 marginTop: Spacing.md,
-                backgroundColor: hasScrolledToBottom && reviewSecondsRemaining === 0 && !joinTermsAttachmentsStillRequired && termsAccepted ? Colors.primary : Colors.textMuted,
+                backgroundColor: hasScrolledToBottom && termsAccepted ? Colors.primary : Colors.textMuted,
                 paddingVertical: Spacing.md,
                 borderRadius: BorderRadius.md,
                 alignItems: 'center',
               }}
-              disabled={!joinFacilityDraft || !hasScrolledToBottom || reviewSecondsRemaining > 0 || joinTermsAttachmentsStillRequired || !termsAccepted || requestingJoin === joinFacilityDraft.id}
+              disabled={!joinFacilityDraft || !hasScrolledToBottom || !termsAccepted || requestingJoin === joinFacilityDraft.id}
               onPress={() => {
                 if (!joinFacilityDraft) return;
                 submitJoinRequest(joinFacilityDraft.id, true);

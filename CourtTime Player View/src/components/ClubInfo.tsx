@@ -395,11 +395,13 @@ export function ClubInfo() {
                     <MapPin className="h-4 w-4 text-gray-400 mr-3 mt-1" />
                     <div>
                       {safeDisplayText(facility.primaryLocationLabel) && (
-                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                        <p className="text-sm font-bold text-gray-900">
                           {safeDisplayText(facility.primaryLocationLabel)}
                         </p>
                       )}
-                      {safeDisplayText(facility.streetAddress) && <p>{safeDisplayText(facility.streetAddress)}</p>}
+                      {safeDisplayText(facility.streetAddress) && (
+                        <p className="text-sm text-gray-600">{safeDisplayText(facility.streetAddress)}</p>
+                      )}
                       <p className="text-sm text-gray-600">
                         {[safeDisplayText(facility.city), safeDisplayText(facility.state)].filter(Boolean).join(', ')}
                         {safeDisplayText(facility.zipCode) && ` ${safeDisplayText(facility.zipCode)}`}
@@ -446,7 +448,7 @@ export function ClubInfo() {
                 <CardContent className="space-y-4">
                   {secondaryLocations.map((loc: any) => (
                     <div key={loc.id} className="space-y-0.5">
-                      <p className="font-medium text-sm">{safeDisplayText(loc.locationName)}</p>
+                      <p className="text-sm font-bold text-gray-900">{safeDisplayText(loc.locationName)}</p>
                       <p className="text-sm text-gray-600">{safeDisplayText(loc.streetAddress)}</p>
                       <p className="text-sm text-gray-600">
                         {safeDisplayText(loc.city)}, {safeDisplayText(loc.state)} {safeDisplayText(loc.zipCode)}

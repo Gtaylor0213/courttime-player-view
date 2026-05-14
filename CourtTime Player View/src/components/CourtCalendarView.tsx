@@ -27,6 +27,11 @@ const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 38;
 
+/** Touch: movement past this (px) commits to slot drag / pointer capture (tap stays below). */
+const CALENDAR_TOUCH_ARM_PX = 5;
+/** Touch: if vertical movement exceeds this (px) and beats horizontal, treat as calendar scroll — not booking. */
+const CALENDAR_TOUCH_SCROLL_VERTICAL_PX = 10;
+
 type CourtDayOperatingBounds = { isOpen: boolean; openMin: number; closeMin: number };
 
 function parseApiTimeToMinutes(value: unknown): number | null {
@@ -136,6 +141,15 @@ export function CourtCalendarView() {
   const dragJustFinishedRef = React.useRef(false);
   /** Removes window pointer listeners when a slot drag ends or unmounts. */
   const pointerDragCleanupRef = useRef<(() => void) | null>(null);
+  /** Touch-only: defer pointer capture until tap vs scroll intent is clear. */
+  const calendarTouchGestureRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    captureTarget: HTMLElement;
+    armed: boolean;
+    aborted: boolean;
+  } | null>(null);
 
   // Quick reserve popup state
   const [showQuickReserve, setShowQuickReserve] = useState(false);
@@ -1067,14 +1081,26 @@ export function CourtCalendarView() {
       event.preventDefault();
     }
 
-    // Mobile: keep this pointer targeted at the slot so pointerup/cancel still completes
-    // the booking gesture instead of being lost to the scroll container.
     const captureTarget = event.currentTarget as HTMLElement | null;
-    if (captureTarget?.setPointerCapture) {
-      try {
-        captureTarget.setPointerCapture(event.pointerId);
-      } catch {
-        // Invalid state / duplicate capture — window listeners still handle drag end.
+    const isFingerTouch = event.pointerType === 'touch';
+
+    if (isFingerTouch && captureTarget) {
+      calendarTouchGestureRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        captureTarget,
+        armed: false,
+        aborted: false,
+      };
+    } else {
+      calendarTouchGestureRef.current = null;
+      if (captureTarget?.setPointerCapture) {
+        try {
+          captureTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // Invalid state / duplicate capture — window listeners still handle drag end.
+        }
       }
     }
 
@@ -1093,6 +1119,42 @@ export function CourtCalendarView() {
     const pointerId = event.pointerId;
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return;
+
+      const touchG = calendarTouchGestureRef.current;
+      if (touchG && ev.pointerType === 'touch' && !touchG.aborted) {
+        const dx = ev.clientX - touchG.startX;
+        const dy = ev.clientY - touchG.startY;
+        if (!touchG.armed) {
+          if (
+            Math.abs(dy) > CALENDAR_TOUCH_SCROLL_VERTICAL_PX &&
+            Math.abs(dy) > Math.abs(dx)
+          ) {
+            touchG.aborted = true;
+            pointerDragCleanupRef.current?.();
+            pointerDragCleanupRef.current = null;
+            const cleared = {
+              isDragging: false,
+              startCell: null as { court: string; time: string } | null,
+              endCell: null as { court: string; time: string } | null,
+              selectedCells: new Set<string>(),
+            };
+            dragStateRef.current = cleared;
+            setDragState(cleared);
+            return;
+          }
+          const armDist2 = CALENDAR_TOUCH_ARM_PX * CALENDAR_TOUCH_ARM_PX;
+          if (dx * dx + dy * dy < armDist2) {
+            return;
+          }
+          touchG.armed = true;
+          try {
+            touchG.captureTarget.setPointerCapture(ev.pointerId);
+          } catch {
+            // ignore
+          }
+        }
+      }
+
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
       if (!slot) return;
@@ -1108,6 +1170,12 @@ export function CourtCalendarView() {
       window.removeEventListener('pointerup', onUp, true);
       window.removeEventListener('pointercancel', onUp, true);
       pointerDragCleanupRef.current = null;
+      const gs = calendarTouchGestureRef.current;
+      const touchAborted = gs?.aborted === true;
+      calendarTouchGestureRef.current = null;
+      if (touchAborted) {
+        return;
+      }
       handlePointerDragEnd();
     };
     window.addEventListener('pointermove', onMove, { capture: true, passive: false });
@@ -1582,7 +1650,7 @@ export function CourtCalendarView() {
         ) : (
           <div
             ref={calendarScrollRef}
-            className="calendar-scroll bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0"
+            className="calendar-scroll overscroll-y-contain bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0"
           >
             <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: effectiveTimeColWidth + courts.length * effectiveCourtWidth }}>
               <thead>

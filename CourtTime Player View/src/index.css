@@ -196,6 +196,8 @@ html {
 .calendar-scroll {
   scrollbar-width: auto; /* Firefox */
   scrollbar-color: #94a3b8 #e2e8f0; /* Firefox: thumb track */
+  /* Keeps overscroll in the grid; reduces parent pull-to-refresh / rubber-band on phones */
+  overscroll-behavior-y: contain;
 }
 
 /* WebKit browsers (Chrome, Safari, Edge) */

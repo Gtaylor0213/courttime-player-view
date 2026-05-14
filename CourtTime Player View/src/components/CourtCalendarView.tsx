@@ -27,10 +27,14 @@ const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 38;
 
-/** Touch: Euclidean movement from touch origin past this (px) classifies scroll vs hold (paired with *_MS). */
-const CALENDAR_TOUCH_MOVEMENT_PX = 10;
-/** Touch: elapsed time (ms) thresholds — same window for “fast swipe = scroll” and “hold still = select”. */
-const CALENDAR_TOUCH_HOLD_MS = 150;
+/** Touch: movement from origin past this (px) before hold window ends → scroll (quick pan). */
+const CALENDAR_TOUCH_FAST_SCROLL_PX = 14;
+/** Touch: only classify that early movement as scroll if the gesture is younger than this (ms). */
+const CALENDAR_TOUCH_FAST_SCROLL_MS = 170;
+/** Touch: finger must stay this still (max distance from origin, px) through the hold window to arm drag-select. */
+const CALENDAR_TOUCH_STILL_PEAK_PX = 16;
+/** Touch: hold at least this long (ms) before drag-select can arm (still peak must stay under STILL_PEAK). */
+const CALENDAR_TOUCH_HOLD_MS = 200;
 
 /** Normalize client coordinates for mouse, pointer, or touch events. */
 function getEventCoords(e: { clientX?: number; clientY?: number; touches?: TouchList; changedTouches?: TouchList }): {
@@ -167,6 +171,8 @@ export function CourtCalendarView() {
     startY: number;
     startTime: number;
     phase: CalendarFingerPhase;
+    /** Max distance from (startX,startY) seen while phase === 'undecided' (updated after scroll-fast check). */
+    peakUndecidedDist: number;
     captureTarget: HTMLElement;
     /** Pointer Events touch only — capture once we enter selecting. */
     pointerCaptureOnSelect: boolean;
@@ -1138,6 +1144,7 @@ export function CourtCalendarView() {
           startY: startClientY,
           startTime: Date.now(),
           phase: 'undecided',
+          peakUndecidedDist: 0,
           captureTarget,
           pointerCaptureOnSelect: transport === 'pointer' && pointerType === 'touch',
         };
@@ -1219,27 +1226,29 @@ export function CourtCalendarView() {
         const deltaY = Math.abs(clientY - g.startY);
         const totalMovement = Math.hypot(deltaX, deltaY);
 
-        if (totalMovement > CALENDAR_TOUCH_MOVEMENT_PX && elapsed < CALENDAR_TOUCH_HOLD_MS) {
+        if (totalMovement > CALENDAR_TOUCH_FAST_SCROLL_PX && elapsed < CALENDAR_TOUCH_FAST_SCROLL_MS) {
           g.phase = 'scrolling';
           return;
         }
 
-        if (elapsed >= CALENDAR_TOUCH_HOLD_MS && totalMovement < CALENDAR_TOUCH_MOVEMENT_PX) {
-          g.phase = 'selecting';
-          if (g.pointerCaptureOnSelect) {
-            try {
-              g.captureTarget.setPointerCapture(g.pointerId);
-            } catch {
-              // ignore
-            }
-          }
-          beginDragFromPoint(g.startX, g.startY);
-          updateSlotsFromPoint(clientX, clientY);
-          ev.preventDefault();
-          return;
-        }
+        const peakBefore = g.peakUndecidedDist;
+        g.peakUndecidedDist = Math.max(g.peakUndecidedDist, totalMovement);
 
-        if (elapsed >= CALENDAR_TOUCH_HOLD_MS && totalMovement >= CALENDAR_TOUCH_MOVEMENT_PX) {
+        if (elapsed >= CALENDAR_TOUCH_HOLD_MS) {
+          if (peakBefore <= CALENDAR_TOUCH_STILL_PEAK_PX) {
+            g.phase = 'selecting';
+            if (g.pointerCaptureOnSelect) {
+              try {
+                g.captureTarget.setPointerCapture(g.pointerId);
+              } catch {
+                // ignore
+              }
+            }
+            beginDragFromPoint(g.startX, g.startY);
+            updateSlotsFromPoint(clientX, clientY);
+            ev.preventDefault();
+            return;
+          }
           g.phase = 'scrolling';
           return;
         }

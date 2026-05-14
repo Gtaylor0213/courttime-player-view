@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Edit, Trash2, Save, X, Settings, Layers, CheckSquare, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Clock, Layers, CheckSquare, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
@@ -731,7 +731,7 @@ export function CourtManagement() {
                           className={configuringCourtId === court.id ? 'bg-green-100 border-green-300' : ''}
                           title="Schedule Settings"
                         >
-                          <Settings className="h-4 w-4" />
+                          <Clock className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="outline"

@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users, FileText, Upload, Settings, Shield, AlertTriangle, Zap, Home, Info, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users, FileText, Upload, Shield, AlertTriangle, Zap, Home, Info, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { RULE_METADATA, CATEGORIES, getRulesByCategory, RuleMeta } from '../facility-registration/rule-defaults';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -3648,7 +3648,7 @@ export function FacilityManagement() {
                                 className={configuringCourtId === court.id ? 'bg-green-100 border-green-300' : ''}
                                 title="Schedule Settings"
                               >
-                                <Settings className="h-4 w-4" />
+                                <Clock className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="outline"

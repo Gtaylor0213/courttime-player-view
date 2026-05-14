@@ -102,6 +102,61 @@ router.get('/conversations/:facilityId/:userId', async (req, res) => {
 });
 
 /**
+ * DELETE /api/messages/message/:messageId
+ * Permanently remove a message you sent (must be sender and a participant in the conversation)
+ */
+router.delete('/message/:messageId', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId =
+      (typeof req.body?.userId === 'string' && req.body.userId) ||
+      (typeof req.query?.userId === 'string' && req.query.userId) ||
+      null;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing userId (body or query)'
+      });
+    }
+
+    const result = await query(
+      `
+      DELETE FROM messages m
+      USING conversations c
+      WHERE m.id = $1
+        AND m.sender_id = $2
+        AND m.conversation_id = c.id
+        AND (c.participant1_id = $2 OR c.participant2_id = $2)
+      RETURNING m.id, m.conversation_id as "conversationId"
+    `,
+      [messageId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Message not found or you cannot delete this message'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        deletedId: result.rows[0].id,
+        conversationId: result.rows[0].conversationId
+      }
+    });
+  } catch (error: any) {
+    console.error('Error deleting message:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/messages/:conversationId
  * Get all messages in a conversation
  */

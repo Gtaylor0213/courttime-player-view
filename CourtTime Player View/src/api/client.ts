@@ -1126,6 +1126,14 @@ export const messagesApi = {
       body: JSON.stringify({ userId }),
     });
   },
+
+  /** Delete a message you sent */
+  deleteMessage: async (messageId: string, userId: string) => {
+    return apiRequest(`/api/messages/message/${messageId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ userId }),
+    });
+  },
 };
 
 // Notifications API
@@ -1320,6 +1328,117 @@ export const paymentsApi = {
       method: 'POST',
       body: JSON.stringify({ facilityId }),
     });
+  },
+};
+
+// ============================================================
+// Stripe Connect (member → club payments) — NEW
+// ============================================================
+
+export type PaymentCategory = 'BALL_MACHINE' | 'CLINIC' | 'DRILL' | 'DUES' | 'OTHER';
+export type ConnectPaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+
+export interface PaymentItem {
+  id: string;
+  clubId: string;
+  name: string;
+  description: string | null;
+  amountCents: number;
+  category: PaymentCategory;
+  isRecurring: boolean;
+  recurringInterval: 'month' | 'year' | null;
+  stripePriceId: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ConnectPayment {
+  id: string;
+  clubId: string;
+  memberId: string;
+  paymentItemId: string;
+  amountCents: number;
+  platformFeeCents: number;
+  status: ConnectPaymentStatus;
+  stripePaymentIntentId: string | null;
+  stripeCheckoutSessionId: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  itemName?: string;
+  itemCategory?: PaymentCategory;
+  memberName?: string;
+  memberEmail?: string;
+}
+
+export const stripeConnectApi = {
+  // Returns { url } to send the admin to Stripe-hosted Express onboarding.
+  startOnboarding: async (clubId: string) => {
+    return apiRequest(
+      `/api/stripe/connect?clubId=${encodeURIComponent(clubId)}&format=json`
+    );
+  },
+  // Refresh + return the connected-account onboarding status.
+  getStatus: async (clubId: string) => {
+    return apiRequest(`/api/stripe/connect/status?clubId=${encodeURIComponent(clubId)}`);
+  },
+};
+
+export const paymentItemsApi = {
+  list: async (clubId: string) => {
+    return apiRequest(`/api/payment-items/club/${encodeURIComponent(clubId)}`);
+  },
+  create: async (data: {
+    clubId: string;
+    name: string;
+    description?: string;
+    amountCents: number;
+    category: PaymentCategory;
+    isRecurring?: boolean;
+    recurringInterval?: 'month' | 'year' | null;
+  }) => {
+    return apiRequest('/api/payment-items', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  update: async (
+    id: string,
+    data: Partial<{
+      name: string;
+      description: string | null;
+      amountCents: number;
+      category: PaymentCategory;
+      isRecurring: boolean;
+      recurringInterval: 'month' | 'year' | null;
+      isActive: boolean;
+    }>
+  ) => {
+    return apiRequest(`/api/payment-items/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+export const connectPaymentsApi = {
+  checkout: async (data: {
+    paymentItemId: string;
+    successUrl?: string;
+    cancelUrl?: string;
+  }) => {
+    return apiRequest('/api/payments/checkout', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  // Admin — all payments for the club.
+  clubHistory: async (clubId: string) => {
+    return apiRequest(`/api/payments/history?clubId=${encodeURIComponent(clubId)}`);
+  },
+  // Member — their own payments (optionally filtered by club).
+  myHistory: async (clubId?: string) => {
+    const qs = clubId ? `?clubId=${encodeURIComponent(clubId)}` : '';
+    return apiRequest(`/api/payments/my-history${qs}`);
   },
 };
 

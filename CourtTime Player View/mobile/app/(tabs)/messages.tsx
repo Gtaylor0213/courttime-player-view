@@ -14,6 +14,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -89,6 +91,7 @@ export default function MessagesScreen() {
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const messagesListRef = useRef<FlatList<MessageItem>>(null);
   const [threadLoadError, setThreadLoadError] = useState<string | null>(null);
 
@@ -254,6 +257,30 @@ export default function MessagesScreen() {
     }
   }
 
+  const performDeleteMessage = useCallback(async (messageId: string) => {
+    if (!user) return;
+    setDeletingMessageId(messageId);
+    const res = await api.delete(`/api/messages/message/${messageId}`, { userId: user.id });
+    setDeletingMessageId(null);
+    if (res.success) {
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      fetchConversations();
+    } else {
+      showApiErrorAlert(res, 'Could not delete');
+    }
+  }, [user, fetchConversations]);
+
+  const confirmDeleteMessage = useCallback((item: MessageItem) => {
+    Alert.alert(
+      'Delete message',
+      'Remove this message from the conversation?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void performDeleteMessage(item.id) },
+      ]
+    );
+  }, [performDeleteMessage]);
+
   // ── Start a new conversation ──
   async function fetchMembers() {
     if (!facilityId) return;
@@ -359,12 +386,29 @@ export default function MessagesScreen() {
 
   const renderMessageItem = useCallback(({ item }: { item: MessageItem }) => {
     const isMe = item.senderId === user?.id;
+    const busy = deletingMessageId === item.id;
     return (
       <View
         style={[styles.messageBubbleRow, isMe && styles.messageBubbleRowMe]}
         accessible
         accessibilityLabel={`${isMe ? 'You' : activeConversation?.otherUser.name || 'Member'} said ${item.messageText}. ${formatDate(item.createdAt)}.`}
       >
+        {isMe && (
+          <TouchableOpacity
+            style={styles.deleteMessageBtn}
+            onPress={() => confirmDeleteMessage(item)}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Delete message"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {busy ? (
+              <ActivityIndicator size="small" color={Colors.textMuted} />
+            ) : (
+              <Text style={styles.deleteMessageBtnText}>Delete</Text>
+            )}
+          </TouchableOpacity>
+        )}
         <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
           <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
             {item.messageText}
@@ -375,7 +419,7 @@ export default function MessagesScreen() {
         </View>
       </View>
     );
-  }, [activeConversation?.otherUser.name, user?.id]);
+  }, [activeConversation?.otherUser.name, confirmDeleteMessage, deletingMessageId, user?.id]);
 
   // ── RENDER: Message Thread View ──
   if (activeConversation) {
@@ -419,6 +463,7 @@ export default function MessagesScreen() {
         <FlatList
           ref={messagesListRef}
           data={messages}
+          extraData={deletingMessageId}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesList}
           initialNumToRender={20}
@@ -774,9 +819,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: Spacing.sm,
     justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    gap: Spacing.xs,
   },
   messageBubbleRowMe: {
     justifyContent: 'flex-end',
+  },
+  deleteMessageBtn: {
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    justifyContent: 'center',
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  deleteMessageBtnText: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
+    color: Colors.destructive,
   },
   messageBubble: {
     maxWidth: '75%',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Search, MessageCircle, Users, X, Plus, UserPlus, ChevronLeft } from 'lucide-react';
+import { Send, Search, MessageCircle, Users, X, Plus, UserPlus, ChevronLeft, Trash2 } from 'lucide-react';
 import { cn } from './ui/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { messagesApi, membersApi } from '../api/client';
@@ -49,6 +49,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // For starting new conversations
@@ -310,6 +311,28 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
     }
   };
 
+  const deleteMessage = async (messageId: string) => {
+    if (!user?.id) return;
+    if (!window.confirm('Delete this message? The other person will no longer see it.')) return;
+
+    try {
+      setDeletingMessageId(messageId);
+      const response = await messagesApi.deleteMessage(messageId, user.id);
+      if (response.success) {
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+        await loadConversations();
+        toast.success('Message deleted');
+      } else {
+        toast.error(response.error || 'Failed to delete message');
+      }
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error('Failed to delete message');
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
   const formatMessageTime = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -490,35 +513,47 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                   No messages yet. Start the conversation!
                 </div>
               ) : (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${
-                      message.senderId === user?.id ? 'justify-end' : 'justify-start'
-                    }`}
-                  >
+                messages.map((message) => {
+                  const isMine = message.senderId === user?.id;
+                  return (
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        message.senderId === user?.id
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-100 text-gray-900'
+                      key={message.id}
+                      className={`flex items-end gap-1 ${
+                        isMine ? 'justify-end' : 'justify-start'
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap break-words">
-                        {message.messageText}
-                      </p>
-                      <p
-                        className={`text-xs mt-1 ${
-                          message.senderId === user?.id
-                            ? 'text-green-100'
-                            : 'text-gray-500'
+                      {isMine && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-gray-500 hover:text-red-600 hover:bg-red-50 md:self-end"
+                          onClick={() => deleteMessage(message.id)}
+                          disabled={deletingMessageId === message.id}
+                          aria-label="Delete message"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          isMine ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-900'
                         }`}
                       >
-                        {formatMessageTime(message.createdAt)}
-                      </p>
+                        <p className="text-sm whitespace-pre-wrap break-words">
+                          {message.messageText}
+                        </p>
+                        <p
+                          className={`text-xs mt-1 ${
+                            isMine ? 'text-green-100' : 'text-gray-500'
+                          }`}
+                        >
+                          {formatMessageTime(message.createdAt)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
               <div ref={messagesEndRef} />
             </div>

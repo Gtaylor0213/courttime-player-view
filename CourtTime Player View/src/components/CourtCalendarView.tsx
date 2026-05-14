@@ -134,6 +134,8 @@ export function CourtCalendarView() {
   const dragStateRef = React.useRef(dragState);
   dragStateRef.current = dragState;
   const dragJustFinishedRef = React.useRef(false);
+  /** Removes window pointer listeners when a slot drag ends or unmounts. */
+  const pointerDragCleanupRef = useRef<(() => void) | null>(null);
 
   // Quick reserve popup state
   const [showQuickReserve, setShowQuickReserve] = useState(false);
@@ -987,86 +989,127 @@ export function CourtCalendarView() {
     }
   };
 
-  // Drag handlers
-  const handleMouseDown = (courtName: string, time: string, event: React.MouseEvent) => {
-    const booking = bookings[courtName as keyof typeof bookings]?.[time];
-    if (booking) return; // Don't start drag on booked slots
+  // Drag handlers — pointer events + window pointermove so touch drags across cells
+  // (touch never receives mouseenter while moving; elementFromPoint fixes that).
+  const extendDragSelection = useCallback((courtName: string, time: string) => {
+    setDragState(prev => {
+      if (!prev.isDragging || !prev.startCell) return prev;
 
-    const courtObj = courts.find((c) => c.name === courtName);
-    if (courtObj?.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) return;
+      const startCourtIndex = courts.findIndex(c => c.name === prev.startCell!.court);
+      const currentCourtIndex = courts.findIndex(c => c.name === courtName);
+      const startTimeIndex = timeSlots.indexOf(prev.startCell!.time);
+      const currentTimeIndex = timeSlots.indexOf(time);
 
-    event.preventDefault();
-    setDragState({
-      isDragging: true,
-      startCell: { court: courtName, time },
-      endCell: { court: courtName, time },
-      selectedCells: new Set([`${courtName}|${time}`])
-    });
-  };
+      if (startCourtIndex < 0 || currentCourtIndex < 0 || startTimeIndex < 0 || currentTimeIndex < 0) {
+        return prev;
+      }
 
-  const handleMouseEnter = (courtName: string, time: string) => {
-    if (!dragState.isDragging) return;
+      const beginCourtIdx = Math.min(startCourtIndex, currentCourtIndex);
+      const endCourtIdx = Math.max(startCourtIndex, currentCourtIndex);
+      const beginTimeIdx = Math.min(startTimeIndex, currentTimeIndex);
+      const endTimeIdx = Math.max(startTimeIndex, currentTimeIndex);
 
-    // Build rectangular selection across courts and time slots
-    const startCourtIndex = courts.findIndex(c => c.name === dragState.startCell!.court);
-    const currentCourtIndex = courts.findIndex(c => c.name === courtName);
-    const startTimeIndex = timeSlots.indexOf(dragState.startCell!.time);
-    const currentTimeIndex = timeSlots.indexOf(time);
-
-    const beginCourtIdx = Math.min(startCourtIndex, currentCourtIndex);
-    const endCourtIdx = Math.max(startCourtIndex, currentCourtIndex);
-    const beginTimeIdx = Math.min(startTimeIndex, currentTimeIndex);
-    const endTimeIdx = Math.max(startTimeIndex, currentTimeIndex);
-
-    const newSelectedCells = new Set<string>();
-    for (let ci = beginCourtIdx; ci <= endCourtIdx; ci++) {
-      const c = courts[ci];
-      for (let ti = beginTimeIdx; ti <= endTimeIdx; ti++) {
-        const slot = timeSlots[ti];
-        const slotBooking = bookings[c.name as keyof typeof bookings]?.[slot];
-        const outside = c.id ? isCourtSlotOutsideOperatingHours(c.id, slot) : false;
-        if (!slotBooking && !outside) {
-          newSelectedCells.add(`${c.name}|${slot}`);
+      const newSelectedCells = new Set<string>();
+      for (let ci = beginCourtIdx; ci <= endCourtIdx; ci++) {
+        const c = courts[ci];
+        for (let ti = beginTimeIdx; ti <= endTimeIdx; ti++) {
+          const slot = timeSlots[ti];
+          const slotBooking = bookings[c.name as keyof typeof bookings]?.[slot];
+          const outside = c.id ? isCourtSlotOutsideOperatingHours(c.id, slot) : false;
+          if (!slotBooking && !outside) {
+            newSelectedCells.add(`${c.name}|${slot}`);
+          }
         }
       }
-    }
 
-    setDragState(prev => ({
-      ...prev,
-      endCell: { court: courtName, time },
-      selectedCells: newSelectedCells
-    }));
-  };
+      const next = {
+        ...prev,
+        endCell: { court: courtName, time },
+        selectedCells: newSelectedCells
+      };
+      dragStateRef.current = next;
+      return next;
+    });
+  }, [courts, timeSlots, bookings, isCourtSlotOutsideOperatingHours]);
 
-  const handleMouseUp = () => {
-    // Read from ref to get the latest drag state (avoids stale closure)
+  const handlePointerDragEnd = () => {
+    pointerDragCleanupRef.current?.();
+    pointerDragCleanupRef.current = null;
+
     const currentDrag = dragStateRef.current;
     if (currentDrag.isDragging && currentDrag.selectedCells.size > 0) {
       const cells = new Set<string>(currentDrag.selectedCells);
       const firstSelected = Array.from(cells)[0] as string;
       const [court, time] = firstSelected.split('|');
-      // Pass cells directly to avoid stale closure issues
       handleEmptySlotClick(court, time, cells);
-      // Suppress the click event that fires right after mouseup
       dragJustFinishedRef.current = true;
       setTimeout(() => { dragJustFinishedRef.current = false; }, 50);
     }
 
-    setDragState({
+    const cleared = {
       isDragging: false,
-      startCell: null,
-      endCell: null,
-      selectedCells: new Set()
-    });
+      startCell: null as { court: string; time: string } | null,
+      endCell: null as { court: string; time: string } | null,
+      selectedCells: new Set<string>()
+    };
+    dragStateRef.current = cleared;
+    setDragState(cleared);
   };
 
-  // Add mouse up listener to document to handle drag end outside grid
-  useEffect(() => {
-    if (dragState.isDragging) {
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => document.removeEventListener('mouseup', handleMouseUp);
+  const handlePointerDown = (courtName: string, time: string, event: React.PointerEvent) => {
+    const booking = bookings[courtName as keyof typeof bookings]?.[time];
+    if (booking) return;
+
+    const courtObj = courts.find((c) => c.name === courtName);
+    if (courtObj?.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) return;
+
+    if (event.pointerType === 'mouse') {
+      event.preventDefault();
     }
-  }, [dragState.isDragging]);
+
+    pointerDragCleanupRef.current?.();
+    pointerDragCleanupRef.current = null;
+
+    const next = {
+      isDragging: true,
+      startCell: { court: courtName, time },
+      endCell: { court: courtName, time },
+      selectedCells: new Set([`${courtName}|${time}`])
+    };
+    dragStateRef.current = next;
+    setDragState(next);
+
+    const pointerId = event.pointerId;
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
+      if (!slot) return;
+      const c = slot.getAttribute('data-slot-court');
+      const t = slot.getAttribute('data-slot-time');
+      if (!c || !t) return;
+      extendDragSelection(c, t);
+      ev.preventDefault();
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+      pointerDragCleanupRef.current = null;
+      handlePointerDragEnd();
+    };
+    window.addEventListener('pointermove', onMove, { capture: true, passive: false });
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onUp, true);
+    pointerDragCleanupRef.current = () => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+    };
+  };
+
+  useEffect(() => () => pointerDragCleanupRef.current?.(), []);
 
   // Quick reserve handlers
   const handleQuickReserve = async (reservation: {
@@ -1637,6 +1680,8 @@ export function CourtCalendarView() {
                             )}
                             {/* Top half (first 15 min) */}
                             <div
+                              data-slot-court={court.name}
+                              data-slot-time={topTime}
                               className={`absolute top-0 left-0 right-0
                                 ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                                 ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
@@ -1656,26 +1701,28 @@ export function CourtCalendarView() {
                                 if (topBooking) handleBookingClick(court.name, topTime);
                                 else handleEmptySlotClick(court.name, topTime);
                               }}
-                              onMouseDown={(e) =>
+                              onPointerDown={(e) =>
                                 !isWalkUpCourt &&
                                 !topBooking &&
                                 !topPast &&
                                 !topBlocked &&
                                 !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
-                                handleMouseDown(court.name, topTime, e)
+                                handlePointerDown(court.name, topTime, e)
                               }
-                              onMouseEnter={() =>
+                              onPointerEnter={() =>
                                 !isWalkUpCourt &&
                                 !topPast &&
                                 !topBlocked &&
                                 !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
-                                handleMouseEnter(court.name, topTime)
+                                extendDragSelection(court.name, topTime)
                               }
                             />
 
                             {/* Bottom half (second 15 min) */}
                             {bottomTime && (
                               <div
+                                data-slot-court={court.name}
+                                data-slot-time={bottomTime}
                                 className={`absolute left-0 right-0
                                   ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                                   ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
@@ -1695,20 +1742,20 @@ export function CourtCalendarView() {
                                   if (bottomBooking) handleBookingClick(court.name, bottomTime);
                                   else handleEmptySlotClick(court.name, bottomTime);
                                 }}
-                                onMouseDown={(e) =>
+                                onPointerDown={(e) =>
                                   !isWalkUpCourt &&
                                   !bottomBooking &&
                                   !bottomPast &&
                                   !bottomBlocked &&
                                   !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
-                                  handleMouseDown(court.name, bottomTime, e)
+                                  handlePointerDown(court.name, bottomTime, e)
                                 }
-                                onMouseEnter={() =>
+                                onPointerEnter={() =>
                                   !isWalkUpCourt &&
                                   !bottomPast &&
                                   !bottomBlocked &&
                                   !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
-                                  handleMouseEnter(court.name, bottomTime)
+                                  extendDragSelection(court.name, bottomTime)
                                 }
                               />
                             )}

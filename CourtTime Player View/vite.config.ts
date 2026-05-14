@@ -62,10 +62,20 @@ export default defineConfig(({ mode }) => {
       outDir: 'build',
     },
     server: {
-      host: '127.0.0.1',
+      /** `0.0.0.0` is more reliable than `true` for LAN access from phones on some setups. */
+      host: '0.0.0.0',
       port: devWebPort,
       strictPort: false,
       open: true,
+      /**
+       * Default Vite CORS only allows localhost origins. Opening the app via `http://192.168.x.x:5173`
+       * sends that origin on module/HMR requests and can break loading from a phone.
+       */
+      cors: mode === 'development',
+      /** Tell the HMR client to use the HTTP port (important when opening the site via a LAN IP). */
+      hmr: {
+        clientPort: devWebPort,
+      },
       proxy: {
         '/api': proxyToApi(devApiProxy),
         '/health': proxyToApi(devApiProxy),

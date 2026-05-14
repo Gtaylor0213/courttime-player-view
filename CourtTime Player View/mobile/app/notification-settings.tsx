@@ -27,6 +27,8 @@ export const ErrorBoundary = createRouteErrorBoundary('Notification Settings');
 
 interface NotificationPreferences {
   emailNotificationsEnabled: boolean;
+  emailBookingConfirmations: boolean;
+  emailMembershipRequestAlerts: boolean;
   pushEnabled: boolean;
   pushBookingUpdates: boolean;
   pushBookingReminders: boolean;
@@ -87,7 +89,18 @@ export default function NotificationSettingsScreen() {
     setLoading(true);
     const res = await api.get('/api/user-preferences/notifications');
     if (res.success && res.data?.preferences) {
-      setPrefs(res.data.preferences);
+      const p = res.data.preferences;
+      setPrefs({
+        emailNotificationsEnabled: p.emailNotificationsEnabled !== false,
+        emailBookingConfirmations: p.emailBookingConfirmations !== false,
+        emailMembershipRequestAlerts: p.emailMembershipRequestAlerts !== false,
+        pushEnabled: p.pushEnabled !== false,
+        pushBookingUpdates: p.pushBookingUpdates !== false,
+        pushBookingReminders: p.pushBookingReminders !== false,
+        pushStrikes: p.pushStrikes !== false,
+        pushAnnouncements: p.pushAnnouncements !== false,
+        pushWeather: p.pushWeather !== false,
+      });
     } else {
       showApiErrorAlert(res);
     }
@@ -139,16 +152,46 @@ export default function NotificationSettingsScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={[styles.masterRow, { marginBottom: Spacing.md }]}>
           <View style={styles.rowText}>
-            <Text style={styles.rowTitle}>Email notifications</Text>
+            <Text style={styles.rowTitle}>General transactional email</Text>
             <Text style={styles.rowDescription}>
-              Booking updates, facility messages, and other emails to your account address. In-app alerts are unchanged.
+              Strikes, lockouts, facility messages to members, and similar alerts to your account address.
             </Text>
           </View>
           <Switch
             value={prefs.emailNotificationsEnabled}
             onValueChange={(v) => toggle('emailNotificationsEnabled', v)}
             trackColor={{ false: Colors.border, true: Colors.primary }}
-            accessibilityLabel="Email notifications"
+            accessibilityLabel="General transactional email"
+          />
+        </View>
+
+        <View style={[styles.masterRow, { marginBottom: Spacing.md }]}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>Court booking email</Text>
+            <Text style={styles.rowDescription}>
+              Confirmations and cancellations when you book or release a court.
+            </Text>
+          </View>
+          <Switch
+            value={prefs.emailBookingConfirmations}
+            onValueChange={(v) => toggle('emailBookingConfirmations', v)}
+            trackColor={{ false: Colors.border, true: Colors.primary }}
+            accessibilityLabel="Court booking email"
+          />
+        </View>
+
+        <View style={[styles.masterRow, { marginBottom: Spacing.md }]}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>New member requests</Text>
+            <Text style={styles.rowDescription}>
+              When you are a facility admin, email when a player requests to join your facility.
+            </Text>
+          </View>
+          <Switch
+            value={prefs.emailMembershipRequestAlerts}
+            onValueChange={(v) => toggle('emailMembershipRequestAlerts', v)}
+            trackColor={{ false: Colors.border, true: Colors.primary }}
+            accessibilityLabel="New member request emails"
           />
         </View>
 
@@ -194,7 +237,7 @@ export default function NotificationSettingsScreen() {
         </View>
 
         <Text style={styles.footnote}>
-          Turn off email above to stop transactional emails. Push categories only affect alerts on this device.
+          Email categories are independent: you can turn off booking messages but still get member-request alerts if you are an admin. Push categories only affect alerts on this device.
         </Text>
       </ScrollView>
     </>

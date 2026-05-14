@@ -583,6 +583,13 @@ export async function addUserToFacility(
       [userId, facilityId, membershipType, status]
     );
 
+    if (status === 'pending') {
+      const { notifyFacilityAdminsOfMembershipRequest } = await import('./membershipRequestAdminNotify');
+      notifyFacilityAdminsOfMembershipRequest(userId, facilityId, membershipType).catch((err) =>
+        console.error('Failed to notify admins of pending membership:', err)
+      );
+    }
+
     return true;
   } catch (error) {
     console.error('Add user to facility error:', error);

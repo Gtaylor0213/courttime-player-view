@@ -2,6 +2,10 @@ import { query } from '../database/connection';
 
 export interface NotificationPreferences {
   emailNotificationsEnabled: boolean;
+  /** Court booking confirmation and cancellation emails */
+  emailBookingConfirmations: boolean;
+  /** When you are a facility admin: email when someone requests to join */
+  emailMembershipRequestAlerts: boolean;
   pushEnabled: boolean;
   pushBookingUpdates: boolean;
   pushBookingReminders: boolean;
@@ -12,6 +16,8 @@ export interface NotificationPreferences {
 
 const DEFAULT_PREFS: NotificationPreferences = {
   emailNotificationsEnabled: true,
+  emailBookingConfirmations: true,
+  emailMembershipRequestAlerts: true,
   pushEnabled: true,
   pushBookingUpdates: true,
   pushBookingReminders: true,
@@ -29,6 +35,14 @@ async function ensureEmailNotificationsColumn(): Promise<void> {
     `ALTER TABLE user_preferences
        ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN NOT NULL DEFAULT true`
   );
+  await query(
+    `ALTER TABLE user_preferences
+       ADD COLUMN IF NOT EXISTS email_booking_confirmations BOOLEAN NOT NULL DEFAULT true`
+  );
+  await query(
+    `ALTER TABLE user_preferences
+       ADD COLUMN IF NOT EXISTS email_membership_request_alerts BOOLEAN NOT NULL DEFAULT true`
+  );
   emailNotificationsColumnReady = true;
 }
 
@@ -42,6 +56,8 @@ export async function getNotificationPreferences(userId: string): Promise<Notifi
   const result = await query(
     `SELECT
         COALESCE(email_notifications_enabled, true) as "emailNotificationsEnabled",
+        COALESCE(email_booking_confirmations, true) as "emailBookingConfirmations",
+        COALESCE(email_membership_request_alerts, true) as "emailMembershipRequestAlerts",
         push_enabled            as "pushEnabled",
         push_booking_updates    as "pushBookingUpdates",
         push_booking_reminders  as "pushBookingReminders",
@@ -68,6 +84,8 @@ export async function updateNotificationPreferences(
 
   const colMap: Record<keyof NotificationPreferences, string> = {
     emailNotificationsEnabled: 'email_notifications_enabled',
+    emailBookingConfirmations: 'email_booking_confirmations',
+    emailMembershipRequestAlerts: 'email_membership_request_alerts',
     pushEnabled: 'push_enabled',
     pushBookingUpdates: 'push_booking_updates',
     pushBookingReminders: 'push_booking_reminders',
@@ -105,15 +123,25 @@ export async function updateNotificationPreferences(
   return getNotificationPreferences(userId);
 }
 
-/**
- * Map a notification type string to the preference column that gates it.
- * Returns null for types that should always send (none currently — defensive).
- */
+/** Strikes, lockouts, facility blast-style messages, and other non-booking transactional email. */
 export async function isEmailNotificationsEnabled(userId: string): Promise<boolean> {
   const prefs = await getNotificationPreferences(userId);
   return prefs.emailNotificationsEnabled;
 }
 
+export async function isEmailBookingConfirmationsEnabled(userId: string): Promise<boolean> {
+  const prefs = await getNotificationPreferences(userId);
+  return prefs.emailBookingConfirmations !== false;
+}
+
+export async function isEmailMembershipRequestAlertsEnabled(userId: string): Promise<boolean> {
+  const prefs = await getNotificationPreferences(userId);
+  return prefs.emailMembershipRequestAlerts !== false;
+}
+
+/**
+ * Map an in-app notification type string to the push preference column that gates it.
+ */
 export function preferenceKeyForType(type: string): keyof NotificationPreferences | null {
   switch (type) {
     case 'booking_confirmed':

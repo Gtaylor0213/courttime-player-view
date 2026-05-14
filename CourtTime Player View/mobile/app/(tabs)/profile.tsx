@@ -122,23 +122,15 @@ export default function ProfileScreen() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const joinTermsViewportRef = useRef(0);
   const joinTermsContentRef = useRef(0);
-  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean | null>(null);
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
 
-    const [profileRes, bookingsRes, strikesRes, notifRes] = await Promise.all([
+    const [profileRes, bookingsRes, strikesRes] = await Promise.all([
       api.get(`/api/player-profile/${user.id}`),
       api.get(`/api/bookings/user/${user.id}`),
       api.get(`/api/strikes/user/${user.id}?activeOnly=true`),
-      api.get('/api/user-preferences/notifications'),
     ]);
-
-    if (notifRes.success && notifRes.data?.preferences) {
-      setEmailNotificationsEnabled(notifRes.data.preferences.emailNotificationsEnabled !== false);
-    } else {
-      setEmailNotificationsEnabled(true);
-    }
 
     if (profileRes.success && profileRes.data) {
       const p = profileRes.data.profile || profileRes.data;
@@ -355,21 +347,6 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: logout },
     ]);
-  }
-
-  async function handleEmailNotificationsChange(enabled: boolean) {
-    if (!user || emailNotificationsEnabled === null) return;
-    const previous = emailNotificationsEnabled;
-    setEmailNotificationsEnabled(enabled);
-    const res = await api.patch('/api/user-preferences/notifications', {
-      emailNotificationsEnabled: enabled,
-    });
-    if (!res.success) {
-      setEmailNotificationsEnabled(previous);
-      showAlert('Error', res.error || 'Could not update email notifications.');
-    } else if (res.data?.preferences) {
-      setEmailNotificationsEnabled(res.data.preferences.emailNotificationsEnabled !== false);
-    }
   }
 
   const getInitials = () => {
@@ -939,26 +916,23 @@ export default function ProfileScreen() {
       {/* Settings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Settings</Text>
-        <View style={styles.settingsRow}>
+        <TouchableOpacity
+          style={styles.settingsRow}
+          onPress={() => router.push('/notification-settings')}
+          accessibilityRole="button"
+          accessibilityLabel="Open email notification settings"
+        >
           <View style={styles.settingsIconBox}>
             <Ionicons name="mail-outline" size={20} color={Colors.primary} />
           </View>
-          <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+          <View style={{ flex: 1 }}>
             <Text style={styles.settingsRowTitle}>Email notifications</Text>
             <Text style={styles.settingsRowDescription}>
-              {emailNotificationsEnabled === null
-                ? 'Loading…'
-                : 'Booking updates and messages to your inbox. In-app alerts are unchanged.'}
+              General messages, court bookings, and new member requests if you are an admin
             </Text>
           </View>
-          <Switch
-            value={emailNotificationsEnabled ?? true}
-            onValueChange={handleEmailNotificationsChange}
-            disabled={emailNotificationsEnabled === null}
-            trackColor={{ false: Colors.border, true: Colors.primary }}
-            accessibilityLabel="Email notifications"
-          />
-        </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.settingsRow}
           onPress={() => router.push('/notification-settings')}

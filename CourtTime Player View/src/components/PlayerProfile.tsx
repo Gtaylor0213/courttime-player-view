@@ -54,6 +54,8 @@ export function PlayerProfile() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean | null>(null);
+  const [emailBookingConfirmations, setEmailBookingConfirmations] = useState<boolean | null>(null);
+  const [emailMembershipRequestAlerts, setEmailMembershipRequestAlerts] = useState<boolean | null>(null);
 
   const [profileData, setProfileData] = useState({
     firstName: '',
@@ -87,12 +89,21 @@ export function PlayerProfile() {
         const res = await userPreferencesApi.getNotifications();
         if (cancelled) return;
         if (res.success && res.data?.preferences) {
-          setEmailNotificationsEnabled(res.data.preferences.emailNotificationsEnabled !== false);
+          const p = res.data.preferences;
+          setEmailNotificationsEnabled(p.emailNotificationsEnabled !== false);
+          setEmailBookingConfirmations(p.emailBookingConfirmations !== false);
+          setEmailMembershipRequestAlerts(p.emailMembershipRequestAlerts !== false);
         } else {
           setEmailNotificationsEnabled(true);
+          setEmailBookingConfirmations(true);
+          setEmailMembershipRequestAlerts(true);
         }
       } catch {
-        if (!cancelled) setEmailNotificationsEnabled(true);
+        if (!cancelled) {
+          setEmailNotificationsEnabled(true);
+          setEmailBookingConfirmations(true);
+          setEmailMembershipRequestAlerts(true);
+        }
       }
     })();
     return () => {
@@ -278,6 +289,32 @@ export function PlayerProfile() {
     } else {
       const next = res.data?.preferences?.emailNotificationsEnabled;
       setEmailNotificationsEnabled(next !== false);
+    }
+  };
+
+  const handleEmailBookingConfirmationsChange = async (enabled: boolean) => {
+    if (!user?.id || emailBookingConfirmations === null) return;
+    const previous = emailBookingConfirmations;
+    setEmailBookingConfirmations(enabled);
+    const res = await userPreferencesApi.updateNotifications({ emailBookingConfirmations: enabled });
+    if (!res.success) {
+      setEmailBookingConfirmations(previous);
+      toast.error(res.error || 'Could not update booking email preference');
+    } else {
+      setEmailBookingConfirmations(res.data?.preferences?.emailBookingConfirmations !== false);
+    }
+  };
+
+  const handleEmailMembershipRequestAlertsChange = async (enabled: boolean) => {
+    if (!user?.id || emailMembershipRequestAlerts === null) return;
+    const previous = emailMembershipRequestAlerts;
+    setEmailMembershipRequestAlerts(enabled);
+    const res = await userPreferencesApi.updateNotifications({ emailMembershipRequestAlerts: enabled });
+    if (!res.success) {
+      setEmailMembershipRequestAlerts(previous);
+      toast.error(res.error || 'Could not update membership request email preference');
+    } else {
+      setEmailMembershipRequestAlerts(res.data?.preferences?.emailMembershipRequestAlerts !== false);
     }
   };
 
@@ -561,29 +598,73 @@ export function PlayerProfile() {
                 Notification preferences
               </CardTitle>
               <CardDescription>
-                Email is the only notification channel today. Turn this off if you do not want booking updates, facility messages, and other alerts sent to your inbox. In-app alerts are unchanged.
+                Control which emails we send to your account address. In-app alerts are unchanged. Booking confirmations and admin membership alerts can be toggled separately.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
                 <div className="space-y-0.5 min-w-0">
-                  <Label htmlFor="email-notifications" className="text-base font-medium text-gray-900">
-                    Email notifications
+                  <Label htmlFor="email-general" className="text-base font-medium text-gray-900">
+                    General transactional email
                   </Label>
                   <p className="text-sm text-gray-600">
                     {emailNotificationsEnabled === null
                       ? 'Loading…'
                       : emailNotificationsEnabled
-                        ? 'On — we may email you about your account and bookings.'
-                        : 'Off — we will not send you emails.'}
+                        ? 'On — strikes, lockouts, facility announcements to members, and similar messages.'
+                        : 'Off — we skip these emails.'}
                   </p>
                 </div>
                 <Switch
-                  id="email-notifications"
+                  id="email-general"
                   className="shrink-0"
                   checked={emailNotificationsEnabled ?? true}
                   onCheckedChange={handleEmailNotificationsChange}
                   disabled={emailNotificationsEnabled === null}
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
+                <div className="space-y-0.5 min-w-0">
+                  <Label htmlFor="email-booking" className="text-base font-medium text-gray-900">
+                    Court booking emails
+                  </Label>
+                  <p className="text-sm text-gray-600">
+                    {emailBookingConfirmations === null
+                      ? 'Loading…'
+                      : emailBookingConfirmations
+                        ? 'On — confirmations and cancellations when you book a court.'
+                        : 'Off — no booking confirmation or cancellation emails.'}
+                  </p>
+                </div>
+                <Switch
+                  id="email-booking"
+                  className="shrink-0"
+                  checked={emailBookingConfirmations ?? true}
+                  onCheckedChange={handleEmailBookingConfirmationsChange}
+                  disabled={emailBookingConfirmations === null}
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
+                <div className="space-y-0.5 min-w-0">
+                  <Label htmlFor="email-membership-requests" className="text-base font-medium text-gray-900">
+                    New member requests (admins)
+                  </Label>
+                  <p className="text-sm text-gray-600">
+                    {emailMembershipRequestAlerts === null
+                      ? 'Loading…'
+                      : emailMembershipRequestAlerts
+                        ? 'On — when you are a facility admin, we email you if someone asks to join.'
+                        : 'Off — no email for new join requests (in-app alert may still appear).'}
+                  </p>
+                </div>
+                <Switch
+                  id="email-membership-requests"
+                  className="shrink-0"
+                  checked={emailMembershipRequestAlerts ?? true}
+                  onCheckedChange={handleEmailMembershipRequestAlertsChange}
+                  disabled={emailMembershipRequestAlerts === null}
                 />
               </div>
             </CardContent>

@@ -20,17 +20,36 @@ interface EmailSendResult {
   response?: unknown;
 }
 
-async function shouldSendEmailToUser(userId: string | undefined): Promise<boolean> {
+/** Which preference column gates this send (each can be toggled independently). */
+export type TransactionalEmailCategory = 'general' | 'booking' | 'membership_request';
+
+async function shouldSendTransactionalEmail(
+  userId: string | undefined,
+  category: TransactionalEmailCategory
+): Promise<boolean> {
   if (!userId) return true;
-  const { isEmailNotificationsEnabled } = await import('./userPreferencesService');
-  return isEmailNotificationsEnabled(userId);
+  const prefs = await import('./userPreferencesService');
+  switch (category) {
+    case 'booking':
+      return prefs.isEmailBookingConfirmationsEnabled(userId);
+    case 'membership_request':
+      return prefs.isEmailMembershipRequestAlertsEnabled(userId);
+    default:
+      return prefs.isEmailNotificationsEnabled(userId);
+  }
 }
 
 /**
  * Send an email via Resend
  */
-async function sendEmail(to: string, subject: string, html: string, userId?: string): Promise<EmailSendResult> {
-  if (!(await shouldSendEmailToUser(userId))) {
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  userId?: string,
+  category: TransactionalEmailCategory = 'general'
+): Promise<EmailSendResult> {
+  if (!(await shouldSendTransactionalEmail(userId, category))) {
     return { success: true, status: null };
   }
 
@@ -139,9 +158,10 @@ async function sendTemplatedEmail(
   facilityName: string,
   templateType: string,
   variables: Record<string, string>,
-  userId?: string
+  userId?: string,
+  category: TransactionalEmailCategory = 'general'
 ): Promise<boolean> {
-  if (!(await shouldSendEmailToUser(userId))) {
+  if (!(await shouldSendTransactionalEmail(userId, category))) {
     return true;
   }
 
@@ -166,7 +186,7 @@ async function sendTemplatedEmail(
   const renderedBody = renderTemplate(bodyTemplate, variables);
   const fullHtml = wrapInEmailLayout(renderedBody, facilityName);
 
-  const result = await sendEmail(to, renderedSubject, fullHtml, userId);
+  const result = await sendEmail(to, renderedSubject, fullHtml, userId, category);
   return result.success;
 }
 
@@ -203,7 +223,8 @@ export async function sendBookingConfirmationEmail(
       endTime,
       bookingType,
     },
-    userId
+    userId,
+    'booking'
   );
 }
 
@@ -234,7 +255,8 @@ export async function sendBookingCancellationEmail(
       startTime,
       reason,
     },
-    userId
+    userId,
+    'booking'
   );
 }
 
@@ -362,7 +384,46 @@ export async function sendAnnouncementEmail(
   `;
   const fullHtml = wrapInEmailLayout(bodyContent, facilityName);
 
-  return sendEmail(email, `${subject} - ${facilityName}`, fullHtml, userId);
+  return sendEmail(email, `${subject} - ${facilityName}`, fullHtml, userId, 'general');
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Email active facility admins when a player requests membership (separate pref from booking email).
+ */
+export async function sendMembershipRequestAdminEmail(
+  adminEmail: string,
+  adminUserId: string,
+  requesterName: string,
+  requesterEmail: string,
+  facilityName: string,
+  membershipType: string
+): Promise<EmailSendResult> {
+  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const manageUrl = `${appUrl}/admin?tab=members`;
+  const safeName = escapeHtml(requesterName || 'A player');
+  const safeEmail = escapeHtml(requesterEmail || '');
+  const safeFacility = escapeHtml(facilityName || 'your facility');
+  const safeType = escapeHtml(membershipType || 'Full');
+
+  const bodyContent = `
+    <p style="color: #374151; margin-top: 0;"><strong>${safeName}</strong>${safeEmail ? ` (${safeEmail})` : ''} has requested to join <strong>${safeFacility}</strong>.</p>
+    <p style="color: #374151;">Membership type: <strong>${safeType}</strong></p>
+    <p style="color: #374151;">Review pending members in the admin console to approve or decline.</p>
+    <p style="margin: 24px 0 0;">
+      <a href="${manageUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">Open members</a>
+    </p>
+    <p style="color: #6b7280; font-size: 13px; margin-top: 24px;">If the button does not work, copy this link: ${escapeHtml(manageUrl)}</p>
+  `;
+  const fullHtml = wrapInEmailLayout(bodyContent, facilityName);
+  return sendEmail(adminEmail, `New membership request — ${facilityName}`, fullHtml, adminUserId, 'membership_request');
 }
 
 /**
@@ -390,5 +451,5 @@ export async function sendBulletinMinParticipantsNotMetEmail(
     <p style="color: #6b7280; font-size: 14px;">Please check the bulletin board for future postings.</p>
   `;
   const html = wrapInEmailLayout(bodyContent, facilityName);
-  return sendEmail(email, `${eventType} Cancelled - ${eventTitle}`, html, userId);
+  return sendEmail(email, `${eventType} Cancelled - ${eventTitle}`, html, userId, 'general');
 }

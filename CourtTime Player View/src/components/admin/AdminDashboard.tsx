@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from '../NotificationBell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Calendar, Users, TrendingUp, DollarSign, Download, Filter, BarChart3, PieChart, Clock } from 'lucide-react';
+import { Calendar, Users, TrendingUp, DollarSign, Download, Filter, BarChart3, PieChart } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
@@ -51,7 +51,7 @@ export function AdminDashboard() {
   const { user } = useAuth();
   const { selectedFacilityId: currentFacilityId } = useAppContext();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'overview' | 'courts' | 'times' | 'members'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'courts' | 'members'>('overview');
   const [timeRange, setTimeRange] = useState('30');
   const [stats, setStats] = useState<DashboardStats>({
     totalBookings: 0,
@@ -311,16 +311,7 @@ export function AdminDashboard() {
                     className="shrink-0"
                   >
                     <PieChart className="h-4 w-4 mr-1" />
-                    Courts
-                  </Button>
-                  <Button
-                    variant={activeTab === 'times' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setActiveTab('times')}
-                    className="shrink-0"
-                  >
-                    <Clock className="h-4 w-4 mr-1" />
-                    Time Analysis
+                    Court & Time Analysis
                   </Button>
                   <Button
                     variant={activeTab === 'members' ? 'default' : 'outline'}
@@ -359,60 +350,59 @@ export function AdminDashboard() {
             </div>
           ) : (
             <>
-              {/* Stats Grid - Always visible */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.totalBookings}</div>
-                    <p className="text-xs text-muted-foreground">
-                      {stats.bookingsChange > 0 ? '+' : ''}{stats.bookingsChange}% from last month
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Active Members</CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.activeMembers}</div>
-                    <p className="text-xs text-muted-foreground">
-                      {stats.newMembers > 0 ? `+${stats.newMembers}` : stats.newMembers} new this month
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Court Utilization</CardTitle>
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.courtUtilization}%</div>
-                    <p className="text-xs text-muted-foreground">This month</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">${stats.revenue.toLocaleString()}</div>
-                    <p className="text-xs text-muted-foreground">This month</p>
-                  </CardContent>
-                </Card>
-              </div>
-
               {/* Overview Tab */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.totalBookings}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {stats.bookingsChange > 0 ? '+' : ''}{stats.bookingsChange}% from last month
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Active Members</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.activeMembers}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {stats.newMembers > 0 ? `+${stats.newMembers}` : stats.newMembers} new this month
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Court Utilization</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.courtUtilization}%</div>
+                        <p className="text-xs text-muted-foreground">This month</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Revenue</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">${stats.revenue.toLocaleString()}</div>
+                        <p className="text-xs text-muted-foreground">This month</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card>
                       <CardHeader>
@@ -545,7 +535,7 @@ export function AdminDashboard() {
                 </div>
               )}
 
-              {/* Courts Tab */}
+              {/* Court & time analysis */}
               {activeTab === 'courts' && (
                 <div className="space-y-6">
                   <Card>
@@ -626,12 +616,7 @@ export function AdminDashboard() {
                       )}
                     </CardContent>
                   </Card>
-                </div>
-              )}
 
-              {/* Time Analysis Tab */}
-              {activeTab === 'times' && (
-                <div className="space-y-6">
                   <Card>
                     <CardHeader>
                       <CardTitle>Bookings by Day of Week</CardTitle>

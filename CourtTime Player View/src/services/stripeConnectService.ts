@@ -99,6 +99,26 @@ function rowToConnectPayment(row: any): ConnectPayment {
 // ---------------------------------------------------------------------------
 
 /**
+ * Stripe rejects empty strings and many non-RFC placeholders as "invalid email".
+ * Only pass an email to accounts.create when it looks usable; otherwise omit
+ * so Stripe collects it during Express onboarding.
+ */
+function pickStripeConnectAccountEmail(
+  ...candidates: Array<string | null | undefined>
+): string | undefined {
+  const basic = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  for (const raw of candidates) {
+    if (raw == null) continue;
+    const s = String(raw).trim();
+    if (!s) continue;
+    const lower = s.toLowerCase();
+    if (['n/a', 'na', 'none', 'no email', 'noemail', 'tbd'].includes(lower)) continue;
+    if (basic.test(s)) return s;
+  }
+  return undefined;
+}
+
+/**
  * Create (or reuse) a Stripe Express account for a club and return an
  * AccountLink the admin can visit to complete onboarding.
  */
@@ -106,6 +126,8 @@ export async function createConnectOnboardingLink(params: {
   clubId: string;
   clubName: string;
   clubEmail?: string | null;
+  /** Used when the facility row has no valid email (common cause of Stripe "invalid email"). */
+  adminEmail?: string | null;
   returnUrl: string;
   refreshUrl: string;
 }): Promise<{ url: string; accountId: string }> {
@@ -125,10 +147,15 @@ export async function createConnectOnboardingLink(params: {
 
   let accountId: string = facility.stripe_account_id;
 
+  const accountEmail = pickStripeConnectAccountEmail(
+    params.clubEmail,
+    facility.email,
+    params.adminEmail
+  );
+
   if (!accountId) {
-    const account = await stripe.accounts.create({
+    const createParams: Stripe.AccountCreateParams = {
       type: 'express',
-      email: params.clubEmail ?? facility.email ?? undefined,
       business_profile: {
         name: params.clubName ?? facility.name,
       },
@@ -137,13 +164,24 @@ export async function createConnectOnboardingLink(params: {
         card_payments: { requested: true },
       },
       metadata: { clubId: params.clubId },
-    });
+    };
+    if (accountEmail) {
+      createParams.email = accountEmail;
+    }
+
+    const account = await stripe.accounts.create(createParams);
     accountId = account.id;
 
     await query(
       'UPDATE facilities SET stripe_account_id = $1 WHERE id = $2',
       [accountId, params.clubId]
     );
+  } else if (accountEmail) {
+    try {
+      await stripe.accounts.update(accountId, { email: accountEmail });
+    } catch (err: any) {
+      console.warn('[STRIPE-CONNECT] could not update connected account email:', err?.message || err);
+    }
   }
 
   const accountLink = await stripe.accountLinks.create({

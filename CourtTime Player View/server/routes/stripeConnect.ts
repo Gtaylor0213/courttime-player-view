@@ -65,6 +65,7 @@ router.get('/connect', requireAuth, async (req, res) => {
       clubId,
       clubName: facility.name,
       clubEmail: facility.email,
+      adminEmail: req.user!.email,
       returnUrl,
       refreshUrl,
     });

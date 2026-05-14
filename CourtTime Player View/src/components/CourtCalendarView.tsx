@@ -1140,9 +1140,11 @@ export function CourtCalendarView() {
     const containerHeight = container.clientHeight;
     const headerHeight = measuredHeaderHeight;
 
-    // Scroll so the current time line is visible (position adjusted for header)
+    // Scroll so the "now" line sits in the upper part of the viewport so more upcoming
+    // slots are visible (past grey + red line styling unchanged — only scroll bias).
     const actualPosition = currentTimeLinePosition + headerHeight;
-    const scrollPosition = Math.max(0, actualPosition - containerHeight / 3);
+    const nowLineFromTop = Math.max(56, containerHeight * 0.12);
+    const scrollPosition = Math.max(0, actualPosition - nowLineFromTop);
     container.scrollTo({
       top: scrollPosition,
       behavior: 'smooth'

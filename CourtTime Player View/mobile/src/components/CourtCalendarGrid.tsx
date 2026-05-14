@@ -644,7 +644,7 @@ export function CourtCalendarGrid({
     const firstFutureRowIndex = timeRows.findIndex((_, rowIndex) => !rowIsPast(rowIndex));
     let scrollY: number;
     if (currentTimeIndicatorY !== null) {
-      const lead = Math.min(ROW_HEIGHT * 2, Math.max(48, gridViewportHeight * 0.22));
+      const lead = Math.min(ROW_HEIGHT * 2, Math.max(32, gridViewportHeight * 0.12));
       scrollY = Math.max(0, currentTimeIndicatorY - lead);
     } else if (firstFutureRowIndex >= 0) {
       scrollY = Math.max(0, firstFutureRowIndex - 1) * ROW_HEIGHT;

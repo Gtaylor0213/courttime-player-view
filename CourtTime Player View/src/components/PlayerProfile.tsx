@@ -553,6 +553,9 @@ export function PlayerProfile() {
     loadProfile();
   };
 
+  const canManageMembershipRequestEmailAlerts =
+    (user?.adminFacilities?.length ?? 0) > 0 || user?.userType === 'admin';
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -598,7 +601,10 @@ export function PlayerProfile() {
                 Notification preferences
               </CardTitle>
               <CardDescription>
-                Control which emails we send to your account address. In-app alerts are unchanged. Booking confirmations and admin membership alerts can be toggled separately.
+                Control which emails we send to your account address. In-app alerts are unchanged.
+                {canManageMembershipRequestEmailAlerts
+                  ? ' Booking confirmations and new member request alerts (facility admins) can be toggled separately.'
+                  : ' Booking confirmations can be toggled separately.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -646,27 +652,29 @@ export function PlayerProfile() {
                 />
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
-                <div className="space-y-0.5 min-w-0">
-                  <Label htmlFor="email-membership-requests" className="text-base font-medium text-gray-900">
-                    New member requests (admins)
-                  </Label>
-                  <p className="text-sm text-gray-600">
-                    {emailMembershipRequestAlerts === null
-                      ? 'Loading…'
-                      : emailMembershipRequestAlerts
-                        ? 'On — when you are a facility admin, we email you if someone asks to join.'
-                        : 'Off — no email for new join requests (in-app alert may still appear).'}
-                  </p>
+              {canManageMembershipRequestEmailAlerts && (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
+                  <div className="space-y-0.5 min-w-0">
+                    <Label htmlFor="email-membership-requests" className="text-base font-medium text-gray-900">
+                      New member requests (admins)
+                    </Label>
+                    <p className="text-sm text-gray-600">
+                      {emailMembershipRequestAlerts === null
+                        ? 'Loading…'
+                        : emailMembershipRequestAlerts
+                          ? 'On — when you are a facility admin, we email you if someone asks to join.'
+                          : 'Off — no email for new join requests (in-app alert may still appear).'}
+                    </p>
+                  </div>
+                  <Switch
+                    id="email-membership-requests"
+                    className="shrink-0"
+                    checked={emailMembershipRequestAlerts ?? true}
+                    onCheckedChange={handleEmailMembershipRequestAlertsChange}
+                    disabled={emailMembershipRequestAlerts === null}
+                  />
                 </div>
-                <Switch
-                  id="email-membership-requests"
-                  className="shrink-0"
-                  checked={emailMembershipRequestAlerts ?? true}
-                  onCheckedChange={handleEmailMembershipRequestAlertsChange}
-                  disabled={emailMembershipRequestAlerts === null}
-                />
-              </div>
+              )}
             </CardContent>
           </Card>
 

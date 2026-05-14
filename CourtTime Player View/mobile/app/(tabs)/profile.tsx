@@ -85,6 +85,8 @@ function tryMarkJoinTermsFitWithoutScroll(
 
 export default function ProfileScreen() {
   const { user, logout, updateUser, facilities } = useAuth();
+  const canManageMembershipRequestEmailAlerts =
+    (user?.adminFacilities?.length ?? 0) > 0 || user?.userType === 'admin';
   const router = useRouter();
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [bookingCount, setBookingCount] = useState(0);
@@ -928,7 +930,9 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.settingsRowTitle}>Email notifications</Text>
             <Text style={styles.settingsRowDescription}>
-              General messages, court bookings, and new member requests if you are an admin
+              {canManageMembershipRequestEmailAlerts
+                ? 'General messages, court bookings, and new member requests for facility admins'
+                : 'General messages and court bookings to your account address'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />

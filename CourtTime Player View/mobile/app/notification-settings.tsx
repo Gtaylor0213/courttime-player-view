@@ -22,6 +22,7 @@ import { showApiErrorAlert } from '../src/utils/alert';
 import { api } from '../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
+import { useAuth } from '../src/contexts/AuthContext';
 
 export const ErrorBoundary = createRouteErrorBoundary('Notification Settings');
 
@@ -78,6 +79,9 @@ const CATEGORY_TOGGLES: ToggleConfig[] = [
 ];
 
 export default function NotificationSettingsScreen() {
+  const { user } = useAuth();
+  const canManageMembershipRequestEmailAlerts =
+    (user?.adminFacilities?.length ?? 0) > 0 || user?.userType === 'admin';
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -180,20 +184,22 @@ export default function NotificationSettingsScreen() {
           />
         </View>
 
-        <View style={[styles.masterRow, { marginBottom: Spacing.md }]}>
-          <View style={styles.rowText}>
-            <Text style={styles.rowTitle}>New member requests</Text>
-            <Text style={styles.rowDescription}>
-              When you are a facility admin, email when a player requests to join your facility.
-            </Text>
+        {canManageMembershipRequestEmailAlerts && (
+          <View style={[styles.masterRow, { marginBottom: Spacing.md }]}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>New member requests</Text>
+              <Text style={styles.rowDescription}>
+                When you are a facility admin, email when a player requests to join your facility.
+              </Text>
+            </View>
+            <Switch
+              value={prefs.emailMembershipRequestAlerts}
+              onValueChange={(v) => toggle('emailMembershipRequestAlerts', v)}
+              trackColor={{ false: Colors.border, true: Colors.primary }}
+              accessibilityLabel="New member request emails"
+            />
           </View>
-          <Switch
-            value={prefs.emailMembershipRequestAlerts}
-            onValueChange={(v) => toggle('emailMembershipRequestAlerts', v)}
-            trackColor={{ false: Colors.border, true: Colors.primary }}
-            accessibilityLabel="New member request emails"
-          />
-        </View>
+        )}
 
         {/* Master toggle */}
         <View style={styles.masterRow}>
@@ -237,7 +243,9 @@ export default function NotificationSettingsScreen() {
         </View>
 
         <Text style={styles.footnote}>
-          Email categories are independent: you can turn off booking messages but still get member-request alerts if you are an admin. Push categories only affect alerts on this device.
+          {canManageMembershipRequestEmailAlerts
+            ? 'Email categories are independent: you can turn off booking messages but still get member-request alerts if you are an admin. Push categories only affect alerts on this device.'
+            : 'Email categories are independent: you can turn off booking messages while keeping other transactional email on. Push categories only affect alerts on this device.'}
         </Text>
       </ScrollView>
     </>

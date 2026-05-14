@@ -1492,22 +1492,30 @@ export function CourtCalendarView() {
                     <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
                       {/* Sticky time label */}
                       <td
-                        className="sticky left-0 z-10 bg-green-50 border-r border-green-100 px-2"
+                        className="sticky left-0 z-10 bg-green-50 border-r border-green-100 p-0"
                         style={{
                           width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth,
-                          textAlign: 'right', verticalAlign: 'top', paddingTop: 4, position: 'relative',
+                          verticalAlign: 'top', position: 'relative',
                           borderBottom: rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
                         }}
                       >
                         {bottomTime && (
                           <div
-                            className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-gray-200"
+                            className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-dashed border-gray-200"
                             style={{ top: effectiveSubSlotHeight }}
                           />
                         )}
-                        <span className={`text-xs whitespace-nowrap ${isHourLabel ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
-                          {time30}
-                        </span>
+                        {/* Label the row start time; keep it in the top 15-min band so it does not sit on the internal divider */}
+                        <div
+                          className="relative z-[2] flex items-center justify-center px-2"
+                          style={{
+                            height: bottomTime ? effectiveSubSlotHeight : effectiveRowHeight,
+                          }}
+                        >
+                          <span className={`text-xs whitespace-nowrap ${isHourLabel ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                            {time30}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Court cells */}

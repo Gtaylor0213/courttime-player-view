@@ -1354,14 +1354,14 @@ const styles = StyleSheet.create({
   timeLabel: {
     width: TIME_LABEL_WIDTH,
     justifyContent: 'center',
-    paddingRight: Spacing.xs,
-    alignItems: 'flex-end',
+    paddingHorizontal: Spacing.xs,
+    alignItems: 'center',
   },
   timeLabelText: {
     fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '500',
-    textAlign: 'right',
+    textAlign: 'center',
   },
   pastText: {
     color: Colors.textMuted,
@@ -1403,6 +1403,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 2,
     overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bookingBlockBlocked: {
     backgroundColor: '#E5E7EB',
@@ -1412,10 +1414,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: Colors.primary,
+    textAlign: 'center',
   },
   bookingBlockTime: {
     fontSize: 9,
     color: Colors.textSecondary,
+    textAlign: 'center',
   },
 
   // Hint

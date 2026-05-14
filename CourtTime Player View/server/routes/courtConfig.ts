@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { query } from '../../src/database/connection';
+import { query, getClient } from '../../src/database/connection';
 import {
   getOperatingHoursForDay,
   parseOperatingHoursInput,
@@ -278,7 +278,7 @@ router.put('/:courtId/schedule', async (req, res, next) => {
       });
     }
 
-    const client = await pool.connect();
+    const client = await getClient();
     try {
       await client.query('BEGIN');
 

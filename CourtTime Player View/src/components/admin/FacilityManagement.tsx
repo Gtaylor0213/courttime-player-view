@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -18,6 +18,7 @@ import { facilitiesApi, adminApi, courtConfigApi, rulesApi, addressWhitelistApi,
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { BillingTab } from './BillingTab';
+import { PaymentsTab } from './PaymentsTab';
 
 // US State abbreviations
 const US_STATES = [
@@ -381,7 +382,9 @@ function FacilityCourtFormBody({
 export function FacilityManagement() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('details');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'details';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -2320,6 +2323,7 @@ export function FacilityManagement() {
                   <TabsTrigger value="rules" className="px-4">Booking Rules</TabsTrigger>
                   <TabsTrigger value="courts" className="px-4">Court Management</TabsTrigger>
                   <TabsTrigger value="billing" className="px-4">Billing & Payment</TabsTrigger>
+                  <TabsTrigger value="payments" className="px-4">Payments</TabsTrigger>
                 </TabsList>
               </div>
             </div>
@@ -3974,6 +3978,11 @@ export function FacilityManagement() {
             {/* Billing & Payment Tab */}
             <TabsContent value="billing" className="space-y-6">
               {currentFacilityId && <BillingTab facilityId={currentFacilityId} />}
+            </TabsContent>
+
+            {/* Payments Tab — Stripe Connect: members pay the club */}
+            <TabsContent value="payments" className="space-y-6">
+              {currentFacilityId && <PaymentsTab clubId={currentFacilityId} />}
             </TabsContent>
           </Tabs>
         </div>

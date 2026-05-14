@@ -854,6 +854,12 @@ export const adminApi = {
 
 // Court Config API
 export const courtConfigApi = {
+  /** Per-court operating window for one calendar day (merged with facility defaults on the server). */
+  getFacilityDayOperating: async (facilityId: string, dateYmd: string) => {
+    const qs = new URLSearchParams({ date: dateYmd });
+    return apiRequest(`/api/court-config/facility/${facilityId}?${qs.toString()}`);
+  },
+
   getSchedule: async (courtId: string) => {
     return apiRequest(`/api/court-config/${courtId}/schedule`);
   },

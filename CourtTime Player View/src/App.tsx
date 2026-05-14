@@ -23,6 +23,8 @@ import { ClubInfo } from './components/ClubInfo';
 import { BulletinBoard } from './components/BulletinBoard';
 import { FindHittingPartner } from './components/FindHittingPartner';
 import { MessagesPage } from './components/MessagesPage';
+import { MemberPayments } from './components/MemberPayments';
+import { PaymentSuccess } from './components/PaymentSuccess';
 
 // Admin pages
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -80,6 +82,8 @@ export default function App() {
               <Route path="/bulletin-board" element={<BulletinBoard />} />
               <Route path="/hitting-partner" element={<FindHittingPartner />} />
               <Route path="/messages" element={<MessagesPage />} />
+              <Route path="/payments" element={<MemberPayments />} />
+              <Route path="/payments/success" element={<PaymentSuccess />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/facilities" element={<FacilityManagement />} />
               <Route path="/admin/courts" element={<CourtManagement />} />

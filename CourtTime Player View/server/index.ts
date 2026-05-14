@@ -51,6 +51,10 @@ import householdsRoutes from './routes/households';
 import paymentRoutes from './routes/payments';
 import webhookRoutes from './routes/webhook';
 import facilityLocationsRoutes from './routes/facilityLocations';
+import stripeConnectRoutes from './routes/stripeConnect';
+import paymentItemsRoutes from './routes/paymentItems';
+import connectPaymentsRoutes from './routes/connectPayments';
+import connectWebhookRoutes from './routes/connectWebhook';
 import { requireAuth } from './middleware/auth';
 
 const app = express();
@@ -90,8 +94,11 @@ function logLanApiUrls(port: number) {
 // Trust the first proxy (Render runs behind a reverse proxy)
 app.set('trust proxy', 1);
 
-// Stripe webhook must be mounted BEFORE express.json() — needs raw body for signature verification
+// Stripe webhooks must be mounted BEFORE express.json() — they need the raw body for signature verification.
+//  - webhookRoutes mounts POST /api/webhooks/stripe (platform subscription billing — existing, untouched).
+//  - connectWebhookRoutes mounts POST /api/webhooks/stripe-connect (member→club Connect payments).
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/webhooks', connectWebhookRoutes);
 
 // Middleware
 app.use(cors({
@@ -193,6 +200,14 @@ app.use('/api/facilities', facilityRoutes);
 app.use('/api/developer', supportRoutes);
 app.use('/api/payments', paymentRoutes);
 
+// Stripe Connect (member→club payments). Mounted after the existing
+// /api/payments routes so the legacy subscription routes always win on
+// any path overlap. New paths: POST /api/payments/checkout,
+// GET /api/payments/history?clubId=..., GET /api/payments/my-history.
+app.use('/api/payments', connectPaymentsRoutes);
+app.use('/api/stripe', stripeConnectRoutes);
+app.use('/api/payment-items', paymentItemsRoutes);
+
 // API Routes — protected (require valid JWT)
 app.use('/api/users', requireAuth, userRoutes);
 app.use('/api/members', requireAuth, memberRoutes);
@@ -281,6 +296,7 @@ async function startServer() {
       console.log(`   ⏰ Court Config: /api/court-config`);
       console.log(`   📜 Booking Rules: /api/rules`);
       console.log(`   🏠 Households: /api/households`);
+      console.log(`   💳 Stripe Connect: /api/stripe, /api/payment-items, /api/payments/checkout`);
       console.log(`\n${'='.repeat(60)}\n`);
     });
 

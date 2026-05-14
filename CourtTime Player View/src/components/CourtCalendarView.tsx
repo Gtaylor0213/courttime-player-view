@@ -17,6 +17,8 @@ import { parseLocalDate } from '../utils/dateUtils';
 import { toast } from 'sonner';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
+import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
+import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 
 // Layout constants
 const ROW_HEIGHT = 50;            // 30-min visible row height
@@ -24,8 +26,28 @@ const SUB_SLOT_HEIGHT = 25;       // 15-min subdivision height
 const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 38;
-import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
-import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+
+type CourtDayOperatingBounds = { isOpen: boolean; openMin: number; closeMin: number };
+
+function parseApiTimeToMinutes(value: unknown): number | null {
+  if (value == null) return null;
+  const s = typeof value === 'string' ? value : String(value);
+  const timePart = s.includes('T') ? s.split('T')[1] || '' : s;
+  const m = timePart.trim().match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+  return h * 60 + min;
+}
+
+function calendarSlotToMinutes(timeSlot: string): number {
+  const [time, period] = timeSlot.split(' ');
+  let [hours, minutes] = time.split(':').map(Number);
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + (minutes || 0);
+}
 
 // Helper to get current time components in a given timezone
 const getTimeComponents = (tz: string = 'America/New_York'): { hours: number; minutes: number; date: Date } => {
@@ -82,6 +104,10 @@ export function CourtCalendarView() {
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [bookingsData, setBookingsData] = useState<any>({});
+  /** Effective operating window per court for the selected calendar day (from API; empty = no extra shading). */
+  const [courtDayOperatingByCourtId, setCourtDayOperatingByCourtId] = useState<
+    Record<string, CourtDayOperatingBounds>
+  >({});
   const [loadingBookings, setLoadingBookings] = useState(false);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const headerRowRef = useRef<HTMLTableRowElement>(null);
@@ -246,6 +272,7 @@ export function CourtCalendarView() {
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async () => {
     if (!selectedFacility) {
+      setCourtDayOperatingByCourtId({});
       return;
     }
 
@@ -258,14 +285,32 @@ export function CourtCalendarView() {
       const day = String(selectedDate.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
 
-      // Fetch bookings and blackouts in parallel
-      const [response, blackoutResponse] = await Promise.all([
+      // Fetch bookings, blackouts, and per-court operating windows for this day
+      const [response, blackoutResponse, facilityDayResponse] = await Promise.all([
         bookingApi.getByFacility(selectedFacility, dateStr),
         courtConfigApi.getFacilityBlackouts(selectedFacility, {
           startDate: dateStr,
           endDate: dateStr,
         }),
+        courtConfigApi.getFacilityDayOperating(selectedFacility, dateStr),
       ]);
+
+      if (facilityDayResponse?.success && Array.isArray(facilityDayResponse.data?.courtConfigs)) {
+        const nextBounds: Record<string, CourtDayOperatingBounds> = {};
+        (facilityDayResponse.data.courtConfigs as any[]).forEach((row: any) => {
+          const openMin = parseApiTimeToMinutes(row.openTime);
+          const closeMin = parseApiTimeToMinutes(row.closeTime);
+          if (openMin === null || closeMin === null) return;
+          nextBounds[row.courtId] = {
+            isOpen: row.isOpen !== false,
+            openMin,
+            closeMin,
+          };
+        });
+        setCourtDayOperatingByCourtId(nextBounds);
+      } else {
+        setCourtDayOperatingByCourtId({});
+      }
 
       // Transform API bookings to match the format expected by the UI
       const transformedBookings: any = {};
@@ -452,6 +497,7 @@ export function CourtCalendarView() {
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setBookingsData({});
+      setCourtDayOperatingByCourtId({});
     } finally {
       setLoadingBookings(false);
     }
@@ -648,6 +694,19 @@ export function CourtCalendarView() {
 
     return currentMinutes >= slotEndMinutes;
   }, [selectedDate, currentTime, isToday, facilityTimezone]);
+
+  /** True when this court column is outside its effective open window for the selected day (stricter than facility grid). */
+  const isCourtSlotOutsideOperatingHours = useCallback(
+    (courtId: string | undefined, timeSlot: string): boolean => {
+      if (!courtId) return false;
+      const bounds = courtDayOperatingByCourtId[courtId];
+      if (!bounds) return false;
+      if (!bounds.isOpen) return true;
+      const slotMin = calendarSlotToMinutes(timeSlot);
+      return slotMin < bounds.openMin || slotMin >= bounds.closeMin;
+    },
+    [courtDayOperatingByCourtId]
+  );
 
   // Filter courts based on selected court type (re-sort so column order is always correct)
   const allCourts = React.useMemo(
@@ -867,6 +926,9 @@ export function CourtCalendarView() {
       console.error('Court not found:', courtName);
       return;
     }
+    if (courtObj.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) {
+      return;
+    }
     if (courtObj.isWalkUp) {
       toast.info('This is a walk-up only court and cannot be booked online.');
       return;
@@ -880,6 +942,16 @@ export function CourtCalendarView() {
 
     // If we have selected cells from dragging, open booking wizard with them
     if (dragCells && dragCells.size > 0) {
+      const hasOutside = Array.from(dragCells).some((cellId) => {
+        const [cName, tSlot] = cellId.split('|');
+        const co = courts.find((c) => c.name === cName);
+        return !!(co?.id && isCourtSlotOutsideOperatingHours(co.id, tSlot));
+      });
+      if (hasOutside) {
+        toast.info("That selection includes times outside that court's operating hours.");
+        return;
+      }
+
       const selectedSlots = Array.from(dragCells).map(cellId => {
         const [court, timeSlot] = cellId.split('|');
         const slotCourtObj = courts.find(c => c.name === court);
@@ -920,6 +992,9 @@ export function CourtCalendarView() {
     const booking = bookings[courtName as keyof typeof bookings]?.[time];
     if (booking) return; // Don't start drag on booked slots
 
+    const courtObj = courts.find((c) => c.name === courtName);
+    if (courtObj?.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) return;
+
     event.preventDefault();
     setDragState({
       isDragging: true,
@@ -949,7 +1024,8 @@ export function CourtCalendarView() {
       for (let ti = beginTimeIdx; ti <= endTimeIdx; ti++) {
         const slot = timeSlots[ti];
         const slotBooking = bookings[c.name as keyof typeof bookings]?.[slot];
-        if (!slotBooking) {
+        const outside = c.id ? isCourtSlotOutsideOperatingHours(c.id, slot) : false;
+        if (!slotBooking && !outside) {
           newSelectedCells.add(`${c.name}|${slot}`);
         }
       }
@@ -1531,6 +1607,15 @@ export function CourtCalendarView() {
                         const topPrime = isPrimeTimeSlot(court.id, topTime);
                         const bottomPrime = bottomTime ? isPrimeTimeSlot(court.id, bottomTime) : false;
                         const isWalkUpCourt = court.isWalkUp === true;
+                        const topOutsideCourt =
+                          !isWalkUpCourt &&
+                          !topBooking &&
+                          !!(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime));
+                        const bottomOutsideCourt =
+                          !!bottomTime &&
+                          !isWalkUpCourt &&
+                          !bottomBooking &&
+                          !!(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime));
 
                         return (
                           <td
@@ -1552,9 +1637,10 @@ export function CourtCalendarView() {
                             <div
                               className={`absolute top-0 left-0 right-0
                                 ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
-                                ${topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
-                                ${topPast && !topBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
-                                ${!isWalkUpCourt && !topPast && !topBooking && !topBlocked ? `cursor-pointer ${topPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
+                                ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
+                                ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
+                                ${!isWalkUpCourt && !topOutsideCourt && topPast && !topBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
+                                ${!isWalkUpCourt && !topOutsideCourt && !topPast && !topBooking && !topBlocked ? `cursor-pointer ${topPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
                                 ${topBooking && !topBlocked ? 'cursor-pointer' : ''}
                                 ${topSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
                                 ${dragState.isDragging && !topBooking ? 'select-none' : ''}
@@ -1563,12 +1649,26 @@ export function CourtCalendarView() {
                               onClick={() => {
                                 if (dragJustFinishedRef.current) return;
                                 if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
+                                if (court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) return;
                                 if (topBlocked || (topPast && !topBooking)) return;
                                 if (topBooking) handleBookingClick(court.name, topTime);
                                 else handleEmptySlotClick(court.name, topTime);
                               }}
-                              onMouseDown={(e) => !isWalkUpCourt && !topBooking && !topPast && !topBlocked && handleMouseDown(court.name, topTime, e)}
-                              onMouseEnter={() => !isWalkUpCourt && !topPast && !topBlocked && handleMouseEnter(court.name, topTime)}
+                              onMouseDown={(e) =>
+                                !isWalkUpCourt &&
+                                !topBooking &&
+                                !topPast &&
+                                !topBlocked &&
+                                !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
+                                handleMouseDown(court.name, topTime, e)
+                              }
+                              onMouseEnter={() =>
+                                !isWalkUpCourt &&
+                                !topPast &&
+                                !topBlocked &&
+                                !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
+                                handleMouseEnter(court.name, topTime)
+                              }
                             />
 
                             {/* Bottom half (second 15 min) */}
@@ -1576,9 +1676,10 @@ export function CourtCalendarView() {
                               <div
                                 className={`absolute left-0 right-0
                                   ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
-                                  ${bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
-                                  ${bottomPast && !bottomBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
-                                  ${!isWalkUpCourt && !bottomPast && !bottomBooking && !bottomBlocked ? `cursor-pointer ${bottomPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
+                                  ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
+                                  ${!isWalkUpCourt && !bottomOutsideCourt && bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
+                                  ${!isWalkUpCourt && !bottomOutsideCourt && bottomPast && !bottomBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
+                                  ${!isWalkUpCourt && !bottomOutsideCourt && !bottomPast && !bottomBooking && !bottomBlocked ? `cursor-pointer ${bottomPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
                                   ${bottomBooking && !bottomBlocked ? 'cursor-pointer' : ''}
                                   ${bottomSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
                                   ${dragState.isDragging && !bottomBooking ? 'select-none' : ''}
@@ -1587,12 +1688,26 @@ export function CourtCalendarView() {
                                 onClick={() => {
                                   if (dragJustFinishedRef.current) return;
                                   if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
+                                  if (court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) return;
                                   if (bottomBlocked || (bottomPast && !bottomBooking)) return;
                                   if (bottomBooking) handleBookingClick(court.name, bottomTime);
                                   else handleEmptySlotClick(court.name, bottomTime);
                                 }}
-                                onMouseDown={(e) => !isWalkUpCourt && !bottomBooking && !bottomPast && !bottomBlocked && handleMouseDown(court.name, bottomTime, e)}
-                                onMouseEnter={() => !isWalkUpCourt && !bottomPast && !bottomBlocked && handleMouseEnter(court.name, bottomTime)}
+                                onMouseDown={(e) =>
+                                  !isWalkUpCourt &&
+                                  !bottomBooking &&
+                                  !bottomPast &&
+                                  !bottomBlocked &&
+                                  !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
+                                  handleMouseDown(court.name, bottomTime, e)
+                                }
+                                onMouseEnter={() =>
+                                  !isWalkUpCourt &&
+                                  !bottomPast &&
+                                  !bottomBlocked &&
+                                  !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
+                                  handleMouseEnter(court.name, bottomTime)
+                                }
                               />
                             )}
                           </td>

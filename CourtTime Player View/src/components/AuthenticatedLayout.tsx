@@ -24,6 +24,7 @@ function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/bulletin-board')) return 'bulletin-board';
   if (pathname.startsWith('/hitting-partner')) return 'hitting-partner';
   if (pathname.startsWith('/messages')) return 'messages';
+  if (pathname.startsWith('/payments')) return 'payments';
   return '';
 }
 

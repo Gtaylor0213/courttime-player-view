@@ -27,10 +27,6 @@ const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 38;
 
-/** Touch: cancel drag-arm timer if finger moves farther than this (Chebyshev px from touchstart) before the arm delay. */
-const CALENDAR_TOUCH_CANCEL_ARM_CHEB_PX = 8;
-/** Touch: after this long with finger still enough, drag-to-select arms (matches native app feel). */
-const CALENDAR_TOUCH_ARM_DELAY_MS = 180;
 /** Normalize client coordinates for mouse, pointer, or touch events. */
 function getEventCoords(e: { clientX?: number; clientY?: number; touches?: TouchList; changedTouches?: TouchList }): {
   clientX: number;
@@ -49,8 +45,6 @@ function getEventCoords(e: { clientX?: number; clientY?: number; touches?: Touch
 }
 
 type CourtDayOperatingBounds = { isOpen: boolean; openMin: number; closeMin: number };
-
-type CalendarFingerPhase = 'undecided' | 'selecting' | 'scrolling';
 
 function parseApiTimeToMinutes(value: unknown): number | null {
   if (value == null) return null;
@@ -133,6 +127,7 @@ export function CourtCalendarView() {
   >({});
   const [loadingBookings, setLoadingBookings] = useState(false);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const calendarGridRef = useRef<HTMLTableElement>(null);
   const headerRowRef = useRef<HTMLTableRowElement>(null);
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState<number>(HEADER_HEIGHT);
   const [bookingWizard, setBookingWizard] = useState({
@@ -157,21 +152,8 @@ export function CourtCalendarView() {
   const dragStateRef = React.useRef(dragState);
   dragStateRef.current = dragState;
   const dragJustFinishedRef = React.useRef(false);
-  /** Removes window pointer listeners when a slot drag ends or unmounts. */
+  /** Removes window pointer/touch listeners when a slot drag ends or unmounts. */
   const pointerDragCleanupRef = useRef<(() => void) | null>(null);
-  /** Finger gesture on calendar: undecided → selecting (drag slots) or scrolling (pan). Date.now() only — no timers. */
-  const calendarTouchGestureRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    startTime: number;
-    phase: CalendarFingerPhase;
-    /** Fires after ARM_DELAY if finger stayed within CANCEL_ARM_CHEB_PX (native-style arm). */
-    intentTimer: ReturnType<typeof setTimeout> | null;
-    captureTarget: HTMLElement;
-    /** Pointer Events touch only — capture once we enter selecting. */
-    pointerCaptureOnSelect: boolean;
-  } | null>(null);
   /** Native touchstart already began slot tracking; skip duplicate pointerdown (touch). */
   const suppressPointerDownForTouchRef = useRef(false);
   const handlePointerDragEndRef = useRef<() => void>(() => {});
@@ -1088,7 +1070,7 @@ export function CourtCalendarView() {
       const [court, time] = firstSelected.split('|');
       handleEmptySlotClick(court, time, cells);
       dragJustFinishedRef.current = true;
-      setTimeout(() => { dragJustFinishedRef.current = false; }, 50);
+      setTimeout(() => { dragJustFinishedRef.current = false; }, 400);
     }
 
     const cleared = {
@@ -1102,6 +1084,40 @@ export function CourtCalendarView() {
   };
 
   handlePointerDragEndRef.current = handlePointerDragEnd;
+
+  /** Map viewport coordinates to court/time (reliable on iOS; elementFromPoint often fails during touch). */
+  const resolveSlotFromPoint = useCallback(
+    (clientX: number, clientY: number): { court: string; time: string } | null => {
+      const grid = calendarGridRef.current;
+      if (!grid || courts.length === 0 || allTimeSlots.length === 0) return null;
+
+      const rect = grid.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      const headerH = headerRowRef.current?.offsetHeight ?? measuredHeaderHeight;
+
+      if (y < headerH) return null;
+
+      const courtAreaX = x - effectiveTimeColWidth;
+      if (courtAreaX < 0) return null;
+
+      const courtIndex = Math.floor(courtAreaX / effectiveCourtWidth);
+      if (courtIndex < 0 || courtIndex >= courts.length) return null;
+
+      const slotIndex = Math.floor((y - headerH) / effectiveSubSlotHeight);
+      if (slotIndex < 0 || slotIndex >= allTimeSlots.length) return null;
+
+      return { court: courts[courtIndex].name, time: allTimeSlots[slotIndex] };
+    },
+    [
+      allTimeSlots,
+      courts,
+      effectiveCourtWidth,
+      effectiveSubSlotHeight,
+      effectiveTimeColWidth,
+      measuredHeaderHeight,
+    ]
+  );
 
   type SlotDragTransport = 'pointer' | 'touch-native';
 
@@ -1120,239 +1136,105 @@ export function CourtCalendarView() {
       }
     ) => {
       const { pointerId = 0, pointerType = 'mouse', captureTarget, activeTouchId } = opts;
-      const isFingerTouch = transport === 'touch-native' || pointerType === 'touch';
-      const deferFingerPhase = isFingerTouch && !!captureTarget;
-
-      const clearIntentTimer = (g: NonNullable<typeof calendarTouchGestureRef.current>) => {
-        if (g.intentTimer != null) {
-          clearTimeout(g.intentTimer);
-          g.intentTimer = null;
-        }
-      };
-
-      if (transport === 'pointer' && pointerType === 'mouse') {
-        calendarTouchGestureRef.current = null;
-        if (captureTarget?.setPointerCapture) {
-          try {
-            captureTarget.setPointerCapture(pointerId);
-          } catch {
-            // Invalid state / duplicate capture — window listeners still handle drag end.
-          }
-        }
-      } else if (deferFingerPhase && captureTarget) {
-        calendarTouchGestureRef.current = {
-          pointerId,
-          startX: startClientX,
-          startY: startClientY,
-          startTime: Date.now(),
-          phase: 'undecided' as CalendarFingerPhase,
-          intentTimer: null as ReturnType<typeof setTimeout> | null,
-          captureTarget,
-          pointerCaptureOnSelect: transport === 'pointer' && pointerType === 'touch',
-        };
-      } else {
-        calendarTouchGestureRef.current = null;
-        if (captureTarget?.setPointerCapture && transport === 'pointer') {
-          try {
-            captureTarget.setPointerCapture(pointerId);
-          } catch {
-            // ignore
-          }
-        }
-      }
 
       pointerDragCleanupRef.current?.();
       pointerDragCleanupRef.current = null;
-
-      if (!deferFingerPhase) {
+      const armDrag = (c: string, t: string) => {
         const next = {
-          isDragging: true,
-          startCell: { court: courtName, time },
-          endCell: { court: courtName, time },
-          selectedCells: new Set([`${courtName}|${time}`]),
-        };
-        dragStateRef.current = next;
-        setDragState(next);
-      }
-
-      const beginDragFromPoint = (clientX: number, clientY: number) => {
-        const el = document.elementFromPoint(clientX, clientY);
-        const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
-        let c = courtName;
-        let t = time;
-        if (slot) {
-          const sc = slot.getAttribute('data-slot-court');
-          const st = slot.getAttribute('data-slot-time');
-          if (sc && st) {
-            c = sc;
-            t = st;
-          }
-        }
-        const nextDrag = {
           isDragging: true,
           startCell: { court: c, time: t },
           endCell: { court: c, time: t },
           selectedCells: new Set([`${c}|${t}`]),
         };
-        dragStateRef.current = nextDrag;
-        setDragState(nextDrag);
+        dragStateRef.current = next;
+        setDragState(next);
       };
 
-      const updateSlotsFromPoint = (clientX: number, clientY: number) => {
-        const el = document.elementFromPoint(clientX, clientY);
-        const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
-        if (!slot) return;
-        const c = slot.getAttribute('data-slot-court');
-        const st = slot.getAttribute('data-slot-time');
-        if (!c || !st) return;
-        extendDragSelection(c, st);
-      };
+      const resolvedStart = resolveSlotFromPoint(startClientX, startClientY);
+      armDrag(resolvedStart?.court ?? courtName, resolvedStart?.time ?? time);
 
-      const processMove = (clientX: number, clientY: number, ev: PointerEvent | TouchEvent) => {
-        const g = calendarTouchGestureRef.current;
-        if (!g) return;
-
-        if (g.phase === 'scrolling') {
-          return;
-        }
-
-        if (g.phase === 'selecting') {
-          ev.preventDefault();
-          updateSlotsFromPoint(clientX, clientY);
-          return;
-        }
-
-        // undecided — mirror native grid: cancel arm timer if finger moves past threshold (then scroll).
-        const cheb = Math.max(Math.abs(clientX - g.startX), Math.abs(clientY - g.startY));
-
-        if (cheb > CALENDAR_TOUCH_CANCEL_ARM_CHEB_PX) {
-          clearIntentTimer(g);
-          g.phase = 'scrolling';
-          return;
-        }
-      };
-
-      if (deferFingerPhase) {
-        const gesture = calendarTouchGestureRef.current;
-        if (gesture) {
-          gesture.intentTimer = setTimeout(() => {
-            const cur = calendarTouchGestureRef.current;
-            if (!cur || cur !== gesture || cur.phase !== 'undecided') return;
-            cur.phase = 'selecting';
-            cur.intentTimer = null;
-            if (cur.pointerCaptureOnSelect) {
-              try {
-                cur.captureTarget.setPointerCapture(cur.pointerId);
-              } catch {
-                // ignore
-              }
-            }
-            beginDragFromPoint(cur.startX, cur.startY);
-          }, CALENDAR_TOUCH_ARM_DELAY_MS);
+      if (pointerType === 'mouse' && captureTarget?.setPointerCapture) {
+        try {
+          captureTarget.setPointerCapture(pointerId);
+        } catch {
+          // ignore
         }
       }
 
-      if (transport === 'pointer') {
-        const onMove = (ev: PointerEvent) => {
-          if (ev.pointerId !== pointerId) return;
-          const coords = getEventCoords(ev);
-          if (!coords) return;
-          processMove(coords.clientX, coords.clientY, ev);
+      const updateFromPoint = (clientX: number, clientY: number) => {
+        const resolved = resolveSlotFromPoint(clientX, clientY);
+        if (resolved) extendDragSelection(resolved.court, resolved.time);
+      };
+
+      if (transport === 'touch-native') {
+        const touchId = activeTouchId as number;
+
+        const onTouchMove = (ev: TouchEvent) => {
+          const touch = Array.from(ev.touches).find((finger) => finger.identifier === touchId);
+          if (!touch) return;
+          ev.preventDefault();
+          updateFromPoint(touch.clientX, touch.clientY);
         };
-        const onUp = (ev: PointerEvent) => {
-          if (ev.pointerId !== pointerId) return;
-          window.removeEventListener('pointermove', onMove, true);
-          window.removeEventListener('pointerup', onUp, true);
-          window.removeEventListener('pointercancel', onUp, true);
+
+        const onTouchEnd = (ev: TouchEvent) => {
+          const endedHere = Array.from(ev.changedTouches).some(
+            (finger) => finger.identifier === touchId
+          );
+          if (!endedHere) return;
+          window.removeEventListener('touchmove', onTouchMove, true);
+          window.removeEventListener('touchend', onTouchEnd, true);
+          window.removeEventListener('touchcancel', onTouchEnd, true);
           pointerDragCleanupRef.current = null;
-          if (!deferFingerPhase) {
-            handlePointerDragEndRef.current();
-            return;
-          }
-          const gs = calendarTouchGestureRef.current;
-          if (gs) clearIntentTimer(gs);
-          const phase = gs?.phase;
-          calendarTouchGestureRef.current = null;
-          if (phase === 'selecting') {
-            const coords = getEventCoords(ev);
-            if (coords) {
-              const el = document.elementFromPoint(coords.clientX, coords.clientY);
-              const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
-              if (slot) {
-                const c = slot.getAttribute('data-slot-court');
-                const st = slot.getAttribute('data-slot-time');
-                if (c && st) extendDragSelection(c, st);
-              }
-            }
-            handlePointerDragEndRef.current();
-            return;
-          }
-          // scrolling or undecided: no reservation (tap may still fire as a native click)
+
+          const coords = getEventCoords(ev);
+          if (coords) updateFromPoint(coords.clientX, coords.clientY);
+
+          // touchstart preventDefault blocks the synthetic click — finish booking here (tap or drag).
+          ev.preventDefault();
+          handlePointerDragEndRef.current();
+          suppressPointerDownForTouchRef.current = false;
         };
-        window.addEventListener('pointermove', onMove, { capture: true, passive: false });
-        window.addEventListener('pointerup', onUp, true);
-        window.addEventListener('pointercancel', onUp, true);
+
+        window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+        window.addEventListener('touchend', onTouchEnd, true);
+        window.addEventListener('touchcancel', onTouchEnd, true);
         pointerDragCleanupRef.current = () => {
-          const g = calendarTouchGestureRef.current;
-          if (g) clearIntentTimer(g);
-          window.removeEventListener('pointermove', onMove, true);
-          window.removeEventListener('pointerup', onUp, true);
-          window.removeEventListener('pointercancel', onUp, true);
-          calendarTouchGestureRef.current = null;
+          window.removeEventListener('touchmove', onTouchMove, true);
+          window.removeEventListener('touchend', onTouchEnd, true);
+          window.removeEventListener('touchcancel', onTouchEnd, true);
         };
         return;
       }
 
-      const touchId = activeTouchId as number;
-      const onTouchMove = (ev: TouchEvent) => {
-        const touch = Array.from(ev.touches).find((finger) => finger.identifier === touchId);
-        if (!touch) return;
-        processMove(touch.clientX, touch.clientY, ev);
+      const onMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        if (pointerType === 'touch') ev.preventDefault();
+        const coords = getEventCoords(ev);
+        if (!coords) return;
+        updateFromPoint(coords.clientX, coords.clientY);
       };
-      const onTouchEnd = (ev: TouchEvent) => {
-        const endedHere = Array.from(ev.changedTouches).some((finger) => finger.identifier === touchId);
-        if (!endedHere) return;
-        window.removeEventListener('touchmove', onTouchMove, true);
-        window.removeEventListener('touchend', onTouchEnd, true);
-        window.removeEventListener('touchcancel', onTouchEnd, true);
+
+      const onUp = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        window.removeEventListener('pointermove', onMove, true);
+        window.removeEventListener('pointerup', onUp, true);
+        window.removeEventListener('pointercancel', onUp, true);
         pointerDragCleanupRef.current = null;
-        const gs = calendarTouchGestureRef.current;
-        if (gs) clearIntentTimer(gs);
-        const phase = gs?.phase;
-        calendarTouchGestureRef.current = null;
-
-        if (phase === 'selecting') {
-          const coords = getEventCoords(ev);
-          if (coords) {
-            const el = document.elementFromPoint(coords.clientX, coords.clientY);
-            const slot = el?.closest('[data-slot-court][data-slot-time]') as HTMLElement | null;
-            if (slot) {
-              const c = slot.getAttribute('data-slot-court');
-              const st = slot.getAttribute('data-slot-time');
-              if (c && st) extendDragSelection(c, st);
-            }
-          }
-          handlePointerDragEndRef.current();
-          suppressPointerDownForTouchRef.current = false;
-          return;
-        }
-
-        suppressPointerDownForTouchRef.current = false;
-        // scrolling or undecided: no reservation
+        const coords = getEventCoords(ev);
+        if (coords) updateFromPoint(coords.clientX, coords.clientY);
+        handlePointerDragEndRef.current();
       };
-      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
-      window.addEventListener('touchend', onTouchEnd, true);
-      window.addEventListener('touchcancel', onTouchEnd, true);
+
+      window.addEventListener('pointermove', onMove, { capture: true, passive: false });
+      window.addEventListener('pointerup', onUp, true);
+      window.addEventListener('pointercancel', onUp, true);
       pointerDragCleanupRef.current = () => {
-        const g = calendarTouchGestureRef.current;
-        if (g) clearIntentTimer(g);
-        window.removeEventListener('touchmove', onTouchMove, true);
-        window.removeEventListener('touchend', onTouchEnd, true);
-        window.removeEventListener('touchcancel', onTouchEnd, true);
-        calendarTouchGestureRef.current = null;
+        window.removeEventListener('pointermove', onMove, true);
+        window.removeEventListener('pointerup', onUp, true);
+        window.removeEventListener('pointercancel', onUp, true);
       };
     },
-    [extendDragSelection, setDragState]
+    [extendDragSelection, resolveSlotFromPoint]
   );
 
   const handlePointerDown = (courtName: string, time: string, event: React.PointerEvent) => {
@@ -1367,7 +1249,7 @@ export function CourtCalendarView() {
     const courtObj = courts.find((c) => c.name === courtName);
     if (courtObj?.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) return;
 
-    if (event.pointerType === 'mouse') {
+    if (event.pointerType === 'mouse' || event.pointerType === 'touch') {
       event.preventDefault();
     }
 
@@ -1406,6 +1288,7 @@ export function CourtCalendarView() {
       const coords = getEventCoords(e);
       if (!coords) return;
 
+      e.preventDefault();
       suppressPointerDownForTouchRef.current = true;
       const touchId = e.touches[0].identifier;
       startSlotDragTracking(courtName, time, coords.clientX, coords.clientY, 'touch-native', {
@@ -1414,7 +1297,7 @@ export function CourtCalendarView() {
       });
     };
 
-    root.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+    root.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
     return () => root.removeEventListener('touchstart', onTouchStart, true);
   }, [bookings, courts, isCourtSlotOutsideOperatingHours, isPastTime, startSlotDragTracking]);
 
@@ -1664,7 +1547,7 @@ export function CourtCalendarView() {
                       </PopoverTrigger>
                       <PopoverContent className="w-[calc(100vw-2rem)] max-w-80">
                         <p className="text-sm text-gray-700">
-                          Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
+                          Tap a time slot to book, or drag up/down across slots to select a range. Use the sidebar to switch facilities.
                         </p>
                       </PopoverContent>
                     </Popover>
@@ -1818,7 +1701,7 @@ export function CourtCalendarView() {
                       </PopoverTrigger>
                       <PopoverContent className="w-[calc(100vw-2rem)] max-w-80">
                         <p className="text-sm text-gray-700">
-                          Click on any empty time slot to book a court reservation. Hold and drag to select multiple consecutive slots. Use the sidebar to switch facilities.
+                          Tap a time slot to book, or drag up/down across slots to select a range. Use the sidebar to switch facilities.
                         </p>
                       </PopoverContent>
                     </Popover>
@@ -1887,9 +1770,12 @@ export function CourtCalendarView() {
         ) : (
           <div
             ref={calendarScrollRef}
-            className="calendar-scroll overscroll-y-contain bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0"
+            className="calendar-scroll overscroll-y-contain bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0 select-none"
           >
-            <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: effectiveTimeColWidth + courts.length * effectiveCourtWidth }}>
+            <table
+              ref={calendarGridRef}
+              style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: effectiveTimeColWidth + courts.length * effectiveCourtWidth }}
+            >
               <thead>
                 <tr ref={headerRowRef}>
                   {/* Corner cell: sticky in both directions */}
@@ -1998,7 +1884,7 @@ export function CourtCalendarView() {
                             <div
                               data-slot-court={court.name}
                               data-slot-time={topTime}
-                              className={`absolute top-0 left-0 right-0 touch-manipulation
+                              className={`absolute top-0 left-0 right-0 select-none touch-none
                                 ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                                 ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
                                 ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
@@ -2006,7 +1892,6 @@ export function CourtCalendarView() {
                                 ${!isWalkUpCourt && !topOutsideCourt && !topPast && !topBooking && !topBlocked ? `cursor-pointer ${topPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
                                 ${topBooking && !topBlocked ? 'cursor-pointer' : ''}
                                 ${topSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
-                                ${dragState.isDragging && !topBooking ? 'select-none' : ''}
                               `}
                               style={{ height: effectiveSubSlotHeight }}
                               onClick={() => {
@@ -2039,7 +1924,7 @@ export function CourtCalendarView() {
                               <div
                                 data-slot-court={court.name}
                                 data-slot-time={bottomTime}
-                                className={`absolute left-0 right-0 touch-manipulation
+                                className={`absolute left-0 right-0 select-none touch-none
                                   ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                                   ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
                                   ${!isWalkUpCourt && !bottomOutsideCourt && bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
@@ -2047,7 +1932,6 @@ export function CourtCalendarView() {
                                   ${!isWalkUpCourt && !bottomOutsideCourt && !bottomPast && !bottomBooking && !bottomBlocked ? `cursor-pointer ${bottomPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
                                   ${bottomBooking && !bottomBlocked ? 'cursor-pointer' : ''}
                                   ${bottomSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
-                                  ${dragState.isDragging && !bottomBooking ? 'select-none' : ''}
                                 `}
                                 style={{ top: effectiveSubSlotHeight, height: effectiveSubSlotHeight }}
                                 onClick={() => {

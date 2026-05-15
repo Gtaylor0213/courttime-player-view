@@ -4,6 +4,11 @@ import { sendBulletinMinParticipantsNotMetEmail } from './emailService';
 
 const SIGNUP_CATEGORIES = ['event', 'drill', 'social', 'clinic', 'tournament'] as const;
 
+function sameUserId(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return String(a).toLowerCase() === String(b).toLowerCase();
+}
+
 /**
  * Bulletin Board Service
  * Handles bulletin board post CRUD operations
@@ -37,6 +42,8 @@ export interface BulletinPost {
   currentUserWaitlistPosition?: number | null;
   currentUserCanSignup?: boolean;
   signupBlockedReason?: string | null;
+  requirePayment?: boolean;
+  signupAmountCents?: number | null;
   participants?: Array<{ userId: string; fullName: string; status: 'confirmed' | 'waitlist'; waitlistPosition: number | null }>;
 }
 
@@ -61,6 +68,8 @@ export interface CreateBulletinPost {
   drillShowParticipants?: boolean;
   minParticipants?: number;
   cancelIfMinNotMet?: boolean;
+  requirePayment?: boolean;
+  signupAmountCents?: number;
 }
 
 interface DrillPostContext {
@@ -73,6 +82,8 @@ interface DrillPostContext {
   drill_court_name: string;
   drill_max_participants: number;
   drill_gender_restriction: 'any' | 'male_only' | 'female_only';
+  require_payment?: boolean;
+  signup_amount_cents?: number | null;
 }
 
 /**
@@ -111,6 +122,8 @@ export async function getFacilityBulletinPosts(facilityId: string, requesterUser
         COALESCE(bp.cancel_if_min_not_met, false) as "cancelIfMinNotMet",
         bp.drill_gender_restriction as "drillGenderRestriction",
         COALESCE(bp.drill_show_participants, false) as "drillShowParticipants",
+        COALESCE(bp.require_payment, false) as "requirePayment",
+        bp.signup_amount_cents as "signupAmountCents",
         COUNT(*) FILTER (WHERE bds.status = 'confirmed')::int as "drillConfirmedCount",
         COUNT(*) FILTER (WHERE bds.status = 'waitlist')::int as "drillWaitlistCount"
        FROM bulletin_posts bp
@@ -177,7 +190,7 @@ export async function getFacilityBulletinPosts(facilityId: string, requesterUser
     for (const post of posts) {
       if (!SIGNUP_CATEGORIES.includes(post.category as (typeof SIGNUP_CATEGORIES)[number])) continue;
       const participants = participantsByPost.get(post.id) || [];
-      const currentSignup = participants.find((p) => p.userId === requesterUserId);
+      const currentSignup = participants.find((p) => sameUserId(p.userId, requesterUserId));
       post.currentUserSignupStatus = currentSignup?.status || null;
       post.currentUserWaitlistPosition = currentSignup?.waitlistPosition || null;
 
@@ -239,6 +252,20 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
     if (data.cancelIfMinNotMet && !data.minParticipants) {
       throw new Error('Minimum participants is required when auto-cancel is enabled');
     }
+    const requirePayment = Boolean(data.requirePayment);
+    const signupAmountCents =
+      data.signupAmountCents != null ? Number(data.signupAmountCents) : undefined;
+
+    if (requirePayment) {
+      if (!signupAmountCents || signupAmountCents <= 0) {
+        throw new Error('Signup fee is required when card payment is enabled');
+      }
+      const { syncConnectOnboardingStatus } = await import('./stripeConnectService');
+      const stripeStatus = await syncConnectOnboardingStatus(data.facilityId);
+      if (!stripeStatus.onboarded) {
+        throw new Error('Complete Stripe Connect setup in Facility Management → Payments before requiring card payment');
+      }
+    }
     if (data.recurrence) {
       if (!['drill', 'clinic'].includes(data.category)) {
         throw new Error('Recurring bulletin posts are only supported for drills and clinics');
@@ -267,7 +294,9 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
         data.drillGenderRestriction || 'any',
         data.drillShowParticipants ?? false,
         data.minParticipants || null,
-        data.cancelIfMinNotMet ?? false
+        data.cancelIfMinNotMet ?? false,
+        requirePayment,
+        requirePayment ? signupAmountCents : null
       ];
 
       let expiresAtExpr = 'NULL';
@@ -296,9 +325,11 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
           drill_show_participants,
           min_participants,
           cancel_if_min_not_met,
+          require_payment,
+          signup_amount_cents,
           expires_at,
           status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, ${expiresAtExpr}, 'active')
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, ${expiresAtExpr}, 'active')
         RETURNING id`,
         params
       );
@@ -437,7 +468,9 @@ async function getDrillPostContext(postId: string): Promise<DrillPostContext | n
        bp.drill_start_at,
        c.name as drill_court_name,
        bp.drill_max_participants,
-       bp.drill_gender_restriction
+       bp.drill_gender_restriction,
+       COALESCE(bp.require_payment, false) as require_payment,
+       bp.signup_amount_cents
      FROM bulletin_posts bp
      JOIN facilities f ON bp.facility_id = f.id
      LEFT JOIN courts c ON bp.drill_court_id = c.id
@@ -450,9 +483,62 @@ async function getDrillPostContext(postId: string): Promise<DrillPostContext | n
   return postResult.rows[0] || null;
 }
 
-export async function signupForDrill(postId: string, userId: string): Promise<{ status: 'confirmed' | 'waitlist'; waitlistPosition: number | null }> {
+async function assertSignupEligibility(post: DrillPostContext, userId: string): Promise<void> {
+  const userRow = await query(`SELECT gender FROM users WHERE id = $1`, [userId]);
+  const gender = userRow.rows[0]?.gender?.toLowerCase() || null;
+  if (post.drill_gender_restriction === 'male_only' && gender !== 'male') {
+    throw new Error('This event is restricted to male members only');
+  }
+  if (post.drill_gender_restriction === 'female_only' && gender !== 'female') {
+    throw new Error('This event is restricted to female members only');
+  }
+
+  const membershipResult = await query(
+    `SELECT 1
+     FROM facility_memberships
+     WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+     LIMIT 1`,
+    [userId, post.facility_id]
+  );
+  if (membershipResult.rows.length === 0) {
+    throw new Error('You must be an active member of this facility to sign up');
+  }
+
+  const existing = await query(
+    `SELECT 1 FROM bulletin_drill_signups WHERE bulletin_post_id = $1 AND user_id = $2`,
+    [post.id, userId]
+  );
+  if (existing.rows.length > 0) {
+    throw new Error('You are already signed up for this event');
+  }
+}
+
+export type DrillSignupResult =
+  | { status: 'confirmed' | 'waitlist'; waitlistPosition: number | null; requiresPayment?: false }
+  | { requiresPayment: true; checkoutUrl: string; status: null; waitlistPosition: null };
+
+export async function signupForDrill(
+  postId: string,
+  userId: string,
+  options?: { successUrl?: string; cancelUrl?: string }
+): Promise<DrillSignupResult> {
   const post = await getDrillPostContext(postId);
   if (!post) throw new Error('Event post not found');
+
+  if (post.require_payment && post.signup_amount_cents) {
+    await assertSignupEligibility(post, userId);
+    const base = process.env.APP_URL || 'http://localhost:5173';
+    const { createBulletinSignupCheckoutSession } = await import('./stripeConnectService');
+    const { url } = await createBulletinSignupCheckoutSession({
+      bulletinPostId: postId,
+      memberId: userId,
+      successUrl:
+        options?.successUrl ||
+        `${base}/bulletin-board?signupSuccess=1&postId=${encodeURIComponent(postId)}&session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: options?.cancelUrl || `${base}/bulletin-board?postId=${encodeURIComponent(postId)}`,
+    });
+    return { requiresPayment: true, checkoutUrl: url, status: null, waitlistPosition: null };
+  }
 
   const userRow = await query(`SELECT gender FROM users WHERE id = $1`, [userId]);
   const gender = userRow.rows[0]?.gender?.toLowerCase() || null;
@@ -551,6 +637,98 @@ export async function signupForDrill(postId: string, userId: string): Promise<{ 
   }
 
   return result;
+}
+
+/**
+ * Called after Stripe Connect checkout completes for a paid bulletin signup.
+ */
+export async function finalizeBulletinSignupAfterPayment(params: {
+  bulletinPostId: string | null;
+  memberId: string | null;
+  connectPaymentId: string;
+}): Promise<void> {
+  if (!params.bulletinPostId || !params.memberId) return;
+
+  const post = await getDrillPostContext(params.bulletinPostId);
+  if (!post) return;
+
+  const existing = await query(
+    `SELECT id FROM bulletin_drill_signups WHERE bulletin_post_id = $1 AND user_id = $2`,
+    [params.bulletinPostId, params.memberId]
+  );
+  if (existing.rows.length > 0) {
+    await query(
+      `UPDATE bulletin_drill_signups SET connect_payment_id = $1 WHERE bulletin_post_id = $2 AND user_id = $3`,
+      [params.connectPaymentId, params.bulletinPostId, params.memberId]
+    );
+    return;
+  }
+
+  const result = await transaction(async (client) => {
+    await client.query(`SELECT id FROM bulletin_posts WHERE id = $1 FOR UPDATE`, [params.bulletinPostId]);
+
+    const countResult = await client.query(
+      `SELECT COUNT(*)::int as count
+       FROM bulletin_drill_signups
+       WHERE bulletin_post_id = $1 AND status = 'confirmed'`,
+      [params.bulletinPostId]
+    );
+    const confirmedCount = countResult.rows[0].count;
+    const isFull =
+      typeof post.drill_max_participants === 'number'
+        ? confirmedCount >= post.drill_max_participants
+        : false;
+
+    if (!isFull) {
+      await client.query(
+        `INSERT INTO bulletin_drill_signups (bulletin_post_id, user_id, status, connect_payment_id)
+         VALUES ($1, $2, 'confirmed', $3)`,
+        [params.bulletinPostId, params.memberId, params.connectPaymentId]
+      );
+      return { status: 'confirmed' as const, waitlistPosition: null };
+    }
+
+    const waitlistCountResult = await client.query(
+      `SELECT COUNT(*)::int as count
+       FROM bulletin_drill_signups
+       WHERE bulletin_post_id = $1 AND status = 'waitlist'`,
+      [params.bulletinPostId]
+    );
+    const waitlistPosition = waitlistCountResult.rows[0].count + 1;
+    await client.query(
+      `INSERT INTO bulletin_drill_signups (bulletin_post_id, user_id, status, waitlist_position, connect_payment_id)
+       VALUES ($1, $2, 'waitlist', $3, $4)`,
+      [params.bulletinPostId, params.memberId, waitlistPosition, params.connectPaymentId]
+    );
+    return { status: 'waitlist' as const, waitlistPosition };
+  });
+
+  const eventType = toEventTypeLabel(post.category);
+  const dateLabel = new Date(post.drill_start_at).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  if (result.status === 'confirmed') {
+    await notificationService.createNotification(
+      params.memberId,
+      `${eventType} Signup Confirmed`,
+      `Your payment was received. You are confirmed for "${post.title}" on ${dateLabel} at ${post.drill_court_name || 'the assigned court'}.`,
+      'drill_signup_confirmed',
+      { actionUrl: '/bulletin-board' }
+    );
+  } else {
+    await notificationService.createNotification(
+      params.memberId,
+      `Added to ${eventType} Waitlist`,
+      `Your payment was received. You are waitlisted for "${post.title}" (position #${result.waitlistPosition}).`,
+      'drill_waitlist',
+      { actionUrl: '/bulletin-board' }
+    );
+  }
 }
 
 export async function cancelDrillSignup(postId: string, userId: string): Promise<{ cancelledStatus: 'confirmed' | 'waitlist' }> {

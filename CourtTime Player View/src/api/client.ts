@@ -3,7 +3,15 @@
  * Frontend utility for calling backend API
  */
 
-import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../shared/api/core';
+import {
+  buildApiRequest,
+  unwrapApiPayload,
+  extractBulletinPosts,
+  parseApiBoolean,
+  type ApiResponse as SharedApiResponse,
+} from '../../shared/api/core';
+
+export { unwrapApiPayload, extractBulletinPosts, parseApiBoolean };
 
 // Dev: always same-origin so Vite can proxy `/api` (ignores stray VITE_API_BASE_URL in .env).
 // Production: same-origin by default, or set VITE_API_BASE_URL at build time if API is on another host.
@@ -471,6 +479,8 @@ export const bulletinBoardApi = {
     cancelIfMinNotMet?: boolean;
     drillGenderRestriction?: 'any' | 'male_only' | 'female_only';
     drillShowParticipants?: boolean;
+    requirePayment?: boolean;
+    signupAmountCents?: number;
   }) => {
     return apiRequest('/api/bulletin-board', {
       method: 'POST',
@@ -503,9 +513,20 @@ export const bulletinBoardApi = {
     });
   },
 
-  signupForDrill: async (postId: string) => {
+  signupForDrill: async (
+    postId: string,
+    options?: { successUrl?: string; cancelUrl?: string }
+  ) => {
     return apiRequest(`/api/bulletin-board/${postId}/signup`, {
       method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    });
+  },
+
+  confirmSignupPayment: async (sessionId: string) => {
+    return apiRequest('/api/bulletin-board/signup/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
     });
   },
 

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
-import { Calendar, Clock, Users, MapPin, Tag, Pin, AlertCircle, Plus, X, Trash2 } from 'lucide-react';
+import { Calendar, Clock, Users, MapPin, Tag, Pin, AlertCircle, Plus, X, Trash2, DollarSign } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -11,7 +11,16 @@ import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
-import { bulletinBoardApi, playerProfileApi, facilitiesApi } from '../api/client';
+import {
+  bulletinBoardApi,
+  playerProfileApi,
+  facilitiesApi,
+  stripeConnectApi,
+  unwrapApiPayload,
+  extractBulletinPosts,
+  parseApiBoolean,
+} from '../api/client';
+import { formatCentsAsUsd, parseDollarsToCents } from '../../shared/utils/money';
 import { toast } from 'sonner';
 
 
@@ -41,6 +50,8 @@ interface BulletinPost {
   currentUserWaitlistPosition?: number | null;
   currentUserCanSignup?: boolean;
   signupBlockedReason?: string | null;
+  requirePayment?: boolean;
+  signupAmountCents?: number | null;
   participants?: Array<{ userId: string; fullName: string; status: 'confirmed' | 'waitlist'; waitlistPosition: number | null }>;
   isPinned: boolean;
   createdAt: string;
@@ -67,6 +78,51 @@ const typeColors: Record<string, string> = {
 const eventSignupTypes = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
 const recurringEligibleTypes = new Set(['drill', 'clinic']);
 
+const emptyNewPost = {
+  title: '',
+  description: '',
+  type: 'announcement' as 'event' | 'clinic' | 'tournament' | 'social' | 'announcement' | 'drill',
+  eventDate: '',
+  eventTime: '',
+  location: '',
+  maxParticipants: '',
+  minParticipants: '',
+  cancelIfMinNotMet: false,
+  drillCourtId: '',
+  drillGenderRestriction: 'any' as 'any' | 'male_only' | 'female_only',
+  drillShowParticipants: false,
+  facilityId: '',
+  expiresInDays: '' as string,
+  recurrenceEnabled: false,
+  recurrenceFrequency: 'weekly' as 'daily' | 'weekly' | 'biweekly',
+  recurrenceEndType: 'date' as 'date' | 'occurrences',
+  recurrenceEndDate: '',
+  recurrenceOccurrences: '4',
+  requirePayment: false,
+  signupFeeDollars: '',
+};
+
+function isPaidSignupPost(post: { requirePayment?: boolean; signupAmountCents?: number | null }) {
+  const cents = post.signupAmountCents != null ? Number(post.signupAmountCents) : 0;
+  if (!Number.isFinite(cents) || cents <= 0) return false;
+  if (post.requirePayment === false) return false;
+  return parseApiBoolean(post.requirePayment ?? true) || cents > 0;
+}
+
+function bulletinSignupReturnUrls(postId: string) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const base = origin || '';
+  return {
+    successUrl: `${base}/bulletin-board?signupSuccess=1&postId=${encodeURIComponent(postId)}&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${base}/bulletin-board?postId=${encodeURIComponent(postId)}`,
+  };
+}
+
+function formatSignupFee(cents?: number | null) {
+  if (!cents) return '';
+  return formatCentsAsUsd(cents);
+}
+
 export function BulletinBoard() {
   const [searchParams] = useSearchParams();
   const clubId = searchParams.get('clubId') || undefined;
@@ -84,37 +140,34 @@ export function BulletinBoard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [courtsByFacility, setCourtsByFacility] = useState<Record<string, Array<{ id: string; name: string }>>>({});
-  const [newPost, setNewPost] = useState({
-    title: '',
-    description: '',
-    type: 'announcement' as 'event' | 'clinic' | 'tournament' | 'social' | 'announcement' | 'drill',
-    eventDate: '',
-    eventTime: '',
-    location: '',
-    maxParticipants: '',
-    minParticipants: '',
-    cancelIfMinNotMet: false,
-    drillCourtId: '',
-    drillGenderRestriction: 'any' as 'any' | 'male_only' | 'female_only',
-    drillShowParticipants: false,
-    facilityId: '',
-    expiresInDays: '' as string,
-    recurrenceEnabled: false,
-    recurrenceFrequency: 'weekly' as 'daily' | 'weekly' | 'biweekly',
-    recurrenceEndType: 'date' as 'date' | 'occurrences',
-    recurrenceEndDate: '',
-    recurrenceOccurrences: '4',
-  });
+  const [stripeOnboardedByFacility, setStripeOnboardedByFacility] = useState<Record<string, boolean>>({});
+  const [stripeStatusLoadingByFacility, setStripeStatusLoadingByFacility] = useState<Record<string, boolean>>({});
+  const [newPost, setNewPost] = useState({ ...emptyNewPost });
+  const loadSeqRef = useRef(0);
+  const confirmInFlightRef = useRef<string | null>(null);
 
   // Check if user is admin of any facility
-  const adminFacilities = memberFacilities.filter((f: any) => f.isFacilityAdmin);
-  const isAdmin = adminFacilities.length > 0;
+  const adminFacilities = useMemo(() => {
+    const fromProfile = memberFacilities.filter((f: any) => f.isFacilityAdmin);
+    const seen = new Set(fromProfile.map((f: any) => f.facilityId));
+    const extras = (user?.adminFacilities || [])
+      .filter((id) => !seen.has(id))
+      .map((id) => {
+        const member = memberFacilities.find((f: any) => f.facilityId === id);
+        return (
+          member || {
+            facilityId: id,
+            facilityName: 'Your facility',
+            membershipType: 'Admin',
+            status: 'active',
+            isFacilityAdmin: true,
+          }
+        );
+      });
+    return [...fromProfile, ...extras];
+  }, [memberFacilities, user?.adminFacilities]);
 
-  useEffect(() => {
-    if (user?.id) {
-      loadData();
-    }
-  }, [user?.id, selectedFacility]);
+  const isAdmin = adminFacilities.length > 0 || (user?.adminFacilities?.length ?? 0) > 0;
 
   // Map database response to frontend BulletinPost interface
   const mapPostFromApi = (post: any): BulletinPost => ({
@@ -143,34 +196,38 @@ export function BulletinBoard() {
     currentUserWaitlistPosition: post.currentUserWaitlistPosition,
     currentUserCanSignup: post.currentUserCanSignup,
     signupBlockedReason: post.signupBlockedReason,
+    requirePayment: parseApiBoolean(post.requirePayment ?? post.require_payment),
+    signupAmountCents:
+      post.signupAmountCents != null && post.signupAmountCents !== ''
+        ? Number(post.signupAmountCents)
+        : post.signup_amount_cents != null
+          ? Number(post.signup_amount_cents)
+          : null,
     participants: post.participants || [],
     isPinned: post.isPinned || false,
     createdAt: post.createdAt,
     authorName: post.authorName || 'Unknown'
   });
 
-  const loadData = async () => {
-    if (!user?.id) return;
+  const loadData = useCallback(async (): Promise<BulletinPost[]> => {
+    if (!user?.id) return [];
+
+    const seq = ++loadSeqRef.current;
 
     try {
       setLoading(true);
 
-      // Load user's facilities with full details
       const profileResponse = await playerProfileApi.getProfile(user.id);
 
       let activeFacilities: any[] = [];
+      const facilities =
+        profileResponse.data?.profile?.memberFacilities ||
+        profileResponse.data?.memberFacilities ||
+        [];
 
-      // Check for facilities in the API response (handles both data.profile and direct profile)
-      let facilities = profileResponse.data?.profile?.memberFacilities
-        || profileResponse.data?.memberFacilities
-        || [];
-
-      // Filter for active status
       activeFacilities = facilities.filter((f: any) => f.status === 'active');
 
-      // If API didn't return facilities, fall back to AuthContext and fetch details
       if (activeFacilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
-        // Fetch facility details for each facility ID from AuthContext
         for (const facilityId of user.memberFacilities) {
           try {
             const facilityResponse = await facilitiesApi.getById(facilityId);
@@ -180,7 +237,7 @@ export function BulletinBoard() {
                 facilityName: facilityResponse.data.facility.name,
                 membershipType: 'Member',
                 status: 'active',
-                isFacilityAdmin: user.adminFacilities?.includes(facilityId) || false
+                isFacilityAdmin: user.adminFacilities?.includes(facilityId) || false,
               });
             }
           } catch (err) {
@@ -189,54 +246,161 @@ export function BulletinBoard() {
         }
       }
 
+      if (seq !== loadSeqRef.current) return [];
+
       setMemberFacilities(activeFacilities);
 
-      // Load bulletin posts
+      let loadedPosts: BulletinPost[] = [];
+
       if (selectedFacility === 'all') {
-        // Load posts from all user's facilities - only if they have facilities
-        const allPosts: BulletinPost[] = [];
         if (activeFacilities.length > 0) {
           for (const facility of activeFacilities) {
             const response = await bulletinBoardApi.getPosts(facility.facilityId);
-            if (response.success && response.data?.posts) {
-              const mappedPosts = response.data.posts.map((p: any) => ({
-                ...mapPostFromApi(p),
-                facilityName: facility.facilityName
-              }));
-              allPosts.push(...mappedPosts);
+            const rawPosts = extractBulletinPosts(response.data);
+            if (response.success) {
+              loadedPosts.push(
+                ...rawPosts.map((p: any) => ({
+                  ...mapPostFromApi(p),
+                  facilityName: facility.facilityName,
+                }))
+              );
             }
           }
         }
-        setPosts(allPosts);
       } else {
-        // Only load posts for specific facility if user is a member
         const isMember = activeFacilities.some((f: any) => f.facilityId === selectedFacility);
         if (!isMember) {
-          setPosts([]);
-          setLoading(false);
-          return;
+          if (seq === loadSeqRef.current) setPosts([]);
+          return [];
         }
         const response = await bulletinBoardApi.getPosts(selectedFacility);
-        if (response.success && response.data?.posts) {
+        const rawPosts = extractBulletinPosts(response.data);
+        if (response.success) {
           const facility = activeFacilities.find((f: any) => f.facilityId === selectedFacility);
-          const mappedPosts = response.data.posts.map((p: any) => ({
+          loadedPosts = rawPosts.map((p: any) => ({
             ...mapPostFromApi(p),
-            facilityName: facility?.facilityName || ''
+            facilityName: facility?.facilityName || '',
           }));
-          setPosts(mappedPosts);
         }
       }
+
+      if (seq !== loadSeqRef.current) return [];
+
+      setPosts(loadedPosts);
+      return loadedPosts;
     } catch (error) {
       console.error('Error loading bulletin board data:', error);
       toast.error('Failed to load bulletin board');
+      return [];
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, [user?.id, user?.memberFacilities, user?.adminFacilities, selectedFacility]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    loadData();
+  }, [user?.id, selectedFacility, loadData]);
+
+  // Keep detail modal in sync after refresh (e.g. paid flags, signup status).
+  useEffect(() => {
+    if (!selectedPost) return;
+    const updated = posts.find((p) => p.id === selectedPost.id);
+    if (updated) setSelectedPost(updated);
+  }, [posts, selectedPost?.id]);
+
+  useEffect(() => {
+    const signupSuccess = searchParams.get('signupSuccess');
+    const sessionId = searchParams.get('session_id');
+    const returnPostId = searchParams.get('postId');
+    if (signupSuccess !== '1' || !user?.id) return;
+
+    const clearReturnParams = () => {
+      navigate('/bulletin-board', { replace: true });
+    };
+
+    const openPostAfterLoad = (loaded: BulletinPost[], openId?: string | null) => {
+      if (!openId) return;
+      const post = loaded.find((p) => p.id === openId);
+      if (post) setSelectedPost(post);
+    };
+
+    if (!sessionId || sessionId === '{CHECKOUT_SESSION_ID}') {
+      toast.info('Payment received. Refreshing your signup status…');
+      void loadData().then((loaded) => {
+        openPostAfterLoad(loaded, returnPostId);
+        clearReturnParams();
+      });
+      return;
+    }
+
+    const alreadyDone =
+      typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem(`bulletinSignupConfirmed:${sessionId}`) === '1';
+    if (alreadyDone) {
+      void loadData().then((loaded) => {
+        openPostAfterLoad(loaded, returnPostId);
+        clearReturnParams();
+      });
+      return;
+    }
+
+    if (confirmInFlightRef.current === sessionId) return;
+    confirmInFlightRef.current = sessionId;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await bulletinBoardApi.confirmSignupPayment(sessionId);
+        if (cancelled) return;
+        const payload = unwrapApiPayload<{
+          status?: 'confirmed' | 'waitlist';
+          waitlistPosition?: number | null;
+          bulletinPostId?: string;
+        }>(response.data);
+        if (response.success) {
+          sessionStorage.setItem(`bulletinSignupConfirmed:${sessionId}`, '1');
+          toast.success(
+            response.message ||
+              (payload?.status === 'waitlist'
+                ? `Payment received — you are on the waitlist (#${payload.waitlistPosition ?? '?'})`
+                : 'Payment received — you are signed up!')
+          );
+        } else {
+          toast.error(
+            response.error || 'Payment received but signup could not be confirmed. Contact the club.'
+          );
+        }
+        const loaded = await loadData();
+        if (!cancelled) {
+          openPostAfterLoad(loaded, returnPostId || payload?.bulletinPostId);
+        }
+      } catch (err) {
+        console.error('Confirm signup payment error:', err);
+        if (!cancelled) {
+          toast.error('Payment received but signup could not be confirmed. Contact the club.');
+          await loadData();
+        }
+      } finally {
+        confirmInFlightRef.current = null;
+        if (!cancelled) clearReturnParams();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, user?.id, navigate, loadData]);
 
   const handleCreatePost = async () => {
-    if (!user?.id || !newPost.title || !newPost.description || !newPost.facilityId) {
+    if (!user?.id || !newPost.title || !newPost.description) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+    if (!newPost.facilityId) {
+      toast.error('Please select a facility for this post');
       return;
     }
 
@@ -258,6 +422,19 @@ export function BulletinBoard() {
         return;
       }
     }
+    const signupFeeCents =
+      eventSignupTypes.has(newPost.type) && newPost.requirePayment
+        ? parseDollarsToCents(newPost.signupFeeDollars)
+        : 0;
+    if (newPost.requirePayment) {
+      if (!signupFeeCents || signupFeeCents <= 0) {
+        toast.error('Enter a signup fee greater than $0');
+        return;
+      }
+    }
+
+    const wantsPaidSignup =
+      eventSignupTypes.has(newPost.type) && newPost.requirePayment && signupFeeCents > 0;
 
     try {
       setIsSubmitting(true);
@@ -290,6 +467,13 @@ export function BulletinBoard() {
         ...(eventSignupTypes.has(newPost.type)
           ? { cancelIfMinNotMet: Boolean(newPost.cancelIfMinNotMet) }
           : {}),
+        ...(wantsPaidSignup
+          ? {
+              requirePayment: true,
+              signupAmountCents: signupFeeCents,
+              signupFeeDollars: newPost.signupFeeDollars,
+            }
+          : {}),
         ...(newPost.recurrenceEnabled && recurringEligibleTypes.has(newPost.type)
           ? {
               recurrence: {
@@ -304,28 +488,7 @@ export function BulletinBoard() {
 
       if (response.success) {
         toast.success('Post created successfully!');
-        setShowCreateModal(false);
-        setNewPost({
-          title: '',
-          description: '',
-          type: 'announcement',
-          eventDate: '',
-          eventTime: '',
-          location: '',
-          maxParticipants: '',
-          minParticipants: '',
-          cancelIfMinNotMet: false,
-          drillCourtId: '',
-          drillGenderRestriction: 'any',
-          drillShowParticipants: false,
-          facilityId: '',
-          expiresInDays: '',
-          recurrenceEnabled: false,
-          recurrenceFrequency: 'weekly',
-          recurrenceEndType: 'date',
-          recurrenceEndDate: '',
-          recurrenceOccurrences: '4',
-        });
+        closeCreateModal();
         // Reload posts
         loadData();
       } else {
@@ -340,15 +503,23 @@ export function BulletinBoard() {
   };
 
   const openCreateModal = () => {
-    // Pre-select facility if only one admin facility or if a specific facility is selected
-    const defaultFacility = selectedFacility !== 'all' && adminFacilities.some(f => f.facilityId === selectedFacility)
-      ? selectedFacility
-      : adminFacilities.length === 1
-        ? adminFacilities[0].facilityId
-        : '';
+    const adminIds = user?.adminFacilities || [];
+    const defaultFacility =
+      selectedFacility !== 'all' &&
+      (adminFacilities.some((f) => f.facilityId === selectedFacility) || adminIds.includes(selectedFacility))
+        ? selectedFacility
+        : adminFacilities[0]?.facilityId || adminIds[0] || '';
 
-    setNewPost(prev => ({ ...prev, facilityId: defaultFacility }));
+    setNewPost({ ...emptyNewPost, facilityId: defaultFacility, type: 'drill' });
     setShowCreateModal(true);
+    if (defaultFacility) {
+      void loadStripeStatusForFacility(defaultFacility);
+    }
+  };
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setNewPost({ ...emptyNewPost });
   };
 
   const loadCourtsForFacility = async (facilityId: string) => {
@@ -368,8 +539,38 @@ export function BulletinBoard() {
   useEffect(() => {
     if (showCreateModal && newPost.facilityId) {
       loadCourtsForFacility(newPost.facilityId);
+      loadStripeStatusForFacility(newPost.facilityId);
     }
   }, [showCreateModal, newPost.facilityId]);
+
+  const loadStripeStatusForFacility = async (facilityId: string): Promise<boolean> => {
+    if (!facilityId) return false;
+    setStripeStatusLoadingByFacility((prev) => ({ ...prev, [facilityId]: true }));
+    try {
+      const res = await stripeConnectApi.getStatus(facilityId);
+      if (res.success) {
+        const statusPayload =
+          unwrapApiPayload<{ onboarded?: boolean; chargesEnabled?: boolean }>(res.data) ??
+          (res.data as { onboarded?: boolean; chargesEnabled?: boolean } | undefined);
+        const onboarded = Boolean(statusPayload?.onboarded ?? statusPayload?.chargesEnabled);
+        setStripeOnboardedByFacility((prev) => ({ ...prev, [facilityId]: onboarded }));
+        return onboarded;
+      }
+      setStripeOnboardedByFacility((prev) => ({ ...prev, [facilityId]: false }));
+      return false;
+    } catch (err) {
+      console.error('Stripe Connect status check failed:', err);
+      return false;
+    } finally {
+      setStripeStatusLoadingByFacility((prev) => ({ ...prev, [facilityId]: false }));
+    }
+  };
+
+  const isStripeReadyForFacility = (facilityId: string) =>
+    stripeOnboardedByFacility[facilityId] === true;
+
+  const isStripeStatusLoading = (facilityId: string) =>
+    Boolean(facilityId && stripeStatusLoadingByFacility[facilityId]);
 
   const handleDeletePost = async (postId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -392,8 +593,17 @@ export function BulletinBoard() {
 
   const handleDrillSignup = async (postId: string) => {
     try {
-      const response = await bulletinBoardApi.signupForDrill(postId);
+      const { successUrl, cancelUrl } = bulletinSignupReturnUrls(postId);
+      const response = await bulletinBoardApi.signupForDrill(postId, { successUrl, cancelUrl });
       if (response.success) {
+        const signupPayload = unwrapApiPayload<{
+          checkoutUrl?: string;
+          requiresPayment?: boolean;
+        }>(response.data);
+        if (signupPayload?.checkoutUrl) {
+          window.location.href = signupPayload.checkoutUrl;
+          return;
+        }
         toast.success(response.message || 'Signup updated');
         loadData();
       } else {
@@ -627,10 +837,18 @@ export function BulletinBoard() {
                               </div>
                               <p className="text-xs text-gray-500">{post.facilityName}</p>
                             </div>
-                            <Badge variant="outline" className="text-gray-700 text-xs capitalize flex-shrink-0 bg-white/80">
-                              <Icon className={`h-3 w-3 mr-1 ${typeColors[post.type]?.replace('bg-', 'text-') || 'text-gray-500'}`} />
-                              {post.type}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              <Badge variant="outline" className="text-gray-700 text-xs capitalize bg-white/80">
+                                <Icon className={`h-3 w-3 mr-1 ${typeColors[post.type]?.replace('bg-', 'text-') || 'text-gray-500'}`} />
+                                {post.type}
+                              </Badge>
+                              {isPaidSignupPost(post) && (
+                                <Badge className="bg-amber-100 text-amber-900 border-amber-200 text-xs">
+                                  <DollarSign className="h-3 w-3 mr-1" />
+                                  {formatSignupFee(post.signupAmountCents)} to join
+                                </Badge>
+                              )}
+                            </div>
                           </div>
 
                           {/* Description */}
@@ -734,6 +952,12 @@ export function BulletinBoard() {
                     <h2 className="text-2xl font-bold">{selectedPost.title}</h2>
                   </div>
                   <Badge className="capitalize">{selectedPost.type}</Badge>
+                  {isPaidSignupPost(selectedPost) && (
+                    <Badge className="mt-2 bg-amber-100 text-amber-900 border-amber-200">
+                      <DollarSign className="h-3.5 w-3.5 mr-1" />
+                      Paid signup · {formatSignupFee(selectedPost.signupAmountCents)}
+                    </Badge>
+                  )}
                 </div>
                 <Button variant="ghost" onClick={() => setSelectedPost(null)}>
                   ✕
@@ -744,6 +968,13 @@ export function BulletinBoard() {
               <div className="space-y-6">
                 <p className="text-gray-700 text-base">{selectedPost.description}</p>
 
+                {eventSignupTypes.has(selectedPost.type) && isPaidSignupPost(selectedPost) && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-medium text-amber-900">
+                      Card payment required — {formatSignupFee(selectedPost.signupAmountCents)} due at signup
+                    </p>
+                  </div>
+                )}
                 {eventSignupTypes.has(selectedPost.type) && (
                   <div className="rounded-lg border p-4 bg-blue-50/50">
                     <h3 className="font-semibold text-gray-900 mb-3">Event Details</h3>
@@ -843,8 +1074,12 @@ export function BulletinBoard() {
                         onClick={() => handleDrillSignup(selectedPost.id)}
                       >
                         {(selectedPost.drillConfirmedCount || 0) >= (selectedPost.maxParticipants || selectedPost.drillMaxParticipants || 0)
-                          ? 'Join Waitlist'
-                          : 'Sign Up'}
+                          ? isPaidSignupPost(selectedPost)
+                            ? `Join Waitlist — ${formatSignupFee(selectedPost.signupAmountCents)}`
+                            : 'Join Waitlist'
+                          : isPaidSignupPost(selectedPost)
+                            ? `Pay & Sign Up — ${formatSignupFee(selectedPost.signupAmountCents)}`
+                            : 'Sign Up'}
                       </Button>
                     )
                   ) : (
@@ -866,6 +1101,11 @@ export function BulletinBoard() {
                     </Button>
                   )}
                 </div>
+                {eventSignupTypes.has(selectedPost.type) && isPaidSignupPost(selectedPost) && (
+                  <p className="text-sm text-gray-600">
+                    Card payment required to sign up ({formatSignupFee(selectedPost.signupAmountCents)}).
+                  </p>
+                )}
                 {eventSignupTypes.has(selectedPost.type) && selectedPost.signupBlockedReason && !selectedPost.currentUserSignupStatus && (
                   <p className="text-sm text-red-600">{selectedPost.signupBlockedReason}</p>
                 )}
@@ -925,7 +1165,7 @@ export function BulletinBoard() {
       {showCreateModal && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowCreateModal(false)}
+          onClick={closeCreateModal}
         >
           <Card
             className="max-w-xl w-full max-h-[90vh] overflow-y-auto"
@@ -935,7 +1175,7 @@ export function BulletinBoard() {
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold">Create Bulletin Post</h2>
-                <Button variant="ghost" size="sm" onClick={() => setShowCreateModal(false)}>
+                <Button variant="ghost" size="sm" onClick={closeCreateModal}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -947,7 +1187,16 @@ export function BulletinBoard() {
                   <Label htmlFor="facility">Facility *</Label>
                   <Select
                     value={newPost.facilityId}
-                    onValueChange={(value) => setNewPost(prev => ({ ...prev, facilityId: value, drillCourtId: '' }))}
+                    onValueChange={(value) => {
+                      setNewPost((prev) => ({
+                        ...prev,
+                        facilityId: value,
+                        drillCourtId: '',
+                        requirePayment: false,
+                        signupFeeDollars: '',
+                      }));
+                      void loadStripeStatusForFacility(value);
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a facility" />
@@ -1162,6 +1411,65 @@ export function BulletinBoard() {
                             onChange={(e) => setNewPost(prev => ({ ...prev, drillShowParticipants: e.target.checked }))}
                           />
                         </div>
+                        <div className="space-y-3 border rounded-md p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium">Require card payment on signup</p>
+                              <p className="text-xs text-gray-500">
+                                Members pay with card via Stripe when they register
+                              </p>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={newPost.requirePayment}
+                              disabled={!newPost.facilityId}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setNewPost((prev) => ({
+                                  ...prev,
+                                  requirePayment: checked,
+                                  signupFeeDollars: checked ? prev.signupFeeDollars : '',
+                                }));
+                                if (checked && newPost.facilityId) {
+                                  void loadStripeStatusForFacility(newPost.facilityId);
+                                }
+                              }}
+                            />
+                          </div>
+                          {isStripeStatusLoading(newPost.facilityId) && newPost.facilityId && (
+                            <p className="text-xs text-gray-500">Checking Stripe Connect status…</p>
+                          )}
+                          {!isStripeStatusLoading(newPost.facilityId) &&
+                            !isStripeReadyForFacility(newPost.facilityId) &&
+                            newPost.facilityId && (
+                            <p className="text-xs text-amber-700">
+                              Stripe Connect is not set up for this facility yet. Complete setup under
+                              Facility Management → Payments before publishing paid signups.
+                            </p>
+                          )}
+                          {isStripeReadyForFacility(newPost.facilityId) && (
+                            <p className="text-xs text-green-700">Stripe Connect is active for this facility.</p>
+                          )}
+                          <div className="space-y-2">
+                            <Label htmlFor="signupFee">
+                              Signup fee (USD){newPost.requirePayment ? ' *' : ''}
+                            </Label>
+                            <Input
+                              id="signupFee"
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={newPost.signupFeeDollars}
+                              onChange={(e) =>
+                                setNewPost((prev) => ({ ...prev, signupFeeDollars: e.target.value }))
+                              }
+                              placeholder="e.g. 25.00"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Check “Require card payment” above and enter a fee to charge on signup.
+                            </p>
+                          </div>
+                        </div>
                         {recurringEligibleTypes.has(newPost.type) && (
                           <div className="space-y-3 border rounded-md p-3">
                             <div className="flex items-center justify-between">
@@ -1269,7 +1577,7 @@ export function BulletinBoard() {
                   <Button
                     variant="outline"
                     className="flex-1"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={closeCreateModal}
                   >
                     Cancel
                   </Button>

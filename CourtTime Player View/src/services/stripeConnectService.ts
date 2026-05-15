@@ -34,7 +34,8 @@ export interface ConnectPayment {
   id: string;
   clubId: string;
   memberId: string;
-  paymentItemId: string;
+  paymentItemId: string | null;
+  bulletinPostId?: string | null;
   amountCents: number;
   platformFeeCents: number;
   status: PaymentStatus;
@@ -79,7 +80,8 @@ function rowToConnectPayment(row: any): ConnectPayment {
     id: row.id,
     clubId: row.club_id,
     memberId: row.member_id,
-    paymentItemId: row.payment_item_id,
+    paymentItemId: row.payment_item_id ?? null,
+    bulletinPostId: row.bulletin_post_id ?? null,
     amountCents: Number(row.amount_cents),
     platformFeeCents: Number(row.platform_fee_cents),
     status: row.status,
@@ -460,6 +462,147 @@ export async function createMemberCheckoutSession(params: {
   return { url: session.url, paymentId };
 }
 
+/**
+ * One-off Checkout for a bulletin event signup (no payment_items catalog row).
+ */
+export async function createBulletinSignupCheckoutSession(params: {
+  bulletinPostId: string;
+  memberId: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<CheckoutResult> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error('Stripe is not configured on this server');
+  }
+
+  const postResult = await query(
+    `SELECT
+       bp.id,
+       bp.title,
+       bp.facility_id,
+       bp.require_payment,
+       bp.signup_amount_cents,
+       bp.category,
+       bp.drill_gender_restriction,
+       bp.drill_max_participants,
+       f.name AS facility_name,
+       f.stripe_account_id,
+       f.stripe_onboarded,
+       f.platform_fee_percent
+     FROM bulletin_posts bp
+     JOIN facilities f ON f.id = bp.facility_id
+     WHERE bp.id = $1
+       AND bp.category IN ('event', 'drill', 'social', 'clinic', 'tournament')
+       AND (bp.status = 'active' OR bp.status IS NULL)`,
+    [params.bulletinPostId]
+  );
+  if (postResult.rows.length === 0) {
+    throw new Error('Event post not found');
+  }
+  const post = postResult.rows[0];
+  if (!post.require_payment || !post.signup_amount_cents) {
+    throw new Error('This event does not require payment to sign up');
+  }
+  if (!post.stripe_account_id || !post.stripe_onboarded) {
+    throw new Error('This club has not finished Stripe Connect onboarding yet');
+  }
+
+  const amountCents = Number(post.signup_amount_cents);
+  const platformFeePercent = Number(post.platform_fee_percent ?? 0);
+  const platformFeeCents = Math.max(0, Math.round((amountCents * platformFeePercent) / 100));
+
+  const existingSignup = await query(
+    `SELECT 1 FROM bulletin_drill_signups
+     WHERE bulletin_post_id = $1 AND user_id = $2`,
+    [params.bulletinPostId, params.memberId]
+  );
+  if (existingSignup.rows.length > 0) {
+    throw new Error('You are already signed up for this event');
+  }
+
+  const pendingPayment = await query(
+    `SELECT id FROM connect_payments
+     WHERE bulletin_post_id = $1 AND member_id = $2 AND status = 'PENDING'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [params.bulletinPostId, params.memberId]
+  );
+  if (pendingPayment.rows.length > 0) {
+    const sessionResult = await query(
+      `SELECT stripe_checkout_session_id FROM connect_payments WHERE id = $1`,
+      [pendingPayment.rows[0].id]
+    );
+    const sessionId = sessionResult.rows[0]?.stripe_checkout_session_id;
+    if (sessionId) {
+      const existingSession = await stripe.checkout.sessions.retrieve(sessionId, {
+        stripeAccount: post.stripe_account_id,
+      });
+      if (existingSession.url && existingSession.status === 'open') {
+        return { url: existingSession.url, paymentId: pendingPayment.rows[0].id };
+      }
+    }
+  }
+
+  const insertResult = await query(
+    `INSERT INTO connect_payments
+       (club_id, member_id, payment_item_id, bulletin_post_id, amount_cents, platform_fee_cents, status)
+     VALUES ($1, $2, NULL, $3, $4, $5, 'PENDING')
+     RETURNING id`,
+    [post.facility_id, params.memberId, params.bulletinPostId, amountCents, platformFeeCents]
+  );
+  const paymentId: string = insertResult.rows[0].id;
+
+  const eventLabel = post.title || 'Event signup';
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: amountCents,
+            product_data: {
+              name: eventLabel,
+              description: `Signup for ${post.facility_name}`,
+            },
+          },
+        },
+      ],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      metadata: {
+        connectPaymentId: paymentId,
+        clubId: post.facility_id,
+        memberId: params.memberId,
+        bulletinPostId: params.bulletinPostId,
+        signupPayment: 'true',
+      },
+      payment_intent_data: {
+        application_fee_amount: platformFeeCents,
+        metadata: {
+          connectPaymentId: paymentId,
+          clubId: post.facility_id,
+          bulletinPostId: params.bulletinPostId,
+        },
+      },
+    },
+    { stripeAccount: post.stripe_account_id }
+  );
+
+  await query(
+    `UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`,
+    [session.id, paymentId]
+  );
+
+  if (!session.url) {
+    throw new Error('Stripe did not return a Checkout URL');
+  }
+  return { url: session.url, paymentId };
+}
+
 // ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
@@ -467,13 +610,14 @@ export async function createMemberCheckoutSession(params: {
 export async function getClubPaymentHistory(clubId: string): Promise<ConnectPayment[]> {
   const result = await query(
     `SELECT cp.*,
-            pi.name AS item_name,
-            pi.category AS item_category,
+            COALESCE(pi.name, bp.title || ' signup') AS item_name,
+            COALESCE(pi.category, 'OTHER') AS item_category,
             u.full_name AS member_name,
             u.email AS member_email
        FROM connect_payments cp
-       JOIN payment_items pi ON pi.id = cp.payment_item_id
-       JOIN users u          ON u.id = cp.member_id
+       LEFT JOIN payment_items pi ON pi.id = cp.payment_item_id
+       LEFT JOIN bulletin_posts bp ON bp.id = cp.bulletin_post_id
+       JOIN users u ON u.id = cp.member_id
       WHERE cp.club_id = $1
       ORDER BY cp.created_at DESC`,
     [clubId]
@@ -484,10 +628,11 @@ export async function getClubPaymentHistory(clubId: string): Promise<ConnectPaym
 export async function getMemberPaymentHistory(memberId: string): Promise<ConnectPayment[]> {
   const result = await query(
     `SELECT cp.*,
-            pi.name AS item_name,
-            pi.category AS item_category
+            COALESCE(pi.name, bp.title || ' signup') AS item_name,
+            COALESCE(pi.category, 'OTHER') AS item_category
        FROM connect_payments cp
-       JOIN payment_items pi ON pi.id = cp.payment_item_id
+       LEFT JOIN payment_items pi ON pi.id = cp.payment_item_id
+       LEFT JOIN bulletin_posts bp ON bp.id = cp.bulletin_post_id
       WHERE cp.member_id = $1
       ORDER BY cp.created_at DESC`,
     [memberId]
@@ -499,33 +644,191 @@ export async function getMemberPaymentHistory(memberId: string): Promise<Connect
 // Webhook handler — marks the PENDING row as PAID once Checkout completes.
 // ---------------------------------------------------------------------------
 
+async function finalizeSignupPaymentRow(row: {
+  id: string;
+  bulletin_post_id: string | null;
+  member_id: string;
+}): Promise<void> {
+  if (!row.bulletin_post_id) return;
+  const { finalizeBulletinSignupAfterPayment } = await import('./bulletinBoardService');
+  await finalizeBulletinSignupAfterPayment({
+    bulletinPostId: row.bulletin_post_id,
+    memberId: row.member_id,
+    connectPaymentId: row.id,
+  });
+}
+
 export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session): Promise<void> {
   const paymentId = session.metadata?.connectPaymentId;
   const paymentIntentId =
     typeof session.payment_intent === 'string' ? session.payment_intent : null;
+  const bulletinPostId = session.metadata?.bulletinPostId || null;
+  const isSignupPayment = session.metadata?.signupPayment === 'true' || Boolean(bulletinPostId);
+
+  let paidRow: { id: string; bulletin_post_id: string | null; member_id: string } | null = null;
 
   if (paymentId) {
-    await query(
+    const result = await query(
       `UPDATE connect_payments
          SET status = 'PAID',
              paid_at = CURRENT_TIMESTAMP,
              stripe_payment_intent_id = COALESCE($1, stripe_payment_intent_id),
              stripe_checkout_session_id = COALESCE($2, stripe_checkout_session_id)
-       WHERE id = $3 AND status <> 'PAID'`,
+       WHERE id = $3
+       RETURNING id, bulletin_post_id, member_id`,
       [paymentIntentId, session.id, paymentId]
     );
-    return;
+    paidRow = result.rows[0] ?? null;
+  } else {
+    const fallback = await query(
+      `UPDATE connect_payments
+         SET status = 'PAID',
+             paid_at = CURRENT_TIMESTAMP,
+             stripe_payment_intent_id = COALESCE($1, stripe_payment_intent_id)
+       WHERE stripe_checkout_session_id = $2
+       RETURNING id, bulletin_post_id, member_id`,
+      [paymentIntentId, session.id]
+    );
+    paidRow = fallback.rows[0] ?? null;
   }
 
-  // Fallback: match on session id alone.
-  await query(
-    `UPDATE connect_payments
-       SET status = 'PAID',
-           paid_at = CURRENT_TIMESTAMP,
-           stripe_payment_intent_id = COALESCE($1, stripe_payment_intent_id)
-     WHERE stripe_checkout_session_id = $2 AND status <> 'PAID'`,
-    [paymentIntentId, session.id]
+  if (paidRow && isSignupPayment) {
+    await finalizeSignupPaymentRow(paidRow);
+    const signupCheck = await query(
+      `SELECT 1 FROM bulletin_drill_signups
+        WHERE bulletin_post_id = $1 AND user_id = $2`,
+      [paidRow.bulletin_post_id, paidRow.member_id]
+    );
+    if (signupCheck.rows.length === 0 && paidRow.bulletin_post_id) {
+      const { finalizeBulletinSignupAfterPayment } = await import('./bulletinBoardService');
+      await finalizeBulletinSignupAfterPayment({
+        bulletinPostId: paidRow.bulletin_post_id,
+        memberId: paidRow.member_id,
+        connectPaymentId: paidRow.id,
+      });
+    }
+  }
+}
+
+/**
+ * After Stripe redirects back to the app, confirm the session and create the signup.
+ * Works even when the Connect webhook has not reached the server (common in local dev).
+ */
+function sameMemberId(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return String(a).toLowerCase() === String(b).toLowerCase();
+}
+
+export async function confirmBulletinSignupCheckout(params: {
+  sessionId: string;
+  memberId: string;
+}): Promise<{
+  bulletinPostId: string;
+  status: 'confirmed' | 'waitlist';
+  waitlistPosition: number | null;
+}> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error('Stripe is not configured on this server');
+  }
+
+  let payment: {
+    id: string;
+    member_id: string;
+    bulletin_post_id: string | null;
+    status: string;
+    stripe_account_id: string;
+  } | null = null;
+
+  const paymentResult = await query(
+    `SELECT cp.id, cp.member_id, cp.bulletin_post_id, cp.status, f.stripe_account_id
+       FROM connect_payments cp
+       JOIN facilities f ON f.id = cp.club_id
+      WHERE cp.stripe_checkout_session_id = $1`,
+    [params.sessionId]
   );
+  if (paymentResult.rows.length > 0) {
+    payment = paymentResult.rows[0];
+  } else {
+    const recentPayments = await query(
+      `SELECT cp.id, cp.member_id, cp.bulletin_post_id, cp.status, f.stripe_account_id
+         FROM connect_payments cp
+         JOIN facilities f ON f.id = cp.club_id
+        WHERE cp.member_id = $1
+          AND cp.bulletin_post_id IS NOT NULL
+          AND cp.status IN ('PENDING', 'PAID')
+        ORDER BY cp.created_at DESC
+        LIMIT 15`,
+      [params.memberId]
+    );
+    for (const row of recentPayments.rows) {
+      try {
+        const probe = await stripe.checkout.sessions.retrieve(params.sessionId, {
+          stripeAccount: row.stripe_account_id,
+        });
+        if (probe.id === params.sessionId) {
+          payment = row;
+          await query(
+            `UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`,
+            [params.sessionId, row.id]
+          );
+          break;
+        }
+      } catch {
+        // Session belongs to a different connected account — try next row.
+      }
+    }
+  }
+
+  if (!payment) {
+    throw new Error('Payment session not found');
+  }
+  if (!sameMemberId(payment.member_id, params.memberId)) {
+    throw new Error('This payment does not belong to your account');
+  }
+  if (!payment.bulletin_post_id) {
+    throw new Error('This payment is not linked to an event signup');
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(params.sessionId, {
+    stripeAccount: payment.stripe_account_id,
+  });
+
+  if (session.payment_status !== 'paid') {
+    throw new Error('Payment has not completed yet');
+  }
+
+  await markCheckoutSessionPaid(session);
+
+  let signupResult = await query(
+    `SELECT status, waitlist_position
+       FROM bulletin_drill_signups
+      WHERE bulletin_post_id = $1 AND user_id = $2`,
+    [payment.bulletin_post_id, params.memberId]
+  );
+  if (signupResult.rows.length === 0) {
+    const { finalizeBulletinSignupAfterPayment } = await import('./bulletinBoardService');
+    await finalizeBulletinSignupAfterPayment({
+      bulletinPostId: payment.bulletin_post_id,
+      memberId: params.memberId,
+      connectPaymentId: payment.id,
+    });
+    signupResult = await query(
+      `SELECT status, waitlist_position
+         FROM bulletin_drill_signups
+        WHERE bulletin_post_id = $1 AND user_id = $2`,
+      [payment.bulletin_post_id, params.memberId]
+    );
+  }
+  if (signupResult.rows.length === 0) {
+    throw new Error('Signup could not be completed. Please contact the club.');
+  }
+
+  return {
+    bulletinPostId: payment.bulletin_post_id,
+    status: signupResult.rows[0].status,
+    waitlistPosition: signupResult.rows[0].waitlist_position,
+  };
 }
 
 // ---------------------------------------------------------------------------

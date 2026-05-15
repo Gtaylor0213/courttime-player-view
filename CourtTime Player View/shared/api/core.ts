@@ -1,3 +1,31 @@
+/** Parse API boolean fields (true/false, t/f, 1/0, "true"/"false"). */
+export function parseApiBoolean(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0 || value == null) return false;
+  const s = String(value).trim().toLowerCase();
+  return s === 'true' || s === 't' || s === '1' || s === 'yes';
+}
+
+/** Unwrap `{ success, data: T }` envelopes from API routes (after buildApiRequest's outer `.data`). */
+export function unwrapApiPayload<T>(responseData: unknown): T | undefined {
+  if (responseData == null || typeof responseData !== 'object') return undefined;
+  const record = responseData as Record<string, unknown>;
+  if ('data' in record && record.data !== undefined) {
+    return record.data as T;
+  }
+  return responseData as T;
+}
+
+/** Extract `posts` from bulletin-board GET responses (handles nested envelopes). */
+export function extractBulletinPosts(apiResponseData: unknown): unknown[] {
+  if (!apiResponseData || typeof apiResponseData !== 'object') return [];
+  const record = apiResponseData as Record<string, unknown>;
+  if (Array.isArray(record.posts)) return record.posts;
+  const nested = unwrapApiPayload<{ posts?: unknown[] }>(apiResponseData);
+  if (nested && Array.isArray(nested.posts)) return nested.posts;
+  return [];
+}
+
 export interface ApiResponse<T = unknown, TCategory extends string = string> {
   success: boolean;
   data?: T;

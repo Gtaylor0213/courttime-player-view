@@ -10,6 +10,8 @@ import {
   removeDrillSignupByAdmin
 } from '../../src/services/bulletinBoardService';
 import { query } from '../../src/database/connection';
+import { parseDollarsToCents } from '../../shared/utils/money';
+import { confirmBulletinSignupCheckout } from '../../src/services/stripeConnectService';
 
 const router = express.Router();
 const signupEnabledCategories = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
@@ -38,7 +40,26 @@ router.get('/:facilityId', async (req, res, next) => {
  */
 router.post('/', async (req, res, next) => {
   try {
-    const postData = { ...req.body, authorId: req.user!.userId };
+    const body = req.body || {};
+    const requirePayment = Boolean(body.requirePayment ?? body.require_payment);
+    const rawAmount = body.signupAmountCents ?? body.signup_amount_cents;
+    const rawDollars = body.signupFeeDollars ?? body.signup_fee_dollars;
+    let signupAmountCents: number | undefined;
+    if (requirePayment) {
+      if (rawDollars != null && String(rawDollars).trim() !== '') {
+        signupAmountCents = parseDollarsToCents(rawDollars);
+      } else if (rawAmount != null) {
+        signupAmountCents = Math.round(Number(rawAmount));
+      }
+    }
+
+    const postData = {
+      ...body,
+      authorId: req.user!.userId,
+      requirePayment,
+      signupAmountCents:
+        requirePayment && signupAmountCents && signupAmountCents > 0 ? signupAmountCents : undefined,
+    };
 
     if (!postData.facilityId || !postData.authorId || !postData.title || !postData.content || !postData.category) {
       return res.status(400).json({
@@ -75,6 +96,40 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
+ * POST /api/bulletin-board/signup/confirm
+ * Complete a paid bulletin signup after Stripe Checkout redirect.
+ */
+router.post('/signup/confirm', async (req, res, next) => {
+  try {
+    const sessionId = String(req.body?.sessionId || req.query?.sessionId || '');
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+    const result = await confirmBulletinSignupCheckout({
+      sessionId,
+      memberId: req.user!.userId,
+    });
+    return res.json({
+      success: true,
+      data: result,
+      message:
+        result.status === 'confirmed'
+          ? 'Successfully signed up for event'
+          : `Added to waitlist at position #${result.waitlistPosition}`,
+    });
+  } catch (error: any) {
+    if (
+      error?.message?.includes('not belong') ||
+      error?.message?.includes('not completed') ||
+      error?.message?.includes('not found')
+    ) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+});
+
+/**
  * POST /api/bulletin-board/:postId/signup
  * Signup current member for an eligible event post
  */
@@ -82,7 +137,15 @@ router.post('/:postId/signup', async (req, res, next) => {
   try {
     const { postId } = req.params;
     const userId = req.user!.userId;
-    const result = await signupForDrill(postId, userId);
+    const { successUrl, cancelUrl } = req.body || {};
+    const result = await signupForDrill(postId, userId, { successUrl, cancelUrl });
+    if (result.requiresPayment) {
+      return res.json({
+        success: true,
+        data: result,
+        message: 'Redirecting to payment',
+      });
+    }
     res.json({
       success: true,
       data: result,

@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { bookingApi } from '../api/client';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
+import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 
 interface QuickReservePopupProps {
   isOpen: boolean;
@@ -536,6 +537,9 @@ export function QuickReservePopup({
     setIsSubmitting(true);
 
     try {
+      const checkoutReturnUrls =
+        typeof window !== 'undefined' ? courtBookingCheckoutUrls(window.location.origin) : undefined;
+
       // Convert 12h time to 24h format
       const [time, period] = selectedTime.split(' ');
       let [hours, minutes] = time.split(':').map(Number);
@@ -591,8 +595,21 @@ export function QuickReservePopup({
             for (const req of bookingRequests) {
               const res = await bookingApi.create({
                 ...req,
+                ...checkoutReturnUrls,
                 provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
               });
+              if (res.requiresPayment && res.checkoutUrl) {
+                sessionStorage.setItem(
+                  'courtBookingCheckoutPending',
+                  JSON.stringify({
+                    courtId: req.courtId,
+                    bookingDate: req.bookingDate,
+                    facilityId: selectedFacility,
+                  })
+                );
+                window.location.replace(res.checkoutUrl);
+                return [res];
+              }
               out.push(res);
               if (!res.success) break;
               prior.push({
@@ -606,8 +623,15 @@ export function QuickReservePopup({
             return out;
           })();
 
+      const paymentResult = results.find((r) => r.requiresPayment && r.checkoutUrl);
+      if (paymentResult?.checkoutUrl) {
+        return;
+      }
+
       const failedBookings = results.filter(r => !r.success);
-      const successfulBookings = results.filter(r => r.success);
+      const successfulBookings = results.filter(
+        (r) => r.success && !r.requiresPayment && (r as { booking?: unknown }).booking
+      );
 
       if (successfulBookings.length > 0) {
         // Call the parent callback to refresh bookings

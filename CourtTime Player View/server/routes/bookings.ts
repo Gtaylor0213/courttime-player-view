@@ -138,7 +138,9 @@ router.post('/', async (req, res, next) => {
       durationMinutes,
       bookingType,
       notes,
-      provisionalSameRequestBookings
+      provisionalSameRequestBookings,
+      successUrl,
+      cancelUrl,
     } = req.body;
 
     // Validation
@@ -161,11 +163,23 @@ router.post('/', async (req, res, next) => {
       notes,
       provisionalSameRequestBookings: Array.isArray(provisionalSameRequestBookings)
         ? provisionalSameRequestBookings
-        : undefined
+        : undefined,
+      successUrl: typeof successUrl === 'string' ? successUrl : undefined,
+      cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
     });
 
     if (!result.success) {
       return res.status(400).json(result);
+    }
+
+    if (result.requiresPayment && result.checkoutUrl) {
+      return res.json({
+        success: true,
+        requiresPayment: true,
+        checkoutUrl: result.checkoutUrl,
+        warnings: result.warnings,
+        isPrimeTime: result.isPrimeTime,
+      });
     }
 
     // Create notification for booking confirmation
@@ -221,6 +235,66 @@ router.post('/', async (req, res, next) => {
 
     res.status(201).json(result);
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/payment/reconcile
+ * Recover reservations for PAID court checkouts that never created a booking row.
+ */
+router.post('/payment/reconcile', async (req, res, next) => {
+  try {
+    const userId = (req as any).user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { reconcilePaidCourtBookingsWithoutReservation } = await import(
+      '../../src/services/bookingService'
+    );
+    const recovered = await reconcilePaidCourtBookingsWithoutReservation(userId);
+    return res.json({
+      success: true,
+      data: { recovered, count: recovered.length },
+      message:
+        recovered.length > 0
+          ? `Recovered ${recovered.length} paid court reservation(s)`
+          : 'No paid reservations needed recovery',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/payment/confirm
+ * Complete a paid court booking after Stripe Checkout redirect.
+ */
+router.post('/payment/confirm', async (req, res, next) => {
+  try {
+    const sessionId = String(req.body?.sessionId || '');
+    const userId = (req as any).user?.userId;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { confirmCourtBookingCheckout } = await import('../../src/services/stripeConnectService');
+    const result = await confirmCourtBookingCheckout({ sessionId, memberId: userId });
+    return res.json({
+      success: true,
+      data: result,
+      message: 'Court booking confirmed after payment',
+    });
+  } catch (error: any) {
+    if (
+      error?.message?.includes('not belong') ||
+      error?.message?.includes('not completed') ||
+      error?.message?.includes('not found')
+    ) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     next(error);
   }
 });

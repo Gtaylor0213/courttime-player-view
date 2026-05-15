@@ -6,6 +6,23 @@ export function parseApiBoolean(value: unknown): boolean {
   return s === 'true' || s === 't' || s === '1' || s === 'yes';
 }
 
+/** Whether Stripe Connect is ready for paid signups/bookings from a status API response. */
+export function isStripeConnectReadyFromResponse(res: {
+  success?: boolean;
+  data?: unknown;
+}): boolean {
+  if (!res.success) return false;
+  const payload =
+    unwrapApiPayload<{
+      onboarded?: boolean;
+      stripeOnboarded?: boolean;
+      chargesEnabled?: boolean;
+    }>(res.data) ??
+    (res.data as { onboarded?: boolean; stripeOnboarded?: boolean; chargesEnabled?: boolean } | undefined);
+  if (!payload || typeof payload !== 'object') return false;
+  return Boolean(payload.onboarded ?? payload.stripeOnboarded ?? payload.chargesEnabled);
+}
+
 /** Unwrap `{ success, data: T }` envelopes from API routes (after buildApiRequest's outer `.data`). */
 export function unwrapApiPayload<T>(responseData: unknown): T | undefined {
   if (responseData == null || typeof responseData !== 'object') return undefined;
@@ -14,6 +31,39 @@ export function unwrapApiPayload<T>(responseData: unknown): T | undefined {
     return record.data as T;
   }
   return responseData as T;
+}
+
+/** Flatten POST /api/bookings responses so `requiresPayment` / `checkoutUrl` are on the top level. */
+export function normalizeBookingCreateResponse<
+  T extends { success?: boolean; data?: unknown; error?: string }
+>(res: T) {
+  if (!res.success) return res;
+  const inner =
+    unwrapApiPayload<{
+      success?: boolean;
+      booking?: unknown;
+      requiresPayment?: boolean;
+      checkoutUrl?: string;
+      warnings?: unknown;
+      isPrimeTime?: boolean;
+      ruleViolations?: unknown;
+      error?: string;
+    }>(res.data) ?? (res.data as Record<string, unknown> | undefined);
+
+  if (!inner || typeof inner !== 'object') return res;
+
+  return {
+    ...res,
+    ...inner,
+    success: res.success && inner.success !== false,
+    requiresPayment: Boolean(inner.requiresPayment),
+    checkoutUrl: typeof inner.checkoutUrl === 'string' ? inner.checkoutUrl : undefined,
+    booking: inner.booking,
+    warnings: inner.warnings,
+    isPrimeTime: inner.isPrimeTime,
+    ruleViolations: inner.ruleViolations,
+    error: inner.error ?? res.error,
+  };
 }
 
 /** Extract `posts` from bulletin-board GET responses (handles nested envelopes). */

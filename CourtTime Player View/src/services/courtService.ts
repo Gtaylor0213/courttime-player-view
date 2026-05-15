@@ -16,6 +16,8 @@ export interface CourtCreateData {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp?: boolean;
+  requirePayment?: boolean;
+  bookingAmountCents?: number | null;
   courtRules?: string;
   parentCourtId?: string; // For split courts
   splitConfiguration?: {
@@ -34,6 +36,8 @@ export interface Court {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp: boolean;
+  requirePayment: boolean;
+  bookingAmountCents: number | null;
   status: string;
   courtRules?: string;
   parentCourtId?: string;
@@ -49,13 +53,17 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
   const result = await query(
     `INSERT INTO courts (
       facility_id, name, court_number, surface_type, court_type,
-      is_indoor, has_lights, is_walk_up, court_rules, parent_court_id, split_configuration,
+      is_indoor, has_lights, is_walk_up, require_payment, booking_amount_cents,
+      court_rules, parent_court_id, split_configuration,
       is_split_court, status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'available')
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'available')
     RETURNING
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      COALESCE(require_payment, false) as "requirePayment",
+      booking_amount_cents as "bookingAmountCents",
+      status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"`,
@@ -68,6 +76,8 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
       courtData.isIndoor,
       courtData.hasLights,
       courtData.isWalkUp || false,
+      courtData.requirePayment || false,
+      courtData.requirePayment && courtData.bookingAmountCents ? courtData.bookingAmountCents : null,
       courtData.courtRules || null,
       courtData.parentCourtId || null,
       courtData.splitConfiguration ? JSON.stringify(courtData.splitConfiguration) : null,
@@ -119,7 +129,10 @@ export async function createCourtsBulk(
       RETURNING
         id, facility_id as "facilityId", name, court_number as "courtNumber",
         surface_type as "surfaceType", court_type as "courtType",
-        is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+        is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+        COALESCE(require_payment, false) as "requirePayment",
+        booking_amount_cents as "bookingAmountCents",
+        status,
         court_rules as "courtRules", parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
         created_at as "createdAt"`,
@@ -175,7 +188,10 @@ export async function createSplitCourt(
         RETURNING
           id, facility_id as "facilityId", name, court_number as "courtNumber",
           surface_type as "surfaceType", court_type as "courtType",
-          is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+          is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+          COALESCE(require_payment, false) as "requirePayment",
+          booking_amount_cents as "bookingAmountCents",
+          status,
           court_rules as "courtRules", parent_court_id as "parentCourtId",
           split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
           created_at as "createdAt"`,
@@ -200,7 +216,10 @@ export async function createSplitCourt(
       `SELECT
         id, facility_id as "facilityId", name, court_number as "courtNumber",
         surface_type as "surfaceType", court_type as "courtType",
-        is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+        is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+        COALESCE(require_payment, false) as "requirePayment",
+        booking_amount_cents as "bookingAmountCents",
+        status,
         court_rules as "courtRules", parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
         created_at as "createdAt"
@@ -282,7 +301,10 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
     `SELECT
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      COALESCE(require_payment, false) as "requirePayment",
+      booking_amount_cents as "bookingAmountCents",
+      status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"
@@ -302,7 +324,10 @@ export async function getCourtById(courtId: string): Promise<Court | null> {
     `SELECT
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      COALESCE(require_payment, false) as "requirePayment",
+      booking_amount_cents as "bookingAmountCents",
+      status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"
@@ -322,7 +347,10 @@ export async function getSplitCourts(parentCourtId: string): Promise<Court[]> {
     `SELECT
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      COALESCE(require_payment, false) as "requirePayment",
+      booking_amount_cents as "bookingAmountCents",
+      status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
       created_at as "createdAt"
@@ -370,6 +398,18 @@ export async function updateCourt(
     fields.push(`is_walk_up = $${paramCount++}`);
     values.push(updates.isWalkUp);
   }
+  if (updates.requirePayment !== undefined) {
+    fields.push(`require_payment = $${paramCount++}`);
+    values.push(updates.requirePayment);
+    if (!updates.requirePayment) {
+      fields.push(`booking_amount_cents = $${paramCount++}`);
+      values.push(null);
+    }
+  }
+  if (updates.bookingAmountCents !== undefined) {
+    fields.push(`booking_amount_cents = $${paramCount++}`);
+    values.push(updates.bookingAmountCents);
+  }
   if (updates.courtRules !== undefined) {
     fields.push(`court_rules = $${paramCount++}`);
     values.push(updates.courtRules);
@@ -388,7 +428,10 @@ export async function updateCourt(
      RETURNING
        id, facility_id as "facilityId", name, court_number as "courtNumber",
        surface_type as "surfaceType", court_type as "courtType",
-      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+      is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      COALESCE(require_payment, false) as "requirePayment",
+      booking_amount_cents as "bookingAmountCents",
+      status,
        court_rules as "courtRules", parent_court_id as "parentCourtId",
        split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
        created_at as "createdAt"`,
@@ -396,6 +439,27 @@ export async function updateCourt(
   );
 
   return result.rows[0];
+}
+
+/**
+ * Validate paid-court settings before save (Stripe Connect must be active).
+ */
+export async function assertPaidCourtConfig(
+  facilityId: string,
+  requirePayment: boolean,
+  bookingAmountCents?: number | null
+): Promise<void> {
+  if (!requirePayment) return;
+  if (!bookingAmountCents || bookingAmountCents <= 0) {
+    throw new Error('Booking fee is required when paid court booking is enabled');
+  }
+  const { syncConnectOnboardingStatus } = await import('./stripeConnectService');
+  const stripeStatus = await syncConnectOnboardingStatus(facilityId);
+  if (!stripeStatus.onboarded) {
+    throw new Error(
+      'Complete Stripe Connect setup in Facility Management → Payments before enabling paid court booking'
+    );
+  }
 }
 
 /**

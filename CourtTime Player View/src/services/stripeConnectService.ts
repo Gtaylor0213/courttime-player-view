@@ -603,6 +603,144 @@ export async function createBulletinSignupCheckoutSession(params: {
   return { url: session.url, paymentId };
 }
 
+/**
+ * One-off Checkout for a paid court booking (no payment_items catalog row).
+ */
+export async function createCourtBookingCheckoutSession(params: {
+  memberId: string;
+  pendingBooking: import('./bookingService').PendingCourtBookingPayload;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<CheckoutResult> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error('Stripe is not configured on this server');
+  }
+
+  const pb = params.pendingBooking;
+  const courtResult = await query(
+    `SELECT
+       c.id,
+       c.name,
+       c.facility_id,
+       c.require_payment,
+       c.booking_amount_cents,
+       f.name AS facility_name,
+       f.stripe_account_id,
+       f.stripe_onboarded,
+       f.platform_fee_percent
+     FROM courts c
+     JOIN facilities f ON f.id = c.facility_id
+     WHERE c.id = $1`,
+    [pb.courtId]
+  );
+  if (courtResult.rows.length === 0) {
+    throw new Error('Court not found');
+  }
+  const court = courtResult.rows[0];
+  if (!court.require_payment || !court.booking_amount_cents) {
+    throw new Error('This court does not require payment to book');
+  }
+  if (!court.stripe_account_id || !court.stripe_onboarded) {
+    throw new Error('This club has not finished Stripe Connect onboarding yet');
+  }
+
+  const amountCents = Number(court.booking_amount_cents);
+  const platformFeePercent = Number(court.platform_fee_percent ?? 0);
+  const platformFeeCents = Math.max(0, Math.round((amountCents * platformFeePercent) / 100));
+
+  const pendingKey = JSON.stringify({
+    courtId: pb.courtId,
+    bookingDate: pb.bookingDate,
+    startTime: pb.startTime,
+    endTime: pb.endTime,
+    userId: pb.userId,
+  });
+
+  const pendingPayment = await query(
+    `SELECT id, stripe_checkout_session_id FROM connect_payments
+     WHERE member_id = $1 AND status = 'PENDING'
+       AND pending_booking IS NOT NULL
+       AND pending_booking->>'courtId' = $2
+       AND pending_booking->>'bookingDate' = $3
+       AND pending_booking->>'startTime' = $4
+       AND pending_booking->>'endTime' = $5
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [params.memberId, pb.courtId, pb.bookingDate, pb.startTime, pb.endTime]
+  );
+  if (pendingPayment.rows.length > 0) {
+    const sessionId = pendingPayment.rows[0].stripe_checkout_session_id;
+    if (sessionId) {
+      const existingSession = await stripe.checkout.sessions.retrieve(sessionId, {
+        stripeAccount: court.stripe_account_id,
+      });
+      if (existingSession.url && existingSession.status === 'open') {
+        return { url: existingSession.url, paymentId: pendingPayment.rows[0].id };
+      }
+    }
+  }
+
+  const insertResult = await query(
+    `INSERT INTO connect_payments
+       (club_id, member_id, payment_item_id, amount_cents, platform_fee_cents, status, pending_booking)
+     VALUES ($1, $2, NULL, $3, $4, 'PENDING', $5::jsonb)
+     RETURNING id`,
+    [court.facility_id, params.memberId, amountCents, platformFeeCents, JSON.stringify(pb)]
+  );
+  const paymentId: string = insertResult.rows[0].id;
+
+  const dateLabel = pb.bookingDate;
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: amountCents,
+            product_data: {
+              name: `${court.name} — court booking`,
+              description: `${court.facility_name} · ${dateLabel} ${pb.startTime}–${pb.endTime}`,
+            },
+          },
+        },
+      ],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      metadata: {
+        connectPaymentId: paymentId,
+        clubId: court.facility_id,
+        memberId: params.memberId,
+        courtBookingPayment: 'true',
+        courtId: pb.courtId,
+        pendingKey,
+      },
+      payment_intent_data: {
+        application_fee_amount: platformFeeCents,
+        metadata: {
+          connectPaymentId: paymentId,
+          clubId: court.facility_id,
+          courtId: pb.courtId,
+        },
+      },
+    },
+    { stripeAccount: court.stripe_account_id }
+  );
+
+  await query(
+    `UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`,
+    [session.id, paymentId]
+  );
+
+  if (!session.url) {
+    throw new Error('Stripe did not return a Checkout URL');
+  }
+  return { url: session.url, paymentId };
+}
+
 // ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
@@ -658,6 +796,22 @@ async function finalizeSignupPaymentRow(row: {
   });
 }
 
+async function finalizeCourtBookingPaymentRow(row: {
+  id: string;
+  member_id: string;
+  booking_id: string | null;
+}): Promise<void> {
+  if (row.booking_id) return;
+  const { finalizeBookingAfterPayment } = await import('./bookingService');
+  const result = await finalizeBookingAfterPayment({
+    connectPaymentId: row.id,
+    memberId: row.member_id,
+  });
+  if (!result?.bookingId) {
+    throw new Error('Court booking could not be created after payment');
+  }
+}
+
 export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session): Promise<void> {
   const paymentId = session.metadata?.connectPaymentId;
   const paymentIntentId =
@@ -665,7 +819,13 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
   const bulletinPostId = session.metadata?.bulletinPostId || null;
   const isSignupPayment = session.metadata?.signupPayment === 'true' || Boolean(bulletinPostId);
 
-  let paidRow: { id: string; bulletin_post_id: string | null; member_id: string } | null = null;
+  let paidRow: {
+    id: string;
+    bulletin_post_id: string | null;
+    member_id: string;
+    booking_id: string | null;
+    pending_booking: unknown;
+  } | null = null;
 
   if (paymentId) {
     const result = await query(
@@ -675,7 +835,7 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
              stripe_payment_intent_id = COALESCE($1, stripe_payment_intent_id),
              stripe_checkout_session_id = COALESCE($2, stripe_checkout_session_id)
        WHERE id = $3
-       RETURNING id, bulletin_post_id, member_id`,
+       RETURNING id, bulletin_post_id, member_id, booking_id, pending_booking`,
       [paymentIntentId, session.id, paymentId]
     );
     paidRow = result.rows[0] ?? null;
@@ -686,10 +846,22 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
              paid_at = CURRENT_TIMESTAMP,
              stripe_payment_intent_id = COALESCE($1, stripe_payment_intent_id)
        WHERE stripe_checkout_session_id = $2
-       RETURNING id, bulletin_post_id, member_id`,
+       RETURNING id, bulletin_post_id, member_id, booking_id, pending_booking`,
       [paymentIntentId, session.id]
     );
     paidRow = fallback.rows[0] ?? null;
+  }
+
+  const isCourtBookingPayment =
+    session.metadata?.courtBookingPayment === 'true' ||
+    Boolean(paidRow?.pending_booking && !paidRow?.bulletin_post_id);
+
+  if (paidRow && isCourtBookingPayment && paidRow.pending_booking) {
+    try {
+      await finalizeCourtBookingPaymentRow(paidRow);
+    } catch (err) {
+      console.error('Court booking finalize after checkout paid (will retry via reconcile):', err);
+    }
   }
 
   if (paidRow && isSignupPayment) {
@@ -829,6 +1001,111 @@ export async function confirmBulletinSignupCheckout(params: {
     status: signupResult.rows[0].status,
     waitlistPosition: signupResult.rows[0].waitlist_position,
   };
+}
+
+export async function confirmCourtBookingCheckout(params: {
+  sessionId: string;
+  memberId: string;
+}): Promise<{ bookingId: string; bookingDate?: string }> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error('Stripe is not configured on this server');
+  }
+
+  let payment: {
+    id: string;
+    member_id: string;
+    booking_id: string | null;
+    pending_booking: unknown;
+    status: string;
+    stripe_account_id: string;
+  } | null = null;
+
+  const paymentResult = await query(
+    `SELECT cp.id, cp.member_id, cp.booking_id, cp.pending_booking, cp.status, f.stripe_account_id
+       FROM connect_payments cp
+       JOIN facilities f ON f.id = cp.club_id
+      WHERE cp.stripe_checkout_session_id = $1`,
+    [params.sessionId]
+  );
+  if (paymentResult.rows.length > 0) {
+    payment = paymentResult.rows[0];
+  } else {
+    const recentPayments = await query(
+      `SELECT cp.id, cp.member_id, cp.booking_id, cp.pending_booking, cp.status, f.stripe_account_id
+         FROM connect_payments cp
+         JOIN facilities f ON f.id = cp.club_id
+        WHERE cp.member_id = $1
+          AND cp.pending_booking IS NOT NULL
+          AND cp.status IN ('PENDING', 'PAID')
+        ORDER BY cp.created_at DESC
+        LIMIT 15`,
+      [params.memberId]
+    );
+    for (const row of recentPayments.rows) {
+      try {
+        const probe = await stripe.checkout.sessions.retrieve(params.sessionId, {
+          stripeAccount: row.stripe_account_id,
+        });
+        if (probe.id === params.sessionId) {
+          payment = row;
+          await query(
+            `UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`,
+            [params.sessionId, row.id]
+          );
+          break;
+        }
+      } catch {
+        // Session belongs to a different connected account.
+      }
+    }
+  }
+
+  if (!payment) {
+    throw new Error('Payment session not found');
+  }
+  if (!sameMemberId(payment.member_id, params.memberId)) {
+    throw new Error('This payment does not belong to your account');
+  }
+  if (!payment.pending_booking && !payment.booking_id) {
+    throw new Error('This payment is not linked to a court booking');
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(params.sessionId, {
+    stripeAccount: payment.stripe_account_id,
+  });
+
+  if (session.payment_status !== 'paid') {
+    throw new Error('Payment has not completed yet');
+  }
+
+  await markCheckoutSessionPaid(session);
+
+  const refreshed = await query(
+    `SELECT booking_id FROM connect_payments WHERE id = $1`,
+    [payment.id]
+  );
+  const linkedBookingId = refreshed.rows[0]?.booking_id ?? payment.booking_id;
+  if (linkedBookingId) {
+    const dateRow = await query(
+      `SELECT TO_CHAR(booking_date, 'YYYY-MM-DD') as "bookingDate" FROM bookings WHERE id = $1`,
+      [linkedBookingId]
+    );
+    return {
+      bookingId: linkedBookingId,
+      bookingDate: dateRow.rows[0]?.bookingDate,
+    };
+  }
+
+  const { finalizeBookingAfterPayment } = await import('./bookingService');
+  const finalized = await finalizeBookingAfterPayment({
+    connectPaymentId: payment.id,
+    memberId: params.memberId,
+  });
+  if (!finalized?.bookingId) {
+    throw new Error('Booking could not be completed. Please contact the club.');
+  }
+  return finalized;
 }
 
 // ---------------------------------------------------------------------------

@@ -11,8 +11,10 @@ import { RuleViolationDialog } from './RuleViolationDialog';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, facilitiesApi } from '../api/client';
+import { toast } from 'sonner';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
+import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 
 interface RuleViolation {
   ruleCode: string;
@@ -106,7 +108,16 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
-  const [facilityCourts, setFacilityCourts] = useState<Array<{ id: string; name: string; status: string; isWalkUp?: boolean }>>([]);
+  const [facilityCourts, setFacilityCourts] = useState<
+    Array<{
+      id: string;
+      name: string;
+      status: string;
+      isWalkUp?: boolean;
+      requirePayment?: boolean;
+      bookingAmountCents?: number | null;
+    }>
+  >([]);
   const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast } = useNotifications();
@@ -311,6 +322,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     setIsSubmitting(true);
 
     try {
+      const checkoutReturnUrls =
+        typeof window !== 'undefined' ? courtBookingCheckoutUrls(window.location.origin) : undefined;
+
       const parseDateStr = (dateStr: string): string => {
         if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) return dateStr;
         if (dateStr.includes('T')) return dateStr.split('T')[0];
@@ -321,6 +335,20 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       const startTime24 = convertTo24Hour(startTime);
       const endTime24 = convertTo24Hour(endTime);
       const datesToBook = generateRecurringDates().map(d => parseDateStr(d));
+
+      const paidCourtInSelection = selectedCourts.some((c) => {
+        const meta = facilityCourts.find((fc) => fc.id === c.courtId);
+        return meta?.requirePayment && meta?.bookingAmountCents;
+      });
+      if (paidCourtInSelection && (advancedBooking || selectedCourts.length > 1 || datesToBook.length > 1)) {
+        showToast(
+          'error',
+          'Paid courts',
+          'Paid courts must be booked one reservation at a time (no recurring or multi-court checkout).'
+        );
+        setIsSubmitting(false);
+        return;
+      }
 
       const bookingRequests = selectedCourts.flatMap(c =>
         datesToBook.map(bookingDate => ({
@@ -358,8 +386,22 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             for (const { courtName: _c, ...req } of bookingRequests) {
               const res = await bookingApi.create({
                 ...req,
+                ...checkoutReturnUrls,
                 provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
               });
+              if (res.requiresPayment && res.checkoutUrl) {
+                sessionStorage.setItem(
+                  'courtBookingCheckoutPending',
+                  JSON.stringify({
+                    courtId: req.courtId,
+                    bookingDate: req.bookingDate,
+                    facilityId,
+                  })
+                );
+                toast.info('Complete card payment to confirm your court reservation.');
+                window.location.replace(res.checkoutUrl);
+                return [res];
+              }
               out.push(res);
               if (!res.success) break;
               prior.push({
@@ -373,8 +415,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             return out;
           })();
 
-      const successfulBookings = results.filter(r => r.success);
-      const failedBookings = results.filter(r => !r.success);
+      const paymentResult = results.find((r) => r.requiresPayment && r.checkoutUrl);
+      if (paymentResult?.checkoutUrl) {
+        return;
+      }
+
+      const successfulBookings = results.filter(
+        (r) => r.success && !r.requiresPayment && (r as { booking?: unknown }).booking
+      );
+      const failedBookings = results.filter((r) => !r.success);
       const totalRequests = bookingRequests.length;
 
       if (successfulBookings.length > 0) {

@@ -12,11 +12,23 @@ import { Switch } from '../ui/switch';
 import { Checkbox } from '../ui/checkbox';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
-import { facilitiesApi, adminApi, courtConfigApi } from '../../api/client';
+import {
+  facilitiesApi,
+  adminApi,
+  courtConfigApi,
+  stripeConnectApi,
+  isStripeConnectReadyFromResponse,
+} from '../../api/client';
 import { toast } from 'sonner';
 import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
+import {
+  PaidCourtBookingFields,
+  formatCentsToDollars,
+  parseBookingFeeDollars,
+  type PaidCourtFormFields,
+} from './PaidCourtBookingFields';
 
-interface Court {
+interface Court extends PaidCourtFormFields {
   id: string;
   name: string;
   courtNumber: number;
@@ -27,6 +39,7 @@ interface Court {
   isWalkUp: boolean;
   status: 'available' | 'maintenance' | 'closed';
 }
+
 
 interface BulkAddForm {
   count: number;
@@ -83,8 +96,23 @@ export function CourtManagement() {
   const [courtSchedule, setCourtSchedule] = useState<any[]>([]);
   const [courtScheduleLoading, setCourtScheduleLoading] = useState(false);
   const [courtScheduleSaving, setCourtScheduleSaving] = useState(false);
+  const [stripeOnboarded, setStripeOnboarded] = useState<boolean | null>(null);
+  const [stripeStatusLoading, setStripeStatusLoading] = useState(false);
 
   const courtEditPanelRef = useRef<HTMLDivElement | null>(null);
+
+  const loadStripeStatus = async (facilityId: string) => {
+    setStripeStatusLoading(true);
+    try {
+      const res = await stripeConnectApi.getStatus(facilityId);
+      setStripeOnboarded(isStripeConnectReadyFromResponse(res));
+    } catch (err) {
+      console.error('Stripe Connect status check failed:', err);
+      setStripeOnboarded(null);
+    } finally {
+      setStripeStatusLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (currentFacilityId) {
@@ -113,6 +141,16 @@ export function CourtManagement() {
           ...c,
           status: c.status === 'active' ? 'available' : c.status === 'inactive' ? 'closed' : c.status,
           isWalkUp: c.isWalkUp === true,
+          requirePayment: c.requirePayment === true || c.require_payment === true,
+          bookingAmountCents:
+            c.bookingAmountCents != null
+              ? Number(c.bookingAmountCents)
+              : c.booking_amount_cents != null
+                ? Number(c.booking_amount_cents)
+                : null,
+          bookingFeeDollars: formatCentsToDollars(
+            c.bookingAmountCents ?? c.booking_amount_cents
+          ),
         }));
         setCourts(normalized);
       } else {
@@ -149,23 +187,49 @@ export function CourtManagement() {
       isIndoor: false,
       hasLights: false,
       isWalkUp: false,
+      requirePayment: false,
+      bookingFeeDollars: '',
       status: 'available',
     });
+    if (currentFacilityId) void loadStripeStatus(currentFacilityId);
     setIsAddingNew(true);
     setBulkAddMode(false);
     setShowLimitAlert(false);
   };
 
   const handleEdit = (court: Court) => {
-    setEditingCourt({ ...court });
+    setEditingCourt({
+      ...court,
+      requirePayment: court.requirePayment === true,
+      bookingFeeDollars:
+        court.bookingFeeDollars || formatCentsToDollars(court.bookingAmountCents),
+    });
+    if (currentFacilityId) void loadStripeStatus(currentFacilityId);
     setIsAddingNew(false);
   };
 
   const handleSave = async () => {
     if (!editingCourt || !currentFacilityId) return;
 
+    const wantsPayment = Boolean(editingCourt.requirePayment);
+    const bookingAmountCents = parseBookingFeeDollars(editingCourt.bookingFeeDollars);
+    if (wantsPayment && !bookingAmountCents) {
+      toast.error('Enter a booking fee when paid court booking is enabled');
+      return;
+    }
+    if (wantsPayment && stripeOnboarded === false) {
+      toast.error('Complete Stripe Connect setup under Facility Management → Payments first');
+      return;
+    }
+
     try {
       setSaving(true);
+
+      const paymentPayload = {
+        requirePayment: wantsPayment,
+        bookingAmountCents: wantsPayment ? bookingAmountCents : null,
+        bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
+      };
 
       let response;
       if (isAddingNew || !editingCourt.id) {
@@ -178,6 +242,7 @@ export function CourtManagement() {
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
           isWalkUp: editingCourt.isWalkUp,
+          ...paymentPayload,
         });
       } else {
         // Update existing court
@@ -190,6 +255,7 @@ export function CourtManagement() {
           hasLights: editingCourt.hasLights,
           isWalkUp: editingCourt.isWalkUp,
           status: editingCourt.status,
+          ...paymentPayload,
         });
       }
 
@@ -571,6 +637,14 @@ export function CourtManagement() {
                     <Label htmlFor="walkUp">Walk-up Court (no online booking)</Label>
                   </div>
                 </div>
+                {editingCourt && (
+                  <PaidCourtBookingFields
+                    court={editingCourt}
+                    onChange={(patch) => setEditingCourt((prev) => (prev ? { ...prev, ...patch } : prev))}
+                    stripeOnboarded={stripeOnboarded}
+                    stripeStatusLoading={stripeStatusLoading}
+                  />
+                )}
                 <div className="flex gap-2 mt-6">
                   <Button onClick={handleSave} disabled={saving}>
                     <Save className="h-4 w-4 mr-2" />
@@ -709,6 +783,11 @@ export function CourtManagement() {
                             <h3 className="text-lg font-semibold">{court.name}</h3>
                             <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
                             {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
+                            {court.requirePayment && court.bookingAmountCents && (
+                              <Badge className="bg-amber-100 text-amber-900 border-amber-200">
+                                Paid · ${(court.bookingAmountCents / 100).toFixed(2)}
+                              </Badge>
+                            )}
                             {isEditingThis && (
                               <Badge className="bg-green-100 text-green-800 border-green-200">Editing</Badge>
                             )}
@@ -846,6 +925,14 @@ export function CourtManagement() {
                           <Label htmlFor={`walkUp-${court.id}`}>Walk-up Court (no online booking)</Label>
                         </div>
                       </div>
+                      {editingCourt && (
+                        <PaidCourtBookingFields
+                          court={editingCourt}
+                          onChange={(patch) => setEditingCourt((prev) => (prev ? { ...prev, ...patch } : prev))}
+                          stripeOnboarded={stripeOnboarded}
+                          stripeStatusLoading={stripeStatusLoading}
+                        />
+                      )}
                       <div className="flex gap-2 mt-6">
                         <Button onClick={handleSave} disabled={saving}>
                           <Save className="h-4 w-4 mr-2" />

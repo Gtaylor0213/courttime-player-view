@@ -9,7 +9,14 @@ import { validateBooking } from '../../src/services/bookingService';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
-import { createCourt, createCourtsBulk, createSplitCourt, deleteCourt, updateCourtsBulk } from '../../src/services/courtService';
+import {
+  createCourt,
+  createCourtsBulk,
+  createSplitCourt,
+  deleteCourt,
+  updateCourtsBulk,
+  assertPaidCourtConfig,
+} from '../../src/services/courtService';
 import { inviteAdmin, getFacilityAdmins, removeAdmin } from '../../src/services/adminService';
 import {
   getCurrentTermsVersion,
@@ -747,6 +754,11 @@ router.patch('/courts/:courtId', async (req, res) => {
       isIndoor,
       hasLights,
       isWalkUp,
+      requirePayment,
+      require_payment,
+      bookingAmountCents,
+      booking_amount_cents,
+      bookingFeeDollars,
       status: rawStatus,
       canSplit,
       splitConfig
@@ -755,6 +767,30 @@ router.patch('/courts/:courtId', async (req, res) => {
     // Normalize legacy status values to match DB constraint
     const statusMap: Record<string, string> = { active: 'available', inactive: 'closed' };
     const status = rawStatus ? (statusMap[rawStatus] || rawStatus) : rawStatus;
+
+    const courtFacility = await query(`SELECT facility_id FROM courts WHERE id = $1`, [courtId]);
+    if (courtFacility.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Court not found' });
+    }
+    const facilityIdForCourt = courtFacility.rows[0].facility_id;
+
+    const wantsPayment =
+      requirePayment !== undefined || require_payment !== undefined
+        ? Boolean(requirePayment ?? require_payment)
+        : undefined;
+    let amountCents: number | null | undefined;
+    if (bookingAmountCents != null) amountCents = parseInt(String(bookingAmountCents), 10);
+    else if (booking_amount_cents != null) amountCents = parseInt(String(booking_amount_cents), 10);
+    else if (bookingFeeDollars != null && bookingFeeDollars !== '') {
+      amountCents = Math.round(parseFloat(String(bookingFeeDollars)) * 100);
+    }
+    if (wantsPayment !== undefined) {
+      await assertPaidCourtConfig(
+        facilityIdForCourt,
+        wantsPayment,
+        wantsPayment ? amountCents ?? null : null
+      );
+    }
 
     const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
       ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
@@ -780,11 +816,17 @@ router.patch('/courts/:courtId', async (req, res) => {
         is_indoor = COALESCE($5, is_indoor),
         has_lights = COALESCE($6, has_lights),
         is_walk_up = COALESCE($7, is_walk_up),
-        status = COALESCE($8, status),
-        is_split_court = COALESCE($9, is_split_court),
-        split_configuration = $10,
+        require_payment = COALESCE($8, require_payment),
+        booking_amount_cents = CASE
+          WHEN $8 = true THEN COALESCE($9, booking_amount_cents)
+          WHEN $8 = false THEN NULL
+          ELSE booking_amount_cents
+        END,
+        status = COALESCE($10, status),
+        is_split_court = COALESCE($11, is_split_court),
+        split_configuration = $12,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $11
+      WHERE id = $13
       RETURNING
         id,
         facility_id as "facilityId",
@@ -795,6 +837,8 @@ router.patch('/courts/:courtId', async (req, res) => {
         is_indoor as "isIndoor",
         has_lights as "hasLights",
         is_walk_up as "isWalkUp",
+        COALESCE(require_payment, false) as "requirePayment",
+        booking_amount_cents as "bookingAmountCents",
         status,
         parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration",
@@ -809,6 +853,8 @@ router.patch('/courts/:courtId', async (req, res) => {
       isIndoor,
       hasLights,
       isWalkUp,
+      wantsPayment,
+      wantsPayment ? amountCents ?? null : null,
       status,
       shouldSplit,
       splitConfiguration,
@@ -876,11 +922,35 @@ router.delete('/courts/:courtId', async (req, res) => {
 router.post('/courts/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
-    const { name, courtNumber, surfaceType, courtType, isIndoor, hasLights, isWalkUp, canSplit, splitConfig } = req.body;
+    const {
+      name,
+      courtNumber,
+      surfaceType,
+      courtType,
+      isIndoor,
+      hasLights,
+      isWalkUp,
+      requirePayment,
+      require_payment,
+      bookingAmountCents,
+      booking_amount_cents,
+      bookingFeeDollars,
+      canSplit,
+      splitConfig,
+    } = req.body;
 
     if (!name) {
       return res.status(400).json({ success: false, error: 'Court name is required' });
     }
+
+    const wantsPayment = Boolean(requirePayment ?? require_payment);
+    let amountCents: number | null = null;
+    if (bookingAmountCents != null) amountCents = parseInt(String(bookingAmountCents), 10);
+    else if (booking_amount_cents != null) amountCents = parseInt(String(booking_amount_cents), 10);
+    else if (bookingFeeDollars != null && bookingFeeDollars !== '') {
+      amountCents = Math.round(parseFloat(String(bookingFeeDollars)) * 100);
+    }
+    await assertPaidCourtConfig(facilityId, wantsPayment, amountCents);
 
     const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
       ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
@@ -899,6 +969,8 @@ router.post('/courts/:facilityId', async (req, res) => {
       isIndoor: isIndoor || false,
       hasLights: hasLights || false,
       isWalkUp: isWalkUp || false,
+      requirePayment: wantsPayment,
+      bookingAmountCents: wantsPayment ? amountCents : null,
     });
 
     if (shouldSplit) {

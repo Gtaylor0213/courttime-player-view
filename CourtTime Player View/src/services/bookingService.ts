@@ -505,6 +505,68 @@ export interface BookingResult {
   ruleViolations?: RuleResult[];
   warnings?: RuleResult[];
   isPrimeTime?: boolean;
+  requiresPayment?: boolean;
+  checkoutUrl?: string;
+}
+
+export type PendingCourtBookingPayload = {
+  courtId: string;
+  userId: string;
+  facilityId: string;
+  seriesId?: string;
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  bookingType?: string;
+  activityType?: string;
+  notes?: string;
+  isPrimeTime?: boolean;
+};
+
+function sameMemberId(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return String(a).toLowerCase() === String(b).toLowerCase();
+}
+
+function normalizeTimeForDb(time: string): string {
+  const part = time.includes('T') ? time.split('T')[1]! : time;
+  const m = part.trim().match(/(\d{1,2}):(\d{2})/);
+  if (!m) return time;
+  return `${m[1].padStart(2, '0')}:${m[2]}:00`;
+}
+
+/** Parse pending_booking JSONB from connect_payments (camelCase or legacy snake_case). */
+export function parsePendingCourtBooking(raw: unknown): PendingCourtBookingPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const courtId = String(r.courtId ?? r.court_id ?? '');
+  const userId = String(r.userId ?? r.user_id ?? '');
+  const facilityId = String(r.facilityId ?? r.facility_id ?? '');
+  const bookingDate = String(r.bookingDate ?? r.booking_date ?? '').slice(0, 10);
+  const startTime = normalizeTimeForDb(String(r.startTime ?? r.start_time ?? ''));
+  const endTime = normalizeTimeForDb(String(r.endTime ?? r.end_time ?? ''));
+  let durationMinutes = Number(r.durationMinutes ?? r.duration_minutes ?? 0);
+  if (!durationMinutes && startTime && endTime) {
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    durationMinutes = eh * 60 + em - (sh * 60 + sm);
+  }
+  if (!courtId || !userId || !facilityId || !bookingDate || !startTime || !endTime) return null;
+  return {
+    courtId,
+    userId,
+    facilityId,
+    bookingDate,
+    startTime,
+    endTime,
+    durationMinutes: durationMinutes > 0 ? durationMinutes : 30,
+    seriesId: r.seriesId ? String(r.seriesId) : undefined,
+    bookingType: r.bookingType ? String(r.bookingType) : undefined,
+    activityType: r.activityType ? String(r.activityType) : undefined,
+    notes: r.notes ? String(r.notes) : undefined,
+    isPrimeTime: r.isPrimeTime === true || r.is_prime_time === true,
+  };
 }
 
 export interface RecurringSeriesRequest {
@@ -607,7 +669,10 @@ export async function createBooking(bookingData: {
   activityType?: string;
   notes?: string;
   skipRulesValidation?: boolean;  // For admin override
+  skipPaymentCheck?: boolean; // After Stripe payment or admin override
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
+  successUrl?: string;
+  cancelUrl?: string;
 }): Promise<BookingResult> {
   return enqueueBookingCreation(bookingData.userId, bookingData.facilityId, () =>
     createBookingCore(bookingData)
@@ -627,7 +692,10 @@ async function createBookingCore(bookingData: {
   activityType?: string;
   notes?: string;
   skipRulesValidation?: boolean;
+  skipPaymentCheck?: boolean;
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
+  successUrl?: string;
+  cancelUrl?: string;
 }): Promise<BookingResult> {
   try {
     const walkUpCourt = await query(
@@ -705,6 +773,62 @@ async function createBookingCore(bookingData: {
       };
     }
 
+    if (!bookingData.skipRulesValidation && !bookingData.skipPaymentCheck) {
+      const paidCourt = await query(
+        `SELECT c.name, c.require_payment, c.booking_amount_cents, f.stripe_onboarded
+         FROM courts c
+         JOIN facilities f ON f.id = c.facility_id
+         WHERE c.id = $1`,
+        [bookingData.courtId]
+      );
+      const courtRow = paidCourt.rows[0];
+      if (courtRow?.require_payment && courtRow.booking_amount_cents) {
+        const { syncConnectOnboardingStatus, createCourtBookingCheckoutSession } = await import(
+          './stripeConnectService'
+        );
+        const stripeStatus = await syncConnectOnboardingStatus(bookingData.facilityId);
+        if (!stripeStatus.onboarded && !stripeStatus.chargesEnabled) {
+          return {
+            success: false,
+            error: 'This court requires payment but the club has not finished Stripe setup yet',
+          };
+        }
+        const base =
+          bookingData.successUrl?.replace(/\?.*$/, '').replace(/\/calendar$/, '') ||
+          (process.env.NODE_ENV !== 'production'
+            ? process.env.DEV_APP_URL || 'http://localhost:5173'
+            : process.env.APP_URL || 'http://localhost:5173');
+        const { url } = await createCourtBookingCheckoutSession({
+          memberId: bookingData.userId,
+          pendingBooking: {
+            courtId: bookingData.courtId,
+            userId: bookingData.userId,
+            facilityId: bookingData.facilityId,
+            seriesId: bookingData.seriesId,
+            bookingDate: bookingData.bookingDate,
+            startTime: bookingData.startTime,
+            endTime: bookingData.endTime,
+            durationMinutes: bookingData.durationMinutes,
+            bookingType: bookingData.bookingType,
+            activityType: bookingData.activityType,
+            notes: bookingData.notes,
+            isPrimeTime: isPrimeTime || false,
+          },
+          successUrl:
+            bookingData.successUrl ||
+            `${base}/calendar?bookingPaymentSuccess=1&session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: bookingData.cancelUrl || `${base}/calendar?bookingPaymentCancelled=1`,
+        });
+        return {
+          success: true,
+          requiresPayment: true,
+          checkoutUrl: url,
+          warnings: warnings || [],
+          isPrimeTime: isPrimeTime || false,
+        };
+      }
+    }
+
     // Insert the booking
     const result = await query(
       `INSERT INTO bookings (
@@ -759,6 +883,117 @@ async function createBookingCore(bookingData: {
       error: 'Failed to create booking'
     };
   }
+}
+
+/**
+ * Create a court booking after Stripe Connect checkout completes.
+ */
+export async function finalizeBookingAfterPayment(params: {
+  connectPaymentId: string;
+  memberId: string;
+}): Promise<{ bookingId: string; bookingDate?: string } | null> {
+  const paymentResult = await query(
+    `SELECT id, member_id, booking_id, pending_booking, status
+     FROM connect_payments
+     WHERE id = $1`,
+    [params.connectPaymentId]
+  );
+  const payment = paymentResult.rows[0];
+  if (!payment) return null;
+  if (!sameMemberId(payment.member_id, params.memberId)) {
+    throw new Error('This payment does not belong to your account');
+  }
+  if (payment.booking_id) {
+    const existing = await query(
+      `SELECT TO_CHAR(booking_date, 'YYYY-MM-DD') as "bookingDate" FROM bookings WHERE id = $1`,
+      [payment.booking_id]
+    );
+    return {
+      bookingId: payment.booking_id,
+      bookingDate: existing.rows[0]?.bookingDate,
+    };
+  }
+
+  const pending = parsePendingCourtBooking(payment.pending_booking);
+  if (!pending) {
+    throw new Error('Paid booking details are missing. Please contact the club.');
+  }
+
+  const existingBooking = await query(
+    `SELECT id FROM bookings
+     WHERE court_id = $1 AND booking_date = $2 AND user_id = $3
+       AND start_time = $4 AND end_time = $5 AND status != 'cancelled'
+     LIMIT 1`,
+    [pending.courtId, pending.bookingDate, pending.userId, pending.startTime, pending.endTime]
+  );
+  if (existingBooking.rows.length > 0) {
+    const bookingId = existingBooking.rows[0].id;
+    await query(
+      `UPDATE bookings SET connect_payment_id = $1 WHERE id = $2`,
+      [params.connectPaymentId, bookingId]
+    );
+    await query(
+      `UPDATE connect_payments SET booking_id = $1, pending_booking = NULL WHERE id = $2`,
+      [bookingId, params.connectPaymentId]
+    );
+    return { bookingId, bookingDate: pending.bookingDate };
+  }
+
+  const coreResult = await createBookingCore({
+    ...pending,
+    userId: payment.member_id,
+    skipRulesValidation: true,
+    skipPaymentCheck: true,
+  });
+  if (!coreResult.success || !coreResult.booking?.id) {
+    throw new Error(coreResult.error || 'Could not create booking after payment');
+  }
+
+  await query(
+    `UPDATE bookings SET connect_payment_id = $1 WHERE id = $2`,
+    [params.connectPaymentId, coreResult.booking.id]
+  );
+  await query(
+    `UPDATE connect_payments SET booking_id = $1, pending_booking = NULL WHERE id = $2`,
+    [coreResult.booking.id, params.connectPaymentId]
+  );
+
+  return { bookingId: coreResult.booking.id, bookingDate: pending.bookingDate };
+}
+
+/**
+ * Create bookings for any PAID court-checkout rows that never got a reservation (recovery).
+ */
+export async function reconcilePaidCourtBookingsWithoutReservation(
+  memberId: string
+): Promise<Array<{ bookingId: string; bookingDate?: string; connectPaymentId: string }>> {
+  const payments = await query(
+    `SELECT id
+       FROM connect_payments
+      WHERE member_id = $1
+        AND status = 'PAID'
+        AND booking_id IS NULL
+        AND pending_booking IS NOT NULL
+      ORDER BY paid_at DESC NULLS LAST, created_at DESC
+      LIMIT 10`,
+    [memberId]
+  );
+
+  const recovered: Array<{ bookingId: string; bookingDate?: string; connectPaymentId: string }> = [];
+  for (const row of payments.rows) {
+    try {
+      const result = await finalizeBookingAfterPayment({
+        connectPaymentId: row.id,
+        memberId,
+      });
+      if (result?.bookingId) {
+        recovered.push({ ...result, connectPaymentId: row.id });
+      }
+    } catch (err) {
+      console.error('reconcilePaidCourtBookingsWithoutReservation failed for', row.id, err);
+    }
+  }
+  return recovered;
 }
 
 async function hasBookingConflict(

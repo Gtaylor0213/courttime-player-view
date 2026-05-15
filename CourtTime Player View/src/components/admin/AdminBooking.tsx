@@ -702,6 +702,11 @@ export function AdminBooking() {
                 ...req,
                 provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
               });
+              if (res.requiresPayment && res.checkoutUrl) {
+                toast.info('Member must complete card payment to confirm this court reservation.');
+                window.location.replace(res.checkoutUrl);
+                return [res];
+              }
               out.push(res);
               if (!res.success) break;
               prior.push({
@@ -715,8 +720,13 @@ export function AdminBooking() {
             return out;
           })();
 
+      const paymentResult = results.find((r) => r.requiresPayment && r.checkoutUrl);
+      if (paymentResult?.checkoutUrl) return;
+
       const failedBookings = results.filter(r => !r.success);
-      const successfulBookings = results.filter(r => r.success);
+      const successfulBookings = results.filter(
+        (r) => r.success && !r.requiresPayment && (r as { booking?: unknown }).booking
+      );
 
       if (successfulBookings.length > 0) {
         if (failedBookings.length > 0) {

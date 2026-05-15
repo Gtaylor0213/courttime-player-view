@@ -8,10 +8,18 @@ import {
   unwrapApiPayload,
   extractBulletinPosts,
   parseApiBoolean,
+  isStripeConnectReadyFromResponse,
+  normalizeBookingCreateResponse,
   type ApiResponse as SharedApiResponse,
 } from '../../shared/api/core';
 
-export { unwrapApiPayload, extractBulletinPosts, parseApiBoolean };
+export {
+  unwrapApiPayload,
+  extractBulletinPosts,
+  parseApiBoolean,
+  isStripeConnectReadyFromResponse,
+  normalizeBookingCreateResponse,
+};
 
 // Dev: always same-origin so Vite can proxy `/api` (ignores stray VITE_API_BASE_URL in .env).
 // Production: same-origin by default, or set VITE_API_BASE_URL at build time if API is on another host.
@@ -571,6 +579,8 @@ export const bookingApi = {
     durationMinutes: number;
     bookingType?: string;
     notes?: string;
+    successUrl?: string;
+    cancelUrl?: string;
     provisionalSameRequestBookings?: Array<{
       bookingDate: string;
       courtId: string;
@@ -579,10 +589,39 @@ export const bookingApi = {
       durationMinutes?: number;
     }>;
   }) => {
-    return apiRequest('/api/bookings', {
+    const res = await apiRequest('/api/bookings', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    return normalizeBookingCreateResponse(res);
+  },
+
+  confirmPayment: async (sessionId: string) => {
+    const res = await apiRequest('/api/bookings/payment/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    });
+    if (!res.success) return res;
+    const payload = unwrapApiPayload<{ bookingId?: string; bookingDate?: string }>(res.data);
+    return {
+      ...res,
+      bookingId: payload?.bookingId,
+      bookingDate: payload?.bookingDate,
+    };
+  },
+
+  reconcilePaidBookings: async () => {
+    const res = await apiRequest('/api/bookings/payment/reconcile', { method: 'POST' });
+    if (!res.success) return res;
+    const payload = unwrapApiPayload<{
+      recovered?: Array<{ bookingId: string; bookingDate?: string }>;
+      count?: number;
+    }>(res.data);
+    return {
+      ...res,
+      recovered: payload?.recovered ?? [],
+      count: payload?.count ?? 0,
+    };
   },
 
   createRecurringSeries: async (data: {
@@ -668,6 +707,9 @@ export const adminApi = {
     isIndoor: boolean;
     hasLights: boolean;
     isWalkUp?: boolean;
+    requirePayment?: boolean;
+    bookingAmountCents?: number | null;
+    bookingFeeDollars?: string;
     canSplit?: boolean;
     splitConfig?: {
       splitNames: string[];
@@ -717,6 +759,9 @@ export const adminApi = {
     isIndoor?: boolean;
     hasLights?: boolean;
     isWalkUp?: boolean;
+    requirePayment?: boolean;
+    bookingAmountCents?: number | null;
+    bookingFeeDollars?: string;
     status?: string;
     canSplit?: boolean;
     splitConfig?: {

@@ -14,7 +14,22 @@ import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { parseLocalDate } from '../../utils/dateUtils';
-import { facilitiesApi, adminApi, courtConfigApi, rulesApi, addressWhitelistApi, facilityLocationsApi } from '../../api/client';
+import {
+  facilitiesApi,
+  adminApi,
+  courtConfigApi,
+  rulesApi,
+  addressWhitelistApi,
+  facilityLocationsApi,
+  stripeConnectApi,
+  isStripeConnectReadyFromResponse,
+} from '../../api/client';
+import {
+  PaidCourtBookingFields,
+  formatCentsToDollars,
+  parseBookingFeeDollars,
+  type PaidCourtFormFields,
+} from './PaidCourtBookingFields';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { BillingTab } from './BillingTab';
@@ -173,7 +188,7 @@ interface FacilityData {
   bookingRules: BookingRules;
 }
 
-interface Court {
+interface Court extends PaidCourtFormFields {
   id: string;
   name: string;
   courtNumber: number;
@@ -197,6 +212,8 @@ function FacilityCourtFormBody({
   courtSaving,
   onSave,
   onCancel,
+  stripeOnboarded,
+  stripeStatusLoading,
 }: {
   editingCourt: Court;
   setEditingCourt: React.Dispatch<React.SetStateAction<Court | null>>;
@@ -204,6 +221,8 @@ function FacilityCourtFormBody({
   courtSaving: boolean;
   onSave: () => void;
   onCancel: () => void;
+  stripeOnboarded: boolean | null;
+  stripeStatusLoading: boolean;
 }) {
   const id = (suffix: string) => `${idPrefix}-${suffix}`;
   return (
@@ -364,6 +383,14 @@ function FacilityCourtFormBody({
           </div>
         )}
       </div>
+
+      <PaidCourtBookingFields
+        court={editingCourt}
+        onChange={(patch) => setEditingCourt((prev) => (prev ? { ...prev, ...patch } : prev))}
+        stripeOnboarded={stripeOnboarded}
+        stripeStatusLoading={stripeStatusLoading}
+        paymentsTabHint="the Payments tab above"
+      />
 
       <div className="flex gap-2 mt-6">
         <Button onClick={onSave} disabled={courtSaving}>
@@ -534,6 +561,22 @@ export function FacilityManagement() {
   const [editingCourt, setEditingCourt] = useState<Court | null>(null);
   const [isAddingNewCourt, setIsAddingNewCourt] = useState(false);
   const [courtSaving, setCourtSaving] = useState(false);
+  const [stripeOnboarded, setStripeOnboarded] = useState<boolean | null>(null);
+  const [stripeStatusLoading, setStripeStatusLoading] = useState(false);
+
+  const loadStripeStatus = async () => {
+    if (!currentFacilityId) return;
+    setStripeStatusLoading(true);
+    try {
+      const res = await stripeConnectApi.getStatus(currentFacilityId);
+      setStripeOnboarded(isStripeConnectReadyFromResponse(res));
+    } catch (err) {
+      console.error('Stripe Connect status check failed:', err);
+      setStripeOnboarded(null);
+    } finally {
+      setStripeStatusLoading(false);
+    }
+  };
 
   // Court schedule config state
   const [configuringCourtId, setConfiguringCourtId] = useState<string | null>(null);
@@ -595,6 +638,12 @@ export function FacilityManagement() {
     if (!editingCourt || isAddingNewCourt) return;
     facilityCourtEditPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [editingCourt?.id, isAddingNewCourt]);
+
+  useEffect(() => {
+    if (activeTab === 'courts' && currentFacilityId) {
+      void loadStripeStatus();
+    }
+  }, [activeTab, currentFacilityId]);
 
   const loadFacilityData = async () => {
     if (!currentFacilityId) {
@@ -1592,7 +1641,21 @@ export function FacilityManagement() {
       const response = await facilitiesApi.getCourts(currentFacilityId);
 
       if (response.success && response.data?.courts) {
-        setCourts(response.data.courts);
+        setCourts(
+          response.data.courts.map((c: any) => ({
+            ...c,
+            requirePayment: c.requirePayment === true || c.require_payment === true,
+            bookingAmountCents:
+              c.bookingAmountCents != null
+                ? Number(c.bookingAmountCents)
+                : c.booking_amount_cents != null
+                  ? Number(c.booking_amount_cents)
+                  : null,
+            bookingFeeDollars: formatCentsToDollars(
+              c.bookingAmountCents ?? c.booking_amount_cents
+            ),
+          }))
+        );
       } else {
         toast.error(response.error || 'Failed to load courts');
       }
@@ -1614,22 +1677,48 @@ export function FacilityManagement() {
       isIndoor: false,
       hasLights: false,
       isWalkUp: false,
+      requirePayment: false,
+      bookingFeeDollars: '',
       status: 'active',
       canSplit: false,
     });
+    void loadStripeStatus();
     setIsAddingNewCourt(true);
   };
 
   const handleEditCourt = (court: Court) => {
-    setEditingCourt({ ...court });
+    setEditingCourt({
+      ...court,
+      requirePayment: court.requirePayment === true,
+      bookingFeeDollars:
+        court.bookingFeeDollars || formatCentsToDollars(court.bookingAmountCents),
+    });
+    void loadStripeStatus();
     setIsAddingNewCourt(false);
   };
 
   const handleSaveCourt = async () => {
     if (!editingCourt || !currentFacilityId) return;
 
+    const wantsPayment = Boolean(editingCourt.requirePayment);
+    const bookingAmountCents = parseBookingFeeDollars(editingCourt.bookingFeeDollars);
+    if (wantsPayment && !bookingAmountCents) {
+      toast.error('Enter a booking fee when paid court booking is enabled');
+      return;
+    }
+    if (wantsPayment && stripeOnboarded === false) {
+      toast.error('Complete Stripe Connect setup on the Payments tab before enabling paid courts');
+      return;
+    }
+
     try {
       setCourtSaving(true);
+
+      const paymentPayload = {
+        requirePayment: wantsPayment,
+        bookingAmountCents: wantsPayment ? bookingAmountCents : null,
+        bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
+      };
 
       let response;
       if (isAddingNewCourt || !editingCourt.id) {
@@ -1644,6 +1733,7 @@ export function FacilityManagement() {
           isWalkUp: editingCourt.isWalkUp,
           canSplit: editingCourt.canSplit,
           splitConfig: editingCourt.splitConfig,
+          ...paymentPayload,
         });
       } else {
         // Update existing court
@@ -1658,6 +1748,7 @@ export function FacilityManagement() {
           status: editingCourt.status,
           canSplit: editingCourt.canSplit,
           splitConfig: editingCourt.splitConfig,
+          ...paymentPayload,
         });
       }
 
@@ -3604,6 +3695,8 @@ export function FacilityManagement() {
                       courtSaving={courtSaving}
                       onSave={handleSaveCourt}
                       onCancel={handleCancelCourtEdit}
+                      stripeOnboarded={stripeOnboarded}
+                      stripeStatusLoading={stripeStatusLoading}
                     />
                   </CardContent>
                 </Card>
@@ -3629,6 +3722,11 @@ export function FacilityManagement() {
                                 <h3 className="text-lg font-semibold">{court.name}</h3>
                                 <Badge className={getCourtStatusColor(court.status)}>{formatCourtStatus(court.status)}</Badge>
                                 {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
+                                {court.requirePayment && court.bookingAmountCents && (
+                                  <Badge className="bg-amber-100 text-amber-900 border-amber-200">
+                                    Paid · ${(court.bookingAmountCents / 100).toFixed(2)}
+                                  </Badge>
+                                )}
                                 {isEditingThis && (
                                   <Badge className="bg-green-100 text-green-800 border-green-200">Editing</Badge>
                                 )}
@@ -3686,6 +3784,8 @@ export function FacilityManagement() {
                               courtSaving={courtSaving}
                               onSave={handleSaveCourt}
                               onCancel={handleCancelCourtEdit}
+                              stripeOnboarded={stripeOnboarded}
+                              stripeStatusLoading={stripeStatusLoading}
                             />
                           </div>
                         )}

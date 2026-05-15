@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { BookingWizard } from './BookingWizard';
 import { QuickReservePopup } from './QuickReservePopup';
@@ -110,6 +110,7 @@ const formatCurrentTime = (tz: string = 'America/New_York'): string => {
 
 export function CourtCalendarView() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { selectedFacilityId = 'sunrise-valley' } = useAppContext();
   const { unreadCount } = useNotifications();
   const { user, loading: authLoading } = useAuth();
@@ -298,7 +299,7 @@ export function CourtCalendarView() {
   }, [user?.memberFacilities, authLoading]);
 
   // Function to fetch bookings (can be called directly)
-  const fetchBookings = React.useCallback(async () => {
+  const fetchBookings = React.useCallback(async (dateOverride?: Date | string) => {
     if (!selectedFacility) {
       setCourtDayOperatingByCourtId({});
       return;
@@ -307,10 +308,15 @@ export function CourtCalendarView() {
     try {
       setLoadingBookings(true);
 
+      const dateForFetch =
+        typeof dateOverride === 'string'
+          ? parseLocalDate(dateOverride)
+          : dateOverride ?? selectedDate;
+
       // Format date as YYYY-MM-DD for API (using local date to avoid timezone issues)
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const year = dateForFetch.getFullYear();
+      const month = String(dateForFetch.getMonth() + 1).padStart(2, '0');
+      const day = String(dateForFetch.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
 
       // Fetch bookings, blackouts, and per-court operating windows for this day
@@ -535,6 +541,179 @@ export function CourtCalendarView() {
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
+
+  // Recover paid court checkouts that never created a booking (e.g. Stripe returned to wrong host)
+  useEffect(() => {
+    if (authLoading || !user?.id) return;
+    if (searchParams.get('bookingPaymentSuccess') === '1') return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const reconcile = await bookingApi.reconcilePaidBookings();
+        if (cancelled || !reconcile.success || !reconcile.count) return;
+        const latest = reconcile.recovered?.[0];
+        if (latest?.bookingDate) {
+          const [y, m, d] = latest.bookingDate.split('-').map(Number);
+          if (y && m && d) setSelectedDate(new Date(y, m - 1, d));
+        }
+        toast.success('Your paid court reservation is now on the calendar.');
+        sessionStorage.removeItem('courtBookingCheckoutPending');
+        await fetchBookings(latest?.bookingDate);
+      } catch (err) {
+        console.error('Paid court booking reconcile error:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, searchParams, fetchBookings]);
+
+  // Complete paid court booking after Stripe redirect (or recover orphaned PAID rows)
+  useEffect(() => {
+    const paymentSuccess = searchParams.get('bookingPaymentSuccess');
+    const sessionId = searchParams.get('session_id');
+    if (paymentSuccess !== '1') return;
+    if (authLoading) return;
+    if (!user?.id) {
+      toast.error('Please log in again to finish confirming your paid court reservation.');
+      return;
+    }
+
+    const clearParams = () => {
+      sessionStorage.removeItem('courtBookingCheckoutPending');
+      navigate('/calendar', { replace: true });
+    };
+
+    const applyRecoveredBookings = async (
+      recovered: Array<{ bookingId: string; bookingDate?: string }>
+    ) => {
+      if (recovered.length === 0) return false;
+      const latest = recovered[0];
+      if (latest.bookingDate) {
+        const [y, m, d] = latest.bookingDate.split('-').map(Number);
+        if (y && m && d) setSelectedDate(new Date(y, m - 1, d));
+      }
+      toast.success(
+        recovered.length > 1
+          ? `${recovered.length} paid court reservations are now on your calendar.`
+          : 'Your paid court reservation is now on the calendar.'
+      );
+      await fetchBookings(latest.bookingDate);
+      return true;
+    };
+
+    if (!sessionId || sessionId === '{CHECKOUT_SESSION_ID}') {
+      void (async () => {
+        const reconcile = await bookingApi.reconcilePaidBookings();
+        if (reconcile.success && reconcile.count && reconcile.count > 0) {
+          await applyRecoveredBookings(reconcile.recovered ?? []);
+        } else {
+          toast.info('Payment received. Refreshing your calendar…');
+          await fetchBookings();
+        }
+        clearParams();
+      })();
+      return;
+    }
+
+    const storageKey = `courtBookingConfirmed:${sessionId}`;
+    const storedBookingId = sessionStorage.getItem(`${storageKey}:bookingId`);
+    if (storedBookingId) {
+      void fetchBookings().finally(clearParams);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await bookingApi.confirmPayment(sessionId);
+        if (cancelled) return;
+        if (response.success) {
+          const bookingId = (response as { bookingId?: string }).bookingId;
+          const bookingDate = (response as { bookingDate?: string }).bookingDate;
+          if (!bookingId) {
+            const reconcile = await bookingApi.reconcilePaidBookings();
+            if (reconcile.success && reconcile.count && reconcile.count > 0) {
+              sessionStorage.setItem(storageKey, '1');
+              if (reconcile.recovered?.[0]?.bookingId) {
+                sessionStorage.setItem(`${storageKey}:bookingId`, reconcile.recovered[0].bookingId);
+              }
+              await applyRecoveredBookings(reconcile.recovered ?? []);
+              return;
+            }
+            toast.error(
+              response.error ||
+                'Payment received but the reservation could not be created. Please contact the club.'
+            );
+            return;
+          }
+          sessionStorage.setItem(storageKey, '1');
+          sessionStorage.setItem(`${storageKey}:bookingId`, bookingId);
+          if (bookingDate) {
+            const [y, m, d] = bookingDate.split('-').map(Number);
+            if (y && m && d) setSelectedDate(new Date(y, m - 1, d));
+          }
+          toast.success(response.message || 'Payment received — your court is booked!');
+          await fetchBookings(bookingDate);
+        } else {
+          const reconcile = await bookingApi.reconcilePaidBookings();
+          if (reconcile.success && reconcile.count && reconcile.count > 0) {
+            await applyRecoveredBookings(reconcile.recovered ?? []);
+          } else {
+            toast.error(response.error || 'Payment received but booking could not be confirmed.');
+          }
+        }
+      } catch (err) {
+        console.error('Confirm booking payment error:', err);
+        if (!cancelled) {
+          const reconcile = await bookingApi.reconcilePaidBookings();
+          if (reconcile.success && reconcile.count && reconcile.count > 0) {
+            await applyRecoveredBookings(reconcile.recovered ?? []);
+          } else {
+            toast.error('Payment received but booking could not be confirmed. Contact the club.');
+          }
+        }
+      } finally {
+        if (!cancelled) clearParams();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, user?.id, authLoading, navigate, fetchBookings]);
+
+  // Recover paid bookings when checkout finished but redirect params were lost
+  useEffect(() => {
+    if (authLoading || !user?.id) return;
+    if (searchParams.get('bookingPaymentSuccess') === '1') return;
+    const pendingRaw = sessionStorage.getItem('courtBookingCheckoutPending');
+    if (!pendingRaw) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const reconcile = await bookingApi.reconcilePaidBookings();
+        if (cancelled || !reconcile.success || !reconcile.count) return;
+        const latest = reconcile.recovered?.[0];
+        if (latest?.bookingDate) {
+          const [y, m, d] = latest.bookingDate.split('-').map(Number);
+          if (y && m && d) setSelectedDate(new Date(y, m - 1, d));
+        }
+        toast.success('Your paid court reservation is now on the calendar.');
+        sessionStorage.removeItem('courtBookingCheckoutPending');
+        await fetchBookings(latest?.bookingDate);
+      } catch (err) {
+        console.error('Pending court booking reconcile error:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, searchParams, fetchBookings]);
 
   // Helper to convert 24h time to 12h format (e.g., "14:00:00" -> "2:00 PM")
   const formatTimeTo12Hour = (time24: string): string => {

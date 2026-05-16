@@ -13,6 +13,10 @@ import { bookingApi } from '../api/client';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
+import {
+  bookingWithDetailsToCalendarDetails,
+  offerAddBookingToCalendar,
+} from '../utils/bookingCalendar';
 
 interface QuickReservePopupProps {
   isOpen: boolean;
@@ -644,6 +648,30 @@ export function QuickReservePopup({
           playerName: user.name || user.email || 'Player'
         };
         onReserve(reservation);
+
+        const msg =
+          successfulBookings.length > 1
+            ? `${successfulBookings.length} court reservations were created at ${currentFacility?.name || 'your club'}.`
+            : `Your ${selectedCourt} booking at ${currentFacility?.name || 'your club'} is confirmed for ${selectedDate} at ${selectedTime}.`;
+
+        const calendarDetails =
+          successfulBookings.length === 1
+            ? bookingWithDetailsToCalendarDetails({
+                courtName: selectedCourt,
+                facilityName: currentFacility?.name,
+                bookingDate: datesToBook[0] || selectedDate,
+                startTime: startTime24,
+                endTime: endTime24,
+                bookingType: bookingType || undefined,
+                notes: notes || undefined,
+              })
+            : null;
+
+        const createdBookingId = (
+          successfulBookings[0] as { booking?: { id?: string } }
+        )?.booking?.id;
+
+        offerAddBookingToCalendar(msg, calendarDetails, { bookingId: createdBookingId });
 
         if (failedBookings.length > 0) {
           // Collect rule violations from failed bookings

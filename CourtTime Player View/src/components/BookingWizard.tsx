@@ -9,6 +9,10 @@ import { Checkbox } from './ui/checkbox';
 import { Calendar, Clock, MapPin, AlertCircle, Info, Repeat } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
 import { useNotifications } from '../contexts/NotificationContext';
+import {
+  bookingWithDetailsToCalendarDetails,
+  offerAddBookingToCalendar,
+} from '../utils/bookingCalendar';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, facilitiesApi } from '../api/client';
 import { toast } from 'sonner';
@@ -122,7 +126,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [bringGuest, setBringGuest] = useState(false);
   const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
-  const { showToast } = useNotifications();
+  const { showToast, addNotification } = useNotifications();
   const { user } = useAuth();
 
   // Fetch all courts for this facility when wizard opens
@@ -452,12 +456,36 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           ? `${successfulBookings.length} of ${totalRequests} bookings created for ${courtLabel} at ${facility}.`
           : `Your ${court} booking at ${facility} has been confirmed.`;
 
-        showToast(
-          'reservation_confirmed',
-          'Court Reservation Confirmed',
-          msg,
-          { facility, court, date, time: `${startTime} - ${endTime}` }
-        );
+        const reservationMeta = { facility, court, date, time: `${startTime} - ${endTime}` };
+        addNotification({
+          type: 'reservation_confirmed',
+          title: 'Court Reservation Confirmed',
+          message: msg,
+          priority: 'high',
+          relatedReservation: reservationMeta,
+        });
+
+        const calendarDetails =
+          successfulBookings.length === 1
+            ? bookingWithDetailsToCalendarDetails({
+                courtName: court,
+                facilityName: facility,
+                bookingDate: parseDateStr(date),
+                startTime: startTime24,
+                endTime: endTime24,
+                bookingType: bookingType || undefined,
+                notes: notes || undefined,
+              })
+            : null;
+
+        const createdBookingId = (
+          successfulBookings[0] as { booking?: { id?: string } }
+        )?.booking?.id;
+
+        offerAddBookingToCalendar(msg, calendarDetails, {
+          alertTitle: 'Court Reservation Confirmed',
+          bookingId: createdBookingId,
+        });
 
         if (onBookingCreated) {
           await onBookingCreated();

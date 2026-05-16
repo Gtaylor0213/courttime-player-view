@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Calendar, Clock, MapPin, User, FileText, AlertCircle, Tag } from 'lucide-react';
+import { Calendar, CalendarPlus, Clock, MapPin, User, FileText, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
+import {
+  bookingWithDetailsToCalendarDetails,
+  openAppleCalendar,
+  openGoogleCalendar,
+} from '../utils/bookingCalendar';
 
 interface ReservationDetails {
   id: string;
@@ -77,6 +82,13 @@ export function ReservationDetailsModal({
     reservation.status !== 'cancelled' &&
     !isPastReservation() &&
     !!onCancelReservation;
+
+  const canAddToCalendar =
+    isOwnReservation &&
+    reservation.status === 'confirmed' &&
+    !isPastReservation();
+
+  const calendarDetails = bookingWithDetailsToCalendarDetails(reservation);
 
   // Handle cancel reservation
   const handleCancel = async () => {
@@ -200,7 +212,7 @@ export function ReservationDetailsModal({
             )}
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-3">
+          <DialogFooter className="gap-2 sm:gap-3 flex-wrap">
             <Button
               variant="outline"
               onClick={onClose}
@@ -208,6 +220,31 @@ export function ReservationDetailsModal({
             >
               Close
             </Button>
+            {canAddToCalendar && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => openGoogleCalendar(calendarDetails)}
+                  className="flex-1 sm:flex-none sm:min-w-[150px]"
+                >
+                  <CalendarPlus className="h-4 w-4 mr-1" />
+                  Google Calendar
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    openAppleCalendar(calendarDetails, {
+                      bookingConfirmed: false,
+                      bookingId: reservation.id,
+                    })
+                  }
+                  className="flex-1 sm:flex-none sm:min-w-[150px]"
+                >
+                  <CalendarPlus className="h-4 w-4 mr-1" />
+                  Apple Calendar
+                </Button>
+              </>
+            )}
             {canCancelReservation && (
               <Button
                 variant="destructive"

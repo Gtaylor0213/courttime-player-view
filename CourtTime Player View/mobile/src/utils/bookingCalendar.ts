@@ -5,53 +5,18 @@ import {
   type DeviceCalendarAddResult,
   type DeviceCalendarEventInput,
 } from './deviceCalendar';
-import { parseLocalDate } from './dateUtils';
 import { api } from '../api/client';
-import type { BookingWithDetails } from '../types/database';
+import {
+  bookingWithDetailsToCalendarDetails,
+  formatBookingDateYmd,
+  type BookingCalendarDetails as SharedBookingCalendarDetails,
+} from '../../../shared/utils/bookingCalendar';
 
-export type BookingCalendarDetails = DeviceCalendarEventInput & { title: string };
+export type BookingCalendarDetails = DeviceCalendarEventInput & SharedBookingCalendarDetails;
+
+export { bookingWithDetailsToCalendarDetails, formatBookingDateYmd };
 
 const DEFAULT_ALARM_MINUTES = 30;
-
-export function formatBookingDateYmd(bookingDate: Date | string): string {
-  if (typeof bookingDate === 'string') {
-    const match = bookingDate.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (match) return match[1];
-  }
-  const parsed = parseLocalDate(String(bookingDate));
-  if (Number.isNaN(parsed.getTime())) {
-    return String(bookingDate).slice(0, 10);
-  }
-  const y = parsed.getFullYear();
-  const m = String(parsed.getMonth() + 1).padStart(2, '0');
-  const d = String(parsed.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-export function bookingWithDetailsToCalendarDetails(
-  booking: Pick<
-    BookingWithDetails,
-    'courtName' | 'bookingDate' | 'startTime' | 'endTime' | 'bookingType' | 'notes' | 'facilityName'
-  >,
-  options?: { facilityName?: string }
-): BookingCalendarDetails {
-  const facilityName = options?.facilityName || booking.facilityName;
-  const courtName = booking.courtName || 'Court';
-  return {
-    title: facilityName ? `${facilityName} - ${courtName}` : `Court booking - ${courtName}`,
-    bookingDate: formatBookingDateYmd(booking.bookingDate),
-    startTime: booking.startTime,
-    endTime: booking.endTime,
-    location: facilityName || undefined,
-    notes: [
-      'Booked from CourtTime.',
-      booking.bookingType ? `Booking type: ${booking.bookingType}.` : null,
-      booking.notes?.trim() ? `Notes: ${booking.notes.trim()}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n'),
-  };
-}
 
 function reportCalendarAddFailure(
   result: DeviceCalendarAddResult,

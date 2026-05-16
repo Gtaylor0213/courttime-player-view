@@ -3,10 +3,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Calendar, Clock, MapPin, User, FileText, AlertCircle, Edit2, X } from 'lucide-react';
+import { Calendar, CalendarPlus, Clock, MapPin, User, FileText, AlertCircle, Edit2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, facilitiesApi } from '../api/client';
 import { toast } from 'sonner';
+import {
+  bookingWithDetailsToCalendarDetails,
+  openAppleCalendar,
+  openGoogleCalendar,
+  offerAddBookingToCalendar,
+} from '../utils/bookingCalendar';
 
 interface ReservationDetails {
   id: string;
@@ -161,6 +167,13 @@ export function ReservationManagementModal({
     reservation.status !== 'cancelled' &&
     !isPastReservation();
 
+  const canAddToCalendar =
+    isOwnReservation &&
+    reservation.status === 'confirmed' &&
+    !isPastReservation();
+
+  const calendarDetails = bookingWithDetailsToCalendarDetails(reservation);
+
   // Handle cancel reservation
   const handleCancel = async () => {
     if (!reservation?.id) return;
@@ -217,10 +230,22 @@ export function ReservationManagementModal({
       });
 
       if (response.success) {
-        toast.success('Reservation updated successfully');
+        const newBookingId = (response as { booking?: { id?: string } }).booking?.id;
         setIsEditing(false);
         onUpdate?.();
         onClose();
+        const court = courts.find((c) => c.id === editCourt);
+        offerAddBookingToCalendar(
+          'Your reservation was updated.',
+          bookingWithDetailsToCalendarDetails({
+            ...reservation,
+            courtName: court?.name || reservation.courtName,
+            bookingDate: editDate,
+            startTime: editStartTime,
+            endTime,
+          }),
+          { alertTitle: 'Reservation updated', bookingId: newBookingId }
+        );
       } else {
         toast.error(response.error || 'Failed to update reservation');
       }
@@ -444,7 +469,7 @@ export function ReservationManagementModal({
             </div>
           )}
 
-          <DialogFooter className="gap-2 sm:gap-3">
+          <DialogFooter className="gap-2 sm:gap-3 flex-wrap">
             {!isEditing ? (
               <>
                 <Button
@@ -454,6 +479,31 @@ export function ReservationManagementModal({
                 >
                   Close
                 </Button>
+                {canAddToCalendar && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => openGoogleCalendar(calendarDetails)}
+                      className="flex-1 sm:flex-none sm:min-w-[150px]"
+                    >
+                      <CalendarPlus className="h-4 w-4 mr-1" />
+                      Google Calendar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        openAppleCalendar(calendarDetails, {
+                          bookingConfirmed: false,
+                          bookingId: reservation.id,
+                        })
+                      }
+                      className="flex-1 sm:flex-none sm:min-w-[150px]"
+                    >
+                      <CalendarPlus className="h-4 w-4 mr-1" />
+                      Apple Calendar
+                    </Button>
+                  </>
+                )}
                 {canCancelReservation && (
                   <>
                     {isOwnReservation && (

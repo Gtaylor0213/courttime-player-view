@@ -19,6 +19,10 @@ import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User,
 import { Calendar as CalendarPicker } from './ui/calendar';
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+import {
+  fetchBookingCalendarDetails,
+  offerAddBookingToCalendar,
+} from '../utils/bookingCalendar';
 
 // Layout constants
 const ROW_HEIGHT = 50;            // 30-min visible row height
@@ -586,6 +590,24 @@ export function CourtCalendarView() {
       navigate('/calendar', { replace: true });
     };
 
+    const facilityName = memberFacilities.find((f) => f.id === selectedFacility)?.name;
+
+    const offerCalendarForBooking = async (
+      bookingId: string | undefined,
+      message: string,
+      options?: { alertTitle?: string }
+    ) => {
+      if (!bookingId) {
+        toast.success(message);
+        return;
+      }
+      const details = await fetchBookingCalendarDetails(bookingId, facilityName);
+      offerAddBookingToCalendar(message, details, {
+        alertTitle: options?.alertTitle || 'Payment received',
+        bookingId,
+      });
+    };
+
     const applyRecoveredBookings = async (
       recovered: Array<{ bookingId: string; bookingDate?: string }>
     ) => {
@@ -595,11 +617,15 @@ export function CourtCalendarView() {
         const [y, m, d] = latest.bookingDate.split('-').map(Number);
         if (y && m && d) setSelectedDate(new Date(y, m - 1, d));
       }
-      toast.success(
+      const message =
         recovered.length > 1
           ? `${recovered.length} paid court reservations are now on your calendar.`
-          : 'Your paid court reservation is now on the calendar.'
-      );
+          : 'Your paid court reservation is now on the calendar.';
+      if (recovered.length === 1 && latest.bookingId) {
+        await offerCalendarForBooking(latest.bookingId, message);
+      } else {
+        toast.success(message);
+      }
       await fetchBookings(latest.bookingDate);
       return true;
     };
@@ -655,7 +681,10 @@ export function CourtCalendarView() {
             const [y, m, d] = bookingDate.split('-').map(Number);
             if (y && m && d) setSelectedDate(new Date(y, m - 1, d));
           }
-          toast.success(response.message || 'Payment received — your court is booked!');
+          await offerCalendarForBooking(
+            bookingId,
+            response.message || 'Payment received — your court is booked!'
+          );
           await fetchBookings(bookingDate);
         } else {
           const reconcile = await bookingApi.reconcilePaidBookings();

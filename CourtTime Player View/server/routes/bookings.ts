@@ -15,6 +15,11 @@ import {
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
 import { query as dbQuery, getPool } from '../../src/database/connection';
+import {
+  bookingWithDetailsToCalendarDetails,
+  buildIcsEventContent,
+  buildIcsFilename,
+} from '../../shared/utils/bookingCalendar';
 const pool = { query: (text: string, params?: any[]) => getPool().query(text, params) };
 
 const router = express.Router();
@@ -91,6 +96,51 @@ router.get('/user/:userId', async (req, res, next) => {
       success: true,
       bookings
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/bookings/:bookingId/calendar.ics
+ * Inline ICS for Apple Calendar / Outlook (Content-Disposition: inline opens Calendar.app on Safari).
+ */
+router.get('/:bookingId/calendar.ics', async (req, res, next) => {
+  try {
+    const { bookingId } = req.params;
+    const booking = await getBookingById(bookingId);
+
+    if (!booking) {
+      return res.status(404).send('Booking not found');
+    }
+
+    let facilityName = '';
+    if (booking.facilityId) {
+      const facilityRow = await dbQuery('SELECT name FROM facilities WHERE id = $1', [
+        booking.facilityId,
+      ]);
+      facilityName = facilityRow.rows[0]?.name || '';
+    }
+
+    const details = bookingWithDetailsToCalendarDetails(
+      {
+        courtName: booking.courtName,
+        facilityName,
+        bookingDate: booking.bookingDate,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        bookingType: booking.bookingType,
+        notes: booking.notes,
+      },
+      { facilityName }
+    );
+
+    const ics = buildIcsEventContent(details);
+    const filename = buildIcsFilename(details);
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(ics);
   } catch (error) {
     next(error);
   }

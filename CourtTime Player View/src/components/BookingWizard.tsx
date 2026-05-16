@@ -189,6 +189,13 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return Array.from(merged.entries()).map(([id, name]) => ({ court: name, courtId: id }));
   }, [dragSelectedCourts, additionalCourtIds, facilityCourts]);
 
+  const hasPaidCourt = useMemo(() =>
+    selectedCourts.some((c) => {
+      const meta = facilityCourts.find((fc) => fc.id === c.courtId);
+      return meta?.requirePayment && meta?.bookingAmountCents;
+    }),
+  [selectedCourts, facilityCourts]);
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -740,7 +747,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               disabled={isSubmitting}
               className="flex-1"
             >
-              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : 'Book Court'}
+              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : hasPaidCourt ? 'Pay and Book' : 'Book Court'}
             </Button>
           </div>
         </form>

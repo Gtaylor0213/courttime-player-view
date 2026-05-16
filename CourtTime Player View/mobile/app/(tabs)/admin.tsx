@@ -9,8 +9,14 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { AdminRevenueCard } from '../../src/components/AdminRevenueCard';
+import { AdminPaymentLockoutCard } from '../../src/components/AdminPaymentLockoutCard';
 import { showAlert } from '../../src/utils/alert';
 import { parseAdminRevenueResponse, type AdminRevenueData } from '../../src/utils/adminRevenue';
+import {
+  parseAdminLockoutMembers,
+  type AdminLockoutMember,
+} from '../../src/utils/adminPaymentLockout';
+import { isStripeConnectReadyFromResponse } from '../../../shared/api/core';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin');
 
@@ -48,6 +54,8 @@ export default function AdminScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [members, setMembers] = useState<MemberOption[]>([]);
+  const [lockoutMembers, setLockoutMembers] = useState<AdminLockoutMember[]>([]);
+  const [stripeConnected, setStripeConnected] = useState(true);
   const [courts, setCourts] = useState<CourtOption[]>([]);
   const [todayBookings, setTodayBookings] = useState<AdminBooking[]>([]);
 
@@ -76,11 +84,12 @@ export default function AdminScreen() {
     if (!facilityId || !isAdmin) return;
     const day = todayYmd();
     setRevenueLoading(true);
-    const [membersRes, courtsRes, bookingsRes, revenueRes] = await Promise.all([
+    const [membersRes, courtsRes, bookingsRes, revenueRes, stripeRes] = await Promise.all([
       api.get(`/api/members/${facilityId}`),
       api.get(`/api/facilities/${facilityId}/courts`),
       api.get(`/api/admin/bookings/${facilityId}?startDate=${day}&endDate=${day}`),
       api.get(`/api/admin/revenue/${facilityId}?months=1&limit=50`),
+      api.get(`/api/stripe/connect/status?clubId=${encodeURIComponent(facilityId)}`),
     ]);
 
     if (membersRes.success) {
@@ -89,13 +98,12 @@ export default function AdminScreen() {
         : Array.isArray((membersRes.data as any)?.members)
           ? (membersRes.data as any).members
           : [];
-      setMembers(
-        raw.map((m: any) => ({
-          userId: m.userId || m.id,
-          fullName: m.fullName || m.userName || m.name || 'Member',
-        }))
-      );
+      const parsed = parseAdminLockoutMembers(raw);
+      setLockoutMembers(parsed);
+      setMembers(parsed.map((m) => ({ userId: m.userId, fullName: m.fullName })));
     }
+
+    setStripeConnected(isStripeConnectReadyFromResponse(stripeRes));
 
     if (courtsRes.success) {
       const list = Array.isArray(courtsRes.data) ? courtsRes.data : (courtsRes.data as any)?.courts || [];
@@ -248,6 +256,13 @@ export default function AdminScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
     >
       <AdminRevenueCard data={revenueData} loading={revenueLoading} error={revenueError} />
+
+      <AdminPaymentLockoutCard
+        facilityId={facilityId}
+        members={lockoutMembers}
+        stripeConnected={stripeConnected}
+        onChanged={loadData}
+      />
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Manual Booking (On Behalf of Member)</Text>

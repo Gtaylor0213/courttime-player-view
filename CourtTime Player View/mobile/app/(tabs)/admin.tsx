@@ -8,7 +8,9 @@ import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundar
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { AdminRevenueCard } from '../../src/components/AdminRevenueCard';
 import { showAlert } from '../../src/utils/alert';
+import { parseAdminRevenueResponse, type AdminRevenueData } from '../../src/utils/adminRevenue';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin');
 
@@ -66,13 +68,19 @@ export default function AdminScreen() {
   const [announcementBody, setAnnouncementBody] = useState('');
   const [postingAnnouncement, setPostingAnnouncement] = useState(false);
 
+  const [revenueData, setRevenueData] = useState<AdminRevenueData | null>(null);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const [revenueError, setRevenueError] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     if (!facilityId || !isAdmin) return;
     const day = todayYmd();
-    const [membersRes, courtsRes, bookingsRes] = await Promise.all([
+    setRevenueLoading(true);
+    const [membersRes, courtsRes, bookingsRes, revenueRes] = await Promise.all([
       api.get(`/api/members/${facilityId}`),
       api.get(`/api/facilities/${facilityId}/courts`),
       api.get(`/api/admin/bookings/${facilityId}?startDate=${day}&endDate=${day}`),
+      api.get(`/api/admin/revenue/${facilityId}?months=1&limit=50`),
     ]);
 
     if (membersRes.success) {
@@ -98,6 +106,19 @@ export default function AdminScreen() {
       const bookings = Array.isArray((bookingsRes.data as any)?.bookings) ? (bookingsRes.data as any).bookings : [];
       setTodayBookings(bookings);
     }
+
+    if (revenueRes.success) {
+      const parsed = parseAdminRevenueResponse(revenueRes.data);
+      if (parsed) {
+        setRevenueData(parsed);
+        setRevenueError(null);
+      } else {
+        setRevenueError('Could not read revenue data.');
+      }
+    } else {
+      setRevenueError(revenueRes.error || 'Could not load revenue.');
+    }
+    setRevenueLoading(false);
   }, [facilityId, isAdmin]);
 
   useEffect(() => {
@@ -226,6 +247,8 @@ export default function AdminScreen() {
       contentContainerStyle={{ paddingBottom: Spacing.xl }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
     >
+      <AdminRevenueCard data={revenueData} loading={revenueLoading} error={revenueError} />
+
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Manual Booking (On Behalf of Member)</Text>
         <Text style={styles.label}>Member</Text>

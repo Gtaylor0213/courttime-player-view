@@ -36,6 +36,8 @@ function RootLayoutNav() {
   const router = useRouter();
   /** Only the top segment — avoids re-running this effect on every in-tab route change (can interrupt tab presses). */
   const rootSegment = segments[0];
+  const isRegisterFacilityRoute =
+    rootSegment === 'auth' && segments[1] === 'register-facility';
 
   const clearLastNotificationResponse = useCallback(async () => {
     try {
@@ -81,10 +83,10 @@ function RootLayoutNav() {
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/auth/login');
-    } else if (isAuthenticated && inAuthGroup) {
+    } else if (isAuthenticated && inAuthGroup && !isRegisterFacilityRoute) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading, rootSegment, router]);
+  }, [isAuthenticated, isLoading, isRegisterFacilityRoute, rootSegment, router]);
 
   // Handle notification tap — navigate to relevant screen (native only, not web)
   useEffect(() => {

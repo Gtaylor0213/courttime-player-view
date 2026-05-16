@@ -174,6 +174,10 @@ export default function RegisterScreen() {
                 <Text style={styles.linkText}>Sign In</Text>
               </Link>
             </View>
+
+            <Link href="/auth/register-facility" style={styles.facilityLink}>
+              <Text style={styles.facilityLinkText}>Register your facility instead</Text>
+            </Link>
           </View>
           </View>
         </ScrollView>
@@ -287,6 +291,15 @@ const styles = StyleSheet.create({
   link: {},
   linkText: {
     color: Colors.primary,
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+  },
+  facilityLink: {
+    alignSelf: 'center',
+    marginTop: Spacing.md,
+  },
+  facilityLinkText: {
+    color: Colors.textSecondary,
     fontSize: FontSize.sm,
     fontWeight: '600',
   },

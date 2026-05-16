@@ -969,6 +969,23 @@ export default function ProfileScreen() {
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.settingsRow}
+          onPress={() => router.push('/auth/register-facility')}
+          accessibilityRole="button"
+          accessibilityLabel="Register a new facility"
+        >
+          <View style={styles.settingsIconBox}>
+            <Ionicons name="business-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingsRowTitle}>Register a facility</Text>
+            <Text style={styles.settingsRowDescription}>
+              Set up a new club on the web (courts, rules, and billing)
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {/* Logout */}

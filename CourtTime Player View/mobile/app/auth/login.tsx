@@ -127,14 +127,12 @@ export default function LoginScreen() {
                   <Text style={styles.linkText}>Sign Up</Text>
                 </Link>
               </View>
+
+              <Link href="/auth/register-facility" style={styles.facilityLink}>
+                <Text style={styles.facilityLinkText}>Register your facility</Text>
+              </Link>
             </View>
           </Card>
-
-          <View style={styles.adminNote}>
-            <Text style={styles.adminNoteText}>
-              Admin features are available on the web app.
-            </Text>
-          </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -270,16 +268,18 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontFamily: FontFamily.semiBold,
   },
-  adminNote: {
-    alignItems: 'center',
-    marginTop: Spacing.lg,
+  facilityLink: {
+    alignSelf: 'center',
+    marginTop: Spacing.md,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.25)',
+    borderTopColor: Colors.border,
+    width: '100%',
+    alignItems: 'center',
   },
-  adminNoteText: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.regular,
+  facilityLinkText: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.semiBold,
   },
 });

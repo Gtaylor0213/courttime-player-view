@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
+import { offerAddBookingToCalendar, bookingWithDetailsToCalendarDetails } from '../utils/bookingCalendar';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { api, paymentApi } from '../api/client';
 import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
@@ -226,7 +227,18 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
       hapticSuccess();
       onSaved();
       onClose();
-      showAlert('Updated', 'Booking updated successfully.');
+      const court = courts.find((c) => c.id === courtId);
+      offerAddBookingToCalendar(
+        'Your booking was updated.',
+        bookingWithDetailsToCalendarDetails({
+          ...booking,
+          courtName: court?.name || booking.courtName,
+          bookingDate: date,
+          startTime: startTimeFull,
+          endTime: endTimeFull,
+        }),
+        { alertTitle: 'Updated' }
+      );
     } else {
       hapticError();
       if (createRes.ruleViolations && createRes.ruleViolations.length > 0) {

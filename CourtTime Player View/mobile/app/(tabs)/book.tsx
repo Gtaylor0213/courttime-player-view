@@ -47,7 +47,12 @@ import type { BookingWithDetails } from '../../src/types/database';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
-import { addBookingToDeviceCalendar } from '../../src/utils/deviceCalendar';
+import {
+  offerAddBookingToCalendar,
+  fetchBookingCalendarDetails,
+  addBookingToCalendarWithFeedback,
+  bookingWithDetailsToCalendarDetails,
+} from '../../src/utils/bookingCalendar';
 import { userFacingApiMessage, type ApiFailureShape } from '../../src/utils/apiUserMessages';
 
 export const ErrorBoundary = createRouteErrorBoundary('Book');
@@ -275,63 +280,6 @@ export default function BookCourtScreen() {
     selectedCourtIdRef.current = selectedCourt?.id ?? null;
   }, [selectedCourt?.id]);
 
-  const offerAddToCalendar = useCallback(
-    (message: string, details: { title: string; bookingDate: string; startTime: string; endTime: string; location?: string; notes?: string } | null) => {
-      if (!details || Platform.OS === 'web') {
-        showAlert('Booked!', message);
-        return;
-      }
-
-      showAlert('Booked!', `${message}\n\nAdd it to your device calendar?`, [
-        { text: 'Not now', style: 'cancel' },
-        {
-          text: 'Add to Calendar',
-          onPress: async () => {
-            const result = await addBookingToDeviceCalendar({
-              ...details,
-              alarmMinutesBefore: 30,
-            });
-
-            if (result.success) {
-              showAlert('Added to Calendar', 'This booking was added to your device calendar.');
-              return;
-            }
-
-            if (result.reason === 'permission_denied') {
-              showAlert(
-                'Calendar access denied',
-                'Your booking is confirmed. To add future bookings, allow calendar access in your device settings.'
-              );
-              return;
-            }
-
-            if (result.reason === 'no_writable_calendar') {
-              showAlert(
-                'No writable calendar found',
-                'Your booking is confirmed, but CourtTime could not find a calendar it can write to on this device.'
-              );
-              return;
-            }
-
-            if (result.reason === 'unsupported') {
-              showAlert(
-                'Calendar not supported',
-                'Your booking is confirmed, but calendar integration is not available on this device.'
-              );
-              return;
-            }
-
-            showAlert(
-              'Could not add to calendar',
-              'Your booking is confirmed, but CourtTime could not add it to your device calendar.'
-            );
-          },
-        },
-      ]);
-    },
-    []
-  );
-
   useEffect(() => {
     if (modalKind !== null) {
       return;
@@ -454,14 +402,17 @@ export default function BookCourtScreen() {
 
     let cancelled = false;
 
-    const finish = async (message: string, bookingDate?: string) => {
+    const finish = async (message: string, bookingDate?: string, bookingId?: string) => {
       if (cancelled) return;
       if (bookingDate && /^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
         setSelectedDate(bookingDate);
         setSelectedBookDate(bookingDate);
       }
       hapticSuccess();
-      showAlert('Payment received', message);
+      const calendarDetails = bookingId
+        ? await fetchBookingCalendarDetails(bookingId, currentFacilityName)
+        : null;
+      offerAddBookingToCalendar(message, calendarDetails, { alertTitle: 'Payment received' });
       void fetchCourts();
       void fetchTimeSlots();
     };
@@ -470,11 +421,13 @@ export default function BookCourtScreen() {
       if (!sessionId || sessionId === '{CHECKOUT_SESSION_ID}') {
         const reconcile = await paymentApi.bookings.reconcilePaidBookings();
         if (!cancelled && reconcile.success && reconcile.count && reconcile.count > 0) {
+          const firstRecovered = reconcile.recovered?.[0];
           await finish(
             reconcile.count > 1
               ? `${reconcile.count} paid court reservations are on your calendar.`
               : 'Your paid court reservation is on your calendar.',
-            reconcile.recovered?.[0]?.bookingDate
+            firstRecovered?.bookingDate,
+            reconcile.count === 1 ? firstRecovered?.bookingId : undefined
           );
         } else if (!cancelled) {
           showAlert('Payment received', 'Refreshing your calendar…');
@@ -487,15 +440,18 @@ export default function BookCourtScreen() {
       if (cancelled) return;
       if (response.success) {
         const bookingDate = (response as { bookingDate?: string }).bookingDate;
-        if ((response as { bookingId?: string }).bookingId) {
-          await finish('Your paid court reservation is confirmed.', bookingDate);
+        const confirmedBookingId = (response as { bookingId?: string }).bookingId;
+        if (confirmedBookingId) {
+          await finish('Your paid court reservation is confirmed.', bookingDate, confirmedBookingId);
           return;
         }
         const reconcile = await paymentApi.bookings.reconcilePaidBookings();
         if (reconcile.success && reconcile.count && reconcile.count > 0) {
+          const firstRecovered = reconcile.recovered?.[0];
           await finish(
             'Your paid court reservation is on your calendar.',
-            reconcile.recovered?.[0]?.bookingDate
+            firstRecovered?.bookingDate,
+            reconcile.count === 1 ? firstRecovered?.bookingId : undefined
           );
         } else {
           showAlert(
@@ -514,7 +470,7 @@ export default function BookCourtScreen() {
     return () => {
       cancelled = true;
     };
-  }, [params.bookingPaymentSuccess, params.session_id, user?.id, fetchCourts, fetchTimeSlots, setSelectedBookDate]);
+  }, [params.bookingPaymentSuccess, params.session_id, user?.id, fetchCourts, fetchTimeSlots, setSelectedBookDate, currentFacilityName]);
 
   // ── Handle calendar grid booking selection ──
   /** Load slot list for this court before opening the modal so TimePickers include the dragged range. */
@@ -928,7 +884,7 @@ export default function BookCourtScreen() {
         allCourtIds.length > 1
           ? `${primaryName} (+ ${allCourtIds.length - 1} more) on ${selectedDateLabel} at ${timeLabel}.`
           : `${primaryName} on ${selectedDateLabel} at ${timeLabel}.`;
-      offerAddToCalendar(
+      offerAddBookingToCalendar(
         bookedBody,
         allCourtIds.length === 1
           ? {
@@ -984,7 +940,7 @@ export default function BookCourtScreen() {
     setModalKind(null);
     if (res.success) {
       hapticSuccess();
-      offerAddToCalendar(
+      offerAddBookingToCalendar(
         'Booking created with admin override.',
         {
           title: currentFacilityName ? `${currentFacilityName} - ${selectedCourt.name}` : `Court booking - ${selectedCourt.name}`,
@@ -1667,6 +1623,20 @@ export default function BookCourtScreen() {
 
                 {user && (selectedCalendarBooking.userId === user.id || isAdmin) ? (
                   <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+                    {selectedCalendarBooking.userId === user.id && Platform.OS !== 'web' ? (
+                      <Button
+                        title="Add to Calendar"
+                        variant="secondary"
+                        onPress={() => {
+                          void addBookingToCalendarWithFeedback(
+                            bookingWithDetailsToCalendarDetails(selectedCalendarBooking, {
+                              facilityName: currentFacilityName,
+                            }),
+                            { bookingConfirmed: false }
+                          );
+                        }}
+                      />
+                    ) : null}
                     <Button
                       title="Edit Booking"
                       variant="secondary"

@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
+import { offerAddBookingToCalendar } from '../utils/bookingCalendar';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { api, paymentApi } from '../api/client';
 import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
@@ -40,6 +41,7 @@ interface RuleViolation {
 interface Props {
   userId: string;
   facilityId: string;
+  facilityName?: string;
   refreshKey: number; // bump to force refetch (e.g. after cancel/edit)
   onBooked: () => void;
   onRuleViolations: (violations: RuleViolation[], warnings: RuleViolation[]) => void;
@@ -50,7 +52,14 @@ const MAX_SLOTS = 3;
 
 type QuickBookEmptyState = 'no_courts' | 'all_booked' | 'outside_open_hours' | 'request_failed';
 
-export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViolations }: Props) {
+export function QuickBook({
+  userId,
+  facilityId,
+  facilityName,
+  refreshKey,
+  onBooked,
+  onRuleViolations,
+}: Props) {
   const [slots, setSlots] = useState<QuickSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingSlotKey, setBookingSlotKey] = useState<string | null>(null);
@@ -260,7 +269,20 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
 
     if (res.success) {
       hapticSuccess();
-      showAlert('Booked!', `${slot.courtName} reserved for ${formatTime(slot.startTime)}.`);
+      const today = formatLocalDate(new Date());
+      offerAddBookingToCalendar(
+        `${slot.courtName} reserved for ${formatTime(slot.startTime)}.`,
+        {
+          title: facilityName
+            ? `${facilityName} - ${slot.courtName}`
+            : `Court booking - ${slot.courtName}`,
+          bookingDate: today,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          location: facilityName,
+          notes: 'Booked from CourtTime.\nBooking type: match.',
+        }
+      );
       onBooked();
       computeSlots();
       return;

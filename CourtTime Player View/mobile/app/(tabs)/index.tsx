@@ -29,6 +29,10 @@ import { EmptyState } from '../../src/components/EmptyState';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import {
+  addBookingToCalendarWithFeedback,
+  bookingWithDetailsToCalendarDetails,
+} from '../../src/utils/bookingCalendar';
 
 export const ErrorBoundary = createRouteErrorBoundary('Home');
 
@@ -40,7 +44,8 @@ interface RuleViolation {
 }
 
 export default function HomeScreen() {
-  const { user, facilityId } = useAuth();
+  const { user, facilityId, facilities } = useAuth();
+  const currentFacilityName = facilities.find((f) => f.id === facilityId)?.name;
   const router = useRouter();
   const { bannerState, lastCachedAt, fetchWithCache, retryConnectivity } = useOfflineApi();
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
@@ -241,6 +246,7 @@ export default function HomeScreen() {
           <QuickBook
             userId={user.id}
             facilityId={facilityId}
+            facilityName={currentFacilityName}
             refreshKey={quickBookKey}
             onBooked={() => {
               fetchData();
@@ -289,6 +295,24 @@ export default function HomeScreen() {
                 </Text>
                 {booking.status === 'confirmed' && (
                   <View style={styles.bookingActions}>
+                    {Platform.OS !== 'web' ? (
+                      <TouchableOpacity
+                        style={styles.calendarButton}
+                        onPress={() => {
+                          void addBookingToCalendarWithFeedback(
+                            bookingWithDetailsToCalendarDetails(booking, {
+                              facilityName: currentFacilityName || booking.facilityName,
+                            }),
+                            { bookingConfirmed: false }
+                          );
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Add to calendar"
+                      >
+                        <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
+                        <Text style={styles.calendarText}>Calendar</Text>
+                      </TouchableOpacity>
+                    ) : null}
                     <TouchableOpacity
                       style={styles.editButton}
                       onPress={() => setEditingBooking(booking)}
@@ -697,7 +721,19 @@ const styles = StyleSheet.create({
   },
   bookingActions: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    justifyContent: 'flex-end',
+  },
+  calendarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  calendarText: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   editButton: {
     flexDirection: 'row',

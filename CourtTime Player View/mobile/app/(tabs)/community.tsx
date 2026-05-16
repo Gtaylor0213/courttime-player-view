@@ -21,9 +21,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../src/utils/alert';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { api } from '../../src/api/client';
+import { api, paymentApi } from '../../src/api/client';
+import { bulletinSignupCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
+import { unwrapApiPayload } from '../../../shared/api/core';
+import {
+  extractCheckoutUrl,
+  formatCentsAsUsd,
+  isPaidBulletinSignup,
+  openStripeCheckout,
+} from '../../src/utils/payments';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, Motion } from '../../src/constants/theme';
 import type { HittingPartnerPostWithUser } from '../../src/types/database';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
@@ -121,9 +129,20 @@ function CommunityListSkeleton({ count = 6 }: { count?: number }) {
   );
 }
 
+function paramString(v: string | string[] | undefined): string | undefined {
+  if (v == null) return undefined;
+  const s = Array.isArray(v) ? v[0] : v;
+  return typeof s === 'string' && s.length > 0 ? s : undefined;
+}
+
 export default function CommunityScreen() {
   const { user, facilityId } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    signupSuccess?: string;
+    session_id?: string;
+    postId?: string;
+  }>();
   const { bannerState, lastCachedAt, retryConnectivity } = useOfflineApi();
   const [activeTab, setActiveTab] = useState<Tab>('partners');
   const [tabBarWidth, setTabBarWidth] = useState(0);
@@ -399,10 +418,70 @@ export default function CommunityScreen() {
 
   // ── Event signup ──
   const [signupBusyId, setSignupBusyId] = useState<string | null>(null);
+  const signupConfirmRef = useRef<string | null>(null);
 
-  async function handleEventSignup(postId: string) {
+  useEffect(() => {
+    const signupSuccess = paramString(params.signupSuccess);
+    const sessionId = paramString(params.session_id);
+    if (signupSuccess !== '1' || !user?.id) return;
+
+    if (!sessionId || sessionId === '{CHECKOUT_SESSION_ID}') {
+      showAlert('Payment received', 'Refreshing your signup status…');
+      void fetchBulletins();
+      return;
+    }
+
+    if (signupConfirmRef.current === sessionId) return;
+    signupConfirmRef.current = sessionId;
+
+    let cancelled = false;
+    void (async () => {
+      const response = await paymentApi.bulletinBoard.confirmSignupPayment(sessionId);
+      if (cancelled) return;
+      const payload = unwrapApiPayload<{
+        status?: 'confirmed' | 'waitlist';
+        waitlistPosition?: number | null;
+      }>(response.data);
+      if (response.success) {
+        showAlert(
+          'Signed up',
+          response.message ||
+            (payload?.status === 'waitlist'
+              ? `Payment received — you are on the waitlist (#${payload.waitlistPosition ?? '?'})`
+              : 'Payment received — you are signed up!')
+        );
+      } else {
+        showAlert(
+          'Signup',
+          response.error || 'Payment received but signup could not be confirmed. Contact the club.'
+        );
+      }
+      await fetchBulletins();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params.signupSuccess, params.session_id, user?.id]);
+
+  async function handleEventSignup(postId: string, post?: { requirePayment?: boolean; signupAmountCents?: number | null }) {
     setSignupBusyId(postId);
-    const res = await api.post(`/api/bulletin-board/${postId}/signup`, {});
+    const urls = bulletinSignupCheckoutUrls(postId);
+    const res = await paymentApi.bulletinBoard.signupForDrill(postId, urls);
+    const checkoutUrl = res.success ? extractCheckoutUrl(res.data) : null;
+    if (checkoutUrl) {
+      const opened = await openStripeCheckout(checkoutUrl);
+      if (!opened) {
+        showAlert('Payment', 'Could not open Stripe checkout. Try again.');
+      } else if (isPaidBulletinSignup(post ?? {})) {
+        showAlert(
+          'Complete payment',
+          `Finish card payment (${formatCentsAsUsd(post?.signupAmountCents)}) to complete your signup.`
+        );
+      }
+      setSignupBusyId(null);
+      return;
+    }
     if (res.success) {
       await fetchBulletins();
       if (res.message) showAlert('Signed Up', res.message);
@@ -721,10 +800,16 @@ export default function CommunityScreen() {
             ) : post.currentUserCanSignup ? (
               <TouchableOpacity
                 style={styles.drillButton}
-                onPress={() => handleEventSignup(post.id)}
+                onPress={() => handleEventSignup(post.id, post)}
                 disabled={signupBusyId === post.id}
               >
-                <Text style={styles.drillButtonText}>{signupBusyId === post.id ? '...' : 'Sign Up'}</Text>
+                <Text style={styles.drillButtonText}>
+                  {signupBusyId === post.id
+                    ? '...'
+                    : isPaidBulletinSignup(post)
+                      ? `Pay & Sign Up · ${formatCentsAsUsd(post.signupAmountCents)}`
+                      : 'Sign Up'}
+                </Text>
               </TouchableOpacity>
             ) : post.signupBlockedReason ? (
               <View style={styles.drillBlockedBox}>

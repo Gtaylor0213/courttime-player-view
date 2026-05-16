@@ -920,6 +920,23 @@ export default function ProfileScreen() {
         <Text style={styles.sectionTitle}>Settings</Text>
         <TouchableOpacity
           style={styles.settingsRow}
+          onPress={() => router.push('/payments')}
+          accessibilityRole="button"
+          accessibilityLabel="Open club payments"
+        >
+          <View style={styles.settingsIconBox}>
+            <Ionicons name="card-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingsRowTitle}>Club payments</Text>
+            <Text style={styles.settingsRowDescription}>
+              Pay dues, clinics, drills, and view your payment history
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.settingsRow}
           onPress={() => router.push('/notification-settings')}
           accessibilityRole="button"
           accessibilityLabel="Open email notification settings"

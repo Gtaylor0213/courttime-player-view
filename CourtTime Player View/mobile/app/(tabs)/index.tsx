@@ -191,6 +191,8 @@ export default function HomeScreen() {
           style={styles.actionCard}
           onPress={() => router.push('/(tabs)/community')}
           activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Open community"
         >
           <View style={styles.actionIconWrap}>
             <Ionicons name="people" size={24} color={Colors.primary} />
@@ -198,18 +200,33 @@ export default function HomeScreen() {
           <Text style={styles.actionLabel}>Community</Text>
         </TouchableOpacity>
 
-        {facilityId && (
+        <TouchableOpacity
+          style={[styles.actionCard, !facilityId && styles.actionCardFull]}
+          onPress={() => router.push('/payments')}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Open club payments"
+        >
+          <View style={[styles.actionIconWrap, styles.actionIconWrapPrimary]}>
+            <Ionicons name="card-outline" size={24} color={Colors.primary} />
+          </View>
+          <Text style={styles.actionLabel}>Payments</Text>
+        </TouchableOpacity>
+
+        {facilityId ? (
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => router.push({ pathname: '/club-info', params: { facilityId } })}
             activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="Open club information"
           >
             <View style={styles.actionIconWrap}>
               <Ionicons name="information-circle" size={24} color={Colors.primary} />
             </View>
             <Text style={styles.actionLabel}>Club Info</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       {/* Quick Book — soonest open slots today */}
@@ -494,12 +511,15 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
     gap: Spacing.sm,
   },
   actionCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '47%',
+    maxWidth: '48%',
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.xl,
     paddingVertical: Spacing.md,
@@ -513,6 +533,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.07,
     shadowRadius: 10,
     elevation: 3,
+  },
+  actionCardFull: {
+    flexBasis: '100%',
+    maxWidth: '100%',
   },
   actionIconWrap: {
     width: 48,

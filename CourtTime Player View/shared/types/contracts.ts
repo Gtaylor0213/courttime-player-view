@@ -45,6 +45,11 @@ export interface Court {
   hasLights: boolean;
   isWalkUp?: boolean;
   status: "available" | "maintenance" | "closed";
+  /** Stripe Connect: court booking fee (cents). */
+  requirePayment?: boolean;
+  bookingAmountCents?: number | null;
+  /** Guest fee (cents), independent of requirePayment. */
+  guestFeeCents?: number | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }

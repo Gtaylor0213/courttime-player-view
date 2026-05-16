@@ -14,7 +14,9 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
 import { hapticSuccess, hapticError } from '../utils/haptics';
-import { api } from '../api/client';
+import { api, paymentApi } from '../api/client';
+import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
+import { openStripeCheckout } from '../utils/payments';
 import { formatLocalDate } from '../utils/dateUtils';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../constants/theme';
 import type { Court } from '../types/database';
@@ -229,7 +231,7 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
   async function bookSlot(slot: QuickSlot) {
     const slotKey = `${slot.courtId}_${slot.startTime}`;
     setBookingSlotKey(slotKey);
-    const res = await api.post('/api/bookings', {
+    const res = await paymentApi.bookings.create({
       courtId: slot.courtId,
       facilityId,
       userId,
@@ -238,8 +240,23 @@ export function QuickBook({ userId, facilityId, refreshKey, onBooked, onRuleViol
       endTime: slot.endTime,
       durationMinutes: SLOT_DURATION_MIN,
       bookingType: 'match',
+      ...courtBookingCheckoutUrls(),
     });
     setBookingSlotKey(null);
+
+    if (res.requiresPayment && res.checkoutUrl) {
+      const opened = await openStripeCheckout(res.checkoutUrl);
+      if (opened) {
+        showAlert(
+          'Complete payment',
+          'Finish card payment in your browser to confirm this court reservation.'
+        );
+      } else {
+        showAlert('Payment', 'Could not open Stripe checkout. Try again.');
+        hapticError();
+      }
+      return;
+    }
 
     if (res.success) {
       hapticSuccess();

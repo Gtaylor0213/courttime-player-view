@@ -11,6 +11,11 @@ import * as Device from 'expo-device';
 import { buildApiRequest, type ApiResponse as SharedApiResponse } from '../../../shared/api/core';
 import { resolveApiBaseUrl } from './baseUrl';
 import { APP_ENV, PRODUCTION_API_URL, stripTrailingSlashes } from '../config/runtime';
+import { createPaymentApis } from './payments';
+import {
+  emitPaymentLocked,
+  normalizeLockoutPayload,
+} from '../paymentLockout/events';
 
 const API_PORT = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
 
@@ -207,7 +212,7 @@ function categoryFromStatus(status: number): ApiErrorCategory {
   return 'unknown';
 }
 
-export const apiRequest = buildApiRequest<ApiErrorCategory>({
+const _rawApiRequest = buildApiRequest<ApiErrorCategory>({
   baseUrl: API_BASE_URL,
   getToken,
   timeoutMs: REQUEST_TIMEOUT_MS,
@@ -220,6 +225,24 @@ export const apiRequest = buildApiRequest<ApiErrorCategory>({
         ? 'Request timed out. Please try again.'
         : `Unable to reach CourtTime right now (${API_BASE_URL}). Please try again.`,
 });
+
+/** Intercept payment lockout (402) so the app can show the lockout screen. */
+export function apiRequest<T = unknown>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<ApiResponse<T>> {
+  return _rawApiRequest<T>(endpoint, options).then((result) => {
+    if (!result.success && result.error === 'payment_locked') {
+      const lockout = normalizeLockoutPayload(
+        (result as ApiResponse<T> & { lockout?: unknown }).lockout
+      );
+      if (lockout) emitPaymentLocked(lockout);
+    }
+    return result;
+  });
+}
+
+export const paymentApi = createPaymentApis(apiRequest);
 
 export { userFacingApiMessage } from '../utils/apiUserMessages';
 

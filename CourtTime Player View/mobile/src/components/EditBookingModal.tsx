@@ -24,7 +24,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../utils/alert';
 import { hapticSuccess, hapticError } from '../utils/haptics';
-import { api } from '../api/client';
+import { api, paymentApi } from '../api/client';
+import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
+import { openStripeCheckout } from '../utils/payments';
 import { MiniCalendar } from './MiniCalendar';
 import { TimePicker } from './TimePicker';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
@@ -187,7 +189,7 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
       return;
     }
 
-    const createRes = await api.post('/api/bookings', {
+    const createRes = await paymentApi.bookings.create({
       courtId,
       facilityId: booking.facilityId,
       userId: booking.userId,
@@ -197,9 +199,28 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
       durationMinutes,
       bookingType: booking.bookingType,
       notes: booking.notes,
+      ...courtBookingCheckoutUrls(),
     });
 
     setSaving(false);
+
+    if (createRes.requiresPayment && createRes.checkoutUrl) {
+      onClose();
+      const opened = await openStripeCheckout(createRes.checkoutUrl);
+      if (opened) {
+        showAlert(
+          'Complete payment',
+          'Your previous booking was cancelled. Finish card payment to confirm the new reservation.'
+        );
+      } else {
+        showAlert(
+          'Payment required',
+          'Could not open Stripe checkout. Your previous booking was cancelled — please book again from the Book tab.'
+        );
+        onSaved();
+      }
+      return;
+    }
 
     if (createRes.success) {
       hapticSuccess();

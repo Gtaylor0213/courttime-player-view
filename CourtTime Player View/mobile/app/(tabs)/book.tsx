@@ -17,6 +17,7 @@ import {
   Pressable,
   LayoutAnimation,
   useWindowDimensions,
+  Switch,
 } from 'react-native';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 import { useLocalSearchParams } from 'expo-router';
@@ -27,7 +28,14 @@ import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
 import { TimePicker, PICKER_HEIGHT } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { api } from '../../src/api/client';
+import { api, paymentApi } from '../../src/api/client';
+import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
+import {
+  courtGuestFeeCents,
+  courtRequiresPayment,
+  formatCentsAsUsd,
+  openStripeCheckout,
+} from '../../src/utils/payments';
 import { Colors, Gradients, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
 import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
@@ -178,7 +186,14 @@ function bookingTypeLabel(typeKey: string): string {
 
 export default function BookCourtScreen() {
   const { height: windowHeight } = useWindowDimensions();
-  const params = useLocalSearchParams<{ facilityId?: string; bookingDate?: string; bookingId?: string }>();
+  const params = useLocalSearchParams<{
+    facilityId?: string;
+    bookingDate?: string;
+    bookingId?: string;
+    bookingPaymentSuccess?: string;
+    bookingPaymentCancelled?: string;
+    session_id?: string;
+  }>();
   const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate } = useAuth();
   const { bannerState, lastCachedAt, retryConnectivity } = useOfflineApi();
   const facilityList = facilities ?? [];
@@ -218,6 +233,7 @@ export default function BookCourtScreen() {
   const [recurringBookingEnabled, setRecurringBookingEnabled] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
+  const [bringGuest, setBringGuest] = useState(false);
 
   // Rule violations modal payload (shown when modalKind === 'violations')
   const [violations, setViolations] = useState<RuleViolation[]>([]);
@@ -331,7 +347,12 @@ export default function BookCourtScreen() {
     setRecurringBookingEnabled(false);
     setRecurringDays([]);
     setRecurringEndDate('');
+    setBringGuest(false);
   }, [modalKind]);
+
+  const primaryCourtGuestFee = selectedCourt ? courtGuestFeeCents(selectedCourt) : null;
+  const selectedCourtRequiresPayment = selectedCourt ? courtRequiresPayment(selectedCourt) : false;
+  const bookingCheckoutUrls = courtBookingCheckoutUrls();
 
   // ── Fetch courts ──
   const fetchCourts = useCallback(async () => {
@@ -424,6 +445,76 @@ export default function BookCourtScreen() {
     await fetchTimeSlots();
     setRefreshing(false);
   }, [fetchCourts, fetchTimeSlots]);
+
+  // Complete paid court booking after Stripe redirect
+  useEffect(() => {
+    const paymentSuccess = paramString(params.bookingPaymentSuccess);
+    const sessionId = paramString(params.session_id);
+    if (paymentSuccess !== '1' || !user?.id) return;
+
+    let cancelled = false;
+
+    const finish = async (message: string, bookingDate?: string) => {
+      if (cancelled) return;
+      if (bookingDate && /^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
+        setSelectedDate(bookingDate);
+        setSelectedBookDate(bookingDate);
+      }
+      hapticSuccess();
+      showAlert('Payment received', message);
+      void fetchCourts();
+      void fetchTimeSlots();
+    };
+
+    void (async () => {
+      if (!sessionId || sessionId === '{CHECKOUT_SESSION_ID}') {
+        const reconcile = await paymentApi.bookings.reconcilePaidBookings();
+        if (!cancelled && reconcile.success && reconcile.count && reconcile.count > 0) {
+          await finish(
+            reconcile.count > 1
+              ? `${reconcile.count} paid court reservations are on your calendar.`
+              : 'Your paid court reservation is on your calendar.',
+            reconcile.recovered?.[0]?.bookingDate
+          );
+        } else if (!cancelled) {
+          showAlert('Payment received', 'Refreshing your calendar…');
+          void fetchCourts();
+        }
+        return;
+      }
+
+      const response = await paymentApi.bookings.confirmPayment(sessionId);
+      if (cancelled) return;
+      if (response.success) {
+        const bookingDate = (response as { bookingDate?: string }).bookingDate;
+        if ((response as { bookingId?: string }).bookingId) {
+          await finish('Your paid court reservation is confirmed.', bookingDate);
+          return;
+        }
+        const reconcile = await paymentApi.bookings.reconcilePaidBookings();
+        if (reconcile.success && reconcile.count && reconcile.count > 0) {
+          await finish(
+            'Your paid court reservation is on your calendar.',
+            reconcile.recovered?.[0]?.bookingDate
+          );
+        } else {
+          showAlert(
+            'Payment received',
+            'Your reservation is processing. Pull to refresh if it does not appear.'
+          );
+        }
+      } else {
+        showAlert(
+          'Payment',
+          response.error || 'Could not confirm your reservation yet. Pull to refresh.'
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params.bookingPaymentSuccess, params.session_id, user?.id, fetchCourts, fetchTimeSlots, setSelectedBookDate]);
 
   // ── Handle calendar grid booking selection ──
   /** Load slot list for this court before opening the modal so TimePickers include the dragged range. */
@@ -663,7 +754,34 @@ export default function BookCourtScreen() {
     const extraCourtIds = additionalCourtIds.filter((id) => id !== selectedCourt.id);
     const allCourtIds = [selectedCourt.id, ...extraCourtIds];
 
+    const extraCourtsRequirePayment = extraCourtIds.some((id) => {
+      const court = courts.find((c) => c.id === id);
+      return court ? courtRequiresPayment(court) : false;
+    });
+    const needsPaidCheckout =
+      selectedCourtRequiresPayment ||
+      extraCourtsRequirePayment ||
+      Boolean(bringGuest && primaryCourtGuestFee);
+    if (needsPaidCheckout && allCourtIds.length > 1) {
+      showAlert(
+        'Paid booking',
+        'Paid courts and guest fees must be booked one court at a time.'
+      );
+      hapticError();
+      setBooking(false);
+      return;
+    }
+
     if (isAdmin && recurringBookingEnabled) {
+      if (needsPaidCheckout) {
+        showAlert(
+          'Paid booking',
+          'Paid courts and guest fees cannot be booked as a recurring series. Book one reservation at a time.'
+        );
+        hapticError();
+        setBooking(false);
+        return;
+      }
       if (recurringDays.length === 0) {
         showAlert('Recurring Booking', 'Select at least one day of the week.');
         hapticError();
@@ -748,13 +866,15 @@ export default function BookCourtScreen() {
         durationMinutes: calcDuration(startTime, endTime),
         bookingType,
         notes: bookingNotes.trim() || undefined,
+        ...bookingCheckoutUrls,
+        bringGuest: bringGuest || undefined,
         ...(priorInThisRequest.length > 0
           ? { provisionalSameRequestBookings: [...priorInThisRequest] }
           : {}),
       };
 
       console.log('[book.confirm] POST /api/bookings', { courtId, bookingData });
-      const res = await api.post('/api/bookings', bookingData);
+      const res = await paymentApi.bookings.create(bookingData);
       console.log('[book.confirm] response', {
         courtId,
         success: res.success,
@@ -763,11 +883,27 @@ export default function BookCourtScreen() {
         hasViolations: Array.isArray(res.ruleViolations) && res.ruleViolations.length > 0,
       });
 
+      if (res.requiresPayment && res.checkoutUrl) {
+        setModalKind(null);
+        setBooking(false);
+        const opened = await openStripeCheckout(res.checkoutUrl);
+        if (!opened) {
+          showAlert('Payment', 'Could not open Stripe checkout. Try again.');
+          hapticError();
+        } else {
+          showAlert(
+            'Complete payment',
+            'Finish card payment in your browser to confirm this court reservation.'
+          );
+        }
+        return;
+      }
+
       if (!res.success) {
         allSuccess = false;
         if (res.ruleViolations && res.ruleViolations.length > 0 && !firstViolations) {
-          firstViolations = res.ruleViolations;
-          firstWarnings = res.warnings || [];
+          firstViolations = res.ruleViolations as RuleViolation[];
+          firstWarnings = (res.warnings || []) as RuleViolation[];
         } else if (!firstError) {
           firstError = res.error || 'Could not complete booking.';
         }
@@ -1363,6 +1499,30 @@ export default function BookCourtScreen() {
                   </>
                 )}
 
+                {primaryCourtGuestFee && additionalCourtIds.length === 0 && !recurringBookingEnabled ? (
+                  <View style={styles.guestFeeRow}>
+                    <View style={styles.guestFeeText}>
+                      <Text style={styles.modalLabel}>Bringing a guest</Text>
+                      <Text style={styles.guestFeeHint}>
+                        +{formatCentsAsUsd(primaryCourtGuestFee)} guest fee
+                      </Text>
+                    </View>
+                    <Switch
+                      value={bringGuest}
+                      onValueChange={setBringGuest}
+                      trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+                      thumbColor={bringGuest ? Colors.primary : Colors.textMuted}
+                    />
+                  </View>
+                ) : null}
+
+                {(selectedCourtRequiresPayment || (bringGuest && primaryCourtGuestFee)) &&
+                additionalCourtIds.length === 0 ? (
+                  <Text style={styles.paidBookingHint}>
+                    Card payment via Stripe is required to confirm this reservation.
+                  </Text>
+                ) : null}
+
                 {/* Notes */}
                 <Text style={styles.modalLabel}>Notes (optional)</Text>
                 <Input
@@ -1381,7 +1541,9 @@ export default function BookCourtScreen() {
                   title={
                     additionalCourtIds.length > 0
                       ? `Book ${1 + additionalCourtIds.length} Courts`
-                      : 'Confirm Booking'
+                      : selectedCourtRequiresPayment || (bringGuest && primaryCourtGuestFee)
+                        ? 'Pay and Book'
+                        : 'Confirm Booking'
                   }
                   onPress={handleConfirmBooking}
                   loading={booking}
@@ -1851,6 +2013,21 @@ const styles = StyleSheet.create({
   typeChipTextSelected: {
     color: Colors.primary,
     fontWeight: '600',
+  },
+  guestFeeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  guestFeeText: { flex: 1, marginRight: Spacing.md },
+  guestFeeHint: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+  paidBookingHint: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    marginBottom: Spacing.md,
+    lineHeight: 18,
   },
   notesInput: {
     minHeight: 52,

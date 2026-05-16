@@ -15,6 +15,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { PaymentLockoutProvider } from '../src/contexts/PaymentLockoutContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
@@ -139,6 +140,9 @@ function RootLayoutNav() {
       {/* Top-level screens get the default Stack header with a back button. */}
       <Stack.Screen name="club-info" />
       <Stack.Screen name="notification-settings" />
+      <Stack.Screen name="payments" options={{ title: 'Payments' }} />
+      <Stack.Screen name="payment-success" options={{ title: 'Payment' }} />
+      <Stack.Screen name="lockout-paid" options={{ title: 'Payment' }} />
     </Stack>
   );
 }
@@ -163,8 +167,10 @@ function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="auto" />
-          <RootLayoutNav />
+          <PaymentLockoutProvider>
+            <StatusBar style="auto" />
+            <RootLayoutNav />
+          </PaymentLockoutProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CourtTime — Home screen icon preview</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+        background: #f4f4f5;
+        color: #18181b;
+        line-height: 1.5;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 48px; }
+      h1 { font-size: 1.35rem; font-weight: 700; margin: 0 0 6px; }
+      .sub { color: #71717a; font-size: 0.9rem; margin: 0 0 28px; }
+      section {
+        background: #fff;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
+      }
+      h2 {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #71717a;
+        margin: 0 0 16px;
+      }
+      .mock-row {
+        display: flex;
+        gap: 28px;
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 12px 0 8px;
+      }
+      .mock { text-align: center; width: 88px; }
+      .mock img {
+        display: block;
+        margin: 0 auto 8px;
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+      }
+      .mock.ios img { border-radius: 13px; }
+      .mock.android img { border-radius: 50%; }
+      .mock span {
+        font-size: 11px;
+        display: block;
+        max-width: 72px;
+        margin: 0 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wallpaper {
+        border-radius: 12px;
+        padding: 28px 20px 24px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 22px 28px;
+        justify-content: center;
+      }
+      .wallpaper.dark {
+        background: linear-gradient(160deg, #1c1c1e 0%, #2c2c2e 100%);
+      }
+      .wallpaper.dark .mock span { color: #e4e4e7; }
+      .wallpaper.light {
+        background: linear-gradient(160deg, #e8e8ed 0%, #f5f5f7 100%);
+      }
+      .wallpaper.light .mock span { color: #3f3f46; }
+      .sizes {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 16px;
+      }
+      .size-card {
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        padding: 14px;
+        text-align: center;
+      }
+      .size-card img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 0 auto 10px;
+      }
+      .size-card strong { display: block; font-size: 0.8rem; }
+      .size-card small { color: #71717a; font-size: 0.75rem; }
+      .compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 480px) {
+        .compare { grid-template-columns: 1fr; }
+      }
+      .variant {
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+      }
+      .variant canvas,
+      .variant img {
+        width: 80px;
+        height: 80px;
+        border-radius: 18px;
+        margin-bottom: 10px;
+      }
+      .variant p { margin: 0; font-size: 0.85rem; color: #52525b; }
+      .tag {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        margin-bottom: 12px;
+      }
+      .tag.current { background: #dcfce7; color: #166534; }
+      .tag.alt { background: #e0e7ff; color: #3730a3; }
+      .note {
+        font-size: 0.85rem;
+        color: #52525b;
+        margin: 0;
+        padding: 12px 14px;
+        background: #fafafa;
+        border-radius: 10px;
+        border: 1px solid #e4e4e7;
+      }
+      .note code { font-size: 0.8rem; word-break: break-all; }
+      a.back { color: #1a5f2a; font-weight: 500; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <p><a class="back" href="/">← Back to CourtTime</a></p>
+      <h1>Home screen icon preview</h1>
+      <p class="sub">
+        How the CourtTime logo will look when saved to a phone home screen.
+        Compare options below, then tell us what to change.
+      </p>
+
+      <section>
+        <h2>On a home screen (iOS style)</h2>
+        <div class="wallpaper dark mock-row">
+          <div class="mock ios">
+            <img src="/icons/apple-touch-icon.png" alt="CourtTime icon" />
+            <span>CourtTime</span>
+          </div>
+        </div>
+        <div class="wallpaper light mock-row" style="margin-top: 12px">
+          <div class="mock ios">
+            <img src="/icons/apple-touch-icon.png" alt="CourtTime icon" />
+            <span>CourtTime</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>On a home screen (Android style)</h2>
+        <div class="wallpaper light mock-row">
+          <div class="mock android">
+            <img src="/icons/icon-192.png" alt="CourtTime icon" />
+            <span>CourtTime</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Background options</h2>
+        <div class="compare">
+          <div class="variant">
+            <span class="tag current">Current</span>
+            <img src="/icons/apple-touch-icon.png" alt="Black background" />
+            <p><strong>Black background</strong><br />Matches your favicon today</p>
+          </div>
+          <div class="variant">
+            <span class="tag alt">Optional</span>
+            <canvas id="green-preview" width="180" height="180" aria-label="Green background preview"></canvas>
+            <p><strong>Brand green (#1a5f2a)</strong><br />Approximate — black replaced with green</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>All exported sizes</h2>
+        <div class="sizes">
+          <div class="size-card">
+            <img src="/favicon.png" width="64" alt="favicon" />
+            <strong>Browser tab</strong>
+            <small>favicon.png</small>
+          </div>
+          <div class="size-card">
+            <img src="/icons/apple-touch-icon.png" width="90" alt="180px" />
+            <strong>180 × 180</strong>
+            <small>iOS home screen</small>
+          </div>
+          <div class="size-card">
+            <img src="/icons/icon-192.png" width="96" alt="192px" />
+            <strong>192 × 192</strong>
+            <small>Android / manifest</small>
+          </div>
+          <div class="size-card">
+            <img src="/icons/icon-512.png" width="120" alt="512px" />
+            <strong>512 × 512</strong>
+            <small>Install prompt</small>
+          </div>
+        </div>
+      </section>
+
+      <p class="note">
+        <strong>Test on your phone:</strong> open
+        <code id="preview-url"></code> on your phone (same Wi‑Fi), or use Share → Add to Home Screen on the live site.
+        Remove any old shortcut first — phones cache icons.
+      </p>
+    </div>
+    <script>
+      document.getElementById('preview-url').textContent = location.origin + '/icon-preview.html';
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.getElementById('green-preview');
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 180, 180);
+        const data = ctx.getImageData(0, 0, 180, 180);
+        const px = data.data;
+        for (let i = 0; i < px.length; i += 4) {
+          const r = px[i];
+          const g = px[i + 1];
+          const b = px[i + 2];
+          if (r < 40 && g < 40 && b < 40) {
+            px[i] = 26;
+            px[i + 1] = 95;
+            px[i + 2] = 42;
+          }
+        }
+        ctx.putImageData(data, 0, 0);
+      };
+      img.src = '/icons/apple-touch-icon.png';
+    </script>
+  </body>
+</html>

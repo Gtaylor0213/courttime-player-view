@@ -1,4 +1,5 @@
 import { Linking } from 'react-native';
+import { MOBILE_FACILITY_REGISTRATION_SOURCE } from '../../../shared/utils/mobileFacilityRegistration';
 import { stripTrailingSlashes } from '../config/runtime';
 
 const FACILITY_REGISTRATION_PATH = '/register/facility';
@@ -35,10 +36,15 @@ export function resolveWebAppBaseUrl(
 
 export function getFacilityRegistrationUrl(
   apiBaseUrl: string,
-  explicitWebUrl?: string | null
+  explicitWebUrl?: string | null,
+  options?: { mobile?: boolean }
 ): string {
   const base = resolveWebAppBaseUrl(apiBaseUrl, explicitWebUrl);
-  return `${base}${FACILITY_REGISTRATION_PATH}`;
+  const url = new URL(`${base}${FACILITY_REGISTRATION_PATH}`);
+  if (options?.mobile) {
+    url.searchParams.set('source', MOBILE_FACILITY_REGISTRATION_SOURCE);
+  }
+  return url.toString();
 }
 
 export async function openFacilityRegistration(registrationUrl: string): Promise<boolean> {

@@ -34,4 +34,10 @@ describe('getFacilityRegistrationUrl', () => {
       'http://localhost:5173/register/facility'
     );
   });
+
+  it('tags mobile handoffs with source=mobile', () => {
+    expect(getFacilityRegistrationUrl('https://www.courttimeapp.com', null, { mobile: true })).toBe(
+      'https://www.courttimeapp.com/register/facility?source=mobile'
+    );
+  });
 });

@@ -37,7 +37,8 @@ function RootLayoutNav() {
   /** Only the top segment — avoids re-running this effect on every in-tab route change (can interrupt tab presses). */
   const rootSegment = segments[0];
   const isRegisterFacilityRoute =
-    rootSegment === 'auth' && segments[1] === 'register-facility';
+    rootSegment === 'auth' &&
+    (segments[1] === 'register-facility' || segments[1] === 'register-facility-complete');
 
   const clearLastNotificationResponse = useCallback(async () => {
     try {

@@ -2,7 +2,7 @@
  * Register a facility — opens the full web registration wizard in the device browser.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import {
   Platform,
   Image,
   TouchableOpacity,
+  ActivityIndicator,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
 import { Link, Stack, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,14 +40,25 @@ const STEPS = [
   'Complete subscription payment (if required)',
 ];
 
+const WAITING_STEPS = [
+  { key: 'browser', label: 'Complete registration in your browser' },
+  { key: 'payment', label: 'Pay subscription (if prompted)' },
+  { key: 'return', label: 'Return here — we sign you in automatically' },
+] as const;
+
+type ScreenPhase = 'intro' | 'waiting';
+
 export default function RegisterFacilityScreen() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, refreshSession } = useAuth();
   const registrationUrl = useMemo(
-    () => getFacilityRegistrationUrl(API_BASE_URL, process.env.EXPO_PUBLIC_WEB_URL),
+    () =>
+      getFacilityRegistrationUrl(API_BASE_URL, process.env.EXPO_PUBLIC_WEB_URL, { mobile: true }),
     []
   );
   const [opening, setOpening] = useState(false);
+  const [phase, setPhase] = useState<ScreenPhase>('intro');
+  const [checkingReturn, setCheckingReturn] = useState(false);
 
   const handleContinue = useCallback(async () => {
     setOpening(true);
@@ -56,8 +70,40 @@ export default function RegisterFacilityScreen() {
         'Could not open browser',
         'Please open this link in Safari or Chrome:\n\n' + registrationUrl
       );
+      return;
     }
+
+    setPhase('waiting');
   }, [registrationUrl]);
+
+  const handleCheckSignIn = useCallback(async () => {
+    setCheckingReturn(true);
+    const ok = await refreshSession();
+    setCheckingReturn(false);
+    if (ok) {
+      router.replace('/(tabs)/admin');
+    } else {
+      showAlert(
+        'Not signed in yet',
+        'Finish registration in the browser first. When you tap “Complete Registration” on the web, you’ll return here automatically.'
+      );
+    }
+  }, [refreshSession, router]);
+
+  useEffect(() => {
+    if (phase !== 'waiting') return;
+
+    const onAppState = (next: AppStateStatus) => {
+      if (next === 'active') {
+        void refreshSession().then(ok => {
+          if (ok) router.replace('/(tabs)/admin');
+        });
+      }
+    };
+
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => sub.remove();
+  }, [phase, refreshSession, router]);
 
   return (
     <View style={styles.root}>
@@ -108,33 +154,78 @@ export default function RegisterFacilityScreen() {
           </View>
 
           <Card style={styles.card}>
-            <View style={styles.iconRow}>
-              <View style={styles.iconCircle}>
-                <Ionicons name="business-outline" size={28} color={Colors.primary} />
-              </View>
-              <Text style={styles.cardTitle}>What happens next</Text>
-            </View>
-
-            {STEPS.map((step, index) => (
-              <View key={step} style={styles.stepRow}>
-                <View style={styles.stepBadge}>
-                  <Text style={styles.stepBadgeText}>{index + 1}</Text>
+            {phase === 'intro' ? (
+              <>
+                <View style={styles.iconRow}>
+                  <View style={styles.iconCircle}>
+                    <Ionicons name="business-outline" size={28} color={Colors.primary} />
+                  </View>
+                  <Text style={styles.cardTitle}>What happens next</Text>
                 </View>
-                <Text style={styles.stepText}>{step}</Text>
-              </View>
-            ))}
 
-            <Button
-              style={styles.primaryButton}
-              title={opening ? 'Opening browser…' : 'Continue in browser'}
-              onPress={handleContinue}
-              disabled={opening}
-            />
+                {STEPS.map((step, index) => (
+                  <View key={step} style={styles.stepRow}>
+                    <View style={styles.stepBadge}>
+                      <Text style={styles.stepBadgeText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.stepText}>{step}</Text>
+                  </View>
+                ))}
 
-            <Text style={styles.hint}>
-              After registration, return to this app and sign in with the admin account you created.
-              {Platform.OS === 'ios' ? ' Use the app switcher to come back.' : ''}
-            </Text>
+                <Button
+                  style={styles.primaryButton}
+                  title={opening ? 'Opening browser…' : 'Continue in browser'}
+                  onPress={handleContinue}
+                  disabled={opening}
+                />
+
+                <Text style={styles.hint}>
+                  When you finish on the web, you’ll return here automatically to open your admin
+                  dashboard.
+                </Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.waitingHeader}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.waitingTitle}>Registration in progress</Text>
+                </View>
+                <Text style={styles.waitingSubtitle}>
+                  Complete the wizard in your browser. We’ll bring you back here when you tap
+                  “Complete Registration.”
+                </Text>
+
+                {WAITING_STEPS.map((step, index) => (
+                  <View key={step.key} style={styles.stepRow}>
+                    <View style={[styles.stepBadge, styles.stepBadgeMuted]}>
+                      <Text style={styles.stepBadgeText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.stepText}>{step.label}</Text>
+                  </View>
+                ))}
+
+                <Button
+                  style={styles.primaryButton}
+                  title={checkingReturn ? 'Checking…' : 'Reopen browser'}
+                  variant="secondary"
+                  onPress={handleContinue}
+                  disabled={opening || checkingReturn}
+                />
+
+                <Button
+                  style={styles.secondaryButton}
+                  title={checkingReturn ? 'Checking…' : 'I finished — check sign-in'}
+                  onPress={handleCheckSignIn}
+                  disabled={checkingReturn || opening}
+                />
+
+                <Text style={styles.hint}>
+                  {Platform.OS === 'ios'
+                    ? 'Use the app switcher to return after completing registration.'
+                    : 'Switch back to CourtTime after completing registration.'}
+                </Text>
+              </>
+            )}
           </Card>
 
           <View style={styles.playerFooter}>
@@ -278,6 +369,30 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     marginTop: Spacing.md,
+  },
+  secondaryButton: {
+    marginTop: Spacing.sm,
+  },
+  waitingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  waitingTitle: {
+    fontSize: FontSize.lg,
+    fontFamily: FontFamily.semiBold,
+    color: Colors.text,
+  },
+  waitingSubtitle: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: Spacing.md,
+  },
+  stepBadgeMuted: {
+    backgroundColor: Colors.textMuted,
   },
   hint: {
     marginTop: Spacing.md,

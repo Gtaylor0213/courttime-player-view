@@ -21,6 +21,11 @@ import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png'
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { facilitiesApi, paymentsApi } from '../api/client';
+import {
+  facilityRegistrationCompleteDeepLink,
+  isMobileFacilityRegistrationSource,
+  MOBILE_FACILITY_REGISTRATION_SOURCE,
+} from '../../shared/utils/mobileFacilityRegistration';
 import { RulesStep } from './facility-registration/RulesStep';
 import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG } from './facility-registration/rule-defaults';
 
@@ -95,11 +100,22 @@ function parsedHasCreateAccountFields(data: {
   );
 }
 
+function getRegistrationPathWithMobileSource(isMobile: boolean): string {
+  if (!isMobile) return window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+  params.set('source', MOBILE_FACILITY_REGISTRATION_SOURCE);
+  const query = params.toString();
+  return query ? `${window.location.pathname}?${query}` : window.location.pathname;
+}
+
 export function FacilityRegistration() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register, user, login } = useAuth();
+  const isMobileRegistration = isMobileFacilityRegistrationSource(
+    new URLSearchParams(window.location.search).get('source')
+  );
 
   // Step 1 mode: choose between creating new account or logging in
   const [step1Mode, setStep1Mode] = useState<'choose' | 'create' | 'login' | 'loggedIn'>('choose');
@@ -306,13 +322,21 @@ export function FacilityRegistration() {
         }
       });
 
-      window.history.replaceState({}, '', window.location.pathname);
+      window.history.replaceState(
+        {},
+        '',
+        getRegistrationPathWithMobileSource(isMobileRegistration)
+      );
     } else if (paymentStatus === 'cancelled') {
       restoreRegistrationFromSession();
       toast.info('Payment was cancelled. You can try again.');
-      window.history.replaceState({}, '', window.location.pathname);
+      window.history.replaceState(
+        {},
+        '',
+        getRegistrationPathWithMobileSource(isMobileRegistration)
+      );
     }
-  }, []);
+  }, [isMobileRegistration]);
 
   useEffect(() => {
     if (!pendingErrorField) return;
@@ -1458,6 +1482,18 @@ export function FacilityRegistration() {
         }
 
         clearRegistrationSession();
+
+        if (isMobileRegistration && backendResponse.token && facilityId) {
+          toast.success('Facility registered! Returning to the CourtTime app…');
+          setTimeout(() => {
+            window.location.href = facilityRegistrationCompleteDeepLink({
+              token: backendResponse.token,
+              facilityId,
+            });
+          }, 800);
+          return;
+        }
+
         toast.success('Facility registered successfully! Logging you in...');
 
         // Navigate to the admin dashboard
@@ -1618,17 +1654,19 @@ export function FacilityRegistration() {
   const handlePayWithStripe = async () => {
     setIsProcessingPayment(true);
     try {
-      const currentUrl = window.location.origin + window.location.pathname;
+      const returnBase =
+        window.location.origin + getRegistrationPathWithMobileSource(isMobileRegistration);
       const tierAmount = getBaseAmountCents(formData.courts.length);
       const finalAmount = promoValidation?.valid ? (promoValidation.finalAmountCents ?? tierAmount) : tierAmount;
+      const paymentJoiner = returnBase.includes('?') ? '&' : '?';
 
       const result = await paymentsApi.createCheckoutSession({
         facilityName: formData.facilityName,
         courtCount: formData.courts.length,
         amountCents: finalAmount,
         promoCode: promoValidation?.valid ? promoCode : undefined,
-        successUrl: `${currentUrl}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${currentUrl}?payment=cancelled`,
+        successUrl: `${returnBase}${paymentJoiner}payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${returnBase}${paymentJoiner}payment=cancelled`,
       });
 
       if (result.success && result.data) {

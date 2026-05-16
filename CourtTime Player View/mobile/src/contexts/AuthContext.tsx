@@ -43,6 +43,7 @@ interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  refreshSession: () => Promise<boolean>;
   updateUser: (updates: Partial<AuthUser>) => Promise<void>;
   pendingTermsAcceptances: PendingTermsAcceptance[];
   acceptTermsAndContinue: (facilityId: string) => Promise<boolean>;
@@ -194,15 +195,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function checkAuth() {
+  async function refreshSession(): Promise<boolean> {
     try {
       const token = await getToken();
       if (!token) {
         setState({ user: null, isLoading: false, isAuthenticated: false });
-        return;
+        return false;
       }
 
-      // Validate token with server and get fresh user data
       const result = await api.get('/api/auth/me');
       if (result.success && result.data?.user) {
         const freshUser = result.data.user;
@@ -210,22 +210,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await hydrateFacilitiesForUser(freshUser);
         setState({ user: freshUser, isLoading: false, isAuthenticated: true });
         await loadTermsStatus(freshUser);
-      } else {
-        // Token invalid/expired — try cached user as fallback, otherwise logout
-        const cached = await getCachedUser();
-        if (cached && result.errorCategory === 'offline') {
-          // Offline — use cached data
-          await hydrateFacilitiesForUser(cached);
-          setState({ user: cached, isLoading: false, isAuthenticated: true });
-        } else {
-          // Token expired or invalid
-          await clearCache();
-          setState({ user: null, isLoading: false, isAuthenticated: false });
-        }
+        return true;
       }
+
+      const cached = await getCachedUser();
+      if (cached && result.errorCategory === 'offline') {
+        await hydrateFacilitiesForUser(cached);
+        setState({ user: cached, isLoading: false, isAuthenticated: true });
+        return true;
+      }
+
+      await clearCache();
+      setState({ user: null, isLoading: false, isAuthenticated: false });
+      return false;
     } catch {
       setState({ user: null, isLoading: false, isAuthenticated: false });
+      return false;
     }
+  }
+
+  async function checkAuth() {
+    setState(prev => ({ ...prev, isLoading: true }));
+    await refreshSession();
   }
 
   async function login(email: string, password: string) {
@@ -321,7 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [facilities, selectedFacilityId]);
 
   return (
-    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
+    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, refreshSession, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
       {children}
     </AuthContext.Provider>
   );

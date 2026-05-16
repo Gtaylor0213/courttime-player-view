@@ -243,9 +243,13 @@ if (process.env.NODE_ENV === 'production') {
   const buildPath = path.join(__dirname, '../build');
   app.use(express.static(buildPath));
 
-  // Handle React routing - return index.html for any unknown routes
+  // Handle React routing - return index.html for unknown routes (not static assets)
   // Express 5 requires {*path} syntax instead of *
-  app.get('/{*path}', (_req, res) => {
+  app.get('/{*path}', (req, res) => {
+    if (/\.(?:png|jpe?g|gif|ico|svg|webp|webmanifest|json|txt|woff2?)$/i.test(req.path)) {
+      res.status(404).end();
+      return;
+    }
     res.sendFile(path.join(buildPath, 'index.html'));
   });
 } else {

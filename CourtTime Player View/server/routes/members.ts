@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getFacilityMembers,
   getMemberDetails,
+  getUserPaymentLockout,
   updateMemberMembership,
   removeMemberFromFacility,
   addMemberToFacility,
@@ -10,6 +11,26 @@ import {
 } from '../../src/services/memberService';
 
 const router = express.Router();
+
+/**
+ * GET /api/members/me/payment-lockout
+ * Member: check if the current user has any payment lockout (for login-time UI).
+ */
+router.get('/me/payment-lockout', async (req, res, next) => {
+  try {
+    const userId = (req as any).user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Not authenticated' });
+
+    const lockout = await getUserPaymentLockout(userId);
+    res.json({
+      success: true,
+      isLocked: Boolean(lockout),
+      lockout: lockout ?? null,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * GET /api/members/:facilityId
@@ -340,8 +361,8 @@ router.get('/:facilityId/me/lockout-info', async (req, res, next) => {
     res.json({
       success: true,
       isLocked: member.isPaymentLocked,
-      amountCents: (member as any).lockoutAmountCents ?? null,
-      description: (member as any).lockoutDescription ?? null,
+      amountCents: member.lockoutAmountCents ?? null,
+      description: member.lockoutDescription ?? null,
       lockedAt: member.paymentLockedAt ?? null,
     });
   } catch (error) {
@@ -365,26 +386,66 @@ router.post('/:facilityId/me/lockout-checkout', async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'No active payment lockout found' });
     }
 
-    const amountCents = (member as any).lockoutAmountCents;
-    const description = (member as any).lockoutDescription || 'Account balance due';
+    const amountCents = member.lockoutAmountCents;
+    const description = member.lockoutDescription || 'Account balance due';
 
     if (!amountCents) {
       return res.status(400).json({ success: false, error: 'No payment amount set for this lockout. Contact your facility administrator.' });
     }
 
     const { createLockoutCheckoutSession } = await import('../../src/services/stripeConnectService');
-    const origin = req.headers.origin || `${req.protocol}://${req.headers.host}`;
+    const appBase = process.env.APP_URL || 'http://localhost:5173';
+    const origin =
+      (typeof req.body?.successUrl === 'string' && req.body.successUrl.startsWith('http')
+        ? new URL(req.body.successUrl).origin
+        : null) ||
+      req.headers.origin ||
+      appBase;
+    const successUrl =
+      req.body?.successUrl ||
+      `${origin}/lockout-paid?facilityId=${facilityId}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = req.body?.cancelUrl || `${origin}/calendar`;
+
     const result = await createLockoutCheckoutSession({
       facilityId,
       memberId: userId,
       amountCents,
       description,
-      successUrl: `${origin}/lockout-paid?facilityId=${facilityId}`,
-      cancelUrl: `${origin}/`,
+      successUrl,
+      cancelUrl,
     });
 
-    res.json({ success: true, checkoutUrl: result.url });
+    res.json({ success: true, data: { checkoutUrl: result.url, connectPaymentId: result.connectPaymentId } });
   } catch (error: any) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/members/:facilityId/me/lockout-confirm
+ * Confirm lockout payment after Stripe redirect (clears lock without waiting for webhook).
+ */
+router.post('/:facilityId/me/lockout-confirm', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+    const userId = (req as any).user?.userId;
+    const sessionId = String(req.body?.sessionId || '');
+    if (!userId) return res.status(401).json({ success: false, error: 'Not authenticated' });
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+
+    const { confirmLockoutCheckout } = await import('../../src/services/stripeConnectService');
+    const result = await confirmLockoutCheckout({ sessionId, memberId: userId, facilityId });
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    if (
+      error?.message?.includes('not belong') ||
+      error?.message?.includes('not completed') ||
+      error?.message?.includes('not found')
+    ) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     next(error);
   }
 });

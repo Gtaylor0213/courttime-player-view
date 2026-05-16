@@ -1,48 +1,74 @@
 import React, { useEffect, useState } from 'react';
 import { Lock, ExternalLink } from 'lucide-react';
-import { membersApi } from '../api/client';
+import { membersApi, unwrapApiPayload } from '../api/client';
 
 interface LockoutInfo {
   facilityId?: string;
   facilityName?: string;
   lockedAt?: string;
+  amountCents?: number | null;
+  description?: string | null;
 }
 
 interface PaymentLockoutScreenProps {
   lockout: LockoutInfo;
 }
 
+function extractCheckoutUrl(res: { success?: boolean; data?: unknown; error?: string }): string | null {
+  if (!res.success || !res.data) return null;
+  const payload = unwrapApiPayload<{ checkoutUrl?: string; url?: string }>(res.data) ?? res.data;
+  if (payload && typeof payload === 'object') {
+    const record = payload as { checkoutUrl?: string; url?: string };
+    return record.checkoutUrl ?? record.url ?? null;
+  }
+  return null;
+}
+
 export function PaymentLockoutScreen({ lockout }: PaymentLockoutScreenProps) {
-  const [amountCents, setAmountCents] = useState<number | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
+  const [amountCents, setAmountCents] = useState<number | null>(lockout.amountCents ?? null);
+  const [description, setDescription] = useState<string | null>(lockout.description ?? null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (lockout.amountCents != null) {
+      setAmountCents(lockout.amountCents);
+      setDescription(lockout.description ?? null);
+    }
     if (!lockout.facilityId) return;
     setLoadingInfo(true);
     membersApi.getLockoutInfo(lockout.facilityId).then((res) => {
       if (res.success && res.data) {
-        const d = (res.data as any).data ?? res.data;
-        setAmountCents(d.amountCents ?? null);
-        setDescription(d.description ?? null);
+        const info = unwrapApiPayload<{
+          amountCents?: number;
+          description?: string;
+        }>(res.data) ?? (res.data as { amountCents?: number; description?: string });
+        setAmountCents(info.amountCents ?? null);
+        setDescription(info.description ?? null);
       }
     }).finally(() => setLoadingInfo(false));
-  }, [lockout.facilityId]);
+  }, [lockout.facilityId, lockout.amountCents, lockout.description]);
 
   const handlePayNow = async () => {
-    if (!lockout.facilityId) return;
+    if (!lockout.facilityId) {
+      setCheckoutError('Missing facility information. Please refresh the page or contact your club.');
+      return;
+    }
     setCheckingOut(true);
     setCheckoutError(null);
     try {
-      const res = await membersApi.getLockoutCheckoutUrl(lockout.facilityId);
-      const url = (res as any).data?.checkoutUrl ?? (res as any).checkoutUrl;
-      if (res.success && url) {
-        window.location.href = url;
-      } else {
-        setCheckoutError((res as any).error || 'Could not generate payment link. Contact your facility administrator.');
+      const base = window.location.origin;
+      const res = await membersApi.getLockoutCheckoutUrl(lockout.facilityId, {
+        successUrl: `${base}/lockout-paid?facilityId=${encodeURIComponent(lockout.facilityId)}&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${base}/calendar`,
+      });
+      const url = extractCheckoutUrl(res);
+      if (url) {
+        window.location.replace(url);
+        return;
       }
+      setCheckoutError(res.error || 'Could not generate payment link. Contact your facility administrator.');
     } catch {
       setCheckoutError('Could not generate payment link. Contact your facility administrator.');
     } finally {
@@ -100,15 +126,17 @@ export function PaymentLockoutScreen({ lockout }: PaymentLockoutScreenProps) {
         <div className="flex flex-col items-center gap-3">
           {hasPayment && (
             <button
+              type="button"
               onClick={handlePayNow}
-              disabled={checkingOut}
+              disabled={checkingOut || !lockout.facilityId}
               className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60 transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
-              {checkingOut ? 'Preparing payment…' : 'Pay Now to Restore Access'}
+              {checkingOut ? 'Redirecting to Stripe…' : 'Pay Now to Restore Access'}
             </button>
           )}
           <button
+            type="button"
             onClick={() => window.location.reload()}
             className="text-sm text-green-600 hover:text-green-700 underline"
           >
@@ -117,7 +145,7 @@ export function PaymentLockoutScreen({ lockout }: PaymentLockoutScreenProps) {
         </div>
 
         <p className="text-xs text-gray-400">
-          Your account will be automatically restored once payment is confirmed.
+          You will be taken to Stripe to pay securely. After payment, you will return here and your access will be restored automatically.
         </p>
       </div>
     </div>

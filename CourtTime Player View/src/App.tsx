@@ -25,6 +25,7 @@ import { FindHittingPartner } from './components/FindHittingPartner';
 import { MessagesPage } from './components/MessagesPage';
 import { MemberPayments } from './components/MemberPayments';
 import { PaymentSuccess } from './components/PaymentSuccess';
+import { LockoutPaid } from './components/LockoutPaid';
 
 // Admin pages
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -84,6 +85,7 @@ export default function App() {
               <Route path="/messages" element={<MessagesPage />} />
               <Route path="/payments" element={<MemberPayments />} />
               <Route path="/payments/success" element={<PaymentSuccess />} />
+              <Route path="/lockout-paid" element={<LockoutPaid />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/facilities" element={<FacilityManagement />} />
               <Route path="/admin/courts" element={<CourtManagement />} />

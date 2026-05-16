@@ -906,8 +906,109 @@ export async function createLockoutCheckoutSession(params: {
     { stripeAccount: facility.stripe_account_id }
   );
 
+  await query(
+    `UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`,
+    [session.id, connectPaymentId]
+  );
+
   if (!session.url) throw new Error('Stripe did not return a checkout URL');
   return { url: session.url, connectPaymentId };
+}
+
+/**
+ * Confirm a lockout payment after Stripe redirect (works even if webhooks are delayed).
+ */
+export async function confirmLockoutCheckout(params: {
+  sessionId: string;
+  memberId: string;
+  facilityId?: string;
+}): Promise<{ unlocked: boolean }> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error('Stripe is not configured on this server');
+  }
+
+  let payment: {
+    id: string;
+    member_id: string;
+    club_id: string;
+    status: string;
+    stripe_account_id: string;
+  } | null = null;
+
+  const paymentResult = await query(
+    `SELECT cp.id, cp.member_id, cp.club_id, cp.status, f.stripe_account_id
+       FROM connect_payments cp
+       JOIN facilities f ON f.id = cp.club_id
+      WHERE cp.stripe_checkout_session_id = $1`,
+    [params.sessionId]
+  );
+  if (paymentResult.rows.length > 0) {
+    payment = paymentResult.rows[0];
+  } else {
+    const recentPayments = await query(
+      `SELECT cp.id, cp.member_id, cp.club_id, cp.status, f.stripe_account_id
+         FROM connect_payments cp
+         JOIN facilities f ON f.id = cp.club_id
+        WHERE cp.member_id = $1
+          AND cp.payment_item_id IS NULL
+          AND cp.status IN ('PENDING', 'PAID')
+        ORDER BY cp.created_at DESC
+        LIMIT 15`,
+      [params.memberId]
+    );
+    for (const row of recentPayments.rows) {
+      if (params.facilityId && row.club_id !== params.facilityId) continue;
+      try {
+        const probe = await stripe.checkout.sessions.retrieve(params.sessionId, {
+          stripeAccount: row.stripe_account_id,
+        });
+        if (probe.id === params.sessionId) {
+          payment = row;
+          await query(
+            `UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`,
+            [params.sessionId, row.id]
+          );
+          break;
+        }
+      } catch {
+        // Session belongs to a different connected account.
+      }
+    }
+  }
+
+  if (!payment) {
+    throw new Error('Payment session not found');
+  }
+  if (!sameMemberId(payment.member_id, params.memberId)) {
+    throw new Error('This payment does not belong to your account');
+  }
+  if (params.facilityId && payment.club_id !== params.facilityId) {
+    throw new Error('This payment is for a different facility');
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(params.sessionId, {
+    stripeAccount: payment.stripe_account_id,
+  });
+
+  const lockoutUserId = session.metadata?.lockoutUserId;
+  if (lockoutUserId && !sameMemberId(lockoutUserId, params.memberId)) {
+    throw new Error('This payment does not belong to your account');
+  }
+
+  if (session.payment_status !== 'paid') {
+    throw new Error('Payment has not completed yet');
+  }
+
+  await markCheckoutSessionPaid(session);
+
+  const lockCheck = await query(
+    `SELECT is_payment_locked FROM facility_memberships
+     WHERE facility_id = $1 AND user_id = $2`,
+    [payment.club_id, params.memberId]
+  );
+
+  return { unlocked: lockCheck.rows[0]?.is_payment_locked === false };
 }
 
 export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session): Promise<void> {

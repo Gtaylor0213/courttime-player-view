@@ -17,6 +17,8 @@ export interface MemberWithProfile {
   isViewOnly: boolean;
   isPaymentLocked: boolean;
   paymentLockedAt?: string;
+  lockoutAmountCents?: number | null;
+  lockoutDescription?: string | null;
   startDate: string;
   endDate?: string;
   suspendedUntil?: string;
@@ -130,6 +132,8 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
         COALESCE(fm.is_view_only, false) as "isViewOnly",
         COALESCE(fm.is_payment_locked, false) as "isPaymentLocked",
         fm.payment_locked_at as "paymentLockedAt",
+        fm.lockout_amount_cents as "lockoutAmountCents",
+        fm.lockout_description as "lockoutDescription",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
@@ -151,6 +155,41 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
   } catch (error) {
     console.error('Get member details error:', error);
     throw new Error('Failed to fetch member details');
+  }
+}
+
+export interface PaymentLockoutStatus {
+  facilityId: string;
+  facilityName: string;
+  lockedAt?: string;
+  amountCents?: number | null;
+  description?: string | null;
+}
+
+/**
+ * Get payment lockout status for a user (first locked membership if any).
+ */
+export async function getUserPaymentLockout(userId: string): Promise<PaymentLockoutStatus | null> {
+  try {
+    const result = await query(
+      `SELECT fm.facility_id as "facilityId",
+              f.name as "facilityName",
+              fm.payment_locked_at as "lockedAt",
+              fm.lockout_amount_cents as "amountCents",
+              fm.lockout_description as "description"
+       FROM facility_memberships fm
+       JOIN facilities f ON f.id = fm.facility_id
+       WHERE fm.user_id = $1 AND fm.is_payment_locked = true
+       ORDER BY fm.payment_locked_at DESC NULLS LAST
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  } catch (error) {
+    console.error('Get user payment lockout error:', error);
+    throw new Error('Failed to fetch payment lockout status');
   }
 }
 

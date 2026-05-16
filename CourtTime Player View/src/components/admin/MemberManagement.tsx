@@ -12,7 +12,8 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { membersApi, addressWhitelistApi, strikesApi } from '../../api/client';
+import { membersApi, addressWhitelistApi, strikesApi, stripeConnectApi, isStripeConnectReadyFromResponse } from '../../api/client';
+import { LockMemberPaymentDialog, type LockMemberTarget } from './LockMemberPaymentDialog';
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,6 +31,8 @@ interface Member {
   isViewOnly: boolean;
   isPaymentLocked: boolean;
   paymentLockedAt?: string;
+  lockoutAmountCents?: number | null;
+  lockoutDescription?: string | null;
   startDate: string;
   endDate?: string;
   suspendedUntil?: string;
@@ -76,14 +79,29 @@ export function MemberManagement() {
   const [suspendDialogName, setSuspendDialogName] = useState('');
   const [suspendDuration, setSuspendDuration] = useState<string>('7d');
 
+  // Payment lockout dialog
+  const [lockPaymentMember, setLockPaymentMember] = useState<LockMemberTarget | null>(null);
+  const [stripeConnected, setStripeConnected] = useState(true);
+
   const { selectedFacilityId: currentFacilityId } = useAppContext();
 
   useEffect(() => {
     if (currentFacilityId) {
       loadMembers();
       loadWhitelistAddresses();
+      void loadStripeStatus();
     }
   }, [currentFacilityId]);
+
+  const loadStripeStatus = async () => {
+    if (!currentFacilityId) return;
+    try {
+      const res = await stripeConnectApi.getStatus(currentFacilityId);
+      setStripeConnected(isStripeConnectReadyFromResponse(res));
+    } catch {
+      setStripeConnected(false);
+    }
+  };
 
   const loadMembers = async () => {
     if (!currentFacilityId) {
@@ -294,21 +312,44 @@ export function MemberManagement() {
     }
   };
 
-  const handleTogglePaymentLockout = async (userId: string, currentIsLocked: boolean) => {
+  const openLockPaymentDialog = (member: Member) => {
+    if (!stripeConnected) {
+      toast.error('Complete Stripe Connect setup under Facility Management → Payments first');
+      return;
+    }
+    setLockPaymentMember({
+      userId: member.userId,
+      fullName: member.fullName,
+      email: member.email,
+    });
+  };
+
+  const handleClearPaymentLockout = async (userId: string, memberName: string) => {
     if (!currentFacilityId) return;
+    if (!confirm(`Clear payment lockout for ${memberName}? They will regain app access immediately.`)) {
+      return;
+    }
 
     try {
-      const response = await membersApi.setPaymentLockout(currentFacilityId, userId, !currentIsLocked);
+      const response = await membersApi.setPaymentLockout(currentFacilityId, userId, false);
 
       if (response.success) {
-        toast.success(currentIsLocked ? 'Payment lockout cleared' : 'Member payment locked out');
+        toast.success('Lockout cleared — member can now access the app');
         loadMembers();
       } else {
-        toast.error(response.error || 'Failed to update payment lockout');
+        toast.error(response.error || 'Failed to clear payment lockout');
       }
     } catch (error) {
-      console.error('Error updating payment lockout:', error);
-      toast.error('Failed to update payment lockout');
+      console.error('Error clearing payment lockout:', error);
+      toast.error('Failed to clear payment lockout');
+    }
+  };
+
+  const handlePaymentLockAction = (member: Member) => {
+    if (member.isPaymentLocked) {
+      void handleClearPaymentLockout(member.userId, member.fullName);
+    } else {
+      openLockPaymentDialog(member);
     }
   };
 
@@ -609,7 +650,9 @@ export function MemberManagement() {
                                 )}
                                 {member.isPaymentLocked && (
                                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 flex-shrink-0 text-red-600 border-red-400">
-                                    Payment Locked
+                                    {member.lockoutAmountCents
+                                      ? `Payment Locked · $${(member.lockoutAmountCents / 100).toFixed(2)}`
+                                      : 'Payment Locked'}
                                   </Badge>
                                 )}
                               </div>
@@ -688,9 +731,9 @@ export function MemberManagement() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleTogglePaymentLockout(member.userId, member.isPaymentLocked)}
+                            onClick={() => handlePaymentLockAction(member)}
                             className={`${member.isPaymentLocked ? 'text-red-600 hover:text-red-700' : 'text-gray-500 hover:text-gray-700'} h-7 w-7 p-0`}
-                            title={member.isPaymentLocked ? 'Clear payment lockout' : 'Lock out for payment'}
+                            title={member.isPaymentLocked ? 'Clear payment lockout' : 'Lock & require payment'}
                           >
                             {member.isPaymentLocked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                           </Button>
@@ -752,9 +795,9 @@ export function MemberManagement() {
                                 {member.isViewOnly ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
                                 {member.isViewOnly ? 'Remove View-Only' : 'Set View-Only'}
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleTogglePaymentLockout(member.userId, member.isPaymentLocked)} className={member.isPaymentLocked ? 'text-red-600' : ''}>
+                              <DropdownMenuItem onClick={() => handlePaymentLockAction(member)} className={member.isPaymentLocked ? 'text-red-600' : ''}>
                                 {member.isPaymentLocked ? <LockOpen className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
-                                {member.isPaymentLocked ? 'Clear Payment Lockout' : 'Lock Out for Payment'}
+                                {member.isPaymentLocked ? 'Clear Payment Lockout' : 'Lock & Require Payment'}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openStrikeDialog(member.userId, member.fullName)} className="text-amber-600">
                                 <AlertTriangle className="h-4 w-4 mr-2" />
@@ -1120,7 +1163,9 @@ export function MemberManagement() {
                       )}
                       {selectedMember.isPaymentLocked && (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-red-600 border-red-400">
-                          Payment Locked
+                          {selectedMember.lockoutAmountCents
+                            ? `Payment Locked · $${(selectedMember.lockoutAmountCents / 100).toFixed(2)}`
+                            : 'Payment Locked'}
                         </Badge>
                       )}
                       <Badge className={`${getStatusColor(selectedMember.status)} text-[10px] px-1.5 py-0`}>
@@ -1253,11 +1298,14 @@ export function MemberManagement() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => { handleTogglePaymentLockout(selectedMember.userId, selectedMember.isPaymentLocked); setSelectedMember(null); }}
+                    onClick={() => {
+                      handlePaymentLockAction(selectedMember);
+                      if (selectedMember.isPaymentLocked) setSelectedMember(null);
+                    }}
                     className={selectedMember.isPaymentLocked ? 'text-red-600 hover:text-red-700' : ''}
                   >
                     {selectedMember.isPaymentLocked ? <LockOpen className="h-4 w-4 mr-1" /> : <Lock className="h-4 w-4 mr-1" />}
-                    {selectedMember.isPaymentLocked ? 'Clear Payment Lockout' : 'Lock Out for Payment'}
+                    {selectedMember.isPaymentLocked ? 'Clear Payment Lockout' : 'Lock & Require Payment'}
                   </Button>
                   <Button
                     size="sm"
@@ -1283,6 +1331,19 @@ export function MemberManagement() {
           )}
         </DialogContent>
       </Dialog>
+
+      <LockMemberPaymentDialog
+        open={lockPaymentMember !== null}
+        onOpenChange={(open) => { if (!open) setLockPaymentMember(null); }}
+        facilityId={currentFacilityId}
+        member={lockPaymentMember}
+        stripeConnected={stripeConnected}
+        onSuccess={() => {
+          setLockPaymentMember(null);
+          setSelectedMember(null);
+          loadMembers();
+        }}
+      />
     </>
   );
 }

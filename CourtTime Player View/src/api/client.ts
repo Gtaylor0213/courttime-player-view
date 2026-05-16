@@ -390,13 +390,28 @@ export const membersApi = {
     });
   },
 
+  getMyPaymentLockout: async () => {
+    return apiRequest('/api/members/me/payment-lockout');
+  },
+
   getLockoutInfo: async (facilityId: string) => {
     return apiRequest(`/api/members/${facilityId}/me/lockout-info`);
   },
 
-  getLockoutCheckoutUrl: async (facilityId: string) => {
+  getLockoutCheckoutUrl: async (
+    facilityId: string,
+    options?: { successUrl?: string; cancelUrl?: string }
+  ) => {
     return apiRequest(`/api/members/${facilityId}/me/lockout-checkout`, {
       method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    });
+  },
+
+  confirmLockoutPayment: async (facilityId: string, sessionId: string) => {
+    return apiRequest(`/api/members/${facilityId}/me/lockout-confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
     });
   },
 

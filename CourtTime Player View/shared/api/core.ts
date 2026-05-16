@@ -143,6 +143,7 @@ export function buildApiRequest<TCategory extends string = string>(config: Reque
           ...(data.ruleViolations && { ruleViolations: data.ruleViolations }),
           ...(data.warnings && { warnings: data.warnings }),
           ...(data.isPrimeTime !== undefined && { isPrimeTime: data.isPrimeTime }),
+          ...(data.lockout && { lockout: data.lockout }),
         };
       }
 

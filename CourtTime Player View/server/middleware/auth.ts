@@ -84,10 +84,12 @@ export async function requireNotPaymentLocked(req: Request, res: Response, next:
   // Inline import to avoid circular deps at module load time
   const { query } = await import('../../src/database/connection');
   const result = await query(
-    `SELECT fm.facility_id, fm.payment_locked_at, f.name as facility_name
+    `SELECT fm.facility_id, fm.payment_locked_at, fm.lockout_amount_cents, fm.lockout_description,
+            f.name as facility_name
      FROM facility_memberships fm
      JOIN facilities f ON f.id = fm.facility_id
      WHERE fm.user_id = $1 AND fm.is_payment_locked = true
+     ORDER BY fm.payment_locked_at DESC NULLS LAST
      LIMIT 1`,
     [req.user.userId]
   ).catch(() => ({ rows: [] as any[] }));
@@ -102,6 +104,8 @@ export async function requireNotPaymentLocked(req: Request, res: Response, next:
         facilityId: row.facility_id,
         facilityName: row.facility_name,
         lockedAt: row.payment_locked_at,
+        amountCents: row.lockout_amount_cents ?? null,
+        description: row.lockout_description ?? null,
       },
     });
     return;

@@ -10,6 +10,7 @@ import {
 } from '../../src/services/facilityService';
 import { getCurrentTermsVersion } from '../../src/services/termsService';
 import { generateToken } from '../middleware/auth';
+import { verifyCheckoutSession } from '../../src/services/paymentService';
 
 const router = express.Router();
 
@@ -338,6 +339,29 @@ router.post('/register', async (req, res, next) => {
       paymentWaived: paymentWaived || false,
       customPricing: customPricing || false,
     };
+
+    // Verify Stripe payment when required (not custom pricing / waived)
+    const requiresPayment =
+      !customPricing &&
+      !paymentWaived &&
+      courts.length <= 10;
+
+    if (requiresPayment) {
+      if (!paymentSessionId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Payment is required. Please complete payment before registering.',
+        });
+      }
+
+      const paymentVerification = await verifyCheckoutSession(paymentSessionId);
+      if (!paymentVerification.verified) {
+        return res.status(400).json({
+          success: false,
+          error: paymentVerification.error || 'Payment could not be verified. Please contact support.',
+        });
+      }
+    }
 
     // Register facility
     const result = await registerFacility(registrationData, existingUserId);

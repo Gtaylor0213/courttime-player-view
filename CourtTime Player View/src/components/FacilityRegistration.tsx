@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -80,6 +80,20 @@ const ERROR_FIELD_TARGETS: Record<string, string> = {
   restrictionType: 'restrictionTypeGroup',
   courts: 'courtsSection',
 };
+
+function parsedHasCreateAccountFields(data: {
+  adminEmail?: string;
+  adminPassword?: string;
+  adminFirstName?: string;
+  adminLastName?: string;
+}): boolean {
+  return !!(
+    data.adminEmail?.trim() &&
+    data.adminPassword &&
+    data.adminFirstName?.trim() &&
+    data.adminLastName?.trim()
+  );
+}
 
 export function FacilityRegistration() {
   const navigate = useNavigate();
@@ -198,11 +212,75 @@ export function FacilityRegistration() {
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentWaived, setPaymentWaived] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [autoSubmitAfterPayment, setAutoSubmitAfterPayment] = useState(false);
+  const handleSubmitRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   // Pre-authenticated = user was already logged in before visiting registration (skip Step 1)
   // loggedInDuringRegistration = user logged in via Step 1 login form (still shows Step 1)
   const preAuthenticated = !!user && !loggedInDuringRegistration;
   const totalSteps = preAuthenticated ? 6 : 7; // +1 for Payment step
+
+  const persistRegistrationToSession = () => {
+    const { facilityImage: _fi, addressWhitelistFile: _af, facilityImagePreview: _fp, ...serializable } = formData;
+    sessionStorage.setItem('facilityRegistrationData', JSON.stringify(serializable));
+    sessionStorage.setItem('facilityRegistrationStep', String(currentStep));
+    sessionStorage.setItem('facilityRegistrationStep1Mode', step1Mode);
+    sessionStorage.setItem('facilityRegistrationLoggedInDuring', loggedInDuringRegistration ? 'true' : 'false');
+    sessionStorage.setItem('facilityRegistrationPromo', promoCode);
+    if (paymentWaived) {
+      sessionStorage.setItem('facilityRegistrationWaived', 'true');
+    }
+  };
+
+  const restoreRegistrationFromSession = (): boolean => {
+    const savedData = sessionStorage.getItem('facilityRegistrationData');
+    const savedStep = sessionStorage.getItem('facilityRegistrationStep');
+    const savedStep1Mode = sessionStorage.getItem('facilityRegistrationStep1Mode');
+    const savedLoggedInDuring = sessionStorage.getItem('facilityRegistrationLoggedInDuring') === 'true';
+    const savedPromo = sessionStorage.getItem('facilityRegistrationPromo');
+    const wasWaived = sessionStorage.getItem('facilityRegistrationWaived') === 'true';
+
+    if (!savedData) return false;
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(savedData);
+      setFormData(prev => ({ ...prev, ...parsed }));
+    } catch {
+      return false;
+    }
+
+    if (savedStep) {
+      setCurrentStep(parseInt(savedStep, 10));
+    }
+    if (savedPromo) {
+      setPromoCode(savedPromo);
+    }
+    if (wasWaived) {
+      setPaymentWaived(true);
+    }
+    if (savedLoggedInDuring) {
+      setLoggedInDuringRegistration(true);
+    }
+
+    if (savedStep1Mode === 'create' || savedStep1Mode === 'login' || savedStep1Mode === 'loggedIn') {
+      setStep1Mode(savedStep1Mode);
+    } else if (parsedHasCreateAccountFields(parsed)) {
+      setStep1Mode('create');
+    }
+
+    return true;
+  };
+
+  const clearRegistrationSession = () => {
+    sessionStorage.removeItem('facilityRegistrationData');
+    sessionStorage.removeItem('facilityRegistrationStep');
+    sessionStorage.removeItem('facilityRegistrationStep1Mode');
+    sessionStorage.removeItem('facilityRegistrationLoggedInDuring');
+    sessionStorage.removeItem('facilityRegistrationPromo');
+    sessionStorage.removeItem('facilityRegistrationWaived');
+    sessionStorage.removeItem('facilityRegistrationPaymentSessionId');
+  };
 
   // Handle return from Stripe Checkout redirect
   useEffect(() => {
@@ -211,55 +289,28 @@ export function FacilityRegistration() {
     const sessionId = urlParams.get('session_id');
 
     if (paymentStatus === 'success' && sessionId) {
-      // Restore form data from sessionStorage
-      const savedData = sessionStorage.getItem('facilityRegistrationData');
-      const savedStep = sessionStorage.getItem('facilityRegistrationStep');
-      const savedPromo = sessionStorage.getItem('facilityRegistrationPromo');
-      const wasWaived = sessionStorage.getItem('facilityRegistrationWaived') === 'true';
-
-      if (savedData) {
-        try { setFormData(JSON.parse(savedData)); } catch {}
-      }
-      if (savedStep) {
-        setCurrentStep(parseInt(savedStep));
-      }
-      if (savedPromo) {
-        setPromoCode(savedPromo);
-      }
-      if (wasWaived) {
-        setPaymentWaived(true);
-      }
+      restoreRegistrationFromSession();
 
       // Verify the session with the backend
       paymentsApi.verifySession(sessionId).then(result => {
         const verification = result.data?.data || result.data;
+        const wasWaived = sessionStorage.getItem('facilityRegistrationWaived') === 'true';
         if (result.success && verification?.verified) {
           setPaymentSessionId(sessionId);
+          sessionStorage.setItem('facilityRegistrationPaymentSessionId', sessionId);
           setPaymentComplete(true);
-          toast.success(wasWaived ? 'Card saved! Your first year is free.' : 'Payment successful!');
+          setAutoSubmitAfterPayment(true);
+          toast.success(wasWaived ? 'Card saved! Finishing registration...' : 'Payment successful! Finishing registration...');
         } else {
           toast.error('Payment verification failed. Please try again.');
         }
       });
 
-      // Clean URL and sessionStorage
       window.history.replaceState({}, '', window.location.pathname);
-      sessionStorage.removeItem('facilityRegistrationData');
-      sessionStorage.removeItem('facilityRegistrationStep');
-      sessionStorage.removeItem('facilityRegistrationPromo');
-      sessionStorage.removeItem('facilityRegistrationWaived');
     } else if (paymentStatus === 'cancelled') {
-      const savedData = sessionStorage.getItem('facilityRegistrationData');
-      const savedStep = sessionStorage.getItem('facilityRegistrationStep');
-      if (savedData) { try { setFormData(JSON.parse(savedData)); } catch {} }
-      if (savedStep) { setCurrentStep(parseInt(savedStep)); }
-
+      restoreRegistrationFromSession();
       toast.info('Payment was cancelled. You can try again.');
       window.history.replaceState({}, '', window.location.pathname);
-      sessionStorage.removeItem('facilityRegistrationData');
-      sessionStorage.removeItem('facilityRegistrationStep');
-      sessionStorage.removeItem('facilityRegistrationPromo');
-      sessionStorage.removeItem('facilityRegistrationWaived');
     }
   }, []);
 
@@ -915,10 +966,15 @@ export function FacilityRegistration() {
     const stepErrors: Record<string, string> = {};
 
     if (!preAuthenticated && step === 1) {
-      // Validate Step 1 based on mode
-      if (step1Mode === 'choose' || step1Mode === 'login') {
+      // Validate Step 1 based on mode (after Stripe redirect step1Mode may reset — infer from form data)
+      const effectiveStep1Mode =
+        step1Mode === 'choose' && parsedHasCreateAccountFields(formData)
+          ? 'create'
+          : step1Mode;
+
+      if (effectiveStep1Mode === 'choose' || effectiveStep1Mode === 'login') {
         stepErrors.step1Mode = 'Please create an account or log in to continue';
-      } else if (step1Mode === 'create') {
+      } else if (effectiveStep1Mode === 'create') {
         // Validate new account creation fields
         if (!formData.adminFirstName.trim()) stepErrors.adminFirstName = 'First name is required';
         if (!formData.adminLastName.trim()) stepErrors.adminLastName = 'Last name is required';
@@ -1367,7 +1423,10 @@ export function FacilityRegistration() {
         existingUserId: user?.id,
 
         // Payment info
-        paymentSessionId: paymentSessionId || undefined,
+        paymentSessionId:
+          paymentSessionId ||
+          sessionStorage.getItem('facilityRegistrationPaymentSessionId') ||
+          undefined,
         promoCode: paymentWaived ? promoCode : undefined,
         paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : getBaseAmountCents(formData.courts.length)),
         paymentWaived,
@@ -1398,6 +1457,7 @@ export function FacilityRegistration() {
           localStorage.setItem('auth_token', backendResponse.token);
         }
 
+        clearRegistrationSession();
         toast.success('Facility registered successfully! Logging you in...');
 
         // Navigate to the admin dashboard
@@ -1405,6 +1465,7 @@ export function FacilityRegistration() {
           window.location.href = '/calendar';
         }, 1000);
       } else {
+        clearRegistrationSession();
         toast.success('Facility registered successfully!');
         setTimeout(() => {
           window.location.href = '/login';
@@ -1418,6 +1479,17 @@ export function FacilityRegistration() {
       setIsSubmitting(false);
     }
   };
+
+  handleSubmitRef.current = handleSubmit;
+
+  useEffect(() => {
+    if (!autoSubmitAfterPayment || !paymentComplete || isSubmitting) return;
+    setAutoSubmitAfterPayment(false);
+    const timer = window.setTimeout(() => {
+      void handleSubmitRef.current();
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [autoSubmitAfterPayment, paymentComplete, isSubmitting]);
 
   // Get step label based on step number and user status
   const getStepLabel = (stepNumber: number): string => {
@@ -1563,10 +1635,7 @@ export function FacilityRegistration() {
         // Unwrap apiRequest double-wrap: server returns { data: { sessionUrl, ... } }
         const payment = result.data?.data || result.data;
         if (payment.sessionUrl) {
-          // Redirect to Stripe (payment mode or setup mode for promo)
-          sessionStorage.setItem('facilityRegistrationData', JSON.stringify(formData));
-          sessionStorage.setItem('facilityRegistrationStep', String(currentStep));
-          sessionStorage.setItem('facilityRegistrationPromo', promoCode);
+          persistRegistrationToSession();
           if (payment.waived) {
             sessionStorage.setItem('facilityRegistrationWaived', 'true');
           }

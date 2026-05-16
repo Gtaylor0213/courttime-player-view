@@ -14,6 +14,7 @@ export interface MemberWithProfile {
   membershipType: string;
   status: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin: boolean;
+  isViewOnly: boolean;
   startDate: string;
   endDate?: string;
   suspendedUntil?: string;
@@ -30,6 +31,7 @@ export interface MemberUpdateData {
   membershipType?: string;
   status?: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin?: boolean;
+  isViewOnly?: boolean;
   endDate?: string;
   suspendedUntil?: string | null;
 }
@@ -63,6 +65,7 @@ export async function getFacilityMembers(facilityId: string, searchTerm?: string
         fm.membership_type as "membershipType",
         fm.status,
         CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin",
+        COALESCE(fm.is_view_only, false) as "isViewOnly",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
@@ -115,6 +118,7 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
         fm.membership_type as "membershipType",
         fm.status,
         CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin",
+        COALESCE(fm.is_view_only, false) as "isViewOnly",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
@@ -165,6 +169,11 @@ export async function updateMemberMembership(
     if (updates.isFacilityAdmin !== undefined) {
       fields.push(`is_facility_admin = $${paramIndex++}`);
       values.push(updates.isFacilityAdmin);
+    }
+
+    if (updates.isViewOnly !== undefined) {
+      fields.push(`is_view_only = $${paramIndex++}`);
+      values.push(updates.isViewOnly);
     }
 
     if (updates.endDate !== undefined) {

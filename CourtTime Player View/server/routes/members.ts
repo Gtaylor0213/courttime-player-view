@@ -69,7 +69,7 @@ router.patch('/:facilityId/:userId', async (req, res, next) => {
     const updates = req.body;
 
     // Validate updates
-    const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'endDate', 'suspendedUntil'];
+    const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'isViewOnly', 'endDate', 'suspendedUntil'];
     const invalidFields = Object.keys(updates).filter(key => !validFields.includes(key));
 
     if (invalidFields.length > 0) {
@@ -190,6 +190,42 @@ router.put('/:facilityId/:userId/admin', async (req, res, next) => {
         success: true,
         member,
         message: `Member ${isAdmin ? 'granted' : 'removed'} admin privileges`
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'Member not found'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/members/:facilityId/:userId/view-only
+ * Set or clear view-only status for a member
+ */
+router.put('/:facilityId/:userId/view-only', async (req, res, next) => {
+  try {
+    const { facilityId, userId } = req.params;
+    const { isViewOnly } = req.body;
+
+    if (typeof isViewOnly !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'isViewOnly must be a boolean value'
+      });
+    }
+
+    const success = await updateMemberMembership(facilityId, userId, { isViewOnly });
+
+    if (success) {
+      const member = await getMemberDetails(facilityId, userId);
+      res.json({
+        success: true,
+        member,
+        message: `Member ${isViewOnly ? 'set to' : 'removed from'} view-only`
       });
     } else {
       res.status(404).json({

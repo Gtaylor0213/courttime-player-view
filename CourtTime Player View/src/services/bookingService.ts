@@ -522,6 +522,7 @@ export type PendingCourtBookingPayload = {
   activityType?: string;
   notes?: string;
   isPrimeTime?: boolean;
+  bringGuest?: boolean;
 };
 
 function sameMemberId(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -670,6 +671,7 @@ export async function createBooking(bookingData: {
   notes?: string;
   skipRulesValidation?: boolean;  // For admin override
   skipPaymentCheck?: boolean; // After Stripe payment or admin override
+  bringGuest?: boolean;
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
   successUrl?: string;
   cancelUrl?: string;
@@ -693,6 +695,7 @@ async function createBookingCore(bookingData: {
   notes?: string;
   skipRulesValidation?: boolean;
   skipPaymentCheck?: boolean;
+  bringGuest?: boolean;
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
   successUrl?: string;
   cancelUrl?: string;
@@ -775,14 +778,17 @@ async function createBookingCore(bookingData: {
 
     if (!bookingData.skipRulesValidation && !bookingData.skipPaymentCheck) {
       const paidCourt = await query(
-        `SELECT c.name, c.require_payment, c.booking_amount_cents, f.stripe_onboarded
+        `SELECT c.name, c.require_payment, c.booking_amount_cents, c.guest_fee_cents, f.stripe_onboarded
          FROM courts c
          JOIN facilities f ON f.id = c.facility_id
          WHERE c.id = $1`,
         [bookingData.courtId]
       );
       const courtRow = paidCourt.rows[0];
-      if (courtRow?.require_payment && courtRow.booking_amount_cents) {
+      const needsPayment =
+        (courtRow?.require_payment && courtRow.booking_amount_cents) ||
+        (bookingData.bringGuest && courtRow?.guest_fee_cents);
+      if (needsPayment) {
         const { syncConnectOnboardingStatus, createCourtBookingCheckoutSession } = await import(
           './stripeConnectService'
         );
@@ -813,6 +819,7 @@ async function createBookingCore(bookingData: {
             activityType: bookingData.activityType,
             notes: bookingData.notes,
             isPrimeTime: isPrimeTime || false,
+            bringGuest: bookingData.bringGuest || false,
           },
           successUrl:
             bookingData.successUrl ||

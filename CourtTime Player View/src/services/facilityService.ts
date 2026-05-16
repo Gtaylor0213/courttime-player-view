@@ -344,6 +344,7 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
         is_split_court as "isSplitCourt",
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
+        guest_fee_cents as "guestFeeCents",
         created_at as "createdAt",
         updated_at as "updatedAt"
       FROM courts

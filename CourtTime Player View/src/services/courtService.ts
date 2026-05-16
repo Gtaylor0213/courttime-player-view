@@ -18,6 +18,7 @@ export interface CourtCreateData {
   isWalkUp?: boolean;
   requirePayment?: boolean;
   bookingAmountCents?: number | null;
+  guestFeeCents?: number | null;
   courtRules?: string;
   parentCourtId?: string; // For split courts
   splitConfiguration?: {
@@ -38,6 +39,7 @@ export interface Court {
   isWalkUp: boolean;
   requirePayment: boolean;
   bookingAmountCents: number | null;
+  guestFeeCents: number | null;
   status: string;
   courtRules?: string;
   parentCourtId?: string;
@@ -54,15 +56,16 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
     `INSERT INTO courts (
       facility_id, name, court_number, surface_type, court_type,
       is_indoor, has_lights, is_walk_up, require_payment, booking_amount_cents,
-      court_rules, parent_court_id, split_configuration,
+      guest_fee_cents, court_rules, parent_court_id, split_configuration,
       is_split_court, status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'available')
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'available')
     RETURNING
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
+      guest_fee_cents as "guestFeeCents",
       status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
@@ -78,6 +81,7 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
       courtData.isWalkUp || false,
       courtData.requirePayment || false,
       courtData.requirePayment && courtData.bookingAmountCents ? courtData.bookingAmountCents : null,
+      courtData.guestFeeCents ?? null,
       courtData.courtRules || null,
       courtData.parentCourtId || null,
       courtData.splitConfiguration ? JSON.stringify(courtData.splitConfiguration) : null,

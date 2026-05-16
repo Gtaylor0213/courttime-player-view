@@ -1,3 +1,4 @@
+import React from 'react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
@@ -6,6 +7,9 @@ export type PaidCourtFormFields = {
   requirePayment?: boolean;
   bookingAmountCents?: number | null;
   bookingFeeDollars?: string;
+  enableGuestFee?: boolean;
+  guestFeeCents?: number | null;
+  guestFeeDollars?: string;
 };
 
 export function formatCentsToDollars(cents: number | null | undefined): string {
@@ -35,6 +39,19 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
 }) {
   return (
     <div className="mt-4 space-y-3 border rounded-md p-3 bg-white">
+      {/* Stripe status */}
+      {stripeStatusLoading && <p className="text-xs text-gray-500">Checking Stripe Connect status…</p>}
+      {!stripeStatusLoading && stripeOnboarded === false && (
+        <p className="text-xs text-amber-700">
+          Stripe Connect is not set up yet. Complete setup under {paymentsTabHint} before enabling
+          paid courts or guest fees.
+        </p>
+      )}
+      {!stripeStatusLoading && stripeOnboarded === true && (
+        <p className="text-xs text-green-700">Stripe Connect is active for this facility.</p>
+      )}
+
+      {/* Paid court booking */}
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-medium">Paid court booking</p>
@@ -52,16 +69,6 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
           }
         />
       </div>
-      {stripeStatusLoading && <p className="text-xs text-gray-500">Checking Stripe Connect status…</p>}
-      {!stripeStatusLoading && stripeOnboarded === false && (
-        <p className="text-xs text-amber-700">
-          Stripe Connect is not set up yet. Complete setup under {paymentsTabHint} before enabling
-          paid courts.
-        </p>
-      )}
-      {!stripeStatusLoading && stripeOnboarded === true && (
-        <p className="text-xs text-green-700">Stripe Connect is active for this facility.</p>
-      )}
       {court.requirePayment && (
         <div className="space-y-2">
           <Label>Booking fee (USD) *</Label>
@@ -72,6 +79,39 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
             value={court.bookingFeeDollars || ''}
             onChange={(e) => onChange({ bookingFeeDollars: e.target.value } as Partial<T>)}
             placeholder="e.g. 25.00"
+          />
+        </div>
+      )}
+
+      {/* Guest fee */}
+      <div className="flex items-center justify-between gap-4 pt-1 border-t">
+        <div>
+          <p className="text-sm font-medium">Guest fee</p>
+          <p className="text-xs text-gray-500">
+            Charge an additional fee when a member brings a guest
+          </p>
+        </div>
+        <Switch
+          checked={Boolean(court.enableGuestFee)}
+          onCheckedChange={(checked) =>
+            onChange({
+              enableGuestFee: checked,
+              guestFeeDollars: checked ? court.guestFeeDollars : '',
+              guestFeeCents: checked ? court.guestFeeCents : null,
+            } as Partial<T>)
+          }
+        />
+      </div>
+      {court.enableGuestFee && (
+        <div className="space-y-2">
+          <Label>Guest fee (USD) *</Label>
+          <Input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={court.guestFeeDollars || ''}
+            onChange={(e) => onChange({ guestFeeDollars: e.target.value } as Partial<T>)}
+            placeholder="e.g. 10.00"
           />
         </div>
       )}

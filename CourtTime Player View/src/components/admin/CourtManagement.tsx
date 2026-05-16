@@ -38,6 +38,9 @@ interface Court extends PaidCourtFormFields {
   hasLights: boolean;
   isWalkUp: boolean;
   status: 'available' | 'maintenance' | 'closed';
+  enableGuestFee?: boolean;
+  guestFeeCents?: number | null;
+  guestFeeDollars?: string;
 }
 
 
@@ -151,6 +154,16 @@ export function CourtManagement() {
           bookingFeeDollars: formatCentsToDollars(
             c.bookingAmountCents ?? c.booking_amount_cents
           ),
+          guestFeeCents:
+            c.guestFeeCents != null
+              ? Number(c.guestFeeCents)
+              : c.guest_fee_cents != null
+                ? Number(c.guest_fee_cents)
+                : null,
+          guestFeeDollars: formatCentsToDollars(
+            c.guestFeeCents ?? c.guest_fee_cents
+          ),
+          enableGuestFee: Boolean(c.guestFeeCents ?? c.guest_fee_cents),
         }));
         setCourts(normalized);
       } else {
@@ -189,6 +202,9 @@ export function CourtManagement() {
       isWalkUp: false,
       requirePayment: false,
       bookingFeeDollars: '',
+      enableGuestFee: false,
+      guestFeeCents: null,
+      guestFeeDollars: '',
       status: 'available',
     });
     if (currentFacilityId) void loadStripeStatus(currentFacilityId);
@@ -203,6 +219,9 @@ export function CourtManagement() {
       requirePayment: court.requirePayment === true,
       bookingFeeDollars:
         court.bookingFeeDollars || formatCentsToDollars(court.bookingAmountCents),
+      enableGuestFee: Boolean(court.guestFeeCents),
+      guestFeeDollars:
+        court.guestFeeDollars || formatCentsToDollars(court.guestFeeCents),
     });
     if (currentFacilityId) void loadStripeStatus(currentFacilityId);
     setIsAddingNew(false);
@@ -217,7 +236,13 @@ export function CourtManagement() {
       toast.error('Enter a booking fee when paid court booking is enabled');
       return;
     }
-    if (wantsPayment && stripeOnboarded === false) {
+    const guestFeeCents = parseBookingFeeDollars(editingCourt.guestFeeDollars);
+    const hasGuestFee = Boolean(editingCourt.enableGuestFee);
+    if (hasGuestFee && !guestFeeCents) {
+      toast.error('Enter a valid guest fee amount');
+      return;
+    }
+    if ((wantsPayment || hasGuestFee) && stripeOnboarded === false) {
       toast.error('Complete Stripe Connect setup under Facility Management → Payments first');
       return;
     }
@@ -229,6 +254,8 @@ export function CourtManagement() {
         requirePayment: wantsPayment,
         bookingAmountCents: wantsPayment ? bookingAmountCents : null,
         bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
+        guestFeeCents: hasGuestFee ? guestFeeCents : null,
+        guestFeeDollars: hasGuestFee ? editingCourt.guestFeeDollars : '',
       };
 
       let response;
@@ -786,6 +813,11 @@ export function CourtManagement() {
                             {court.requirePayment && court.bookingAmountCents && (
                               <Badge className="bg-amber-100 text-amber-900 border-amber-200">
                                 Paid · ${(court.bookingAmountCents / 100).toFixed(2)}
+                              </Badge>
+                            )}
+                            {court.guestFeeCents && (
+                              <Badge className="bg-blue-100 text-blue-900 border-blue-200">
+                                Guest fee · ${(court.guestFeeCents / 100).toFixed(2)}
                               </Badge>
                             )}
                             {isEditingThis && (

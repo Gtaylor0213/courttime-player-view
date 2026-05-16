@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle, Clock, MapPin, Phone, User, MoreVertical, Upload } from 'lucide-react';
+import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle, Clock, MapPin, Phone, User, MoreVertical, Upload, Eye, EyeOff } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
@@ -27,6 +27,7 @@ interface Member {
   membershipType: string;
   status: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin: boolean;
+  isViewOnly: boolean;
   startDate: string;
   endDate?: string;
   suspendedUntil?: string;
@@ -270,6 +271,24 @@ export function MemberManagement() {
     } catch (error) {
       console.error('Error updating admin status:', error);
       toast.error('Failed to update admin status');
+    }
+  };
+
+  const handleToggleViewOnly = async (userId: string, currentIsViewOnly: boolean) => {
+    if (!currentFacilityId) return;
+
+    try {
+      const response = await membersApi.updateMember(currentFacilityId, userId, { isViewOnly: !currentIsViewOnly });
+
+      if (response.success) {
+        toast.success(currentIsViewOnly ? 'View-only removed' : 'Member set to view-only');
+        loadMembers();
+      } else {
+        toast.error(response.error || 'Failed to update view-only status');
+      }
+    } catch (error) {
+      console.error('Error updating view-only status:', error);
+      toast.error('Failed to update view-only status');
     }
   };
 
@@ -563,6 +582,11 @@ export function MemberManagement() {
                                 }`}>
                                   {member.isFacilityAdmin ? 'Admin' : 'Regular'}
                                 </Badge>
+                                {member.isViewOnly && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 flex-shrink-0 text-blue-600 border-blue-400">
+                                    View Only
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-xs text-gray-500 truncate">{member.email}</div>
                             </div>
@@ -630,6 +654,15 @@ export function MemberManagement() {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => handleToggleViewOnly(member.userId, member.isViewOnly)}
+                            className={`${member.isViewOnly ? 'text-blue-600 hover:text-blue-700' : 'text-gray-500 hover:text-gray-700'} h-7 w-7 p-0`}
+                            title={member.isViewOnly ? 'Remove view-only' : 'Set view-only'}
+                          >
+                            {member.isViewOnly ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => openStrikeDialog(member.userId, member.fullName)}
                             className="text-amber-600 hover:text-amber-700 h-7 w-7 p-0"
                             title="Manage strikes"
@@ -680,6 +713,10 @@ export function MemberManagement() {
                               <DropdownMenuItem onClick={() => handleToggleAdmin(member.userId, member.isFacilityAdmin)}>
                                 {member.isFacilityAdmin ? <ShieldOff className="h-4 w-4 mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
                                 {member.isFacilityAdmin ? 'Remove Admin' : 'Make Admin'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleViewOnly(member.userId, member.isViewOnly)} className={member.isViewOnly ? 'text-blue-600' : ''}>
+                                {member.isViewOnly ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                                {member.isViewOnly ? 'Remove View-Only' : 'Set View-Only'}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openStrikeDialog(member.userId, member.fullName)} className="text-amber-600">
                                 <AlertTriangle className="h-4 w-4 mr-2" />
@@ -1029,7 +1066,7 @@ export function MemberManagement() {
                     <AvatarFallback>{getInitials(selectedMember.fullName)}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {selectedMember.fullName}
                       <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
                         selectedMember.isFacilityAdmin
@@ -1038,6 +1075,11 @@ export function MemberManagement() {
                       }`}>
                         {selectedMember.isFacilityAdmin ? 'Admin' : 'Regular'}
                       </Badge>
+                      {selectedMember.isViewOnly && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-blue-600 border-blue-400">
+                          View Only
+                        </Badge>
+                      )}
                       <Badge className={`${getStatusColor(selectedMember.status)} text-[10px] px-1.5 py-0`}>
                         {selectedMember.status.charAt(0).toUpperCase() + selectedMember.status.slice(1)}
                       </Badge>
@@ -1155,6 +1197,15 @@ export function MemberManagement() {
                   >
                     {selectedMember.isFacilityAdmin ? <ShieldOff className="h-4 w-4 mr-1" /> : <Shield className="h-4 w-4 mr-1" />}
                     {selectedMember.isFacilityAdmin ? 'Remove Admin' : 'Make Admin'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { handleToggleViewOnly(selectedMember.userId, selectedMember.isViewOnly); setSelectedMember(null); }}
+                    className={selectedMember.isViewOnly ? 'text-blue-600 hover:text-blue-700' : ''}
+                  >
+                    {selectedMember.isViewOnly ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                    {selectedMember.isViewOnly ? 'Remove View-Only' : 'Set View-Only'}
                   </Button>
                   <Button
                     size="sm"

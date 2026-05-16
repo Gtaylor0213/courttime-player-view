@@ -625,6 +625,7 @@ export async function createCourtBookingCheckoutSession(params: {
        c.facility_id,
        c.require_payment,
        c.booking_amount_cents,
+       c.guest_fee_cents,
        f.name AS facility_name,
        f.stripe_account_id,
        f.stripe_onboarded,
@@ -638,16 +639,20 @@ export async function createCourtBookingCheckoutSession(params: {
     throw new Error('Court not found');
   }
   const court = courtResult.rows[0];
-  if (!court.require_payment || !court.booking_amount_cents) {
+  const hasBookingFee = court.require_payment && court.booking_amount_cents;
+  const hasGuestFee = pb.bringGuest && court.guest_fee_cents;
+  if (!hasBookingFee && !hasGuestFee) {
     throw new Error('This court does not require payment to book');
   }
   if (!court.stripe_account_id || !court.stripe_onboarded) {
     throw new Error('This club has not finished Stripe Connect onboarding yet');
   }
 
-  const amountCents = Number(court.booking_amount_cents);
+  const bookingAmountCents = hasBookingFee ? Number(court.booking_amount_cents) : 0;
+  const guestAmountCents = hasGuestFee ? Number(court.guest_fee_cents) : 0;
+  const totalAmountCents = bookingAmountCents + guestAmountCents;
   const platformFeePercent = Number(court.platform_fee_percent ?? 0);
-  const platformFeeCents = Math.max(0, Math.round((amountCents * platformFeePercent) / 100));
+  const platformFeeCents = Math.max(0, Math.round((totalAmountCents * platformFeePercent) / 100));
 
   const pendingKey = JSON.stringify({
     courtId: pb.courtId,
@@ -686,28 +691,43 @@ export async function createCourtBookingCheckoutSession(params: {
        (club_id, member_id, payment_item_id, amount_cents, platform_fee_cents, status, pending_booking)
      VALUES ($1, $2, NULL, $3, $4, 'PENDING', $5::jsonb)
      RETURNING id`,
-    [court.facility_id, params.memberId, amountCents, platformFeeCents, JSON.stringify(pb)]
+    [court.facility_id, params.memberId, totalAmountCents, platformFeeCents, JSON.stringify(pb)]
   );
   const paymentId: string = insertResult.rows[0].id;
 
   const dateLabel = pb.bookingDate;
+  const lineItems: import('stripe').Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+  if (bookingAmountCents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        unit_amount: bookingAmountCents,
+        product_data: {
+          name: `${court.name} — court booking`,
+          description: `${court.facility_name} · ${dateLabel} ${pb.startTime}–${pb.endTime}`,
+        },
+      },
+    });
+  }
+  if (guestAmountCents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        unit_amount: guestAmountCents,
+        product_data: {
+          name: `Guest fee — ${court.name}`,
+          description: `${court.facility_name} · ${dateLabel}`,
+        },
+      },
+    });
+  }
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'payment',
       payment_method_types: ['card'],
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: 'usd',
-            unit_amount: amountCents,
-            product_data: {
-              name: `${court.name} — court booking`,
-              description: `${court.facility_name} · ${dateLabel} ${pb.startTime}–${pb.endTime}`,
-            },
-          },
-        },
-      ],
+      line_items: lineItems,
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       metadata: {

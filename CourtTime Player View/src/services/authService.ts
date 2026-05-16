@@ -271,7 +271,7 @@ export async function loginUser(email: string, password: string): Promise<LoginR
 
     // Get user's facility memberships
     const membershipsResult = await query(
-      `SELECT fm.facility_id as "facilityId", fm.status, fm.suspended_until as "suspendedUntil", f.name as "facilityName"
+      `SELECT fm.facility_id as "facilityId", fm.status, fm.suspended_until as "suspendedUntil", f.name as "facilityName", COALESCE(fm.is_view_only, false) as "isViewOnly"
        FROM facility_memberships fm
        JOIN facilities f ON fm.facility_id = f.id
        WHERE fm.user_id = $1`,
@@ -289,6 +289,10 @@ export async function loginUser(email: string, password: string): Promise<LoginR
         facilityName: row.facilityName,
         suspendedUntil: row.suspendedUntil
       }));
+
+    const viewOnlyFacilities = membershipsResult.rows
+      .filter(row => row.status === 'active' && row.isViewOnly)
+      .map(row => row.facilityId);
 
     // Get facilities where user is an admin
     const adminResult = await query(
@@ -319,7 +323,8 @@ export async function loginUser(email: string, password: string): Promise<LoginR
         ...user,
         memberFacilities,
         adminFacilities,
-        suspendedFacilities
+        suspendedFacilities,
+        viewOnlyFacilities
       },
       message: 'Login successful'
     };
@@ -378,7 +383,7 @@ export async function getUserById(userId: string): Promise<User | null> {
 /**
  * Get user with memberships
  */
-export async function getUserWithMemberships(userId: string): Promise<(User & { memberFacilities: string[]; adminFacilities: string[]; suspendedFacilities?: any[] }) | null> {
+export async function getUserWithMemberships(userId: string): Promise<(User & { memberFacilities: string[]; adminFacilities: string[]; suspendedFacilities?: any[]; viewOnlyFacilities: string[] }) | null> {
   try {
     const user = await getUserById(userId);
 
@@ -388,7 +393,7 @@ export async function getUserWithMemberships(userId: string): Promise<(User & { 
 
     // Get user's facility memberships
     const membershipsResult = await query(
-      `SELECT fm.facility_id as "facilityId", fm.status, fm.suspended_until as "suspendedUntil", f.name as "facilityName"
+      `SELECT fm.facility_id as "facilityId", fm.status, fm.suspended_until as "suspendedUntil", f.name as "facilityName", COALESCE(fm.is_view_only, false) as "isViewOnly"
        FROM facility_memberships fm
        JOIN facilities f ON fm.facility_id = f.id
        WHERE fm.user_id = $1`,
@@ -407,6 +412,10 @@ export async function getUserWithMemberships(userId: string): Promise<(User & { 
         suspendedUntil: row.suspendedUntil
       }));
 
+    const viewOnlyFacilities = membershipsResult.rows
+      .filter(row => row.status === 'active' && row.isViewOnly)
+      .map(row => row.facilityId);
+
     // Get facilities where user is an admin
     const adminResult = await query(
       `SELECT facility_id as "facilityId"
@@ -421,7 +430,8 @@ export async function getUserWithMemberships(userId: string): Promise<(User & { 
       ...user,
       memberFacilities,
       adminFacilities,
-      suspendedFacilities
+      suspendedFacilities,
+      viewOnlyFacilities
     };
   } catch (error) {
     console.error('Get user with memberships error:', error);

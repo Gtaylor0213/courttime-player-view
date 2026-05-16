@@ -759,6 +759,8 @@ router.patch('/courts/:courtId', async (req, res) => {
       bookingAmountCents,
       booking_amount_cents,
       bookingFeeDollars,
+      guestFeeCents: rawGuestFeeCents,
+      guestFeeDollars,
       status: rawStatus,
       canSplit,
       splitConfig
@@ -792,6 +794,16 @@ router.patch('/courts/:courtId', async (req, res) => {
       );
     }
 
+    // Guest fee: explicit null means "clear it", undefined means "leave unchanged"
+    let guestFeeValue: number | null | undefined;
+    if (rawGuestFeeCents != null && rawGuestFeeCents !== '') {
+      guestFeeValue = parseInt(String(rawGuestFeeCents), 10);
+    } else if (guestFeeDollars != null && guestFeeDollars !== '') {
+      guestFeeValue = Math.round(parseFloat(String(guestFeeDollars)) * 100);
+    } else if (rawGuestFeeCents === null || guestFeeDollars === '') {
+      guestFeeValue = null;
+    }
+
     const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
       ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
       : [];
@@ -822,6 +834,10 @@ router.patch('/courts/:courtId', async (req, res) => {
           WHEN $8 = false THEN NULL
           ELSE booking_amount_cents
         END,
+        guest_fee_cents = CASE
+          WHEN $14::boolean THEN $15::integer
+          ELSE guest_fee_cents
+        END,
         status = COALESCE($10, status),
         is_split_court = COALESCE($11, is_split_court),
         split_configuration = $12,
@@ -839,6 +855,7 @@ router.patch('/courts/:courtId', async (req, res) => {
         is_walk_up as "isWalkUp",
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
+        guest_fee_cents as "guestFeeCents",
         status,
         parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration",
@@ -858,7 +875,9 @@ router.patch('/courts/:courtId', async (req, res) => {
       status,
       shouldSplit,
       splitConfiguration,
-      courtId
+      courtId,
+      guestFeeValue !== undefined,
+      guestFeeValue ?? null,
     ]);
 
     if (result.rows.length === 0) {
@@ -935,6 +954,8 @@ router.post('/courts/:facilityId', async (req, res) => {
       bookingAmountCents,
       booking_amount_cents,
       bookingFeeDollars,
+      guestFeeCents: rawGuestFeeCentsCreate,
+      guestFeeDollars: guestFeeDollarsCreate,
       canSplit,
       splitConfig,
     } = req.body;
@@ -951,6 +972,13 @@ router.post('/courts/:facilityId', async (req, res) => {
       amountCents = Math.round(parseFloat(String(bookingFeeDollars)) * 100);
     }
     await assertPaidCourtConfig(facilityId, wantsPayment, amountCents);
+
+    let guestFeeCreate: number | null = null;
+    if (rawGuestFeeCentsCreate != null && rawGuestFeeCentsCreate !== '') {
+      guestFeeCreate = parseInt(String(rawGuestFeeCentsCreate), 10);
+    } else if (guestFeeDollarsCreate != null && guestFeeDollarsCreate !== '') {
+      guestFeeCreate = Math.round(parseFloat(String(guestFeeDollarsCreate)) * 100);
+    }
 
     const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
       ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
@@ -971,6 +999,7 @@ router.post('/courts/:facilityId', async (req, res) => {
       isWalkUp: isWalkUp || false,
       requirePayment: wantsPayment,
       bookingAmountCents: wantsPayment ? amountCents : null,
+      guestFeeCents: guestFeeCreate,
     });
 
     if (shouldSplit) {

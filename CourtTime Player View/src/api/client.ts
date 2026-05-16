@@ -325,6 +325,7 @@ export const membersApi = {
     membershipType?: string;
     status?: 'active' | 'pending' | 'expired' | 'suspended';
     isFacilityAdmin?: boolean;
+    isViewOnly?: boolean;
     endDate?: string;
     suspendedUntil?: string | null;
   }) => {
@@ -355,6 +356,13 @@ export const membersApi = {
     return apiRequest(`/api/members/${facilityId}/${userId}/admin`, {
       method: 'PUT',
       body: JSON.stringify({ isAdmin }),
+    });
+  },
+
+  setViewOnly: async (facilityId: string, userId: string, isViewOnly: boolean) => {
+    return apiRequest(`/api/members/${facilityId}/${userId}/view-only`, {
+      method: 'PUT',
+      body: JSON.stringify({ isViewOnly }),
     });
   },
 
@@ -581,6 +589,7 @@ export const bookingApi = {
     notes?: string;
     successUrl?: string;
     cancelUrl?: string;
+    bringGuest?: boolean;
     provisionalSameRequestBookings?: Array<{
       bookingDate: string;
       courtId: string;
@@ -762,6 +771,9 @@ export const adminApi = {
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
     bookingFeeDollars?: string;
+    guestFeeCents?: number | null;
+    guestFeeDollars?: string;
+    enableGuestFee?: boolean;
     status?: string;
     canSplit?: boolean;
     splitConfig?: {

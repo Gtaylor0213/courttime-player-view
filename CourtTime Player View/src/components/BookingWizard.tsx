@@ -116,8 +116,10 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       isWalkUp?: boolean;
       requirePayment?: boolean;
       bookingAmountCents?: number | null;
+      guestFeeCents?: number | null;
     }>
   >([]);
+  const [bringGuest, setBringGuest] = useState(false);
   const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast } = useNotifications();
@@ -196,6 +198,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     }),
   [selectedCourts, facilityCourts]);
 
+  const primaryCourtGuestFeeCents = useMemo(() => {
+    if (selectedCourts.length !== 1) return null;
+    const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
+    return meta?.guestFeeCents ?? null;
+  }, [selectedCourts, facilityCourts]);
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -216,6 +224,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       setRecurringDays([]);
       setRecurringEndDate('');
       setAdditionalCourtIds([]);
+      setBringGuest(false);
     }
   }, [selectedSlots, isOpen, time]);
 
@@ -347,11 +356,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         const meta = facilityCourts.find((fc) => fc.id === c.courtId);
         return meta?.requirePayment && meta?.bookingAmountCents;
       });
-      if (paidCourtInSelection && (advancedBooking || selectedCourts.length > 1 || datesToBook.length > 1)) {
+      const requiresSingleBooking = paidCourtInSelection || (bringGuest && Boolean(primaryCourtGuestFeeCents));
+      if (requiresSingleBooking && (advancedBooking || selectedCourts.length > 1 || datesToBook.length > 1)) {
         showToast(
           'error',
           'Paid courts',
-          'Paid courts must be booked one reservation at a time (no recurring or multi-court checkout).'
+          'Paid courts and guest fees must be booked one reservation at a time (no recurring or multi-court checkout).'
         );
         setIsSubmitting(false);
         return;
@@ -394,6 +404,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               const res = await bookingApi.create({
                 ...req,
                 ...checkoutReturnUrls,
+                bringGuest: bringGuest || undefined,
                 provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
               });
               if (res.requiresPayment && res.checkoutUrl) {
@@ -728,6 +739,22 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Guest fee */}
+          {primaryCourtGuestFeeCents && selectedCourts.length === 1 && !advancedBooking && (
+            <div className="space-y-1.5 pt-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="bring-guest"
+                  checked={bringGuest}
+                  onCheckedChange={(checked) => setBringGuest(checked === true)}
+                />
+                <Label htmlFor="bring-guest" className="text-sm font-medium cursor-pointer">
+                  Bringing a guest (+${(primaryCourtGuestFeeCents / 100).toFixed(2)} guest fee)
+                </Label>
+              </div>
             </div>
           )}
 

@@ -138,6 +138,7 @@ router.post('/', async (req, res, next) => {
       durationMinutes,
       bookingType,
       notes,
+      bringGuest,
       provisionalSameRequestBookings,
       successUrl,
       cancelUrl,
@@ -151,6 +152,18 @@ router.post('/', async (req, res, next) => {
       });
     }
 
+    // Reject bookings from view-only members
+    const membershipCheck = await dbQuery(
+      `SELECT is_view_only FROM facility_memberships WHERE user_id = $1 AND facility_id = $2`,
+      [userId, facilityId]
+    );
+    if (membershipCheck.rows[0]?.is_view_only) {
+      return res.status(403).json({
+        success: false,
+        error: 'View-only members cannot make bookings'
+      });
+    }
+
     const result = await createBooking({
       courtId,
       userId,
@@ -161,6 +174,7 @@ router.post('/', async (req, res, next) => {
       durationMinutes,
       bookingType,
       notes,
+      bringGuest: bringGuest === true,
       provisionalSameRequestBookings: Array.isArray(provisionalSameRequestBookings)
         ? provisionalSameRequestBookings
         : undefined,

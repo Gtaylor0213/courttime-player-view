@@ -3,10 +3,10 @@
  * Bottom tab bar with player-facing screens
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Tabs } from 'expo-router';
+import { Tabs, useNavigation, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,27 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { MessageUnreadProvider, useMessageUnread } from '../../src/contexts/MessageUnreadContext';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
+
+/** iOS stack back label for screens pushed above the tab group (e.g. Payments). */
+const TAB_BACK_TITLES: Record<string, string> = {
+  index: 'Home',
+  book: 'Book',
+  community: 'Community',
+  messages: 'Messages',
+  profile: 'Profile',
+  admin: 'Admin',
+};
+
+function useTabsStackBackTitle() {
+  const navigation = useNavigation();
+  const segments = useSegments();
+  const tabKey = segments[0] === '(tabs)' ? (segments[1] ?? 'index') : 'index';
+
+  useEffect(() => {
+    const title = TAB_BACK_TITLES[tabKey] ?? 'Home';
+    navigation.getParent()?.setOptions({ title });
+  }, [navigation, tabKey]);
+}
 
 /**
  * Bottom tabs call `tabBarButton` as `button(props)` (a plain function).
@@ -43,6 +64,7 @@ function renderNavTabButton(props: Record<string, unknown>) {
 }
 
 function TabsShell() {
+  useTabsStackBackTitle();
   const insets = useSafeAreaInsets();
   const { user, facilityId } = useAuth();
   const { hasUnreadMessages } = useMessageUnread();

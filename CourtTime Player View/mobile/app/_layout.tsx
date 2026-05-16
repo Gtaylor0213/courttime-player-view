@@ -134,6 +134,7 @@ function RootLayoutNav() {
       <Stack.Screen
         name="(tabs)"
         options={{
+          title: 'Home',
           headerShown: false,
           // Fade + native stack can leave the tab group receiving touches incorrectly in Expo Go.
           animation: 'none',

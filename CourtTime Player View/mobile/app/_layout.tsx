@@ -82,7 +82,7 @@ function RootLayoutNav() {
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/auth/login');
     } else if (isAuthenticated && inAuthGroup) {
-      router.replace('/(tabs)/book');
+      router.replace('/(tabs)');
     }
   }, [isAuthenticated, isLoading, rootSegment, router]);
 

@@ -83,7 +83,7 @@ function TabsShell() {
   return (
     <>
       <StatusBar style="light" />
-      <Tabs initialRouteName="book" detachInactiveScreens={false} screenOptions={screenOptions}>
+      <Tabs initialRouteName="index" detachInactiveScreens={false} screenOptions={screenOptions}>
       <Tabs.Screen
         name="book"
         options={{

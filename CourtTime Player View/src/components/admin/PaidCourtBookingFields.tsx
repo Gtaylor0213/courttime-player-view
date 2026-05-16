@@ -43,8 +43,8 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
       {stripeStatusLoading && <p className="text-xs text-gray-500">Checking Stripe Connect status…</p>}
       {!stripeStatusLoading && stripeOnboarded === false && (
         <p className="text-xs text-amber-700">
-          Stripe Connect is not set up yet. Complete setup under {paymentsTabHint} before enabling
-          paid courts or guest fees.
+          Stripe Connect is not set up yet. Complete setup under {paymentsTabHint} before members
+          can be charged for paid courts or guest fees. You can still save fee amounts below.
         </p>
       )}
       {!stripeStatusLoading && stripeOnboarded === true && (

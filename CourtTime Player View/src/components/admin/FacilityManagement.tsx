@@ -1654,6 +1654,16 @@ export function FacilityManagement() {
             bookingFeeDollars: formatCentsToDollars(
               c.bookingAmountCents ?? c.booking_amount_cents
             ),
+            guestFeeCents:
+              c.guestFeeCents != null
+                ? Number(c.guestFeeCents)
+                : c.guest_fee_cents != null
+                  ? Number(c.guest_fee_cents)
+                  : null,
+            guestFeeDollars: formatCentsToDollars(
+              c.guestFeeCents ?? c.guest_fee_cents
+            ),
+            enableGuestFee: Boolean(c.guestFeeCents ?? c.guest_fee_cents),
           }))
         );
       } else {
@@ -1679,6 +1689,9 @@ export function FacilityManagement() {
       isWalkUp: false,
       requirePayment: false,
       bookingFeeDollars: '',
+      enableGuestFee: false,
+      guestFeeCents: null,
+      guestFeeDollars: '',
       status: 'active',
       canSplit: false,
     });
@@ -1692,6 +1705,9 @@ export function FacilityManagement() {
       requirePayment: court.requirePayment === true,
       bookingFeeDollars:
         court.bookingFeeDollars || formatCentsToDollars(court.bookingAmountCents),
+      enableGuestFee: Boolean(court.guestFeeCents),
+      guestFeeDollars:
+        court.guestFeeDollars || formatCentsToDollars(court.guestFeeCents),
     });
     void loadStripeStatus();
     setIsAddingNewCourt(false);
@@ -1706,9 +1722,18 @@ export function FacilityManagement() {
       toast.error('Enter a booking fee when paid court booking is enabled');
       return;
     }
+    const guestFeeCents = parseBookingFeeDollars(editingCourt.guestFeeDollars);
+    const hasGuestFee = Boolean(editingCourt.enableGuestFee);
+    if (hasGuestFee && !guestFeeCents) {
+      toast.error('Enter a valid guest fee amount');
+      return;
+    }
     if (wantsPayment && stripeOnboarded === false) {
       toast.error('Complete Stripe Connect setup on the Payments tab before enabling paid courts');
       return;
+    }
+    if (hasGuestFee && stripeOnboarded === false) {
+      toast.info('Guest fee saved, but Stripe Connect must be set up before members can be charged');
     }
 
     try {
@@ -1718,6 +1743,8 @@ export function FacilityManagement() {
         requirePayment: wantsPayment,
         bookingAmountCents: wantsPayment ? bookingAmountCents : null,
         bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
+        guestFeeCents: hasGuestFee ? guestFeeCents : null,
+        guestFeeDollars: hasGuestFee ? editingCourt.guestFeeDollars : '',
       };
 
       let response;

@@ -290,6 +290,20 @@ router.get('/dashboard/:facilityId', async (req, res) => {
       LIMIT 10
     `, [facilityId]);
 
+    // Get revenue for current month from revenue log
+    const revenueResult = await query(`
+      SELECT
+        COALESCE(SUM(amount_cents), 0) as total_cents,
+        COALESCE(SUM(CASE WHEN payment_type = 'COURT_BOOKING' THEN amount_cents ELSE 0 END), 0) as court_booking_cents,
+        COALESCE(SUM(CASE WHEN payment_type = 'BULLETIN_SIGNUP' THEN amount_cents ELSE 0 END), 0) as bulletin_signup_cents,
+        COALESCE(SUM(CASE WHEN payment_type = 'PAYMENT_ITEM' THEN amount_cents ELSE 0 END), 0) as payment_item_cents,
+        COALESCE(SUM(CASE WHEN payment_type = 'PLATFORM_SUBSCRIPTION' THEN amount_cents ELSE 0 END), 0) as subscription_cents
+      FROM facility_revenue_log
+      WHERE facility_id = $1
+        AND paid_at >= DATE_TRUNC('month', CURRENT_DATE)
+        AND paid_at < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
+    `, [facilityId]);
+
     const totalBookings = parseInt(bookingsResult.rows[0]?.total_bookings || 0);
     const lastMonthBookings = parseInt(lastMonthBookingsResult.rows[0]?.total_bookings || 0);
     const bookingsChange = lastMonthBookings > 0
@@ -305,6 +319,9 @@ router.get('/dashboard/:facilityId', async (req, res) => {
     const bookedSlots = parseInt(utilizationResult.rows[0]?.total_bookings || 0);
     const utilization = Math.round((bookedSlots / totalSlots) * 100);
 
+    const rev = revenueResult.rows[0];
+    const revenueCents = parseInt(rev?.total_cents || 0);
+
     res.json({
       success: true,
       data: {
@@ -314,7 +331,14 @@ router.get('/dashboard/:facilityId', async (req, res) => {
           activeMembers,
           newMembers,
           courtUtilization: utilization,
-          revenue: 0 // Placeholder - would need pricing data
+          revenueCents,
+          revenueDollars: (revenueCents / 100).toFixed(2),
+          revenueBreakdown: {
+            courtBooking: parseInt(rev?.court_booking_cents || 0),
+            bulletinSignup: parseInt(rev?.bulletin_signup_cents || 0),
+            paymentItem: parseInt(rev?.payment_item_cents || 0),
+            platformSubscription: parseInt(rev?.subscription_cents || 0),
+          },
         },
         recentActivity: recentActivityResult.rows
       }
@@ -325,6 +349,77 @@ router.get('/dashboard/:facilityId', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+/**
+ * GET /api/admin/revenue/:facilityId
+ * Revenue totals and transaction log for a facility.
+ * Query params: months (default 12), limit (default 50)
+ */
+router.get('/revenue/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const months = Math.min(24, Math.max(1, parseInt(String(req.query.months ?? '12'))));
+    const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? '50'))));
+
+    const totalsResult = await query(`
+      SELECT
+        COALESCE(SUM(amount_cents), 0) as all_time_cents,
+        COALESCE(SUM(CASE WHEN paid_at >= DATE_TRUNC('month', CURRENT_DATE) THEN amount_cents ELSE 0 END), 0) as this_month_cents,
+        COALESCE(SUM(CASE WHEN paid_at >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+                           AND paid_at <  DATE_TRUNC('month', CURRENT_DATE) THEN amount_cents ELSE 0 END), 0) as last_month_cents,
+        COALESCE(SUM(CASE WHEN paid_at >= DATE_TRUNC('year', CURRENT_DATE) THEN amount_cents ELSE 0 END), 0) as this_year_cents
+      FROM facility_revenue_log
+      WHERE facility_id = $1
+    `, [facilityId]);
+
+    const monthlyResult = await query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', paid_at), 'YYYY-MM') as month,
+        SUM(amount_cents) as total_cents,
+        payment_type
+      FROM facility_revenue_log
+      WHERE facility_id = $1
+        AND paid_at >= DATE_TRUNC('month', CURRENT_DATE) - ($2 || ' months')::interval
+      GROUP BY DATE_TRUNC('month', paid_at), payment_type
+      ORDER BY DATE_TRUNC('month', paid_at) DESC
+    `, [facilityId, months]);
+
+    const transactionsResult = await query(`
+      SELECT
+        rl.id,
+        rl.amount_cents,
+        rl.payment_type,
+        rl.source_id,
+        rl.source_type,
+        rl.paid_at,
+        u.full_name as member_name,
+        u.email as member_email
+      FROM facility_revenue_log rl
+      LEFT JOIN users u ON rl.member_id = u.id
+      WHERE rl.facility_id = $1
+      ORDER BY rl.paid_at DESC
+      LIMIT $2
+    `, [facilityId, limit]);
+
+    const t = totalsResult.rows[0];
+    res.json({
+      success: true,
+      data: {
+        totals: {
+          allTimeCents: parseInt(t.all_time_cents),
+          thisMonthCents: parseInt(t.this_month_cents),
+          lastMonthCents: parseInt(t.last_month_cents),
+          thisYearCents: parseInt(t.this_year_cents),
+        },
+        monthly: monthlyResult.rows,
+        transactions: transactionsResult.rows,
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching revenue:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -803,7 +898,6 @@ router.patch('/courts/:courtId', async (req, res) => {
     } else if (rawGuestFeeCents === null || guestFeeDollars === '') {
       guestFeeValue = null;
     }
-
     const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
       ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
       : [];

@@ -242,9 +242,12 @@ export function CourtManagement() {
       toast.error('Enter a valid guest fee amount');
       return;
     }
-    if ((wantsPayment || hasGuestFee) && stripeOnboarded === false) {
+    if (wantsPayment && stripeOnboarded === false) {
       toast.error('Complete Stripe Connect setup under Facility Management → Payments first');
       return;
+    }
+    if (hasGuestFee && stripeOnboarded === false) {
+      toast.info('Guest fee saved, but Stripe Connect must be set up before members can be charged');
     }
 
     try {

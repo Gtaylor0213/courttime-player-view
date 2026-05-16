@@ -15,6 +15,8 @@ export interface MemberWithProfile {
   status: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin: boolean;
   isViewOnly: boolean;
+  isPaymentLocked: boolean;
+  paymentLockedAt?: string;
   startDate: string;
   endDate?: string;
   suspendedUntil?: string;
@@ -32,6 +34,9 @@ export interface MemberUpdateData {
   status?: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin?: boolean;
   isViewOnly?: boolean;
+  isPaymentLocked?: boolean;
+  lockoutAmountCents?: number | null;
+  lockoutDescription?: string | null;
   endDate?: string;
   suspendedUntil?: string | null;
 }
@@ -66,6 +71,10 @@ export async function getFacilityMembers(facilityId: string, searchTerm?: string
         fm.status,
         CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin",
         COALESCE(fm.is_view_only, false) as "isViewOnly",
+        COALESCE(fm.is_payment_locked, false) as "isPaymentLocked",
+        fm.payment_locked_at as "paymentLockedAt",
+        fm.lockout_amount_cents as "lockoutAmountCents",
+        fm.lockout_description as "lockoutDescription",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
@@ -119,6 +128,8 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
         fm.status,
         CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin",
         COALESCE(fm.is_view_only, false) as "isViewOnly",
+        COALESCE(fm.is_payment_locked, false) as "isPaymentLocked",
+        fm.payment_locked_at as "paymentLockedAt",
         TO_CHAR(fm.start_date, 'YYYY-MM-DD') as "startDate",
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
@@ -174,6 +185,30 @@ export async function updateMemberMembership(
     if (updates.isViewOnly !== undefined) {
       fields.push(`is_view_only = $${paramIndex++}`);
       values.push(updates.isViewOnly);
+    }
+
+    if (updates.isPaymentLocked !== undefined) {
+      fields.push(`is_payment_locked = $${paramIndex++}`);
+      values.push(updates.isPaymentLocked);
+      fields.push(`payment_locked_at = $${paramIndex++}`);
+      values.push(updates.isPaymentLocked ? new Date().toISOString() : null);
+      if (!updates.isPaymentLocked) {
+        // Clearing lockout — also wipe payment details
+        fields.push(`lockout_amount_cents = $${paramIndex++}`);
+        values.push(null);
+        fields.push(`lockout_description = $${paramIndex++}`);
+        values.push(null);
+      }
+    }
+
+    if (updates.lockoutAmountCents !== undefined) {
+      fields.push(`lockout_amount_cents = $${paramIndex++}`);
+      values.push(updates.lockoutAmountCents);
+    }
+
+    if (updates.lockoutDescription !== undefined) {
+      fields.push(`lockout_description = $${paramIndex++}`);
+      values.push(updates.lockoutDescription);
     }
 
     if (updates.endDate !== undefined) {

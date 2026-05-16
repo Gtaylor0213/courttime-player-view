@@ -18,7 +18,14 @@ interface DashboardStats {
   activeMembers: number;
   newMembers: number;
   courtUtilization: number;
-  revenue: number;
+  revenueCents: number;
+  revenueDollars: string;
+  revenueBreakdown?: {
+    courtBooking: number;
+    bulletinSignup: number;
+    paymentItem: number;
+    platformSubscription: number;
+  };
 }
 
 interface RecentActivity {
@@ -59,7 +66,8 @@ export function AdminDashboard() {
     activeMembers: 0,
     newMembers: 0,
     courtUtilization: 0,
-    revenue: 0
+    revenueCents: 0,
+    revenueDollars: '0.00',
   });
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
@@ -397,7 +405,7 @@ export function AdminDashboard() {
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">${stats.revenue.toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${parseFloat(stats.revenueDollars).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         <p className="text-xs text-muted-foreground">This month</p>
                       </CardContent>
                     </Card>

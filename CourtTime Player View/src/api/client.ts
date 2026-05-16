@@ -36,10 +36,20 @@ export interface TermsAttachment {
   dataUrl: string;
 }
 
-const apiRequest = buildApiRequest({
+const _rawApiRequest = buildApiRequest({
   baseUrl: API_BASE_URL,
   getToken: () => localStorage.getItem('auth_token'),
 });
+
+// Intercept payment_locked (402) responses and broadcast to the UI so it can redirect.
+function apiRequest<T = unknown>(endpoint: string, options?: RequestInit) {
+  return _rawApiRequest<T>(endpoint, options).then((result) => {
+    if (!result.success && (result as any).error === 'payment_locked') {
+      window.dispatchEvent(new CustomEvent('payment-locked', { detail: (result as any).lockout }));
+    }
+    return result;
+  });
+}
 
 // Auth API
 export const authApi = {
@@ -366,6 +376,30 @@ export const membersApi = {
     });
   },
 
+  setPaymentLockout: async (facilityId: string, userId: string, isPaymentLocked: boolean) => {
+    return apiRequest(`/api/members/${facilityId}/${userId}/payment-lockout`, {
+      method: 'PUT',
+      body: JSON.stringify({ isPaymentLocked }),
+    });
+  },
+
+  createLockoutPayment: async (facilityId: string, userId: string, amountCents: number, description: string) => {
+    return apiRequest(`/api/members/${facilityId}/${userId}/lockout-payment`, {
+      method: 'POST',
+      body: JSON.stringify({ amountCents, description }),
+    });
+  },
+
+  getLockoutInfo: async (facilityId: string) => {
+    return apiRequest(`/api/members/${facilityId}/me/lockout-info`);
+  },
+
+  getLockoutCheckoutUrl: async (facilityId: string) => {
+    return apiRequest(`/api/members/${facilityId}/me/lockout-checkout`, {
+      method: 'POST',
+    });
+  },
+
   isAdmin: async (facilityId: string, userId: string) => {
     return apiRequest(`/api/members/${facilityId}/${userId}/is-admin`);
   },
@@ -681,6 +715,10 @@ export const adminApi = {
     return apiRequest(`/api/admin/dashboard/${facilityId}`);
   },
 
+  getRevenue: async (facilityId: string, months = 12, limit = 50) => {
+    return apiRequest(`/api/admin/revenue/${facilityId}?months=${months}&limit=${limit}`);
+  },
+
   // Facility Management
   updateFacility: async (facilityId: string, data: {
     name?: string;
@@ -719,6 +757,8 @@ export const adminApi = {
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
     bookingFeeDollars?: string;
+    guestFeeCents?: number | null;
+    guestFeeDollars?: string;
     canSplit?: boolean;
     splitConfig?: {
       splitNames: string[];

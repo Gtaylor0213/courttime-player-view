@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { TermsAcceptanceGate } from './TermsAcceptanceGate';
+import { PaymentLockoutScreen } from './PaymentLockoutScreen';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,6 +11,16 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, termsLoading, pendingTermsAcceptances } = useAuth();
   const location = useLocation();
+  const [lockoutInfo, setLockoutInfo] = useState<{ facilityId?: string; facilityName?: string; lockedAt?: string } | null>(null);
+
+  useEffect(() => {
+    const handleLocked = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setLockoutInfo(detail ?? {});
+    };
+    window.addEventListener('payment-locked', handleLocked);
+    return () => window.removeEventListener('payment-locked', handleLocked);
+  }, []);
 
   if (loading) {
     return (
@@ -24,6 +35,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (lockoutInfo && user.userType !== 'admin') {
+    return <PaymentLockoutScreen lockout={lockoutInfo} />;
   }
 
   if (termsLoading) {

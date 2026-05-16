@@ -832,6 +832,84 @@ async function finalizeCourtBookingPaymentRow(row: {
   }
 }
 
+/**
+ * Create a Stripe checkout session for a member's payment lockout.
+ * The session's metadata contains lockoutFacilityId + lockoutUserId so the webhook
+ * can automatically clear is_payment_locked when the payment succeeds.
+ */
+export async function createLockoutCheckoutSession(params: {
+  facilityId: string;
+  memberId: string;
+  amountCents: number;
+  description: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<{ url: string; connectPaymentId: string }> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error('Stripe is not configured on this server');
+
+  const facilityResult = await query(
+    `SELECT name, stripe_account_id, stripe_onboarded, platform_fee_percent
+     FROM facilities WHERE id = $1`,
+    [params.facilityId]
+  );
+  if (facilityResult.rows.length === 0) throw new Error('Facility not found');
+  const facility = facilityResult.rows[0];
+  if (!facility.stripe_account_id || !facility.stripe_onboarded) {
+    throw new Error('This facility has not completed Stripe Connect onboarding');
+  }
+
+  const platformFeePercent = Number(facility.platform_fee_percent ?? 0);
+  const platformFeeCents = Math.max(0, Math.round((params.amountCents * platformFeePercent) / 100));
+
+  const insertResult = await query(
+    `INSERT INTO connect_payments
+       (club_id, member_id, payment_item_id, amount_cents, platform_fee_cents, status)
+     VALUES ($1, $2, NULL, $3, $4, 'PENDING')
+     RETURNING id`,
+    [params.facilityId, params.memberId, params.amountCents, platformFeeCents]
+  );
+  const connectPaymentId: string = insertResult.rows[0].id;
+
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: 'payment',
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: params.amountCents,
+            product_data: {
+              name: params.description || 'Account balance due',
+              description: `Payment to ${facility.name}`,
+            },
+          },
+        },
+      ],
+      payment_intent_data: {
+        application_fee_amount: platformFeeCents,
+        metadata: {
+          connectPaymentId,
+          lockoutFacilityId: params.facilityId,
+          lockoutUserId: params.memberId,
+        },
+      },
+      metadata: {
+        connectPaymentId,
+        lockoutFacilityId: params.facilityId,
+        lockoutUserId: params.memberId,
+      },
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+    },
+    { stripeAccount: facility.stripe_account_id }
+  );
+
+  if (!session.url) throw new Error('Stripe did not return a checkout URL');
+  return { url: session.url, connectPaymentId };
+}
+
 export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session): Promise<void> {
   const paymentId = session.metadata?.connectPaymentId;
   const paymentIntentId =
@@ -841,10 +919,12 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
 
   let paidRow: {
     id: string;
+    club_id: string;
     bulletin_post_id: string | null;
     member_id: string;
     booking_id: string | null;
     pending_booking: unknown;
+    amount_cents: number;
   } | null = null;
 
   if (paymentId) {
@@ -855,7 +935,7 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
              stripe_payment_intent_id = COALESCE($1, stripe_payment_intent_id),
              stripe_checkout_session_id = COALESCE($2, stripe_checkout_session_id)
        WHERE id = $3
-       RETURNING id, bulletin_post_id, member_id, booking_id, pending_booking`,
+       RETURNING id, club_id, bulletin_post_id, member_id, booking_id, pending_booking, amount_cents`,
       [paymentIntentId, session.id, paymentId]
     );
     paidRow = result.rows[0] ?? null;
@@ -866,7 +946,7 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
              paid_at = CURRENT_TIMESTAMP,
              stripe_payment_intent_id = COALESCE($1, stripe_payment_intent_id)
        WHERE stripe_checkout_session_id = $2
-       RETURNING id, bulletin_post_id, member_id, booking_id, pending_booking`,
+       RETURNING id, club_id, bulletin_post_id, member_id, booking_id, pending_booking, amount_cents`,
       [paymentIntentId, session.id]
     );
     paidRow = fallback.rows[0] ?? null;
@@ -899,6 +979,37 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
         connectPaymentId: paidRow.id,
       });
     }
+  }
+
+  // Auto-clear payment lockout if this was a lockout payment
+  const lockoutFacilityId = session.metadata?.lockoutFacilityId;
+  const lockoutUserId = session.metadata?.lockoutUserId;
+  if (lockoutFacilityId && lockoutUserId) {
+    await query(
+      `UPDATE facility_memberships
+         SET is_payment_locked = false,
+             payment_locked_at = NULL,
+             lockout_amount_cents = NULL,
+             lockout_description = NULL
+       WHERE facility_id = $1 AND user_id = $2 AND is_payment_locked = true`,
+      [lockoutFacilityId, lockoutUserId]
+    ).catch(err => console.error('Lockout clear after payment failed (non-critical):', err));
+  }
+
+  // Record in revenue log once payment is confirmed
+  if (paidRow && paidRow.club_id) {
+    const paymentType = isSignupPayment
+      ? 'BULLETIN_SIGNUP'
+      : isCourtBookingPayment
+        ? 'COURT_BOOKING'
+        : 'PAYMENT_ITEM';
+    await query(
+      `INSERT INTO facility_revenue_log
+         (facility_id, amount_cents, payment_type, source_id, source_type, member_id)
+       VALUES ($1, $2, $3, $4, 'connect_payment', $5)
+       ON CONFLICT DO NOTHING`,
+      [paidRow.club_id, paidRow.amount_cents, paymentType, paidRow.id, paidRow.member_id]
+    ).catch(err => console.error('Revenue log insert failed (non-critical):', err));
   }
 }
 

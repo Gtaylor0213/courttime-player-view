@@ -168,6 +168,17 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       `UPDATE facilities SET payment_status = 'paid' WHERE id = $1`,
       [facilityId]
     );
+
+    // Record in revenue log (skip $0 trial invoices)
+    if (amountPaid > 0) {
+      await query(
+        `INSERT INTO facility_revenue_log
+           (facility_id, amount_cents, payment_type, source_id, source_type)
+         VALUES ($1, $2, 'PLATFORM_SUBSCRIPTION', $3, 'platform_invoice')
+         ON CONFLICT DO NOTHING`,
+        [facilityId, amountPaid, invoice.id]
+      ).catch(err => console.error('Revenue log insert failed (non-critical):', err));
+    }
   }
 }
 

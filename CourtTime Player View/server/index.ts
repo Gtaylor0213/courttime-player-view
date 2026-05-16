@@ -55,7 +55,7 @@ import stripeConnectRoutes from './routes/stripeConnect';
 import paymentItemsRoutes from './routes/paymentItems';
 import connectPaymentsRoutes from './routes/connectPayments';
 import connectWebhookRoutes from './routes/connectWebhook';
-import { requireAuth } from './middleware/auth';
+import { requireAuth, requireNotPaymentLocked } from './middleware/auth';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -209,22 +209,25 @@ app.use('/api/stripe', stripeConnectRoutes);
 app.use('/api/payment-items', paymentItemsRoutes);
 
 // API Routes — protected (require valid JWT)
-app.use('/api/users', requireAuth, userRoutes);
-app.use('/api/members', requireAuth, memberRoutes);
-app.use('/api/player-profile', requireAuth, playerProfileRoutes);
-app.use('/api/hitting-partner', requireAuth, hittingPartnerRoutes);
-app.use('/api/bulletin-board', requireAuth, bulletinBoardRoutes);
-app.use('/api/bookings', requireAuth, bookingRoutes);
+// Admin routes are NOT subject to payment lockout so admins can manage locked accounts.
 app.use('/api/admin', requireAuth, adminRoutes);
-app.use('/api/address-whitelist', requireAuth, addressWhitelistRoutes);
-app.use('/api/messages', requireAuth, messagesRoutes);
+app.use('/api/members', requireAuth, memberRoutes);
+app.use('/api/users', requireAuth, userRoutes);
+app.use('/api/player-profile', requireAuth, playerProfileRoutes);
 app.use('/api/notifications', requireAuth, notificationRoutes);
 app.use('/api/user-preferences', requireAuth, userPreferencesRoutes);
-app.use('/api/strikes', requireAuth, strikesRoutes);
-app.use('/api/court-config', requireAuth, courtConfigRoutes);
-app.use('/api/rules', requireAuth, rulesRoutes);
-app.use('/api/households', requireAuth, householdsRoutes);
 app.use('/api/facility-locations', requireAuth, facilityLocationsRoutes);
+
+// Player-action routes — blocked when account has a payment lockout
+app.use('/api/hitting-partner', requireAuth, requireNotPaymentLocked, hittingPartnerRoutes);
+app.use('/api/bulletin-board', requireAuth, requireNotPaymentLocked, bulletinBoardRoutes);
+app.use('/api/bookings', requireAuth, requireNotPaymentLocked, bookingRoutes);
+app.use('/api/address-whitelist', requireAuth, requireNotPaymentLocked, addressWhitelistRoutes);
+app.use('/api/messages', requireAuth, requireNotPaymentLocked, messagesRoutes);
+app.use('/api/strikes', requireAuth, requireNotPaymentLocked, strikesRoutes);
+app.use('/api/court-config', requireAuth, requireNotPaymentLocked, courtConfigRoutes);
+app.use('/api/rules', requireAuth, requireNotPaymentLocked, rulesRoutes);
+app.use('/api/households', requireAuth, requireNotPaymentLocked, householdsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

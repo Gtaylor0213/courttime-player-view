@@ -23,11 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { CheckCircle2, AlertCircle, ExternalLink, Plus, Pencil, X, Save } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ExternalLink, Plus, Pencil, X, Save, Lock, LockOpen, User } from 'lucide-react';
 import {
   paymentItemsApi,
   stripeConnectApi,
   connectPaymentsApi,
+  membersApi,
   type PaymentItem,
   type PaymentCategory,
   type ConnectPayment,
@@ -89,6 +90,24 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
   const [savingItem, setSavingItem] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
+  // Member lockout state
+  const [allMembers, setAllMembers] = useState<Array<{ userId: string; fullName: string; email: string; isPaymentLocked: boolean; lockoutAmountCents?: number | null; lockoutDescription?: string | null; paymentLockedAt?: string | null }>>([]);
+  const [lockoutMemberSearch, setLockoutMemberSearch] = useState('');
+  const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [lockoutAmountDollars, setLockoutAmountDollars] = useState('');
+  const [lockoutDescription, setLockoutDescription] = useState('');
+  const [lockingMember, setLockingMember] = useState(false);
+  const [clearingLockout, setClearingLockout] = useState<string | null>(null);
+
+  const loadMembers = useCallback(async () => {
+    if (!clubId) return;
+    const res = await membersApi.getFacilityMembers(clubId).catch(() => null);
+    if (res?.success) {
+      const list = (res as any).data?.members ?? [];
+      setAllMembers(Array.isArray(list) ? list : []);
+    }
+  }, [clubId]);
+
   const refresh = useCallback(async () => {
     if (!clubId) return;
     setLoading(true);
@@ -99,7 +118,7 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
         connectPaymentsApi.clubHistory(clubId),
       ]);
       if (statusRes.success) {
-        const d = statusRes.data?.data || statusRes.data;
+        const d = (statusRes as any).data?.data || (statusRes as any).data;
         setConnectStatus({
           onboarded: Boolean(d.onboarded),
           chargesEnabled: Boolean(d.chargesEnabled),
@@ -108,19 +127,20 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
         });
       }
       if (itemsRes.success) {
-        const list = itemsRes.data?.data ?? itemsRes.data ?? [];
+        const list = (itemsRes as any).data?.data ?? (itemsRes as any).data ?? [];
         setItems(Array.isArray(list) ? list : []);
       }
       if (historyRes.success) {
-        const list = historyRes.data?.data ?? historyRes.data ?? [];
+        const list = (historyRes as any).data?.data ?? (historyRes as any).data ?? [];
         setPayments(Array.isArray(list) ? list : []);
       }
+      await loadMembers();
     } catch (err) {
       console.error('PaymentsTab refresh failed', err);
     } finally {
       setLoading(false);
     }
-  }, [clubId]);
+  }, [clubId, loadMembers]);
 
   useEffect(() => {
     refresh();
@@ -239,7 +259,56 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
     }
   };
 
+  const handleLockMember = async () => {
+    if (!selectedMemberId) { toast.error('Select a member'); return; }
+    const amount = Number(lockoutAmountDollars);
+    if (!Number.isFinite(amount) || amount <= 0) { toast.error('Enter a valid amount greater than $0'); return; }
+    const amountCents = Math.round(amount * 100);
+    setLockingMember(true);
+    try {
+      const res = await membersApi.createLockoutPayment(clubId, selectedMemberId, amountCents, lockoutDescription.trim() || 'Account balance due');
+      if (!(res as any).success) throw new Error((res as any).error || 'Failed to lock member');
+      toast.success('Member locked — they will be prompted to pay before accessing the app');
+      setSelectedMemberId('');
+      setLockoutAmountDollars('');
+      setLockoutDescription('');
+      setLockoutMemberSearch('');
+      await loadMembers();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to lock member');
+    } finally {
+      setLockingMember(false);
+    }
+  };
+
+  const handleClearLockout = async (userId: string) => {
+    setClearingLockout(userId);
+    try {
+      const res = await membersApi.setPaymentLockout(clubId, userId, false);
+      if (!(res as any).success) throw new Error((res as any).error || 'Failed to clear lockout');
+      toast.success('Lockout cleared — member can now access the app');
+      await loadMembers();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to clear lockout');
+    } finally {
+      setClearingLockout(null);
+    }
+  };
+
   const isConnected = Boolean(connectStatus?.onboarded);
+
+  const filteredMembers = useMemo(() => {
+    const q = lockoutMemberSearch.toLowerCase();
+    return allMembers.filter(m =>
+      !m.isPaymentLocked &&
+      (m.fullName.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+    );
+  }, [allMembers, lockoutMemberSearch]);
+
+  const lockedMembers = useMemo(
+    () => allMembers.filter(m => m.isPaymentLocked),
+    [allMembers]
+  );
 
   const sortedItems = useMemo(
     () =>
@@ -493,6 +562,151 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Member payment lockout */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Member Lockout</CardTitle>
+          <CardDescription>
+            Lock a member's access and require a Stripe payment before they can use the app again.
+            Their account is automatically restored once payment is confirmed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Lock a member form */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Lock className="h-4 w-4" />
+              Lock a member
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="lockout-search">Search member</Label>
+                <Input
+                  id="lockout-search"
+                  placeholder="Type name or email…"
+                  value={lockoutMemberSearch}
+                  onChange={e => {
+                    setLockoutMemberSearch(e.target.value);
+                    setSelectedMemberId('');
+                  }}
+                />
+                {lockoutMemberSearch && filteredMembers.length > 0 && !selectedMemberId && (
+                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto shadow-sm">
+                    {filteredMembers.slice(0, 8).map(m => (
+                      <button
+                        key={m.userId}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors"
+                        onClick={() => {
+                          setSelectedMemberId(m.userId);
+                          setLockoutMemberSearch(`${m.fullName} (${m.email})`);
+                        }}
+                      >
+                        <span className="font-medium">{m.fullName}</span>
+                        <span className="text-gray-400 ml-2">{m.email}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {lockoutMemberSearch && filteredMembers.length === 0 && !selectedMemberId && (
+                  <p className="text-xs text-gray-400 pl-1">No unlocked members match</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lockout-amount">Amount owed (USD)</Label>
+                <Input
+                  id="lockout-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.50"
+                  placeholder="25.00"
+                  value={lockoutAmountDollars}
+                  onChange={e => setLockoutAmountDollars(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lockout-desc">Description (optional)</Label>
+                <Input
+                  id="lockout-desc"
+                  placeholder="e.g. Court damage fee"
+                  value={lockoutDescription}
+                  onChange={e => setLockoutDescription(e.target.value)}
+                />
+              </div>
+            </div>
+            <Button
+              onClick={handleLockMember}
+              disabled={lockingMember || !selectedMemberId}
+              variant="destructive"
+              className="gap-2"
+            >
+              <Lock className="h-4 w-4" />
+              {lockingMember ? 'Locking…' : 'Lock Member & Require Payment'}
+            </Button>
+          </div>
+
+          {/* Currently locked members */}
+          {lockedMembers.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Currently locked ({lockedMembers.length})
+              </h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead>Locked on</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lockedMembers.map(m => (
+                    <TableRow key={m.userId}>
+                      <TableCell>
+                        <div className="font-medium">{m.fullName}</div>
+                        <div className="text-xs text-gray-500">{m.email}</div>
+                      </TableCell>
+                      <TableCell>
+                        {m.lockoutAmountCents
+                          ? dollars(m.lockoutAmountCents)
+                          : <span className="text-gray-400">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        {m.lockoutDescription || <span className="text-gray-400">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        {m.paymentLockedAt
+                          ? new Date(m.paymentLockedAt).toLocaleDateString()
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={clearingLockout === m.userId}
+                          onClick={() => handleClearLockout(m.userId)}
+                          className="gap-1"
+                        >
+                          <LockOpen className="h-3.5 w-3.5" />
+                          {clearingLockout === m.userId ? 'Clearing…' : 'Clear Lockout'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {lockedMembers.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-2">No members are currently locked.</p>
           )}
         </CardContent>
       </Card>

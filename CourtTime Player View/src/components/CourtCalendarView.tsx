@@ -1854,7 +1854,7 @@ export function CourtCalendarView() {
   return (
     <>
       {/* Main Content */}
-      <div className="h-screen flex flex-col overflow-hidden">
+      <div className="flex flex-col overflow-hidden h-[calc(100dvh-3.5rem-env(safe-area-inset-top,0px))] md:h-screen">
         {/* Controls - Sticky Header */}
         {authLoading || loadingFacilities ? (
           <div className="flex flex-1 items-center justify-center px-3 md:px-6 py-12">

@@ -52,10 +52,12 @@ export function AuthenticatedLayout() {
       />
       <div className={cn(
         'transition-all duration-300 ease-in-out',
+        // Reserve space below fixed mobile header (incl. safe area on notched phones)
+        'pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-0',
         sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
       )}>
-        {/* Mobile header bar */}
-        <div className="sticky top-0 z-30 flex items-center h-14 px-4 bg-gradient-to-r from-green-700 to-green-800 border-b border-green-900 md:hidden">
+        {/* Mobile header bar — fixed so menu + logo stay reachable while scrolling */}
+        <header className="fixed top-0 left-0 right-0 z-30 flex items-center min-h-14 px-4 pt-[env(safe-area-inset-top,0px)] bg-gradient-to-r from-green-700 to-green-800 border-b border-green-900 shadow-md md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 -ml-2 rounded-md hover:bg-white/20 text-white"
@@ -64,7 +66,7 @@ export function AuthenticatedLayout() {
             <Menu className="h-6 w-6" />
           </button>
           <img src={logoImage} alt="CourtTime" className="h-8 w-auto ml-3 brightness-0 invert" />
-        </div>
+        </header>
         {/* Suspended membership banner */}
         {user?.suspendedFacilities && user.suspendedFacilities.length > 0 && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">

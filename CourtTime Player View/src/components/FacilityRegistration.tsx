@@ -2856,65 +2856,6 @@ export function FacilityRegistration() {
         )}
       </Card>
 
-      {/* Address Whitelist Upload */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Address Whitelist
-          </CardTitle>
-          <CardDescription>
-            Upload a list of approved addresses and last names for membership verification (optional)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {formData.addressWhitelistFileName ? (
-            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-green-600" />
-                <span className="text-sm text-green-700">{formData.addressWhitelistFileName} ({formData.parsedAddresses.length} addresses)</span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={removeAddressWhitelist}
-                className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-              <Upload className="h-6 w-6 text-gray-400 mb-1" />
-              <span className="text-sm text-gray-500">Upload Address &amp; Last Name List</span>
-              <span className="text-xs text-gray-400 mt-1">Excel or CSV file with Address and Last Name columns</span>
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={handleAddressWhitelistChange}
-                className="hidden"
-              />
-            </label>
-          )}
-          <div className="flex items-center gap-3 mt-3">
-            <Label htmlFor="accountsPerAddress" className="text-sm whitespace-nowrap">Max accounts per address:</Label>
-            <Input
-              id="accountsPerAddress"
-              type="number"
-              min="1"
-              max="20"
-              value={formData.accountsPerAddress}
-              onChange={(e) => setFormData(prev => ({ ...prev, accountsPerAddress: parseInt(e.target.value) || 4 }))}
-              className="w-20"
-            />
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            The file should have "Address" and "Last Name" columns (one entry per row). Members will be auto-approved when their address and last name match an entry on this list.
-          </p>
-        </CardContent>
-      </Card>
-
       <Separator className="my-6" />
 
       <div>
@@ -2982,18 +2923,79 @@ export function FacilityRegistration() {
   );
 
   const renderRulesStep = () => (
-    <RulesStep
-      rulesConfig={formData.rulesConfig}
-      onRulesChange={handleRulesChange}
-      onRuleEntryChange={handleRuleEntryChange}
-      onRuleConfigFieldChange={handleRuleConfigFieldChange}
-      onAddPeakHourSlot={addPeakHourSlot}
-      onRemovePeakHourSlot={removePeakHourSlot}
-      onUpdatePeakHourSlot={updatePeakHourSlot}
-      onTogglePeakHourSlotDay={togglePeakHourSlotDay}
-      onUpdatePeakHourSlotRule={updatePeakHourSlotRule}
-      errors={errors}
-    />
+    <div className="space-y-6">
+      <RulesStep
+        rulesConfig={formData.rulesConfig}
+        onRulesChange={handleRulesChange}
+        onRuleEntryChange={handleRuleEntryChange}
+        onRuleConfigFieldChange={handleRuleConfigFieldChange}
+        onAddPeakHourSlot={addPeakHourSlot}
+        onRemovePeakHourSlot={removePeakHourSlot}
+        onUpdatePeakHourSlot={updatePeakHourSlot}
+        onTogglePeakHourSlotDay={togglePeakHourSlotDay}
+        onUpdatePeakHourSlotRule={updatePeakHourSlotRule}
+        errors={errors}
+      />
+
+      {/* Address Whitelist Upload */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Address Whitelist
+          </CardTitle>
+          <CardDescription>
+            Upload a list of approved addresses and last names for membership verification (optional)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {formData.addressWhitelistFileName ? (
+            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-green-600" />
+                <span className="text-sm text-green-700">{formData.addressWhitelistFileName} ({formData.parsedAddresses.length} addresses)</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={removeAddressWhitelist}
+                className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <Upload className="h-6 w-6 text-gray-400 mb-1" />
+              <span className="text-sm text-gray-500">Upload Address &amp; Last Name List</span>
+              <span className="text-xs text-gray-400 mt-1">Excel or CSV file with Address and Last Name columns</span>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={handleAddressWhitelistChange}
+                className="hidden"
+              />
+            </label>
+          )}
+          <div className="flex items-center gap-3 mt-3">
+            <Label htmlFor="accountsPerAddressRules" className="text-sm whitespace-nowrap">Max accounts per address:</Label>
+            <Input
+              id="accountsPerAddressRules"
+              type="number"
+              min="1"
+              max="20"
+              value={formData.accountsPerAddress}
+              onChange={(e) => setFormData(prev => ({ ...prev, accountsPerAddress: parseInt(e.target.value) || 4 }))}
+              className="w-20"
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            The file should have "Address" and "Last Name" columns (one entry per row). Members will be auto-approved when their address and last name match an entry on this list.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   const renderStep4Courts = () => (

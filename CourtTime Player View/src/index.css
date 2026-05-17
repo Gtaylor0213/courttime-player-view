@@ -203,6 +203,12 @@ html {
   -webkit-touch-callout: none;
 }
 
+/* Active vertical slot drag on mobile web — matches native scroll lock */
+.calendar-scroll--touch-locked {
+  touch-action: none;
+  overflow: hidden;
+}
+
 /* WebKit browsers (Chrome, Safari, Edge) */
 .calendar-scroll::-webkit-scrollbar {
   width: 12px;

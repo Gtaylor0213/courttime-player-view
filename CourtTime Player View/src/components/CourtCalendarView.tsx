@@ -30,6 +30,9 @@ const SUB_SLOT_HEIGHT = 25;       // 15-min subdivision height
 const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 38;
+/** Match native app: short hold before drag arms so scroll/swipe stay natural. */
+const MOBILE_DRAG_ARM_DELAY_MS = 180;
+const MOBILE_MOVEMENT_THRESHOLD_PX = 8;
 
 /** Normalize client coordinates for mouse, pointer, or touch events. */
 function getEventCoords(e: { clientX?: number; clientY?: number; touches?: TouchList; changedTouches?: TouchList }): {
@@ -162,6 +165,21 @@ export function CourtCalendarView() {
   /** Native touchstart already began slot tracking; skip duplicate pointerdown (touch). */
   const suppressPointerDownForTouchRef = useRef(false);
   const handlePointerDragEndRef = useRef<() => void>(() => {});
+
+  /** Mobile web: long-press vertical drag (mirrors CourtCalendarGrid). */
+  const mobileDragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileTouchGestureRef = useRef<{
+    startClientX: number;
+    startClientY: number;
+    court: string;
+    startTime: string;
+    startSlotIndex: number;
+    armed: boolean;
+    moved: boolean;
+    horizontalSwipe: boolean;
+  } | null>(null);
+  const mobileTouchCleanupRef = useRef<(() => void) | null>(null);
+  const [calendarTouchLocked, setCalendarTouchLocked] = useState(false);
 
   // Quick reserve popup state
   const [showQuickReserve, setShowQuickReserve] = useState(false);
@@ -1267,6 +1285,98 @@ export function CourtCalendarView() {
     });
   }, [courts, timeSlots, bookings, isCourtSlotOutsideOperatingHours]);
 
+  const setMobileVerticalSelection = useCallback(
+    (courtName: string, startIndex: number, endIndex: number) => {
+      const beginIdx = Math.min(startIndex, endIndex);
+      const endIdx = Math.max(startIndex, endIndex);
+      const startTime = allTimeSlots[beginIdx];
+      const endTime = allTimeSlots[endIdx];
+      if (!startTime || !endTime) return;
+
+      const newSelectedCells = new Set<string>();
+      for (let ti = beginIdx; ti <= endIdx; ti++) {
+        const slot = allTimeSlots[ti];
+        if (!slot) continue;
+        const slotBooking = bookings[courtName as keyof typeof bookings]?.[slot];
+        const courtObj = courts.find((c) => c.name === courtName);
+        const outside = courtObj?.id ? isCourtSlotOutsideOperatingHours(courtObj.id, slot) : false;
+        if (!slotBooking && !outside) {
+          newSelectedCells.add(`${courtName}|${slot}`);
+        }
+      }
+
+      const next = {
+        isDragging: true,
+        startCell: { court: courtName, time: startTime },
+        endCell: { court: courtName, time: endTime },
+        selectedCells: newSelectedCells,
+      };
+      dragStateRef.current = next;
+      setDragState(next);
+    },
+    [allTimeSlots, bookings, courts, isCourtSlotOutsideOperatingHours]
+  );
+
+  const clearMobileDragArmTimer = useCallback(() => {
+    if (mobileDragArmTimerRef.current) {
+      clearTimeout(mobileDragArmTimerRef.current);
+      mobileDragArmTimerRef.current = null;
+    }
+  }, []);
+
+  const releaseMobileTouchLocks = useCallback(() => {
+    setCalendarTouchLocked(false);
+  }, []);
+
+  const clearMobileDragState = useCallback(() => {
+    const cleared = {
+      isDragging: false,
+      startCell: null as { court: string; time: string } | null,
+      endCell: null as { court: string; time: string } | null,
+      selectedCells: new Set<string>(),
+    };
+    dragStateRef.current = cleared;
+    setDragState(cleared);
+  }, []);
+
+  const finalizeMobileTouch = useCallback(() => {
+    mobileTouchCleanupRef.current?.();
+    mobileTouchCleanupRef.current = null;
+    clearMobileDragArmTimer();
+
+    const gesture = mobileTouchGestureRef.current;
+    mobileTouchGestureRef.current = null;
+    releaseMobileTouchLocks();
+    suppressPointerDownForTouchRef.current = false;
+
+    if (!gesture || gesture.horizontalSwipe) {
+      clearMobileDragState();
+      return;
+    }
+
+    const currentDrag = dragStateRef.current;
+    if (gesture.armed) {
+      if (gesture.moved && currentDrag.selectedCells.size > 0) {
+        const cells = new Set<string>(currentDrag.selectedCells);
+        const firstSelected = Array.from(cells)[0] as string;
+        const [court, time] = firstSelected.split('|');
+        handleEmptySlotClick(court, time, cells);
+        dragJustFinishedRef.current = true;
+        setTimeout(() => {
+          dragJustFinishedRef.current = false;
+        }, 400);
+      } else if (!gesture.moved) {
+        handleEmptySlotClick(gesture.court, gesture.startTime);
+        dragJustFinishedRef.current = true;
+        setTimeout(() => {
+          dragJustFinishedRef.current = false;
+        }, 400);
+      }
+    }
+
+    clearMobileDragState();
+  }, [clearMobileDragArmTimer, clearMobileDragState, releaseMobileTouchLocks]);
+
   const handlePointerDragEnd = () => {
     pointerDragCleanupRef.current?.();
     pointerDragCleanupRef.current = null;
@@ -1446,6 +1556,10 @@ export function CourtCalendarView() {
   );
 
   const handlePointerDown = (courtName: string, time: string, event: React.PointerEvent) => {
+    if (isMobile && event.pointerType === 'touch') {
+      return;
+    }
+
     if (event.pointerType === 'touch' && suppressPointerDownForTouchRef.current) {
       suppressPointerDownForTouchRef.current = false;
       return;
@@ -1493,23 +1607,140 @@ export function CourtCalendarView() {
       const blocked = slotBooking?.type === 'blocked';
       if (blocked) return;
 
-      const coords = getEventCoords(e);
-      if (!coords) return;
+      const touch = e.touches[0];
+      if (!touch) return;
 
-      e.preventDefault();
       suppressPointerDownForTouchRef.current = true;
-      const touchId = e.touches[0].identifier;
-      startSlotDragTracking(courtName, time, coords.clientX, coords.clientY, 'touch-native', {
-        captureTarget: slot as HTMLElement,
-        activeTouchId: touchId,
-      });
+
+      if (!isMobile) {
+        e.preventDefault();
+        startSlotDragTracking(courtName, time, touch.clientX, touch.clientY, 'touch-native', {
+          captureTarget: slot as HTMLElement,
+          activeTouchId: touch.identifier,
+        });
+        return;
+      }
+
+      // Mobile web: match native app — long-press to arm, vertical drag on one court, scroll otherwise.
+      mobileTouchCleanupRef.current?.();
+      mobileTouchCleanupRef.current = null;
+      clearMobileDragArmTimer();
+      clearMobileDragState();
+
+      const startSlotIndex = allTimeSlots.indexOf(time);
+      if (startSlotIndex < 0) return;
+
+      mobileTouchGestureRef.current = {
+        startClientX: touch.clientX,
+        startClientY: touch.clientY,
+        court: courtName,
+        startTime: time,
+        startSlotIndex,
+        armed: false,
+        moved: false,
+        horizontalSwipe: false,
+      };
+
+      mobileDragArmTimerRef.current = setTimeout(() => {
+        const gesture = mobileTouchGestureRef.current;
+        if (!gesture || gesture.court !== courtName) return;
+        gesture.armed = true;
+        setMobileVerticalSelection(courtName, gesture.startSlotIndex, gesture.startSlotIndex);
+      }, MOBILE_DRAG_ARM_DELAY_MS);
+
+      const touchId = touch.identifier;
+
+      const onTouchMove = (ev: TouchEvent) => {
+        const gesture = mobileTouchGestureRef.current;
+        if (!gesture) return;
+        const finger = Array.from(ev.touches).find((t) => t.identifier === touchId);
+        if (!finger) return;
+
+        const deltaX = finger.clientX - gesture.startClientX;
+        const deltaY = finger.clientY - gesture.startClientY;
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+
+        if (!gesture.armed) {
+          if (absX > MOBILE_MOVEMENT_THRESHOLD_PX || absY > MOBILE_MOVEMENT_THRESHOLD_PX) {
+            clearMobileDragArmTimer();
+          }
+          return;
+        }
+
+        if (absX > 10 && absX > absY + 2) {
+          gesture.horizontalSwipe = true;
+          clearMobileDragState();
+          releaseMobileTouchLocks();
+          return;
+        }
+
+        if (absY > MOBILE_MOVEMENT_THRESHOLD_PX) {
+          ev.preventDefault();
+          if (!gesture.moved) {
+            gesture.moved = true;
+            setCalendarTouchLocked(true);
+          }
+          const slotOffset = Math.round(deltaY / effectiveSubSlotHeight);
+          const endIndex = Math.max(
+            0,
+            Math.min(allTimeSlots.length - 1, gesture.startSlotIndex + slotOffset)
+          );
+          setMobileVerticalSelection(gesture.court, gesture.startSlotIndex, endIndex);
+        }
+      };
+
+      const onTouchEnd = (ev: TouchEvent) => {
+        const endedHere = Array.from(ev.changedTouches).some((t) => t.identifier === touchId);
+        if (!endedHere) return;
+        const gesture = mobileTouchGestureRef.current;
+        if (gesture?.armed) {
+          ev.preventDefault();
+        }
+        finalizeMobileTouch();
+      };
+
+      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+      window.addEventListener('touchend', onTouchEnd, true);
+      window.addEventListener('touchcancel', onTouchEnd, true);
+      mobileTouchCleanupRef.current = () => {
+        window.removeEventListener('touchmove', onTouchMove, true);
+        window.removeEventListener('touchend', onTouchEnd, true);
+        window.removeEventListener('touchcancel', onTouchEnd, true);
+      };
     };
 
     root.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
-    return () => root.removeEventListener('touchstart', onTouchStart, true);
-  }, [bookings, courts, isCourtSlotOutsideOperatingHours, isPastTime, startSlotDragTracking]);
+    return () => {
+      root.removeEventListener('touchstart', onTouchStart, true);
+      mobileTouchCleanupRef.current?.();
+      mobileTouchCleanupRef.current = null;
+      clearMobileDragArmTimer();
+    };
+  }, [
+    allTimeSlots,
+    bookings,
+    clearMobileDragArmTimer,
+    clearMobileDragState,
+    courts,
+    effectiveSubSlotHeight,
+    finalizeMobileTouch,
+    isCourtSlotOutsideOperatingHours,
+    isMobile,
+    isPastTime,
+    releaseMobileTouchLocks,
+    setMobileVerticalSelection,
+    startSlotDragTracking,
+  ]);
 
-  useEffect(() => () => pointerDragCleanupRef.current?.(), []);
+  useEffect(
+    () => () => {
+      pointerDragCleanupRef.current?.();
+      mobileTouchCleanupRef.current?.();
+      clearMobileDragArmTimer();
+    },
+    [clearMobileDragArmTimer]
+  );
 
   // Quick reserve handlers
   const handleQuickReserve = async (reservation: {
@@ -1755,7 +1986,7 @@ export function CourtCalendarView() {
                       </PopoverTrigger>
                       <PopoverContent className="w-[calc(100vw-2rem)] max-w-80">
                         <p className="text-sm text-gray-700">
-                          Tap a time slot to book, or drag up/down across slots to select a range. Use the sidebar to switch facilities.
+                          Tap a time slot to book, or long press and drag up or down to select a range. Swipe the calendar to scroll.
                         </p>
                       </PopoverContent>
                     </Popover>
@@ -1909,7 +2140,7 @@ export function CourtCalendarView() {
                       </PopoverTrigger>
                       <PopoverContent className="w-[calc(100vw-2rem)] max-w-80">
                         <p className="text-sm text-gray-700">
-                          Tap a time slot to book, or drag up/down across slots to select a range. Use the sidebar to switch facilities.
+                          Tap a time slot to book, or long press and drag up or down to select a range. Swipe the calendar to scroll.
                         </p>
                       </PopoverContent>
                     </Popover>
@@ -1978,7 +2209,7 @@ export function CourtCalendarView() {
         ) : (
           <div
             ref={calendarScrollRef}
-            className="calendar-scroll overscroll-y-contain bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0 select-none"
+            className={`calendar-scroll overscroll-y-contain bg-white rounded-lg shadow-lg border border-gray-200 overflow-auto relative w-full flex-1 min-h-0 select-none${calendarTouchLocked ? ' calendar-scroll--touch-locked' : ''}`}
           >
             <table
               ref={calendarGridRef}
@@ -2092,7 +2323,7 @@ export function CourtCalendarView() {
                             <div
                               data-slot-court={court.name}
                               data-slot-time={topTime}
-                              className={`absolute top-0 left-0 right-0 select-none touch-none
+                              className={`absolute top-0 left-0 right-0 select-none ${!isMobile || calendarTouchLocked ? 'touch-none' : ''}
                                 ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                                 ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
                                 ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
@@ -2132,7 +2363,7 @@ export function CourtCalendarView() {
                               <div
                                 data-slot-court={court.name}
                                 data-slot-time={bottomTime}
-                                className={`absolute left-0 right-0 select-none touch-none
+                                className={`absolute left-0 right-0 select-none ${!isMobile || calendarTouchLocked ? 'touch-none' : ''}
                                   ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                                   ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
                                   ${!isWalkUpCourt && !bottomOutsideCourt && bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}

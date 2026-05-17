@@ -1,5 +1,7 @@
+import { createElement } from 'react';
 import { toast } from 'sonner';
 import { bookingApi } from '../api/client';
+import { BookingCalendarToast } from '../components/BookingCalendarToast';
 import {
   type BookingCalendarDetails,
   bookingWithDetailsToCalendarDetails,
@@ -131,29 +133,25 @@ export function offerAddBookingToCalendar(
     bookingId: options?.bookingId,
   };
 
-  toast.success(title, {
-    description: `${message} Add it to your calendar:`,
-    duration: 12000,
-    action: {
-      label: 'Google Calendar',
-      onClick: () => {
-        openGoogleCalendar(details);
-      },
-    },
-    cancel: {
-      label: isAppleCalendarDevice() ? 'Apple Calendar' : 'Download .ics',
-      onClick: () => {
-        if (isAppleCalendarDevice()) {
-          openAppleCalendar(details, calendarOpts);
-        } else {
-          downloadIcsFile(buildIcsFilename(details), buildIcsEventContent(details));
+  toast.custom(
+    (toastId) =>
+      createElement(BookingCalendarToast, {
+        toastId,
+        title,
+        message,
+        details,
+        bookingId: options?.bookingId,
+        onGoogle: openGoogleCalendar,
+        onApple: (d, bookingId) => openAppleCalendar(d, { ...calendarOpts, bookingId }),
+        onDownloadIcs: (d) => {
+          downloadIcsFile(buildIcsFilename(d), buildIcsEventContent(d));
           toast.success('Calendar file downloaded', {
             description: 'Open the .ics file to add this booking to Outlook or another app.',
           });
-        }
-      },
-    },
-  });
+        },
+      }),
+    { duration: 12000 }
+  );
 }
 
 export async function fetchBookingCalendarDetails(

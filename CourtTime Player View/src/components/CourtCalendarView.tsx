@@ -165,6 +165,9 @@ export function CourtCalendarView() {
   /** Native touchstart already began slot tracking; skip duplicate pointerdown (touch). */
   const suppressPointerDownForTouchRef = useRef(false);
   const handlePointerDragEndRef = useRef<() => void>(() => {});
+  const handleEmptySlotClickRef = useRef<
+    (courtName: string, time: string, dragCells?: Set<string>) => void
+  >(() => {});
 
   /** Mobile web: long-press vertical drag (mirrors CourtCalendarGrid). */
   const mobileDragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1240,6 +1243,7 @@ export function CourtCalendarView() {
       });
     }
   };
+  handleEmptySlotClickRef.current = handleEmptySlotClick;
 
   // Drag handlers — pointer events + window pointermove so touch drags across cells
   // (touch never receives mouseenter while moving; elementFromPoint fixes that).
@@ -1356,17 +1360,17 @@ export function CourtCalendarView() {
 
     const currentDrag = dragStateRef.current;
     if (gesture.armed) {
-      if (gesture.moved && currentDrag.selectedCells.size > 0) {
-        const cells = new Set<string>(currentDrag.selectedCells);
+      const cells = new Set<string>(currentDrag.selectedCells);
+      if (cells.size > 0) {
         const firstSelected = Array.from(cells)[0] as string;
         const [court, time] = firstSelected.split('|');
-        handleEmptySlotClick(court, time, cells);
+        handleEmptySlotClickRef.current(court, time, cells);
         dragJustFinishedRef.current = true;
         setTimeout(() => {
           dragJustFinishedRef.current = false;
         }, 400);
-      } else if (!gesture.moved) {
-        handleEmptySlotClick(gesture.court, gesture.startTime);
+      } else {
+        handleEmptySlotClickRef.current(gesture.court, gesture.startTime);
         dragJustFinishedRef.current = true;
         setTimeout(() => {
           dragJustFinishedRef.current = false;

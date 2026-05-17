@@ -1556,71 +1556,131 @@ export function FacilityRegistration() {
   };
 
   const renderProgressBar = () => {
+    const progressPercent = totalSteps > 1
+      ? ((currentStep - 1) / (totalSteps - 1)) * 100
+      : 100;
+
     return (
-      <div className="mb-8">
-        <div className="flex justify-between mb-2">
-          {Array.from({ length: totalSteps }).map((_, index) => {
-            const stepNumber = index + 1;
-            const isCurrent = stepNumber === currentStep;
-            // A step is "visited" if we've moved past it
-            const isVisited = stepNumber < currentStep;
+      <div className="mb-6 md:mb-8">
+        <div className="md:hidden space-y-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-semibold text-green-700 whitespace-nowrap">
+              Step {currentStep} of {totalSteps}
+            </span>
+            <span className="text-gray-600 text-right truncate">
+              {getStepLabel(currentStep)}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-gray-200 overflow-hidden" aria-hidden>
+            <div
+              className="h-full rounded-full bg-green-700 transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div
+            className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory"
+            role="tablist"
+            aria-label="Registration steps"
+          >
+            {Array.from({ length: totalSteps }).map((_, index) => {
+              const stepNumber = index + 1;
+              const isCurrent = stepNumber === currentStep;
+              const isVisited = stepNumber < currentStep;
+              const label = getStepLabel(stepNumber);
 
-            // Determine colors based on state
-            let bgColor = 'white';
-            let borderColor = '#d1d5db';
-            let textColor = '#6b7280';
-
-            if (isCurrent) {
-              bgColor = '#15803d'; // green-700
-              borderColor = '#15803d';
-              textColor = 'white';
-            } else if (isVisited) {
-              bgColor = '#166534'; // green-800
-              borderColor = '#166534';
-              textColor = 'white';
-            }
-
-            return (
-              <div key={stepNumber} className="flex-1 flex items-start">
-                <div className="flex flex-col items-center flex-1">
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => goToStep(stepNumber)}
-                    onKeyDown={(e) => e.key === 'Enter' && goToStep(stepNumber)}
-                    className="w-10 h-10 flex items-center justify-center transition-all cursor-pointer hover:scale-105 font-medium"
-                    style={{
-                      backgroundColor: bgColor,
-                      borderColor: borderColor,
-                      borderWidth: '2px',
-                      borderStyle: 'solid',
-                      borderRadius: '9999px',
-                      color: textColor,
-                    }}
-                    title={`Go to step ${stepNumber}: ${getStepLabel(stepNumber)}`}
-                  >
-                    {isVisited ? <Check className="h-5 w-5" /> : stepNumber}
-                  </div>
-                  <div
-                    className="text-xs mt-2 text-center"
-                    style={{ color: isCurrent ? '#15803d' : '#6b7280', fontWeight: isCurrent ? 600 : 400 }}
-                  >
-                    {getStepLabel(stepNumber)}
-                  </div>
-                </div>
-                {stepNumber < totalSteps && (
-                  <div
-                    className="flex-1 mx-2 mt-5 transition-colors"
-                    style={{ backgroundColor: isVisited ? '#166534' : '#d1d5db', height: '2px' }}
-                  />
-                )}
-              </div>
-            );
-          })}
+              return (
+                <button
+                  key={stepNumber}
+                  type="button"
+                  role="tab"
+                  aria-selected={isCurrent}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  onClick={() => goToStep(stepNumber)}
+                  className={`snap-start shrink-0 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isCurrent
+                      ? 'border-green-700 bg-green-700 text-white'
+                      : isVisited
+                        ? 'border-green-800 bg-green-50 text-green-800'
+                        : 'border-gray-300 bg-white text-gray-600'
+                  }`}
+                  title={`Go to step ${stepNumber}: ${label}`}
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+                    {isVisited ? <Check className="h-3 w-3" /> : stepNumber}
+                  </span>
+                  <span className="max-w-[7rem] truncate sm:max-w-none">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-gray-500">
+            Tap a step to jump ahead. All required fields must be completed before you submit.
+          </p>
         </div>
-        <p className="text-xs text-center" style={{ color: '#6b7280' }}>
-          Click any step above to navigate. All required fields must be completed before registration.
-        </p>
+
+        <div className="hidden md:block">
+          <div className="flex justify-between mb-2">
+            {Array.from({ length: totalSteps }).map((_, index) => {
+              const stepNumber = index + 1;
+              const isCurrent = stepNumber === currentStep;
+              const isVisited = stepNumber < currentStep;
+
+              let bgColor = 'white';
+              let borderColor = '#d1d5db';
+              let textColor = '#6b7280';
+
+              if (isCurrent) {
+                bgColor = '#15803d';
+                borderColor = '#15803d';
+                textColor = 'white';
+              } else if (isVisited) {
+                bgColor = '#166534';
+                borderColor = '#166534';
+                textColor = 'white';
+              }
+
+              return (
+                <div key={stepNumber} className="flex-1 flex items-start min-w-0">
+                  <div className="flex flex-col items-center flex-1 min-w-0">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => goToStep(stepNumber)}
+                      onKeyDown={(e) => e.key === 'Enter' && goToStep(stepNumber)}
+                      className="w-10 h-10 flex items-center justify-center transition-all cursor-pointer hover:scale-105 font-medium shrink-0"
+                      style={{
+                        backgroundColor: bgColor,
+                        borderColor: borderColor,
+                        borderWidth: '2px',
+                        borderStyle: 'solid',
+                        borderRadius: '9999px',
+                        color: textColor,
+                      }}
+                      title={`Go to step ${stepNumber}: ${getStepLabel(stepNumber)}`}
+                    >
+                      {isVisited ? <Check className="h-5 w-5" /> : stepNumber}
+                    </div>
+                    <div
+                      className="text-xs mt-2 text-center px-0.5 leading-tight truncate w-full max-w-[5.5rem]"
+                      style={{ color: isCurrent ? '#15803d' : '#6b7280', fontWeight: isCurrent ? 600 : 400 }}
+                    >
+                      {getStepLabel(stepNumber)}
+                    </div>
+                  </div>
+                  {stepNumber < totalSteps && (
+                    <div
+                      className="flex-1 mx-2 mt-5 transition-colors min-w-[8px]"
+                      style={{ backgroundColor: isVisited ? '#166534' : '#d1d5db', height: '2px' }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-center text-gray-500">
+            Click any step above to navigate. All required fields must be completed before registration.
+          </p>
+        </div>
       </div>
     );
   };
@@ -1783,7 +1843,7 @@ export function FacilityRegistration() {
                     <Tag className="h-3.5 w-3.5" />
                     Promo Code
                   </Label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
                       value={promoCode}
                       onChange={(e) => {
@@ -1867,7 +1927,7 @@ export function FacilityRegistration() {
       {/* Profile Picture */}
       <div>
         <Label>Profile Picture</Label>
-        <div className="flex items-center gap-4 mt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mt-2">
           <Avatar className="h-16 w-16">
             {formData.adminProfilePicture ? (
               <AvatarImage src={formData.adminProfilePicture} alt="Profile" />
@@ -1876,7 +1936,7 @@ export function FacilityRegistration() {
               {(formData.adminFirstName || user?.firstName || '?')[0]?.toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
@@ -2370,7 +2430,7 @@ export function FacilityRegistration() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             {/* Left Column - Address & Contact Info */}
             <div className="space-y-4">
               <div>
@@ -2425,7 +2485,7 @@ export function FacilityRegistration() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <Label htmlFor="state">State *</Label>
                   <Select
@@ -2560,8 +2620,8 @@ export function FacilityRegistration() {
               </div>
 
               <div className="rounded-md border p-3 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex-1 min-w-0 pr-0 sm:pr-4">
                     <Label htmlFor="enableTermsAndConditions">Terms & Conditions (Optional)</Label>
                     <p className="text-xs text-gray-500 mt-1">
                       If enabled, paste your terms below. Players must scroll through the full text and accept before they can request to join.
@@ -2606,7 +2666,7 @@ export function FacilityRegistration() {
       {/* Additional Locations (optional satellite / branch addresses) */}
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
                 <MapPin className="h-5 w-5" />
@@ -2648,8 +2708,8 @@ export function FacilityRegistration() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 gap-3">
+                <div>
                   <Label className="text-xs">Location Name</Label>
                   <Input
                     value={location.locationName}
@@ -2658,7 +2718,7 @@ export function FacilityRegistration() {
                     className="h-9"
                   />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <Label className="text-xs">Street Address</Label>
                   <Input
                     value={location.streetAddress}
@@ -2667,7 +2727,7 @@ export function FacilityRegistration() {
                     className="h-9"
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
+                <div>
                   <Label className="text-xs">City</Label>
                   <Input
                     value={location.city}
@@ -2676,7 +2736,7 @@ export function FacilityRegistration() {
                     className="h-9"
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1 grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs">State</Label>
                     <Select
@@ -2703,7 +2763,7 @@ export function FacilityRegistration() {
                     />
                   </div>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <Label className="text-xs">Phone</Label>
                   <Input
                     value={location.phone}
@@ -2731,8 +2791,8 @@ export function FacilityRegistration() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 sm:col-span-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="primaryContactName">Contact Name *</Label>
               <Input
                 id="primaryContactName"
@@ -2782,7 +2842,7 @@ export function FacilityRegistration() {
       {/* Secondary Contacts Section */}
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="h-5 w-5" />
@@ -2819,8 +2879,8 @@ export function FacilityRegistration() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2 sm:col-span-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
                     <Label className="text-xs">Name</Label>
                     <Input
                       value={contact.name}
@@ -2829,7 +2889,7 @@ export function FacilityRegistration() {
                       className="h-9"
                     />
                   </div>
-                  <div className="col-span-2 sm:col-span-1">
+                  <div>
                     <Label className="text-xs">Phone</Label>
                     <Input
                       type="tel"
@@ -2839,7 +2899,7 @@ export function FacilityRegistration() {
                       className="h-9"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <Label className="text-xs">Email</Label>
                     <Input
                       type="email"
@@ -2867,25 +2927,25 @@ export function FacilityRegistration() {
           {Object.keys(formData.operatingHours).map((day) => {
             const hours = formData.operatingHours[day as keyof typeof formData.operatingHours];
             return (
-              <div key={day} className="flex items-center gap-4">
-                <div className="w-28 font-medium capitalize">{day}</div>
-                <div className="flex items-center gap-2 flex-1">
+              <div key={day} className="rounded-lg border bg-white p-3 sm:border-0 sm:bg-transparent sm:p-0 sm:rounded-none space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
+                <div className="w-full sm:w-28 font-medium capitalize text-sm">{day}</div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-1 min-w-0">
                   <Input
                     type="time"
                     value={hours.open}
                     onChange={(e) => handleOperatingHoursChange(day, 'open', e.target.value)}
                     disabled={hours.closed}
-                    className="w-32"
+                    className="w-full sm:w-32"
                   />
-                  <span className="text-gray-500">to</span>
+                  <span className="text-gray-500 text-sm">to</span>
                   <Input
                     type="time"
                     value={hours.close}
                     onChange={(e) => handleOperatingHoursChange(day, 'close', e.target.value)}
                     disabled={hours.closed}
-                    className="w-32"
+                    className="w-full sm:w-32"
                   />
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="flex items-center gap-2 sm:ml-4 pt-1 sm:pt-0">
                     <Switch
                       checked={hours.closed}
                       onCheckedChange={(checked) => handleOperatingHoursChange(day, 'closed', checked)}
@@ -2905,7 +2965,7 @@ export function FacilityRegistration() {
           value={formData.timezone}
           onValueChange={(value: string) => handleInputChange('timezone', value)}
         >
-          <SelectTrigger className="w-72">
+          <SelectTrigger className="w-full sm:w-72">
             <SelectValue placeholder="Select timezone" />
           </SelectTrigger>
           <SelectContent>
@@ -2950,10 +3010,10 @@ export function FacilityRegistration() {
         </CardHeader>
         <CardContent>
           {formData.addressWhitelistFileName ? (
-            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-green-600" />
-                <span className="text-sm text-green-700">{formData.addressWhitelistFileName} ({formData.parsedAddresses.length} addresses)</span>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="h-5 w-5 text-green-600 shrink-0" />
+                <span className="text-sm text-green-700 break-words">{formData.addressWhitelistFileName} ({formData.parsedAddresses.length} addresses)</span>
               </div>
               <Button
                 type="button"
@@ -2978,8 +3038,8 @@ export function FacilityRegistration() {
               />
             </label>
           )}
-          <div className="flex items-center gap-3 mt-3">
-            <Label htmlFor="accountsPerAddressRules" className="text-sm whitespace-nowrap">Max accounts per address:</Label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 mt-3">
+            <Label htmlFor="accountsPerAddressRules" className="text-sm">Max accounts per address:</Label>
             <Input
               id="accountsPerAddressRules"
               type="number"
@@ -3014,7 +3074,7 @@ export function FacilityRegistration() {
         </Alert>
       )}
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <Button
           type="button"
           variant={courtFormMode === 'individual' ? 'default' : 'outline'}
@@ -3054,7 +3114,7 @@ export function FacilityRegistration() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Number of Courts</Label>
                 <Input
@@ -3148,7 +3208,7 @@ export function FacilityRegistration() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Court Number</Label>
                   <Input
@@ -3220,7 +3280,7 @@ export function FacilityRegistration() {
                 {court.canSplit && (
                   <div className="ml-6 mt-3 p-4 bg-gray-50 rounded-lg">
                     <Label className="text-sm mb-2 block">Split Configuration</Label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs">Split Names (comma-separated)</Label>
                         <Input
@@ -3483,9 +3543,9 @@ export function FacilityRegistration() {
         <CardContent>
           <div className="space-y-2 text-sm">
             {formData.courts.map((court) => (
-              <div key={court.id} className="flex justify-between">
-                <span>{court.name}</span>
-                <span className="text-gray-600">
+              <div key={court.id} className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-start sm:gap-4 py-2 border-b border-gray-100 last:border-0">
+                <span className="font-medium shrink-0">{court.name}</span>
+                <span className="text-gray-600 text-sm">
                   {court.surfaceType} · {court.courtType} · {court.isIndoor ? 'Indoor' : 'Outdoor'}
                   {court.canSplit && ` · Splits into ${court.splitConfig?.splitNames.join(', ')}`}
                 </span>
@@ -3567,26 +3627,26 @@ export function FacilityRegistration() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-4xl">
-        <CardHeader>
-          <div className="flex flex-col items-center mb-6">
-            <Button variant="ghost" onClick={() => navigate('/login')} className="self-start mb-4">
+    <div className="facility-registration min-h-screen bg-gray-50 flex items-start sm:items-center justify-center px-3 py-4 sm:p-4 pb-24 sm:pb-4">
+      <Card className="w-full max-w-4xl shadow-sm">
+        <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6">
+          <div className="flex flex-col items-center mb-4 sm:mb-6">
+            <Button variant="ghost" onClick={() => navigate('/login')} className="self-start mb-3 sm:mb-4 -ml-2">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Login
             </Button>
-            <img src={logoImage} alt="CourtTime" className="h-16" />
+            <img src={logoImage} alt="CourtTime" className="h-12 sm:h-16" />
           </div>
-          <CardTitle className="text-2xl">Facility Registration</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl">Facility Registration</CardTitle>
           <CardDescription>
             Register your tennis or pickleball facility with CourtTime
           </CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
           {renderProgressBar()}
 
-          <div className="mt-8">
+          <div className="mt-6 sm:mt-8">
             {!preAuthenticated && currentStep === 1 && renderStep1AdminAccount()}
             {(preAuthenticated ? currentStep === 1 : currentStep === 2) && renderStep2FacilityInfo()}
             {(preAuthenticated ? currentStep === 2 : currentStep === 3) && renderStep4Courts()}
@@ -3596,19 +3656,20 @@ export function FacilityRegistration() {
             {(preAuthenticated ? currentStep === 6 : currentStep === 7) && renderPaymentStep()}
           </div>
 
-          <div className="flex justify-between mt-8">
+          <div className="facility-reg-nav sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 sm:py-0 mt-6 sm:mt-8 bg-gray-50/95 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none border-t sm:border-t-0 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between z-10">
             <Button
               type="button"
               variant="outline"
               onClick={handleBack}
               disabled={currentStep === 1}
+              className="w-full sm:w-auto"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Previous
             </Button>
 
             {currentStep < totalSteps ? (
-              <Button type="button" onClick={handleNext}>
+              <Button type="button" onClick={handleNext} className="w-full sm:w-auto">
                 Next
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
@@ -3621,6 +3682,7 @@ export function FacilityRegistration() {
                   !paymentComplete &&
                   !paymentWaived
                 )}
+                className="w-full sm:w-auto"
               >
                 {isSubmitting ? 'Submitting...' : 'Complete Registration'}
               </Button>

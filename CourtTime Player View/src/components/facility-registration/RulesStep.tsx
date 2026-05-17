@@ -64,14 +64,15 @@ function RuleCard({
 }) {
   return (
     <div className="p-3 border rounded-lg space-y-2">
-      <div className="flex justify-between items-center">
-        <div className="flex-1 mr-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+        <div className="flex-1 min-w-0 sm:mr-3">
           <Label className="font-medium text-sm">{meta.name}</Label>
           <p className="text-xs text-gray-500 mt-0.5">{meta.description}</p>
         </div>
         <Switch
           checked={entry.enabled}
           onCheckedChange={onToggle}
+          className="shrink-0 self-start sm:self-center"
         />
       </div>
       {entry.enabled && meta.fields.length > 0 && (
@@ -183,7 +184,7 @@ export function RulesStep({
             }`}
           >
             <Label className="mb-2 block">Restriction Type</Label>
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -426,19 +427,19 @@ export function RulesStep({
                   <div className="space-y-2">
                     {rulesConfig.peakHoursSlots.map((slot) => (
                       <div key={slot.id} className="border rounded-md p-2 space-y-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Input
                             type="time"
                             value={slot.startTime}
                             onChange={(e) => onUpdatePeakHourSlot(slot.id, 'startTime', e.target.value)}
-                            className="w-32"
+                            className="w-full min-w-[7rem] flex-1 sm:w-32 sm:flex-none"
                           />
-                          <span>to</span>
+                          <span className="text-sm text-gray-500">to</span>
                           <Input
                             type="time"
                             value={slot.endTime}
                             onChange={(e) => onUpdatePeakHourSlot(slot.id, 'endTime', e.target.value)}
-                            className="w-32"
+                            className="w-full min-w-[7rem] flex-1 sm:w-32 sm:flex-none"
                           />
                           <button
                             type="button"
@@ -451,7 +452,7 @@ export function RulesStep({
 
                         <div className="space-y-2 p-3 bg-gray-50 rounded-md">
                           <Label className="text-sm">Applies To Days</Label>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border rounded p-2 bg-white">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border rounded p-2 bg-white">
                             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, day) => (
                               <label key={label} className="inline-flex items-center gap-2 text-sm">
                                 <input

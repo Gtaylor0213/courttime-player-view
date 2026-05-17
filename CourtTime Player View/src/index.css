@@ -246,6 +246,27 @@ html {
   }
 }
 
+/* Facility registration — mobile-friendly layout (presentation only) */
+.facility-registration {
+  -webkit-overflow-scrolling: touch;
+}
+
+.facility-registration .facility-reg-nav {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 767px) {
+  .facility-registration [data-slot="card-header"] {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .facility-registration [data-slot="card-content"] {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
 /* Diagonal stripe pattern for maintenance/blocked time slots */
 .unavailable-stripe {
   background: repeating-linear-gradient(

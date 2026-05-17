@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, User, Mail, Phone, Building, Check, AlertCircle, Camera, Search, MapPin, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../contexts/AuthContext';
-import { facilitiesApi } from '../api/client';
+import { facilitiesApi, playerProfileApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -24,8 +24,15 @@ export function UserRegistration() {
   const [facilitySearchQuery, setFacilitySearchQuery] = useState('');
   const [facilitySearchResults, setFacilitySearchResults] = useState<any[]>([]);
   const [isSearchingFacilities, setIsSearchingFacilities] = useState(false);
-  const [selectedFacilities, setSelectedFacilities] = useState<any[]>([]);
+  const [selectedFacilities, setSelectedFacilities] = useState<Array<{ id: string; name: string; termsAccepted?: boolean; [key: string]: unknown }>>([]);
   const [membershipRequestStatus, setMembershipRequestStatus] = useState<{ [key: string]: 'none' | 'requesting' | 'sent' }>({});
+  const joinTermsScrollRef = useRef<HTMLDivElement>(null);
+  const [joinTermsModal, setJoinTermsModal] = useState<{
+    facility: { id: string; name: string; [key: string]: unknown };
+    termsHtml: string;
+  } | null>(null);
+  const [joinTermsScrolledToBottom, setJoinTermsScrolledToBottom] = useState(false);
+  const [joinTermsAccepted, setJoinTermsAccepted] = useState(false);
 
   const [formData, setFormData] = useState({
     // Personal Information
@@ -100,14 +107,54 @@ export function UserRegistration() {
     }
   };
 
-  const handleMembershipRequest = (facility: any) => {
-    setMembershipRequestStatus(prev => ({ ...prev, [facility.id]: 'requesting' }));
+  useLayoutEffect(() => {
+    if (!joinTermsModal) return;
+    const el = joinTermsScrollRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    setJoinTermsScrolledToBottom(el.scrollHeight <= el.clientHeight + 8);
+  }, [joinTermsModal?.facility.id, joinTermsModal?.termsHtml]);
 
-    // Just mark as selected for now - will request membership after registration completes
-    setTimeout(() => {
-      setMembershipRequestStatus(prev => ({ ...prev, [facility.id]: 'sent' }));
-      setSelectedFacilities(prev => [...prev, facility]);
-    }, 500);
+  const addFacilityToSelection = (facility: { id: string; name: string; termsAccepted?: boolean; [key: string]: unknown }) => {
+    if (selectedFacilities.some((f) => f.id === facility.id)) return;
+    setMembershipRequestStatus((prev) => ({ ...prev, [facility.id]: 'sent' }));
+    setSelectedFacilities((prev) => [...prev, facility]);
+  };
+
+  const handleMembershipRequest = async (facility: { id: string; name: string; [key: string]: unknown }) => {
+    if (selectedFacilities.some((f) => f.id === facility.id)) return;
+
+    setMembershipRequestStatus((prev) => ({ ...prev, [facility.id]: 'requesting' }));
+
+    try {
+      const termsResponse = await facilitiesApi.getTerms(facility.id);
+      const terms = termsResponse.success ? termsResponse.data?.terms : null;
+
+      if (terms?.contentHtml?.trim()) {
+        setMembershipRequestStatus((prev) => ({ ...prev, [facility.id]: 'none' }));
+        setJoinTermsModal({
+          facility,
+          termsHtml: terms.contentHtml,
+        });
+        setJoinTermsScrolledToBottom(false);
+        setJoinTermsAccepted(false);
+        return;
+      }
+
+      addFacilityToSelection({ ...facility, termsAccepted: false });
+    } catch (error) {
+      console.error('Error loading facility terms:', error);
+      setMembershipRequestStatus((prev) => ({ ...prev, [facility.id]: 'none' }));
+      toast.error('Failed to load facility terms');
+    }
+  };
+
+  const confirmJoinTermsAndSelectFacility = () => {
+    if (!joinTermsModal || !joinTermsAccepted || !joinTermsScrolledToBottom) return;
+    addFacilityToSelection({ ...joinTermsModal.facility, termsAccepted: true });
+    setJoinTermsModal(null);
+    setJoinTermsScrolledToBottom(false);
+    setJoinTermsAccepted(false);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,8 +210,6 @@ export function UserRegistration() {
     try {
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
-      // Register the user account (selectedFacilities are passed to the backend
-      // which creates pending membership records via addUserToFacility)
       const success = await register(
         formData.email,
         formData.password,
@@ -180,7 +225,6 @@ export function UserRegistration() {
           ustaRating: formData.ustaRating,
           bio: formData.bio,
           profilePicture: formData.profilePicture,
-          selectedFacilities: selectedFacilities.map(f => f.id),
         }
       );
 
@@ -188,7 +232,33 @@ export function UserRegistration() {
         toast.success('Account created successfully!');
 
         if (selectedFacilities.length > 0) {
-          toast.info(`Membership ${selectedFacilities.length === 1 ? 'request' : 'requests'} sent to ${selectedFacilities.length} ${selectedFacilities.length === 1 ? 'facility' : 'facilities'}`);
+          const savedUser = JSON.parse(localStorage.getItem('auth_user') || '{}');
+          const userId = savedUser?.id as string | undefined;
+
+          if (userId) {
+            const results = await Promise.all(
+              selectedFacilities.map((facility) =>
+                playerProfileApi.requestMembership(
+                  userId,
+                  facility.id,
+                  'Full',
+                  Boolean(facility.termsAccepted)
+                )
+              )
+            );
+            const failed = results.filter((r) => !r.success);
+            if (failed.length > 0) {
+              toast.error(
+                failed.length === selectedFacilities.length
+                  ? 'Account created, but membership requests could not be sent.'
+                  : 'Account created, but some membership requests could not be sent.'
+              );
+            } else {
+              toast.info(
+                `Membership ${selectedFacilities.length === 1 ? 'request' : 'requests'} sent to ${selectedFacilities.length} ${selectedFacilities.length === 1 ? 'facility' : 'facilities'}`
+              );
+            }
+          }
         }
 
         navigate('/calendar');
@@ -741,6 +811,65 @@ export function UserRegistration() {
           </div>
         </Card>
       </div>
+
+      {joinTermsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <CardHeader>
+              <CardTitle>Terms & Conditions</CardTitle>
+              <CardDescription>
+                Review and accept the terms for {joinTermsModal.facility.name} before requesting membership.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 overflow-hidden">
+              <div
+                ref={joinTermsScrollRef}
+                className="h-72 overflow-y-auto border rounded-md p-3 text-sm"
+                onScroll={(e) => {
+                  const target = e.currentTarget;
+                  const reachedBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 8;
+                  if (reachedBottom) setJoinTermsScrolledToBottom(true);
+                }}
+              >
+                <div dangerouslySetInnerHTML={{ __html: joinTermsModal.termsHtml }} />
+              </div>
+
+              {!joinTermsScrolledToBottom && (
+                <p className="text-xs text-gray-500">Scroll to the bottom to enable acceptance.</p>
+              )}
+
+              <label className={`flex items-center gap-2 text-sm ${!joinTermsScrolledToBottom ? 'opacity-50' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={joinTermsAccepted}
+                  disabled={!joinTermsScrolledToBottom}
+                  onChange={(e) => setJoinTermsAccepted(e.target.checked)}
+                />
+                I have read and accept these Terms & Conditions
+              </label>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setJoinTermsModal(null);
+                    setJoinTermsScrolledToBottom(false);
+                    setJoinTermsAccepted(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={!joinTermsScrolledToBottom || !joinTermsAccepted}
+                  onClick={confirmJoinTermsAndSelectFacility}
+                >
+                  Accept & Continue
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

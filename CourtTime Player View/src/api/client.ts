@@ -1005,11 +1005,8 @@ export const courtConfigApi = {
     prime_time_start?: string | null;
     prime_time_end?: string | null;
     prime_time_max_duration?: number;
-    slot_duration?: number;
     min_duration?: number;
     max_duration?: number;
-    buffer_before?: number;
-    buffer_after?: number;
   }>) => {
     return apiRequest(`/api/court-config/${courtId}/schedule`, {
       method: 'PUT',

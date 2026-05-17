@@ -38,11 +38,8 @@ function mergeFacilityTemplateWithExistingCourtRows(
       prime_time_end: primeEnd,
       prime_time_max_duration:
         ex.prime_time_max_duration ?? ex.primeTimeMaxDuration ?? tpl.prime_time_max_duration,
-      slot_duration: ex.slot_duration ?? ex.slotDuration ?? tpl.slot_duration,
       min_duration: ex.min_duration ?? ex.minDuration ?? tpl.min_duration,
       max_duration: ex.max_duration ?? ex.maxDuration ?? tpl.max_duration,
-      buffer_before: ex.buffer_before ?? ex.bufferBefore ?? tpl.buffer_before,
-      buffer_after: ex.buffer_after ?? ex.bufferAfter ?? tpl.buffer_after,
     };
   });
 }
@@ -55,7 +52,7 @@ async function loadMergedScheduleForCourt(
   const template = buildCourtScheduleRowsFromFacilityOperatingHours(rawOperatingHours);
   const existing = await client.query(
     `SELECT day_of_week, prime_time_start, prime_time_end, prime_time_max_duration,
-            slot_duration, min_duration, max_duration, buffer_before, buffer_after
+            min_duration, max_duration
      FROM court_operating_config WHERE court_id = $1 ORDER BY day_of_week ASC`,
     [courtId]
   );
@@ -74,8 +71,8 @@ async function writeScheduleForCourt(
       `INSERT INTO court_operating_config (
         court_id, day_of_week, is_open, open_time, close_time,
         prime_time_start, prime_time_end, prime_time_max_duration,
-        slot_duration, min_duration, max_duration, buffer_before, buffer_after
-      ) VALUES ($1, $2, $3, $4::time, $5::time, $6::time, $7::time, $8, $9, $10, $11, $12, $13)`,
+        min_duration, max_duration
+      ) VALUES ($1, $2, $3, $4::time, $5::time, $6::time, $7::time, $8, $9, $10)`,
       [
         courtId,
         day.day_of_week,
@@ -85,11 +82,8 @@ async function writeScheduleForCourt(
         day.prime_time_start,
         day.prime_time_end,
         day.prime_time_max_duration,
-        day.slot_duration,
         day.min_duration,
         day.max_duration,
-        day.buffer_before,
-        day.buffer_after,
       ]
     );
   }

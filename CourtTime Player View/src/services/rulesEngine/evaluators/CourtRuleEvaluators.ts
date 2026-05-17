@@ -10,7 +10,6 @@ import {
   CRT002Config,
   CRT003Config,
   CRT005Config,
-  CRT007Config,
   CRT008Config,
   CRT009Config,
   CRT010Config,
@@ -357,68 +356,6 @@ const CRT006: RuleEvaluator = {
 };
 
 /**
- * CRT-007: Buffer Time Between Reservations
- */
-const CRT007: RuleEvaluator = {
-  ruleCode: 'CRT-007',
-  ruleName: 'Buffer Time Between Reservations',
-  category: 'court',
-
-  async evaluate(context: RuleContext, config: CRT007Config): Promise<RuleResult> {
-    const dayOfWeek = getDayOfWeek(context.request.bookingDate);
-    const dayConfig = context.court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
-
-    const bufferBefore = dayConfig?.bufferBefore || config.buffer_before_minutes || 0;
-    const bufferAfter = dayConfig?.bufferAfter || config.buffer_after_minutes || 5;
-
-    if (bufferBefore === 0 && bufferAfter === 0) {
-      return { ruleCode: 'CRT-007', ruleName: 'Buffer Time Between Reservations', passed: true, severity: 'error' };
-    }
-
-    const requestStartMinutes = timeToMinutes(context.request.startTime);
-    const requestEndMinutes = timeToMinutes(context.request.endTime);
-
-    // Check court bookings for buffer violations
-    for (const existing of context.existingBookings.court) {
-      const existingStartMinutes = timeToMinutes(existing.startTime);
-      const existingEndMinutes = timeToMinutes(existing.endTime);
-
-      // Check if new booking starts too soon after existing booking
-      if (bufferAfter > 0) {
-        const requiredGapAfter = existingEndMinutes + bufferAfter;
-        if (requestStartMinutes > existingEndMinutes && requestStartMinutes < requiredGapAfter) {
-          return {
-            ruleCode: 'CRT-007',
-            ruleName: 'Buffer Time Between Reservations',
-            passed: false,
-            severity: 'error',
-            message: `A ${bufferAfter}-minute buffer is required after the previous booking.`,
-            details: { bufferAfter, existingEnd: existing.endTime }
-          };
-        }
-      }
-
-      // Check if new booking ends too close to existing booking
-      if (bufferBefore > 0) {
-        const requiredGapBefore = existingStartMinutes - bufferBefore;
-        if (requestEndMinutes < existingStartMinutes && requestEndMinutes > requiredGapBefore) {
-          return {
-            ruleCode: 'CRT-007',
-            ruleName: 'Buffer Time Between Reservations',
-            passed: false,
-            severity: 'error',
-            message: `A ${bufferBefore}-minute buffer is required before the next booking.`,
-            details: { bufferBefore, existingStart: existing.startTime }
-          };
-        }
-      }
-    }
-
-    return { ruleCode: 'CRT-007', ruleName: 'Buffer Time Between Reservations', passed: true, severity: 'error' };
-  }
-};
-
-/**
  * CRT-008: Allowed Activities / Booking Types
  */
 const CRT008: RuleEvaluator = {
@@ -645,7 +582,6 @@ export const courtEvaluators: RuleEvaluator[] = [
   CRT004,
   CRT005,
   CRT006,
-  CRT007,
   CRT008,
   CRT009,
   CRT010,

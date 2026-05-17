@@ -127,11 +127,8 @@ export interface CourtOperatingConfig {
   primeTimeStart?: string;
   primeTimeEnd?: string;
   primeTimeMaxDuration: number;
-  slotDuration: number;
   minDuration: number;
   maxDuration: number;
-  bufferBefore: number;
-  bufferAfter: number;
   releaseTime?: string;
 }
 
@@ -487,11 +484,6 @@ export interface CRT005Config {
   slot_minutes: number;
   min_duration_minutes: number;
   max_duration_minutes: number;
-}
-
-export interface CRT007Config {
-  buffer_before_minutes: number;
-  buffer_after_minutes: number;
 }
 
 export interface CRT008Config {

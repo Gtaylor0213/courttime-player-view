@@ -108,8 +108,7 @@ router.get('/facility/:facilityId', async (req, res, next) => {
          c.id as "courtId",
          coc.is_open as "isOpen",
          coc.open_time as "openTime",
-         coc.close_time as "closeTime",
-         coc.slot_duration as "slotDuration"
+         coc.close_time as "closeTime"
        FROM courts c
        LEFT JOIN court_operating_config coc
          ON coc.court_id = c.id
@@ -129,7 +128,7 @@ router.get('/facility/:facilityId', async (req, res, next) => {
         isOpen: config?.isOpen ?? !facilityClosed,
         openTime: config?.openTime || facilityOpenTime,
         closeTime: config?.closeTime || facilityCloseTime,
-        slotDuration: config?.slotDuration || 30,
+        slotDuration: 30,
       };
     });
 
@@ -208,9 +207,7 @@ router.get('/:courtId/schedule', async (req, res, next) => {
             '20:00',
           prime_time_start: null,
           prime_time_end: null,
-          prime_time_max_duration: null,
-          slot_duration: 30,
-          buffer_minutes: 0
+          prime_time_max_duration: null
         };
       });
 
@@ -294,8 +291,8 @@ router.put('/:courtId/schedule', async (req, res, next) => {
           `INSERT INTO court_operating_config (
             court_id, day_of_week, is_open, open_time, close_time,
             prime_time_start, prime_time_end, prime_time_max_duration,
-            slot_duration, min_duration, max_duration, buffer_before, buffer_after
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            min_duration, max_duration
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             courtId,
             day.day_of_week,
@@ -305,11 +302,8 @@ router.put('/:courtId/schedule', async (req, res, next) => {
             day.prime_time_start || null,
             day.prime_time_end || null,
             day.prime_time_max_duration || 90,
-            day.slot_duration || 30,
             day.min_duration || 30,
-            day.max_duration || 120,
-            day.buffer_before || 0,
-            day.buffer_after || 5
+            day.max_duration || 120
           ]
         );
       }
@@ -353,19 +347,16 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
       primeTimeStart,
       primeTimeEnd,
       primeTimeMaxDuration,
-      slotDuration,
       minDuration,
-      maxDuration,
-      bufferBefore,
-      bufferAfter
+      maxDuration
     } = req.body;
 
     const result = await query(
       `INSERT INTO court_operating_config (
         court_id, day_of_week, is_open, open_time, close_time,
         prime_time_start, prime_time_end, prime_time_max_duration,
-        slot_duration, min_duration, max_duration, buffer_before, buffer_after
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        min_duration, max_duration
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (court_id, day_of_week)
       DO UPDATE SET
         is_open = EXCLUDED.is_open,
@@ -374,11 +365,8 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
         prime_time_start = EXCLUDED.prime_time_start,
         prime_time_end = EXCLUDED.prime_time_end,
         prime_time_max_duration = EXCLUDED.prime_time_max_duration,
-        slot_duration = EXCLUDED.slot_duration,
         min_duration = EXCLUDED.min_duration,
         max_duration = EXCLUDED.max_duration,
-        buffer_before = EXCLUDED.buffer_before,
-        buffer_after = EXCLUDED.buffer_after,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *`,
       [
@@ -390,11 +378,8 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
         primeTimeStart || null,
         primeTimeEnd || null,
         primeTimeMaxDuration || 90,
-        slotDuration || 30,
         minDuration || 30,
-        maxDuration || 120,
-        bufferBefore || 0,
-        bufferAfter || 5
+        maxDuration || 120
       ]
     );
 
@@ -753,8 +738,7 @@ router.get('/:courtId/availability', async (req, res, next) => {
     const config = configResult.rows[0] || {
       is_open: !facilityClosed,
       open_time: facilityOpenTime,
-      close_time: facilityCloseTime,
-      slot_duration: 30
+      close_time: facilityCloseTime
     };
 
     res.json({
@@ -769,8 +753,7 @@ router.get('/:courtId/availability', async (req, res, next) => {
         start: config.prime_time_start,
         end: config.prime_time_end
       } : null,
-      slotDuration: config.slot_duration,
-      bufferMinutes: config.buffer_minutes,
+      slotDuration: 30,
       blackouts: blackoutResult.rows,
       existingBookings: bookingsResult.rows
     });

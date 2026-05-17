@@ -194,15 +194,6 @@ export const RULE_METADATA: RuleMeta[] = [
     ],
   },
   {
-    code: 'CRT-007',
-    name: 'Buffer Time Between Reservations',
-    description: 'Requires a gap between back-to-back reservations to allow for court transitions.',
-    category: 'court',
-    fields: [
-      { key: 'buffer_minutes', label: 'Buffer', type: 'number', min: 0, max: 60, step: 5, suffix: 'minutes' },
-    ],
-  },
-  {
     code: 'CRT-008',
     name: 'Allowed Booking Types',
     description: 'Restrict which booking types (singles, doubles, lessons, etc.) are available at this facility.',
@@ -281,7 +272,6 @@ export const DEFAULT_RULE_CONFIGS: Record<string, RuleEntry> = {
   'CRT-002': { enabled: false, config: { max_minutes_prime: '' } },
   'CRT-003': { enabled: false, config: { allowed_tiers: [], allow_admin_override: true } },
   'CRT-005': { enabled: false, config: { max_duration_minutes: '' } },
-  'CRT-007': { enabled: false, config: { buffer_minutes: '' } },
   'CRT-008': { enabled: false, config: { allowed_types: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'] } },
   'CRT-010': { enabled: false, config: { max_per_week_per_account: '', window_type: 'calendar_week' } },
   'CRT-011': { enabled: false, config: { release_time_local: '', days_ahead: '' } },

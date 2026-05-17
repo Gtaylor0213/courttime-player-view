@@ -282,11 +282,8 @@ export type CourtOperatingScheduleRow = {
   prime_time_start: string | null;
   prime_time_end: string | null;
   prime_time_max_duration: number;
-  slot_duration: number;
   min_duration: number;
   max_duration: number;
-  buffer_before: number;
-  buffer_after: number;
 };
 
 /**
@@ -331,11 +328,8 @@ export function buildCourtScheduleRowsFromFacilityOperatingHours(
       prime_time_start: null,
       prime_time_end: null,
       prime_time_max_duration: 90,
-      slot_duration: 30,
       min_duration: 30,
       max_duration: 120,
-      buffer_before: 0,
-      buffer_after: 5,
     };
   });
 }

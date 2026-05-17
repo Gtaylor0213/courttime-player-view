@@ -141,9 +141,6 @@ interface BookingRules {
   strikeThreshold: string;
   strikeWindowDays: string;
   strikeLockoutDays: string;
-  // CRT-007: Buffer time between reservations
-  bufferTimeEnabled: boolean;
-  bufferTimeMinutes: string;
   // CRT-008: Allowed booking types
   allowedBookingTypesEnabled: boolean;
   allowedBookingTypes: string[];
@@ -480,8 +477,6 @@ export function FacilityManagement() {
     strikeThreshold: '',
     strikeWindowDays: '',
     strikeLockoutDays: '',
-    bufferTimeEnabled: false,
-    bufferTimeMinutes: '',
     allowedBookingTypesEnabled: false,
     allowedBookingTypes: ['singles', 'doubles', 'lesson', 'clinic', 'open_play', 'tournament', 'practice', 'social', 'other'],
     courtWeeklyCapEnabled: false,
@@ -2264,7 +2259,6 @@ export function FacilityManagement() {
     'ACC-010': { enabledField: 'peakHoursRestrictions.maxBookingsUnlimited', invertEnabled: true, configMap: { max_prime_per_week: { field: 'peakHoursRestrictions.maxBookingsPerWeek' } } },
     'CRT-002': { enabledField: 'peakHoursRestrictions.maxDurationUnlimited', invertEnabled: true, configMap: { max_minutes_prime: { field: 'peakHoursRestrictions.maxDurationHours', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
     'CRT-005': { enabledField: 'maxReservationDurationEnabled', configMap: { max_duration_minutes: { field: 'maxReservationDurationMinutes', fromDb: (v: number) => v, toDb: (v: number) => v } } },
-    'CRT-007': { enabledField: 'bufferTimeEnabled', configMap: { buffer_minutes: { field: 'bufferTimeMinutes' } } },
     'CRT-008': { enabledField: 'allowedBookingTypesEnabled', configMap: {} },
     'CRT-010': { enabledField: 'courtWeeklyCapEnabled', configMap: { max_per_week_per_account: { field: 'courtWeeklyCap' } } },
     'CRT-011': { enabledField: 'courtReleaseTimeEnabled', configMap: { release_time_local: { field: 'courtReleaseTime' }, days_ahead: { field: 'courtReleaseDaysAhead' } } },
@@ -3962,44 +3956,6 @@ export function FacilityManagement() {
                                       ))}
                                     </tbody>
                                   </table>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
-                                  <div className="space-y-1">
-                                    <Label className="text-sm">Slot Duration (min)</Label>
-                                    <Select
-                                      value={String(courtSchedule[0]?.slot_duration || 30)}
-                                      onValueChange={(val: string) => updateAllScheduleDays('slot_duration', parseInt(val))}
-                                    >
-                                      <SelectTrigger><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="15">15 min</SelectItem>
-                                        <SelectItem value="30">30 min</SelectItem>
-                                        <SelectItem value="60">60 min</SelectItem>
-                                        <SelectItem value="90">90 min</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-sm">Buffer Before (min)</Label>
-                                    <Input
-                                      type="number"
-                                      value={courtSchedule[0]?.buffer_before || 0}
-                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllScheduleDays('buffer_before', parseInt(e.target.value) || 0)}
-                                      min="0"
-                                      max="30"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-sm">Buffer After (min)</Label>
-                                    <Input
-                                      type="number"
-                                      value={courtSchedule[0]?.buffer_after || 0}
-                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllScheduleDays('buffer_after', parseInt(e.target.value) || 0)}
-                                      min="0"
-                                      max="30"
-                                    />
-                                  </div>
                                 </div>
 
                                 <div className="flex gap-2 pt-4">

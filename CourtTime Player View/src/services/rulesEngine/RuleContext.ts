@@ -1264,11 +1264,8 @@ async function fetchCourtWithConfig(courtId: string): Promise<CourtWithConfig> {
       prime_time_start as "primeTimeStart",
       prime_time_end as "primeTimeEnd",
       prime_time_max_duration as "primeTimeMaxDuration",
-      slot_duration as "slotDuration",
       min_duration as "minDuration",
       max_duration as "maxDuration",
-      buffer_before as "bufferBefore",
-      buffer_after as "bufferAfter",
       release_time as "releaseTime"
     FROM court_operating_config
     WHERE court_id = $1

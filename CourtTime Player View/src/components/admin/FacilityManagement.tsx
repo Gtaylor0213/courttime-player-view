@@ -30,6 +30,7 @@ import {
   parseBookingFeeDollars,
   type PaidCourtFormFields,
 } from './PaidCourtBookingFields';
+import { CourtScheduleEditor } from './CourtScheduleEditor';
 import { toast } from 'sonner';
 import {
   courtScheduleRowsToOperatingHoursMap,
@@ -1877,8 +1878,6 @@ export function FacilityManagement() {
   };
 
   // Court schedule config functions
-  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
   const loadCourtSchedule = async (courtId: string) => {
     try {
       setCourtScheduleLoading(true);
@@ -3041,26 +3040,31 @@ export function FacilityManagement() {
                     {isEditing ? (
                       <div className="space-y-4">
                         {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
-                          <div key={day} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                            <div className="w-28 font-medium capitalize">{day}</div>
-                            <div className="flex items-center gap-2 flex-1">
-                              <Input
-                                type="time"
-                                value={facilityData.operatingHours[day]?.open || '08:00'}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOperatingHoursChange(day, 'open', e.target.value)}
-                                disabled={facilityData.operatingHours[day]?.closed}
-                                className="w-32"
-                              />
-                              <span className="text-gray-500">to</span>
-                              <Input
-                                type="time"
-                                value={facilityData.operatingHours[day]?.close || '20:00'}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOperatingHoursChange(day, 'close', e.target.value)}
-                                disabled={facilityData.operatingHours[day]?.closed}
-                                className="w-32"
-                              />
+                          <div key={day} className="flex flex-col gap-3 p-3 bg-gray-50 rounded-lg sm:flex-row sm:items-center sm:gap-4">
+                            <div className="font-medium capitalize sm:w-28">{day}</div>
+                            <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:flex sm:flex-1 sm:items-center sm:gap-2">
+                              <div className="space-y-1 sm:space-y-0">
+                                <Label className="text-xs text-gray-600 sm:hidden">Start time</Label>
+                                <Input
+                                  type="time"
+                                  value={facilityData.operatingHours[day]?.open || '08:00'}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOperatingHoursChange(day, 'open', e.target.value)}
+                                  disabled={facilityData.operatingHours[day]?.closed}
+                                  className="w-full sm:w-32"
+                                />
+                              </div>
+                              <div className="space-y-1 sm:space-y-0">
+                                <Label className="text-xs text-gray-600 sm:hidden">End time</Label>
+                                <Input
+                                  type="time"
+                                  value={facilityData.operatingHours[day]?.close || '20:00'}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOperatingHoursChange(day, 'close', e.target.value)}
+                                  disabled={facilityData.operatingHours[day]?.closed}
+                                  className="w-full sm:w-32"
+                                />
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 sm:shrink-0">
                               <Switch
                                 id={`closed-${day}`}
                                 checked={facilityData.operatingHours[day]?.closed || false}
@@ -3894,71 +3898,14 @@ export function FacilityManagement() {
                               </div>
                             ) : (
                               <div className="space-y-4">
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-sm">
-                                    <thead>
-                                      <tr className="border-b">
-                                        <th className="text-left p-2">Day</th>
-                                        <th className="text-center p-2">Open</th>
-                                        <th className="text-center p-2">Open Time</th>
-                                        <th className="text-center p-2">Close Time</th>
-                                        <th className="text-center p-2">Peak Start</th>
-                                        <th className="text-center p-2">Peak End</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {courtSchedule.map((day: any) => (
-                                        <tr key={day.day_of_week} className="border-b">
-                                          <td className="p-2 font-medium">{DAY_NAMES[day.day_of_week]}</td>
-                                          <td className="p-2 text-center">
-                                            <Switch
-                                              checked={day.is_open}
-                                              onCheckedChange={(checked: boolean) => updateCourtScheduleDay(day.day_of_week, 'is_open', checked)}
-                                            />
-                                          </td>
-                                          <td className="p-2">
-                                            <Input
-                                              type="time"
-                                              value={day.open_time || '06:00'}
-                                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'open_time', e.target.value)}
-                                              disabled={!day.is_open}
-                                              className="w-28"
-                                            />
-                                          </td>
-                                          <td className="p-2">
-                                            <Input
-                                              type="time"
-                                              value={day.close_time || '22:00'}
-                                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'close_time', e.target.value)}
-                                              disabled={!day.is_open}
-                                              className="w-28"
-                                            />
-                                          </td>
-                                          <td className="p-2">
-                                            <Input
-                                              type="time"
-                                              value={day.prime_time_start || ''}
-                                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'prime_time_start', e.target.value || null)}
-                                              disabled={!day.is_open}
-                                              className="w-28"
-                                            />
-                                          </td>
-                                          <td className="p-2">
-                                            <Input
-                                              type="time"
-                                              value={day.prime_time_end || ''}
-                                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'prime_time_end', e.target.value || null)}
-                                              disabled={!day.is_open}
-                                              className="w-28"
-                                            />
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
+                                <CourtScheduleEditor
+                                  schedule={courtSchedule}
+                                  onUpdateDay={updateCourtScheduleDay}
+                                  peakStartLabel="Peak Start"
+                                  peakEndLabel="Peak End"
+                                />
 
-                                <div className="flex gap-2 pt-4">
+                                <div className="flex flex-wrap gap-2 pt-4">
                                   <Button onClick={saveCourtSchedule} disabled={courtScheduleSaving}>
                                     <Save className="h-4 w-4 mr-2" />
                                     {courtScheduleSaving ? 'Saving...' : 'Save Schedule'}

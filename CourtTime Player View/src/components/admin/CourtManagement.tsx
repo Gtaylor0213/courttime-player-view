@@ -33,6 +33,7 @@ import {
   parseBookingFeeDollars,
   type PaidCourtFormFields,
 } from './PaidCourtBookingFields';
+import { CourtScheduleEditor } from './CourtScheduleEditor';
 
 interface Court extends PaidCourtFormFields {
   id: string;
@@ -508,8 +509,6 @@ export function CourtManagement() {
   };
 
   // --- Court Schedule Config ---
-
-  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const loadCourtSchedule = async (courtId: string) => {
     try {
@@ -1064,74 +1063,14 @@ export function CourtManagement() {
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          <div className="relative">
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b">
-                                    <th className="text-left p-2">Day</th>
-                                  <th className="text-center p-2">Open</th>
-                                  <th className="text-center p-2">Open Time</th>
-                                  <th className="text-center p-2">Close Time</th>
-                                  <th className="text-center p-2">Prime Start</th>
-                                  <th className="text-center p-2">Prime End</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {courtSchedule.map((day: any) => (
-                                  <tr key={day.day_of_week} className="border-b">
-                                    <td className="p-2 font-medium">{DAY_NAMES[day.day_of_week]}</td>
-                                    <td className="p-2 text-center">
-                                      <Switch
-                                        checked={day.is_open}
-                                        onCheckedChange={(checked: boolean) => updateCourtScheduleDay(day.day_of_week, 'is_open', checked)}
-                                      />
-                                    </td>
-                                    <td className="p-2">
-                                      <Input
-                                        type="time"
-                                        value={day.open_time || '06:00'}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'open_time', e.target.value)}
-                                        disabled={!day.is_open}
-                                        className="w-28"
-                                      />
-                                    </td>
-                                    <td className="p-2">
-                                      <Input
-                                        type="time"
-                                        value={day.close_time || '22:00'}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'close_time', e.target.value)}
-                                        disabled={!day.is_open}
-                                        className="w-28"
-                                      />
-                                    </td>
-                                    <td className="p-2">
-                                      <Input
-                                        type="time"
-                                        value={day.prime_time_start || ''}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'prime_time_start', e.target.value || null)}
-                                        disabled={!day.is_open}
-                                        className="w-28"
-                                      />
-                                    </td>
-                                    <td className="p-2">
-                                      <Input
-                                        type="time"
-                                        value={day.prime_time_end || ''}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCourtScheduleDay(day.day_of_week, 'prime_time_end', e.target.value || null)}
-                                        disabled={!day.is_open}
-                                        className="w-28"
-                                      />
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                              </table>
-                            </div>
-                            <div className="absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-white pointer-events-none md:hidden" />
-                          </div>
+                          <CourtScheduleEditor
+                            schedule={courtSchedule}
+                            onUpdateDay={updateCourtScheduleDay}
+                            peakStartLabel="Prime Start"
+                            peakEndLabel="Prime End"
+                          />
 
-                          <div className="flex gap-2 pt-4">
+                          <div className="flex flex-wrap gap-2 pt-4">
                             <Button onClick={saveCourtSchedule} disabled={courtScheduleSaving}>
                               <Save className="h-4 w-4 mr-2" />
                               {courtScheduleSaving ? 'Saving...' : 'Save Schedule'}

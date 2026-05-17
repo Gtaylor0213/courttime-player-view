@@ -23,6 +23,11 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { OperatingHoursCard } from '../src/components/OperatingHoursCard';
 import { EmptyState } from '../src/components/EmptyState';
 import { CardSkeleton } from '../src/components/LoadingSkeleton';
+import {
+  courtScheduleRowsToOperatingHoursMap,
+  groupOperatingHoursForCompactDisplay,
+  type OperatingHoursMap,
+} from '../../shared/utils/operatingHours';
 
 export const ErrorBoundary = createRouteErrorBoundary('Club Info');
 
@@ -55,6 +60,26 @@ interface CourtData {
   status: string;
 }
 
+function CourtWeeklyHours({ hours }: { hours: OperatingHoursMap }) {
+  if (!hours || Object.keys(hours).length === 0) {
+    return <Text style={styles.courtHoursEmpty}>Hours not available</Text>;
+  }
+  const groups = groupOperatingHoursForCompactDisplay(hours, 'full');
+  return (
+    <View style={styles.courtHoursBlock}>
+      <Text style={styles.courtHoursTitle}>Court Hours</Text>
+      {groups.map((row, idx) => (
+        <View key={`${row.dayRangeLabel}-${idx}`} style={styles.courtHoursRow}>
+          <Text style={styles.courtHoursDay}>{row.dayRangeLabel}</Text>
+          <Text style={row.closed ? styles.courtHoursClosed : styles.courtHoursTime}>
+            {row.hoursLabel}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function ClubInfoScreen() {
   const router = useRouter();
   const { facilityId: routeFacilityId } = useLocalSearchParams<{ facilityId: string }>();
@@ -62,9 +87,45 @@ export default function ClubInfoScreen() {
   const resolvedFacilityId = routeFacilityId || authFacilityId || null;
   const [facility, setFacility] = useState<FacilityData | null>(null);
   const [courts, setCourts] = useState<CourtData[]>([]);
+  const [courtOperatingHours, setCourtOperatingHours] = useState<Record<string, OperatingHoursMap>>({});
+  const [courtHoursLoading, setCourtHoursLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  const loadCourtOperatingHours = useCallback(async (courtList: CourtData[]) => {
+    if (!courtList.length) {
+      setCourtOperatingHours({});
+      return;
+    }
+    setCourtHoursLoading(true);
+    try {
+      const results = await Promise.all(
+        courtList.map(async (court) => {
+          try {
+            const res = await api.get(`/api/court-config/${court.id}/schedule`);
+            const schedule = (res.data as { schedule?: unknown })?.schedule;
+            if (res.success && Array.isArray(schedule)) {
+              return {
+                courtId: court.id,
+                hours: courtScheduleRowsToOperatingHoursMap(schedule),
+              };
+            }
+          } catch {
+            /* omit on failure */
+          }
+          return { courtId: court.id, hours: {} as OperatingHoursMap };
+        })
+      );
+      const byCourtId: Record<string, OperatingHoursMap> = {};
+      results.forEach(({ courtId, hours }) => {
+        byCourtId[courtId] = hours;
+      });
+      setCourtOperatingHours(byCourtId);
+    } finally {
+      setCourtHoursLoading(false);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     if (!resolvedFacilityId) {
@@ -92,11 +153,13 @@ export default function ClubInfoScreen() {
     if (courtsRes.success && courtsRes.data) {
       const list = Array.isArray(courtsRes.data) ? courtsRes.data : courtsRes.data.courts || [];
       setCourts(list);
+      await loadCourtOperatingHours(list);
     } else {
       setCourts([]);
+      setCourtOperatingHours({});
     }
     setLoading(false);
-  }, [resolvedFacilityId]);
+  }, [resolvedFacilityId, loadCourtOperatingHours]);
 
   useEffect(() => {
     fetchData();
@@ -268,6 +331,11 @@ export default function ClubInfoScreen() {
                       <Text style={styles.courtMetaText}> · Lights</Text>
                     )}
                   </View>
+                  {courtHoursLoading ? (
+                    <Text style={styles.courtHoursLoading}>Loading hours...</Text>
+                  ) : (
+                    <CourtWeeklyHours hours={courtOperatingHours[court.id] || {}} />
+                  )}
                 </View>
                 <View style={[styles.statusDot, { backgroundColor: getCourtStatusColor(court.status) }]} />
               </View>
@@ -378,5 +446,56 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     marginLeft: Spacing.sm,
+  },
+  courtHoursBlock: {
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+  },
+  courtHoursTitle: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
+    color: Colors.textMuted,
+    marginBottom: Spacing.xs,
+  },
+  courtHoursRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  courtHoursDay: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.textSecondary,
+    flexShrink: 1,
+    marginRight: Spacing.sm,
+  },
+  courtHoursTime: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.text,
+    flex: 1,
+    textAlign: 'right',
+  },
+  courtHoursClosed: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    flex: 1,
+    textAlign: 'right',
+  },
+  courtHoursEmpty: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
+    marginTop: Spacing.sm,
+  },
+  courtHoursLoading: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
+    marginTop: Spacing.sm,
   },
 });

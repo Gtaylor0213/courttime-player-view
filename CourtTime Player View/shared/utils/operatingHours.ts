@@ -344,3 +344,155 @@ export function buildCourtScheduleRowsFromFacilityOperatingHours(
 export function facilityOperatingHoursScheduleFingerprint(raw: unknown): string {
   return JSON.stringify(buildCourtScheduleRowsFromFacilityOperatingHours(raw));
 }
+
+export type CourtScheduleRowInput = {
+  day_of_week?: number;
+  dayOfWeek?: number;
+  is_open?: boolean;
+  isOpen?: boolean;
+  open_time?: string;
+  openTime?: string;
+  close_time?: string;
+  closeTime?: string;
+};
+
+const DAY_LABELS_SHORT: Record<OperatingDayMondayFirst, string> = {
+  monday: 'Mon',
+  tuesday: 'Tue',
+  wednesday: 'Wed',
+  thursday: 'Thu',
+  friday: 'Fri',
+  saturday: 'Sat',
+  sunday: 'Sun',
+};
+
+const DAY_LABELS_FULL: Record<OperatingDayMondayFirst, string> = {
+  monday: 'Monday',
+  tuesday: 'Tuesday',
+  wednesday: 'Wednesday',
+  thursday: 'Thursday',
+  friday: 'Friday',
+  saturday: 'Saturday',
+  sunday: 'Sunday',
+};
+
+export type GroupedOperatingHoursRow = {
+  dayRangeLabel: string;
+  hoursLabel: string;
+  closed: boolean;
+};
+
+/** Collapse consecutive days with identical hours (e.g. Monday–Friday 9:00 AM – 9:00 PM). */
+export function groupOperatingHoursForCompactDisplay(
+  operatingHours: OperatingHoursMap,
+  labelStyle: 'short' | 'full' = 'full'
+): GroupedOperatingHoursRow[] {
+  const labels = labelStyle === 'short' ? DAY_LABELS_SHORT : DAY_LABELS_FULL;
+  const groups: GroupedOperatingHoursRow[] = [];
+
+  let rangeStart: OperatingDayMondayFirst | null = null;
+  let rangeEnd: OperatingDayMondayFirst | null = null;
+  let hoursLabel = '';
+  let closed = true;
+
+  const flush = () => {
+    if (!rangeStart || !rangeEnd) return;
+    const dayRangeLabel =
+      rangeStart === rangeEnd
+        ? labels[rangeStart]
+        : `${labels[rangeStart]}-${labels[rangeEnd]}`;
+    groups.push({ dayRangeLabel, hoursLabel, closed });
+    rangeStart = null;
+    rangeEnd = null;
+  };
+
+  for (const day of OPERATING_DAYS_MONDAY_FIRST) {
+    const normalized = normalizeDayHours(getOperatingHoursForDay(operatingHours, day));
+    if (rangeStart == null) {
+      rangeStart = day;
+      rangeEnd = day;
+      hoursLabel = normalized.display;
+      closed = normalized.closed;
+      continue;
+    }
+    if (normalized.display === hoursLabel) {
+      rangeEnd = day;
+    } else {
+      flush();
+      rangeStart = day;
+      rangeEnd = day;
+      hoursLabel = normalized.display;
+      closed = normalized.closed;
+    }
+  }
+  flush();
+  return groups;
+}
+
+/** e.g. "9:00 AM – 9:00 PM" → "9am-9pm" for compact inline summaries */
+export function compactHoursDisplayLabel(label: string): string {
+  if (!label || label.toLowerCase() === 'closed') return 'Closed';
+  return label
+    .replace(/\s*–\s*/g, '-')
+    .replace(/:00/g, '')
+    .replace(/\s/g, '')
+    .toLowerCase();
+}
+
+/** One-line grouped hours for admin lists (e.g. "Mon-Fri 9am-9pm · Sat-Sun 10am-10pm"). */
+export function formatGroupedOperatingHoursSummary(
+  operatingHours: OperatingHoursMap,
+  options?: { labelStyle?: 'short' | 'full'; separator?: string; compactTimes?: boolean }
+): string {
+  const groups = groupOperatingHoursForCompactDisplay(
+    operatingHours,
+    options?.labelStyle ?? 'short'
+  );
+  if (groups.length === 0) return '';
+  const sep = options?.separator ?? ' · ';
+  const compactTimes = options?.compactTimes !== false;
+  return groups
+    .map((g) => {
+      const hours = compactTimes ? compactHoursDisplayLabel(g.hoursLabel) : g.hoursLabel;
+      return `${g.dayRangeLabel} ${hours}`;
+    })
+    .join(sep);
+}
+
+/** Pull schedule array from GET /api/court-config/:id/schedule response body. */
+export function extractCourtScheduleFromApiResponse(apiData: unknown): CourtScheduleRowInput[] {
+  if (apiData == null) return [];
+  if (Array.isArray(apiData)) return apiData;
+  if (typeof apiData !== 'object') return [];
+  const record = apiData as Record<string, unknown>;
+  if (Array.isArray(record.schedule)) return record.schedule;
+  if (record.data && typeof record.data === 'object') {
+    const inner = record.data as Record<string, unknown>;
+    if (Array.isArray(inner.schedule)) return inner.schedule;
+  }
+  return [];
+}
+
+/** Map court_operating_config rows (JS weekday 0=Sun … 6=Sat) to facility-style day keys for display. */
+export function courtScheduleRowsToOperatingHoursMap(
+  schedule: CourtScheduleRowInput[] | null | undefined
+): OperatingHoursMap {
+  if (!Array.isArray(schedule) || schedule.length === 0) return {};
+  const map: OperatingHoursMap = {};
+  for (const row of schedule) {
+    const dowRaw = row.day_of_week ?? row.dayOfWeek;
+    const dow = typeof dowRaw === 'string' ? parseInt(dowRaw, 10) : dowRaw;
+    if (dow == null || !Number.isFinite(dow) || dow < 0 || dow > 6) continue;
+    const dayName = SUNDAY_FIRST_DAY_NAMES[dow];
+    const isOpen = row.is_open ?? row.isOpen;
+    if (isOpen === false) {
+      map[dayName] = { closed: true };
+      continue;
+    }
+    map[dayName] = {
+      open: row.open_time ?? row.openTime ?? '08:00',
+      close: row.close_time ?? row.closeTime ?? '20:00',
+    };
+  }
+  return map;
+}

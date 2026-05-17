@@ -6,9 +6,14 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { facilitiesApi, playerProfileApi, facilityLocationsApi } from '../api/client';
+import { facilitiesApi, playerProfileApi, facilityLocationsApi, courtConfigApi } from '../api/client';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
+import {
+  courtScheduleRowsToOperatingHoursMap,
+  groupOperatingHoursForCompactDisplay,
+  type OperatingHoursMap,
+} from '../../shared/utils/operatingHours';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -46,6 +51,28 @@ interface FacilityData {
   }[];
 }
 
+function CourtWeeklyHours({ hours }: { hours: OperatingHoursMap }) {
+  if (!hours || Object.keys(hours).length === 0) {
+    return <p className="text-xs text-gray-500 mt-2">Hours not available</p>;
+  }
+  const groups = groupOperatingHoursForCompactDisplay(hours, 'full');
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-200 text-left">
+      <p className="text-xs font-medium text-gray-500 mb-1">Court Hours</p>
+      <div className="space-y-0.5">
+        {groups.map((row, idx) => (
+          <div key={`${row.dayRangeLabel}-${idx}`} className="flex justify-between text-xs gap-2">
+            <span className="text-gray-600 shrink-0">{row.dayRangeLabel}</span>
+            <span className={row.closed ? 'text-gray-400 italic' : 'text-gray-700'}>
+              {row.hoursLabel}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ClubInfo() {
   const { clubId } = useParams<{ clubId: string }>();
   const navigate = useNavigate();
@@ -55,6 +82,8 @@ export function ClubInfo() {
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [isMember, setIsMember] = useState(false);
   const [secondaryLocations, setSecondaryLocations] = useState<any[]>([]);
+  const [courtOperatingHours, setCourtOperatingHours] = useState<Record<string, OperatingHoursMap>>({});
+  const [courtHoursLoading, setCourtHoursLoading] = useState(false);
 
   useEffect(() => {
     if (clubId) {
@@ -62,9 +91,43 @@ export function ClubInfo() {
     }
   }, [clubId, user?.id]);
 
+  const loadCourtOperatingHours = async (courts: FacilityData['courts']) => {
+    if (!courts.length) {
+      setCourtOperatingHours({});
+      return;
+    }
+    setCourtHoursLoading(true);
+    try {
+      const results = await Promise.all(
+        courts.map(async (court) => {
+          try {
+            const response = await courtConfigApi.getSchedule(court.id);
+            if (response.success && Array.isArray(response.data?.schedule)) {
+              return {
+                courtId: court.id,
+                hours: courtScheduleRowsToOperatingHoursMap(response.data.schedule),
+              };
+            }
+          } catch {
+            /* omit court hours on failure */
+          }
+          return { courtId: court.id, hours: {} as OperatingHoursMap };
+        })
+      );
+      const byCourtId: Record<string, OperatingHoursMap> = {};
+      results.forEach(({ courtId, hours }) => {
+        byCourtId[courtId] = hours;
+      });
+      setCourtOperatingHours(byCourtId);
+    } finally {
+      setCourtHoursLoading(false);
+    }
+  };
+
   const loadFacilityData = async () => {
     try {
       setLoading(true);
+      setCourtOperatingHours({});
 
       // Load user's member facilities to check if they're a member
       if (user?.id) {
@@ -184,7 +247,11 @@ export function ClubInfo() {
           const activeCourts = courtsResponse.data.courts.filter(
             (court: any) => court.status === 'active' || court.status === 'available' || !court.status
           );
-          setFacility(prev => prev ? { ...prev, courts: sortCourtsForDisplay(activeCourts) } : null);
+          const sortedCourts = sortCourtsForDisplay(activeCourts);
+          setFacility(prev => prev ? { ...prev, courts: sortedCourts } : null);
+          await loadCourtOperatingHours(sortedCourts);
+        } else {
+          setCourtOperatingHours({});
         }
       }
     } catch (error) {
@@ -616,15 +683,22 @@ export function ClubInfo() {
               </CardHeader>
               <CardContent>
                 {facility.courts && facility.courts.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {facility.courts.map((court) => (
-                      <div key={court.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-center">
-                        <p className="font-medium text-sm">{safeDisplayText(court.name)}</p>
-                        <Badge variant="outline" className="mt-1 text-[10px]">{safeDisplayText(court.courtType)}</Badge>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {safeDisplayText(court.surfaceType)} • {court.isIndoor ? 'Indoor' : 'Outdoor'}
-                          {court.hasLights && ' • Lights'}
-                        </p>
+                      <div key={court.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="text-center">
+                          <p className="font-medium text-sm">{safeDisplayText(court.name)}</p>
+                          <Badge variant="outline" className="mt-1 text-[10px]">{safeDisplayText(court.courtType)}</Badge>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {safeDisplayText(court.surfaceType)} • {court.isIndoor ? 'Indoor' : 'Outdoor'}
+                            {court.hasLights && ' • Lights'}
+                          </p>
+                        </div>
+                        {courtHoursLoading ? (
+                          <p className="text-xs text-gray-400 mt-2 text-center">Loading hours...</p>
+                        ) : (
+                          <CourtWeeklyHours hours={courtOperatingHours[court.id] || {}} />
+                        )}
                       </div>
                     ))}
                   </div>

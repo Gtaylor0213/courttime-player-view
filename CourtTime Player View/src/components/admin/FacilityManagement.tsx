@@ -31,6 +31,12 @@ import {
   type PaidCourtFormFields,
 } from './PaidCourtBookingFields';
 import { toast } from 'sonner';
+import {
+  courtScheduleRowsToOperatingHoursMap,
+  extractCourtScheduleFromApiResponse,
+  formatGroupedOperatingHoursSummary,
+  type OperatingHoursMap,
+} from '../../../shared/utils/operatingHours';
 import * as XLSX from 'xlsx';
 import { BillingTab } from './BillingTab';
 import { PaymentsTab } from './PaymentsTab';
@@ -583,6 +589,8 @@ export function FacilityManagement() {
   const [courtSchedule, setCourtSchedule] = useState<any[]>([]);
   const [courtScheduleLoading, setCourtScheduleLoading] = useState(false);
   const [courtScheduleSaving, setCourtScheduleSaving] = useState(false);
+  const [courtOperatingHours, setCourtOperatingHours] = useState<Record<string, OperatingHoursMap>>({});
+  const [courtHoursLoading, setCourtHoursLoading] = useState(false);
   const facilityCourtEditPanelRef = useRef<HTMLDivElement | null>(null);
 
   // Blackout state
@@ -1632,17 +1640,66 @@ export function FacilityManagement() {
     }
   };
 
+  const loadCourtOperatingHours = async (courtList: Court[]) => {
+    if (!courtList.length) {
+      setCourtOperatingHours({});
+      return;
+    }
+    setCourtHoursLoading(true);
+    try {
+      const results = await Promise.all(
+        courtList.map(async (court) => {
+          try {
+            const response = await courtConfigApi.getSchedule(court.id);
+            const schedule = extractCourtScheduleFromApiResponse(response.data);
+            if (response.success && schedule.length > 0) {
+              return {
+                courtId: court.id,
+                hours: courtScheduleRowsToOperatingHoursMap(schedule),
+              };
+            }
+          } catch {
+            /* omit on failure */
+          }
+          return { courtId: court.id, hours: {} as OperatingHoursMap };
+        })
+      );
+      const byCourtId: Record<string, OperatingHoursMap> = {};
+      results.forEach(({ courtId, hours }) => {
+        byCourtId[courtId] = hours;
+      });
+      setCourtOperatingHours(byCourtId);
+    } finally {
+      setCourtHoursLoading(false);
+    }
+  };
+
+  const refreshCourtHoursSummary = async (courtId: string) => {
+    try {
+      const response = await courtConfigApi.getSchedule(courtId);
+      const schedule = extractCourtScheduleFromApiResponse(response.data);
+      if (response.success && schedule.length > 0) {
+        setCourtOperatingHours((prev) => ({
+          ...prev,
+          [courtId]: courtScheduleRowsToOperatingHoursMap(schedule),
+        }));
+      }
+    } catch {
+      /* keep existing summary */
+    }
+  };
+
   // Court management functions
   const loadCourts = async () => {
     if (!currentFacilityId) return;
 
     try {
       setCourtsLoading(true);
+      setCourtOperatingHours({});
       const response = await facilitiesApi.getCourts(currentFacilityId);
 
       if (response.success && response.data?.courts) {
-        setCourts(
-          response.data.courts.map((c: any) => ({
+        const normalized = response.data.courts.map((c: any) => ({
             ...c,
             requirePayment: c.requirePayment === true || c.require_payment === true,
             bookingAmountCents:
@@ -1664,8 +1721,9 @@ export function FacilityManagement() {
               c.guestFeeCents ?? c.guest_fee_cents
             ),
             enableGuestFee: Boolean(c.guestFeeCents ?? c.guest_fee_cents),
-          }))
-        );
+          }));
+        setCourts(normalized);
+        void loadCourtOperatingHours(normalized);
       } else {
         toast.error(response.error || 'Failed to load courts');
       }
@@ -1868,6 +1926,7 @@ export function FacilityManagement() {
       const response = await courtConfigApi.updateSchedule(configuringCourtId, courtSchedule);
       if (response.success) {
         toast.success('Court schedule saved');
+        await refreshCourtHoursSummary(configuringCourtId);
       } else {
         toast.error(response.error || 'Failed to save schedule');
       }
@@ -3740,6 +3799,9 @@ export function FacilityManagement() {
                   {courts.map((court) => {
                     const isEditingThis =
                       editingCourt !== null && !isAddingNewCourt && editingCourt.id === court.id;
+                    const hoursSummary = courtHoursLoading
+                      ? null
+                      : formatGroupedOperatingHoursSummary(courtOperatingHours[court.id] || {});
                     return (
                     <React.Fragment key={court.id}>
                       <Card className={isEditingThis ? 'border-green-200' : ''}>
@@ -3749,6 +3811,11 @@ export function FacilityManagement() {
                               <div className="flex items-center gap-3 mb-2">
                                 <h3 className="text-lg font-semibold">{court.name}</h3>
                                 <Badge className={getCourtStatusColor(court.status)}>{formatCourtStatus(court.status)}</Badge>
+                                {courtHoursLoading ? (
+                                  <span className="text-xs text-gray-400">Loading hours…</span>
+                                ) : hoursSummary ? (
+                                  <span className="text-xs text-gray-600 font-normal">{hoursSummary}</span>
+                                ) : null}
                                 {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
                                 {court.requirePayment && court.bookingAmountCents && (
                                   <Badge className="bg-amber-100 text-amber-900 border-amber-200">

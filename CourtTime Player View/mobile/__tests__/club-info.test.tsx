@@ -1,6 +1,12 @@
 import { describe, it, expect } from '@jest/globals';
 import { getTodayHoursMessage } from '../src/components/OperatingHoursCard';
-import { getOperatingHoursForDay, normalizeDayHours } from '../../shared/utils/operatingHours';
+import {
+  courtScheduleRowsToOperatingHoursMap,
+  getOperatingHoursForDay,
+  formatGroupedOperatingHoursSummary,
+  groupOperatingHoursForCompactDisplay,
+  normalizeDayHours,
+} from '../../shared/utils/operatingHours';
 
 describe('Club info operating hours', () => {
   it('renders today open-hours using club-local timezone wording', () => {
@@ -96,6 +102,51 @@ describe('Club info operating hours', () => {
     expect(sun.closed).toBe(false);
     expect(sun.display).toContain('9:00');
     expect(sun.display).toContain('5:00');
+  });
+
+  it('formats grouped hours as a compact one-line summary', () => {
+    const operatingHours = {
+      monday: { open: '09:00', close: '21:00' },
+      tuesday: { open: '09:00', close: '21:00' },
+      wednesday: { open: '09:00', close: '21:00' },
+      thursday: { open: '09:00', close: '21:00' },
+      friday: { open: '09:00', close: '21:00' },
+      saturday: { open: '10:00', close: '22:00' },
+      sunday: { open: '10:00', close: '22:00' },
+    };
+    const summary = formatGroupedOperatingHoursSummary(operatingHours);
+    expect(summary).toBe('Mon-Fri 9am-9pm · Sat-Sun 10am-10pm');
+  });
+
+  it('groups consecutive days with identical hours', () => {
+    const operatingHours = {
+      monday: { open: '09:00', close: '21:00' },
+      tuesday: { open: '09:00', close: '21:00' },
+      wednesday: { open: '09:00', close: '21:00' },
+      thursday: { open: '09:00', close: '21:00' },
+      friday: { open: '09:00', close: '21:00' },
+      saturday: { open: '10:00', close: '22:00' },
+      sunday: { open: '10:00', close: '22:00' },
+    };
+    const groups = groupOperatingHoursForCompactDisplay(operatingHours, 'full');
+    expect(groups).toHaveLength(2);
+    expect(groups[0].dayRangeLabel).toBe('Monday-Friday');
+    expect(groups[0].hoursLabel).toBe('9:00 AM – 9:00 PM');
+    expect(groups[1].dayRangeLabel).toBe('Saturday-Sunday');
+    expect(groups[1].hoursLabel).toBe('10:00 AM – 10:00 PM');
+  });
+
+  it('maps court schedule rows to weekly display hours', () => {
+    const schedule = [
+      { day_of_week: 1, is_open: true, open_time: '07:00', close_time: '19:00' },
+      { day_of_week: 0, is_open: false, open_time: '08:00', close_time: '20:00' },
+    ];
+    const hours = courtScheduleRowsToOperatingHoursMap(schedule);
+    const mon = normalizeDayHours(getOperatingHoursForDay(hours, 'monday'));
+    const sun = normalizeDayHours(getOperatingHoursForDay(hours, 'sunday'));
+    expect(mon.display).toBe('7:00 AM – 7:00 PM');
+    expect(sun.closed).toBe(true);
+    expect(sun.display).toBe('Closed');
   });
 
   it('named keys beat numeric when both exist', () => {

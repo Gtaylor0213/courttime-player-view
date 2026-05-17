@@ -22,6 +22,12 @@ import {
 import { toast } from 'sonner';
 import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
 import {
+  courtScheduleRowsToOperatingHoursMap,
+  extractCourtScheduleFromApiResponse,
+  formatGroupedOperatingHoursSummary,
+  type OperatingHoursMap,
+} from '../../../shared/utils/operatingHours';
+import {
   PaidCourtBookingFields,
   formatCentsToDollars,
   parseBookingFeeDollars,
@@ -99,6 +105,8 @@ export function CourtManagement() {
   const [courtSchedule, setCourtSchedule] = useState<any[]>([]);
   const [courtScheduleLoading, setCourtScheduleLoading] = useState(false);
   const [courtScheduleSaving, setCourtScheduleSaving] = useState(false);
+  const [courtOperatingHours, setCourtOperatingHours] = useState<Record<string, OperatingHoursMap>>({});
+  const [courtHoursLoading, setCourtHoursLoading] = useState(false);
   const [stripeOnboarded, setStripeOnboarded] = useState<boolean | null>(null);
   const [stripeStatusLoading, setStripeStatusLoading] = useState(false);
 
@@ -128,6 +136,55 @@ export function CourtManagement() {
     courtEditPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [editingCourt?.id, isAddingNew]);
 
+  const loadCourtOperatingHours = async (courtList: Court[]) => {
+    if (!courtList.length) {
+      setCourtOperatingHours({});
+      return;
+    }
+    setCourtHoursLoading(true);
+    try {
+      const results = await Promise.all(
+        courtList.map(async (court) => {
+          try {
+            const response = await courtConfigApi.getSchedule(court.id);
+            const schedule = extractCourtScheduleFromApiResponse(response.data);
+            if (response.success && schedule.length > 0) {
+              return {
+                courtId: court.id,
+                hours: courtScheduleRowsToOperatingHoursMap(schedule),
+              };
+            }
+          } catch {
+            /* omit on failure */
+          }
+          return { courtId: court.id, hours: {} as OperatingHoursMap };
+        })
+      );
+      const byCourtId: Record<string, OperatingHoursMap> = {};
+      results.forEach(({ courtId, hours }) => {
+        byCourtId[courtId] = hours;
+      });
+      setCourtOperatingHours(byCourtId);
+    } finally {
+      setCourtHoursLoading(false);
+    }
+  };
+
+  const refreshCourtHoursSummary = async (courtId: string) => {
+    try {
+      const response = await courtConfigApi.getSchedule(courtId);
+      const schedule = extractCourtScheduleFromApiResponse(response.data);
+      if (response.success && schedule.length > 0) {
+        setCourtOperatingHours((prev) => ({
+          ...prev,
+          [courtId]: courtScheduleRowsToOperatingHoursMap(schedule),
+        }));
+      }
+    } catch {
+      /* keep existing summary */
+    }
+  };
+
   const loadCourts = async () => {
     if (!currentFacilityId) {
       toast.error('No facility selected');
@@ -136,6 +193,7 @@ export function CourtManagement() {
 
     try {
       setLoading(true);
+      setCourtOperatingHours({});
       const response = await facilitiesApi.getCourts(currentFacilityId);
 
       if (response.success && response.data?.courts) {
@@ -166,6 +224,7 @@ export function CourtManagement() {
           enableGuestFee: Boolean(c.guestFeeCents ?? c.guest_fee_cents),
         }));
         setCourts(normalized);
+        void loadCourtOperatingHours(normalized);
       } else {
         toast.error(response.error || 'Failed to load courts');
       }
@@ -494,6 +553,7 @@ export function CourtManagement() {
       const response = await courtConfigApi.updateSchedule(configuringCourtId, courtSchedule);
       if (response.success) {
         toast.success('Court schedule saved');
+        await refreshCourtHoursSummary(configuringCourtId);
       } else {
         toast.error(response.error || 'Failed to save schedule');
       }
@@ -790,6 +850,9 @@ export function CourtManagement() {
             {sortedActiveCourts.map((court) => {
               const isEditingThis =
                 editingCourt !== null && !isAddingNew && editingCourt.id === court.id;
+              const hoursSummary = courtHoursLoading
+                ? null
+                : formatGroupedOperatingHoursSummary(courtOperatingHours[court.id] || {});
               return (
               <React.Fragment key={court.id}>
                 <Card
@@ -812,6 +875,11 @@ export function CourtManagement() {
                           <div className="flex items-center gap-3 mb-2">
                             <h3 className="text-lg font-semibold">{court.name}</h3>
                             <Badge className={getStatusColor(court.status)}>{formatStatus(court.status)}</Badge>
+                            {courtHoursLoading ? (
+                              <span className="text-xs text-gray-400">Loading hours…</span>
+                            ) : hoursSummary ? (
+                              <span className="text-xs text-gray-600 font-normal">{hoursSummary}</span>
+                            ) : null}
                             {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
                             {court.requirePayment && court.bookingAmountCents && (
                               <Badge className="bg-amber-100 text-amber-900 border-amber-200">

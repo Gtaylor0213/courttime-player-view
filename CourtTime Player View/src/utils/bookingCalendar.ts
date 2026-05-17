@@ -9,7 +9,6 @@ import {
   buildIcsEventContent,
   buildIcsFilename,
   formatBookingDateYmd,
-  getBookingCalendarIcsPath,
   isAppleCalendarDevice,
 } from '../../shared/utils/bookingCalendar';
 
@@ -81,11 +80,7 @@ export function openAppleCalendar(
   options?: CalendarFeedbackOptions
 ): boolean {
   try {
-    if (options?.bookingId) {
-      window.location.assign(getBookingCalendarIcsPath(options.bookingId));
-    } else {
-      openIcsInline(buildIcsEventContent(details));
-    }
+    openIcsInline(buildIcsEventContent(details));
     toast.success(options?.successTitle || 'Opening Apple Calendar', {
       description: 'Confirm the event in Calendar to add your court reservation.',
       duration: 7000,

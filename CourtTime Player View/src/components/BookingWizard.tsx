@@ -18,6 +18,7 @@ import { bookingApi, facilitiesApi } from '../api/client';
 import { toast } from 'sonner';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
+import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 
 interface RuleViolation {
@@ -248,6 +249,51 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     if (m === 0) return `${h} hr`;
     return `${h} hr ${m} min`;
   }, [durationMins]);
+
+  const primaryCourtId = selectedCourts[0]?.courtId || courtId;
+
+  const bookingDateYmd = useMemo(() => {
+    if (date.match(/^\d{4}-\d{2}-\d{2}$/)) return date;
+    if (date.includes('T')) return date.split('T')[0];
+    const parsed = parseLocalDate(date);
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  }, [date]);
+
+  // Peak-hours status from rules engine (same logic as booking validation)
+  useEffect(() => {
+    if (!isOpen || !user?.id || !primaryCourtId || !facilityId || durationMins <= 0) {
+      setIsPrimeTime(false);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      const result = await checkBookingPeakHours({
+        courtId: primaryCourtId,
+        userId: user.id,
+        facilityId,
+        bookingDate: bookingDateYmd,
+        startTime12h: startTime,
+        endTime12h: endTime,
+      });
+      if (!cancelled) {
+        setIsPrimeTime(result.isPrimeTime);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    user?.id,
+    primaryCourtId,
+    facilityId,
+    bookingDateYmd,
+    startTime,
+    endTime,
+    durationMins,
+  ]);
 
   const toggleRecurringDay = (day: string) => {
     setRecurringDays(prev =>
@@ -598,9 +644,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
           {/* Peak Hours Badge */}
           {isPrimeTime && (
-            <div className="flex items-center gap-2 text-sm bg-purple-50 border border-purple-200 text-purple-700 rounded-md px-3 py-2">
+            <div className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-200 text-blue-700 rounded-md px-3 py-2">
               <Clock className="h-4 w-4" />
-              This slot is during peak hours
+              This reservation is during peak hours
             </div>
           )}
 

@@ -655,7 +655,7 @@ export class RulesEngine {
       results: blockers,
       blockers,
       warnings: [],
-      isPrimeTime: false
+      isPrimeTime: context.isPrimeTime
     };
   }
 

@@ -1937,7 +1937,7 @@ router.get('/email-templates/:facilityId', async (req, res) => {
         templateType: type,
         subject: custom?.subject || config.defaultSubject,
         bodyHtml: custom?.bodyHtml || config.defaultBody,
-        isEnabled: custom ? custom.isEnabled : true,
+        isEnabled: true,
         isCustom: !!custom,
         label: config.label,
         description: config.description,
@@ -1959,7 +1959,7 @@ router.get('/email-templates/:facilityId', async (req, res) => {
 router.put('/email-templates/:facilityId/:templateType', async (req, res) => {
   try {
     const { facilityId, templateType } = req.params;
-    const { subject, bodyHtml, isEnabled } = req.body;
+    const { subject, bodyHtml } = req.body;
 
     if (!EMAIL_TEMPLATE_TYPES[templateType]) {
       return res.status(400).json({ success: false, error: 'Invalid template type' });
@@ -1971,11 +1971,11 @@ router.put('/email-templates/:facilityId/:templateType', async (req, res) => {
 
     const result = await query(
       `INSERT INTO email_templates (facility_id, template_type, subject, body_html, is_enabled)
-       VALUES ($1, $2, $3, $4, $5)
+       VALUES ($1, $2, $3, $4, true)
        ON CONFLICT (facility_id, template_type)
-       DO UPDATE SET subject = $3, body_html = $4, is_enabled = $5, updated_at = CURRENT_TIMESTAMP
+       DO UPDATE SET subject = $3, body_html = $4, is_enabled = true, updated_at = CURRENT_TIMESTAMP
        RETURNING id, template_type as "templateType", subject, body_html as "bodyHtml", is_enabled as "isEnabled"`,
-      [facilityId, templateType, subject, bodyHtml, isEnabled !== false]
+      [facilityId, templateType, subject, bodyHtml]
     );
 
     res.json({ success: true, template: result.rows[0] });

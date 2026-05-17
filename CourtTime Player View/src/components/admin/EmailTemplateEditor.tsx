@@ -5,7 +5,6 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
-import { Switch } from '../ui/switch';
 import { Loader2, Save, RotateCcw, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
 import { adminApi } from '../../api/client';
 import { toast } from 'sonner';
@@ -22,7 +21,6 @@ interface EmailTemplate {
   templateType: string;
   subject: string;
   bodyHtml: string;
-  isEnabled: boolean;
   isCustom: boolean;
   label: string;
   description: string;
@@ -81,30 +79,6 @@ export function EmailTemplateEditor() {
     }
   };
 
-  const handleToggleEnabled = async (templateType: string, enabled: boolean) => {
-    const template = templates.find(t => t.templateType === templateType);
-    if (!template) return;
-
-    try {
-      const response = await adminApi.upsertEmailTemplate(selectedFacilityId, templateType, {
-        subject: template.subject,
-        bodyHtml: template.bodyHtml,
-        isEnabled: enabled,
-      });
-
-      if (response.success) {
-        setTemplates(prev => prev.map(t =>
-          t.templateType === templateType ? { ...t, isEnabled: enabled, isCustom: true } : t
-        ));
-        toast.success(`${template.label} ${enabled ? 'enabled' : 'disabled'}`);
-      } else {
-        toast.error('Failed to update template');
-      }
-    } catch {
-      toast.error('Error updating template');
-    }
-  };
-
   const handleSave = async () => {
     if (!expandedType) return;
 
@@ -115,11 +89,9 @@ export function EmailTemplateEditor() {
 
     try {
       setSaving(true);
-      const template = templates.find(t => t.templateType === expandedType);
       const response = await adminApi.upsertEmailTemplate(selectedFacilityId, expandedType, {
         subject: editSubject,
         bodyHtml: editBody,
-        isEnabled: template?.isEnabled !== false,
       });
 
       if (response.success) {
@@ -213,7 +185,7 @@ export function EmailTemplateEditor() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Customize the automated emails sent to members. Toggle emails on/off or edit the content and subject lines.
+        Customize the automated emails sent to members. Edit subject lines and message content below.
       </p>
 
       {templates.map(template => (
@@ -238,16 +210,6 @@ export function EmailTemplateEditor() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                  <Label htmlFor={`toggle-${template.templateType}`} className="text-xs text-gray-500">
-                    {template.isEnabled ? 'On' : 'Off'}
-                  </Label>
-                  <Switch
-                    id={`toggle-${template.templateType}`}
-                    checked={template.isEnabled}
-                    onCheckedChange={(checked) => handleToggleEnabled(template.templateType, checked)}
-                  />
-                </div>
                 {expandedType === template.templateType
                   ? <ChevronUp className="h-4 w-4 text-gray-400" />
                   : <ChevronDown className="h-4 w-4 text-gray-400" />

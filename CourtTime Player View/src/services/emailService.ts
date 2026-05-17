@@ -174,11 +174,6 @@ async function sendTemplatedEmail(
   // Try to load custom template
   const custom = await getTemplateForFacility(facilityId, templateType);
 
-  // If custom template exists and is disabled, skip sending
-  if (custom && !custom.isEnabled) {
-    return false;
-  }
-
   const subjectTemplate = custom?.subject || defaults.defaultSubject;
   const bodyTemplate = custom?.bodyHtml || defaults.defaultBody;
 

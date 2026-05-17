@@ -939,7 +939,6 @@ export const adminApi = {
   upsertEmailTemplate: async (facilityId: string, templateType: string, data: {
     subject: string;
     bodyHtml: string;
-    isEnabled: boolean;
   }) => {
     return apiRequest(`/api/admin/email-templates/${facilityId}/${templateType}`, {
       method: 'PUT',

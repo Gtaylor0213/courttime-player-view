@@ -1,5 +1,35 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+
+const FACILITY_STORAGE_KEY = 'selectedFacilityId';
+const LEGACY_FACILITY_STORAGE_KEY = 'courttime_facility';
+
+function loadStoredFacilityId(): string | null {
+  try {
+    return localStorage.getItem(FACILITY_STORAGE_KEY) || localStorage.getItem(LEGACY_FACILITY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredFacilityId(id: string): void {
+  try {
+    localStorage.setItem(FACILITY_STORAGE_KEY, id);
+    localStorage.setItem(LEGACY_FACILITY_STORAGE_KEY, id);
+  } catch {
+    // ignore quota / private browsing errors
+  }
+}
+
+function resolveFacilityId(
+  allFacilityIds: string[],
+  preferredId?: string | null
+): string | null {
+  if (allFacilityIds.length === 0) return null;
+  const saved = preferredId ?? loadStoredFacilityId();
+  if (saved && allFacilityIds.includes(saved)) return saved;
+  return allFacilityIds[0];
+}
 
 interface AppContextType {
   sidebarCollapsed: boolean;
@@ -24,18 +54,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedFacilityId, setSelectedFacilityId] = useState<string>('sunrise-valley');
+  const [selectedFacilityId, setSelectedFacilityIdState] = useState<string>(
+    () => loadStoredFacilityId() || 'sunrise-valley'
+  );
 
-  // Auto-select first facility when user logs in or changes (prefer member, then admin)
+  const setSelectedFacilityId = useCallback((id: string) => {
+    setSelectedFacilityIdState(id);
+    saveStoredFacilityId(id);
+  }, []);
+
+  // Restore last-selected facility on login/refresh; fall back to first available
   useEffect(() => {
     const allFacilityIds = Array.from(new Set([
       ...(user?.memberFacilities || []),
       ...(user?.adminFacilities || []),
     ]));
-    if (allFacilityIds.length > 0) {
-      setSelectedFacilityId(allFacilityIds[0]);
-    }
+    const resolved = resolveFacilityId(allFacilityIds);
+    if (!resolved) return;
+    setSelectedFacilityIdState(resolved);
+    saveStoredFacilityId(resolved);
   }, [user?.id]);
+
+  // If facility list changes, keep selection when valid
+  useEffect(() => {
+    if (!user) return;
+    const allFacilityIds = Array.from(new Set([
+      ...(user.memberFacilities || []),
+      ...(user.adminFacilities || []),
+    ]));
+    if (allFacilityIds.length === 0) return;
+    if (allFacilityIds.includes(selectedFacilityId)) return;
+    const resolved = resolveFacilityId(allFacilityIds);
+    if (resolved) setSelectedFacilityId(resolved);
+  }, [user, selectedFacilityId, setSelectedFacilityId]);
 
   const toggleSidebar = () => setSidebarCollapsed(prev => !prev);
 

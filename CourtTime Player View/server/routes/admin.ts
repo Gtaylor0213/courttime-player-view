@@ -865,11 +865,17 @@ router.patch('/courts/:courtId', async (req, res) => {
     const statusMap: Record<string, string> = { active: 'available', inactive: 'closed' };
     const status = rawStatus ? (statusMap[rawStatus] || rawStatus) : rawStatus;
 
-    const courtFacility = await query(`SELECT facility_id FROM courts WHERE id = $1`, [courtId]);
+    const courtFacility = await query(
+      `SELECT facility_id, require_payment, booking_amount_cents
+       FROM courts WHERE id = $1`,
+      [courtId]
+    );
     if (courtFacility.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Court not found' });
     }
-    const facilityIdForCourt = courtFacility.rows[0].facility_id;
+    const existingCourt = courtFacility.rows[0];
+    const facilityIdForCourt = existingCourt.facility_id;
+    const wasPaid = Boolean(existingCourt.require_payment);
 
     const wantsPayment =
       requirePayment !== undefined || require_payment !== undefined
@@ -881,12 +887,15 @@ router.patch('/courts/:courtId', async (req, res) => {
     else if (bookingFeeDollars != null && bookingFeeDollars !== '') {
       amountCents = Math.round(parseFloat(String(bookingFeeDollars)) * 100);
     }
-    if (wantsPayment !== undefined) {
-      await assertPaidCourtConfig(
-        facilityIdForCourt,
-        wantsPayment,
-        wantsPayment ? amountCents ?? null : null
-      );
+    if (wantsPayment !== undefined && wantsPayment) {
+      const effectiveAmountCents =
+        amountCents ??
+        (existingCourt.booking_amount_cents != null
+          ? parseInt(String(existingCourt.booking_amount_cents), 10)
+          : null);
+      await assertPaidCourtConfig(facilityIdForCourt, true, effectiveAmountCents, {
+        requireStripe: !wasPaid,
+      });
     }
 
     // Guest fee: explicit null means "clear it", undefined means "leave unchanged"
@@ -908,9 +917,11 @@ router.patch('/courts/:courtId', async (req, res) => {
     const splitConfiguration = shouldSplit
       ? JSON.stringify({ splitInto: normalizedSplitNames, splitType })
       : null;
+    const updateSplitFields = canSplit !== undefined || splitConfig !== undefined;
 
-    // Rebuild split children on each save to keep config and child courts in sync.
-    await query(`DELETE FROM courts WHERE parent_court_id = $1`, [courtId]);
+    if (updateSplitFields) {
+      await query(`DELETE FROM courts WHERE parent_court_id = $1`, [courtId]);
+    }
 
     const result = await query(`
       UPDATE courts
@@ -933,8 +944,8 @@ router.patch('/courts/:courtId', async (req, res) => {
           ELSE guest_fee_cents
         END,
         status = COALESCE($10, status),
-        is_split_court = COALESCE($11, is_split_court),
-        split_configuration = $12,
+        is_split_court = CASE WHEN $16::boolean THEN $11 ELSE is_split_court END,
+        split_configuration = CASE WHEN $16::boolean THEN $12 ELSE split_configuration END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $13
       RETURNING
@@ -972,6 +983,7 @@ router.patch('/courts/:courtId', async (req, res) => {
       courtId,
       guestFeeValue !== undefined,
       guestFeeValue ?? null,
+      updateSplitFields,
     ]);
 
     if (result.rows.length === 0) {
@@ -981,7 +993,7 @@ router.patch('/courts/:courtId', async (req, res) => {
       });
     }
 
-    if (shouldSplit) {
+    if (updateSplitFields && shouldSplit) {
       await createSplitCourt(courtId, {
         splitNames: normalizedSplitNames,
         splitType,

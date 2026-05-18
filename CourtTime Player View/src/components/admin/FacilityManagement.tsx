@@ -38,6 +38,12 @@ import {
   formatGroupedOperatingHoursSummary,
   type OperatingHoursMap,
 } from '../../../shared/utils/operatingHours';
+import {
+  courtFieldsAfterNameChange,
+  courtFieldsAfterNumberChange,
+  formatStandardCourtName,
+  normalizeCourtNameAndNumber,
+} from '../../../shared/utils/courtNaming';
 import * as XLSX from 'xlsx';
 import { BillingTab } from './BillingTab';
 import { PaymentsTab } from './PaymentsTab';
@@ -238,11 +244,18 @@ function FacilityCourtFormBody({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={id('courtName')}>Court Name</Label>
+          <p className="text-xs text-gray-500">Shown on the calendar — any label you want (not tied to court number).</p>
           <Input
             id={id('courtName')}
             value={editingCourt.name}
-            onChange={(e) => setEditingCourt({ ...editingCourt, name: e.target.value })}
-            placeholder="e.g., Court 1"
+            onChange={(e) =>
+              setEditingCourt((prev) =>
+                prev
+                  ? { ...prev, ...courtFieldsAfterNameChange(e.target.value, prev.courtNumber) }
+                  : prev
+              )
+            }
+            placeholder="e.g. Center Court"
           />
         </div>
         <div className="space-y-2">
@@ -251,14 +264,28 @@ function FacilityCourtFormBody({
             id={id('courtNumber')}
             type="number"
             value={editingCourt.courtNumber}
-            onChange={(e) => setEditingCourt({ ...editingCourt, courtNumber: parseInt(e.target.value) || 1 })}
+            onChange={(e) =>
+              setEditingCourt((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      ...courtFieldsAfterNumberChange(
+                        parseInt(e.target.value, 10) || 1,
+                        prev.name
+                      ),
+                    }
+                  : prev
+              )
+            }
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor={id('courtType')}>Court Type</Label>
           <Select
             value={editingCourt.courtType}
-            onValueChange={(value) => setEditingCourt({ ...editingCourt, courtType: value })}
+            onValueChange={(value) =>
+              setEditingCourt((prev) => (prev ? { ...prev, courtType: value } : prev))
+            }
           >
             <SelectTrigger id={id('courtType')}>
               <SelectValue />
@@ -274,7 +301,9 @@ function FacilityCourtFormBody({
           <Label htmlFor={id('courtSurface')}>Surface Type</Label>
           <Select
             value={editingCourt.surfaceType}
-            onValueChange={(value) => setEditingCourt({ ...editingCourt, surfaceType: value })}
+            onValueChange={(value) =>
+              setEditingCourt((prev) => (prev ? { ...prev, surfaceType: value } : prev))
+            }
           >
             <SelectTrigger id={id('courtSurface')}>
               <SelectValue />
@@ -290,7 +319,9 @@ function FacilityCourtFormBody({
           <Label htmlFor={id('courtStatus')}>Status</Label>
           <Select
             value={editingCourt.status}
-            onValueChange={(value: 'available' | 'maintenance' | 'closed') => setEditingCourt({ ...editingCourt, status: value })}
+            onValueChange={(value: 'available' | 'maintenance' | 'closed') =>
+              setEditingCourt((prev) => (prev ? { ...prev, status: value } : prev))
+            }
           >
             <SelectTrigger id={id('courtStatus')}>
               <SelectValue />
@@ -306,7 +337,9 @@ function FacilityCourtFormBody({
           <Switch
             id={id('indoor')}
             checked={editingCourt.isIndoor}
-            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isIndoor: checked })}
+            onCheckedChange={(checked) =>
+              setEditingCourt((prev) => (prev ? { ...prev, isIndoor: checked } : prev))
+            }
           />
           <Label htmlFor={id('indoor')}>Indoor Court</Label>
         </div>
@@ -314,7 +347,9 @@ function FacilityCourtFormBody({
           <Switch
             id={id('lights')}
             checked={editingCourt.hasLights}
-            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, hasLights: checked })}
+            onCheckedChange={(checked) =>
+              setEditingCourt((prev) => (prev ? { ...prev, hasLights: checked } : prev))
+            }
           />
           <Label htmlFor={id('lights')}>Has Lights</Label>
         </div>
@@ -322,7 +357,9 @@ function FacilityCourtFormBody({
           <Switch
             id={id('walkUp')}
             checked={editingCourt.isWalkUp === true}
-            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isWalkUp: checked })}
+            onCheckedChange={(checked) =>
+              setEditingCourt((prev) => (prev ? { ...prev, isWalkUp: checked } : prev))
+            }
           />
           <Label htmlFor={id('walkUp')}>Walk-up Court (no online booking)</Label>
         </div>
@@ -333,13 +370,20 @@ function FacilityCourtFormBody({
           <Switch
             id={id('canSplit')}
             checked={editingCourt.canSplit || false}
-            onCheckedChange={(checked) => setEditingCourt({
-              ...editingCourt,
-              canSplit: checked,
-              splitConfig: checked && !editingCourt.splitConfig
-                ? { splitNames: [], splitType: 'Pickleball' }
-                : editingCourt.splitConfig,
-            })}
+            onCheckedChange={(checked) =>
+              setEditingCourt((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      canSplit: checked,
+                      splitConfig:
+                        checked && !prev.splitConfig
+                          ? { splitNames: [], splitType: 'Pickleball' }
+                          : prev.splitConfig,
+                    }
+                  : prev
+              )
+            }
           />
           <Label htmlFor={id('canSplit')}>Can be split into multiple courts</Label>
         </div>
@@ -356,10 +400,18 @@ function FacilityCourtFormBody({
                   key={idPrefix + '-splitnames'}
                   onBlur={(e) => {
                     const names = e.target.value.split(',').map((n) => n.trim()).filter(Boolean);
-                    setEditingCourt({
-                      ...editingCourt,
-                      splitConfig: { ...editingCourt.splitConfig, splitNames: names, splitType: editingCourt.splitConfig?.splitType || 'Pickleball' },
-                    });
+                    setEditingCourt((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            splitConfig: {
+                              ...prev.splitConfig,
+                              splitNames: names,
+                              splitType: prev.splitConfig?.splitType || 'Pickleball',
+                            },
+                          }
+                        : prev
+                    );
                   }}
                   className="text-sm"
                 />
@@ -369,10 +421,18 @@ function FacilityCourtFormBody({
                 <Select
                   value={editingCourt.splitConfig?.splitType || 'Pickleball'}
                   onValueChange={(value: 'Tennis' | 'Pickleball') => {
-                    setEditingCourt({
-                      ...editingCourt,
-                      splitConfig: { ...editingCourt.splitConfig, splitType: value, splitNames: editingCourt.splitConfig?.splitNames || [] },
-                    });
+                    setEditingCourt((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            splitConfig: {
+                              ...prev.splitConfig,
+                              splitType: value,
+                              splitNames: prev.splitConfig?.splitNames || [],
+                            },
+                          }
+                        : prev
+                    );
                   }}
                 >
                   <SelectTrigger className="text-sm">
@@ -1732,10 +1792,12 @@ export function FacilityManagement() {
   };
 
   const handleAddNewCourt = () => {
+    const maxNumber = courts.length > 0 ? Math.max(...courts.map((c) => c.courtNumber)) : 0;
+    const nextNumber = maxNumber + 1;
     setEditingCourt({
       id: '',
-      name: '',
-      courtNumber: courts.length + 1,
+      name: formatStandardCourtName(nextNumber),
+      courtNumber: nextNumber,
       courtType: 'Tennis',
       surfaceType: 'Hard Court',
       isIndoor: false,
@@ -1771,7 +1833,15 @@ export function FacilityManagement() {
     if (!editingCourt || !currentFacilityId) return;
 
     const wantsPayment = Boolean(editingCourt.requirePayment);
-    const bookingAmountCents = parseBookingFeeDollars(editingCourt.bookingFeeDollars);
+    const existingCourt =
+      !isAddingNewCourt && editingCourt.id
+        ? courts.find((c) => c.id === editingCourt.id)
+        : undefined;
+    const wasPaid = existingCourt?.requirePayment === true;
+    const turningOnPaidBooking = wantsPayment && !wasPaid;
+    const bookingAmountCents =
+      parseBookingFeeDollars(editingCourt.bookingFeeDollars) ??
+      (wantsPayment ? existingCourt?.bookingAmountCents ?? null : null);
     if (wantsPayment && !bookingAmountCents) {
       toast.error('Enter a booking fee when paid court booking is enabled');
       return;
@@ -1782,9 +1852,14 @@ export function FacilityManagement() {
       toast.error('Enter a valid guest fee amount');
       return;
     }
-    if (wantsPayment && stripeOnboarded === false) {
+    if (turningOnPaidBooking && stripeOnboarded === false) {
       toast.error('Complete Stripe Connect setup on the Payments tab before enabling paid courts');
       return;
+    }
+    if (wantsPayment && !turningOnPaidBooking && stripeOnboarded === false) {
+      toast.info(
+        'Court details saved. Stripe Connect must be set up before members can be charged for bookings.'
+      );
     }
     if (hasGuestFee && stripeOnboarded === false) {
       toast.info('Guest fee saved, but Stripe Connect must be set up before members can be charged');
@@ -1793,9 +1868,14 @@ export function FacilityManagement() {
     try {
       setCourtSaving(true);
 
+      const { name: courtName, courtNumber } = normalizeCourtNameAndNumber({
+        name: editingCourt.name,
+        courtNumber: editingCourt.courtNumber,
+      });
+
       const paymentPayload = {
         requirePayment: wantsPayment,
-        bookingAmountCents: wantsPayment ? bookingAmountCents : null,
+        bookingAmountCents: wantsPayment ? bookingAmountCents ?? null : null,
         bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
         guestFeeCents: hasGuestFee ? guestFeeCents : null,
         guestFeeDollars: hasGuestFee ? editingCourt.guestFeeDollars : '',
@@ -1805,8 +1885,8 @@ export function FacilityManagement() {
       if (isAddingNewCourt || !editingCourt.id) {
         // Create new court
         response = await adminApi.createCourt(currentFacilityId, {
-          name: editingCourt.name || `Court ${editingCourt.courtNumber}`,
-          courtNumber: editingCourt.courtNumber,
+          name: courtName,
+          courtNumber,
           surfaceType: editingCourt.surfaceType,
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,
@@ -1819,8 +1899,8 @@ export function FacilityManagement() {
       } else {
         // Update existing court
         response = await adminApi.updateCourt(editingCourt.id, {
-          name: editingCourt.name,
-          courtNumber: editingCourt.courtNumber,
+          name: courtName,
+          courtNumber,
           surfaceType: editingCourt.surfaceType,
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,

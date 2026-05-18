@@ -22,6 +22,12 @@ import {
 import { toast } from 'sonner';
 import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
 import {
+  courtFieldsAfterNameChange,
+  courtFieldsAfterNumberChange,
+  formatStandardCourtName,
+  normalizeCourtNameAndNumber,
+} from '../../../shared/utils/courtNaming';
+import {
   courtScheduleRowsToOperatingHoursMap,
   extractCourtScheduleFromApiResponse,
   formatGroupedOperatingHoursSummary,
@@ -251,10 +257,11 @@ export function CourtManagement() {
       return;
     }
     const maxNumber = courts.length > 0 ? Math.max(...courts.map(c => c.courtNumber)) : 0;
+    const nextNumber = maxNumber + 1;
     setEditingCourt({
       id: '',
-      name: '',
-      courtNumber: maxNumber + 1,
+      name: formatStandardCourtName(nextNumber),
+      courtNumber: nextNumber,
       courtType: 'Tennis',
       surfaceType: 'Hard Court',
       isIndoor: false,
@@ -291,7 +298,13 @@ export function CourtManagement() {
     if (!editingCourt || !currentFacilityId) return;
 
     const wantsPayment = Boolean(editingCourt.requirePayment);
-    const bookingAmountCents = parseBookingFeeDollars(editingCourt.bookingFeeDollars);
+    const existingCourt =
+      !isAddingNew && editingCourt.id ? courts.find((c) => c.id === editingCourt.id) : undefined;
+    const wasPaid = existingCourt?.requirePayment === true;
+    const turningOnPaidBooking = wantsPayment && !wasPaid;
+    const bookingAmountCents =
+      parseBookingFeeDollars(editingCourt.bookingFeeDollars) ??
+      (wantsPayment ? existingCourt?.bookingAmountCents ?? null : null);
     if (wantsPayment && !bookingAmountCents) {
       toast.error('Enter a booking fee when paid court booking is enabled');
       return;
@@ -302,9 +315,14 @@ export function CourtManagement() {
       toast.error('Enter a valid guest fee amount');
       return;
     }
-    if (wantsPayment && stripeOnboarded === false) {
+    if (turningOnPaidBooking && stripeOnboarded === false) {
       toast.error('Complete Stripe Connect setup under Facility Management → Payments first');
       return;
+    }
+    if (wantsPayment && !turningOnPaidBooking && stripeOnboarded === false) {
+      toast.info(
+        'Court details saved. Stripe Connect must be set up before members can be charged for bookings.'
+      );
     }
     if (hasGuestFee && stripeOnboarded === false) {
       toast.info('Guest fee saved, but Stripe Connect must be set up before members can be charged');
@@ -313,9 +331,14 @@ export function CourtManagement() {
     try {
       setSaving(true);
 
+      const { name: courtName, courtNumber } = normalizeCourtNameAndNumber({
+        name: editingCourt.name,
+        courtNumber: editingCourt.courtNumber,
+      });
+
       const paymentPayload = {
         requirePayment: wantsPayment,
-        bookingAmountCents: wantsPayment ? bookingAmountCents : null,
+        bookingAmountCents: wantsPayment ? bookingAmountCents ?? null : null,
         bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
         guestFeeCents: hasGuestFee ? guestFeeCents : null,
         guestFeeDollars: hasGuestFee ? editingCourt.guestFeeDollars : '',
@@ -325,8 +348,8 @@ export function CourtManagement() {
       if (isAddingNew || !editingCourt.id) {
         // Create new court
         response = await adminApi.createCourt(currentFacilityId, {
-          name: editingCourt.name || `Court ${editingCourt.courtNumber}`,
-          courtNumber: editingCourt.courtNumber,
+          name: courtName,
+          courtNumber,
           surfaceType: editingCourt.surfaceType,
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,
@@ -337,8 +360,8 @@ export function CourtManagement() {
       } else {
         // Update existing court
         response = await adminApi.updateCourt(editingCourt.id, {
-          name: editingCourt.name,
-          courtNumber: editingCourt.courtNumber,
+          name: courtName,
+          courtNumber,
           surfaceType: editingCourt.surfaceType,
           courtType: editingCourt.courtType,
           isIndoor: editingCourt.isIndoor,
@@ -355,11 +378,11 @@ export function CourtManagement() {
         setIsAddingNew(false);
         await loadCourts();
       } else {
-        toast.error(response.error || 'Failed to save court');
+        toast.error(response.error || response.message || 'Failed to save court');
       }
     } catch (error: any) {
       console.error('Error saving court:', error);
-      toast.error('Failed to save court');
+      toast.error(error?.message || 'Failed to save court');
     } finally {
       setSaving(false);
     }
@@ -653,11 +676,18 @@ export function CourtManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="courtName">Court Name</Label>
+                    <p className="text-xs text-gray-500">Shown on the calendar — any label you want (not tied to court number).</p>
                     <Input
                       id="courtName"
                       value={editingCourt.name}
-                      onChange={(e) => setEditingCourt({ ...editingCourt, name: e.target.value })}
-                      placeholder={`Court ${editingCourt.courtNumber}`}
+                      onChange={(e) =>
+                        setEditingCourt((prev) =>
+                          prev
+                            ? { ...prev, ...courtFieldsAfterNameChange(e.target.value, prev.courtNumber) }
+                            : prev
+                        )
+                      }
+                      placeholder="e.g. Center Court"
                     />
                   </div>
                   <div className="space-y-2">
@@ -666,14 +696,28 @@ export function CourtManagement() {
                       id="courtNumber"
                       type="number"
                       value={editingCourt.courtNumber}
-                      onChange={(e) => setEditingCourt({ ...editingCourt, courtNumber: parseInt(e.target.value) || 1 })}
+                      onChange={(e) =>
+                        setEditingCourt((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                ...courtFieldsAfterNumberChange(
+                                  parseInt(e.target.value, 10) || 1,
+                                  prev.name
+                                ),
+                              }
+                            : prev
+                        )
+                      }
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="courtType">Court Type</Label>
                     <Select
                       value={editingCourt.courtType}
-                      onValueChange={(value) => setEditingCourt({ ...editingCourt, courtType: value })}
+                      onValueChange={(value) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, courtType: value } : prev))
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -689,7 +733,9 @@ export function CourtManagement() {
                     <Label htmlFor="courtSurface">Surface Type</Label>
                     <Select
                       value={editingCourt.surfaceType}
-                      onValueChange={(value) => setEditingCourt({ ...editingCourt, surfaceType: value })}
+                      onValueChange={(value) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, surfaceType: value } : prev))
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -705,7 +751,9 @@ export function CourtManagement() {
                     <Switch
                       id="indoor"
                       checked={editingCourt.isIndoor}
-                      onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isIndoor: checked })}
+                      onCheckedChange={(checked) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, isIndoor: checked } : prev))
+                      }
                     />
                     <Label htmlFor="indoor">Indoor Court</Label>
                   </div>
@@ -713,7 +761,9 @@ export function CourtManagement() {
                     <Switch
                       id="lights"
                       checked={editingCourt.hasLights}
-                      onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, hasLights: checked })}
+                      onCheckedChange={(checked) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, hasLights: checked } : prev))
+                      }
                     />
                     <Label htmlFor="lights">Has Lights</Label>
                   </div>
@@ -721,7 +771,9 @@ export function CourtManagement() {
                     <Switch
                       id="walkUp"
                       checked={editingCourt.isWalkUp}
-                      onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isWalkUp: checked })}
+                      onCheckedChange={(checked) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, isWalkUp: checked } : prev))
+                      }
                     />
                     <Label htmlFor="walkUp">Walk-up Court (no online booking)</Label>
                   </div>
@@ -944,11 +996,18 @@ export function CourtManagement() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor={`courtName-${court.id}`}>Court Name</Label>
+                          <p className="text-xs text-gray-500">Shown on the calendar — any label you want.</p>
                           <Input
                             id={`courtName-${court.id}`}
                             value={editingCourt.name}
-                            onChange={(e) => setEditingCourt({ ...editingCourt, name: e.target.value })}
-                            placeholder={`Court ${editingCourt.courtNumber}`}
+                            onChange={(e) =>
+                        setEditingCourt((prev) =>
+                          prev
+                            ? { ...prev, ...courtFieldsAfterNameChange(e.target.value, prev.courtNumber) }
+                            : prev
+                        )
+                      }
+                            placeholder="e.g. Center Court"
                           />
                         </div>
                         <div className="space-y-2">
@@ -957,14 +1016,28 @@ export function CourtManagement() {
                             id={`courtNumber-${court.id}`}
                             type="number"
                             value={editingCourt.courtNumber}
-                            onChange={(e) => setEditingCourt({ ...editingCourt, courtNumber: parseInt(e.target.value) || 1 })}
+                            onChange={(e) =>
+                        setEditingCourt((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                ...courtFieldsAfterNumberChange(
+                                  parseInt(e.target.value, 10) || 1,
+                                  prev.name
+                                ),
+                              }
+                            : prev
+                        )
+                      }
                           />
                         </div>
                         <div className="space-y-2">
                           <Label>Court Type</Label>
                           <Select
                             value={editingCourt.courtType}
-                            onValueChange={(value) => setEditingCourt({ ...editingCourt, courtType: value })}
+                            onValueChange={(value) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, courtType: value } : prev))
+                      }
                           >
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -978,7 +1051,9 @@ export function CourtManagement() {
                           <Label>Surface Type</Label>
                           <Select
                             value={editingCourt.surfaceType}
-                            onValueChange={(value) => setEditingCourt({ ...editingCourt, surfaceType: value })}
+                            onValueChange={(value) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, surfaceType: value } : prev))
+                      }
                           >
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -992,7 +1067,9 @@ export function CourtManagement() {
                           <Label>Status</Label>
                           <Select
                             value={editingCourt.status}
-                            onValueChange={(value: 'available' | 'maintenance' | 'closed') => setEditingCourt({ ...editingCourt, status: value })}
+                            onValueChange={(value: 'available' | 'maintenance' | 'closed') =>
+                              setEditingCourt((prev) => (prev ? { ...prev, status: value } : prev))
+                            }
                           >
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -1006,7 +1083,9 @@ export function CourtManagement() {
                           <Switch
                             id={`indoor-${court.id}`}
                             checked={editingCourt.isIndoor}
-                            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isIndoor: checked })}
+                            onCheckedChange={(checked) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, isIndoor: checked } : prev))
+                      }
                           />
                           <Label htmlFor={`indoor-${court.id}`}>Indoor Court</Label>
                         </div>
@@ -1014,7 +1093,9 @@ export function CourtManagement() {
                           <Switch
                             id={`lights-${court.id}`}
                             checked={editingCourt.hasLights}
-                            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, hasLights: checked })}
+                            onCheckedChange={(checked) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, hasLights: checked } : prev))
+                      }
                           />
                           <Label htmlFor={`lights-${court.id}`}>Has Lights</Label>
                         </div>
@@ -1022,7 +1103,9 @@ export function CourtManagement() {
                           <Switch
                             id={`walkUp-${court.id}`}
                             checked={editingCourt.isWalkUp}
-                            onCheckedChange={(checked) => setEditingCourt({ ...editingCourt, isWalkUp: checked })}
+                            onCheckedChange={(checked) =>
+                        setEditingCourt((prev) => (prev ? { ...prev, isWalkUp: checked } : prev))
+                      }
                           />
                           <Label htmlFor={`walkUp-${court.id}`}>Walk-up Court (no online booking)</Label>
                         </div>

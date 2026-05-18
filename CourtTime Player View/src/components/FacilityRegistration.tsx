@@ -44,6 +44,11 @@ import {
   courtScheduleRowsToOperatingHoursMap,
   formatGroupedOperatingHoursSummary,
 } from '../../shared/utils/operatingHours';
+import {
+  courtFieldsAfterNameChange,
+  courtFieldsAfterNumberChange,
+  normalizeCourtNameAndNumber,
+} from '../../shared/utils/courtNaming';
 
 interface Court extends PaidCourtFormFields {
   id: string;
@@ -1362,16 +1367,26 @@ export function FacilityRegistration() {
       courts: prev.courts.map(court => {
         if (court.id !== courtId) return court;
 
+        let merged = { ...court, ...updates };
+        if (updates.courtNumber !== undefined) {
+          merged = { ...merged, ...courtFieldsAfterNumberChange(updates.courtNumber, court.name) };
+        }
+        if (updates.name !== undefined) {
+          merged = {
+            ...merged,
+            ...courtFieldsAfterNameChange(updates.name, merged.courtNumber),
+          };
+        }
+
         // Initialize splitConfig when canSplit is enabled
         if (updates.canSplit && !court.splitConfig) {
           return {
-            ...court,
-            ...updates,
+            ...merged,
             splitConfig: { splitNames: [], splitType: 'Pickleball' as const }
           };
         }
 
-        return { ...court, ...updates };
+        return merged;
       })
     }));
   };
@@ -1582,9 +1597,13 @@ export function FacilityRegistration() {
         courts: fd.courts.map(court => {
           const wantsPayment = Boolean(court.requirePayment);
           const hasGuestFee = Boolean(court.enableGuestFee);
-          return {
+          const { name, courtNumber } = normalizeCourtNameAndNumber({
             name: court.name,
             courtNumber: court.courtNumber,
+          });
+          return {
+            name,
+            courtNumber,
             surfaceType: court.surfaceType,
             courtType: court.courtType,
             isIndoor: court.isIndoor,
@@ -3327,11 +3346,24 @@ export function FacilityRegistration() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
+                  <Label>Court Name</Label>
+                  <p className="text-xs text-gray-500">Shown on the calendar — any label you want.</p>
+                  <Input
+                    value={court.name}
+                    onChange={(e) => updateCourt(court.id, { name: e.target.value })}
+                    placeholder="e.g. Center Court"
+                  />
+                </div>
+                <div>
                   <Label>Court Number</Label>
                   <Input
                     type="number"
                     value={court.courtNumber}
-                    onChange={(e) => updateCourt(court.id, { courtNumber: parseInt(e.target.value) })}
+                    onChange={(e) =>
+                      updateCourt(court.id, {
+                        courtNumber: parseInt(e.target.value, 10) || 1,
+                      })
+                    }
                   />
                 </div>
                 <div>

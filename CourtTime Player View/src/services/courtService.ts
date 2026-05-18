@@ -451,12 +451,14 @@ export async function updateCourt(
 export async function assertPaidCourtConfig(
   facilityId: string,
   requirePayment: boolean,
-  bookingAmountCents?: number | null
+  bookingAmountCents?: number | null,
+  options?: { requireStripe?: boolean }
 ): Promise<void> {
   if (!requirePayment) return;
   if (!bookingAmountCents || bookingAmountCents <= 0) {
     throw new Error('Booking fee is required when paid court booking is enabled');
   }
+  if (options?.requireStripe === false) return;
   const { syncConnectOnboardingStatus } = await import('./stripeConnectService');
   const stripeStatus = await syncConnectOnboardingStatus(facilityId);
   if (!stripeStatus.onboarded) {

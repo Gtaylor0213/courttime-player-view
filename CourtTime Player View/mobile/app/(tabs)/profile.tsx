@@ -652,20 +652,15 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* My Facilities */}
+      {/* Club Info */}
       <View style={styles.section}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
-          <Text style={styles.sectionTitle}>My Facilities</Text>
-          <TouchableOpacity onPress={() => setShowFindFacility(true)} accessibilityRole="button" accessibilityLabel="Find a facility to join">
-            <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' }}>+ Find Facility</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.sectionTitle, { marginBottom: Spacing.sm }]}>Club Info</Text>
         {facilities.length === 0 ? (
           <View style={styles.detailCard}>
             <View style={{ padding: Spacing.lg, alignItems: 'center' }}>
               <Text style={{ color: Colors.textMuted, fontSize: FontSize.sm }}>You're not a member of any facility yet.</Text>
-              <TouchableOpacity onPress={() => setShowFindFacility(true)} style={{ marginTop: Spacing.sm }} accessibilityRole="button" accessibilityLabel="Find a facility to join">
-                <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' }}>Find a facility to join</Text>
+              <TouchableOpacity onPress={() => setShowFindFacility(true)} style={{ marginTop: Spacing.sm }} accessibilityRole="button" accessibilityLabel="Request a facility to join">
+                <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' }}>Request a facility</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -681,6 +676,14 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
             ))}
+            <TouchableOpacity
+              onPress={() => setShowFindFacility(true)}
+              style={{ padding: Spacing.md, alignItems: 'center', borderTopWidth: 1, borderTopColor: Colors.borderLight }}
+              accessibilityRole="button"
+              accessibilityLabel="Request a facility to join"
+            >
+              <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' }}>Request a facility</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>

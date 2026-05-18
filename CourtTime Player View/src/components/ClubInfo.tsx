@@ -360,14 +360,49 @@ export function ClubInfo() {
             <h1 className="text-2xl font-medium text-gray-900">Club Information</h1>
             <NotificationBell />
           </div>
-          {/* Non-Member Notice */}
+          {/* Your clubs — listed before request actions */}
+          {memberFacilities.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Your Clubs
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {memberFacilities.map((membership: any) => {
+                  const id = membership.facilityId;
+                  const name = safeDisplayText(membership.facilityName) || 'Club';
+                  const isCurrent = id === clubId;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => navigate(`/club/${id}`)}
+                      className={`w-full text-left p-3 border rounded-lg transition-colors hover:bg-gray-50 ${
+                        isCurrent ? 'border-green-300 bg-green-50/50' : 'border-gray-200'
+                      }`}
+                    >
+                      <p className="font-medium text-gray-900">{name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 capitalize">
+                        {membership.status || 'active'}
+                        {isCurrent ? ' · Viewing now' : ''}
+                      </p>
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Request membership — below clubs you already belong to */}
           {!isMember && (
             <Card className="mb-6 border-green-200 bg-green-50">
               <CardContent className="pt-6">
                 <div className="flex items-start gap-4">
                   <AlertCircle className="h-5 w-5 text-green-600 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="font-medium text-green-900 mb-1">Not a Member</h3>
+                    <h3 className="font-medium text-green-900 mb-1">Request a facility</h3>
                     <p className="text-sm text-green-800 mb-3">
                       You're viewing information for a facility you're not currently a member of. Request membership to access courts and book sessions.
                     </p>

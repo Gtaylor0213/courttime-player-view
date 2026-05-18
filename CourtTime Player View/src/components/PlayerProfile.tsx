@@ -722,12 +722,12 @@ export function PlayerProfile() {
                 </CardContent>
               </Card>
 
-              {/* Facility Memberships */}
+              {/* Club Info */}
               <Card className="mt-6">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Building2 className="h-5 w-5" />
-                    Facility Memberships
+                    Club Info
                   </CardTitle>
                   <CardDescription>
                     {profileData.memberFacilities.length === 0
@@ -770,10 +770,77 @@ export function PlayerProfile() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-6 text-gray-500">
-                      <p className="text-sm">Request membership to a facility to access courts and features</p>
+                    <div className="text-center py-4 text-gray-500">
+                      <p className="text-sm">You are not a member of any facility yet</p>
                     </div>
                   )}
+
+                  <div className="pt-4 mt-4 border-t border-gray-200 space-y-4">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        Request a facility
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Search for facilities and request membership to access their courts
+                      </p>
+                    </div>
+                    <div>
+                      <Label htmlFor="facilitySearch">Search Facilities</Label>
+                      <Input
+                        id="facilitySearch"
+                        placeholder="Search by name, location, or type..."
+                        value={facilitySearchQuery}
+                        onChange={(e) => handleFacilitySearch(e.target.value)}
+                      />
+                    </div>
+
+                    {isSearchingFacilities && (
+                      <div className="text-sm text-gray-500">Searching...</div>
+                    )}
+
+                    {facilitySearchResults.length > 0 && (
+                      <div className="border rounded-lg divide-y max-h-64 overflow-y-auto">
+                        {facilitySearchResults.map((facility) => {
+                          const isAlreadyMember = profileData.memberFacilities.some(
+                            (f: any) => f.facilityId === facility.id
+                          );
+
+                          return (
+                            <div
+                              key={facility.id}
+                              className="p-4 hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <div className="font-medium">{facility.name}</div>
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    {facility.type}
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleRequestMembership(facility.id, facility.name)}
+                                  disabled={isAlreadyMember || requestingMembership === facility.id}
+                                  variant={isAlreadyMember ? 'outline' : 'default'}
+                                >
+                                  {isAlreadyMember ? 'Member' :
+                                   requestingMembership === facility.id ? 'Requesting...' :
+                                   'Request'}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {facilitySearchQuery.length >= 2 && !isSearchingFacilities && facilitySearchResults.length === 0 && (
+                      <div className="text-sm text-gray-500 text-center py-4">
+                        No facilities found matching "{facilitySearchQuery}"
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1176,78 +1243,6 @@ export function PlayerProfile() {
                 </CardContent>
               </Card>
 
-              {/* Request Membership */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Plus className="h-5 w-5" />
-                    Request Facility Membership
-                  </CardTitle>
-                  <CardDescription>
-                    Search for facilities and request membership to access their courts
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="facilitySearch">Search Facilities</Label>
-                      <Input
-                        id="facilitySearch"
-                        placeholder="Search by name, location, or type..."
-                        value={facilitySearchQuery}
-                        onChange={(e) => handleFacilitySearch(e.target.value)}
-                      />
-                    </div>
-
-                    {isSearchingFacilities && (
-                      <div className="text-sm text-gray-500">Searching...</div>
-                    )}
-
-                    {facilitySearchResults.length > 0 && (
-                      <div className="border rounded-lg divide-y max-h-64 overflow-y-auto">
-                        {facilitySearchResults.map((facility) => {
-                          const isAlreadyMember = profileData.memberFacilities.some(
-                            (f: any) => f.facilityId === facility.id
-                          );
-
-                          return (
-                            <div
-                              key={facility.id}
-                              className="p-4 hover:bg-gray-50 transition-colors"
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <div className="font-medium">{facility.name}</div>
-                                  <div className="text-sm text-gray-600 mt-1">
-                                    {facility.type}
-                                  </div>
-                                  {/* Description is only visible to admitted members, not in search results */}
-                                </div>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleRequestMembership(facility.id, facility.name)}
-                                  disabled={isAlreadyMember || requestingMembership === facility.id}
-                                  variant={isAlreadyMember ? "outline" : "default"}
-                                >
-                                  {isAlreadyMember ? 'Member' :
-                                   requestingMembership === facility.id ? 'Requesting...' :
-                                   'Request'}
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {facilitySearchQuery.length >= 2 && !isSearchingFacilities && facilitySearchResults.length === 0 && (
-                      <div className="text-sm text-gray-500 text-center py-4">
-                        No facilities found matching "{facilitySearchQuery}"
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           </div>
         </div>

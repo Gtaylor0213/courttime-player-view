@@ -26,6 +26,8 @@ import {
   isMobileFacilityRegistrationSource,
   MOBILE_FACILITY_REGISTRATION_SOURCE,
 } from '../../shared/utils/mobileFacilityRegistration';
+import { FACILITY_TYPE_OPTIONS } from '../../shared/constants/facilityTypes';
+import { mergeRegistrationFormData } from '../../shared/utils/facilityRegistrationForm';
 import { RulesStep } from './facility-registration/RulesStep';
 import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG } from './facility-registration/rule-defaults';
 
@@ -229,6 +231,9 @@ export function FacilityRegistration() {
   const [paymentWaived, setPaymentWaived] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [autoSubmitAfterPayment, setAutoSubmitAfterPayment] = useState(false);
+  const [registrationSessionReady, setRegistrationSessionReady] = useState(
+    () => new URLSearchParams(window.location.search).get('payment') !== 'success'
+  );
   const handleSubmitRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   // Pre-authenticated = user was already logged in before visiting registration (skip Step 1)
@@ -237,7 +242,8 @@ export function FacilityRegistration() {
   const totalSteps = preAuthenticated ? 6 : 7; // +1 for Payment step
 
   const persistRegistrationToSession = () => {
-    const { facilityImage: _fi, addressWhitelistFile: _af, facilityImagePreview: _fp, ...serializable } = formData;
+    const merged = mergeRegistrationFormData(formData);
+    const { facilityImage: _fi, addressWhitelistFile: _af, facilityImagePreview: _fp, ...serializable } = merged;
     sessionStorage.setItem('facilityRegistrationData', JSON.stringify(serializable));
     sessionStorage.setItem('facilityRegistrationStep', String(currentStep));
     sessionStorage.setItem('facilityRegistrationStep1Mode', step1Mode);
@@ -285,6 +291,7 @@ export function FacilityRegistration() {
       setStep1Mode('create');
     }
 
+    setRegistrationSessionReady(true);
     return true;
   };
 
@@ -305,7 +312,11 @@ export function FacilityRegistration() {
     const sessionId = urlParams.get('session_id');
 
     if (paymentStatus === 'success' && sessionId) {
-      restoreRegistrationFromSession();
+      setRegistrationSessionReady(false);
+      const restored = restoreRegistrationFromSession();
+      if (!restored) {
+        setRegistrationSessionReady(true);
+      }
 
       // Verify the session with the backend
       paymentsApi.verifySession(sessionId).then(result => {
@@ -986,13 +997,16 @@ export function FacilityRegistration() {
   };
 
   // Validate a single step and return errors (without setting state)
-  const getStepErrors = (step: number): Record<string, string> => {
+  const getStepErrors = (
+    step: number,
+    dataSource: typeof formData = formData
+  ): Record<string, string> => {
     const stepErrors: Record<string, string> = {};
 
     if (!preAuthenticated && step === 1) {
       // Validate Step 1 based on mode (after Stripe redirect step1Mode may reset — infer from form data)
       const effectiveStep1Mode =
-        step1Mode === 'choose' && parsedHasCreateAccountFields(formData)
+        step1Mode === 'choose' && parsedHasCreateAccountFields(dataSource)
           ? 'create'
           : step1Mode;
 
@@ -1000,20 +1014,20 @@ export function FacilityRegistration() {
         stepErrors.step1Mode = 'Please create an account or log in to continue';
       } else if (effectiveStep1Mode === 'create') {
         // Validate new account creation fields
-        if (!formData.adminFirstName.trim()) stepErrors.adminFirstName = 'First name is required';
-        if (!formData.adminLastName.trim()) stepErrors.adminLastName = 'Last name is required';
-        if (!formData.adminEmail.trim()) stepErrors.adminEmail = 'Email is required';
-        else if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) stepErrors.adminEmail = 'Email is invalid';
-        if (!formData.adminPhone.trim()) stepErrors.adminPhone = 'Phone number is required';
-        if (!formData.adminPassword) stepErrors.adminPassword = 'Password is required';
-        else if (formData.adminPassword.length < 8) stepErrors.adminPassword = 'Password must be at least 8 characters';
-        if (formData.adminPassword !== formData.adminConfirmPassword) {
+        if (!dataSource.adminFirstName.trim()) stepErrors.adminFirstName = 'First name is required';
+        if (!dataSource.adminLastName.trim()) stepErrors.adminLastName = 'Last name is required';
+        if (!dataSource.adminEmail.trim()) stepErrors.adminEmail = 'Email is required';
+        else if (!/\S+@\S+\.\S+/.test(dataSource.adminEmail)) stepErrors.adminEmail = 'Email is invalid';
+        if (!dataSource.adminPhone.trim()) stepErrors.adminPhone = 'Phone number is required';
+        if (!dataSource.adminPassword) stepErrors.adminPassword = 'Password is required';
+        else if (dataSource.adminPassword.length < 8) stepErrors.adminPassword = 'Password must be at least 8 characters';
+        if (dataSource.adminPassword !== dataSource.adminConfirmPassword) {
           stepErrors.adminConfirmPassword = 'Passwords do not match';
         }
-        if (!formData.adminStreetAddress.trim()) stepErrors.adminStreetAddress = 'Street address is required';
-        if (!formData.adminCity.trim()) stepErrors.adminCity = 'City is required';
-        if (!formData.adminState) stepErrors.adminState = 'State is required';
-        if (!formData.adminZipCode.trim()) stepErrors.adminZipCode = 'ZIP code is required';
+        if (!dataSource.adminStreetAddress.trim()) stepErrors.adminStreetAddress = 'Street address is required';
+        if (!dataSource.adminCity.trim()) stepErrors.adminCity = 'City is required';
+        if (!dataSource.adminState) stepErrors.adminState = 'State is required';
+        if (!dataSource.adminZipCode.trim()) stepErrors.adminZipCode = 'ZIP code is required';
       }
       // 'loggedIn' mode: no required fields (all profile completion is optional)
     }
@@ -1021,39 +1035,39 @@ export function FacilityRegistration() {
     const facilityStep = preAuthenticated ? 1 : 2;
     if (step === facilityStep) {
       // Validate Facility Information
-      if (!formData.facilityName.trim()) stepErrors.facilityName = 'Facility name is required';
-      if (!formData.facilityType) stepErrors.facilityType = 'Facility type is required';
-      if (!formData.streetAddress.trim()) stepErrors.streetAddress = 'Street address is required';
-      if (!formData.city.trim()) stepErrors.city = 'City is required';
-      if (!formData.state) stepErrors.state = 'State is required';
-      if (!formData.zipCode.trim()) stepErrors.zipCode = 'ZIP code is required';
-      if (!formData.phone.trim()) stepErrors.phone = 'Facility phone number is required';
-      if (!formData.email.trim()) stepErrors.email = 'Facility email is required';
-      else if (!/\S+@\S+\.\S+/.test(formData.email)) stepErrors.email = 'Facility email is invalid';
+      if (!dataSource.facilityName.trim()) stepErrors.facilityName = 'Facility name is required';
+      if (!dataSource.facilityType) stepErrors.facilityType = 'Facility type is required';
+      if (!dataSource.streetAddress.trim()) stepErrors.streetAddress = 'Street address is required';
+      if (!dataSource.city.trim()) stepErrors.city = 'City is required';
+      if (!dataSource.state) stepErrors.state = 'State is required';
+      if (!dataSource.zipCode.trim()) stepErrors.zipCode = 'ZIP code is required';
+      if (!dataSource.phone.trim()) stepErrors.phone = 'Facility phone number is required';
+      if (!dataSource.email.trim()) stepErrors.email = 'Facility email is required';
+      else if (!/\S+@\S+\.\S+/.test(dataSource.email)) stepErrors.email = 'Facility email is invalid';
       // Validate primary contact
-      if (!formData.primaryContact.name.trim()) stepErrors.primaryContactName = 'Primary contact name is required';
-      if (!formData.primaryContact.email.trim()) stepErrors.primaryContactEmail = 'Primary contact email is required';
-      else if (!/\S+@\S+\.\S+/.test(formData.primaryContact.email)) stepErrors.primaryContactEmail = 'Primary contact email is invalid';
-      if (!formData.primaryContact.phone.trim()) stepErrors.primaryContactPhone = 'Primary contact phone is required';
+      if (!dataSource.primaryContact.name.trim()) stepErrors.primaryContactName = 'Primary contact name is required';
+      if (!dataSource.primaryContact.email.trim()) stepErrors.primaryContactEmail = 'Primary contact email is required';
+      else if (!/\S+@\S+\.\S+/.test(dataSource.primaryContact.email)) stepErrors.primaryContactEmail = 'Primary contact email is invalid';
+      if (!dataSource.primaryContact.phone.trim()) stepErrors.primaryContactPhone = 'Primary contact phone is required';
     }
 
     const courtsStep = preAuthenticated ? 2 : 3;
     if (step === courtsStep) {
       // Validate Courts
-      if (formData.courts.length === 0) {
+      if (dataSource.courts.length === 0) {
         stepErrors.courts = 'At least one court is required';
       }
     }
 
     const rulesStep = preAuthenticated ? 3 : 4;
     if (step === rulesStep) {
-      if (!formData.rulesConfig.generalRules.trim()) stepErrors.generalRules = 'General rules are required';
-      if (!formData.rulesConfig.restrictionType) stepErrors.restrictionType = 'Please select how restrictions apply';
+      if (!dataSource.rulesConfig.generalRules.trim()) stepErrors.generalRules = 'General rules are required';
+      if (!dataSource.rulesConfig.restrictionType) stepErrors.restrictionType = 'Please select how restrictions apply';
 
-      const daysInAdvanceRule = getRuleEntry(formData.rulesConfig, 'ACC-005');
-      const maxReservationDurationRule = getRuleEntry(formData.rulesConfig, 'CRT-005');
-      const weeklyIndividualRule = getRuleEntry(formData.rulesConfig, 'ACC-002');
-      const householdRule = getRuleEntry(formData.rulesConfig, 'HH-003');
+      const daysInAdvanceRule = getRuleEntry(dataSource.rulesConfig, 'ACC-005');
+      const maxReservationDurationRule = getRuleEntry(dataSource.rulesConfig, 'CRT-005');
+      const weeklyIndividualRule = getRuleEntry(dataSource.rulesConfig, 'ACC-002');
+      const householdRule = getRuleEntry(dataSource.rulesConfig, 'HH-003');
 
       if (daysInAdvanceRule.enabled && !hasValue(daysInAdvanceRule.config.max_days_ahead)) {
         stepErrors.daysInAdvance = 'Enter a days-in-advance value or turn that rule off';
@@ -1092,7 +1106,9 @@ export function FacilityRegistration() {
   };
 
   // Validate all steps and return combined errors with the first invalid step
-  const validateAllSteps = (): {
+  const validateAllSteps = (
+    dataSource: typeof formData = formData
+  ): {
     isValid: boolean;
     errors: Record<string, string>;
     firstInvalidStep: number | null;
@@ -1103,7 +1119,7 @@ export function FacilityRegistration() {
     let firstInvalidField: string | null = null;
 
     for (let step = 1; step <= totalSteps; step++) {
-      const stepErrors = getStepErrors(step);
+      const stepErrors = getStepErrors(step, dataSource);
       if (Object.keys(stepErrors).length > 0) {
         Object.assign(allErrors, stepErrors);
         if (firstInvalidStep === null) {
@@ -1262,8 +1278,10 @@ export function FacilityRegistration() {
   };
 
   const handleSubmit = async () => {
+    const submitFormData = mergeRegistrationFormData(formData);
+
     // Validate ALL steps before submission
-    const validation = validateAllSteps();
+    const validation = validateAllSteps(submitFormData);
 
     if (!validation.isValid) {
       setErrors(validation.errors);
@@ -1280,58 +1298,60 @@ export function FacilityRegistration() {
     setIsSubmitting(true);
 
     try {
-      const bookingRulesPayload = buildRegistrationBookingRules(formData.rulesConfig);
+      const bookingRulesPayload = buildRegistrationBookingRules(submitFormData.rulesConfig);
+      // Merged session data (e.g. after Stripe return) — must match validation payload
+      const fd = submitFormData;
 
       // Prepare registration data
       const registrationData = {
         // Facility Administrator Account (if creating new user — not logged in)
         ...(user ? {} : {
-          adminEmail: formData.adminEmail,
-          adminPassword: formData.adminPassword,
-          adminFullName: `${formData.adminFirstName} ${formData.adminLastName}`.trim(),
-          adminFirstName: formData.adminFirstName,
-          adminLastName: formData.adminLastName,
-          adminPhone: formData.adminPhone,
-          adminStreetAddress: formData.adminStreetAddress,
-          adminCity: formData.adminCity,
-          adminState: formData.adminState,
-          adminZipCode: formData.adminZipCode,
+          adminEmail: fd.adminEmail,
+          adminPassword: fd.adminPassword,
+          adminFullName: `${fd.adminFirstName} ${fd.adminLastName}`.trim(),
+          adminFirstName: fd.adminFirstName,
+          adminLastName: fd.adminLastName,
+          adminPhone: fd.adminPhone,
+          adminStreetAddress: fd.adminStreetAddress,
+          adminCity: fd.adminCity,
+          adminState: fd.adminState,
+          adminZipCode: fd.adminZipCode,
         }),
 
         // Admin profile fields (for both new and existing users)
-        ...(formData.adminProfilePicture && { adminProfilePicture: formData.adminProfilePicture }),
-        ...(formData.adminSkillLevel && { adminSkillLevel: formData.adminSkillLevel }),
-        ...(formData.adminUstaRating && { adminUstaRating: formData.adminUstaRating }),
-        ...(formData.adminBio && { adminBio: formData.adminBio }),
+        ...(fd.adminProfilePicture && { adminProfilePicture: fd.adminProfilePicture }),
+        ...(fd.adminSkillLevel && { adminSkillLevel: fd.adminSkillLevel }),
+        ...(fd.adminUstaRating && { adminUstaRating: fd.adminUstaRating }),
+        ...(fd.adminBio && { adminBio: fd.adminBio }),
 
         // Facility Information
-        facilityName: formData.facilityName,
-        facilityType: formData.facilityType,
-        primaryLocationLabel: formData.primaryLocationLabel.trim() || undefined,
-        streetAddress: formData.streetAddress,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-        phone: formData.primaryContact.phone || formData.phone,
-        email: formData.primaryContact.email || formData.email,
-        contactName: formData.primaryContact.name,
-        description: formData.description,
-        facilityImage: formData.facilityImageBase64 || undefined,
+        facilityName: fd.facilityName,
+        facilityType: fd.facilityType,
+        primaryLocationLabel: fd.primaryLocationLabel.trim() || undefined,
+        streetAddress: fd.streetAddress,
+        city: fd.city,
+        state: fd.state,
+        zipCode: fd.zipCode,
+        phone: fd.primaryContact.phone || fd.phone,
+        email: fd.primaryContact.email || fd.email,
+        contactName: fd.primaryContact.name,
+        description: fd.description,
+        facilityImage: fd.facilityImageBase64 || undefined,
 
         // Contacts
         primaryContact: {
-          name: formData.primaryContact.name,
-          email: formData.primaryContact.email,
-          phone: formData.primaryContact.phone,
+          name: fd.primaryContact.name,
+          email: fd.primaryContact.email,
+          phone: fd.primaryContact.phone,
         },
-        secondaryContacts: formData.secondaryContacts
+        secondaryContacts: fd.secondaryContacts
           .filter(c => c.name.trim())
           .map(c => ({
             name: c.name,
             email: c.email || undefined,
             phone: c.phone || undefined,
           })),
-        secondaryLocations: formData.secondaryLocations
+        secondaryLocations: fd.secondaryLocations
           .filter((location) =>
             location.locationName.trim() &&
             location.streetAddress.trim() &&
@@ -1349,22 +1369,22 @@ export function FacilityRegistration() {
           })),
 
         // Operating Hours
-        operatingHours: formData.operatingHours,
-        timezone: formData.timezone,
+        operatingHours: fd.operatingHours,
+        timezone: fd.timezone,
 
         // Facility Rules
-        generalRules: formData.rulesConfig.generalRules,
-        termsAndConditions: formData.enableTermsAndConditions && formData.termsAndConditions.trim()
-          ? formData.termsAndConditions.trim()
+        generalRules: fd.rulesConfig.generalRules,
+        termsAndConditions: fd.enableTermsAndConditions && fd.termsAndConditions.trim()
+          ? fd.termsAndConditions.trim()
           : undefined,
-        termsAttachments: formData.enableTermsAndConditions && formData.termsAndConditions.trim()
+        termsAttachments: fd.enableTermsAndConditions && fd.termsAndConditions.trim()
           ? []
           : [],
         requiredReviewSeconds: 0,
         bookingRules: bookingRulesPayload,
 
         // Restriction settings - map from rules engine entries for backward compatibility
-        restrictionType: formData.rulesConfig.restrictionType,
+        restrictionType: fd.rulesConfig.restrictionType,
         maxBookingsPerWeek:
           bookingRulesPayload.courtsPerWeekUserEnabled && hasValue(bookingRulesPayload.courtsPerWeekUser)
             ? bookingRulesPayload.courtsPerWeekUser
@@ -1383,10 +1403,10 @@ export function FacilityRegistration() {
         adminRestrictions: undefined,
 
         // Peak hours policy - with per-day time slots
-        peakHoursPolicy: formData.rulesConfig.hasPeakHours ? {
+        peakHoursPolicy: fd.rulesConfig.hasPeakHours ? {
           enabled: true,
           applyToAdmins: false,
-          timeSlots: formData.rulesConfig.peakHoursSlots.map((slot) => ({
+          timeSlots: fd.rulesConfig.peakHoursSlots.map((slot) => ({
             id: slot.id,
             startTime: slot.startTime,
             endTime: slot.endTime,
@@ -1404,16 +1424,16 @@ export function FacilityRegistration() {
         } : undefined,
 
         // Weekend policy
-        weekendPolicy: formData.rulesConfig.hasWeekendPolicy ? {
+        weekendPolicy: fd.rulesConfig.hasWeekendPolicy ? {
           enabled: true,
           applyToAdmins: false,
-          maxBookingsPerWeekend: formData.rulesConfig.weekendPolicy.maxBookingsUnlimited ? -1 : parseInt(formData.rulesConfig.weekendPolicy.maxBookingsPerWeekend),
-          maxDurationHours: formData.rulesConfig.weekendPolicy.maxDurationUnlimited ? -1 : parseFloat(formData.rulesConfig.weekendPolicy.maxDurationHours),
-          advanceBookingDays: formData.rulesConfig.weekendPolicy.advanceBookingUnlimited ? -1 : parseInt(formData.rulesConfig.weekendPolicy.advanceBookingDays),
+          maxBookingsPerWeekend: fd.rulesConfig.weekendPolicy.maxBookingsUnlimited ? -1 : parseInt(fd.rulesConfig.weekendPolicy.maxBookingsPerWeekend),
+          maxDurationHours: fd.rulesConfig.weekendPolicy.maxDurationUnlimited ? -1 : parseFloat(fd.rulesConfig.weekendPolicy.maxDurationHours),
+          advanceBookingDays: fd.rulesConfig.weekendPolicy.advanceBookingUnlimited ? -1 : parseInt(fd.rulesConfig.weekendPolicy.advanceBookingDays),
         } : undefined,
 
         // Rules engine configs for facility_rule_configs table
-        ruleConfigs: Object.entries(formData.rulesConfig.rules)
+        ruleConfigs: Object.entries(fd.rulesConfig.rules)
           .filter(([key]) => /^(ACC|CRT|HH)-\d{3}$/.test(key))
           .map(([ruleCode, entry]) => ({
             ruleCode,
@@ -1425,7 +1445,7 @@ export function FacilityRegistration() {
           })),
 
         // Courts
-        courts: formData.courts.map(court => ({
+        courts: fd.courts.map(court => ({
           name: court.name,
           courtNumber: court.courtNumber,
           surfaceType: court.surfaceType,
@@ -1437,11 +1457,11 @@ export function FacilityRegistration() {
         })),
 
         // Admin Invites
-        adminInvites: formData.adminInvites.filter(invite => invite.email),
+        adminInvites: fd.adminInvites.filter(invite => invite.email),
 
         // Address Whitelist
-        hoaAddresses: formData.parsedAddresses.length > 0 ? formData.parsedAddresses : undefined,
-        accountsPerAddress: formData.accountsPerAddress,
+        hoaAddresses: fd.parsedAddresses.length > 0 ? fd.parsedAddresses : undefined,
+        accountsPerAddress: fd.accountsPerAddress,
 
         // Existing user ID (if already logged in)
         existingUserId: user?.id,
@@ -1452,9 +1472,9 @@ export function FacilityRegistration() {
           sessionStorage.getItem('facilityRegistrationPaymentSessionId') ||
           undefined,
         promoCode: paymentWaived ? promoCode : undefined,
-        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : getBaseAmountCents(formData.courts.length)),
+        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : getBaseAmountCents(fd.courts.length)),
         paymentWaived,
-        customPricing: formData.courts.length > 10,
+        customPricing: fd.courts.length > 10,
       };
 
       // Call the API to register the facility
@@ -1519,13 +1539,13 @@ export function FacilityRegistration() {
   handleSubmitRef.current = handleSubmit;
 
   useEffect(() => {
-    if (!autoSubmitAfterPayment || !paymentComplete || isSubmitting) return;
+    if (!autoSubmitAfterPayment || !paymentComplete || !registrationSessionReady || isSubmitting) return;
     setAutoSubmitAfterPayment(false);
     const timer = window.setTimeout(() => {
       void handleSubmitRef.current();
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [autoSubmitAfterPayment, paymentComplete, isSubmitting]);
+  }, [autoSubmitAfterPayment, paymentComplete, registrationSessionReady, isSubmitting]);
 
   // Get step label based on step number and user status
   const getStepLabel = (stepNumber: number): string => {
@@ -2606,12 +2626,11 @@ export function FacilityRegistration() {
                     <SelectValue placeholder="Select facility type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="HOA">HOA</SelectItem>
-                    <SelectItem value="Tennis Club">Tennis Club</SelectItem>
-                    <SelectItem value="Pickleball Club">Pickleball Club</SelectItem>
-                    <SelectItem value="Racquet Club">Racquet Club</SelectItem>
-                    <SelectItem value="Public Recreation Facility">Public Recreation Facility</SelectItem>
-                    <SelectItem value="Private Sports Club">Private Sports Club</SelectItem>
+                    {FACILITY_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {errors.facilityType && (

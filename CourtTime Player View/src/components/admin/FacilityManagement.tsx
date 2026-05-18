@@ -41,6 +41,10 @@ import {
 import * as XLSX from 'xlsx';
 import { BillingTab } from './BillingTab';
 import { PaymentsTab } from './PaymentsTab';
+import {
+  getFacilityTypeSelectOptions,
+  normalizeFacilityType,
+} from '../../../shared/constants/facilityTypes';
 
 // US State abbreviations
 const US_STATES = [
@@ -1040,7 +1044,7 @@ export function FacilityManagement() {
 
         const data: FacilityData = {
           name: facility.name || '',
-          type: facility.type || facility.facilityType || 'Tennis Facility',
+          type: normalizeFacilityType(facility.type || facility.facilityType) || 'Tennis Facility',
           primaryLocationLabel: facility.primaryLocationLabel || '',
           streetAddress,
           city,
@@ -2548,15 +2552,14 @@ export function FacilityManagement() {
                         disabled={!isEditing}
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="Select facility type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Tennis Club">Tennis Club</SelectItem>
-                          <SelectItem value="Tennis Facility">Tennis Facility</SelectItem>
-                          <SelectItem value="Pickleball Club">Pickleball Club</SelectItem>
-                          <SelectItem value="Multi-Sport Club">Multi-Sport Club</SelectItem>
-                          <SelectItem value="HOA Community">HOA Community</SelectItem>
-                          <SelectItem value="Recreation Center">Recreation Center</SelectItem>
+                          {getFacilityTypeSelectOptions(facilityData.type).map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

@@ -15,6 +15,7 @@ import {
   type OperatingHoursMap,
 } from '../../shared/utils/operatingHours';
 import { useAuth } from '../contexts/AuthContext';
+import { normalizeFacilityType } from '../../shared/constants/facilityTypes';
 import { toast } from 'sonner';
 
 interface FacilityData {
@@ -210,7 +211,7 @@ export function ClubInfo() {
         const facilityData: FacilityData = {
           id: rawFacility.id,
           name: rawFacility.name || '',
-          type: rawFacility.type || rawFacility.facilityType || 'Tennis Facility',
+          type: normalizeFacilityType(rawFacility.type || rawFacility.facilityType) || 'Tennis Facility',
           description: rawFacility.description || '',
           primaryLocationLabel: rawFacility.primaryLocationLabel || '',
           streetAddress,

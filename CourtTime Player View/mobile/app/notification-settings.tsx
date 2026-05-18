@@ -59,12 +59,6 @@ const CATEGORY_TOGGLES: ToggleConfig[] = [
     icon: 'alarm-outline',
   },
   {
-    key: 'pushStrikes',
-    title: 'Strikes & lockouts',
-    description: 'Issued, revoked, or account lockout warnings',
-    icon: 'warning-outline',
-  },
-  {
     key: 'pushAnnouncements',
     title: 'Facility announcements',
     description: 'News, events, and admin posts',
@@ -158,7 +152,7 @@ export default function NotificationSettingsScreen() {
           <View style={styles.rowText}>
             <Text style={styles.rowTitle}>General transactional email</Text>
             <Text style={styles.rowDescription}>
-              Strikes, lockouts, facility messages to members, and similar alerts to your account address.
+              Facility messages to members and similar alerts. Strike and lockout emails are always sent.
             </Text>
           </View>
           <Switch
@@ -217,6 +211,18 @@ export default function NotificationSettingsScreen() {
           />
         </View>
 
+        <View style={styles.mandatoryRow}>
+          <View style={styles.rowIcon}>
+            <Ionicons name="warning-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>Strikes & lockouts</Text>
+            <Text style={styles.rowDescription}>
+              Always on — issued, revoked, or account lockout warnings cannot be disabled.
+            </Text>
+          </View>
+        </View>
+
         <Text style={styles.sectionLabel}>Categories</Text>
         <View style={[styles.categoriesBox, !prefs.pushEnabled && styles.categoriesBoxDisabled]}>
           {CATEGORY_TOGGLES.map((cfg, idx) => (
@@ -244,8 +250,8 @@ export default function NotificationSettingsScreen() {
 
         <Text style={styles.footnote}>
           {canManageMembershipRequestEmailAlerts
-            ? 'Email categories are independent: you can turn off booking messages but still get member-request alerts if you are an admin. Push categories only affect alerts on this device.'
-            : 'Email categories are independent: you can turn off booking messages while keeping other transactional email on. Push categories only affect alerts on this device.'}
+            ? 'Strike and lockout alerts are always delivered. Other email categories are independent. Push categories only affect optional alerts on this device.'
+            : 'Strike and lockout alerts are always delivered. Other email categories are independent. Push categories only affect optional alerts on this device.'}
         </Text>
       </ScrollView>
     </>
@@ -283,6 +289,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: Spacing.sm,
     marginLeft: Spacing.sm,
+  },
+  mandatoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
   },
   categoriesBox: {
     backgroundColor: Colors.card,

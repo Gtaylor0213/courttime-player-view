@@ -617,8 +617,8 @@ export function PlayerProfile() {
                     {emailNotificationsEnabled === null
                       ? 'Loading…'
                       : emailNotificationsEnabled
-                        ? 'On — strikes, lockouts, facility announcements to members, and similar messages.'
-                        : 'Off — we skip these emails.'}
+                        ? 'On — facility announcements to members and similar messages. Strike and lockout emails are always sent.'
+                        : 'Off — we skip optional transactional emails. Strike and lockout emails are still sent.'}
                   </p>
                 </div>
                 <Switch

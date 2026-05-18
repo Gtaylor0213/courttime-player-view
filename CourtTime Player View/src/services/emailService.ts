@@ -21,7 +21,7 @@ interface EmailSendResult {
 }
 
 /** Which preference column gates this send (each can be toggled independently). */
-export type TransactionalEmailCategory = 'general' | 'booking' | 'membership_request';
+export type TransactionalEmailCategory = 'general' | 'booking' | 'membership_request' | 'strike';
 
 async function shouldSendTransactionalEmail(
   userId: string | undefined,
@@ -30,6 +30,8 @@ async function shouldSendTransactionalEmail(
   if (!userId) return true;
   const prefs = await import('./userPreferencesService');
   switch (category) {
+    case 'strike':
+      return true;
     case 'booking':
       return prefs.isEmailBookingConfirmationsEnabled(userId);
     case 'membership_request':
@@ -299,7 +301,8 @@ export async function sendStrikeIssuedEmail(
       strikeReason: reason,
       expiryDate,
     },
-    userId
+    userId,
+    'strike'
   );
 }
 
@@ -324,7 +327,8 @@ export async function sendStrikeRevokedEmail(
       facilityName,
       revokeReason: revokeReason ? `Reason: ${revokeReason}` : '',
     },
-    userId
+    userId,
+    'strike'
   );
 }
 
@@ -353,7 +357,8 @@ export async function sendLockoutEmail(
       facilityName,
       lockoutEndDate,
     },
-    userId
+    userId,
+    'strike'
   );
 }
 

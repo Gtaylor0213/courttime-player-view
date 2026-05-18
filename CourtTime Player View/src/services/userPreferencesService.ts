@@ -1,5 +1,13 @@
 import { query } from '../database/connection';
 
+/** In-app / push types that users cannot opt out of. */
+export const MANDATORY_PUSH_NOTIFICATION_TYPES = new Set([
+  'strike_issued',
+  'strike_revoked',
+  'account_lockout',
+  'account_locked_out',
+]);
+
 export interface NotificationPreferences {
   emailNotificationsEnabled: boolean;
   /** Court booking confirmation and cancellation emails */
@@ -69,7 +77,9 @@ export async function getNotificationPreferences(userId: string): Promise<Notifi
     [userId]
   );
   if (result.rows.length === 0) return { ...DEFAULT_PREFS };
-  return { ...DEFAULT_PREFS, ...result.rows[0] };
+  const prefs = { ...DEFAULT_PREFS, ...result.rows[0] };
+  prefs.pushStrikes = true;
+  return prefs;
 }
 
 /**
@@ -94,7 +104,12 @@ export async function updateNotificationPreferences(
     pushWeather: 'push_weather',
   };
 
-  const entries = Object.entries(updates).filter(
+  const sanitizedUpdates = { ...updates };
+  if (sanitizedUpdates.pushStrikes === false) {
+    delete sanitizedUpdates.pushStrikes;
+  }
+
+  const entries = Object.entries(sanitizedUpdates).filter(
     ([key, value]) =>
       typeof value === 'boolean' && Object.prototype.hasOwnProperty.call(colMap, key)
   ) as Array<[keyof NotificationPreferences, boolean]>;
@@ -116,7 +131,7 @@ export async function updateNotificationPreferences(
   values.push(userId);
 
   await query(
-    `UPDATE user_preferences SET ${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE user_id = $${i}`,
+    `UPDATE user_preferences SET ${setClauses.join(', ')}, push_strikes = true, updated_at = CURRENT_TIMESTAMP WHERE user_id = $${i}`,
     values
   );
 
@@ -157,7 +172,7 @@ export function preferenceKeyForType(type: string): keyof NotificationPreference
     case 'strike_revoked':
     case 'account_lockout':
     case 'account_locked_out':
-      return 'pushStrikes';
+      return null;
     case 'facility_announcement':
       return 'pushAnnouncements';
     case 'weather_alert':

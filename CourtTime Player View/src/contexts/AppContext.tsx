@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 const FACILITY_STORAGE_KEY = 'selectedFacilityId';
@@ -52,6 +53,7 @@ export function useAppContext() {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedFacilityId, setSelectedFacilityIdState] = useState<string>(
@@ -87,6 +89,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const resolved = resolveFacilityId(allFacilityIds);
     if (resolved) setSelectedFacilityId(resolved);
   }, [user, selectedFacilityId, setSelectedFacilityId]);
+
+  // Deep links (e.g. membership request emails) can pin the active facility via ?facilityId=
+  useEffect(() => {
+    if (!user) return;
+    const facilityIdFromUrl = new URLSearchParams(location.search).get('facilityId');
+    if (!facilityIdFromUrl) return;
+    const allFacilityIds = Array.from(new Set([
+      ...(user.memberFacilities || []),
+      ...(user.adminFacilities || []),
+    ]));
+    if (allFacilityIds.includes(facilityIdFromUrl)) {
+      setSelectedFacilityId(facilityIdFromUrl);
+    }
+  }, [location.search, user, setSelectedFacilityId]);
 
   const toggleSidebar = () => setSidebarCollapsed(prev => !prev);
 

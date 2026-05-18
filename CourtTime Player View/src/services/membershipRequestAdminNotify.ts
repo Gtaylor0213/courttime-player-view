@@ -40,7 +40,7 @@ export async function notifyFacilityAdminsOfMembershipRequest(
         'New Membership Request',
         `${userName} (${userEmail}) has requested to join ${facilityName}.`,
         'membership_request',
-        { actionUrl: `/admin?tab=members` }
+        { actionUrl: `/admin/members?facilityId=${encodeURIComponent(facilityId)}&status=pending` }
       );
     } catch (e) {
       console.error('Failed to create membership request in-app notification:', e);
@@ -53,6 +53,7 @@ export async function notifyFacilityAdminsOfMembershipRequest(
         userName,
         userEmail,
         facilityName,
+        facilityId,
         membershipType
       );
     } catch (e) {

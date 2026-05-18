@@ -399,10 +399,11 @@ export async function sendMembershipRequestAdminEmail(
   requesterName: string,
   requesterEmail: string,
   facilityName: string,
+  facilityId: string,
   membershipType: string
 ): Promise<EmailSendResult> {
   const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
-  const manageUrl = `${appUrl}/admin?tab=members`;
+  const manageUrl = `${appUrl}/admin/members?facilityId=${encodeURIComponent(facilityId)}&status=pending`;
   const safeName = escapeHtml(requesterName || 'A player');
   const safeEmail = escapeHtml(requesterEmail || '');
   const safeFacility = escapeHtml(facilityName || 'your facility');

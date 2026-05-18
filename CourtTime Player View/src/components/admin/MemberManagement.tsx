@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -48,9 +48,13 @@ interface Member {
 export function MemberManagement() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('members');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>(() => {
+    const status = searchParams.get('status');
+    return status === 'pending' ? 'pending' : 'all';
+  });
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -83,6 +87,13 @@ export function MemberManagement() {
   const [stripeConnected, setStripeConnected] = useState(true);
 
   const { selectedFacilityId: currentFacilityId } = useAppContext();
+
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status === 'pending') {
+      setFilterStatus('pending');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (currentFacilityId) {

@@ -1522,7 +1522,7 @@ export function FacilityManagement() {
       return;
     }
     try {
-      const response = await addressWhitelistApi.add(currentFacilityId, newWhitelistAddress.trim(), whitelistAccountsLimit, newWhitelistLastName.trim());
+      const response = await addressWhitelistApi.add(currentFacilityId, newWhitelistAddress.trim(), 999, newWhitelistLastName.trim());
       if (response.success) {
         setNewWhitelistAddress('');
         setNewWhitelistLastName('');
@@ -1600,20 +1600,15 @@ export function FacilityManagement() {
         /^(last.?name|lastname|surname|family.?name)$/i.test(h.trim())
       );
 
-      const limitCol = headers.find(h =>
-        /^(limit|accounts?.?limit|max|max.?accounts?)$/i.test(h.trim())
-      );
-
       const addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }> = [];
       for (const row of rows) {
         const addr = String(row[addressCol] || '').trim();
         if (addr) {
-          const limit = limitCol ? parseInt(String(row[limitCol])) : undefined;
           const lastName = lastNameCol ? String(row[lastNameCol] || '').trim() : '';
           addresses.push({
             address: addr,
             lastName,
-            accountsLimit: limit && !isNaN(limit) && limit > 0 ? limit : whitelistAccountsLimit
+            accountsLimit: 999,
           });
         }
       }
@@ -3290,6 +3285,49 @@ export function FacilityManagement() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Max Accounts Per Address
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
+                      <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-green-800">
+                        {RULE_METADATA.find((m) => m.code === 'HH-001')?.description ??
+                          'Limits how many member accounts can join from the same street address. When off, there is no limit.'}
+                        {' '}This rule is separate from the address whitelist.
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label>Enable</Label>
+                      <Switch
+                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+                        checked={facilityData.bookingRules.householdMaxMembersEnabled}
+                        onCheckedChange={(v: boolean) => handleBookingRulesChange('householdMaxMembersEnabled', v)}
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm text-gray-600 whitespace-nowrap">Max Accounts:</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="50"
+                        className="w-24"
+                        value={facilityData.bookingRules.householdMaxMembers}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          handleBookingRulesChange('householdMaxMembers', e.target.value)
+                        }
+                        disabled={!isEditing || !facilityData.bookingRules.householdMaxMembersEnabled}
+                      />
+                    </div>
+                  </CardContent>
+                  {renderSectionSaveFooter('max accounts per address')}
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
                       <Calendar className="h-5 w-5" />
                       Days in Advance
                     </CardTitle>
@@ -3653,7 +3691,7 @@ export function FacilityManagement() {
                       <Home className="h-5 w-5" />
                       Address Whitelist
                     </CardTitle>
-                    <CardDescription>Manage approved addresses for membership verification</CardDescription>
+                    <CardDescription>Manage approved addresses for membership auto-approval (separate from account limits)</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Add new address */}
@@ -3672,17 +3710,6 @@ export function FacilityManagement() {
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
                         className="w-40"
                       />
-                      <div className="flex items-center gap-1">
-                        <Label className="text-xs whitespace-nowrap">Limit:</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="20"
-                          value={whitelistAccountsLimit}
-                          onChange={(e) => setWhitelistAccountsLimit(parseInt(e.target.value) || 4)}
-                          className="w-16"
-                        />
-                      </div>
                       <Button onClick={handleAddWhitelistAddress} size="sm">
                         <Plus className="h-4 w-4 mr-1" />
                         Add
@@ -3708,7 +3735,7 @@ export function FacilityManagement() {
                         {whitelistUploading ? 'Importing...' : 'Import from Excel/CSV'}
                       </Button>
                       <span className="text-xs text-gray-500">
-                        File should have "Address" and "Last Name" columns. Optional "Limit" column for per-address limits.
+                        File should have "Address" and "Last Name" columns.
                       </span>
                     </div>
 
@@ -3726,25 +3753,14 @@ export function FacilityManagement() {
                                 {item.lastName && <span className="text-gray-500"> — {item.lastName}</span>}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 ml-2">
-                              <Label className="text-xs whitespace-nowrap">Max:</Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                max="20"
-                                value={item.accountsLimit}
-                                onChange={(e) => handleUpdateWhitelistLimit(item.id, parseInt(e.target.value) || 1)}
-                                className="w-14 h-7 text-xs"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveWhitelistAddress(item.id)}
-                                className="text-red-600 hover:text-red-700 h-7 w-7 p-0"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveWhitelistAddress(item.id)}
+                              className="text-red-600 hover:text-red-700 h-7 w-7 p-0 ml-2"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         ))}
                       </div>

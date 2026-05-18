@@ -55,7 +55,8 @@
     "@types/react": "~19.2.10",
     "@vitejs/plugin-react-swc": "^3.10.2",
     "typescript": "~5.9.2",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "dev": "concurrently -n api,web -c blue,magenta \"npm run dev:server\" \"vite --host 0.0.0.0\"",
@@ -70,6 +71,8 @@
     "db:check": "node scripts/check-database.js",
     "db:migrate": "node scripts/run-migration.js",
     "db:test-data": "tsx scripts/setup-test-data.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "expo:start": "npm --prefix mobile start",
     "postinstall": "npm --prefix mobile install"
   },

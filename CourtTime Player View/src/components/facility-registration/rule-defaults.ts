@@ -223,11 +223,11 @@ export const RULE_METADATA: RuleMeta[] = [
   // Household Rules
   {
     code: 'HH-001',
-    name: 'Max Members Per Address',
-    description: 'Limits how many accounts can be registered at a single address.',
+    name: 'Max Accounts Per Address',
+    description: 'Limits how many member accounts can join a facility from the same street address. When off, there is no limit.',
     category: 'household',
     fields: [
-      { key: 'max_members', label: 'Max Members', type: 'number', min: 1, max: 50 },
+      { key: 'max_members', label: 'Max Accounts', type: 'number', min: 1, max: 50 },
     ],
   },
   {
@@ -345,7 +345,7 @@ export const CATEGORIES = {
     instruction: 'Control court-level scheduling behavior. Per-court settings like operating hours and blackouts are configured in Court Management after registration.',
   },
   household: {
-    title: 'Household Rules',
-    instruction: 'When using address-based restrictions, these rules limit booking activity per household to ensure fair access across all members at an address.',
+    title: 'Membership & Household Rules',
+    instruction: 'Control how many accounts may join from the same address and how booking limits apply per household.',
   },
 } as const;

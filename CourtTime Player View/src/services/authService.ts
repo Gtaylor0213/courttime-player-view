@@ -530,7 +530,8 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; er
 
 /**
  * Add user to facility
- * New members start as 'pending' unless their address is on the whitelist
+ * New members start as 'pending' unless their address is on the whitelist.
+ * HH-001 (max accounts per address) blocks join when the address is at capacity.
  */
 export async function addUserToFacility(
   userId: string,
@@ -538,6 +539,12 @@ export async function addUserToFacility(
   membershipType: string = 'Full'
 ): Promise<boolean> {
   try {
+    const { checkMaxAccountsPerAddressAllowed } = await import('./maxAccountsPerAddressService');
+    const addressLimitCheck = await checkMaxAccountsPerAddressAllowed(facilityId, userId);
+    if (!addressLimitCheck.allowed) {
+      throw new Error(addressLimitCheck.message || 'This address has reached the maximum number of accounts allowed.');
+    }
+
     // Get user's address and last name to check against whitelist
     const userResult = await query(
       `SELECT street_address as "streetAddress", last_name as "lastName" FROM users WHERE id = $1`,
@@ -546,42 +553,23 @@ export async function addUserToFacility(
 
     let status: 'active' | 'pending' = 'pending';
 
-    // Check if user's (address + last name) is on the whitelist for auto-approval
-    // Match on the street portion only (before any comma) since whitelist may store
-    // full addresses like "123 Main St, Denver, CO 80202" while users.street_address
-    // stores only the street line "123 Main St"
+    // Whitelist auto-approves when address + last name match (capacity enforced by HH-001 above)
     if (userResult.rows.length > 0 && userResult.rows[0].streetAddress) {
       const userAddress = userResult.rows[0].streetAddress;
       const userLastName = userResult.rows[0].lastName || '';
 
       const whitelistResult = await query(
-        `SELECT accounts_limit as "accountsLimit"
+        `SELECT 1
          FROM address_whitelist
          WHERE facility_id = $1
            AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))
-           AND LOWER(TRIM(COALESCE(last_name, ''))) = LOWER(TRIM($3))`,
+           AND LOWER(TRIM(COALESCE(last_name, ''))) = LOWER(TRIM($3))
+         LIMIT 1`,
         [facilityId, userAddress, userLastName]
       );
 
       if (whitelistResult.rows.length > 0) {
-        // Check if account limit hasn't been exceeded for this address + last name combo
-        const countResult = await query(
-          `SELECT COUNT(DISTINCT u.id) as count
-           FROM users u
-           JOIN facility_memberships fm ON u.id = fm.user_id
-           WHERE fm.facility_id = $1
-             AND LOWER(TRIM(u.street_address)) = LOWER(TRIM($2))
-             AND LOWER(TRIM(COALESCE(u.last_name, ''))) = LOWER(TRIM($3))
-             AND fm.status IN ('active', 'pending')`,
-          [facilityId, userAddress, userLastName]
-        );
-
-        const currentCount = parseInt(countResult.rows[0].count) || 0;
-        const limit = whitelistResult.rows[0].accountsLimit;
-
-        if (currentCount < limit) {
-          status = 'active';
-        }
+        status = 'active';
       }
     }
 
@@ -602,6 +590,9 @@ export async function addUserToFacility(
 
     return true;
   } catch (error) {
+    if (error instanceof Error && error.message.includes('maximum number of accounts')) {
+      throw error;
+    }
     console.error('Add user to facility error:', error);
     return false;
   }

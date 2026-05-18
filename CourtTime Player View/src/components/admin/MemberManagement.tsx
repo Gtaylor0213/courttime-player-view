@@ -59,7 +59,6 @@ export function MemberManagement() {
   const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{id: string; address: string; lastName: string; accountsLimit: number}>>([]);
   const [newAddress, setNewAddress] = useState('');
   const [newLastName, setNewLastName] = useState('');
-  const [accountsPerAddress, setAccountsPerAddress] = useState(4);
   const [whitelistUploading, setWhitelistUploading] = useState(false);
   const whitelistFileRef = useRef<HTMLInputElement>(null);
 
@@ -384,7 +383,7 @@ export function MemberManagement() {
     }
 
     try {
-      const response = await addressWhitelistApi.add(currentFacilityId, newAddress.trim(), accountsPerAddress, newLastName.trim());
+      const response = await addressWhitelistApi.add(currentFacilityId, newAddress.trim(), 999, newLastName.trim());
 
       if (response.success) {
         setNewAddress('');
@@ -464,7 +463,7 @@ export function MemberManagement() {
       const payload = addresses.map(a => ({
         address: a.address,
         lastName: a.lastName,
-        accountsLimit: a.accountsLimit || accountsPerAddress,
+        accountsLimit: a.accountsLimit || 999,
       }));
 
       const response = await addressWhitelistApi.bulkAdd(currentFacilityId, payload);
@@ -838,25 +837,6 @@ export function MemberManagement() {
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Account Limit Setting */}
-            <div className="border-b pb-4">
-              <Label htmlFor="accountLimit" className="text-sm font-medium">Default Accounts Per Address Limit</Label>
-              <div className="flex items-center gap-4 mt-2">
-                <Input
-                  id="accountLimit"
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={accountsPerAddress}
-                  onChange={(e) => setAccountsPerAddress(parseInt(e.target.value) || 1)}
-                  className="w-24"
-                />
-                <span className="text-sm text-gray-600">
-                  Maximum accounts allowed per address + last name combo
-                </span>
-              </div>
-            </div>
-
             {/* Add New Address */}
             <div>
               <Label className="text-sm font-medium">Add New Entry</Label>
@@ -939,7 +919,6 @@ export function MemberManagement() {
                             {item.address}
                             {item.lastName && <span className="text-gray-500"> — {item.lastName}</span>}
                           </span>
-                          <span className="text-xs text-gray-500">Limit: {item.accountsLimit} accounts</span>
                         </div>
                       </div>
                       <Button

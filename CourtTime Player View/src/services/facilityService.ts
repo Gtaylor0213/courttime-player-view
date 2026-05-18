@@ -15,6 +15,7 @@ const ALLOWED_BOOKING_RULE_CODES = new Set([
   'ACC-010',
   'CRT-001',
   'CRT-002',
+  'HH-001',
   'HH-003'
 ]);
 
@@ -879,7 +880,6 @@ export interface FacilityRegistrationData {
 
   // Address Whitelist
   hoaAddresses?: Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }>;
-  accountsPerAddress?: number;
 
   // Rules engine configs
   ruleConfigs?: Array<{
@@ -1321,7 +1321,6 @@ export async function registerFacility(
 
     // 10. Insert addresses into address_whitelist
     if (data.hoaAddresses && data.hoaAddresses.length > 0) {
-      const defaultLimit = data.accountsPerAddress || 4;
       for (const addr of data.hoaAddresses) {
         if (addr.streetAddress?.trim()) {
           // Build full address string for the whitelist table
@@ -1333,9 +1332,9 @@ export async function registerFacility(
 
           await client.query(
             `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit)
-             VALUES ($1, $2, $3, $4)
+             VALUES ($1, $2, $3, 999)
              ON CONFLICT DO NOTHING`,
-            [facilityId, fullAddress, addr.lastName?.trim() || '', defaultLimit]
+            [facilityId, fullAddress, addr.lastName?.trim() || '']
           );
         }
       }

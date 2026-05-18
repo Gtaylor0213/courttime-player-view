@@ -259,6 +259,15 @@ export async function requestFacilityMembership(
       throw new Error('You must accept this facility\'s Terms & Conditions before requesting membership.');
     }
 
+    const { checkMaxAccountsPerAddressAllowed } = await import('./maxAccountsPerAddressService');
+    const addressLimitCheck = await checkMaxAccountsPerAddressAllowed(facilityId, userId);
+    if (!addressLimitCheck.allowed) {
+      throw new Error(
+        addressLimitCheck.message ||
+          'This address has reached the maximum number of accounts allowed.'
+      );
+    }
+
     await query(
       `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)
        VALUES ($1, $2, $3, 'pending', CURRENT_DATE)
@@ -292,6 +301,9 @@ export async function requestFacilityMembership(
     return true;
   } catch (error) {
     console.error('Request facility membership error:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
     throw new Error('Failed to request facility membership');
   }
 }

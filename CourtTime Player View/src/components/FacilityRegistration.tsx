@@ -176,7 +176,6 @@ export function FacilityRegistration() {
     addressWhitelistFile: null as File | null,
     addressWhitelistFileName: '',
     parsedAddresses: [] as Array<{ streetAddress: string; city?: string; state?: string; zipCode?: string; householdName?: string; lastName?: string }>,
-    accountsPerAddress: 4,
 
     // Operating Hours
     operatingHours: {
@@ -482,6 +481,7 @@ export function FacilityRegistration() {
     const daysInAdvanceRule = getRuleEntry(rulesConfig, 'ACC-005');
     const maxReservationDurationRule = getRuleEntry(rulesConfig, 'CRT-005');
     const weeklyIndividualRule = getRuleEntry(rulesConfig, 'ACC-002');
+    const maxAccountsPerAddressRule = getRuleEntry(rulesConfig, 'HH-001');
     const householdRule = getRuleEntry(rulesConfig, 'HH-003');
 
     const daysInAdvance = daysInAdvanceRule.enabled
@@ -506,10 +506,15 @@ export function FacilityRegistration() {
     const courtsPerDayHousehold = courtsPerDayHouseholdEnabled
       ? toStringOrBlank(householdRule.config.max_per_day_household)
       : '';
+    const householdMaxMembers = maxAccountsPerAddressRule.enabled
+      ? toStringOrBlank(maxAccountsPerAddressRule.config.max_members)
+      : '';
 
     return {
       generalRules: rulesConfig.generalRules,
       restrictionType: rulesConfig.restrictionType,
+      householdMaxMembersEnabled: !!maxAccountsPerAddressRule.enabled,
+      householdMaxMembers,
       daysInAdvanceEnabled: !!daysInAdvanceRule.enabled,
       daysInAdvance,
       maxReservationDurationEnabled: !!maxReservationDurationRule.enabled,
@@ -1461,7 +1466,6 @@ export function FacilityRegistration() {
 
         // Address Whitelist
         hoaAddresses: fd.parsedAddresses.length > 0 ? fd.parsedAddresses : undefined,
-        accountsPerAddress: fd.accountsPerAddress,
 
         // Existing user ID (if already logged in)
         existingUserId: user?.id,
@@ -3057,20 +3061,8 @@ export function FacilityRegistration() {
               />
             </label>
           )}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 mt-3">
-            <Label htmlFor="accountsPerAddressRules" className="text-sm">Max accounts per address:</Label>
-            <Input
-              id="accountsPerAddressRules"
-              type="number"
-              min="1"
-              max="20"
-              value={formData.accountsPerAddress}
-              onChange={(e) => setFormData(prev => ({ ...prev, accountsPerAddress: parseInt(e.target.value) || 4 }))}
-              className="w-20"
-            />
-          </div>
           <p className="text-xs text-gray-500 mt-2">
-            The file should have "Address" and "Last Name" columns (one entry per row). Members will be auto-approved when their address and last name match an entry on this list.
+            The file should have "Address" and "Last Name" columns (one entry per row). Members will be auto-approved when their address and last name match an entry on this list. Configure max accounts per address in the Max Accounts Per Address section above.
           </p>
         </CardContent>
       </Card>

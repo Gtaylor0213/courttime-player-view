@@ -145,6 +145,7 @@ export function RulesStep({
 }: RulesStepProps) {
   const { rules } = rulesConfig;
   const daysInAdvanceMeta = RULE_METADATA.find((meta) => meta.code === 'ACC-005');
+  const maxAccountsPerAddressMeta = RULE_METADATA.find((meta) => meta.code === 'HH-001');
 
   return (
     <div className="space-y-6">
@@ -219,6 +220,45 @@ export function RulesStep({
           </div>
         </CardContent>
       </Card>
+
+      {/* Max accounts per address (HH-001) */}
+      {maxAccountsPerAddressMeta && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Max Accounts Per Address
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <InstructionCard
+              icon={Info}
+              text={`${maxAccountsPerAddressMeta.description} This rule is separate from the address whitelist.`}
+            />
+            <div className="flex items-center justify-between">
+              <Label>Enable</Label>
+              <Switch
+                checked={!!rules['HH-001']?.enabled}
+                onCheckedChange={(enabled) => onRuleEntryChange('HH-001', { enabled })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm text-gray-600 whitespace-nowrap">Max Accounts:</Label>
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                className="w-24"
+                value={rules['HH-001']?.config?.max_members ?? ''}
+                onChange={(e) =>
+                  onRuleConfigFieldChange('HH-001', 'max_members', parseInt(e.target.value, 10) || '')
+                }
+                disabled={!rules['HH-001']?.enabled}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Days in Advance */}
       <Card>

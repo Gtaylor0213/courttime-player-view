@@ -212,6 +212,16 @@ export async function updateMemberMembership(
     }
 
     if (updates.status !== undefined) {
+      if (updates.status === 'active') {
+        const { checkMaxAccountsPerAddressAllowed } = await import('./maxAccountsPerAddressService');
+        const addressLimitCheck = await checkMaxAccountsPerAddressAllowed(facilityId, userId);
+        if (!addressLimitCheck.allowed) {
+          throw new Error(
+            addressLimitCheck.message ||
+              'This address has reached the maximum number of accounts allowed.'
+          );
+        }
+      }
       fields.push(`status = $${paramIndex++}`);
       values.push(updates.status);
     }
@@ -276,6 +286,9 @@ export async function updateMemberMembership(
     return result.rowCount > 0;
   } catch (error) {
     console.error('Update member membership error:', error);
+    if (error instanceof Error && error.message.includes('maximum number of accounts')) {
+      throw error;
+    }
     throw new Error('Failed to update member membership');
   }
 }

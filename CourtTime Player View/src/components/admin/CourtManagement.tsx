@@ -244,7 +244,7 @@ export function CourtManagement() {
   };
 
   // --- Court Limit ---
-  const MAX_STANDARD_COURTS = 8;
+  const MAX_STANDARD_COURTS = 11;
   const activeCourts = courts.filter(c => c.status !== 'closed');
   const atCourtLimit = activeCourts.length >= MAX_STANDARD_COURTS;
   const [showLimitAlert, setShowLimitAlert] = useState(false);
@@ -436,7 +436,7 @@ export function CourtManagement() {
     if (!currentFacilityId) return;
     const remaining = MAX_STANDARD_COURTS - activeCourts.length;
     if (bulkAddForm.count > remaining) {
-      toast.error(`You can only add ${remaining} more court${remaining !== 1 ? 's' : ''} on your current plan. Contact us for custom pricing to add more.`);
+      toast.error(`You can only add ${remaining} more court${remaining !== 1 ? 's' : ''} on your current plan (${MAX_STANDARD_COURTS} court maximum). Contact support@courttime.app for help.`);
       return;
     }
 
@@ -654,10 +654,9 @@ export function CourtManagement() {
             <Alert className="mb-6 border-yellow-200 bg-yellow-50">
               <AlertCircle className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-800">
-                Your current plan supports up to {MAX_STANDARD_COURTS} courts. You have {activeCourts.length} active court{activeCourts.length !== 1 ? 's' : ''}.
-                To add more courts, please contact us at{' '}
-                <a href="mailto:support@courttimeapp.com" className="font-medium underline">support@courttimeapp.com</a>{' '}
-                for custom subscription pricing.
+                Your subscription supports up to {MAX_STANDARD_COURTS} courts at the annual plan maximum ($550/year). You have {activeCourts.length} active court{activeCourts.length !== 1 ? 's' : ''}.
+                To add more courts, contact us at{' '}
+                <a href="mailto:support@courttime.app" className="font-medium underline">support@courttime.app</a>.
                 <Button variant="ghost" size="sm" className="ml-2 h-6 px-2 text-yellow-800" onClick={() => setShowLimitAlert(false)}>
                   <X className="h-3 w-3" />
                 </Button>

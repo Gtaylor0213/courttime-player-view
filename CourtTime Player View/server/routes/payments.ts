@@ -8,7 +8,23 @@ import {
   getPaymentHistory,
   cancelSubscription,
 } from '../../src/services/paymentService';
+import { getAmountForCourts } from '../../src/services/subscriptionPricing';
 import { requireAuth } from '../middleware/auth';
+
+async function resolveExpectedAmountCents(
+  courtCount: number,
+  promoCode?: string
+): Promise<{ expected: number; promoError?: string }> {
+  const baseAmount = getAmountForCourts(courtCount);
+  if (!promoCode?.trim()) {
+    return { expected: baseAmount };
+  }
+  const promo = await validatePromoCode(promoCode.trim(), courtCount);
+  if (!promo.valid) {
+    return { expected: baseAmount, promoError: promo.message || 'Invalid promo code' };
+  }
+  return { expected: promo.finalAmountCents ?? baseAmount };
+}
 
 const router = express.Router();
 
@@ -18,12 +34,15 @@ const router = express.Router();
  */
 router.post('/validate-promo', async (req, res, next) => {
   try {
-    const { code } = req.body;
+    const { code, courtCount } = req.body;
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ success: false, error: 'Promo code is required' });
     }
 
-    const result = await validatePromoCode(code.trim());
+    const parsedCourtCount =
+      courtCount != null && Number.isFinite(Number(courtCount)) ? Number(courtCount) : undefined;
+
+    const result = await validatePromoCode(code.trim(), parsedCourtCount);
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -38,14 +57,30 @@ router.post('/create-checkout-session', async (req, res, next) => {
   try {
     const { facilityName, courtCount, amountCents, promoCode, successUrl, cancelUrl } = req.body;
 
-    if (!facilityName || !courtCount || !successUrl || !cancelUrl) {
+    if (!facilityName || courtCount == null || !successUrl || !cancelUrl) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const parsedCourtCount = Number(courtCount);
+    if (!Number.isFinite(parsedCourtCount) || parsedCourtCount < 1) {
+      return res.status(400).json({ success: false, error: 'Invalid court count' });
+    }
+
+    const { expected, promoError } = await resolveExpectedAmountCents(parsedCourtCount, promoCode);
+    if (promoError) {
+      return res.status(400).json({ success: false, error: promoError });
+    }
+
+    const clientAmount =
+      amountCents != null && Number.isFinite(Number(amountCents)) ? Number(amountCents) : expected;
+    if (clientAmount !== expected) {
+      return res.status(400).json({ success: false, error: 'Payment amount does not match expected subscription price' });
     }
 
     const result = await createCheckoutSession({
       facilityName,
-      courtCount,
-      amountCents: amountCents ?? 40406,
+      courtCount: parsedCourtCount,
+      amountCents: expected,
       promoCode,
       successUrl,
       cancelUrl,

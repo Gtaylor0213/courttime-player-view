@@ -1,14 +1,13 @@
 import Stripe from 'stripe';
 import { query } from '../database/connection';
 import type { PoolClient } from 'pg';
+import {
+  getAmountForCourts,
+  formatAnnualPricePerYear,
+  MAX_SUBSCRIPTION_CENTS,
+} from './subscriptionPricing';
 
-// Pricing tiers by court count
-function getAmountForCourts(courtCount: number): number {
-  if (courtCount <= 4) return 20400;   // 1-4 courts: $204
-  if (courtCount <= 10) return 40400;  // 5-10 courts: $404
-  return 0;                             // 11+: custom pricing
-}
-const STANDARD_AMOUNT_CENTS = 40400; // default for backward compat
+export { getAmountForCourts } from './subscriptionPricing';
 
 /**
  * Get Stripe instance (returns null if no key configured — dev mode)
@@ -59,8 +58,8 @@ export async function validatePromoCode(code: string, courtCount?: number): Prom
     return { valid: false, message: 'This promo code has reached its usage limit' };
   }
 
-  // Calculate final amount based on court count tier
-  const baseAmount = courtCount ? getAmountForCourts(courtCount) : STANDARD_AMOUNT_CENTS;
+  // Calculate final amount based on per-court pricing
+  const baseAmount = courtCount ? getAmountForCourts(courtCount) : MAX_SUBSCRIPTION_CENTS;
   let finalAmountCents = baseAmount;
   if (promo.discount_type === 'full') {
     finalAmountCents = 0;
@@ -73,7 +72,7 @@ export async function validatePromoCode(code: string, courtCount?: number): Prom
   // Build message based on trial months or discount
   let message: string;
   const trialMonths = promo.trial_months ? Number(promo.trial_months) : undefined;
-  const renewalPrice = `$${(baseAmount / 100).toFixed(2)}/year`;
+  const renewalPrice = formatAnnualPricePerYear(baseAmount);
 
   if (trialMonths) {
     message = `Promo code applied — ${trialMonths} month${trialMonths > 1 ? 's' : ''} free trial! Card required for annual renewal (${renewalPrice}).`;
@@ -157,7 +156,7 @@ async function getOrCreateCoupon(stripe: Stripe, promoCode: string): Promise<str
 
 /**
  * Create a Stripe Checkout Session for facility subscription.
- * Uses mode: 'subscription' with a pre-created Stripe Price (STRIPE_PRICE_ID env var).
+ * Uses mode: 'subscription' with dynamic annual price_data (per-court pricing).
  * Promo codes are mapped to Stripe trials or coupons.
  */
 export async function createCheckoutSession(params: {
@@ -187,16 +186,30 @@ export async function createCheckoutSession(params: {
     };
   }
 
-  // Select price ID based on court count tier
-  const starterPriceId = process.env.STRIPE_PRICE_ID_STARTER || 'price_1TExHxCFoJfVR2i4Qu020FtL';
-  const standardPriceId = process.env.STRIPE_PRICE_ID_STANDARD || process.env.STRIPE_PRICE_ID || 'price_1T5RUECFoJfVR2i4WMH6bzuI';
-  const priceId = params.courtCount <= 4 ? starterPriceId : standardPriceId;
+  const productId = process.env.STRIPE_SUBSCRIPTION_PRODUCT_ID;
+  if (!productId) {
+    return {
+      amountCents: params.amountCents,
+      waived: false,
+      error: 'STRIPE_SUBSCRIPTION_PRODUCT_ID is not configured',
+    };
+  }
+
+  const listPriceCents = getAmountForCourts(params.courtCount);
 
   try {
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
       mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product: productId,
+          unit_amount: params.amountCents > 0 ? params.amountCents : listPriceCents,
+          recurring: { interval: 'year' },
+        },
+        quantity: 1,
+      }],
       metadata: {
         facilityName: params.facilityName,
         courtCount: String(params.courtCount),
@@ -233,7 +246,7 @@ export async function createCheckoutSession(params: {
           },
         };
       } else {
-        // Standard full waiver — 1 year free trial, then $404.06/yr auto-renewal
+        // Standard full waiver — 1 year free trial, then annual renewal at list price
         sessionParams.subscription_data = {
           trial_period_days: 365,
           metadata: {
@@ -242,7 +255,7 @@ export async function createCheckoutSession(params: {
           },
         };
       }
-    } else if (params.promoCode && params.amountCents > 0 && params.amountCents < STANDARD_AMOUNT_CENTS) {
+    } else if (params.promoCode && params.amountCents > 0 && params.amountCents < listPriceCents) {
       // Partial discount — create one-time coupon
       const couponId = await getOrCreateCoupon(stripe, params.promoCode);
       if (couponId) {
@@ -275,12 +288,12 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
 }> {
   // Dev mode sessions
   if (sessionId.startsWith('dev_session_')) {
-    return { verified: true, paymentStatus: 'paid', amountPaid: STANDARD_AMOUNT_CENTS };
+    return { verified: true, paymentStatus: 'paid', amountPaid: 0 };
   }
 
   const stripe = getStripe();
   if (!stripe) {
-    return { verified: true, paymentStatus: 'paid', amountPaid: STANDARD_AMOUNT_CENTS };
+    return { verified: true, paymentStatus: 'paid', amountPaid: 0 };
   }
 
   try {
@@ -309,7 +322,7 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
       return {
         verified: true,
         paymentStatus: session.payment_status,
-        amountPaid: session.amount_total || STANDARD_AMOUNT_CENTS,
+        amountPaid: session.amount_total || 0,
       };
     }
 
@@ -335,8 +348,7 @@ export async function recordPayment(
     paymentMethodType: string; // 'card', 'promo_code', 'custom'
   }
 ): Promise<void> {
-  // Determine plan type
-  const planType = params.courtCount > 8 ? 'custom' : 'standard';
+  const planType = 'standard';
 
   // Calculate billing period (1 year from now)
   const now = new Date();
@@ -359,8 +371,8 @@ export async function recordPayment(
       params.amountCents,
       params.promoCode || null,
       params.courtCount,
-      params.status === 'custom_pending' ? null : now,
-      params.status === 'custom_pending' ? null : oneYearLater,
+      now,
+      oneYearLater,
     ]
   );
 
@@ -376,12 +388,10 @@ export async function recordPayment(
       facilityId,
       subscriptionId,
       params.amountCents,
-      params.status === 'custom_pending' ? 'pending' : 'succeeded',
+      'succeeded',
       params.status === 'waived'
         ? `Registration fee waived (promo: ${params.promoCode})`
-        : params.status === 'custom_pending'
-          ? 'Custom pricing — pending arrangement'
-          : 'Annual facility registration fee',
+        : 'Annual facility registration fee',
       params.paymentMethodType,
       params.promoCode || null,
     ]

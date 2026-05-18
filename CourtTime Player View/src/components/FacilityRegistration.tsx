@@ -22,6 +22,14 @@ import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { facilitiesApi, paymentsApi } from '../api/client';
 import {
+  getAmountForCourts,
+  formatAnnualPrice,
+  formatAnnualPricePerYear,
+  PER_COURT_CENTS,
+  MIN_SUBSCRIPTION_CENTS,
+  MAX_SUBSCRIPTION_CENTS,
+} from '../services/subscriptionPricing';
+import {
   facilityRegistrationCompleteDeepLink,
   isMobileFacilityRegistrationSource,
   MOBILE_FACILITY_REGISTRATION_SOURCE,
@@ -1636,9 +1644,9 @@ export function FacilityRegistration() {
           sessionStorage.getItem('facilityRegistrationPaymentSessionId') ||
           undefined,
         promoCode: paymentWaived ? promoCode : undefined,
-        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : getBaseAmountCents(fd.courts.length)),
+        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : getAmountForCourts(fd.courts.length)),
         paymentWaived,
-        customPricing: fd.courts.length > 10,
+        customPricing: false,
       };
 
       // Call the API to register the facility
@@ -1874,7 +1882,7 @@ export function FacilityRegistration() {
     if (!promoCode.trim()) return;
     setIsValidatingPromo(true);
     try {
-      const result = await paymentsApi.validatePromo(promoCode.trim());
+      const result = await paymentsApi.validatePromo(promoCode.trim(), formData.courts.length);
       if (result.success && result.data) {
         // Unwrap apiRequest double-wrap
         const promo = result.data?.data || result.data;
@@ -1900,7 +1908,7 @@ export function FacilityRegistration() {
     try {
       const returnBase =
         window.location.origin + getRegistrationPathWithMobileSource(isMobileRegistration);
-      const tierAmount = getBaseAmountCents(formData.courts.length);
+      const tierAmount = getAmountForCourts(formData.courts.length);
       const finalAmount = promoValidation?.valid ? (promoValidation.finalAmountCents ?? tierAmount) : tierAmount;
       const paymentJoiner = returnBase.includes('?') ? '&' : '?';
 
@@ -1942,21 +1950,15 @@ export function FacilityRegistration() {
     }
   };
 
-  const getBaseAmountCents = (count: number) => {
-    if (count <= 4) return 20400;   // $204
-    if (count <= 10) return 40400;  // $404
-    return 0;                        // custom
-  };
-
   const renderPaymentStep = () => {
     const courtCount = formData.courts.length;
-    const isCustomPricing = courtCount > 10;
-    const baseAmountCents = getBaseAmountCents(courtCount);
+    const baseAmountCents = getAmountForCourts(courtCount);
+    const rawAmountCents = courtCount * PER_COURT_CENTS;
     const finalAmountCents = promoValidation?.valid
       ? (promoValidation.finalAmountCents ?? 0)
       : baseAmountCents;
     const isPromoFree = promoValidation?.valid && finalAmountCents === 0;
-    const isPaymentRequired = !isCustomPricing && !paymentComplete && !paymentWaived;
+    const isPaymentRequired = !paymentComplete && !paymentWaived;
 
     return (
       <div className="space-y-6">
@@ -1965,40 +1967,37 @@ export function FacilityRegistration() {
           <p className="text-sm text-gray-500">Complete payment to activate your facility</p>
         </div>
 
-        {isCustomPricing ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Custom Pricing
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Your facility has <strong>{courtCount} courts</strong>. Facilities with 11 or more courts
-                  qualify for custom pricing. Our team will contact you to set up your plan.
-                  You can complete registration now and payment will be arranged separately.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
+        <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5" />
                 Facility Registration Fee
               </CardTitle>
-              <CardDescription>Annual subscription — {courtCount <= 4 ? '1-4 courts' : '5-10 courts'}</CardDescription>
+              <CardDescription>
+                Annual subscription — {formatAnnualPrice(PER_COURT_CENTS)} per court
+                (min {formatAnnualPrice(MIN_SUBSCRIPTION_CENTS)}, max {formatAnnualPrice(MAX_SUBSCRIPTION_CENTS)})
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Pricing summary */}
               <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">
+                    {formatAnnualPrice(PER_COURT_CENTS)} × {courtCount} court{courtCount !== 1 ? 's' : ''}
+                  </span>
+                  <span>{formatAnnualPrice(rawAmountCents)}</span>
+                </div>
+                {rawAmountCents !== baseAmountCents && (
+                  <div className="flex justify-between items-center text-sm text-gray-500">
+                    <span>
+                      {rawAmountCents < MIN_SUBSCRIPTION_CENTS ? 'Minimum annual fee' : 'Maximum annual fee'}
+                    </span>
+                    <span>{formatAnnualPrice(baseAmountCents)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Annual Fee ({courtCount} court{courtCount !== 1 ? 's' : ''})</span>
-                  <span className="font-medium">${(baseAmountCents / 100).toFixed(2)}</span>
+                  <span className="text-gray-600">Annual fee ({courtCount} court{courtCount !== 1 ? 's' : ''})</span>
+                  <span className="font-medium">{formatAnnualPrice(baseAmountCents)}</span>
                 </div>
                 {promoValidation?.valid && (
                   <div className="flex justify-between items-center text-green-600">
@@ -2073,7 +2072,7 @@ export function FacilityRegistration() {
                 <Alert className="border-green-200 bg-green-50">
                   <Check className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-700">
-                    Promo code applied! Your first year is free. Your card will be charged $404.06/year at renewal. Click "Complete Registration" to finish.
+                    Promo code applied! Your first year is free. Your card will be charged {formatAnnualPricePerYear(baseAmountCents)} at renewal. Click "Complete Registration" to finish.
                   </AlertDescription>
                 </Alert>
               )}
@@ -2097,7 +2096,6 @@ export function FacilityRegistration() {
               )}
             </CardContent>
           </Card>
-        )}
       </div>
     );
   };
@@ -3884,11 +3882,7 @@ export function FacilityRegistration() {
               <Button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isSubmitting || (
-                  formData.courts.length <= 10 &&
-                  !paymentComplete &&
-                  !paymentWaived
-                )}
+                disabled={isSubmitting || (!paymentComplete && !paymentWaived)}
                 className="w-full sm:w-auto"
               >
                 {isSubmitting ? 'Submitting...' : 'Complete Registration'}

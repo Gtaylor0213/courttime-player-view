@@ -1415,10 +1415,10 @@ export const householdsApi = {
 
 // Payments API
 export const paymentsApi = {
-  validatePromo: async (code: string) => {
+  validatePromo: async (code: string, courtCount?: number) => {
     return apiRequest('/api/payments/validate-promo', {
       method: 'POST',
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, courtCount }),
     });
   },
 

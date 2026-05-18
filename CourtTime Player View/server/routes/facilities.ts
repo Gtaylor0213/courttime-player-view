@@ -10,7 +10,8 @@ import {
 } from '../../src/services/facilityService';
 import { getCurrentTermsVersion } from '../../src/services/termsService';
 import { generateToken } from '../middleware/auth';
-import { verifyCheckoutSession } from '../../src/services/paymentService';
+import { verifyCheckoutSession, validatePromoCode } from '../../src/services/paymentService';
+import { getAmountForCourts } from '../../src/services/subscriptionPricing';
 
 const router = express.Router();
 
@@ -335,16 +336,34 @@ router.post('/register', async (req, res, next) => {
       // Payment
       paymentSessionId: paymentSessionId || undefined,
       promoCode: promoCode || undefined,
-      paymentAmountCents: paymentAmountCents != null ? parseInt(paymentAmountCents) : (courts.length <= 4 ? 20400 : 40400),
+      paymentAmountCents: paymentAmountCents != null ? parseInt(paymentAmountCents) : getAmountForCourts(courts.length),
       paymentWaived: paymentWaived || false,
-      customPricing: customPricing || false,
+      customPricing: false,
     };
 
-    // Verify Stripe payment when required (not custom pricing / waived)
-    const requiresPayment =
-      !customPricing &&
-      !paymentWaived &&
-      courts.length <= 10;
+    if (!paymentWaived) {
+      const expectedBase = getAmountForCourts(courts.length);
+      let expectedAmount = expectedBase;
+      if (promoCode?.trim()) {
+        const promo = await validatePromoCode(promoCode.trim(), courts.length);
+        if (!promo.valid) {
+          return res.status(400).json({
+            success: false,
+            error: promo.message || 'Invalid promo code',
+          });
+        }
+        expectedAmount = promo.finalAmountCents ?? expectedBase;
+      }
+      if (registrationData.paymentAmountCents !== expectedAmount) {
+        return res.status(400).json({
+          success: false,
+          error: 'Payment amount does not match expected subscription price',
+        });
+      }
+    }
+
+    // Verify Stripe payment when required (not waived)
+    const requiresPayment = !paymentWaived;
 
     if (requiresPayment) {
       if (!paymentSessionId) {

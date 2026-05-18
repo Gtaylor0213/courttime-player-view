@@ -4,6 +4,7 @@ import { parseOperatingHoursInput } from '../../shared/utils/operatingHours';
 import { Facility, Court } from '../types/database';
 import type { PoolClient } from 'pg';
 import { recordPayment } from './paymentService';
+import { getAmountForCourts } from './subscriptionPricing';
 import type { TermsAttachment } from './termsService';
 import {
   writeCourtOperatingSchedule,
@@ -1374,19 +1375,15 @@ export async function registerFacility(
     }
 
     // 11. Record payment
-    const paymentStatus = data.customPricing
-      ? 'custom_pending'
-      : data.paymentWaived
-        ? 'waived'
-        : 'active';
+    const paymentStatus = data.paymentWaived ? 'waived' : 'active';
 
     await recordPayment(client, facilityId, {
       stripeSessionId: data.paymentSessionId,
-      amountCents: data.paymentAmountCents ?? (data.courts.length <= 4 ? 20400 : 40400),
+      amountCents: data.paymentAmountCents ?? getAmountForCourts(data.courts.length),
       status: paymentStatus,
       promoCode: data.promoCode,
       courtCount: data.courts.length,
-      paymentMethodType: data.paymentWaived ? 'promo_code' : data.customPricing ? 'custom' : 'card',
+      paymentMethodType: data.paymentWaived ? 'promo_code' : 'card',
     });
 
     // Get user data with memberFacilities

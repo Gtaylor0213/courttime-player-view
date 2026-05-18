@@ -205,7 +205,7 @@ interface Court extends PaidCourtFormFields {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp?: boolean;
-  status: 'active' | 'maintenance' | 'inactive';
+  status: 'available' | 'maintenance' | 'closed';
   canSplit?: boolean;
   splitConfig?: {
     splitNames: string[];
@@ -290,15 +290,15 @@ function FacilityCourtFormBody({
           <Label htmlFor={id('courtStatus')}>Status</Label>
           <Select
             value={editingCourt.status}
-            onValueChange={(value: 'active' | 'maintenance' | 'inactive') => setEditingCourt({ ...editingCourt, status: value })}
+            onValueChange={(value: 'available' | 'maintenance' | 'closed') => setEditingCourt({ ...editingCourt, status: value })}
           >
             <SelectTrigger id={id('courtStatus')}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="available">Available</SelectItem>
               <SelectItem value="maintenance">Maintenance</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="closed">Closed</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1696,6 +1696,7 @@ export function FacilityManagement() {
       if (response.success && response.data?.courts) {
         const normalized = response.data.courts.map((c: any) => ({
             ...c,
+            status: c.status === 'active' ? 'available' : c.status === 'inactive' ? 'closed' : c.status,
             requirePayment: c.requirePayment === true || c.require_payment === true,
             bookingAmountCents:
               c.bookingAmountCents != null
@@ -1745,7 +1746,7 @@ export function FacilityManagement() {
       enableGuestFee: false,
       guestFeeCents: null,
       guestFeeDollars: '',
-      status: 'active',
+      status: 'available',
       canSplit: false,
     });
     void loadStripeStatus();
@@ -2425,10 +2426,16 @@ export function FacilityManagement() {
 
   const getCourtStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'maintenance': return 'bg-yellow-100 text-yellow-800';
-      case 'inactive': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'available':
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'maintenance':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'closed':
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -3777,6 +3784,13 @@ export function FacilityManagement() {
 
             {/* Court Management Tab */}
             <TabsContent value="courts" className="space-y-6">
+              <Card className="border-green-100 bg-green-50/40">
+                <CardContent className="pt-6 text-sm text-gray-600">
+                  Add courts here with paid booking and guest fees. Use the clock icon on each court for
+                  operating hours and prime-time windows — the same editor as Admin → Court Management.
+                  Fees and schedules saved here can be updated anytime from Court Management.
+                </CardContent>
+              </Card>
               <div className="flex justify-end">
                 <Button onClick={handleAddNewCourt} disabled={editingCourt !== null || isAddingNewCourt}>
                   <Plus className="h-4 w-4 mr-2" />
@@ -3837,6 +3851,11 @@ export function FacilityManagement() {
                                 {court.requirePayment && court.bookingAmountCents && (
                                   <Badge className="bg-amber-100 text-amber-900 border-amber-200">
                                     Paid · ${(court.bookingAmountCents / 100).toFixed(2)}
+                                  </Badge>
+                                )}
+                                {court.guestFeeCents && (
+                                  <Badge className="bg-blue-100 text-blue-900 border-blue-200">
+                                    Guest fee · ${(court.guestFeeCents / 100).toFixed(2)}
                                   </Badge>
                                 )}
                                 {isEditingThis && (
@@ -3908,7 +3927,7 @@ export function FacilityManagement() {
                         <Card className="border-green-200 bg-green-50/50">
                           <CardHeader>
                             <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
-                            <CardDescription>Configure hours, peak hours, and slot settings per day</CardDescription>
+                            <CardDescription>Configure available/unavailable hours and optional prime-time windows per day</CardDescription>
                           </CardHeader>
                           <CardContent>
                             {courtScheduleLoading ? (
@@ -3920,8 +3939,8 @@ export function FacilityManagement() {
                                 <CourtScheduleEditor
                                   schedule={courtSchedule}
                                   onUpdateDay={updateCourtScheduleDay}
-                                  peakStartLabel="Peak Start"
-                                  peakEndLabel="Peak End"
+                                  peakStartLabel="Prime Start"
+                                  peakEndLabel="Prime End"
                                 />
 
                                 <div className="flex flex-wrap gap-2 pt-4">

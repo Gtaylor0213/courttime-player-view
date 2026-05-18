@@ -30,8 +30,22 @@ import { FACILITY_TYPE_OPTIONS } from '../../shared/constants/facilityTypes';
 import { mergeRegistrationFormData } from '../../shared/utils/facilityRegistrationForm';
 import { RulesStep } from './facility-registration/RulesStep';
 import { RulesConfig, RuleEntry, DEFAULT_RULES_CONFIG } from './facility-registration/rule-defaults';
+import {
+  PaidCourtBookingFields,
+  parseBookingFeeDollars,
+  type PaidCourtFormFields,
+} from './admin/PaidCourtBookingFields';
+import {
+  CourtScheduleEditor,
+  type CourtScheduleDay,
+} from './admin/CourtScheduleEditor';
+import {
+  buildCourtScheduleRowsFromFacilityOperatingHours,
+  courtScheduleRowsToOperatingHoursMap,
+  formatGroupedOperatingHoursSummary,
+} from '../../shared/utils/operatingHours';
 
-interface Court {
+interface Court extends PaidCourtFormFields {
   id: string;
   name: string;
   courtNumber: number;
@@ -40,6 +54,7 @@ interface Court {
   isIndoor: boolean;
   hasLights: boolean;
   canSplit: boolean;
+  operatingSchedule: CourtScheduleDay[];
   splitConfig?: {
     splitNames: string[];
     splitType: 'Tennis' | 'Pickleball';
@@ -410,6 +425,97 @@ export function FacilityRegistration() {
       }
     }));
   };
+
+  const buildDefaultCourtSchedule = (
+    operatingHours: typeof formData.operatingHours = formData.operatingHours
+  ): CourtScheduleDay[] =>
+    buildCourtScheduleRowsFromFacilityOperatingHours(operatingHours).map((row) => ({
+      day_of_week: row.day_of_week,
+      is_open: row.is_open,
+      open_time: row.open_time,
+      close_time: row.close_time,
+      prime_time_start: row.prime_time_start,
+      prime_time_end: row.prime_time_end,
+    }));
+
+  const updateCourtScheduleDay = (
+    courtId: string,
+    dayOfWeek: number,
+    field: string,
+    value: unknown
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      courts: prev.courts.map((court) => {
+        if (court.id !== courtId) return court;
+        const base =
+          court.operatingSchedule?.length === 7
+            ? court.operatingSchedule
+            : buildDefaultCourtSchedule(prev.operatingHours);
+        return {
+          ...court,
+          operatingSchedule: base.map((day) =>
+            day.day_of_week === dayOfWeek ? { ...day, [field]: value } : day
+          ),
+        };
+      }),
+    }));
+  };
+
+  const resetCourtScheduleToFacilityDefaults = (courtId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      courts: prev.courts.map((court) =>
+        court.id === courtId
+          ? { ...court, operatingSchedule: buildDefaultCourtSchedule(prev.operatingHours) }
+          : court
+      ),
+    }));
+  };
+
+  const renderFacilityOperatingHours = (description?: string) => (
+    <div>
+      <h4 className="font-semibold mb-4 flex items-center gap-2">
+        <Clock className="h-4 w-4" />
+        Court hours (default for all courts)
+      </h4>
+      {description && <p className="text-sm text-gray-600 mb-3">{description}</p>}
+      <div className="space-y-3">
+        {Object.keys(formData.operatingHours).map((day) => {
+          const hours = formData.operatingHours[day as keyof typeof formData.operatingHours];
+          return (
+            <div key={day} className="rounded-lg border bg-white p-3 sm:border-0 sm:bg-transparent sm:p-0 sm:rounded-none space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
+              <div className="w-full sm:w-28 font-medium capitalize text-sm">{day}</div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-1 min-w-0">
+                <Input
+                  type="time"
+                  value={hours.open}
+                  onChange={(e) => handleOperatingHoursChange(day, 'open', e.target.value)}
+                  disabled={hours.closed}
+                  className="w-full sm:w-32"
+                />
+                <span className="text-gray-500 text-sm">to</span>
+                <Input
+                  type="time"
+                  value={hours.close}
+                  onChange={(e) => handleOperatingHoursChange(day, 'close', e.target.value)}
+                  disabled={hours.closed}
+                  className="w-full sm:w-32"
+                />
+                <div className="flex items-center gap-2 sm:ml-4 pt-1 sm:pt-0">
+                  <Switch
+                    checked={hours.closed}
+                    onCheckedChange={(checked) => handleOperatingHoursChange(day, 'closed', checked)}
+                  />
+                  <Label className="text-sm">Closed</Label>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   // --- Rules config handlers ---
   const handleRulesChange = (updates: Partial<RulesConfig>) => {
@@ -1061,6 +1167,17 @@ export function FacilityRegistration() {
       // Validate Courts
       if (dataSource.courts.length === 0) {
         stepErrors.courts = 'At least one court is required';
+      } else {
+        for (const court of dataSource.courts) {
+          if (court.requirePayment && !parseBookingFeeDollars(court.bookingFeeDollars)) {
+            stepErrors.courts = `Enter a booking fee for ${court.name} or turn off paid court booking`;
+            break;
+          }
+          if (court.enableGuestFee && !parseBookingFeeDollars(court.guestFeeDollars)) {
+            stepErrors.courts = `Enter a guest fee amount for ${court.name}`;
+            break;
+          }
+        }
       }
     }
 
@@ -1179,6 +1296,12 @@ export function FacilityRegistration() {
       isIndoor: false,
       hasLights: false,
       canSplit: false,
+      requirePayment: false,
+      bookingFeeDollars: '',
+      enableGuestFee: false,
+      guestFeeCents: null,
+      guestFeeDollars: '',
+      operatingSchedule: buildDefaultCourtSchedule(),
     };
     setFormData(prev => ({
       ...prev,
@@ -1211,6 +1334,12 @@ export function FacilityRegistration() {
         isIndoor: bulkCourtData.isIndoor,
         hasLights: bulkCourtData.hasLights,
         canSplit: false,
+        requirePayment: false,
+        bookingFeeDollars: '',
+        enableGuestFee: false,
+        guestFeeCents: null,
+        guestFeeDollars: '',
+        operatingSchedule: buildDefaultCourtSchedule(),
       });
     }
 
@@ -1450,16 +1579,28 @@ export function FacilityRegistration() {
           })),
 
         // Courts
-        courts: fd.courts.map(court => ({
-          name: court.name,
-          courtNumber: court.courtNumber,
-          surfaceType: court.surfaceType,
-          courtType: court.courtType,
-          isIndoor: court.isIndoor,
-          hasLights: court.hasLights,
-          canSplit: court.canSplit,
-          splitConfig: court.splitConfig,
-        })),
+        courts: fd.courts.map(court => {
+          const wantsPayment = Boolean(court.requirePayment);
+          const hasGuestFee = Boolean(court.enableGuestFee);
+          return {
+            name: court.name,
+            courtNumber: court.courtNumber,
+            surfaceType: court.surfaceType,
+            courtType: court.courtType,
+            isIndoor: court.isIndoor,
+            hasLights: court.hasLights,
+            canSplit: court.canSplit,
+            splitConfig: court.splitConfig,
+            requirePayment: wantsPayment,
+            bookingAmountCents: wantsPayment
+              ? parseBookingFeeDollars(court.bookingFeeDollars)
+              : null,
+            guestFeeCents: hasGuestFee
+              ? parseBookingFeeDollars(court.guestFeeDollars)
+              : null,
+            operatingSchedule: court.operatingSchedule,
+          };
+        }),
 
         // Admin Invites
         adminInvites: fd.adminInvites.filter(invite => invite.email),
@@ -2941,46 +3082,10 @@ export function FacilityRegistration() {
 
       <Separator className="my-6" />
 
-      <div>
-        <h4 className="font-semibold mb-4">Court hours (default for all courts)</h4>
-        <p className="text-sm text-gray-600 mb-3">
-          Sets the weekly open and close times stored in Court Management for every court. You can customize individual courts later under Facility Management → Court Management.
-        </p>
-        <div className="space-y-3">
-          {Object.keys(formData.operatingHours).map((day) => {
-            const hours = formData.operatingHours[day as keyof typeof formData.operatingHours];
-            return (
-              <div key={day} className="rounded-lg border bg-white p-3 sm:border-0 sm:bg-transparent sm:p-0 sm:rounded-none space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
-                <div className="w-full sm:w-28 font-medium capitalize text-sm">{day}</div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-1 min-w-0">
-                  <Input
-                    type="time"
-                    value={hours.open}
-                    onChange={(e) => handleOperatingHoursChange(day, 'open', e.target.value)}
-                    disabled={hours.closed}
-                    className="w-full sm:w-32"
-                  />
-                  <span className="text-gray-500 text-sm">to</span>
-                  <Input
-                    type="time"
-                    value={hours.close}
-                    onChange={(e) => handleOperatingHoursChange(day, 'close', e.target.value)}
-                    disabled={hours.closed}
-                    className="w-full sm:w-32"
-                  />
-                  <div className="flex items-center gap-2 sm:ml-4 pt-1 sm:pt-0">
-                    <Switch
-                      checked={hours.closed}
-                      onCheckedChange={(checked) => handleOperatingHoursChange(day, 'closed', checked)}
-                    />
-                    <Label className="text-sm">Closed</Label>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {renderFacilityOperatingHours(
+        'Sets the weekly open and close times for every court. You can customize individual courts later under Facility Management → Court Management.'
+      )}
+
 
       <div>
         <h4 className="font-semibold mb-4">Timezone</h4>
@@ -3074,7 +3179,8 @@ export function FacilityRegistration() {
       <div>
         <h3 className="text-lg font-semibold mb-4">Court Setup</h3>
         <p className="text-sm text-gray-600 mb-6">
-          Add courts to your facility. You can add them individually or in bulk if they have identical properties.
+          Add each court with its own operating hours, plus optional paid booking and guest fees. New courts
+          start from the facility hours you set on the previous step — adjust each court below as needed.
         </p>
       </div>
 
@@ -3333,6 +3439,46 @@ export function FacilityRegistration() {
                   </div>
                 )}
               </div>
+
+              <div className="mt-4 border-t pt-4 space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h5 className="text-sm font-medium">Operating hours</h5>
+                    <p className="text-xs text-gray-500">
+                      Weekly schedule for this court only
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => resetCourtScheduleToFacilityDefaults(court.id)}
+                  >
+                    Use facility default hours
+                  </Button>
+                </div>
+                <CourtScheduleEditor
+                  schedule={
+                    court.operatingSchedule?.length === 7
+                      ? court.operatingSchedule
+                      : buildDefaultCourtSchedule()
+                  }
+                  onUpdateDay={(dayOfWeek, field, value) =>
+                    updateCourtScheduleDay(court.id, dayOfWeek, field, value)
+                  }
+                  peakStartLabel="Prime Start"
+                  peakEndLabel="Prime End"
+                />
+              </div>
+
+              <PaidCourtBookingFields
+                court={court}
+                onChange={(patch) => updateCourt(court.id, patch)}
+                stripeOnboarded={false}
+                stripeStatusLoading={false}
+                paymentsTabHint="Facility Management → Payments (after registration)"
+              />
             </CardContent>
           </Card>
         ))}
@@ -3553,15 +3699,33 @@ export function FacilityRegistration() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
-            {formData.courts.map((court) => (
-              <div key={court.id} className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-start sm:gap-4 py-2 border-b border-gray-100 last:border-0">
-                <span className="font-medium shrink-0">{court.name}</span>
+            {formData.courts.map((court) => {
+              const schedule =
+                court.operatingSchedule?.length === 7
+                  ? court.operatingSchedule
+                  : buildDefaultCourtSchedule();
+              const hoursSummary = formatGroupedOperatingHoursSummary(
+                courtScheduleRowsToOperatingHoursMap(schedule)
+              );
+              return (
+              <div key={court.id} className="flex flex-col gap-1 py-2 border-b border-gray-100 last:border-0">
+                <span className="font-medium">{court.name}</span>
+                {hoursSummary && (
+                  <span className="text-gray-600 text-sm">{hoursSummary}</span>
+                )}
                 <span className="text-gray-600 text-sm">
                   {court.surfaceType} · {court.courtType} · {court.isIndoor ? 'Indoor' : 'Outdoor'}
                   {court.canSplit && ` · Splits into ${court.splitConfig?.splitNames.join(', ')}`}
+                  {court.requirePayment && court.bookingFeeDollars && (
+                    <> · Paid ${court.bookingFeeDollars}</>
+                  )}
+                  {court.enableGuestFee && court.guestFeeDollars && (
+                    <> · Guest fee ${court.guestFeeDollars}</>
+                  )}
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>

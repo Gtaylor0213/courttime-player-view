@@ -5,7 +5,12 @@ import { Facility, Court } from '../types/database';
 import type { PoolClient } from 'pg';
 import { recordPayment } from './paymentService';
 import type { TermsAttachment } from './termsService';
-import { replaceAllCourtOperatingConfigsForFacilityWithClient } from './courtOperatingConfigSync';
+import {
+  writeCourtOperatingSchedule,
+  seedCourtsWithoutOperatingConfig,
+} from './courtOperatingConfigSync';
+import { normalizeCourtOperatingScheduleRows } from '../../shared/utils/operatingHours';
+import type { CourtScheduleRowInput } from '../../shared/utils/operatingHours';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const ALLOWED_BOOKING_RULE_CODES = new Set([
@@ -762,6 +767,10 @@ export interface CourtCreateData {
     splitNames: string[];
     splitType: 'Tennis' | 'Pickleball';
   };
+  requirePayment?: boolean;
+  bookingAmountCents?: number | null;
+  guestFeeCents?: number | null;
+  operatingSchedule?: CourtScheduleRowInput[];
 }
 
 /**
@@ -1183,15 +1192,28 @@ export async function registerFacility(
     const createdCourts: any[] = [];
 
     for (const court of data.courts) {
+      const wantsPayment = Boolean(court.requirePayment);
+      const bookingAmountCents =
+        wantsPayment && court.bookingAmountCents && court.bookingAmountCents > 0
+          ? court.bookingAmountCents
+          : null;
+      const guestFeeCents =
+        court.guestFeeCents != null && court.guestFeeCents > 0 ? court.guestFeeCents : null;
+
       const courtResult = await client.query(
         `INSERT INTO courts (
           facility_id, name, court_number, surface_type, court_type,
-          is_indoor, has_lights, is_walk_up, status, is_split_court, split_configuration
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'available', $9, $10)
+          is_indoor, has_lights, is_walk_up, require_payment, booking_amount_cents,
+          guest_fee_cents, status, is_split_court, split_configuration
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'available', $12, $13)
         RETURNING
           id, facility_id as "facilityId", name, court_number as "courtNumber",
           surface_type as "surfaceType", court_type as "courtType",
-          is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp", status,
+          is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+          COALESCE(require_payment, false) as "requirePayment",
+          booking_amount_cents as "bookingAmountCents",
+          guest_fee_cents as "guestFeeCents",
+          status,
           is_split_court as "isSplitCourt", split_configuration as "splitConfiguration"`,
         [
           facilityId,
@@ -1202,6 +1224,9 @@ export async function registerFacility(
           court.isIndoor,
           court.hasLights,
           court.isWalkUp || false,
+          wantsPayment,
+          bookingAmountCents,
+          guestFeeCents,
           court.canSplit || false,
           court.splitConfig ? JSON.stringify(court.splitConfig) : null,
         ]
@@ -1209,6 +1234,14 @@ export async function registerFacility(
 
       const createdCourt = courtResult.rows[0];
       createdCourts.push(createdCourt);
+
+      if (court.operatingSchedule?.length) {
+        const scheduleRows = normalizeCourtOperatingScheduleRows(
+          court.operatingSchedule,
+          data.operatingHours
+        );
+        await writeCourtOperatingSchedule(client, createdCourt.id, scheduleRows);
+      }
 
       // If court can split, create child courts
       if (court.canSplit && court.splitConfig?.splitNames && court.splitConfig.splitNames.length > 0) {
@@ -1235,8 +1268,8 @@ export async function registerFacility(
       }
     }
 
-    // 7b. Seed court_operating_config from facility operating hours (same data Court Management edits)
-    await replaceAllCourtOperatingConfigsForFacilityWithClient(client, facilityId, data.operatingHours);
+    // 7b. Seed any courts without per-court schedules (e.g. split children) from facility hours
+    await seedCourtsWithoutOperatingConfig(client, facilityId, data.operatingHours);
 
     // 8. Store facility contacts
     // First, add primary contact

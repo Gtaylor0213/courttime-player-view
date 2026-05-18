@@ -339,6 +339,45 @@ export function facilityOperatingHoursScheduleFingerprint(raw: unknown): string 
   return JSON.stringify(buildCourtScheduleRowsFromFacilityOperatingHours(raw));
 }
 
+/** Normalize a partial per-court schedule (registration or API) into full DB rows. */
+export function normalizeCourtOperatingScheduleRows(
+  schedule: CourtScheduleRowInput[] | undefined | null,
+  facilityHoursFallback?: unknown
+): CourtOperatingScheduleRow[] {
+  const defaults = buildCourtScheduleRowsFromFacilityOperatingHours(facilityHoursFallback ?? {});
+  if (!Array.isArray(schedule) || schedule.length === 0) return defaults;
+
+  const byDay = new Map<number, CourtScheduleRowInput>();
+  for (const row of schedule) {
+    const dowRaw = row.day_of_week ?? row.dayOfWeek;
+    const dow = typeof dowRaw === 'string' ? parseInt(dowRaw, 10) : dowRaw;
+    if (dow != null && Number.isFinite(dow) && dow >= 0 && dow <= 6) {
+      byDay.set(dow, row);
+    }
+  }
+
+  return defaults.map((def) => {
+    const row = byDay.get(def.day_of_week);
+    if (!row) return def;
+    const isOpen = row.is_open ?? row.isOpen;
+    return {
+      ...def,
+      is_open: isOpen !== false && isOpen !== 'false',
+      open_time: normalizeWallTimeToHHMM(
+        row.open_time ?? row.openTime,
+        def.open_time
+      ),
+      close_time: normalizeWallTimeToHHMM(
+        row.close_time ?? row.closeTime,
+        def.close_time
+      ),
+      prime_time_start:
+        row.prime_time_start ?? row.primeTimeStart ?? def.prime_time_start,
+      prime_time_end: row.prime_time_end ?? row.primeTimeEnd ?? def.prime_time_end,
+    };
+  });
+}
+
 export type CourtScheduleRowInput = {
   day_of_week?: number;
   dayOfWeek?: number;
@@ -348,6 +387,10 @@ export type CourtScheduleRowInput = {
   openTime?: string;
   close_time?: string;
   closeTime?: string;
+  prime_time_start?: string | null;
+  prime_time_end?: string | null;
+  primeTimeStart?: string | null;
+  primeTimeEnd?: string | null;
 };
 
 const DAY_LABELS_SHORT: Record<OperatingDayMondayFirst, string> = {

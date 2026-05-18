@@ -60,7 +60,7 @@ async function loadMergedScheduleForCourt(
   return mergeFacilityTemplateWithExistingCourtRows(existing.rows, template);
 }
 
-async function writeScheduleForCourt(
+export async function writeCourtOperatingSchedule(
   client: PoolClient,
   courtId: string,
   scheduleRows: CourtOperatingScheduleRow[]
@@ -104,7 +104,28 @@ export async function replaceAllCourtOperatingConfigsForFacilityWithClient(
   );
   for (const court of courts) {
     const rows = await loadMergedScheduleForCourt(client, court.id, rawOperatingHours);
-    await writeScheduleForCourt(client, court.id, rows);
+    await writeCourtOperatingSchedule(client, court.id, rows);
+  }
+}
+
+/** Seed facility default hours only for courts that have no operating config rows yet (e.g. split children). */
+export async function seedCourtsWithoutOperatingConfig(
+  client: PoolClient,
+  facilityId: string,
+  rawOperatingHours: unknown
+): Promise<void> {
+  const { rows: courtsNeedingSeed } = await client.query<{ id: string }>(
+    `SELECT c.id
+     FROM courts c
+     WHERE c.facility_id = $1
+       AND NOT EXISTS (
+         SELECT 1 FROM court_operating_config coc WHERE coc.court_id = c.id
+       )`,
+    [facilityId]
+  );
+  const template = buildCourtScheduleRowsFromFacilityOperatingHours(rawOperatingHours);
+  for (const court of courtsNeedingSeed) {
+    await writeCourtOperatingSchedule(client, court.id, template);
   }
 }
 
@@ -121,7 +142,7 @@ export async function replaceAllCourtOperatingConfigsForFacility(
     await client.query('BEGIN');
     for (const court of courts) {
       const rows = await loadMergedScheduleForCourt(client, court.id, rawOperatingHours);
-      await writeScheduleForCourt(client, court.id, rows);
+      await writeCourtOperatingSchedule(client, court.id, rows);
     }
     await client.query('COMMIT');
   } catch (err) {

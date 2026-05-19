@@ -218,7 +218,7 @@ export async function updateMemberMembership(
         if (!addressLimitCheck.allowed) {
           throw new Error(
             addressLimitCheck.message ||
-              'This address has reached the maximum number of accounts allowed.'
+              "You've hit the max number of accounts under this address."
           );
         }
       }
@@ -286,7 +286,7 @@ export async function updateMemberMembership(
     return result.rowCount > 0;
   } catch (error) {
     console.error('Update member membership error:', error);
-    if (error instanceof Error && error.message.includes('maximum number of accounts')) {
+    if (error instanceof Error && error.message.includes('max number of accounts')) {
       throw error;
     }
     throw new Error('Failed to update member membership');

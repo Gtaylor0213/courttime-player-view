@@ -122,8 +122,7 @@ describe('maxAccountsPerAddressService', () => {
       expect(result.allowed).toBe(false);
       expect(result.current).toBe(4);
       expect(result.max).toBe(4);
-      expect(result.message).toContain('maximum number of accounts');
-      expect(result.message).toContain('4/4');
+      expect(result.message).toBe("You've hit the max number of accounts under this address.");
     });
 
     it('allows join when rule is disabled (unlimited)', async () => {

@@ -29,14 +29,13 @@ describe('max accounts per address enforcement on join paths', () => {
     it('throws before inserting membership when address is at capacity', async () => {
       checkLimitMock.mockResolvedValue({
         allowed: false,
-        message:
-          'This address has reached the maximum number of accounts allowed. You cannot join this facility with this address. (4/4 accounts at this address).',
+        message: "You've hit the max number of accounts under this address.",
         current: 4,
         max: 4,
       });
 
       await expect(addUserToFacility('user-5', 'facility-1')).rejects.toThrow(
-        'maximum number of accounts'
+        'max number of accounts'
       );
 
       expect(checkLimitMock).toHaveBeenCalledWith('facility-1', 'user-5');
@@ -66,13 +65,13 @@ describe('max accounts per address enforcement on join paths', () => {
     it('throws before creating a pending request when at capacity', async () => {
       checkLimitMock.mockResolvedValue({
         allowed: false,
-        message: 'This address has reached the maximum number of accounts allowed.',
+        message: "You've hit the max number of accounts under this address.",
       });
       queryMock.mockResolvedValueOnce({ rows: [] });
 
       await expect(
         requestFacilityMembership('user-5', 'facility-1', 'Full', true)
-      ).rejects.toThrow('maximum number of accounts');
+      ).rejects.toThrow('max number of accounts');
 
       expect(checkLimitMock).toHaveBeenCalledWith('facility-1', 'user-5');
       const insertCalls = queryMock.mock.calls.filter((call) =>
@@ -101,12 +100,12 @@ describe('max accounts per address enforcement on join paths', () => {
     it('blocks admin approval to active when address is at capacity', async () => {
       checkLimitMock.mockResolvedValue({
         allowed: false,
-        message: 'This address has reached the maximum number of accounts allowed.',
+        message: "You've hit the max number of accounts under this address.",
       });
 
       await expect(
         updateMemberMembership('facility-1', 'user-5', { status: 'active' })
-      ).rejects.toThrow('maximum number of accounts');
+      ).rejects.toThrow('max number of accounts');
 
       expect(checkLimitMock).toHaveBeenCalledWith('facility-1', 'user-5');
       expect(queryMock).not.toHaveBeenCalled();

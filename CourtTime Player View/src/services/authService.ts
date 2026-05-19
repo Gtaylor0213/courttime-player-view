@@ -542,7 +542,7 @@ export async function addUserToFacility(
     const { checkMaxAccountsPerAddressAllowed } = await import('./maxAccountsPerAddressService');
     const addressLimitCheck = await checkMaxAccountsPerAddressAllowed(facilityId, userId);
     if (!addressLimitCheck.allowed) {
-      throw new Error(addressLimitCheck.message || 'This address has reached the maximum number of accounts allowed.');
+      throw new Error(addressLimitCheck.message || "You've hit the max number of accounts under this address.");
     }
 
     const userResult = await query(
@@ -601,7 +601,7 @@ export async function addUserToFacility(
 
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('maximum number of accounts')) {
+    if (error instanceof Error && error.message.includes('max number of accounts')) {
       throw error;
     }
     console.error('Add user to facility error:', error);

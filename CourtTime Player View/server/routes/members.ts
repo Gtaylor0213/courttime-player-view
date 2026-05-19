@@ -116,7 +116,7 @@ router.patch('/:facilityId/:userId', async (req, res, next) => {
       });
     }
   } catch (error) {
-    if (error instanceof Error && error.message.includes('maximum number of accounts')) {
+    if (error instanceof Error && error.message.includes('max number of accounts')) {
       return res.status(400).json({ success: false, error: error.message });
     }
     next(error);

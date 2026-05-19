@@ -264,7 +264,7 @@ export async function requestFacilityMembership(
     if (!addressLimitCheck.allowed) {
       throw new Error(
         addressLimitCheck.message ||
-          'This address has reached the maximum number of accounts allowed.'
+          "You've hit the max number of accounts under this address."
       );
     }
 

@@ -14,7 +14,7 @@ export interface MaxAccountsPerAddressCheckResult {
 }
 
 const DEFAULT_LIMIT_MESSAGE =
-  'This address has reached the maximum number of accounts allowed. You cannot join this facility with this address.';
+  "You've hit the max number of accounts under this address.";
 
 /**
  * Load HH-001 (max accounts per address) for a facility.
@@ -136,7 +136,7 @@ export async function checkMaxAccountsPerAddressAllowed(
   if (current >= config.maxMembers) {
     return {
       allowed: false,
-      message: `${DEFAULT_LIMIT_MESSAGE} (${current}/${config.maxMembers} accounts at this address).`,
+      message: DEFAULT_LIMIT_MESSAGE,
       current,
       max: config.maxMembers,
     };

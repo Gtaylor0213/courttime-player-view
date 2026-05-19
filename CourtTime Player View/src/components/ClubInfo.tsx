@@ -12,6 +12,8 @@ import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import {
   courtScheduleRowsToOperatingHoursMap,
   groupOperatingHoursForCompactDisplay,
+  DAY_LABELS_SHORT,
+  OPERATING_DAYS_MONDAY_FIRST,
   type OperatingHoursMap,
 } from '../../shared/utils/operatingHours';
 import { useAuth } from '../contexts/AuthContext';
@@ -56,14 +58,14 @@ function CourtWeeklyHours({ hours }: { hours: OperatingHoursMap }) {
   if (!hours || Object.keys(hours).length === 0) {
     return <p className="text-xs text-gray-500 mt-2">Hours not available</p>;
   }
-  const groups = groupOperatingHoursForCompactDisplay(hours, 'full');
+  const groups = groupOperatingHoursForCompactDisplay(hours, 'short');
   return (
     <div className="mt-2 pt-2 border-t border-gray-200 text-left">
       <p className="text-xs font-medium text-gray-500 mb-1">Court Hours</p>
       <div className="space-y-0.5">
         {groups.map((row, idx) => (
           <div key={`${row.dayRangeLabel}-${idx}`} className="flex justify-between text-xs gap-2">
-            <span className="text-gray-600 shrink-0">{row.dayRangeLabel}</span>
+            <span className="text-gray-600 shrink-0 whitespace-nowrap">{row.dayRangeLabel}</span>
             <span className={row.closed ? 'text-gray-400 italic' : 'text-gray-700'}>
               {row.hoursLabel}
             </span>
@@ -574,7 +576,7 @@ export function ClubInfo() {
               <CardContent>
                 {facility.operatingHours && typeof facility.operatingHours === 'object' && Object.keys(facility.operatingHours).length > 0 ? (
                   <div className="grid grid-cols-1 gap-2">
-                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
+                    {OPERATING_DAYS_MONDAY_FIRST.map(day => {
                       const hours = facility.operatingHours[day];
                       let hoursDisplay = 'Closed';
                       if (hours != null && hours !== '') {
@@ -615,9 +617,11 @@ export function ClubInfo() {
                         }
                       }
                       return (
-                        <div key={day} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
-                          <span className="font-medium capitalize text-gray-700">{day}</span>
-                          <span className="text-gray-600">{hoursDisplay}</span>
+                        <div key={day} className="flex justify-between py-1 border-b border-gray-100 last:border-0 gap-2">
+                          <span className="font-medium text-gray-700 shrink-0 whitespace-nowrap w-9">
+                            {DAY_LABELS_SHORT[day]}
+                          </span>
+                          <span className="text-gray-600 text-right">{hoursDisplay}</span>
                         </div>
                       );
                     })}

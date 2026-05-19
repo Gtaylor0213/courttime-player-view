@@ -393,7 +393,7 @@ export type CourtScheduleRowInput = {
   primeTimeEnd?: string | null;
 };
 
-const DAY_LABELS_SHORT: Record<OperatingDayMondayFirst, string> = {
+export const DAY_LABELS_SHORT: Record<OperatingDayMondayFirst, string> = {
   monday: 'Mon',
   tuesday: 'Tue',
   wednesday: 'Wed',

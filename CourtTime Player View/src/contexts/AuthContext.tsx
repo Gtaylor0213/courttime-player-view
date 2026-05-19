@@ -43,6 +43,7 @@ interface RegistrationData {
   bio?: string;
   profilePicture?: string;
   selectedFacilities?: string[];
+  setupToken?: string;
   notificationPreferences?: {
     emailBookingConfirmations?: boolean;
     smsReminders?: boolean;
@@ -208,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fullName,
         userType: userType || 'player',
         selectedFacilities: additionalData?.selectedFacilities,
+        setupToken: additionalData?.setupToken,
         phone: additionalData?.phone,
         streetAddress: additionalData?.streetAddress,
         city: additionalData?.city,

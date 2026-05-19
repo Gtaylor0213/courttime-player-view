@@ -661,9 +661,18 @@ export function FacilityManagement() {
   const [blackoutSaving, setBlackoutSaving] = useState(false);
 
   // Address whitelist state
-  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{id: string; address: string; lastName: string; accountsLimit: number}>>([]);
+  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{
+    id: string;
+    address: string;
+    lastName: string;
+    email: string | null;
+    accountsLimit: number;
+    setupInviteSentAt: string | null;
+    setupInviteAcceptedAt: string | null;
+  }>>([]);
   const [newWhitelistAddress, setNewWhitelistAddress] = useState('');
   const [newWhitelistLastName, setNewWhitelistLastName] = useState('');
+  const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [whitelistAccountsLimit, setWhitelistAccountsLimit] = useState(4);
   const [whitelistUploading, setWhitelistUploading] = useState(false);
   const whitelistFileRef = React.useRef<HTMLInputElement>(null);
@@ -1582,11 +1591,22 @@ export function FacilityManagement() {
       return;
     }
     try {
-      const response = await addressWhitelistApi.add(currentFacilityId, newWhitelistAddress.trim(), 999, newWhitelistLastName.trim());
+      const response = await addressWhitelistApi.add(
+        currentFacilityId,
+        newWhitelistAddress.trim(),
+        999,
+        newWhitelistLastName.trim(),
+        newWhitelistEmail.trim() || undefined
+      );
       if (response.success) {
         setNewWhitelistAddress('');
         setNewWhitelistLastName('');
-        toast.success('Address added to whitelist');
+        setNewWhitelistEmail('');
+        toast.success(
+          newWhitelistEmail.trim()
+            ? 'Address added and setup invite sent'
+            : 'Address added to whitelist'
+        );
         loadWhitelistAddresses();
       } else {
         toast.error(response.error || 'Failed to add address');
@@ -1660,14 +1680,20 @@ export function FacilityManagement() {
         /^(last.?name|lastname|surname|family.?name)$/i.test(h.trim())
       );
 
-      const addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }> = [];
+      const emailCol = headers.find(h =>
+        /^(email|e.?mail|email.?address)$/i.test(h.trim())
+      );
+
+      const addresses: Array<{ address: string; lastName?: string; accountsLimit?: number; email?: string }> = [];
       for (const row of rows) {
         const addr = String(row[addressCol] || '').trim();
         if (addr) {
           const lastName = lastNameCol ? String(row[lastNameCol] || '').trim() : '';
+          const email = emailCol ? String(row[emailCol] || '').trim() : '';
           addresses.push({
             address: addr,
             lastName,
+            email: email || undefined,
             accountsLimit: 999,
           });
         }
@@ -3797,6 +3823,14 @@ export function FacilityManagement() {
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
                         className="w-40"
                       />
+                      <Input
+                        type="email"
+                        placeholder="Email (optional)"
+                        value={newWhitelistEmail}
+                        onChange={(e) => setNewWhitelistEmail(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
+                        className="w-48"
+                      />
                       <Button onClick={handleAddWhitelistAddress} size="sm">
                         <Plus className="h-4 w-4 mr-1" />
                         Add
@@ -3822,7 +3856,7 @@ export function FacilityManagement() {
                         {whitelistUploading ? 'Importing...' : 'Import from Excel/CSV'}
                       </Button>
                       <span className="text-xs text-gray-500">
-                        File should have "Address" and "Last Name" columns.
+                        File should have "Address" and "Last Name" columns. Optional "Email" sends a setup invite.
                       </span>
                     </div>
 
@@ -3835,10 +3869,24 @@ export function FacilityManagement() {
                           <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <Home className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                              <span className="text-sm truncate">
-                                {item.address}
-                                {item.lastName && <span className="text-gray-500"> — {item.lastName}</span>}
-                              </span>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm truncate">
+                                  {item.address}
+                                  {item.lastName && <span className="text-gray-500"> — {item.lastName}</span>}
+                                </span>
+                                {item.email && (
+                                  <span className="text-xs text-gray-500 truncate">{item.email}</span>
+                                )}
+                                {item.email && (
+                                  <span className="text-xs text-gray-400">
+                                    {item.setupInviteAcceptedAt
+                                      ? 'Joined'
+                                      : item.setupInviteSentAt
+                                        ? `Invite sent ${new Date(item.setupInviteSentAt).toLocaleDateString()}`
+                                        : 'Invite pending'}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <Button
                               variant="ghost"

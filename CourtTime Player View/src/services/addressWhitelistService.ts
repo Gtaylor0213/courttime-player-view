@@ -1,13 +1,48 @@
 import { query } from '../database/connection';
+import {
+  issueSetupInviteForWhitelistRow,
+  normalizeWhitelistEmail,
+} from './memberSetupInviteService';
 
 export interface AddressWhitelist {
   id: string;
   facilityId: string;
   address: string;
   lastName: string;
+  email: string | null;
   accountsLimit: number;
+  setupInviteSentAt: string | null;
+  setupInviteAcceptedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+const WHITELIST_SELECT = `
+  id,
+  facility_id as "facilityId",
+  address,
+  COALESCE(last_name, '') as "lastName",
+  email,
+  accounts_limit as "accountsLimit",
+  setup_invite_sent_at as "setupInviteSentAt",
+  setup_invite_accepted_at as "setupInviteAcceptedAt",
+  created_at as "createdAt",
+  updated_at as "updatedAt"
+`;
+
+function mapDuplicateError(error: { code?: string; constraint?: string }): string | null {
+  if (error.code !== '23505') return null;
+  if (error.constraint?.includes('email')) {
+    return 'Email already whitelisted for this facility';
+  }
+  return 'Address already whitelisted';
+}
+
+async function sendInviteIfEmailPresent(whitelistId: string, email: string | null): Promise<void> {
+  if (!email) return;
+  issueSetupInviteForWhitelistRow(whitelistId).catch((err) =>
+    console.error('Failed to issue setup invite for whitelist row:', err)
+  );
 }
 
 /**
@@ -16,14 +51,7 @@ export interface AddressWhitelist {
 export async function getWhitelistedAddresses(facilityId: string): Promise<AddressWhitelist[]> {
   try {
     const result = await query(
-      `SELECT
-        id,
-        facility_id as "facilityId",
-        address,
-        COALESCE(last_name, '') as "lastName",
-        accounts_limit as "accountsLimit",
-        created_at as "createdAt",
-        updated_at as "updatedAt"
+      `SELECT ${WHITELIST_SELECT}
       FROM address_whitelist
       WHERE facility_id = $1
       ORDER BY address ASC, last_name ASC`,
@@ -44,38 +72,34 @@ export async function addWhitelistedAddress(
   facilityId: string,
   address: string,
   accountsLimit: number = 4,
-  lastName: string = ''
+  lastName: string = '',
+  email?: string | null
 ): Promise<{ success: boolean; address?: AddressWhitelist; error?: string }> {
   try {
+    const normalizedEmail = normalizeWhitelistEmail(email);
     const result = await query(
-      `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit)
-       VALUES ($1, $2, $3, $4)
-       RETURNING
-         id,
-         facility_id as "facilityId",
-         address,
-         COALESCE(last_name, '') as "lastName",
-         accounts_limit as "accountsLimit",
-         created_at as "createdAt",
-         updated_at as "updatedAt"`,
-      [facilityId, address, lastName.trim(), accountsLimit]
+      `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit, email)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING ${WHITELIST_SELECT}`,
+      [facilityId, address, lastName.trim(), accountsLimit, normalizedEmail]
     );
+
+    const row = result.rows[0];
+    await sendInviteIfEmailPresent(row.id, normalizedEmail);
 
     return {
       success: true,
-      address: result.rows[0]
+      address: row,
     };
   } catch (error: any) {
     console.error('Error adding whitelisted address:', error);
-    if (error.code === '23505') {
-      return {
-        success: false,
-        error: 'Address already whitelisted'
-      };
+    const duplicateMsg = mapDuplicateError(error);
+    if (duplicateMsg) {
+      return { success: false, error: duplicateMsg };
     }
     return {
       success: false,
-      error: 'Failed to add address to whitelist'
+      error: 'Failed to add address to whitelist',
     };
   }
 }
@@ -98,7 +122,7 @@ export async function removeWhitelistedAddress(
     if (result.rows.length === 0) {
       return {
         success: false,
-        error: 'Address not found or unauthorized'
+        error: 'Address not found or unauthorized',
       };
     }
 
@@ -107,8 +131,65 @@ export async function removeWhitelistedAddress(
     console.error('Error removing whitelisted address:', error);
     return {
       success: false,
-      error: 'Failed to remove address from whitelist'
+      error: 'Failed to remove address from whitelist',
     };
+  }
+}
+
+/**
+ * Update whitelist entry (accounts limit and/or email)
+ */
+export async function updateWhitelistedAddress(
+  facilityId: string,
+  addressId: string,
+  updates: { accountsLimit?: number; email?: string | null }
+): Promise<{ success: boolean; address?: AddressWhitelist; error?: string }> {
+  try {
+    const sets: string[] = ['updated_at = CURRENT_TIMESTAMP'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (updates.accountsLimit !== undefined) {
+      sets.push(`accounts_limit = $${paramIndex++}`);
+      values.push(updates.accountsLimit);
+    }
+
+    if (updates.email !== undefined) {
+      sets.push(`email = $${paramIndex++}`);
+      values.push(normalizeWhitelistEmail(updates.email));
+    }
+
+    if (sets.length === 1) {
+      return { success: false, error: 'No updates provided' };
+    }
+
+    values.push(addressId, facilityId);
+
+    const result = await query(
+      `UPDATE address_whitelist
+       SET ${sets.join(', ')}
+       WHERE id = $${paramIndex++} AND facility_id = $${paramIndex}
+       RETURNING ${WHITELIST_SELECT}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return { success: false, error: 'Address not found or unauthorized' };
+    }
+
+    const row = result.rows[0];
+    if (updates.email !== undefined && row.email) {
+      await sendInviteIfEmailPresent(row.id, row.email);
+    }
+
+    return { success: true, address: row };
+  } catch (error: any) {
+    console.error('Error updating whitelisted address:', error);
+    const duplicateMsg = mapDuplicateError(error);
+    if (duplicateMsg) {
+      return { success: false, error: duplicateMsg };
+    }
+    return { success: false, error: 'Failed to update whitelist entry' };
   }
 }
 
@@ -120,30 +201,8 @@ export async function updateAccountsLimit(
   addressId: string,
   accountsLimit: number
 ): Promise<{ success: boolean; error?: string }> {
-  try {
-    const result = await query(
-      `UPDATE address_whitelist
-       SET accounts_limit = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2 AND facility_id = $3
-       RETURNING id`,
-      [accountsLimit, addressId, facilityId]
-    );
-
-    if (result.rows.length === 0) {
-      return {
-        success: false,
-        error: 'Address not found or unauthorized'
-      };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating accounts limit:', error);
-    return {
-      success: false,
-      error: 'Failed to update accounts limit'
-    };
-  }
+  const result = await updateWhitelistedAddress(facilityId, addressId, { accountsLimit });
+  return { success: result.success, error: result.error };
 }
 
 /**
@@ -167,7 +226,7 @@ export async function isAddressWhitelisted(
     if (result.rows.length > 0) {
       return {
         isWhitelisted: true,
-        accountsLimit: result.rows[0].accountsLimit
+        accountsLimit: result.rows[0].accountsLimit,
       };
     }
 
@@ -183,37 +242,60 @@ export async function isAddressWhitelisted(
  */
 export async function bulkAddWhitelistedAddresses(
   facilityId: string,
-  addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }>
+  addresses: Array<{ address: string; lastName?: string; accountsLimit?: number; email?: string }>
 ): Promise<{ success: boolean; added: number; skipped: number; error?: string }> {
   try {
-    // Filter out empty addresses
-    const validItems = addresses.filter(item => item.address?.trim());
+    const validItems = addresses.filter((item) => item.address?.trim());
     const skippedEmpty = addresses.length - validItems.length;
 
     if (validItems.length === 0) {
       return { success: true, added: 0, skipped: skippedEmpty };
     }
 
-    // Build multi-row INSERT with parameterized values
-    const values: any[] = [];
-    const placeholders: string[] = [];
-    validItems.forEach((item, i) => {
-      const offset = i * 4;
-      placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`);
-      values.push(facilityId, item.address.trim(), (item.lastName || '').trim(), item.accountsLimit || 4);
-    });
+    let added = 0;
+    let skippedDuplicates = 0;
 
-    const result = await query(
-      `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit)
-       VALUES ${placeholders.join(', ')}
-       ON CONFLICT DO NOTHING`,
-      values
-    );
+    for (const item of validItems) {
+      const normalizedEmail = normalizeWhitelistEmail(item.email);
+      try {
+        const result = await query(
+          `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit, email)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT DO NOTHING
+           RETURNING id, email`,
+          [
+            facilityId,
+            item.address.trim(),
+            (item.lastName || '').trim(),
+            item.accountsLimit || 4,
+            normalizedEmail,
+          ]
+        );
 
-    const added = result.rowCount || 0;
-    const skipped = skippedEmpty + (validItems.length - added);
+        if (result.rows.length === 0) {
+          skippedDuplicates += 1;
+          continue;
+        }
 
-    return { success: true, added, skipped };
+        added += 1;
+        const row = result.rows[0];
+        if (row.email) {
+          await sendInviteIfEmailPresent(row.id, row.email);
+        }
+      } catch (error: any) {
+        if (error.code === '23505') {
+          skippedDuplicates += 1;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return {
+      success: true,
+      added,
+      skipped: skippedEmpty + skippedDuplicates,
+    };
   } catch (error) {
     console.error('Error bulk importing addresses:', error);
     return { success: false, added: 0, skipped: addresses.length, error: 'Failed to import addresses' };
@@ -257,7 +339,10 @@ export async function getWhitelistWithMembers(facilityId: string) {
         aw.id as "whitelistId",
         aw.address,
         COALESCE(aw.last_name, '') as "lastName",
+        aw.email as "whitelistEmail",
         aw.accounts_limit as "accountsLimit",
+        aw.setup_invite_sent_at as "setupInviteSentAt",
+        aw.setup_invite_accepted_at as "setupInviteAcceptedAt",
         u.id as "userId",
         u.first_name as "firstName",
         u.last_name as "userLastName",
@@ -277,7 +362,6 @@ export async function getWhitelistWithMembers(facilityId: string) {
       [facilityId]
     );
 
-    // Group rows by whitelist entry
     const entriesMap = new Map<string, any>();
     for (const row of result.rows) {
       if (!entriesMap.has(row.whitelistId)) {
@@ -285,7 +369,10 @@ export async function getWhitelistWithMembers(facilityId: string) {
           id: row.whitelistId,
           address: row.address,
           lastName: row.lastName,
+          email: row.whitelistEmail,
           accountsLimit: row.accountsLimit,
+          setupInviteSentAt: row.setupInviteSentAt,
+          setupInviteAcceptedAt: row.setupInviteAcceptedAt,
           members: [],
         });
       }

@@ -60,9 +60,18 @@ export function MemberManagement() {
 
   // Address whitelist management
   const [showAddressDialog, setShowAddressDialog] = useState(false);
-  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{id: string; address: string; lastName: string; accountsLimit: number}>>([]);
+  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{
+    id: string;
+    address: string;
+    lastName: string;
+    email: string | null;
+    accountsLimit: number;
+    setupInviteSentAt: string | null;
+    setupInviteAcceptedAt: string | null;
+  }>>([]);
   const [newAddress, setNewAddress] = useState('');
   const [newLastName, setNewLastName] = useState('');
+  const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [whitelistUploading, setWhitelistUploading] = useState(false);
   const whitelistFileRef = useRef<HTMLInputElement>(null);
 
@@ -394,12 +403,23 @@ export function MemberManagement() {
     }
 
     try {
-      const response = await addressWhitelistApi.add(currentFacilityId, newAddress.trim(), 999, newLastName.trim());
+      const response = await addressWhitelistApi.add(
+        currentFacilityId,
+        newAddress.trim(),
+        999,
+        newLastName.trim(),
+        newWhitelistEmail.trim() || undefined
+      );
 
       if (response.success) {
         setNewAddress('');
         setNewLastName('');
-        toast.success('Address added to whitelist');
+        setNewWhitelistEmail('');
+        toast.success(
+          newWhitelistEmail.trim()
+            ? 'Address added and setup invite sent'
+            : 'Address added to whitelist'
+        );
         loadWhitelistAddresses();
       } else {
         toast.error(response.error || 'Failed to add address');
@@ -423,7 +443,7 @@ export function MemberManagement() {
     setWhitelistUploading(true);
 
     try {
-      let addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }> = [];
+      let addresses: Array<{ address: string; lastName?: string; accountsLimit?: number; email?: string }> = [];
 
       if (ext === 'csv') {
         const text = await file.text();
@@ -432,6 +452,7 @@ export function MemberManagement() {
           const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s_-]+/g, ''));
           const addressCol = headers.findIndex(h => h.includes('address') || h.includes('street'));
           const lastNameCol = headers.findIndex(h => /^(lastname|surname|familyname)$/.test(h));
+          const emailCol = headers.findIndex(h => h === 'email' || h.includes('email'));
           const limitCol = headers.findIndex(h => h.includes('limit') || h.includes('max') || h.includes('account'));
 
           if (addressCol >= 0) {
@@ -440,6 +461,7 @@ export function MemberManagement() {
               return {
                 address: cols[addressCol] || '',
                 lastName: lastNameCol >= 0 ? cols[lastNameCol] : undefined,
+                email: emailCol >= 0 ? cols[emailCol] : undefined,
                 accountsLimit: limitCol >= 0 ? parseInt(cols[limitCol]) || undefined : undefined,
               };
             }).filter(a => a.address);
@@ -456,11 +478,13 @@ export function MemberManagement() {
           const hdrs = Object.keys(rows[0]);
           const addressKey = hdrs.find(h => /^(street|address|street.?address|full.?address)$/i.test(h.trim())) || hdrs[0];
           const lastNameKey = hdrs.find(h => /^(last.?name|lastname|surname|family.?name)$/i.test(h.trim()));
+          const emailKey = hdrs.find(h => /^(email|e.?mail|email.?address)$/i.test(h.trim()));
           const limitKey = hdrs.find(h => /^(limit|max|accounts?.?limit)$/i.test(h.trim()));
 
           addresses = rows.map(row => ({
             address: String(row[addressKey] || '').trim(),
             lastName: lastNameKey ? String(row[lastNameKey] || '').trim() || undefined : undefined,
+            email: emailKey ? String(row[emailKey] || '').trim() || undefined : undefined,
             accountsLimit: limitKey ? parseInt(row[limitKey]) || undefined : undefined,
           })).filter(a => a.address);
         }
@@ -474,6 +498,7 @@ export function MemberManagement() {
       const payload = addresses.map(a => ({
         address: a.address,
         lastName: a.lastName,
+        email: a.email,
         accountsLimit: a.accountsLimit || 999,
       }));
 
@@ -876,6 +901,19 @@ export function MemberManagement() {
                   }}
                   className="w-40"
                 />
+                <Input
+                  type="email"
+                  placeholder="Email (optional)"
+                  value={newWhitelistEmail}
+                  onChange={(e) => setNewWhitelistEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddAddress();
+                    }
+                  }}
+                  className="w-48"
+                />
                 <Button onClick={handleAddAddress}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add
@@ -904,7 +942,7 @@ export function MemberManagement() {
                   {whitelistUploading ? 'Importing...' : 'Import from Excel/CSV'}
                 </Button>
                 <span className="text-xs text-gray-500">
-                  File should have "Address" and "Last Name" columns. Optional "Limit" column.
+                  File should have "Address" and "Last Name" columns. Optional "Email" and "Limit" columns.
                 </span>
               </div>
             </div>
@@ -930,6 +968,18 @@ export function MemberManagement() {
                             {item.address}
                             {item.lastName && <span className="text-gray-500"> — {item.lastName}</span>}
                           </span>
+                          {item.email && (
+                            <span className="text-xs text-gray-500 truncate">{item.email}</span>
+                          )}
+                          {item.email && (
+                            <span className="text-xs text-gray-400">
+                              {item.setupInviteAcceptedAt
+                                ? 'Joined'
+                                : item.setupInviteSentAt
+                                  ? `Invite sent ${new Date(item.setupInviteSentAt).toLocaleDateString()}`
+                                  : 'Invite pending'}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <Button

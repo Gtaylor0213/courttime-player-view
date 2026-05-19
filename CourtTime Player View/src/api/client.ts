@@ -53,12 +53,17 @@ function apiRequest<T = unknown>(endpoint: string, options?: RequestInit) {
 
 // Auth API
 export const authApi = {
+  getSetupInvite: async (token: string) => {
+    return apiRequest(`/api/auth/setup-invite/${encodeURIComponent(token)}`);
+  },
+
   register: async (data: {
     email: string;
     password: string;
     fullName: string;
     userType?: string;
     selectedFacilities?: string[];
+    setupToken?: string;
     phone?: string;
     streetAddress?: string;
     city?: string;
@@ -1196,10 +1201,16 @@ export const addressWhitelistApi = {
     return apiRequest(`/api/address-whitelist/${facilityId}/with-members`);
   },
 
-  add: async (facilityId: string, address: string, accountsLimit?: number, lastName?: string) => {
+  add: async (
+    facilityId: string,
+    address: string,
+    accountsLimit?: number,
+    lastName?: string,
+    email?: string
+  ) => {
     return apiRequest(`/api/address-whitelist/${facilityId}`, {
       method: 'POST',
-      body: JSON.stringify({ address, accountsLimit, lastName }),
+      body: JSON.stringify({ address, accountsLimit, lastName, email }),
     });
   },
 
@@ -1216,6 +1227,17 @@ export const addressWhitelistApi = {
     });
   },
 
+  update: async (
+    facilityId: string,
+    addressId: string,
+    updates: { accountsLimit?: number; email?: string | null }
+  ) => {
+    return apiRequest(`/api/address-whitelist/${facilityId}/${addressId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
   check: async (facilityId: string, address: string, lastName?: string) => {
     const qs = lastName ? `?lastName=${encodeURIComponent(lastName)}` : '';
     return apiRequest(`/api/address-whitelist/${facilityId}/check/${encodeURIComponent(address)}${qs}`);
@@ -1226,7 +1248,10 @@ export const addressWhitelistApi = {
     return apiRequest(`/api/address-whitelist/${facilityId}/count/${encodeURIComponent(address)}${qs}`);
   },
 
-  bulkAdd: async (facilityId: string, addresses: Array<{ address: string; lastName?: string; accountsLimit?: number }>) => {
+  bulkAdd: async (
+    facilityId: string,
+    addresses: Array<{ address: string; lastName?: string; accountsLimit?: number; email?: string }>
+  ) => {
     return apiRequest(`/api/address-whitelist/${facilityId}/bulk`, {
       method: 'POST',
       body: JSON.stringify({ addresses }),

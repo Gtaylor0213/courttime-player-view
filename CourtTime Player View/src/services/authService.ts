@@ -545,27 +545,38 @@ export async function addUserToFacility(
       throw new Error(addressLimitCheck.message || 'This address has reached the maximum number of accounts allowed.');
     }
 
-    // Get user's address and last name to check against whitelist
     const userResult = await query(
-      `SELECT street_address as "streetAddress", last_name as "lastName" FROM users WHERE id = $1`,
+      `SELECT street_address as "streetAddress", last_name as "lastName", email
+       FROM users WHERE id = $1`,
       [userId]
     );
 
     let status: 'active' | 'pending' = 'pending';
 
-    // Whitelist auto-approves when address + last name match (capacity enforced by HH-001 above)
-    if (userResult.rows.length > 0 && userResult.rows[0].streetAddress) {
-      const userAddress = userResult.rows[0].streetAddress;
-      const userLastName = userResult.rows[0].lastName || '';
+    if (userResult.rows.length > 0) {
+      const user = userResult.rows[0];
+      const userAddress = user.streetAddress;
+      const userLastName = user.lastName || '';
+      const userEmail = user.email || '';
 
       const whitelistResult = await query(
         `SELECT 1
          FROM address_whitelist
          WHERE facility_id = $1
-           AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))
-           AND LOWER(TRIM(COALESCE(last_name, ''))) = LOWER(TRIM($3))
+           AND (
+             (
+               $2::text IS NOT NULL AND $2::text <> ''
+               AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))
+               AND LOWER(TRIM(COALESCE(last_name, ''))) = LOWER(TRIM($3))
+             )
+             OR (
+               $4::text IS NOT NULL AND $4::text <> ''
+               AND email IS NOT NULL AND TRIM(email) <> ''
+               AND LOWER(TRIM(email)) = LOWER(TRIM($4))
+             )
+           )
          LIMIT 1`,
-        [facilityId, userAddress, userLastName]
+        [facilityId, userAddress || null, userLastName, userEmail || null]
       );
 
       if (whitelistResult.rows.length > 0) {

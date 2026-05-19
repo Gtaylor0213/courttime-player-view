@@ -10,6 +10,10 @@ import {
   validateResetToken,
   resetPassword
 } from '../../src/services/passwordResetService';
+import {
+  validateSetupToken,
+  consumeSetupToken,
+} from '../../src/services/memberSetupInviteService';
 import { generateToken, verifyToken } from '../middleware/auth';
 import {
   acceptCurrentTermsForUser,
@@ -26,6 +30,30 @@ function getAuthenticatedUserId(req: express.Request): string | null {
 }
 
 /**
+ * GET /api/auth/setup-invite/:token
+ * Validate a member setup invite token for registration prefill
+ */
+router.get('/setup-invite/:token', async (req, res, next) => {
+  try {
+    const validation = await validateSetupToken(req.params.token);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, error: validation.error });
+    }
+
+    res.json({
+      success: true,
+      email: validation.email,
+      facilityId: validation.facilityId,
+      facilityName: validation.facilityName,
+      address: validation.address,
+      lastName: validation.lastName,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/auth/register
  * Register a new user
  */
@@ -37,6 +65,7 @@ router.post('/register', async (req, res, next) => {
       fullName,
       userType,
       selectedFacilities,
+      setupToken,
       phone,
       streetAddress,
       city,
@@ -55,6 +84,21 @@ router.post('/register', async (req, res, next) => {
         success: false,
         error: 'Email, password, and full name are required'
       });
+    }
+
+    let inviteFacilityId: string | null = null;
+    if (setupToken) {
+      const validation = await validateSetupToken(setupToken);
+      if (!validation.valid) {
+        return res.status(400).json({ success: false, error: validation.error });
+      }
+      if (email.trim().toLowerCase() !== validation.email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email must match the address on your setup invitation',
+        });
+      }
+      inviteFacilityId = validation.facilityId;
     }
 
     // Register user with additional data
@@ -81,9 +125,14 @@ router.post('/register', async (req, res, next) => {
       return res.status(400).json(result);
     }
 
-    // Add user to selected facilities
-    if (result.user && selectedFacilities && Array.isArray(selectedFacilities)) {
-      for (const facilityId of selectedFacilities) {
+    const facilitiesToJoin = inviteFacilityId
+      ? [inviteFacilityId]
+      : selectedFacilities && Array.isArray(selectedFacilities)
+        ? selectedFacilities
+        : [];
+
+    if (result.user && facilitiesToJoin.length > 0) {
+      for (const facilityId of facilitiesToJoin) {
         try {
           await addUserToFacility(result.user.id, facilityId);
         } catch (facilityError) {
@@ -93,6 +142,10 @@ router.post('/register', async (req, res, next) => {
           throw facilityError;
         }
       }
+    }
+
+    if (result.user && setupToken) {
+      await consumeSetupToken(setupToken, result.user.id);
     }
 
     // Get user with memberships

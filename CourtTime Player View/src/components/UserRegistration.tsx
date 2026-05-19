@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -10,15 +10,70 @@ import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, User, Mail, Phone, Building, Check, AlertCircle, Camera, Search, MapPin, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../contexts/AuthContext';
-import { facilitiesApi, playerProfileApi } from '../api/client';
+import { authApi, facilitiesApi, playerProfileApi } from '../api/client';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 export function UserRegistration() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const setupTokenParam = searchParams.get('setupToken');
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register } = useAuth();
+  const [setupInvite, setSetupInvite] = useState<{
+    facilityId: string;
+    facilityName: string;
+    email: string;
+    lastName?: string;
+  } | null>(null);
+  const [setupInviteError, setSetupInviteError] = useState('');
+  const [setupInviteLoading, setSetupInviteLoading] = useState(!!setupTokenParam);
+
+  const maxStep = setupInvite ? 1 : 2;
+
+  useEffect(() => {
+    if (!setupTokenParam) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await authApi.getSetupInvite(setupTokenParam);
+        if (cancelled) return;
+        if (response.success && response.data) {
+          const data = response.data as {
+            email: string;
+            facilityId: string;
+            facilityName: string;
+            lastName?: string;
+          };
+          setSetupInvite({
+            facilityId: data.facilityId,
+            facilityName: data.facilityName,
+            email: data.email,
+            lastName: data.lastName,
+          });
+          setFormData((prev) => ({
+            ...prev,
+            email: data.email,
+            lastName: data.lastName || prev.lastName,
+          }));
+        } else {
+          setSetupInviteError(response.error || 'This setup link is invalid or has expired');
+        }
+      } catch {
+        if (!cancelled) {
+          setSetupInviteError('Failed to load setup invitation');
+        }
+      } finally {
+        if (!cancelled) setSetupInviteLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setupTokenParam]);
 
   // Facility search states
   const [facilitySearchQuery, setFacilitySearchQuery] = useState('');
@@ -193,9 +248,12 @@ export function UserRegistration() {
   };
 
   const handleNext = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep(prev => prev + 1);
+    if (!validateStep(currentStep)) return;
+    if (setupInvite) {
+      handleSubmit();
+      return;
     }
+    setCurrentStep((prev) => prev + 1);
   };
 
   const handleBack = () => {
@@ -225,13 +283,18 @@ export function UserRegistration() {
           ustaRating: formData.ustaRating,
           bio: formData.bio,
           profilePicture: formData.profilePicture,
+          setupToken: setupTokenParam || undefined,
         }
       );
 
       if (success) {
-        toast.success('Account created successfully!');
+        toast.success(
+          setupInvite
+            ? `Welcome to ${setupInvite.facilityName}!`
+            : 'Account created successfully!'
+        );
 
-        if (selectedFacilities.length > 0) {
+        if (!setupInvite && selectedFacilities.length > 0) {
           const savedUser = JSON.parse(localStorage.getItem('auth_user') || '{}');
           const userId = savedUser?.id as string | undefined;
 
@@ -335,6 +398,7 @@ export function UserRegistration() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
+                disabled={!!setupInvite}
                 className={errors.email ? 'border-red-500' : ''}
               />
               {errors.email && <p className="text-sm text-red-500 mt-1">{errors.email}</p>}
@@ -749,6 +813,7 @@ export function UserRegistration() {
                 </div>
 
                 {/* Step 2 */}
+                {!setupInvite && (
                 <div className="flex flex-col items-center text-center">
                   <div
                     className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-base md:text-lg font-medium border-2 transition-all duration-200 md:mb-2 ${
@@ -763,6 +828,7 @@ export function UserRegistration() {
                     Facilities
                   </p>
                 </div>
+                )}
               </div>
             </div>
 
@@ -780,8 +846,29 @@ export function UserRegistration() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {renderStepContent()}
+                {setupInviteLoading && (
+                  <Alert className="mb-4">
+                    <AlertDescription>Loading your invitation...</AlertDescription>
+                  </Alert>
+                )}
+                {setupInviteError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{setupInviteError}</AlertDescription>
+                  </Alert>
+                )}
+                {setupInvite && (
+                  <Alert className="mb-4 border-green-200 bg-green-50">
+                    <Check className="h-4 w-4 text-green-600" />
+                    <AlertDescription>
+                      You are joining <strong>{setupInvite.facilityName}</strong>. Complete the form below to create your account.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {!setupInviteError && renderStepContent()}
 
+                {!setupInviteError && (
+                <>
                 {/* Navigation Buttons */}
                 <div className="flex justify-between mt-8">
                   <div>
@@ -792,20 +879,22 @@ export function UserRegistration() {
                     )}
                   </div>
                   <div>
-                    {currentStep < 2 ? (
-                      <Button onClick={handleNext}>
-                        Next Step
+                    {currentStep < maxStep ? (
+                      <Button onClick={handleNext} disabled={setupInviteLoading || isSubmitting}>
+                        {setupInvite ? (isSubmitting ? 'Creating Account...' : 'Create Account') : 'Next Step'}
                       </Button>
                     ) : (
                       <Button
                         onClick={handleSubmit}
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || setupInviteLoading}
                       >
                         {isSubmitting ? 'Creating Account...' : 'Create Account'}
                       </Button>
                     )}
                   </div>
                 </div>
+                </>
+                )}
               </CardContent>
             </div>
           </div>

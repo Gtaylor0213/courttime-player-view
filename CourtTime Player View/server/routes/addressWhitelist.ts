@@ -4,7 +4,7 @@ import {
   addWhitelistedAddress,
   bulkAddWhitelistedAddresses,
   removeWhitelistedAddress,
-  updateAccountsLimit,
+  updateWhitelistedAddress,
   isAddressWhitelisted,
   getAccountCountAtAddress,
   getWhitelistWithMembers
@@ -55,7 +55,7 @@ router.get('/:facilityId/with-members', async (req, res, next) => {
 router.post('/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
-    const { address, accountsLimit, lastName } = req.body;
+    const { address, accountsLimit, lastName, email } = req.body;
 
     if (!address) {
       return res.status(400).json({
@@ -68,7 +68,8 @@ router.post('/:facilityId', async (req, res, next) => {
       facilityId,
       address,
       accountsLimit || 4,
-      lastName || ''
+      lastName || '',
+      email
     );
 
     if (!result.success) {
@@ -126,21 +127,32 @@ router.delete('/:facilityId/:addressId', async (req, res, next) => {
 
 /**
  * PATCH /api/address-whitelist/:facilityId/:addressId
- * Update the accounts limit for an address
+ * Update accounts limit and/or email for a whitelist entry
  */
 router.patch('/:facilityId/:addressId', async (req, res, next) => {
   try {
     const { facilityId, addressId } = req.params;
-    const { accountsLimit } = req.body;
+    const { accountsLimit, email } = req.body;
 
-    if (!accountsLimit || accountsLimit < 1) {
+    if (accountsLimit === undefined && email === undefined) {
       return res.status(400).json({
         success: false,
-        error: 'Valid accounts limit is required'
+        error: 'accountsLimit or email is required',
       });
     }
 
-    const result = await updateAccountsLimit(facilityId, addressId, accountsLimit);
+    if (accountsLimit !== undefined && accountsLimit < 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid accounts limit is required',
+      });
+    }
+
+    const updates: { accountsLimit?: number; email?: string | null } = {};
+    if (accountsLimit !== undefined) updates.accountsLimit = accountsLimit;
+    if (email !== undefined) updates.email = email;
+
+    const result = await updateWhitelistedAddress(facilityId, addressId, updates);
 
     if (!result.success) {
       return res.status(400).json(result);

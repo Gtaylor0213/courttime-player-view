@@ -21,6 +21,12 @@ import {
   parseApiBoolean,
 } from '../api/client';
 import { formatCentsAsUsd, parseDollarsToCents } from '../../shared/utils/money';
+import {
+  EVENT_SIGNUP_TYPES,
+  formatBulletinPostProminentDate,
+  getBulletinPostEventAt,
+  getBulletinPostSortTimestamp,
+} from '../utils/bulletinPostDisplay';
 import { toast } from 'sonner';
 
 
@@ -75,7 +81,7 @@ const typeColors: Record<string, string> = {
   announcement: 'bg-orange-500'
   ,drill: 'bg-blue-500'
 };
-const eventSignupTypes = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
+const eventSignupTypes = EVENT_SIGNUP_TYPES;
 const recurringEligibleTypes = new Set(['drill', 'clinic']);
 
 const emptyNewPost = {
@@ -176,7 +182,9 @@ export function BulletinBoard() {
     title: post.title,
     description: post.content || post.description || '',
     type: post.category || post.type || 'announcement',
-    eventDate: post.eventDate || post.postedDate,
+    eventDate: post.drillStartAt
+      ? String(post.drillStartAt)
+      : post.eventDate || undefined,
     eventTime: post.eventTime,
     location: post.location,
     facilityId: post.facilityId,
@@ -657,7 +665,7 @@ export function BulletinBoard() {
   filteredPosts = filteredPosts.sort((a, b) => {
     if (a.isPinned && !b.isPinned) return -1;
     if (!a.isPinned && b.isPinned) return 1;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return getBulletinPostSortTimestamp(b) - getBulletinPostSortTimestamp(a);
   });
 
   const TypeIcon = selectedPost ? typeIcons[selectedPost.type] : Calendar;
@@ -857,23 +865,10 @@ export function BulletinBoard() {
                           <p className="text-sm text-gray-600 line-clamp-2 mb-4">{post.description}</p>
 
                           {/* Event Details */}
-                          {post.eventDate && (
-                            <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                              <div className="flex items-center gap-1.5">
-                                <Calendar className="h-4 w-4 text-gray-400" />
-                                <span>{new Date(post.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                              </div>
-                              {post.eventTime && (
-                                <div className="flex items-center gap-1.5">
-                                  <Clock className="h-4 w-4 text-gray-400" />
-                                  <span>{post.eventTime}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {eventSignupTypes.has(post.type) && post.drillStartAt && (
-                            <div className="text-xs text-gray-600 mb-2">
-                              {new Date(post.drillStartAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          {getBulletinPostEventAt(post) && (
+                            <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-4">
+                              <Calendar className="h-4 w-4 text-gray-400" />
+                              <span>{formatBulletinPostProminentDate(post, 'cardWithTime')}</span>
                             </div>
                           )}
 
@@ -918,8 +913,8 @@ export function BulletinBoard() {
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               )}
-                              <span className="text-xs text-gray-400">
-                                {new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              <span className="text-xs text-gray-400" title={post.createdAt ? `Posted ${new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : undefined}>
+                                {formatBulletinPostProminentDate(post, 'short')}
                               </span>
                             </div>
                           </div>
@@ -995,21 +990,12 @@ export function BulletinBoard() {
                 {/* Details Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-3">
-                    {selectedPost.eventDate && (
+                    {!eventSignupTypes.has(selectedPost.type) && getBulletinPostEventAt(selectedPost) && (
                       <div className="flex items-start">
                         <Calendar className="h-5 w-5 text-gray-400 mr-3 mt-0.5" />
                         <div>
                           <p className="text-sm text-gray-500">Date</p>
-                          <p className="font-medium">{new Date(selectedPost.eventDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-                        </div>
-                      </div>
-                    )}
-                    {selectedPost.eventTime && (
-                      <div className="flex items-start">
-                        <Clock className="h-5 w-5 text-gray-400 mr-3 mt-0.5" />
-                        <div>
-                          <p className="text-sm text-gray-500">Time</p>
-                          <p className="font-medium">{selectedPost.eventTime}</p>
+                          <p className="font-medium">{formatBulletinPostProminentDate(selectedPost, 'detail')}</p>
                         </div>
                       </div>
                     )}

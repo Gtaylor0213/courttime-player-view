@@ -37,6 +37,7 @@ import type { HittingPartnerPostWithUser } from '../../src/types/database';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { EmptyState } from '../../src/components/EmptyState';
 import { createPollingTransport } from '../../../shared/api/sync';
+import { formatBulletinPostProminentDate } from '../../src/utils/bulletinPostDisplay';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
 import { Skeleton } from '../../src/components/Skeleton';
@@ -844,7 +845,7 @@ export default function CommunityScreen() {
           </>
         )}
         <Text style={styles.bulletinMeta}>
-          {post.authorName || 'Admin'} · {formatShortDate(post.createdAt || post.postedDate)}
+          {post.authorName || 'Admin'} · {formatBulletinPostProminentDate({ ...post, type: post.category }, 'short')}
         </Text>
       </Card>
     ),

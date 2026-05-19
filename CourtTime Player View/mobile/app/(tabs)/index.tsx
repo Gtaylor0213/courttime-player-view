@@ -28,6 +28,7 @@ import { QuickBook } from '../../src/components/QuickBook';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
+import { formatBulletinPostProminentDate } from '../../src/utils/bulletinPostDisplay';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import {
   addBookingToCalendarWithFeedback,
@@ -357,7 +358,7 @@ export default function HomeScreen() {
                 {post.content}
               </Text>
               <Text style={styles.bulletinMeta}>
-                {post.authorName} · {formatDate(post.postedDate)}
+                {post.authorName} · {formatBulletinPostProminentDate({ ...post, type: post.category }, 'short')}
               </Text>
             </View>
           ))

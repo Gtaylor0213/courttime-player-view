@@ -53,6 +53,13 @@ export interface ConnectPayment {
   createdAt: string;
 }
 
+export interface SavedPaymentMethod {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+}
+
 export function createPaymentApis(request: PaymentApiRequest) {
   return {
     paymentItems: {
@@ -69,6 +76,23 @@ export function createPaymentApis(request: PaymentApiRequest) {
         request('/api/payments/checkout', {
           method: 'POST',
           body: JSON.stringify(data),
+        }),
+      getPaymentMethod: (clubId: string) =>
+        request<SavedPaymentMethod | null>(
+          `/api/payments/payment-method?clubId=${encodeURIComponent(clubId)}`
+        ),
+      setupCheckout: (data: {
+        clubId: string;
+        successUrl?: string;
+        cancelUrl?: string;
+      }) =>
+        request('/api/payments/setup-checkout', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+      removePaymentMethod: (clubId: string) =>
+        request(`/api/payments/payment-method?clubId=${encodeURIComponent(clubId)}`, {
+          method: 'DELETE',
         }),
       myHistory: (clubId?: string) => {
         const qs = clubId ? `?clubId=${encodeURIComponent(clubId)}` : '';

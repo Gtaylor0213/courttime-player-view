@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -18,6 +19,7 @@ import {
   type PaymentItem,
   type PaymentCategory,
   type ConnectPayment,
+  type SavedPaymentMethod,
 } from '../api/client';
 import { useAppContext } from '../contexts/AppContext';
 import { toast } from 'sonner';
@@ -34,13 +36,32 @@ function dollars(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function formatCardBrand(brand: string): string {
+  return brand.charAt(0).toUpperCase() + brand.slice(1);
+}
+
 export function MemberPayments() {
   const { selectedFacilityId } = useAppContext();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<PaymentItem[]>([]);
   const [history, setHistory] = useState<ConnectPayment[]>([]);
+  const [savedCard, setSavedCard] = useState<SavedPaymentMethod | null>(null);
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [cardActionLoading, setCardActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const facilityLabel = selectedFacilityId
+    ? selectedFacilityId.replace(/-/g, ' ')
+    : null;
+
+  const loadSavedCard = useCallback(async (clubId: string) => {
+    const res = await connectPaymentsApi.getPaymentMethod(clubId);
+    if (res.success) {
+      const method: SavedPaymentMethod | null = res.data?.data ?? res.data ?? null;
+      setSavedCard(method && method.last4 ? method : null);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +73,7 @@ export function MemberPayments() {
         const [itemsRes, historyRes] = await Promise.all([
           paymentItemsApi.list(selectedFacilityId),
           connectPaymentsApi.myHistory(selectedFacilityId),
+          loadSavedCard(selectedFacilityId),
         ]);
         if (cancelled) return;
         if (itemsRes.success) {
@@ -74,7 +96,57 @@ export function MemberPayments() {
     return () => {
       cancelled = true;
     };
-  }, [selectedFacilityId]);
+  }, [selectedFacilityId, loadSavedCard]);
+
+  useEffect(() => {
+    if (searchParams.get('setup') !== 'success' || !selectedFacilityId) return;
+    void loadSavedCard(selectedFacilityId).then(() => {
+      toast.success('Card saved for faster checkout');
+      searchParams.delete('setup');
+      setSearchParams(searchParams, { replace: true });
+    });
+  }, [searchParams, selectedFacilityId, loadSavedCard, setSearchParams]);
+
+  const handleAddOrUpdateCard = async () => {
+    if (!selectedFacilityId) return;
+    try {
+      setCardActionLoading(true);
+      const base = window.location.origin;
+      const res = await connectPaymentsApi.setupCheckout({
+        clubId: selectedFacilityId,
+        successUrl: `${base}/payments?setup=success`,
+        cancelUrl: `${base}/payments`,
+      });
+      const url = res.data?.data?.url || res.data?.url;
+      if (res.success && url) {
+        window.location.href = url;
+        return;
+      }
+      toast.error(res.error || 'Could not start card setup');
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not start card setup');
+    } finally {
+      setCardActionLoading(false);
+    }
+  };
+
+  const handleRemoveCard = async () => {
+    if (!selectedFacilityId) return;
+    try {
+      setCardActionLoading(true);
+      const res = await connectPaymentsApi.removePaymentMethod(selectedFacilityId);
+      if (res.success) {
+        setSavedCard(null);
+        toast.success('Card removed');
+      } else {
+        toast.error(res.error || 'Could not remove card');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not remove card');
+    } finally {
+      setCardActionLoading(false);
+    }
+  };
 
   const handlePay = async (item: PaymentItem) => {
     try {
@@ -131,6 +203,56 @@ export function MemberPayments() {
           </div>
         ) : (
           <>
+            {selectedFacilityId && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Saved card</CardTitle>
+                  <CardDescription>
+                    {facilityLabel
+                      ? `Stored for this club (${facilityLabel}). Used to speed up checkout for dues, bookings, and events here.`
+                      : 'Stored for this club. Used to speed up checkout for dues, bookings, and events.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap items-center justify-between gap-3">
+                  {savedCard ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <CreditCard className="h-4 w-4 text-gray-500" />
+                      <span>
+                        {formatCardBrand(savedCard.brand)} ···· {savedCard.last4} · Exp{' '}
+                        {String(savedCard.expMonth).padStart(2, '0')}/{savedCard.expYear}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600">
+                      Add a card once and Stripe will pre-fill it when you pay this club.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={savedCard ? 'outline' : 'default'}
+                      onClick={handleAddOrUpdateCard}
+                      disabled={cardActionLoading}
+                    >
+                      {cardActionLoading
+                        ? 'Please wait…'
+                        : savedCard
+                          ? 'Update card'
+                          : 'Add card'}
+                    </Button>
+                    {savedCard && (
+                      <Button
+                        variant="ghost"
+                        onClick={handleRemoveCard}
+                        disabled={cardActionLoading}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {items.length === 0 ? (
               <Card>
                 <CardHeader>

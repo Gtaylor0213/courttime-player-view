@@ -22,6 +22,13 @@ export function memberPaymentCheckoutUrls() {
   };
 }
 
+export function memberPaymentSetupUrls() {
+  return {
+    successUrl: `${SCHEME}://payments?setup=success`,
+    cancelUrl: `${SCHEME}://payments`,
+  };
+}
+
 export function lockoutCheckoutUrls(facilityId: string) {
   return {
     successUrl: `${SCHEME}://lockout-paid?facilityId=${encodeURIComponent(facilityId)}&session_id={CHECKOUT_SESSION_ID}`,

@@ -12,8 +12,11 @@ import express from 'express';
 import { requireAuth } from '../middleware/auth';
 import {
   createMemberCheckoutSession,
+  createMemberSetupCheckoutSession,
+  detachMemberPaymentMethod,
   getClubPaymentHistory,
   getMemberPaymentHistory,
+  getMemberSavedPaymentMethod,
   getPaymentItem,
   isClubAdmin,
   isClubMember,
@@ -88,6 +91,85 @@ router.get('/history', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[CONNECT-PAYMENTS] history failed:', err);
     return res.status(500).json({ success: false, error: err.message || 'Failed to load history' });
+  }
+});
+
+/**
+ * GET /api/payments/payment-method?clubId=<id>
+ * Saved card summary for the member at this club.
+ */
+router.get('/payment-method', requireAuth, async (req, res) => {
+  try {
+    const clubId = String(req.query.clubId || '');
+    if (!clubId) {
+      return res.status(400).json({ success: false, error: 'clubId is required' });
+    }
+    const userId = req.user!.userId;
+    const member = await isClubMember(userId, clubId);
+    if (!member) {
+      return res.status(403).json({ success: false, error: 'Not a member of this club' });
+    }
+    const method = await getMemberSavedPaymentMethod(userId, clubId);
+    return res.json({ success: true, data: method });
+  } catch (err: any) {
+    console.error('[CONNECT-PAYMENTS] payment-method get failed:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to load payment method' });
+  }
+});
+
+/**
+ * POST /api/payments/setup-checkout
+ * Stripe Checkout (setup mode) to add or update saved card.
+ */
+router.post('/setup-checkout', requireAuth, async (req, res) => {
+  try {
+    const { clubId, successUrl, cancelUrl } = req.body || {};
+    if (!clubId) {
+      return res.status(400).json({ success: false, error: 'clubId is required' });
+    }
+    const userId = req.user!.userId;
+    const member = await isClubMember(userId, clubId);
+    if (!member) {
+      return res.status(403).json({ success: false, error: 'Not a member of this club' });
+    }
+    const base = defaultAppUrl();
+    const finalSuccessUrl =
+      successUrl || `${base}/payments?setup=success`;
+    const finalCancelUrl = cancelUrl || `${base}/payments`;
+
+    const { url } = await createMemberSetupCheckoutSession({
+      userId,
+      clubId,
+      successUrl: finalSuccessUrl,
+      cancelUrl: finalCancelUrl,
+    });
+    return res.json({ success: true, data: { url } });
+  } catch (err: any) {
+    console.error('[CONNECT-PAYMENTS] setup-checkout failed:', err);
+    return res.status(400).json({ success: false, error: err.message || 'Failed to start card setup' });
+  }
+});
+
+/**
+ * DELETE /api/payments/payment-method?clubId=<id>
+ * Remove saved card for this club.
+ */
+router.delete('/payment-method', requireAuth, async (req, res) => {
+  try {
+    const clubId = String(req.query.clubId || '');
+    if (!clubId) {
+      return res.status(400).json({ success: false, error: 'clubId is required' });
+    }
+    const userId = req.user!.userId;
+    const member = await isClubMember(userId, clubId);
+    if (!member) {
+      return res.status(403).json({ success: false, error: 'Not a member of this club' });
+    }
+    await detachMemberPaymentMethod(userId, clubId);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('[CONNECT-PAYMENTS] payment-method delete failed:', err);
+    return res.status(400).json({ success: false, error: err.message || 'Failed to remove card' });
   }
 });
 

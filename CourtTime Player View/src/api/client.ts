@@ -1555,6 +1555,13 @@ export const paymentItemsApi = {
   },
 };
 
+export interface SavedPaymentMethod {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+}
+
 export const connectPaymentsApi = {
   checkout: async (data: {
     paymentItemId: string;
@@ -1564,6 +1571,26 @@ export const connectPaymentsApi = {
     return apiRequest('/api/payments/checkout', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+  getPaymentMethod: async (clubId: string) => {
+    return apiRequest<SavedPaymentMethod | null>(
+      `/api/payments/payment-method?clubId=${encodeURIComponent(clubId)}`
+    );
+  },
+  setupCheckout: async (data: {
+    clubId: string;
+    successUrl?: string;
+    cancelUrl?: string;
+  }) => {
+    return apiRequest('/api/payments/setup-checkout', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  removePaymentMethod: async (clubId: string) => {
+    return apiRequest(`/api/payments/payment-method?clubId=${encodeURIComponent(clubId)}`, {
+      method: 'DELETE',
     });
   },
   // Admin — all payments for the club.

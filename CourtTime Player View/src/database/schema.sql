@@ -74,6 +74,12 @@ CREATE TABLE facility_memberships (
     start_date DATE NOT NULL,
     end_date DATE,
     suspended_until TIMESTAMP,
+    stripe_customer_id VARCHAR(255),
+    stripe_default_payment_method_id VARCHAR(255),
+    card_brand VARCHAR(20),
+    card_last4 VARCHAR(4),
+    card_exp_month INTEGER,
+    card_exp_year INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, facility_id)

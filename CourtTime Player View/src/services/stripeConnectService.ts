@@ -353,6 +353,261 @@ export async function getPaymentItem(id: string): Promise<PaymentItem | null> {
 }
 
 // ---------------------------------------------------------------------------
+// Saved payment methods (per member per club on connected account)
+// ---------------------------------------------------------------------------
+
+export interface SavedPaymentMethod {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+}
+
+export async function getMemberSavedPaymentMethod(
+  userId: string,
+  clubId: string
+): Promise<SavedPaymentMethod | null> {
+  const result = await query(
+    `SELECT stripe_default_payment_method_id, card_brand, card_last4, card_exp_month, card_exp_year
+       FROM facility_memberships
+      WHERE user_id = $1 AND facility_id = $2`,
+    [userId, clubId]
+  );
+  const row = result.rows[0];
+  if (!row?.stripe_default_payment_method_id || !row.card_last4) return null;
+  return {
+    brand: row.card_brand ?? 'card',
+    last4: row.card_last4,
+    expMonth: Number(row.card_exp_month),
+    expYear: Number(row.card_exp_year),
+  };
+}
+
+async function getConnectCustomerIdIfExists(
+  userId: string,
+  clubId: string
+): Promise<string | null> {
+  const result = await query(
+    `SELECT stripe_customer_id FROM facility_memberships
+      WHERE user_id = $1 AND facility_id = $2`,
+    [userId, clubId]
+  );
+  const id = result.rows[0]?.stripe_customer_id;
+  return id ? String(id) : null;
+}
+
+/** Checkout session fields when a Connect customer already exists for the member. */
+export function buildConnectCheckoutCustomerOptions(
+  customerId: string | null
+): { customer?: string } {
+  return customerId ? { customer: customerId } : {};
+}
+
+async function connectCheckoutCustomerOptions(
+  memberId: string,
+  clubId: string
+): Promise<{ customer?: string }> {
+  const customerId = await getConnectCustomerIdIfExists(memberId, clubId);
+  return buildConnectCheckoutCustomerOptions(customerId);
+}
+
+export async function getOrCreateConnectCustomer(
+  userId: string,
+  clubId: string
+): Promise<string> {
+  const existing = await getConnectCustomerIdIfExists(userId, clubId);
+  if (existing) return existing;
+
+  const stripe = getStripe();
+  if (!stripe) throw new Error('Stripe is not configured on this server');
+
+  const clubResult = await query(
+    `SELECT stripe_account_id, stripe_onboarded FROM facilities WHERE id = $1`,
+    [clubId]
+  );
+  if (clubResult.rows.length === 0) throw new Error('Club not found');
+  const club = clubResult.rows[0];
+  if (!club.stripe_account_id || !club.stripe_onboarded) {
+    throw new Error('This club has not finished Stripe Connect onboarding yet');
+  }
+
+  const userResult = await query(
+    `SELECT email, full_name FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (userResult.rows.length === 0) throw new Error('User not found');
+  const user = userResult.rows[0];
+
+  const customer = await stripe.customers.create(
+    {
+      email: user.email ?? undefined,
+      name: user.full_name ?? undefined,
+      metadata: { userId, clubId },
+    },
+    { stripeAccount: club.stripe_account_id }
+  );
+
+  await query(
+    `UPDATE facility_memberships
+        SET stripe_customer_id = $3, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND facility_id = $2`,
+    [userId, clubId, customer.id]
+  );
+
+  return customer.id;
+}
+
+export async function createMemberSetupCheckoutSession(params: {
+  userId: string;
+  clubId: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<{ url: string }> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error('Stripe is not configured on this server');
+
+  const clubResult = await query(
+    `SELECT stripe_account_id, stripe_onboarded FROM facilities WHERE id = $1`,
+    [params.clubId]
+  );
+  if (clubResult.rows.length === 0) throw new Error('Club not found');
+  const club = clubResult.rows[0];
+  if (!club.stripe_account_id || !club.stripe_onboarded) {
+    throw new Error('This club has not finished Stripe Connect onboarding yet');
+  }
+
+  const customerId = await getOrCreateConnectCustomer(params.userId, params.clubId);
+
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: 'setup',
+      customer: customerId,
+      payment_method_types: ['card'],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      metadata: {
+        purpose: 'member_setup',
+        userId: params.userId,
+        clubId: params.clubId,
+      },
+    },
+    { stripeAccount: club.stripe_account_id }
+  );
+
+  if (!session.url) throw new Error('Stripe did not return a Checkout URL');
+  return { url: session.url };
+}
+
+export async function syncMemberPaymentMethodFromSetupSession(
+  session: Stripe.Checkout.Session
+): Promise<void> {
+  if (session.mode !== 'setup' || session.metadata?.purpose !== 'member_setup') return;
+
+  const userId = session.metadata?.userId;
+  const clubId = session.metadata?.clubId;
+  if (!userId || !clubId) return;
+
+  const stripe = getStripe();
+  if (!stripe) return;
+
+  const clubResult = await query(
+    `SELECT stripe_account_id FROM facilities WHERE id = $1`,
+    [clubId]
+  );
+  const stripeAccount = clubResult.rows[0]?.stripe_account_id as string | undefined;
+  if (!stripeAccount) return;
+
+  const setupIntentId =
+    typeof session.setup_intent === 'string'
+      ? session.setup_intent
+      : session.setup_intent?.id;
+  if (!setupIntentId) return;
+
+  const setupIntent = await stripe.setupIntents.retrieve(setupIntentId, {
+    stripeAccount,
+  });
+  const pmId =
+    typeof setupIntent.payment_method === 'string'
+      ? setupIntent.payment_method
+      : setupIntent.payment_method?.id;
+  if (!pmId) return;
+
+  const customerId =
+    typeof session.customer === 'string' ? session.customer : session.customer?.id;
+  if (customerId) {
+    await stripe.customers.update(
+      customerId,
+      { invoice_settings: { default_payment_method: pmId } },
+      { stripeAccount }
+    );
+  }
+
+  const pm = await stripe.paymentMethods.retrieve(pmId, { stripeAccount });
+  const card = pm.card;
+  if (!card) return;
+
+  await query(
+    `UPDATE facility_memberships
+        SET stripe_customer_id = COALESCE(stripe_customer_id, $3),
+            stripe_default_payment_method_id = $4,
+            card_brand = $5,
+            card_last4 = $6,
+            card_exp_month = $7,
+            card_exp_year = $8,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND facility_id = $2`,
+    [
+      userId,
+      clubId,
+      customerId ?? null,
+      pmId,
+      card.brand,
+      card.last4,
+      card.exp_month,
+      card.exp_year,
+    ]
+  );
+}
+
+export async function detachMemberPaymentMethod(userId: string, clubId: string): Promise<void> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error('Stripe is not configured on this server');
+
+  const membership = await query(
+    `SELECT fm.stripe_default_payment_method_id, f.stripe_account_id
+       FROM facility_memberships fm
+       JOIN facilities f ON f.id = fm.facility_id
+      WHERE fm.user_id = $1 AND fm.facility_id = $2`,
+    [userId, clubId]
+  );
+  const row = membership.rows[0];
+  if (!row) throw new Error('Membership not found');
+
+  const pmId = row.stripe_default_payment_method_id as string | null;
+  const stripeAccount = row.stripe_account_id as string | null;
+
+  if (pmId && stripeAccount) {
+    try {
+      await stripe.paymentMethods.detach(pmId, { stripeAccount });
+    } catch (err: any) {
+      if (err?.code !== 'resource_missing') throw err;
+    }
+  }
+
+  await query(
+    `UPDATE facility_memberships
+        SET stripe_default_payment_method_id = NULL,
+            card_brand = NULL,
+            card_last4 = NULL,
+            card_exp_month = NULL,
+            card_exp_year = NULL,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND facility_id = $2`,
+    [userId, clubId]
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Checkout (direct charges on the connected account)
 // ---------------------------------------------------------------------------
 
@@ -404,11 +659,13 @@ export async function createMemberCheckoutSession(params: {
     [item.clubId, params.memberId, item.id, item.amountCents, platformFeeCents]
   );
   const paymentId: string = insertResult.rows[0].id;
+  const customerOpts = await connectCheckoutCustomerOptions(params.memberId, item.clubId);
 
   const session = await stripe.checkout.sessions.create(
     {
       mode: item.isRecurring ? 'subscription' : 'payment',
       payment_method_types: ['card'],
+      ...customerOpts,
       line_items: [
         {
           quantity: 1,
@@ -554,10 +811,15 @@ export async function createBulletinSignupCheckoutSession(params: {
   const paymentId: string = insertResult.rows[0].id;
 
   const eventLabel = post.title || 'Event signup';
+  const customerOpts = await connectCheckoutCustomerOptions(
+    params.memberId,
+    post.facility_id
+  );
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'payment',
       payment_method_types: ['card'],
+      ...customerOpts,
       line_items: [
         {
           quantity: 1,
@@ -723,10 +985,15 @@ export async function createCourtBookingCheckoutSession(params: {
       },
     });
   }
+  const customerOpts = await connectCheckoutCustomerOptions(
+    params.memberId,
+    court.facility_id
+  );
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'payment',
       payment_method_types: ['card'],
+      ...customerOpts,
       line_items: lineItems,
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
@@ -870,10 +1137,16 @@ export async function createLockoutCheckoutSession(params: {
     [params.facilityId, params.memberId, params.amountCents, platformFeeCents]
   );
   const connectPaymentId: string = insertResult.rows[0].id;
+  const customerOpts = await connectCheckoutCustomerOptions(
+    params.memberId,
+    params.facilityId
+  );
 
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'payment',
+      payment_method_types: ['card'],
+      ...customerOpts,
       line_items: [
         {
           quantity: 1,
@@ -1012,6 +1285,11 @@ export async function confirmLockoutCheckout(params: {
 }
 
 export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session): Promise<void> {
+  if (session.mode === 'setup' && session.metadata?.purpose === 'member_setup') {
+    await syncMemberPaymentMethodFromSetupSession(session);
+    return;
+  }
+
   const paymentId = session.metadata?.connectPaymentId;
   const paymentIntentId =
     typeof session.payment_intent === 'string' ? session.payment_intent : null;

@@ -198,9 +198,17 @@ html {
   scrollbar-color: #94a3b8 #e2e8f0; /* Firefox: thumb track */
   /* Keeps overscroll in the grid; reduces parent pull-to-refresh / rubber-band on phones */
   overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* Mobile court body: horizontal swipe only; vertical scroll passes to parent */
+.calendar-court-body-scroll {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
 }
 
 /* Active vertical slot drag on mobile web — matches native scroll lock */

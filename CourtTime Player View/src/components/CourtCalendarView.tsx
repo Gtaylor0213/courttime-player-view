@@ -137,10 +137,9 @@ export function CourtCalendarView() {
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const calendarGridRef = useRef<HTMLTableElement>(null);
   const headerRowRef = useRef<HTMLTableRowElement | HTMLDivElement>(null);
-  /** Mobile: fixed time column (vertical scroll only, synced with court grid). */
-  const timeScrollRef = useRef<HTMLDivElement>(null);
-  /** Mobile: court headers scroll horizontally in sync with the court grid. */
+  /** Mobile: court headers / body horizontal scroll (synced). */
   const courtHeaderScrollRef = useRef<HTMLDivElement>(null);
+  const courtHorizontalScrollRef = useRef<HTMLDivElement>(null);
   const scrollSyncLockRef = useRef(false);
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState<number>(HEADER_HEIGHT);
   const [bookingWizard, setBookingWizard] = useState({
@@ -1816,47 +1815,30 @@ export function CourtCalendarView() {
 
 
 
-  const handleCourtGridScroll = useCallback(() => {
-    if (scrollSyncLockRef.current) return;
-    const courtEl = calendarScrollRef.current;
-    if (!courtEl) return;
-
-    scrollSyncLockRef.current = true;
-    if (isMobile) {
-      if (courtHeaderScrollRef.current) {
-        courtHeaderScrollRef.current.scrollLeft = courtEl.scrollLeft;
-      }
-      if (timeScrollRef.current) {
-        timeScrollRef.current.scrollTop = courtEl.scrollTop;
-      }
-    }
-    scrollSyncLockRef.current = false;
-  }, [isMobile]);
-
-  const handleTimeColumnScroll = useCallback(() => {
+  const handleCourtHorizontalScroll = useCallback(() => {
     if (!isMobile || scrollSyncLockRef.current) return;
-    const courtEl = calendarScrollRef.current;
-    const timeEl = timeScrollRef.current;
-    if (!courtEl || !timeEl) return;
+    const bodyEl = courtHorizontalScrollRef.current;
+    const headerEl = courtHeaderScrollRef.current;
+    if (!bodyEl || !headerEl) return;
 
     scrollSyncLockRef.current = true;
-    courtEl.scrollTop = timeEl.scrollTop;
+    headerEl.scrollLeft = bodyEl.scrollLeft;
     scrollSyncLockRef.current = false;
   }, [isMobile]);
 
   const handleCourtHeaderScroll = useCallback(() => {
     if (!isMobile || scrollSyncLockRef.current) return;
-    const courtEl = calendarScrollRef.current;
+    const bodyEl = courtHorizontalScrollRef.current;
     const headerEl = courtHeaderScrollRef.current;
-    if (!courtEl || !headerEl) return;
+    if (!bodyEl || !headerEl) return;
 
     scrollSyncLockRef.current = true;
-    courtEl.scrollLeft = headerEl.scrollLeft;
+    bodyEl.scrollLeft = headerEl.scrollLeft;
     scrollSyncLockRef.current = false;
   }, [isMobile]);
 
   // Function to scroll to current time
-  const scrollToCurrentTime = useCallback(() => {
+  const scrollToCurrentTime = useCallback((opts?: { reliable?: boolean }) => {
     if (!calendarScrollRef.current || currentTimeLinePosition === null) return;
 
     const container = calendarScrollRef.current;
@@ -1868,15 +1850,31 @@ export function CourtCalendarView() {
     const actualPosition = currentTimeLinePosition + headerHeight;
     const nowLineFromTop = Math.max(56, containerHeight * 0.12);
     const scrollPosition = Math.max(0, actualPosition - nowLineFromTop);
-    container.scrollTo({
-      top: scrollPosition,
-      behavior: 'smooth'
-    });
-    if (isMobile && timeScrollRef.current) {
-      timeScrollRef.current.scrollTo({
-        top: scrollPosition,
-        behavior: 'smooth'
+    const maxScroll = Math.max(0, container.scrollHeight - containerHeight);
+    const clampedPosition = Math.min(scrollPosition, maxScroll);
+
+    const applyScroll = () => {
+      if (!calendarScrollRef.current) return;
+      const useSmooth = !opts?.reliable && !isMobile;
+      calendarScrollRef.current.scrollTo({
+        top: clampedPosition,
+        behavior: useSmooth ? 'smooth' : 'auto',
       });
+      // Direct assignment helps iOS when scrollTo runs before layout is final
+      calendarScrollRef.current.scrollTop = clampedPosition;
+    };
+
+    if (isMobile || opts?.reliable) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          applyScroll();
+          setTimeout(applyScroll, 50);
+          setTimeout(applyScroll, 160);
+          setTimeout(applyScroll, 320);
+        });
+      });
+    } else {
+      applyScroll();
     }
   }, [currentTimeLinePosition, measuredHeaderHeight, isMobile]);
 
@@ -1898,14 +1896,14 @@ export function CourtCalendarView() {
     if (!calendarScrollRef.current) return;
     const timer = setTimeout(() => {
       if (isToday(selectedDate) && currentTimeLinePosition !== null) {
-        scrollToCurrentTime();
+        scrollToCurrentTime({ reliable: isMobile });
+        if (isMobile) {
+          setTimeout(() => scrollToCurrentTime({ reliable: true }), 140);
+        }
       } else {
         calendarScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-        if (isMobile) {
-          timeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-        }
       }
-    }, 150);
+    }, isMobile ? 300 : 150);
     return () => clearTimeout(timer);
   }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger, isMobile]);
 
@@ -2678,38 +2676,41 @@ export function CourtCalendarView() {
               </div>
             </div>
 
-            <div className="flex flex-1 min-h-0 min-w-0">
+            <div
+              ref={calendarScrollRef}
+              className={`calendar-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain${calendarTouchLocked ? ' calendar-scroll--touch-locked' : ''}`}
+            >
               <div
-                ref={timeScrollRef}
-                className="shrink-0 overflow-y-auto overflow-x-hidden calendar-time-col-sync relative z-20"
-                style={{ width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth }}
-                onScroll={handleTimeColumnScroll}
+                className="flex min-w-0"
+                style={{ height: visibleTimeSlots.length * effectiveRowHeight }}
               >
-                <div className="relative" style={{ height: visibleTimeSlots.length * effectiveRowHeight }}>
+                <div
+                  className="shrink-0 relative z-20 bg-green-50 border-r border-green-100"
+                  style={{ width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth }}
+                >
                   {visibleTimeSlots.map((time30, visibleIdx) => renderTimeLabelRow(visibleIdx, time30, false))}
                   {renderCurrentTimeIndicator(0, true)}
                 </div>
-              </div>
-
-              <div
-                ref={calendarScrollRef}
-                className={`calendar-scroll flex-1 overflow-auto relative overscroll-y-contain min-w-0${calendarTouchLocked ? ' calendar-scroll--touch-locked' : ''}`}
-                onScroll={handleCourtGridScroll}
-              >
-                <table
-                  ref={calendarGridRef}
-                  style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: courtGridWidth }}
+                <div
+                  ref={courtHorizontalScrollRef}
+                  className="calendar-court-body-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden relative"
+                  onScroll={handleCourtHorizontalScroll}
                 >
-                  <tbody>
-                    {visibleTimeSlots.map((time30, visibleIdx) => (
-                      <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
-                        {renderCourtCellsForRow(visibleIdx)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {renderBookingOverlayLayer(0)}
-                {renderMobileCurrentTimeLine()}
+                  <table
+                    ref={calendarGridRef}
+                    style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: courtGridWidth }}
+                  >
+                    <tbody>
+                      {visibleTimeSlots.map((time30, visibleIdx) => (
+                        <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
+                          {renderCourtCellsForRow(visibleIdx)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {renderBookingOverlayLayer(0)}
+                  {renderMobileCurrentTimeLine()}
+                </div>
               </div>
             </div>
           </div>

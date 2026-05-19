@@ -136,7 +136,12 @@ export function CourtCalendarView() {
   const [loadingBookings, setLoadingBookings] = useState(false);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const calendarGridRef = useRef<HTMLTableElement>(null);
-  const headerRowRef = useRef<HTMLTableRowElement>(null);
+  const headerRowRef = useRef<HTMLTableRowElement | HTMLDivElement>(null);
+  /** Mobile: fixed time column (vertical scroll only, synced with court grid). */
+  const timeScrollRef = useRef<HTMLDivElement>(null);
+  /** Mobile: court headers scroll horizontally in sync with the court grid. */
+  const courtHeaderScrollRef = useRef<HTMLDivElement>(null);
+  const scrollSyncLockRef = useRef(false);
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState<number>(HEADER_HEIGHT);
   const [bookingWizard, setBookingWizard] = useState({
     isOpen: false,
@@ -1013,7 +1018,7 @@ export function CourtCalendarView() {
     updateHeaderHeight();
     window.addEventListener('resize', updateHeaderHeight);
     return () => window.removeEventListener('resize', updateHeaderHeight);
-  }, [courts.length, effectiveHeaderHeight, effectiveCourtWidth, zoomLevel]);
+  }, [courts.length, effectiveHeaderHeight, effectiveCourtWidth, zoomLevel, isMobile]);
 
   // Fetch peak-hours configs for visible courts
   useEffect(() => {
@@ -1420,7 +1425,7 @@ export function CourtCalendarView() {
 
       if (y < headerH) return null;
 
-      const courtAreaX = x - effectiveTimeColWidth;
+      const courtAreaX = isMobile ? x : x - effectiveTimeColWidth;
       if (courtAreaX < 0) return null;
 
       const courtIndex = Math.floor(courtAreaX / effectiveCourtWidth);
@@ -1438,6 +1443,7 @@ export function CourtCalendarView() {
       effectiveSubSlotHeight,
       effectiveTimeColWidth,
       measuredHeaderHeight,
+      isMobile,
     ]
   );
 
@@ -1810,13 +1816,52 @@ export function CourtCalendarView() {
 
 
 
+  const handleCourtGridScroll = useCallback(() => {
+    if (scrollSyncLockRef.current) return;
+    const courtEl = calendarScrollRef.current;
+    if (!courtEl) return;
+
+    scrollSyncLockRef.current = true;
+    if (isMobile) {
+      if (courtHeaderScrollRef.current) {
+        courtHeaderScrollRef.current.scrollLeft = courtEl.scrollLeft;
+      }
+      if (timeScrollRef.current) {
+        timeScrollRef.current.scrollTop = courtEl.scrollTop;
+      }
+    }
+    scrollSyncLockRef.current = false;
+  }, [isMobile]);
+
+  const handleTimeColumnScroll = useCallback(() => {
+    if (!isMobile || scrollSyncLockRef.current) return;
+    const courtEl = calendarScrollRef.current;
+    const timeEl = timeScrollRef.current;
+    if (!courtEl || !timeEl) return;
+
+    scrollSyncLockRef.current = true;
+    courtEl.scrollTop = timeEl.scrollTop;
+    scrollSyncLockRef.current = false;
+  }, [isMobile]);
+
+  const handleCourtHeaderScroll = useCallback(() => {
+    if (!isMobile || scrollSyncLockRef.current) return;
+    const courtEl = calendarScrollRef.current;
+    const headerEl = courtHeaderScrollRef.current;
+    if (!courtEl || !headerEl) return;
+
+    scrollSyncLockRef.current = true;
+    courtEl.scrollLeft = headerEl.scrollLeft;
+    scrollSyncLockRef.current = false;
+  }, [isMobile]);
+
   // Function to scroll to current time
   const scrollToCurrentTime = useCallback(() => {
     if (!calendarScrollRef.current || currentTimeLinePosition === null) return;
 
     const container = calendarScrollRef.current;
     const containerHeight = container.clientHeight;
-    const headerHeight = measuredHeaderHeight;
+    const headerHeight = isMobile ? 0 : measuredHeaderHeight;
 
     // Scroll so the "now" line sits in the upper part of the viewport so more upcoming
     // slots are visible (past grey + red line styling unchanged — only scroll bias).
@@ -1827,7 +1872,13 @@ export function CourtCalendarView() {
       top: scrollPosition,
       behavior: 'smooth'
     });
-  }, [currentTimeLinePosition, measuredHeaderHeight]);
+    if (isMobile && timeScrollRef.current) {
+      timeScrollRef.current.scrollTo({
+        top: scrollPosition,
+        behavior: 'smooth'
+      });
+    }
+  }, [currentTimeLinePosition, measuredHeaderHeight, isMobile]);
 
   // Trigger auto-scroll on mount (page navigation)
   useEffect(() => {
@@ -1850,10 +1901,405 @@ export function CourtCalendarView() {
         scrollToCurrentTime();
       } else {
         calendarScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        if (isMobile) {
+          timeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        }
       }
     }, 150);
     return () => clearTimeout(timer);
-  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger]);
+  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger, isMobile]);
+
+  const courtGridWidth = courts.length * effectiveCourtWidth;
+  const calendarGridHeight = measuredHeaderHeight + visibleTimeSlots.length * effectiveRowHeight;
+
+  const renderTimeLabelRow = (visibleIdx: number, time30: string, asTableCell: boolean) => {
+    const isHourLabel = time30.endsWith(':00 AM') || time30.endsWith(':00 PM');
+    const rowStartMinute = parseInt(time30.split(' ')[0].split(':')[1], 10);
+    const rowEndsOnHour = Number.isFinite(rowStartMinute) && ((rowStartMinute + 30) % 60 === 0);
+    const bottomTime = allTimeSlots[visibleIdx * 2 + 1];
+    const borderBottom = rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb';
+    const content = (
+      <>
+        {bottomTime && (
+          <div
+            className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-dashed border-gray-200"
+            style={{ top: effectiveSubSlotHeight }}
+          />
+        )}
+        <div
+          className="relative z-[2] flex items-center justify-center px-2"
+          style={{
+            height: bottomTime ? effectiveSubSlotHeight : effectiveRowHeight,
+          }}
+        >
+          <span className={`text-xs whitespace-nowrap ${isHourLabel ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+            {time30}
+          </span>
+        </div>
+      </>
+    );
+
+    if (asTableCell) {
+      return (
+        <td
+          className="sticky left-0 z-10 bg-green-50 border-r border-green-100 p-0"
+          style={{
+            width: effectiveTimeColWidth,
+            minWidth: effectiveTimeColWidth,
+            verticalAlign: 'top',
+            position: 'relative',
+            borderBottom,
+          }}
+        >
+          {content}
+        </td>
+      );
+    }
+
+    return (
+      <div
+        key={visibleIdx}
+        className="relative bg-green-50 border-r border-green-100 shrink-0"
+        style={{
+          width: effectiveTimeColWidth,
+          minWidth: effectiveTimeColWidth,
+          height: effectiveRowHeight,
+          borderBottom,
+        }}
+      >
+        {content}
+      </div>
+    );
+  };
+
+  const renderCourtCellsForRow = (visibleIdx: number) => {
+    const time30 = visibleTimeSlots[visibleIdx];
+    const rowStartMinute = parseInt(time30.split(' ')[0].split(':')[1], 10);
+    const rowEndsOnHour = Number.isFinite(rowStartMinute) && ((rowStartMinute + 30) % 60 === 0);
+    const topTime = allTimeSlots[visibleIdx * 2];
+    const bottomTime = allTimeSlots[visibleIdx * 2 + 1];
+
+    return courts.map((court, courtIndex) => {
+      const topBooking = bookings[court.name as keyof typeof bookings]?.[topTime];
+      const bottomBooking = bottomTime ? bookings[court.name as keyof typeof bookings]?.[bottomTime] : null;
+      const topBlocked = topBooking?.type === 'blocked';
+      const bottomBlocked = bottomBooking?.type === 'blocked';
+      const topPast = isPastTime(topTime);
+      const bottomPast = bottomTime ? isPastTime(bottomTime) : false;
+      const topSelected = dragState.selectedCells.has(`${court.name}|${topTime}`);
+      const bottomSelected = bottomTime ? dragState.selectedCells.has(`${court.name}|${bottomTime}`) : false;
+      const topPrime = isPrimeTimeSlot(court.id, topTime);
+      const bottomPrime = bottomTime ? isPrimeTimeSlot(court.id, bottomTime) : false;
+      const isWalkUpCourt = court.isWalkUp === true;
+      const topOutsideCourt =
+        !isWalkUpCourt &&
+        !topBooking &&
+        !!(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime));
+      const bottomOutsideCourt =
+        !!bottomTime &&
+        !isWalkUpCourt &&
+        !bottomBooking &&
+        !!(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime));
+
+      return (
+        <td
+          key={courtIndex}
+          className="relative border-r border-gray-200 last:border-r-0 p-0"
+          style={{
+            width: effectiveCourtWidth,
+            minWidth: effectiveCourtWidth,
+            height: effectiveRowHeight,
+            verticalAlign: 'top',
+            borderBottom: rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
+          }}
+        >
+          {bottomTime && (
+            <div
+              className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-gray-200"
+              style={{ top: effectiveSubSlotHeight }}
+            />
+          )}
+          <div
+            data-slot-court={court.name}
+            data-slot-time={topTime}
+            className={`absolute top-0 left-0 right-0 select-none ${!isMobile || calendarTouchLocked ? 'touch-none' : ''}
+              ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
+              ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
+              ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
+              ${!isWalkUpCourt && !topOutsideCourt && topPast && !topBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
+              ${!isWalkUpCourt && !topOutsideCourt && !topPast && !topBooking && !topBlocked ? `cursor-pointer ${topPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
+              ${topBooking && !topBlocked ? 'cursor-pointer' : ''}
+              ${topSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
+            `}
+            style={{ height: effectiveSubSlotHeight }}
+            onClick={() => {
+              if (dragJustFinishedRef.current) return;
+              if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
+              if (court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) return;
+              if (topBlocked || (topPast && !topBooking)) return;
+              if (topBooking) handleBookingClick(court.name, topTime);
+              else handleEmptySlotClick(court.name, topTime);
+            }}
+            onPointerDown={(e) =>
+              !isWalkUpCourt &&
+              !topBooking &&
+              !topPast &&
+              !topBlocked &&
+              !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
+              handlePointerDown(court.name, topTime, e)
+            }
+            onPointerEnter={() =>
+              !isWalkUpCourt &&
+              !topPast &&
+              !topBlocked &&
+              !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
+              extendDragSelection(court.name, topTime)
+            }
+          />
+          {bottomTime && (
+            <div
+              data-slot-court={court.name}
+              data-slot-time={bottomTime}
+              className={`absolute left-0 right-0 select-none ${!isMobile || calendarTouchLocked ? 'touch-none' : ''}
+                ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
+                ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
+                ${!isWalkUpCourt && !bottomOutsideCourt && bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
+                ${!isWalkUpCourt && !bottomOutsideCourt && bottomPast && !bottomBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
+                ${!isWalkUpCourt && !bottomOutsideCourt && !bottomPast && !bottomBooking && !bottomBlocked ? `cursor-pointer ${bottomPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
+                ${bottomBooking && !bottomBlocked ? 'cursor-pointer' : ''}
+                ${bottomSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
+              `}
+              style={{ top: effectiveSubSlotHeight, height: effectiveSubSlotHeight }}
+              onClick={() => {
+                if (dragJustFinishedRef.current) return;
+                if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
+                if (court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) return;
+                if (bottomBlocked || (bottomPast && !bottomBooking)) return;
+                if (bottomBooking) handleBookingClick(court.name, bottomTime);
+                else handleEmptySlotClick(court.name, bottomTime);
+              }}
+              onPointerDown={(e) =>
+                !isWalkUpCourt &&
+                !bottomBooking &&
+                !bottomPast &&
+                !bottomBlocked &&
+                !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
+                handlePointerDown(court.name, bottomTime, e)
+              }
+              onPointerEnter={() =>
+                !isWalkUpCourt &&
+                !bottomPast &&
+                !bottomBlocked &&
+                !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
+                extendDragSelection(court.name, bottomTime)
+              }
+            />
+          )}
+        </td>
+      );
+    });
+  };
+
+  const renderCourtHeaderCells = () =>
+    courts.map((court, index) => (
+      <th
+        key={index}
+        className="sticky top-0 z-30 bg-gradient-to-b from-green-600 to-green-700 text-white border-r border-b-2 border-green-800 last:border-r-0 px-2 py-1 text-left font-normal"
+        style={{ width: effectiveCourtWidth, minWidth: effectiveCourtWidth, height: effectiveHeaderHeight, verticalAlign: 'middle' }}
+      >
+        <div className="truncate font-semibold text-xs leading-tight text-white">
+          {court.name}
+        </div>
+        <div className="truncate text-[10px] leading-none text-green-200 capitalize">
+          {court.type}
+          {court.isWalkUp ? ' - Walk-up' : ''}
+        </div>
+      </th>
+    ));
+
+  const renderMobileCourtHeaderCells = () =>
+    courts.map((court, index) => (
+      <div
+        key={index}
+        className="shrink-0 bg-gradient-to-b from-green-600 to-green-700 text-white border-r border-b-2 border-green-800 last:border-r-0 px-2 py-1 text-left"
+        style={{ width: effectiveCourtWidth, minWidth: effectiveCourtWidth, height: effectiveHeaderHeight }}
+      >
+        <div className="truncate font-semibold text-xs leading-tight text-white">
+          {court.name}
+        </div>
+        <div className="truncate text-[10px] leading-none text-green-200 capitalize">
+          {court.type}
+          {court.isWalkUp ? ' - Walk-up' : ''}
+        </div>
+      </div>
+    ));
+
+  const renderBookingOverlayLayer = (timeColOffset: number) => (
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: timeColOffset + courtGridWidth,
+        height: calendarGridHeight - (isMobile ? measuredHeaderHeight : 0),
+        zIndex: 5,
+        pointerEvents: 'none',
+        overflow: 'visible',
+      }}
+    >
+      {bookingOverlays.map((overlay, idx) => {
+        const { booking } = overlay;
+        const isBlocked = booking.type === 'blocked';
+        const parseMinutes = (timeValue?: string): number | null => {
+          if (!timeValue || typeof timeValue !== 'string') return null;
+          const [h, m] = timeValue.split(':').map(Number);
+          if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+          return h * 60 + m;
+        };
+        const bookingStartMinutes = parseMinutes(booking.startTime);
+        const bookingEndMinutes = parseMinutes(booking.endTime);
+        const dayStartMinutesForOverlay = dayStartMinutes;
+        const hasExactRange = bookingStartMinutes !== null
+          && bookingEndMinutes !== null
+          && bookingEndMinutes > bookingStartMinutes;
+        const top = hasExactRange
+          ? (isMobile ? 0 : measuredHeaderHeight) + ((bookingStartMinutes - dayStartMinutesForOverlay) / 15) * effectiveSubSlotHeight + (isBlocked ? 0 : 2)
+          : (isMobile ? 0 : measuredHeaderHeight) + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
+        const left = timeColOffset + overlay.courtIndex * effectiveCourtWidth + (isBlocked ? 0 : 4);
+        const width = effectiveCourtWidth - (isBlocked ? 0 : 8);
+        const height = hasExactRange
+          ? (((bookingEndMinutes - bookingStartMinutes) / 15) * effectiveSubSlotHeight) - (isBlocked ? 0 : 4)
+          : overlay.slotCount * effectiveSubSlotHeight - (isBlocked ? 0 : 4);
+        const colorClass = isBlocked
+          ? 'bg-gray-200 text-gray-500 border-0'
+          : booking.bookingType
+            ? getBookingTypeBadgeColor(booking.bookingType)
+            : 'bg-blue-50 text-blue-900 border-blue-200';
+
+        return (
+          <div
+            key={`booking-${booking.bookingId || idx}`}
+            className={`absolute ${isBlocked ? '' : 'rounded-lg border cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${colorClass}`}
+            style={{
+              top,
+              left,
+              width,
+              height,
+              transform: 'none',
+              filter: 'none',
+              boxShadow: isBlocked
+                ? 'none'
+                : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
+            }}
+            onClick={() => !isBlocked && handleBookingClick(overlay.courtName, allTimeSlots[overlay.startSlotIndex])}
+          >
+            <div className={`${isBlocked ? 'px-1.5 py-1' : 'px-2 py-1'} h-full flex flex-col overflow-hidden`}>
+              <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>
+              {height > 28 && (
+                <div className="text-[10px] opacity-75 mt-0.5">
+                  {booking.duration}
+                  {booking.bookingType && (
+                    <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-medium bg-white/50">
+                      {getBookingTypeLabel(booking.bookingType)}
+                    </span>
+                  )}
+                </div>
+              )}
+              {booking.notes && height > effectiveSubSlotHeight * 3 && (
+                <div className="text-[9px] mt-1 truncate italic opacity-70">
+                  {booking.notes.length > 30 ? `${booking.notes.substring(0, 30)}...` : booking.notes}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderCurrentTimeIndicator = (timeColOffset: number, showLabelInTimeColumn: boolean) => {
+    if (currentTimeLinePosition === null) return null;
+
+    const lineTop = currentTimeLinePosition + (showLabelInTimeColumn ? 0 : measuredHeaderHeight);
+
+    if (showLabelInTimeColumn) {
+      return (
+        <div
+          className="pointer-events-none absolute left-0 right-0"
+          style={{
+            top: `${lineTop}px`,
+            height: '2px',
+            zIndex: 20,
+          }}
+        >
+          <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-[25]">
+            <div className="bg-white border border-red-400 text-gray-800 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md whitespace-nowrap">
+              {formatCurrentTime(facilityTimezone)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className="pointer-events-none"
+        style={{
+          position: 'absolute',
+          top: `${lineTop}px`,
+          left: 0,
+          right: 0,
+          zIndex: 20,
+          height: '2px',
+        }}
+      >
+        <div
+          className="sticky left-0 inline-flex items-center"
+          style={{ zIndex: 25 }}
+        >
+          <div className="bg-white border border-red-400 text-gray-800 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md">
+            {formatCurrentTime(facilityTimezone)}
+          </div>
+        </div>
+        <div
+          className="absolute bg-red-600"
+          style={{
+            left: `${timeColOffset}px`,
+            right: 0,
+            top: '50%',
+            height: '2px',
+            transform: 'translateY(-50%)',
+            boxShadow: '0 0 6px rgba(220, 38, 38, 0.6)',
+          }}
+        />
+        <div
+          className="absolute w-3 h-3 bg-red-600 rounded-full border-2 border-white shadow-md"
+          style={{
+            left: `${timeColOffset - 6}px`,
+            top: '50%',
+            transform: 'translateY(-50%)',
+          }}
+        />
+      </div>
+    );
+  };
+
+  const renderMobileCurrentTimeLine = () => {
+    if (currentTimeLinePosition === null) return null;
+    return (
+      <div
+        className="pointer-events-none absolute left-0 right-0"
+        style={{
+          top: `${currentTimeLinePosition}px`,
+          height: '2px',
+          zIndex: 20,
+        }}
+      >
+        <div className="absolute bg-red-600 left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 shadow-[0_0_6px_rgba(220,38,38,0.6)]" />
+        <div className="absolute w-3 h-3 bg-red-600 rounded-full border-2 border-white shadow-md left-0 top-1/2 -translate-y-1/2 -translate-x-1/2" />
+      </div>
+    );
+  };
 
   return (
     <>
@@ -2210,6 +2656,63 @@ export function CourtCalendarView() {
               Show {selectedCourtType === 'tennis' ? 'Pickleball' : 'Tennis'} Courts
             </Button>
           </div>
+        ) : isMobile ? (
+          <div
+            className={`flex flex-col flex-1 min-h-0 w-full bg-white rounded-lg shadow-lg border border-gray-200 select-none${calendarTouchLocked ? ' calendar-scroll--touch-locked' : ''}`}
+          >
+            <div className="flex flex-shrink-0 border-b-2 border-green-800">
+              <div
+                className="shrink-0 bg-green-700 border-r border-green-800 flex items-center justify-center"
+                style={{ width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth, height: effectiveHeaderHeight }}
+              >
+                <span className="font-semibold text-xs text-green-100">Time (EST)</span>
+              </div>
+              <div
+                ref={courtHeaderScrollRef}
+                className="flex-1 overflow-x-auto overflow-y-hidden calendar-court-header-sync"
+                onScroll={handleCourtHeaderScroll}
+              >
+                <div ref={headerRowRef} className="flex" style={{ width: courtGridWidth }}>
+                  {renderMobileCourtHeaderCells()}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-1 min-h-0 min-w-0">
+              <div
+                ref={timeScrollRef}
+                className="shrink-0 overflow-y-auto overflow-x-hidden calendar-time-col-sync relative z-20"
+                style={{ width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth }}
+                onScroll={handleTimeColumnScroll}
+              >
+                <div className="relative" style={{ height: visibleTimeSlots.length * effectiveRowHeight }}>
+                  {visibleTimeSlots.map((time30, visibleIdx) => renderTimeLabelRow(visibleIdx, time30, false))}
+                  {renderCurrentTimeIndicator(0, true)}
+                </div>
+              </div>
+
+              <div
+                ref={calendarScrollRef}
+                className={`calendar-scroll flex-1 overflow-auto relative overscroll-y-contain min-w-0${calendarTouchLocked ? ' calendar-scroll--touch-locked' : ''}`}
+                onScroll={handleCourtGridScroll}
+              >
+                <table
+                  ref={calendarGridRef}
+                  style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: courtGridWidth }}
+                >
+                  <tbody>
+                    {visibleTimeSlots.map((time30, visibleIdx) => (
+                      <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
+                        {renderCourtCellsForRow(visibleIdx)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {renderBookingOverlayLayer(0)}
+                {renderMobileCurrentTimeLine()}
+              </div>
+            </div>
+          </div>
         ) : (
           <div
             ref={calendarScrollRef}
@@ -2217,327 +2720,30 @@ export function CourtCalendarView() {
           >
             <table
               ref={calendarGridRef}
-              style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: effectiveTimeColWidth + courts.length * effectiveCourtWidth }}
+              style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: effectiveTimeColWidth + courtGridWidth }}
             >
               <thead>
-                <tr ref={headerRowRef}>
-                  {/* Corner cell: sticky in both directions */}
+                <tr ref={headerRowRef as React.RefObject<HTMLTableRowElement>}>
                   <th
                     className="sticky top-0 left-0 z-40 bg-green-700 border-r border-b-2 border-green-800"
                     style={{ width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth, height: effectiveHeaderHeight, textAlign: 'center', verticalAlign: 'middle' }}
                   >
                     <span className="font-semibold text-xs text-green-100">Time (EST)</span>
                   </th>
-                  {/* Court header cells: sticky top */}
-                  {courts.map((court, index) => (
-                    <th
-                      key={index}
-                      className="sticky top-0 z-30 bg-gradient-to-b from-green-600 to-green-700 text-white border-r border-b-2 border-green-800 last:border-r-0 px-2 py-1 text-left font-normal"
-                      style={{ width: effectiveCourtWidth, minWidth: effectiveCourtWidth, height: effectiveHeaderHeight, verticalAlign: 'middle' }}
-                    >
-                      <div className="truncate font-semibold text-xs leading-tight text-white">
-                        {court.name}
-                      </div>
-                      <div className="truncate text-[10px] leading-none text-green-200 capitalize">
-                        {court.type}
-                        {court.isWalkUp ? ' - Walk-up' : ''}
-                      </div>
-                    </th>
-                  ))}
+                  {renderCourtHeaderCells()}
                 </tr>
               </thead>
               <tbody>
-                {visibleTimeSlots.map((time30, visibleIdx) => {
-                  const isHourLabel = time30.endsWith(':00 AM') || time30.endsWith(':00 PM');
-                  const rowStartMinute = parseInt(time30.split(' ')[0].split(':')[1], 10);
-                  const rowEndsOnHour = Number.isFinite(rowStartMinute) && ((rowStartMinute + 30) % 60 === 0);
-                  const topTime = allTimeSlots[visibleIdx * 2];
-                  const bottomTime = allTimeSlots[visibleIdx * 2 + 1];
-
-                  return (
-                    <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
-                      {/* Sticky time label */}
-                      <td
-                        className="sticky left-0 z-10 bg-green-50 border-r border-green-100 p-0"
-                        style={{
-                          width: effectiveTimeColWidth, minWidth: effectiveTimeColWidth,
-                          verticalAlign: 'top', position: 'relative',
-                          borderBottom: rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
-                        }}
-                      >
-                        {bottomTime && (
-                          <div
-                            className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-dashed border-gray-200"
-                            style={{ top: effectiveSubSlotHeight }}
-                          />
-                        )}
-                        {/* Label the row start time; keep it in the top 15-min band so it does not sit on the internal divider */}
-                        <div
-                          className="relative z-[2] flex items-center justify-center px-2"
-                          style={{
-                            height: bottomTime ? effectiveSubSlotHeight : effectiveRowHeight,
-                          }}
-                        >
-                          <span className={`text-xs whitespace-nowrap ${isHourLabel ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
-                            {time30}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Court cells */}
-                      {courts.map((court, courtIndex) => {
-                        const topBooking = bookings[court.name as keyof typeof bookings]?.[topTime];
-                        const bottomBooking = bottomTime ? bookings[court.name as keyof typeof bookings]?.[bottomTime] : null;
-                        const topBlocked = topBooking?.type === 'blocked';
-                        const bottomBlocked = bottomBooking?.type === 'blocked';
-                        const topPast = isPastTime(topTime);
-                        const bottomPast = bottomTime ? isPastTime(bottomTime) : false;
-                        const topSelected = dragState.selectedCells.has(`${court.name}|${topTime}`);
-                        const bottomSelected = bottomTime ? dragState.selectedCells.has(`${court.name}|${bottomTime}`) : false;
-                        const topPrime = isPrimeTimeSlot(court.id, topTime);
-                        const bottomPrime = bottomTime ? isPrimeTimeSlot(court.id, bottomTime) : false;
-                        const isWalkUpCourt = court.isWalkUp === true;
-                        const topOutsideCourt =
-                          !isWalkUpCourt &&
-                          !topBooking &&
-                          !!(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime));
-                        const bottomOutsideCourt =
-                          !!bottomTime &&
-                          !isWalkUpCourt &&
-                          !bottomBooking &&
-                          !!(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime));
-
-                        return (
-                          <td
-                            key={courtIndex}
-                            className="relative border-r border-gray-200 last:border-r-0 p-0"
-                            style={{
-                              width: effectiveCourtWidth, minWidth: effectiveCourtWidth,
-                              height: effectiveRowHeight, verticalAlign: 'top',
-                              borderBottom: rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
-                            }}
-                          >
-                            {bottomTime && (
-                              <div
-                                className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-gray-200"
-                                style={{ top: effectiveSubSlotHeight }}
-                              />
-                            )}
-                            {/* Top half (first 15 min) */}
-                            <div
-                              data-slot-court={court.name}
-                              data-slot-time={topTime}
-                              className={`absolute top-0 left-0 right-0 select-none ${!isMobile || calendarTouchLocked ? 'touch-none' : ''}
-                                ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
-                                ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
-                                ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
-                                ${!isWalkUpCourt && !topOutsideCourt && topPast && !topBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
-                                ${!isWalkUpCourt && !topOutsideCourt && !topPast && !topBooking && !topBlocked ? `cursor-pointer ${topPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
-                                ${topBooking && !topBlocked ? 'cursor-pointer' : ''}
-                                ${topSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
-                              `}
-                              style={{ height: effectiveSubSlotHeight }}
-                              onClick={() => {
-                                if (dragJustFinishedRef.current) return;
-                                if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
-                                if (court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) return;
-                                if (topBlocked || (topPast && !topBooking)) return;
-                                if (topBooking) handleBookingClick(court.name, topTime);
-                                else handleEmptySlotClick(court.name, topTime);
-                              }}
-                              onPointerDown={(e) =>
-                                !isWalkUpCourt &&
-                                !topBooking &&
-                                !topPast &&
-                                !topBlocked &&
-                                !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
-                                handlePointerDown(court.name, topTime, e)
-                              }
-                              onPointerEnter={() =>
-                                !isWalkUpCourt &&
-                                !topPast &&
-                                !topBlocked &&
-                                !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
-                                extendDragSelection(court.name, topTime)
-                              }
-                            />
-
-                            {/* Bottom half (second 15 min) */}
-                            {bottomTime && (
-                              <div
-                                data-slot-court={court.name}
-                                data-slot-time={bottomTime}
-                                className={`absolute left-0 right-0 select-none ${!isMobile || calendarTouchLocked ? 'touch-none' : ''}
-                                  ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
-                                  ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
-                                  ${!isWalkUpCourt && !bottomOutsideCourt && bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
-                                  ${!isWalkUpCourt && !bottomOutsideCourt && bottomPast && !bottomBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
-                                  ${!isWalkUpCourt && !bottomOutsideCourt && !bottomPast && !bottomBooking && !bottomBlocked ? `cursor-pointer ${bottomPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
-                                  ${bottomBooking && !bottomBlocked ? 'cursor-pointer' : ''}
-                                  ${bottomSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
-                                `}
-                                style={{ top: effectiveSubSlotHeight, height: effectiveSubSlotHeight }}
-                                onClick={() => {
-                                  if (dragJustFinishedRef.current) return;
-                                  if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
-                                  if (court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) return;
-                                  if (bottomBlocked || (bottomPast && !bottomBooking)) return;
-                                  if (bottomBooking) handleBookingClick(court.name, bottomTime);
-                                  else handleEmptySlotClick(court.name, bottomTime);
-                                }}
-                                onPointerDown={(e) =>
-                                  !isWalkUpCourt &&
-                                  !bottomBooking &&
-                                  !bottomPast &&
-                                  !bottomBlocked &&
-                                  !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
-                                  handlePointerDown(court.name, bottomTime, e)
-                                }
-                                onPointerEnter={() =>
-                                  !isWalkUpCourt &&
-                                  !bottomPast &&
-                                  !bottomBlocked &&
-                                  !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
-                                  extendDragSelection(court.name, bottomTime)
-                                }
-                              />
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
+                {visibleTimeSlots.map((time30, visibleIdx) => (
+                  <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
+                    {renderTimeLabelRow(visibleIdx, time30, true)}
+                    {renderCourtCellsForRow(visibleIdx)}
+                  </tr>
+                ))}
               </tbody>
             </table>
-
-            {/* Booking Overlay Layer — positioned on top of the grid */}
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: effectiveTimeColWidth + courts.length * effectiveCourtWidth,
-                height: measuredHeaderHeight + visibleTimeSlots.length * effectiveRowHeight,
-                zIndex: 5,
-                pointerEvents: 'none',
-                overflow: 'visible',
-              }}
-            >
-              {bookingOverlays.map((overlay, idx) => {
-                const { booking } = overlay;
-                const isBlocked = booking.type === 'blocked';
-                const parseMinutes = (timeValue?: string): number | null => {
-                  if (!timeValue || typeof timeValue !== 'string') return null;
-                  const [h, m] = timeValue.split(':').map(Number);
-                  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-                  return h * 60 + m;
-                };
-                const bookingStartMinutes = parseMinutes(booking.startTime);
-                const bookingEndMinutes = parseMinutes(booking.endTime);
-                const dayStartMinutesForOverlay = dayStartMinutes;
-                const hasExactRange = bookingStartMinutes !== null
-                  && bookingEndMinutes !== null
-                  && bookingEndMinutes > bookingStartMinutes;
-                const top = hasExactRange
-                  ? measuredHeaderHeight + ((bookingStartMinutes - dayStartMinutesForOverlay) / 15) * effectiveSubSlotHeight + (isBlocked ? 0 : 2)
-                  : measuredHeaderHeight + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
-                const left = effectiveTimeColWidth + overlay.courtIndex * effectiveCourtWidth + (isBlocked ? 0 : 4);
-                const width = effectiveCourtWidth - (isBlocked ? 0 : 8);
-                const height = hasExactRange
-                  ? (((bookingEndMinutes - bookingStartMinutes) / 15) * effectiveSubSlotHeight) - (isBlocked ? 0 : 4)
-                  : overlay.slotCount * effectiveSubSlotHeight - (isBlocked ? 0 : 4);
-                const colorClass = isBlocked
-                  ? 'bg-gray-200 text-gray-500 border-0'
-                  : booking.bookingType
-                    ? getBookingTypeBadgeColor(booking.bookingType)
-                    : 'bg-blue-50 text-blue-900 border-blue-200';
-
-                return (
-                  <div
-                    key={`booking-${booking.bookingId || idx}`}
-                    className={`absolute ${isBlocked ? '' : 'rounded-lg border cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${colorClass}`}
-                    style={{
-                      top,
-                      left,
-                      width,
-                      height,
-                      transform: 'none',
-                      filter: 'none',
-                      boxShadow: isBlocked
-                        ? 'none'
-                        : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
-                    }}
-                    onClick={() => !isBlocked && handleBookingClick(overlay.courtName, allTimeSlots[overlay.startSlotIndex])}
-                  >
-                    <div className={`${isBlocked ? 'px-1.5 py-1' : 'px-2 py-1'} h-full flex flex-col overflow-hidden`}>
-                      <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>
-                      {height > 28 && (
-                        <div className="text-[10px] opacity-75 mt-0.5">
-                          {booking.duration}
-                          {booking.bookingType && (
-                            <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-medium bg-white/50">
-                              {getBookingTypeLabel(booking.bookingType)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {booking.notes && height > effectiveSubSlotHeight * 3 && (
-                        <div className="text-[9px] mt-1 truncate italic opacity-70">
-                          {booking.notes.length > 30 ? `${booking.notes.substring(0, 30)}...` : booking.notes}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Current Time Indicator Line - positioned absolutely in scroll container */}
-            {currentTimeLinePosition !== null && (
-              <div
-                className="pointer-events-none"
-                style={{
-                  position: 'absolute',
-                  top: `${currentTimeLinePosition + measuredHeaderHeight}px`,
-                  left: 0,
-                  right: 0,
-                  zIndex: 20,
-                  height: '2px'
-                }}
-              >
-                {/* Time label - sticky to left */}
-                <div
-                  className="sticky left-0 inline-flex items-center"
-                  style={{ zIndex: 25 }}
-                >
-                  <div className="bg-white border border-red-400 text-gray-800 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md">
-                    {formatCurrentTime(facilityTimezone)}
-                  </div>
-                </div>
-                {/* Red line */}
-                <div
-                  className="absolute bg-red-600"
-                  style={{
-                    left: `${effectiveTimeColWidth}px`,
-                    right: 0,
-                    top: '50%',
-                    height: '2px',
-                    transform: 'translateY(-50%)',
-                    boxShadow: '0 0 6px rgba(220, 38, 38, 0.6)'
-                  }}
-                />
-                {/* Circle indicator */}
-                <div
-                  className="absolute w-3 h-3 bg-red-600 rounded-full border-2 border-white shadow-md"
-                  style={{
-                    left: `${effectiveTimeColWidth - 6}px`,
-                    top: '50%',
-                    transform: 'translateY(-50%)'
-                  }}
-                />
-              </div>
-            )}
+            {renderBookingOverlayLayer(effectiveTimeColWidth)}
+            {renderCurrentTimeIndicator(effectiveTimeColWidth, false)}
           </div>
         )}
         </div>

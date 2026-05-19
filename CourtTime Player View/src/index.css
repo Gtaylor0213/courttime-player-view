@@ -209,6 +209,18 @@ html {
   overflow: hidden;
 }
 
+/* Mobile split calendar: hide scrollbars on synced panes */
+.calendar-time-col-sync,
+.calendar-court-header-sync {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.calendar-time-col-sync::-webkit-scrollbar,
+.calendar-court-header-sync::-webkit-scrollbar {
+  display: none;
+}
+
 /* WebKit browsers (Chrome, Safari, Edge) */
 .calendar-scroll::-webkit-scrollbar {
   width: 12px;

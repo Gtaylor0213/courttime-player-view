@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 import { useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -189,8 +190,14 @@ function bookingTypeLabel(typeKey: string): string {
   return BOOKING_TYPES.find((type) => type.key === typeKey)?.label ?? typeKey;
 }
 
+/** Dimmed overlay visible above the booking sheet */
+const BOOKING_MODAL_OVERLAY_TOP = 24;
+/** Minimum sheet height so time pickers + confirm button remain usable on small phones */
+const BOOKING_MODAL_MIN_HEIGHT = 360;
+
 export default function BookCourtScreen() {
   const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     facilityId?: string;
     bookingDate?: string;
@@ -1033,7 +1040,13 @@ export default function BookCourtScreen() {
     setSelectedCourt(null);
   };
 
-  const bookingModalMaxHeight = Math.round(windowHeight * 0.92);
+  const bookingModalMaxHeight = Math.max(
+    BOOKING_MODAL_MIN_HEIGHT,
+    Math.round(
+      windowHeight - insets.top - insets.bottom - BOOKING_MODAL_OVERLAY_TOP
+    )
+  );
+  const bookingModalFooterPaddingBottom = Math.max(insets.bottom, Spacing.lg);
 
   const formatTimeLabel = (time: string) => {
     const [h, m] = time.split(':').map(Number);
@@ -1232,10 +1245,10 @@ export default function BookCourtScreen() {
       >
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.modalKeyboardAvoid}
           >
-            <View style={[styles.modalBookingSheet, { height: bookingModalMaxHeight }]}>
+            <View style={[styles.modalBookingSheet, { maxHeight: bookingModalMaxHeight, height: bookingModalMaxHeight }]}>
               <View style={styles.modalBookingHeader}>
                 <Text style={styles.modalTitle}>Booking Details</Text>
                 <Pressable
@@ -1492,7 +1505,7 @@ export default function BookCourtScreen() {
                 />
               </ScrollView>
 
-              <View style={styles.modalBookingFooter}>
+              <View style={[styles.modalBookingFooter, { paddingBottom: bookingModalFooterPaddingBottom }]}>
                 <Button
                   title={
                     additionalCourtIds.length > 0
@@ -1821,6 +1834,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     justifyContent: 'flex-end',
+    flexShrink: 1,
   },
   modalBookingSheet: {
     width: '100%',
@@ -1830,6 +1844,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.lg,
     overflow: 'hidden',
     flexDirection: 'column',
+    flexShrink: 1,
   },
   modalBookingHeader: {
     flexDirection: 'row',
@@ -1852,9 +1867,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
-    paddingBottom: Spacing.lg,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
+    backgroundColor: Colors.card,
   },
   modalHeader: {
     flexDirection: 'row',

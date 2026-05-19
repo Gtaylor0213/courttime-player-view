@@ -71,7 +71,7 @@ export function AdminPaymentLockoutCard({
     if (!stripeConnected) {
       showAlert(
         'Stripe required',
-        'Complete Stripe Connect setup under Facility Management → Payments before members can pay to unlock.'
+        'Complete Stripe Connect setup under Member Payments before members can pay to unlock.'
       );
       return;
     }
@@ -163,7 +163,7 @@ export function AdminPaymentLockoutCard({
           <View style={styles.stripeWarning}>
             <Ionicons name="warning-outline" size={18} color={Colors.warning} />
             <Text style={styles.stripeWarningText}>
-              Stripe Connect must be set up on web (Facility Management → Payments) before you can
+              Stripe Connect must be set up on web (Member Payments) before you can
               lock members and require payment.
             </Text>
           </View>

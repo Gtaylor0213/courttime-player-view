@@ -291,6 +291,12 @@ export function UnifiedSidebar({
                   isActive={currentPage === 'booking-management' || currentPage === 'admin-booking'}
                 />
                 <SidebarButton
+                  onClick={() => handleNav('/admin/member-payments')}
+                  icon={CreditCard}
+                  label="Member Payments"
+                  isActive={currentPage === 'member-payments'}
+                />
+                <SidebarButton
                   onClick={() => handleNav('/admin/communication')}
                   icon={Mail}
                   label="Communication"

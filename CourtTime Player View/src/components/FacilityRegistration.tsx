@@ -3507,7 +3507,7 @@ export function FacilityRegistration() {
                 onChange={(patch) => updateCourt(court.id, patch)}
                 stripeOnboarded={false}
                 stripeStatusLoading={false}
-                paymentsTabHint="Facility Management → Payments (after registration)"
+                paymentsTabHint="Member Payments (after registration)"
               />
             </CardContent>
           </Card>

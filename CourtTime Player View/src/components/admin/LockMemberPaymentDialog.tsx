@@ -53,7 +53,7 @@ export function LockMemberPaymentDialog({
   const handleSubmit = async () => {
     if (!facilityId || !member) return;
     if (!stripeConnected) {
-      toast.error('Complete Stripe Connect setup under Facility Management → Payments first');
+      toast.error('Complete Stripe Connect setup under Member Payments first');
       return;
     }
 
@@ -109,7 +109,7 @@ export function LockMemberPaymentDialog({
         {!stripeConnected && (
           <Alert variant="destructive">
             <AlertDescription>
-              Stripe Connect must be set up under Facility Management → Payments before members can pay to unlock.
+              Stripe Connect must be set up under Member Payments before members can pay to unlock.
             </AlertDescription>
           </Alert>
         )}

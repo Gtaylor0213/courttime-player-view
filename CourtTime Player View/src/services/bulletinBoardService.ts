@@ -263,7 +263,7 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
       const { syncConnectOnboardingStatus } = await import('./stripeConnectService');
       const stripeStatus = await syncConnectOnboardingStatus(data.facilityId);
       if (!stripeStatus.onboarded) {
-        throw new Error('Complete Stripe Connect setup in Facility Management → Payments before requiring card payment');
+        throw new Error('Complete Stripe Connect setup in Member Payments before requiring card payment');
       }
     }
     if (data.recurrence) {

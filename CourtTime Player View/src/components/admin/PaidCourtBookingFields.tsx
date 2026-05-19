@@ -29,7 +29,7 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
   onChange,
   stripeOnboarded,
   stripeStatusLoading,
-  paymentsTabHint = 'Facility Management → Payments',
+  paymentsTabHint = 'Member Payments',
 }: {
   court: T;
   onChange: (patch: Partial<T>) => void;

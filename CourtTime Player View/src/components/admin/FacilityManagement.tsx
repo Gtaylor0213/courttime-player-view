@@ -45,7 +45,6 @@ import {
 } from '../../../shared/utils/courtNaming';
 import * as XLSX from 'xlsx';
 import { BillingTab } from './BillingTab';
-import { PaymentsTab } from './PaymentsTab';
 import {
   getFacilityTypeSelectOptions,
   normalizeFacilityType,
@@ -456,7 +455,7 @@ function FacilityCourtFormBody({
         onChange={(patch) => setEditingCourt((prev) => (prev ? { ...prev, ...patch } : prev))}
         stripeOnboarded={stripeOnboarded}
         stripeStatusLoading={stripeStatusLoading}
-        paymentsTabHint="the Payments tab above"
+        paymentsTabHint="Member Payments in the sidebar"
       />
 
       <div className="flex gap-2 mt-6">
@@ -477,8 +476,17 @@ export function FacilityManagement() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'details';
+  const tabParam = searchParams.get('tab');
+  const initialTab = tabParam === 'payments' ? 'details' : tabParam || 'details';
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    if (tabParam !== 'payments') return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('tab');
+    const query = next.toString();
+    navigate(`/admin/member-payments${query ? `?${query}` : ''}`, { replace: true });
+  }, [tabParam, searchParams, navigate]);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1713,7 +1721,7 @@ export function FacilityManagement() {
       return;
     }
     if (turningOnPaidBooking && stripeOnboarded === false) {
-      toast.error('Complete Stripe Connect setup on the Payments tab before enabling paid courts');
+      toast.error('Complete Stripe Connect setup on the Member Payments page before enabling paid courts');
       return;
     }
     if (wantsPayment && !turningOnPaidBooking && stripeOnboarded === false) {
@@ -2438,8 +2446,7 @@ export function FacilityManagement() {
                   <TabsTrigger value="details" className="px-4">Facility Details</TabsTrigger>
                   <TabsTrigger value="rules" className="px-4">Booking Rules</TabsTrigger>
                   <TabsTrigger value="courts" className="px-4">Court Management</TabsTrigger>
-                  <TabsTrigger value="billing" className="px-4">Billing & Payment</TabsTrigger>
-                  <TabsTrigger value="payments" className="px-4">Payments</TabsTrigger>
+                  <TabsTrigger value="billing" className="px-4">Subscription</TabsTrigger>
                 </TabsList>
               </div>
             </div>
@@ -3966,14 +3973,9 @@ export function FacilityManagement() {
               </Card>
             </TabsContent>
 
-            {/* Billing & Payment Tab */}
+            {/* Subscription Tab */}
             <TabsContent value="billing" className="space-y-6">
               {currentFacilityId && <BillingTab facilityId={currentFacilityId} />}
-            </TabsContent>
-
-            {/* Payments Tab — Stripe Connect: members pay the club */}
-            <TabsContent value="payments" className="space-y-6">
-              {currentFacilityId && <PaymentsTab clubId={currentFacilityId} />}
             </TabsContent>
           </Tabs>
         </div>

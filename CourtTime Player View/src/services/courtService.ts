@@ -463,7 +463,7 @@ export async function assertPaidCourtConfig(
   const stripeStatus = await syncConnectOnboardingStatus(facilityId);
   if (!stripeStatus.onboarded) {
     throw new Error(
-      'Complete Stripe Connect setup in Facility Management → Payments before enabling paid court booking'
+      'Complete Stripe Connect setup in Member Payments before enabling paid court booking'
     );
   }
 }

@@ -23,8 +23,8 @@ function getAppUrl(): string {
 function buildReturnUrls(clubId: string) {
   const base = getAppUrl();
   return {
-    returnUrl: `${base}/admin/facilities?tab=payments&connect=return&clubId=${encodeURIComponent(clubId)}`,
-    refreshUrl: `${base}/admin/facilities?tab=payments&connect=refresh&clubId=${encodeURIComponent(clubId)}`,
+    returnUrl: `${base}/admin/member-payments?connect=return&clubId=${encodeURIComponent(clubId)}`,
+    refreshUrl: `${base}/admin/member-payments?connect=refresh&clubId=${encodeURIComponent(clubId)}`,
   };
 }
 
@@ -58,7 +58,7 @@ router.get('/connect', requireAuth, async (req, res) => {
     const base = getAppUrl();
     const { refreshUrl } = buildReturnUrls(clubId);
     // After Stripe finishes onboarding it will hit our callback, which then
-    // bounces the admin back into the Payments tab.
+    // bounces the admin back into the Member Payments page.
     const returnUrl = `${base}/api/stripe/callback?clubId=${encodeURIComponent(clubId)}`;
 
     const { url } = await createConnectOnboardingLink({
@@ -101,7 +101,7 @@ router.get('/callback', async (req, res) => {
 
   const base = getAppUrl();
   return res.redirect(
-    `${base}/admin/facilities?tab=payments&connect=done&clubId=${encodeURIComponent(String(req.query.clubId || ''))}`
+    `${base}/admin/member-payments?connect=done&clubId=${encodeURIComponent(String(req.query.clubId || ''))}`
   );
 });
 

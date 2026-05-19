@@ -1444,7 +1444,7 @@ export function BulletinBoard() {
                             newPost.facilityId && (
                             <p className="text-xs text-amber-700">
                               Stripe Connect is not set up for this facility yet. Complete setup under
-                              Facility Management → Payments before publishing paid signups.
+                              Member Payments before publishing paid signups.
                             </p>
                           )}
                           {isStripeReadyForFacility(newPost.facilityId) && (

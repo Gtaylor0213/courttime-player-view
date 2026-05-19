@@ -316,7 +316,7 @@ export function CourtManagement() {
       return;
     }
     if (turningOnPaidBooking && stripeOnboarded === false) {
-      toast.error('Complete Stripe Connect setup under Facility Management → Payments first');
+      toast.error('Complete Stripe Connect setup under Member Payments first');
       return;
     }
     if (wantsPayment && !turningOnPaidBooking && stripeOnboarded === false) {

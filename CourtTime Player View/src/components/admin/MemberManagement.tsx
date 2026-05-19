@@ -301,7 +301,7 @@ export function MemberManagement() {
 
   const openLockPaymentDialog = (member: Member) => {
     if (!stripeConnected) {
-      toast.error('Complete Stripe Connect setup under Facility Management → Payments first');
+      toast.error('Complete Stripe Connect setup under Member Payments first');
       return;
     }
     setLockPaymentMember({

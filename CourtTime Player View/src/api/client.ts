@@ -528,6 +528,18 @@ export const bulletinBoardApi = {
     return apiRequest(`/api/bulletin-board/${facilityId}`);
   },
 
+  getPost: async (postId: string) => {
+    const res = await apiRequest(`/api/bulletin-board/post/${postId}`);
+    if (!res.success) return res;
+    const payload =
+      unwrapApiPayload<{ post?: Record<string, unknown> }>(res.data) ??
+      (res.data as { post?: Record<string, unknown> } | undefined);
+    return {
+      ...res,
+      post: payload?.post,
+    };
+  },
+
   create: async (data: {
     facilityId: string;
     authorId: string;

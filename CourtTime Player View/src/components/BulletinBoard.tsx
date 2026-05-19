@@ -84,6 +84,7 @@ const emptyNewPost = {
   type: 'announcement' as 'event' | 'clinic' | 'tournament' | 'social' | 'announcement' | 'drill',
   eventDate: '',
   eventTime: '',
+  eventDurationMinutes: '60',
   location: '',
   maxParticipants: '',
   minParticipants: '',
@@ -453,6 +454,7 @@ export function BulletinBoard() {
         ...(eventSignupTypes.has(newPost.type)
           ? {
               drillStartAt: new Date(`${newPost.eventDate}T${newPost.eventTime}`).toISOString(),
+              drillDurationMinutes: parseInt(newPost.eventDurationMinutes, 10) || 60,
               drillCourtId: newPost.drillCourtId,
               ...(typeof parsedMaxParticipants === 'number' && !Number.isNaN(parsedMaxParticipants)
                 ? { drillMaxParticipants: parsedMaxParticipants }
@@ -1314,6 +1316,21 @@ export function BulletinBoard() {
                         />
                       </div>
                     </div>
+
+                    {eventSignupTypes.has(newPost.type) && (
+                      <div className="space-y-2">
+                        <Label htmlFor="eventDuration">Duration (minutes)</Label>
+                        <Input
+                          id="eventDuration"
+                          type="number"
+                          min={15}
+                          max={480}
+                          step={15}
+                          value={newPost.eventDurationMinutes}
+                          onChange={(e) => setNewPost(prev => ({ ...prev, eventDurationMinutes: e.target.value }))}
+                        />
+                      </div>
+                    )}
 
                     {!eventSignupTypes.has(newPost.type) && (
                       <div className="space-y-2">

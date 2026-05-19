@@ -1,6 +1,8 @@
-import { query, transaction } from '../database/connection';
+import { query } from '../database/connection';
 import { notificationService } from './notificationService';
 import { sendBulletinMinParticipantsNotMetEmail } from './emailService';
+import { createBooking } from './bookingService';
+import { minutesToTime } from './rulesEngine/utils/timeUtils';
 
 const SIGNUP_CATEGORIES = ['event', 'drill', 'social', 'clinic', 'tournament'] as const;
 
@@ -29,8 +31,10 @@ export interface BulletinPost {
   status: string;
   createdAt: string;
   drillStartAt?: string | null;
+  drillDurationMinutes?: number | null;
   drillCourtId?: string | null;
   drillCourtName?: string | null;
+  bookingId?: string | null;
   drillMaxParticipants?: number | null;
   minParticipants?: number | null;
   cancelIfMinNotMet?: boolean;
@@ -62,6 +66,7 @@ export interface CreateBulletinPost {
     occurrenceCount?: number;
   };
   drillStartAt?: string;
+  drillDurationMinutes?: number;
   drillCourtId?: string;
   drillMaxParticipants?: number;
   drillGenderRestriction?: 'any' | 'male_only' | 'female_only';
@@ -141,91 +146,263 @@ export async function getFacilityBulletinPosts(facilityId: string, requesterUser
       return posts;
     }
 
-    const isAdminResult = await query(
-      `SELECT 1
-       FROM facility_admins
-       WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
-       LIMIT 1`,
-      [requesterUserId, facilityId]
-    );
-    const isFacilityAdmin = isAdminResult.rows.length > 0;
-
-    const drillPostIds = posts
-      .filter((p) => SIGNUP_CATEGORIES.includes(p.category as (typeof SIGNUP_CATEGORIES)[number]))
-      .map((p) => p.id);
-    if (drillPostIds.length === 0) {
-      return posts;
-    }
-
-    const signupResult = await query(
-      `SELECT
-         bds.bulletin_post_id as "postId",
-         bds.user_id as "userId",
-         u.full_name as "fullName",
-         bds.status,
-         bds.waitlist_position as "waitlistPosition",
-         bds.created_at as "createdAt"
-       FROM bulletin_drill_signups bds
-       JOIN users u ON bds.user_id = u.id
-       WHERE bds.bulletin_post_id = ANY($1::uuid[])
-       ORDER BY bds.bulletin_post_id, bds.created_at ASC`,
-      [drillPostIds]
-    );
-
-    const participantsByPost = new Map<string, BulletinPost['participants']>();
-    for (const row of signupResult.rows) {
-      const existing = participantsByPost.get(row.postId) || [];
-      existing.push({
-        userId: row.userId,
-        fullName: row.fullName,
-        status: row.status,
-        waitlistPosition: row.waitlistPosition
-      });
-      participantsByPost.set(row.postId, existing);
-    }
-
-    const userResult = await query(`SELECT gender FROM users WHERE id = $1`, [requesterUserId]);
-    const requesterGender = userResult.rows[0]?.gender || null;
-
-    for (const post of posts) {
-      if (!SIGNUP_CATEGORIES.includes(post.category as (typeof SIGNUP_CATEGORIES)[number])) continue;
-      const participants = participantsByPost.get(post.id) || [];
-      const currentSignup = participants.find((p) => sameUserId(p.userId, requesterUserId));
-      post.currentUserSignupStatus = currentSignup?.status || null;
-      post.currentUserWaitlistPosition = currentSignup?.waitlistPosition || null;
-
-      const isFull =
-        typeof post.drillMaxParticipants === 'number' &&
-        (post.drillConfirmedCount || 0) >= post.drillMaxParticipants;
-      if (currentSignup) {
-        post.currentUserCanSignup = false;
-      } else if (post.drillGenderRestriction && post.drillGenderRestriction !== 'any') {
-        const required = post.drillGenderRestriction === 'male_only' ? 'male' : 'female';
-        const canByGender = requesterGender && requesterGender.toLowerCase() === required;
-        post.currentUserCanSignup = Boolean(canByGender);
-        if (!canByGender) {
-          post.signupBlockedReason = 'This event has a gender restriction that your profile does not meet.';
-        }
-      } else {
-        post.currentUserCanSignup = true;
-      }
-
-      if (post.drillShowParticipants || isFacilityAdmin) {
-        post.participants = participants;
-      } else {
-        post.participants = [];
-      }
-
-      if (isFull && !currentSignup && post.currentUserCanSignup) {
-        post.signupBlockedReason = null;
-      }
-    }
-
+    await enrichBulletinPostsWithSignupContext(posts, facilityId, requesterUserId);
     return posts;
   } catch (error) {
     console.error('Get bulletin posts error:', error);
     throw new Error('Failed to fetch bulletin posts');
   }
+}
+
+async function enrichBulletinPostsWithSignupContext(
+  posts: BulletinPost[],
+  facilityId: string,
+  requesterUserId: string
+): Promise<void> {
+  const isAdminResult = await query(
+    `SELECT 1
+     FROM facility_admins
+     WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+     LIMIT 1`,
+    [requesterUserId, facilityId]
+  );
+  const isFacilityAdmin = isAdminResult.rows.length > 0;
+
+  const drillPostIds = posts
+    .filter((p) => SIGNUP_CATEGORIES.includes(p.category as (typeof SIGNUP_CATEGORIES)[number]))
+    .map((p) => p.id);
+  if (drillPostIds.length === 0) {
+    return;
+  }
+
+  const signupResult = await query(
+    `SELECT
+       bds.bulletin_post_id as "postId",
+       bds.user_id as "userId",
+       u.full_name as "fullName",
+       bds.status,
+       bds.waitlist_position as "waitlistPosition",
+       bds.created_at as "createdAt"
+     FROM bulletin_drill_signups bds
+     JOIN users u ON bds.user_id = u.id
+     WHERE bds.bulletin_post_id = ANY($1::uuid[])
+     ORDER BY bds.bulletin_post_id, bds.created_at ASC`,
+    [drillPostIds]
+  );
+
+  const participantsByPost = new Map<string, BulletinPost['participants']>();
+  for (const row of signupResult.rows) {
+    const existing = participantsByPost.get(row.postId) || [];
+    existing.push({
+      userId: row.userId,
+      fullName: row.fullName,
+      status: row.status,
+      waitlistPosition: row.waitlistPosition,
+    });
+    participantsByPost.set(row.postId, existing);
+  }
+
+  const userResult = await query(`SELECT gender FROM users WHERE id = $1`, [requesterUserId]);
+  const requesterGender = userResult.rows[0]?.gender || null;
+
+  for (const post of posts) {
+    if (!SIGNUP_CATEGORIES.includes(post.category as (typeof SIGNUP_CATEGORIES)[number])) continue;
+    const participants = participantsByPost.get(post.id) || [];
+    const currentSignup = participants.find((p) => sameUserId(p.userId, requesterUserId));
+    post.currentUserSignupStatus = currentSignup?.status || null;
+    post.currentUserWaitlistPosition = currentSignup?.waitlistPosition || null;
+
+    const isFull =
+      typeof post.drillMaxParticipants === 'number' &&
+      (post.drillConfirmedCount || 0) >= post.drillMaxParticipants;
+    if (currentSignup) {
+      post.currentUserCanSignup = false;
+    } else if (post.drillGenderRestriction && post.drillGenderRestriction !== 'any') {
+      const required = post.drillGenderRestriction === 'male_only' ? 'male' : 'female';
+      const canByGender = requesterGender && requesterGender.toLowerCase() === required;
+      post.currentUserCanSignup = Boolean(canByGender);
+      if (!canByGender) {
+        post.signupBlockedReason =
+          'This event has a gender restriction that your profile does not meet.';
+      }
+    } else {
+      post.currentUserCanSignup = true;
+    }
+
+    if (post.drillShowParticipants || isFacilityAdmin) {
+      post.participants = participants;
+    } else {
+      post.participants = [];
+    }
+
+    if (isFull && !currentSignup && post.currentUserCanSignup) {
+      post.signupBlockedReason = null;
+    }
+  }
+}
+
+/**
+ * Get a single bulletin post with signup context for the requester.
+ */
+export async function getBulletinPostById(
+  postId: string,
+  requesterUserId?: string
+): Promise<BulletinPost | null> {
+  const result = await query(
+    `SELECT
+      bp.id,
+      bp.facility_id as "facilityId",
+      bp.author_id as "authorId",
+      u.full_name as "authorName",
+      bp.title,
+      bp.content,
+      bp.category,
+      bp.is_pinned as "isPinned",
+      bp.is_admin_post as "isAdminPost",
+      bp.posted_date as "postedDate",
+      bp.expires_at as "expiresAt",
+      bp.status,
+      bp.created_at as "createdAt",
+      bp.drill_start_at as "drillStartAt",
+      bp.drill_court_id as "drillCourtId",
+      c.name as "drillCourtName",
+      bp.drill_max_participants as "drillMaxParticipants",
+      bp.min_participants as "minParticipants",
+      COALESCE(bp.cancel_if_min_not_met, false) as "cancelIfMinNotMet",
+      bp.drill_gender_restriction as "drillGenderRestriction",
+      COALESCE(bp.drill_show_participants, false) as "drillShowParticipants",
+      COALESCE(bp.require_payment, false) as "requirePayment",
+      bp.signup_amount_cents as "signupAmountCents",
+      COUNT(*) FILTER (WHERE bds.status = 'confirmed')::int as "drillConfirmedCount",
+      COUNT(*) FILTER (WHERE bds.status = 'waitlist')::int as "drillWaitlistCount",
+      f.name as "facilityName"
+     FROM bulletin_posts bp
+     JOIN users u ON bp.author_id = u.id
+     JOIN facilities f ON f.id = bp.facility_id
+     LEFT JOIN courts c ON bp.drill_court_id = c.id
+     LEFT JOIN bulletin_drill_signups bds ON bp.id = bds.bulletin_post_id
+     WHERE bp.id = $1 AND (bp.status = 'active' OR bp.status IS NULL)
+     GROUP BY bp.id, u.full_name, c.name, f.name`,
+    [postId]
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  const post: BulletinPost = result.rows[0];
+  if (requesterUserId) {
+    await enrichBulletinPostsWithSignupContext([post], post.facilityId, requesterUserId);
+  }
+  return post;
+}
+
+const DEFAULT_DRILL_DURATION_MINUTES = 60;
+
+function resolveDrillDurationMinutes(value?: number): number {
+  const n = value != null ? Number(value) : DEFAULT_DRILL_DURATION_MINUTES;
+  if (!Number.isFinite(n) || n < 15 || n > 480) {
+    return DEFAULT_DRILL_DURATION_MINUTES;
+  }
+  return Math.round(n);
+}
+
+function drillStartAtToBookingFields(
+  drillStartAt: string,
+  durationMinutes: number,
+  timeZone: string
+): { bookingDate: string; startTime: string; endTime: string } {
+  const instant = new Date(drillStartAt);
+  if (Number.isNaN(instant.getTime())) {
+    throw new Error('Invalid event start time');
+  }
+
+  const dateParts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant);
+  const getPart = (type: string) => dateParts.find((p) => p.type === type)?.value ?? '01';
+  const bookingDate = `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+
+  const timeParts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(instant);
+  const hour = parseInt(timeParts.find((p) => p.type === 'hour')?.value || '0', 10);
+  const minute = parseInt(timeParts.find((p) => p.type === 'minute')?.value || '0', 10);
+  const startMinutes = hour * 60 + minute;
+  const endMinutes = startMinutes + durationMinutes;
+
+  return {
+    bookingDate,
+    startTime: minutesToTime(startMinutes),
+    endTime: minutesToTime(endMinutes),
+  };
+}
+
+async function reserveCourtForBulletinPost(params: {
+  postId: string;
+  facilityId: string;
+  authorId: string;
+  courtId: string;
+  drillStartAt: string;
+  durationMinutes: number;
+  category: string;
+  title: string;
+}): Promise<string> {
+  const tzResult = await query(`SELECT timezone FROM facilities WHERE id = $1`, [params.facilityId]);
+  const timeZone = tzResult.rows[0]?.timezone || 'America/New_York';
+  const { bookingDate, startTime, endTime } = drillStartAtToBookingFields(
+    params.drillStartAt,
+    params.durationMinutes,
+    timeZone
+  );
+
+  const bookingResult = await createBooking({
+    courtId: params.courtId,
+    userId: params.authorId,
+    facilityId: params.facilityId,
+    bookingDate,
+    startTime,
+    endTime,
+    durationMinutes: params.durationMinutes,
+    bookingType: params.category,
+    notes: `${toEventTypeLabel(params.category)}: ${params.title}`,
+    bulletinPostId: params.postId,
+    skipRulesValidation: true,
+    skipPaymentCheck: true,
+  });
+
+  if (!bookingResult.success || !bookingResult.booking?.id) {
+    throw new Error(bookingResult.error || 'Court is not available for this event time');
+  }
+
+  await query(`UPDATE bulletin_posts SET booking_id = $1 WHERE id = $2`, [
+    bookingResult.booking.id,
+    params.postId,
+  ]);
+
+  return bookingResult.booking.id;
+}
+
+async function cancelBulletinCourtBooking(postId: string): Promise<void> {
+  const row = await query(
+    `SELECT booking_id as "bookingId" FROM bulletin_posts WHERE id = $1`,
+    [postId]
+  );
+  const bookingId = row.rows[0]?.bookingId;
+  if (!bookingId) return;
+
+  await query(
+    `UPDATE bookings
+     SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1 AND status != 'cancelled'`,
+    [bookingId]
+  );
 }
 
 /**
@@ -278,68 +455,101 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
       }
     }
 
+    const drillDurationMinutes = resolveDrillDurationMinutes(data.drillDurationMinutes);
+    const needsCourtHold = SIGNUP_CATEGORIES.includes(
+      data.category as (typeof SIGNUP_CATEGORIES)[number]
+    );
     const recurrenceStartTimes = buildRecurringStartTimes(data.drillStartAt || null, data.recurrence);
-    const createdIds: string[] = [];
-    for (const startAt of recurrenceStartTimes) {
-      const params: any[] = [
-        data.facilityId,
-        data.authorId,
-        data.title,
-        data.content,
-        data.category,
-        data.isAdminPost || false,
-        startAt,
-        data.drillCourtId || null,
-        data.drillMaxParticipants || null,
-        data.drillGenderRestriction || 'any',
-        data.drillShowParticipants ?? false,
-        data.minParticipants || null,
-        data.cancelIfMinNotMet ?? false,
-        requirePayment,
-        requirePayment ? signupAmountCents : null
-      ];
+    const createdPosts: Array<{ id: string; startAt: string | null }> = [];
 
-      let expiresAtExpr = 'NULL';
-      if (data.expiresAfterEvent) {
-        if (!startAt) {
-          throw new Error('Event datetime is required for "after event" expiration');
+    try {
+      for (const startAt of recurrenceStartTimes) {
+        const params: any[] = [
+          data.facilityId,
+          data.authorId,
+          data.title,
+          data.content,
+          data.category,
+          data.isAdminPost || false,
+          startAt,
+          data.drillCourtId || null,
+          drillDurationMinutes,
+          data.drillMaxParticipants || null,
+          data.drillGenderRestriction || 'any',
+          data.drillShowParticipants ?? false,
+          data.minParticipants || null,
+          data.cancelIfMinNotMet ?? false,
+          requirePayment,
+          requirePayment ? signupAmountCents : null,
+        ];
+
+        let expiresAtExpr = 'NULL';
+        if (data.expiresAfterEvent) {
+          if (!startAt) {
+            throw new Error('Event datetime is required for "after event" expiration');
+          }
+          expiresAtExpr = '$7';
+        } else if (data.expiresInDays) {
+          params.push(parseInt(String(data.expiresInDays)));
+          expiresAtExpr = `CURRENT_TIMESTAMP + make_interval(days => $${params.length})`;
         }
-        expiresAtExpr = '$7';
-      } else if (data.expiresInDays) {
-        params.push(parseInt(String(data.expiresInDays)));
-        expiresAtExpr = `CURRENT_TIMESTAMP + make_interval(days => $${params.length})`;
+
+        const result = await query(
+          `INSERT INTO bulletin_posts (
+            facility_id,
+            author_id,
+            title,
+            content,
+            category,
+            is_admin_post,
+            drill_start_at,
+            drill_court_id,
+            drill_duration_minutes,
+            drill_max_participants,
+            drill_gender_restriction,
+            drill_show_participants,
+            min_participants,
+            cancel_if_min_not_met,
+            require_payment,
+            signup_amount_cents,
+            expires_at,
+            status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, ${expiresAtExpr}, 'active')
+          RETURNING id`,
+          params
+        );
+        createdPosts.push({ id: result.rows[0].id, startAt });
       }
 
-      const result = await query(
-        `INSERT INTO bulletin_posts (
-          facility_id,
-          author_id,
-          title,
-          content,
-          category,
-          is_admin_post,
-          drill_start_at,
-          drill_court_id,
-          drill_max_participants,
-          drill_gender_restriction,
-          drill_show_participants,
-          min_participants,
-          cancel_if_min_not_met,
-          require_payment,
-          signup_amount_cents,
-          expires_at,
-          status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, ${expiresAtExpr}, 'active')
-        RETURNING id`,
-        params
-      );
-      createdIds.push(result.rows[0].id);
-    }
+      if (needsCourtHold && data.drillCourtId) {
+        for (const post of createdPosts) {
+          if (!post.startAt) continue;
+          await reserveCourtForBulletinPost({
+            postId: post.id,
+            facilityId: data.facilityId,
+            authorId: data.authorId,
+            courtId: data.drillCourtId,
+            drillStartAt: post.startAt,
+            durationMinutes: drillDurationMinutes,
+            category: data.category,
+            title: data.title,
+          });
+        }
+      }
 
-    return createdIds[0];
-  } catch (error) {
+      return createdPosts[0].id;
+    } catch (error: any) {
+      for (const post of createdPosts) {
+        await cancelBulletinCourtBooking(post.id).catch(() => undefined);
+        await query(`DELETE FROM bulletin_posts WHERE id = $1`, [post.id]).catch(() => undefined);
+      }
+      const message = error?.message || 'Failed to create bulletin post';
+      console.error('Create bulletin post error:', error);
+      throw new Error(message);
+    }
+  } catch (error: any) {
     console.error('Create bulletin post error:', error);
-    throw new Error('Failed to create bulletin post');
+    throw error instanceof Error ? error : new Error('Failed to create bulletin post');
   }
 }
 
@@ -423,6 +633,7 @@ export async function updateBulletinPost(
  */
 export async function deleteBulletinPost(postId: string, authorId: string, isAdmin?: boolean): Promise<boolean> {
   try {
+    await cancelBulletinCourtBooking(postId);
     const result = isAdmin
       ? await query(`DELETE FROM bulletin_posts WHERE id = $1`, [postId])
       : await query(`DELETE FROM bulletin_posts WHERE id = $1 AND author_id = $2`, [postId, authorId]);
@@ -897,6 +1108,8 @@ export async function processBulletinMinParticipantCancellations(): Promise<numb
         participant.userId
       );
     }
+
+    await cancelBulletinCourtBooking(post.id);
 
     await query(
       `UPDATE bulletin_posts

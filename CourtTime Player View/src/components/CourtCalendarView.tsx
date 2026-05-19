@@ -10,9 +10,10 @@ import { BookingWizard } from './BookingWizard';
 import { QuickReservePopup } from './QuickReservePopup';
 import { NotificationBell } from './NotificationBell';
 import { ReservationDetailsModal } from './ReservationDetailsModal';
+import { BulletinActivitySignupModal } from './BulletinActivitySignupModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
-import { facilitiesApi, usersApi, bookingApi, courtConfigApi } from '../api/client';
+import { bulletinBoardApi, facilitiesApi, usersApi, bookingApi, courtConfigApi, unwrapApiPayload } from '../api/client';
 import { parseLocalDate } from '../utils/dateUtils';
 import { toast } from 'sonner';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
@@ -23,6 +24,10 @@ import {
   fetchBookingCalendarDetails,
   offerAddBookingToCalendar,
 } from '../utils/bookingCalendar';
+import {
+  BULLETIN_ACTIVITY_BOOKING_TYPES,
+  isBulletinActivityBooking,
+} from '../utils/bulletinPostDisplay';
 
 // Layout constants
 const ROW_HEIGHT = 50;            // 30-min visible row height
@@ -195,6 +200,10 @@ export function CourtCalendarView() {
   const [reservationDetailsModal, setReservationDetailsModal] = useState({
     isOpen: false,
     reservation: null as any
+  });
+  const [bulletinActivityModal, setBulletinActivityModal] = useState({
+    isOpen: false,
+    postId: null as string | null,
   });
 
   // Calendar display customization
@@ -442,8 +451,13 @@ export function CourtCalendarView() {
               bookingType: 'blocked',
             };
           } else {
+            const activityLabel =
+              BULLETIN_ACTIVITY_BOOKING_TYPES.has(String(booking.bookingType || '').toLowerCase()) &&
+              booking.notes
+                ? String(booking.notes)
+                : booking.userName || 'Reserved';
             transformedBookings[targetCourtName][slotTime] = {
-              player: booking.userName || 'Reserved',
+              player: activityLabel,
               duration: `${booking.durationMinutes}min`,
               type: 'reservation',
               bookingId: booking.id,
@@ -598,6 +612,64 @@ export function CourtCalendarView() {
       cancelled = true;
     };
   }, [authLoading, user?.id, searchParams, fetchBookings]);
+
+  // Complete paid bulletin signup after Stripe redirect
+  useEffect(() => {
+    const signupSuccess = searchParams.get('signupSuccess');
+    const sessionId = searchParams.get('session_id');
+    const returnPostId = searchParams.get('postId');
+    if (signupSuccess !== '1' || !sessionId || sessionId === '{CHECKOUT_SESSION_ID}') return;
+    if (authLoading || !user?.id) return;
+
+    const clearParams = () => {
+      navigate('/calendar', { replace: true });
+    };
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await bulletinBoardApi.confirmSignupPayment(sessionId);
+        if (cancelled) return;
+        if (response.success) {
+          const payload = unwrapApiPayload<{ status?: string; waitlistPosition?: number | null }>(
+            response.data
+          );
+          toast.success(
+            response.message ||
+              (payload?.status === 'waitlist'
+                ? `Payment received — waitlist #${payload.waitlistPosition ?? '?'}`
+                : 'Payment received — you are signed up!')
+          );
+          if (returnPostId) {
+            setBulletinActivityModal({ isOpen: true, postId: returnPostId });
+          }
+          await fetchBookings();
+        } else {
+          toast.error(
+            response.error || 'Payment received but signup could not be confirmed.'
+          );
+        }
+      } catch (err) {
+        console.error('Confirm bulletin signup from calendar:', err);
+        toast.error('Payment received but signup could not be confirmed.');
+      } finally {
+        if (!cancelled) clearParams();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, searchParams, navigate, fetchBookings]);
+
+  // Open bulletin activity modal from ?postId= (e.g. cancel URL after Stripe)
+  useEffect(() => {
+    const postId = searchParams.get('postId');
+    const signupSuccess = searchParams.get('signupSuccess');
+    if (!postId || signupSuccess === '1') return;
+    setBulletinActivityModal({ isOpen: true, postId });
+    navigate('/calendar', { replace: true });
+  }, [searchParams, navigate]);
 
   // Complete paid court booking after Stripe redirect (or recover orphaned PAID rows)
   useEffect(() => {
@@ -1172,10 +1244,17 @@ export function CourtCalendarView() {
   const handleBookingClick = (court: string, time: string) => {
     const booking = bookings[court as keyof typeof bookings]?.[time];
     if (booking?.type === 'reservation' && booking.fullDetails) {
-      // Open reservation details modal
+      const details = booking.fullDetails;
+      if (isBulletinActivityBooking(details) && details.bulletinPostId) {
+        setBulletinActivityModal({
+          isOpen: true,
+          postId: String(details.bulletinPostId),
+        });
+        return;
+      }
       setReservationDetailsModal({
         isOpen: true,
-        reservation: booking.fullDetails
+        reservation: details,
       });
     }
   };
@@ -2782,6 +2861,14 @@ export function CourtCalendarView() {
         onClose={closeReservationDetailsModal}
         reservation={reservationDetailsModal.reservation}
         onCancelReservation={handleCancelReservation}
+      />
+
+      <BulletinActivitySignupModal
+        isOpen={bulletinActivityModal.isOpen}
+        postId={bulletinActivityModal.postId}
+        onClose={() => setBulletinActivityModal({ isOpen: false, postId: null })}
+        onSignupChange={() => void fetchBookings()}
+        returnPath="calendar"
       />
     </>
   );

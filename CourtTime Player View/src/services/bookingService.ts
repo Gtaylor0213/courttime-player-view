@@ -363,6 +363,7 @@ export async function getBookingsByFacilityAndDate(
         b.status,
         b.booking_type as "bookingType",
         b.notes,
+        b.bulletin_post_id as "bulletinPostId",
         b.created_at as "createdAt",
         b.updated_at as "updatedAt",
         c.name as "courtName",
@@ -669,6 +670,7 @@ export async function createBooking(bookingData: {
   bookingType?: string;
   activityType?: string;
   notes?: string;
+  bulletinPostId?: string;
   skipRulesValidation?: boolean;  // For admin override
   skipPaymentCheck?: boolean; // After Stripe payment or admin override
   bringGuest?: boolean;
@@ -693,6 +695,7 @@ async function createBookingCore(bookingData: {
   bookingType?: string;
   activityType?: string;
   notes?: string;
+  bulletinPostId?: string;
   skipRulesValidation?: boolean;
   skipPaymentCheck?: boolean;
   bringGuest?: boolean;
@@ -841,9 +844,9 @@ async function createBookingCore(bookingData: {
       `INSERT INTO bookings (
         series_id, court_id, user_id, facility_id, booking_date,
         start_time, end_time, duration_minutes, booking_type,
-        activity_type, notes, status, is_prime_time
+        activity_type, notes, bulletin_post_id, status, is_prime_time
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'confirmed', $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13)
       RETURNING
         id,
         series_id as "seriesId",
@@ -873,6 +876,7 @@ async function createBookingCore(bookingData: {
         bookingData.bookingType || null,
         bookingData.activityType || null,
         bookingData.notes || null,
+        bookingData.bulletinPostId || null,
         isPrimeTime || false
       ]
     );

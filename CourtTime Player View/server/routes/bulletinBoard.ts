@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   getFacilityBulletinPosts,
+  getBulletinPostById,
   createBulletinPost,
   updateBulletinPost,
   deleteBulletinPost,
@@ -15,6 +16,23 @@ import { confirmBulletinSignupCheckout } from '../../src/services/stripeConnectS
 
 const router = express.Router();
 const signupEnabledCategories = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
+
+/**
+ * GET /api/bulletin-board/post/:postId
+ * Get a single bulletin post (for calendar signup, deep links)
+ */
+router.get('/post/:postId', async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const post = await getBulletinPostById(postId, req.user?.userId);
+    if (!post) {
+      return res.status(404).json({ success: false, error: 'Post not found' });
+    }
+    res.json({ success: true, post });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * GET /api/bulletin-board/:facilityId
@@ -53,10 +71,17 @@ router.post('/', async (req, res, next) => {
       }
     }
 
+    const rawDuration = body.drillDurationMinutes ?? body.drill_duration_minutes;
+    const drillDurationMinutes =
+      rawDuration != null && String(rawDuration).trim() !== ''
+        ? Math.round(Number(rawDuration))
+        : undefined;
+
     const postData = {
       ...body,
       authorId: req.user!.userId,
       requirePayment,
+      drillDurationMinutes,
       signupAmountCents:
         requirePayment && signupAmountCents && signupAmountCents > 0 ? signupAmountCents : undefined,
     };

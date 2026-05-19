@@ -24,6 +24,31 @@ export const BOOKING_TYPES = {
     color: 'bg-orange-100 text-orange-800 border-orange-300',
     bgColor: 'bg-orange-100'
   },
+  clinic: {
+    label: 'Clinic',
+    color: 'bg-teal-100 text-teal-800 border-teal-300',
+    bgColor: 'bg-teal-100'
+  },
+  drill: {
+    label: 'Drill',
+    color: 'bg-blue-100 text-blue-800 border-blue-300',
+    bgColor: 'bg-blue-100'
+  },
+  event: {
+    label: 'Event',
+    color: 'bg-green-100 text-green-800 border-green-300',
+    bgColor: 'bg-green-100'
+  },
+  tournament: {
+    label: 'Tournament',
+    color: 'bg-purple-100 text-purple-800 border-purple-300',
+    bgColor: 'bg-purple-100'
+  },
+  social: {
+    label: 'Social',
+    color: 'bg-pink-100 text-pink-800 border-pink-300',
+    bgColor: 'bg-pink-100'
+  },
   other: {
     label: 'Other',
     color: 'bg-gray-100 text-gray-800 border-gray-300',

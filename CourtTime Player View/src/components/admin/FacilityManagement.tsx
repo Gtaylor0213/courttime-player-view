@@ -19,7 +19,6 @@ import {
   adminApi,
   courtConfigApi,
   rulesApi,
-  addressWhitelistApi,
   facilityLocationsApi,
   stripeConnectApi,
   isStripeConnectReadyFromResponse,
@@ -660,22 +659,6 @@ export function FacilityManagement() {
   const [isAddingBlackout, setIsAddingBlackout] = useState(false);
   const [blackoutSaving, setBlackoutSaving] = useState(false);
 
-  // Address whitelist state
-  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{
-    id: string;
-    address: string;
-    lastName: string;
-    email: string | null;
-    accountsLimit: number;
-    setupInviteSentAt: string | null;
-    setupInviteAcceptedAt: string | null;
-  }>>([]);
-  const [newWhitelistAddress, setNewWhitelistAddress] = useState('');
-  const [newWhitelistLastName, setNewWhitelistLastName] = useState('');
-  const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
-  const [whitelistAccountsLimit, setWhitelistAccountsLimit] = useState(4);
-  const [whitelistUploading, setWhitelistUploading] = useState(false);
-  const whitelistFileRef = React.useRef<HTMLInputElement>(null);
 
   // Secondary facility locations
   interface SecondaryLocation {
@@ -706,7 +689,6 @@ export function FacilityManagement() {
       loadFacilityData().then(() => loadFacilityRules());
       loadCourts();
       loadBlackouts();
-      loadWhitelistAddresses();
       loadSecondaryLocations();
     }
   }, [currentFacilityId]);
@@ -1572,154 +1554,6 @@ export function FacilityManagement() {
     }
   };
 
-  // Address whitelist CRUD
-  const loadWhitelistAddresses = async () => {
-    if (!currentFacilityId) return;
-    try {
-      const response = await addressWhitelistApi.getAll(currentFacilityId);
-      if (response.success && response.data?.addresses) {
-        setWhitelistAddresses(response.data.addresses);
-      }
-    } catch (error) {
-      console.error('Error loading whitelist addresses:', error);
-    }
-  };
-
-  const handleAddWhitelistAddress = async () => {
-    if (!currentFacilityId || !newWhitelistAddress.trim()) {
-      toast.error('Please enter an address');
-      return;
-    }
-    try {
-      const response = await addressWhitelistApi.add(
-        currentFacilityId,
-        newWhitelistAddress.trim(),
-        999,
-        newWhitelistLastName.trim(),
-        newWhitelistEmail.trim() || undefined
-      );
-      if (response.success) {
-        setNewWhitelistAddress('');
-        setNewWhitelistLastName('');
-        setNewWhitelistEmail('');
-        toast.success(
-          newWhitelistEmail.trim()
-            ? 'Address added and setup invite sent'
-            : 'Address added to whitelist'
-        );
-        loadWhitelistAddresses();
-      } else {
-        toast.error(response.error || 'Failed to add address');
-      }
-    } catch (error) {
-      console.error('Error adding whitelist address:', error);
-      toast.error('Failed to add address');
-    }
-  };
-
-  const handleRemoveWhitelistAddress = async (addressId: string) => {
-    if (!currentFacilityId) return;
-    try {
-      const response = await addressWhitelistApi.remove(currentFacilityId, addressId);
-      if (response.success) {
-        toast.success('Address removed');
-        loadWhitelistAddresses();
-      } else {
-        toast.error(response.error || 'Failed to remove address');
-      }
-    } catch (error) {
-      console.error('Error removing whitelist address:', error);
-      toast.error('Failed to remove address');
-    }
-  };
-
-  const handleUpdateWhitelistLimit = async (addressId: string, newLimit: number) => {
-    if (!currentFacilityId) return;
-    try {
-      const response = await addressWhitelistApi.updateLimit(currentFacilityId, addressId, newLimit);
-      if (response.success) {
-        setWhitelistAddresses(prev => prev.map(a => a.id === addressId ? { ...a, accountsLimit: newLimit } : a));
-      } else {
-        toast.error(response.error || 'Failed to update limit');
-      }
-    } catch (error) {
-      console.error('Error updating whitelist limit:', error);
-    }
-  };
-
-  const handleWhitelistFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentFacilityId) return;
-
-    const ext = file.name.toLowerCase().split('.').pop();
-    if (!['xlsx', 'xls', 'csv'].includes(ext || '')) {
-      toast.error('Please upload an Excel (.xlsx, .xls) or CSV file');
-      if (whitelistFileRef.current) whitelistFileRef.current.value = '';
-      return;
-    }
-
-    setWhitelistUploading(true);
-    try {
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data);
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-
-      if (rows.length === 0) {
-        toast.error('File is empty or has no data rows');
-        return;
-      }
-
-      // Try to find columns (flexible matching)
-      const headers = Object.keys(rows[0]);
-      const addressCol = headers.find(h =>
-        /^(address|street|street.?address|full.?address|home.?address)$/i.test(h.trim())
-      ) || headers[0]; // Fall back to first column
-
-      const lastNameCol = headers.find(h =>
-        /^(last.?name|lastname|surname|family.?name)$/i.test(h.trim())
-      );
-
-      const emailCol = headers.find(h =>
-        /^(email|e.?mail|email.?address)$/i.test(h.trim())
-      );
-
-      const addresses: Array<{ address: string; lastName?: string; accountsLimit?: number; email?: string }> = [];
-      for (const row of rows) {
-        const addr = String(row[addressCol] || '').trim();
-        if (addr) {
-          const lastName = lastNameCol ? String(row[lastNameCol] || '').trim() : '';
-          const email = emailCol ? String(row[emailCol] || '').trim() : '';
-          addresses.push({
-            address: addr,
-            lastName,
-            email: email || undefined,
-            accountsLimit: 999,
-          });
-        }
-      }
-
-      if (addresses.length === 0) {
-        toast.error('No valid addresses found in file');
-        return;
-      }
-
-      const response = await addressWhitelistApi.bulkAdd(currentFacilityId, addresses);
-      if (response.success) {
-        const result = response.data || response;
-        toast.success(`Imported ${result.added} address${result.added !== 1 ? 'es' : ''}${result.skipped > 0 ? ` (${result.skipped} skipped/duplicates)` : ''}`);
-        loadWhitelistAddresses();
-      } else {
-        toast.error(response.error || 'Failed to import addresses');
-      }
-    } catch (error) {
-      console.error('Error processing file:', error);
-      toast.error('Failed to read file. Check the format and try again.');
-    } finally {
-      setWhitelistUploading(false);
-      if (whitelistFileRef.current) whitelistFileRef.current.value = '';
-    }
-  };
 
   const loadCourtOperatingHours = async (courtList: Court[]) => {
     if (!courtList.length) {
@@ -3797,116 +3631,7 @@ export function FacilityManagement() {
                   {renderSectionSaveFooter('peak hours policy')}
                 </Card>
 
-                {/* Address Whitelist */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Home className="h-5 w-5" />
-                      Address Whitelist
-                    </CardTitle>
-                    <CardDescription>Manage approved addresses for membership auto-approval (separate from account limits)</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Add new address */}
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Enter address..."
-                        value={newWhitelistAddress}
-                        onChange={(e) => setNewWhitelistAddress(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
-                        className="flex-1"
-                      />
-                      <Input
-                        placeholder="Last name..."
-                        value={newWhitelistLastName}
-                        onChange={(e) => setNewWhitelistLastName(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
-                        className="w-40"
-                      />
-                      <Input
-                        type="email"
-                        placeholder="Email (optional)"
-                        value={newWhitelistEmail}
-                        onChange={(e) => setNewWhitelistEmail(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddWhitelistAddress(); } }}
-                        className="w-48"
-                      />
-                      <Button onClick={handleAddWhitelistAddress} size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
-                      </Button>
-                    </div>
-
-                    {/* File upload */}
-                    <div className="flex items-center gap-2">
-                      <input
-                        ref={whitelistFileRef}
-                        type="file"
-                        accept=".xlsx,.xls,.csv"
-                        onChange={handleWhitelistFileUpload}
-                        className="hidden"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => whitelistFileRef.current?.click()}
-                        disabled={whitelistUploading}
-                      >
-                        <Upload className="h-4 w-4 mr-1" />
-                        {whitelistUploading ? 'Importing...' : 'Import from Excel/CSV'}
-                      </Button>
-                      <span className="text-xs text-gray-500">
-                        File should have "Address" and "Last Name" columns. Optional "Email" sends a setup invite.
-                      </span>
-                    </div>
-
-                    {/* Address list */}
-                    {whitelistAddresses.length === 0 ? (
-                      <p className="text-gray-500 text-sm py-2">No addresses in whitelist. Add addresses to enable membership verification.</p>
-                    ) : (
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {whitelistAddresses.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <Home className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-sm truncate">
-                                  {item.address}
-                                  {item.lastName && <span className="text-gray-500"> — {item.lastName}</span>}
-                                </span>
-                                {item.email && (
-                                  <span className="text-xs text-gray-500 truncate">{item.email}</span>
-                                )}
-                                {item.email && (
-                                  <span className="text-xs text-gray-400">
-                                    {item.setupInviteAcceptedAt
-                                      ? 'Joined'
-                                      : item.setupInviteSentAt
-                                        ? `Invite sent ${new Date(item.setupInviteSentAt).toLocaleDateString()}`
-                                        : 'Invite pending'}
-                                  </span>
-                                )}
-                              </div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveWhitelistAddress(item.id)}
-                              className="text-red-600 hover:text-red-700 h-7 w-7 p-0 ml-2"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-500">
-                      {whitelistAddresses.length} address{whitelistAddresses.length !== 1 ? 'es' : ''} whitelisted
-                    </p>
-                  </CardContent>
-                </Card>
-
-              </div>
               {renderTabFooterSaveBar()}
             </TabsContent>
 

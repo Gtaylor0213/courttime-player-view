@@ -1,24 +1,24 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import * as XLSX from 'xlsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, Home, Plus, X, Settings, AlertTriangle, Clock, MapPin, Phone, User, MoreVertical, Upload, Eye, EyeOff, Lock, LockOpen } from 'lucide-react';
+import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, X, Settings, AlertTriangle, Clock, MapPin, Phone, User, MoreVertical, Eye, EyeOff, Lock, LockOpen } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { membersApi, addressWhitelistApi, strikesApi, stripeConnectApi, isStripeConnectReadyFromResponse } from '../../api/client';
+import { membersApi, strikesApi, stripeConnectApi, isStripeConnectReadyFromResponse } from '../../api/client';
 import { LockMemberPaymentDialog, type LockMemberTarget } from './LockMemberPaymentDialog';
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { HouseholdManagement } from './HouseholdManagement';
+import { AddressWhitelistPanel } from './AddressWhitelistPanel';
 
 interface Member {
   userId: string;
@@ -58,23 +58,6 @@ export function MemberManagement() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Address whitelist management
-  const [showAddressDialog, setShowAddressDialog] = useState(false);
-  const [whitelistAddresses, setWhitelistAddresses] = useState<Array<{
-    id: string;
-    address: string;
-    lastName: string;
-    email: string | null;
-    accountsLimit: number;
-    setupInviteSentAt: string | null;
-    setupInviteAcceptedAt: string | null;
-  }>>([]);
-  const [newAddress, setNewAddress] = useState('');
-  const [newLastName, setNewLastName] = useState('');
-  const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
-  const [whitelistUploading, setWhitelistUploading] = useState(false);
-  const whitelistFileRef = useRef<HTMLInputElement>(null);
-
   // Strike management
   const [strikeDialogUserId, setStrikeDialogUserId] = useState<string | null>(null);
   const [strikeDialogName, setStrikeDialogName] = useState('');
@@ -107,7 +90,6 @@ export function MemberManagement() {
   useEffect(() => {
     if (currentFacilityId) {
       loadMembers();
-      loadWhitelistAddresses();
       void loadStripeStatus();
     }
   }, [currentFacilityId]);
@@ -142,20 +124,6 @@ export function MemberManagement() {
       toast.error('Failed to load members');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadWhitelistAddresses = async () => {
-    if (!currentFacilityId) return;
-
-    try {
-      const response = await addressWhitelistApi.getAll(currentFacilityId);
-
-      if (response.success && response.data?.addresses) {
-        setWhitelistAddresses(response.data.addresses);
-      }
-    } catch (error) {
-      console.error('Error loading whitelist addresses:', error);
     }
   };
 
@@ -394,148 +362,6 @@ export function MemberManagement() {
     }
   };
 
-  const handleAddAddress = async () => {
-    if (!currentFacilityId) return;
-
-    if (!newAddress.trim()) {
-      toast.error('Please enter an address');
-      return;
-    }
-
-    try {
-      const response = await addressWhitelistApi.add(
-        currentFacilityId,
-        newAddress.trim(),
-        999,
-        newLastName.trim(),
-        newWhitelistEmail.trim() || undefined
-      );
-
-      if (response.success) {
-        setNewAddress('');
-        setNewLastName('');
-        setNewWhitelistEmail('');
-        toast.success(
-          newWhitelistEmail.trim()
-            ? 'Address added and setup invite sent'
-            : 'Address added to whitelist'
-        );
-        loadWhitelistAddresses();
-      } else {
-        toast.error(response.error || 'Failed to add address');
-      }
-    } catch (error) {
-      console.error('Error adding address:', error);
-      toast.error('Failed to add address');
-    }
-  };
-
-  const handleWhitelistFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentFacilityId) return;
-
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!['csv', 'xlsx', 'xls'].includes(ext || '')) {
-      toast.error('Please select a CSV or Excel (.xlsx, .xls) file');
-      return;
-    }
-
-    setWhitelistUploading(true);
-
-    try {
-      let addresses: Array<{ address: string; lastName?: string; accountsLimit?: number; email?: string }> = [];
-
-      if (ext === 'csv') {
-        const text = await file.text();
-        const lines = text.split(/\r?\n/).filter(line => line.trim());
-        if (lines.length > 0) {
-          const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s_-]+/g, ''));
-          const addressCol = headers.findIndex(h => h.includes('address') || h.includes('street'));
-          const lastNameCol = headers.findIndex(h => /^(lastname|surname|familyname)$/.test(h));
-          const emailCol = headers.findIndex(h => h === 'email' || h.includes('email'));
-          const limitCol = headers.findIndex(h => h.includes('limit') || h.includes('max') || h.includes('account'));
-
-          if (addressCol >= 0) {
-            addresses = lines.slice(1).map(line => {
-              const cols = line.split(',').map(c => c.trim());
-              return {
-                address: cols[addressCol] || '',
-                lastName: lastNameCol >= 0 ? cols[lastNameCol] : undefined,
-                email: emailCol >= 0 ? cols[emailCol] : undefined,
-                accountsLimit: limitCol >= 0 ? parseInt(cols[limitCol]) || undefined : undefined,
-              };
-            }).filter(a => a.address);
-          } else {
-            addresses = lines.slice(1).map(line => ({ address: line.trim() })).filter(a => a.address);
-          }
-        }
-      } else {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data);
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        if (rows.length > 0) {
-          const hdrs = Object.keys(rows[0]);
-          const addressKey = hdrs.find(h => /^(street|address|street.?address|full.?address)$/i.test(h.trim())) || hdrs[0];
-          const lastNameKey = hdrs.find(h => /^(last.?name|lastname|surname|family.?name)$/i.test(h.trim()));
-          const emailKey = hdrs.find(h => /^(email|e.?mail|email.?address)$/i.test(h.trim()));
-          const limitKey = hdrs.find(h => /^(limit|max|accounts?.?limit)$/i.test(h.trim()));
-
-          addresses = rows.map(row => ({
-            address: String(row[addressKey] || '').trim(),
-            lastName: lastNameKey ? String(row[lastNameKey] || '').trim() || undefined : undefined,
-            email: emailKey ? String(row[emailKey] || '').trim() || undefined : undefined,
-            accountsLimit: limitKey ? parseInt(row[limitKey]) || undefined : undefined,
-          })).filter(a => a.address);
-        }
-      }
-
-      if (addresses.length === 0) {
-        toast.error('No addresses found in file');
-        return;
-      }
-
-      const payload = addresses.map(a => ({
-        address: a.address,
-        lastName: a.lastName,
-        email: a.email,
-        accountsLimit: a.accountsLimit || 999,
-      }));
-
-      const response = await addressWhitelistApi.bulkAdd(currentFacilityId, payload);
-      if (response.success) {
-        toast.success(`Imported ${response.data?.added || addresses.length} addresses`);
-        loadWhitelistAddresses();
-      } else {
-        toast.error(response.error || 'Failed to import addresses');
-      }
-    } catch (error) {
-      console.error('Error importing whitelist file:', error);
-      toast.error('Failed to read file. Check the format and try again.');
-    } finally {
-      setWhitelistUploading(false);
-      if (whitelistFileRef.current) whitelistFileRef.current.value = '';
-    }
-  };
-
-  const handleRemoveAddress = async (addressId: string) => {
-    if (!currentFacilityId) return;
-
-    try {
-      const response = await addressWhitelistApi.remove(currentFacilityId, addressId);
-
-      if (response.success) {
-        toast.success('Address removed from whitelist');
-        loadWhitelistAddresses();
-      } else {
-        toast.error(response.error || 'Failed to remove address');
-      }
-    } catch (error) {
-      console.error('Error removing address:', error);
-      toast.error('Failed to remove address');
-    }
-  };
-
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          member.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -580,17 +406,14 @@ export function MemberManagement() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="flex">
+            <TabsList className="flex flex-wrap">
               <TabsTrigger value="members" className="px-4">Members</TabsTrigger>
+              <TabsTrigger value="whitelist" className="px-4">Address Whitelist</TabsTrigger>
               <TabsTrigger value="households" className="px-4">Households</TabsTrigger>
             </TabsList>
 
             <TabsContent value="members" className="space-y-6">
           <div className="flex justify-end gap-2 mb-4">
-              <Button onClick={() => setShowAddressDialog(true)} variant="outline">
-                <Home className="h-4 w-4 mr-2" />
-                Address Whitelist
-              </Button>
               <Button onClick={loadMembers} variant="outline">
                 Refresh
               </Button>
@@ -855,156 +678,16 @@ export function MemberManagement() {
           </Card>
             </TabsContent>
 
+            <TabsContent value="whitelist" className="space-y-6">
+              <AddressWhitelistPanel facilityId={currentFacilityId} />
+            </TabsContent>
+
             <TabsContent value="households">
               <HouseholdManagement />
             </TabsContent>
           </Tabs>
         </div>
       </div>
-
-      {/* Address Whitelist Dialog */}
-      <Dialog open={showAddressDialog} onOpenChange={setShowAddressDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Address Whitelist Management</DialogTitle>
-            <DialogDescription>
-              Manage approved addresses and last names for auto-approval of new members.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            {/* Add New Address */}
-            <div>
-              <Label className="text-sm font-medium">Add New Entry</Label>
-              <div className="flex gap-2 mt-2">
-                <Input
-                  placeholder="Enter full address..."
-                  value={newAddress}
-                  onChange={(e) => setNewAddress(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddAddress();
-                    }
-                  }}
-                  className="flex-1"
-                />
-                <Input
-                  placeholder="Last name..."
-                  value={newLastName}
-                  onChange={(e) => setNewLastName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddAddress();
-                    }
-                  }}
-                  className="w-40"
-                />
-                <Input
-                  type="email"
-                  placeholder="Email (optional)"
-                  value={newWhitelistEmail}
-                  onChange={(e) => setNewWhitelistEmail(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddAddress();
-                    }
-                  }}
-                  className="w-48"
-                />
-                <Button onClick={handleAddAddress}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
-              </div>
-            </div>
-
-            {/* File Upload */}
-            <div>
-              <Label className="text-sm font-medium">Import from File</Label>
-              <div className="flex items-center gap-2 mt-2">
-                <input
-                  ref={whitelistFileRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleWhitelistFileUpload}
-                  className="hidden"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => whitelistFileRef.current?.click()}
-                  disabled={whitelistUploading}
-                >
-                  <Upload className="h-4 w-4 mr-1" />
-                  {whitelistUploading ? 'Importing...' : 'Import from Excel/CSV'}
-                </Button>
-                <span className="text-xs text-gray-500">
-                  File should have "Address" and "Last Name" columns. Optional "Email" and "Limit" columns.
-                </span>
-              </div>
-            </div>
-
-            {/* Address List */}
-            <div>
-              <Label className="text-sm font-medium">Whitelisted Entries ({whitelistAddresses.length})</Label>
-              <div className="mt-2 space-y-2 max-h-64 overflow-y-auto">
-                {whitelistAddresses.length === 0 ? (
-                  <div className="text-center py-4 text-gray-500 text-sm">
-                    No entries in whitelist. Add addresses to enable auto-approval.
-                  </div>
-                ) : (
-                  whitelistAddresses.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <Home className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-sm truncate">
-                            {item.address}
-                            {item.lastName && <span className="text-gray-500"> — {item.lastName}</span>}
-                          </span>
-                          {item.email && (
-                            <span className="text-xs text-gray-500 truncate">{item.email}</span>
-                          )}
-                          {item.email && (
-                            <span className="text-xs text-gray-400">
-                              {item.setupInviteAcceptedAt
-                                ? 'Joined'
-                                : item.setupInviteSentAt
-                                  ? `Invite sent ${new Date(item.setupInviteSentAt).toLocaleDateString()}`
-                                  : 'Invite pending'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveAddress(item.id)}
-                        className="text-red-600 hover:text-red-700 h-8 w-8 p-0 flex-shrink-0"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Close Button */}
-            <div className="flex justify-end pt-4 border-t">
-              <Button variant="outline" onClick={() => setShowAddressDialog(false)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Strike Management Dialog */}
       <Dialog open={strikeDialogUserId !== null} onOpenChange={(open) => { if (!open) setStrikeDialogUserId(null); }}>

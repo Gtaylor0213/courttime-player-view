@@ -1029,6 +1029,77 @@ export async function createCourtBookingCheckoutSession(params: {
 }
 
 // ---------------------------------------------------------------------------
+// Refunds
+// ---------------------------------------------------------------------------
+
+export interface BulletinSignupRefundSummary {
+  refunded: number;
+  skipped: number;
+  failed: number;
+}
+
+/**
+ * Refund paid bulletin signups for a cancelled event (e.g. minimum not met).
+ * Uses Connect direct-charge refunds on the facility's connected account.
+ */
+export async function refundBulletinSignupPaymentsForPost(
+  bulletinPostId: string
+): Promise<BulletinSignupRefundSummary> {
+  const stripe = getStripe();
+  if (!stripe) {
+    console.warn(
+      '[bulletin-refund] Stripe is not configured — skipping signup refunds for post',
+      bulletinPostId
+    );
+    return { refunded: 0, skipped: 0, failed: 0 };
+  }
+
+  const result = await query(
+    `SELECT
+       cp.id,
+       cp.status,
+       cp.stripe_payment_intent_id as "stripePaymentIntentId",
+       f.stripe_account_id as "stripeAccountId"
+     FROM bulletin_drill_signups bds
+     JOIN connect_payments cp ON cp.id = bds.connect_payment_id
+     JOIN facilities f ON f.id = cp.club_id
+     WHERE bds.bulletin_post_id = $1
+       AND bds.status = 'confirmed'
+       AND bds.connect_payment_id IS NOT NULL`,
+    [bulletinPostId]
+  );
+
+  let refunded = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const row of result.rows) {
+    if (row.status === 'REFUNDED') {
+      skipped += 1;
+      continue;
+    }
+    if (row.status !== 'PAID' || !row.stripePaymentIntentId || !row.stripeAccountId) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      await stripe.refunds.create(
+        { payment_intent: row.stripePaymentIntentId },
+        { stripeAccount: row.stripeAccountId }
+      );
+      await query(`UPDATE connect_payments SET status = 'REFUNDED' WHERE id = $1`, [row.id]);
+      refunded += 1;
+    } catch (err) {
+      failed += 1;
+      console.error(`[bulletin-refund] Failed to refund connect payment ${row.id}:`, err);
+    }
+  }
+
+  return { refunded, skipped, failed };
+}
+
+// ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
 

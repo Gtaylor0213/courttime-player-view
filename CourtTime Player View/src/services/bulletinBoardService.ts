@@ -1,6 +1,7 @@
 import { query } from '../database/connection';
 import { notificationService } from './notificationService';
 import { sendBulletinMinParticipantsNotMetEmail } from './emailService';
+import { refundBulletinSignupPaymentsForPost } from './stripeConnectService';
 import { createBooking } from './bookingService';
 import { minutesToTime } from './rulesEngine/utils/timeUtils';
 
@@ -1063,7 +1064,8 @@ export async function processBulletinMinParticipantCancellations(): Promise<numb
        COUNT(bds.id)::int as "registeredParticipants"
      FROM bulletin_posts bp
      JOIN facilities f ON f.id = bp.facility_id
-     LEFT JOIN bulletin_drill_signups bds ON bds.bulletin_post_id = bp.id
+     LEFT JOIN bulletin_drill_signups bds
+       ON bds.bulletin_post_id = bp.id AND bds.status = 'confirmed'
      WHERE bp.status = 'active'
        AND bp.min_participants IS NOT NULL
        AND COALESCE(bp.cancel_if_min_not_met, false) = true
@@ -1082,7 +1084,7 @@ export async function processBulletinMinParticipantCancellations(): Promise<numb
       `SELECT u.id as "userId", u.email, u.full_name as "fullName"
        FROM bulletin_drill_signups bds
        JOIN users u ON u.id = bds.user_id
-       WHERE bds.bulletin_post_id = $1`,
+       WHERE bds.bulletin_post_id = $1 AND bds.status = 'confirmed'`,
       [post.id]
     );
 
@@ -1106,6 +1108,13 @@ export async function processBulletinMinParticipantCancellations(): Promise<numb
         post.minParticipants,
         post.registeredParticipants,
         participant.userId
+      );
+    }
+
+    const refundSummary = await refundBulletinSignupPaymentsForPost(post.id);
+    if (refundSummary.refunded > 0 || refundSummary.failed > 0) {
+      console.log(
+        `[bulletin-cancel] post ${post.id} signup refunds: refunded=${refundSummary.refunded} skipped=${refundSummary.skipped} failed=${refundSummary.failed}`
       );
     }
 

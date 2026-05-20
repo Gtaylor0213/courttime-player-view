@@ -449,8 +449,9 @@ export async function sendBulletinMinParticipantsNotMetEmail(
       <p style="margin: 4px 0; color: #374151;"><strong>Minimum Participants:</strong> ${minParticipants}</p>
       <p style="margin: 4px 0; color: #374151;"><strong>Registered Participants:</strong> ${registeredParticipants}</p>
     </div>
+    <p style="color: #6b7280; font-size: 14px;">If you paid to sign up for this event, your card will be refunded.</p>
     <p style="color: #6b7280; font-size: 14px;">Please check the bulletin board for future postings.</p>
   `;
   const html = wrapInEmailLayout(bodyContent, facilityName);
-  return sendEmail(email, `${eventType} Cancelled - ${eventTitle}`, html, userId, 'general');
+  return sendEmail(email, `${eventType} Cancelled - ${eventTitle}`, html, userId, 'booking');
 }

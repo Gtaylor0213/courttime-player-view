@@ -46,7 +46,7 @@ describe('max accounts per address enforcement on join paths', () => {
       checkLimitMock.mockResolvedValue({ allowed: true, current: 2, max: 4 });
       queryMock
         .mockResolvedValueOnce({
-          rows: [{ streetAddress: '123 Main St', lastName: 'Smith' }],
+          rows: [{ streetAddress: '123 Main St', lastName: 'Smith', email: 'a@b.com' }],
         })
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] });
@@ -83,6 +83,10 @@ describe('max accounts per address enforcement on join paths', () => {
     it('creates pending membership when allowed', async () => {
       checkLimitMock.mockResolvedValue({ allowed: true });
       queryMock
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{ streetAddress: '123 Main St', lastName: 'Smith', email: 'a@b.com' }],
+        })
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] });
 

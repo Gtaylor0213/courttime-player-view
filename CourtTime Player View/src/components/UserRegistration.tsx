@@ -26,6 +26,7 @@ export function UserRegistration() {
     facilityName: string;
     email: string;
     lastName?: string;
+    address?: string;
   } | null>(null);
   const [setupInviteError, setSetupInviteError] = useState('');
   const [setupInviteLoading, setSetupInviteLoading] = useState(!!setupTokenParam);
@@ -46,17 +47,23 @@ export function UserRegistration() {
             facilityId: string;
             facilityName: string;
             lastName?: string;
+            address?: string;
           };
+          const streetFromInvite = data.address
+            ? data.address.split(',')[0]?.trim() || ''
+            : '';
           setSetupInvite({
             facilityId: data.facilityId,
             facilityName: data.facilityName,
             email: data.email,
             lastName: data.lastName,
+            address: data.address,
           });
           setFormData((prev) => ({
             ...prev,
             email: data.email,
             lastName: data.lastName || prev.lastName,
+            streetAddress: streetFromInvite || prev.streetAddress,
           }));
         } else {
           setSetupInviteError(response.error || 'This setup link is invalid or has expired');

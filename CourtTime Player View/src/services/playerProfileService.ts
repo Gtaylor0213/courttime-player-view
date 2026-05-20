@@ -84,6 +84,9 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfileWit
 
     const profile = result.rows[0];
 
+    const { syncWhitelistedPendingMemberships } = await import('./addressWhitelistService');
+    await syncWhitelistedPendingMemberships(userId);
+
     // Get user's facility memberships (derive admin status from facility_admins table)
     const membershipsResult = await query(
       `SELECT
@@ -268,13 +271,19 @@ export async function requestFacilityMembership(
       );
     }
 
+    const { resolveMembershipStatusFromWhitelist } = await import('./addressWhitelistService');
+    const status = await resolveMembershipStatusFromWhitelist(userId, facilityId);
+
     await query(
       `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)
-       VALUES ($1, $2, $3, 'pending', CURRENT_DATE)
+       VALUES ($1, $2, $3, $4, CURRENT_DATE)
        ON CONFLICT (user_id, facility_id) DO UPDATE SET
-         status = 'pending',
-         membership_type = $3`,
-      [userId, facilityId, membershipType]
+         status = CASE
+           WHEN facility_memberships.status = 'active' THEN 'active'
+           ELSE EXCLUDED.status
+         END,
+         membership_type = EXCLUDED.membership_type`,
+      [userId, facilityId, membershipType, status]
     );
 
     if (currentTerms) {
@@ -291,11 +300,13 @@ export async function requestFacilityMembership(
       );
     }
 
-    try {
-      const { notifyFacilityAdminsOfMembershipRequest } = await import('./membershipRequestAdminNotify');
-      await notifyFacilityAdminsOfMembershipRequest(userId, facilityId, membershipType);
-    } catch (notifError) {
-      console.error('Failed to notify facility admins for membership request:', notifError);
+    if (status === 'pending') {
+      try {
+        const { notifyFacilityAdminsOfMembershipRequest } = await import('./membershipRequestAdminNotify');
+        await notifyFacilityAdminsOfMembershipRequest(userId, facilityId, membershipType);
+      } catch (notifError) {
+        console.error('Failed to notify facility admins for membership request:', notifError);
+      }
     }
 
     return true;

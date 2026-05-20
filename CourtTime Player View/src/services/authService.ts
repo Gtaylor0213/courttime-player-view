@@ -545,44 +545,8 @@ export async function addUserToFacility(
       throw new Error(addressLimitCheck.message || "You've hit the max number of accounts under this address.");
     }
 
-    const userResult = await query(
-      `SELECT street_address as "streetAddress", last_name as "lastName", email
-       FROM users WHERE id = $1`,
-      [userId]
-    );
-
-    let status: 'active' | 'pending' = 'pending';
-
-    if (userResult.rows.length > 0) {
-      const user = userResult.rows[0];
-      const userAddress = user.streetAddress;
-      const userLastName = user.lastName || '';
-      const userEmail = user.email || '';
-
-      const whitelistResult = await query(
-        `SELECT 1
-         FROM address_whitelist
-         WHERE facility_id = $1
-           AND (
-             (
-               $2::text IS NOT NULL AND $2::text <> ''
-               AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))
-               AND LOWER(TRIM(COALESCE(last_name, ''))) = LOWER(TRIM($3))
-             )
-             OR (
-               $4::text IS NOT NULL AND $4::text <> ''
-               AND email IS NOT NULL AND TRIM(email) <> ''
-               AND LOWER(TRIM(email)) = LOWER(TRIM($4))
-             )
-           )
-         LIMIT 1`,
-        [facilityId, userAddress || null, userLastName, userEmail || null]
-      );
-
-      if (whitelistResult.rows.length > 0) {
-        status = 'active';
-      }
-    }
+    const { resolveMembershipStatusFromWhitelist } = await import('./addressWhitelistService');
+    const status = await resolveMembershipStatusFromWhitelist(userId, facilityId);
 
     await query(
       `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)

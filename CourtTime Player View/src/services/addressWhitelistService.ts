@@ -30,6 +30,80 @@ const WHITELIST_SELECT = `
   updated_at as "updatedAt"
 `;
 
+/**
+ * True when the user's email or street address + last name matches a whitelist row.
+ */
+export async function isUserWhitelistedForFacility(
+  userId: string,
+  facilityId: string
+): Promise<boolean> {
+  const userResult = await query(
+    `SELECT street_address as "streetAddress", last_name as "lastName", email
+     FROM users WHERE id = $1`,
+    [userId]
+  );
+
+  if (userResult.rows.length === 0) return false;
+
+  const user = userResult.rows[0];
+  const userAddress = user.streetAddress;
+  const userLastName = user.lastName || '';
+  const userEmail = user.email || '';
+
+  const whitelistResult = await query(
+    `SELECT 1
+     FROM address_whitelist
+     WHERE facility_id = $1
+       AND (
+         (
+           $2::text IS NOT NULL AND $2::text <> ''
+           AND LOWER(TRIM(SPLIT_PART(address, ',', 1))) = LOWER(TRIM($2))
+           AND LOWER(TRIM(COALESCE(last_name, ''))) = LOWER(TRIM($3))
+         )
+         OR (
+           $4::text IS NOT NULL AND $4::text <> ''
+           AND email IS NOT NULL AND TRIM(email) <> ''
+           AND LOWER(TRIM(email)) = LOWER(TRIM($4))
+         )
+       )
+     LIMIT 1`,
+    [facilityId, userAddress || null, userLastName, userEmail || null]
+  );
+
+  return whitelistResult.rows.length > 0;
+}
+
+export async function resolveMembershipStatusFromWhitelist(
+  userId: string,
+  facilityId: string
+): Promise<'active' | 'pending'> {
+  const whitelisted = await isUserWhitelistedForFacility(userId, facilityId);
+  return whitelisted ? 'active' : 'pending';
+}
+
+/**
+ * Promote pending memberships to active when the user matches the whitelist.
+ */
+export async function syncWhitelistedPendingMemberships(userId: string): Promise<void> {
+  const pendingResult = await query(
+    `SELECT facility_id as "facilityId"
+     FROM facility_memberships
+     WHERE user_id = $1 AND status = 'pending'`,
+    [userId]
+  );
+
+  for (const row of pendingResult.rows) {
+    if (await isUserWhitelistedForFacility(userId, row.facilityId)) {
+      await query(
+        `UPDATE facility_memberships
+         SET status = 'active'
+         WHERE user_id = $1 AND facility_id = $2 AND status = 'pending'`,
+        [userId, row.facilityId]
+      );
+    }
+  }
+}
+
 function mapDuplicateError(error: { code?: string; constraint?: string }): string | null {
   if (error.code !== '23505') return null;
   if (error.constraint?.includes('email')) {

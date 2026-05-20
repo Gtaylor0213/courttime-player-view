@@ -4,7 +4,7 @@
  * Opened via deep link: courttime://reset-password?token=...
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -29,8 +29,43 @@ export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [validating, setValidating] = useState(true);
+  const [tokenValid, setTokenValid] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    const resetToken = typeof token === 'string' ? token : token?.[0];
+    if (!resetToken) {
+      setValidating(false);
+      setTokenValid(false);
+      setError('Invalid or missing reset token. Please request a new reset link.');
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const result = await api.get(
+        `/api/auth/validate-reset-token?token=${encodeURIComponent(resetToken)}`
+      );
+      if (cancelled) return;
+      setValidating(false);
+      if (result.success && (result.data as { valid?: boolean })?.valid) {
+        setTokenValid(true);
+      } else {
+        setTokenValid(false);
+        setError(
+          (result.data as { message?: string })?.message ||
+            result.error ||
+            'This password reset link has expired or is invalid.'
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   async function handleReset() {
     if (!password.trim()) {
@@ -62,6 +97,38 @@ export default function ResetPasswordScreen() {
     } else {
       setError(result.error || 'Failed to reset password. The link may have expired.');
     }
+  }
+
+  if (validating) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.scrollContent}>
+          <Text style={styles.subtitle}>Validating reset link…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!tokenValid) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.successContainer}>
+            <View style={[styles.successIcon, { backgroundColor: Colors.error }]}>
+              <Text style={styles.successIconText}>!</Text>
+            </View>
+            <Text style={styles.successTitle}>Invalid link</Text>
+            <Text style={styles.successMessage}>{error}</Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => router.replace('/auth/forgot-password')}
+            >
+              <Text style={styles.buttonText}>Request new link</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   if (success) {

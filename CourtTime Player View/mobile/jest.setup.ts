@@ -1,5 +1,10 @@
 import './src/registerTextDefaults';
 
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: jest.fn(() => ({ width: 390, height: 844, scale: 2, fontScale: 1 })),
+}));
+
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
   const insets = { top: 0, right: 0, bottom: 0, left: 0 };

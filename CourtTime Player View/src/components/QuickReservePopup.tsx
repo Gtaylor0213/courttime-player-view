@@ -9,7 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Calendar, Clock, MapPin, User, Zap, AlertCircle, Info } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
 import { useAuth } from '../contexts/AuthContext';
-import { bookingApi } from '../api/client';
+import { bookingApi, courtConfigApi } from '../api/client';
+import {
+  buildExistingBookingsMap12h,
+  type CourtAvailabilityData,
+} from '../../shared/utils/courtAvailability';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
@@ -186,92 +190,43 @@ export function QuickReservePopup({
     return allCourts.filter(court => court.type === selectedCourtType);
   }, [allCourts, selectedCourtType]);
 
-  // Fetch bookings when modal opens, facility changes, or date changes
+  // Per-court availability (same API as mobile book flow)
   useEffect(() => {
-    const fetchBookings = async () => {
-      if (!isOpen || !selectedFacility || !selectedDate) return;
+    if (!isOpen || !selectedFacility || !selectedDate || allCourts.length === 0) {
+      if (!isOpen) setExistingBookings({});
+      return;
+    }
 
+    let cancelled = false;
+
+    (async () => {
       try {
-        const response = await bookingApi.getByFacility(selectedFacility, selectedDate);
-        if (response.success && response.data?.bookings) {
-          // Transform bookings into a lookup object by court name and time
-          const bookingsMap: any = {};
-
-          // Helper to add slots for a booking to a court name
-          const addBookingSlots = (courtName: string, hours24: number, minutes: number, durationMinutes: number) => {
-            if (!bookingsMap[courtName]) {
-              bookingsMap[courtName] = new Set();
+        const byCourtId: Record<string, CourtAvailabilityData> = {};
+        await Promise.all(
+          allCourts.map(async (c) => {
+            const res = await courtConfigApi.getAvailability(c.id, selectedDate);
+            if (res.success && res.data) {
+              byCourtId[c.id] = res.data as CourtAvailabilityData;
             }
-            const slotsToFill = Math.ceil(durationMinutes / 15);
-            for (let i = 0; i < slotsToFill; i++) {
-              const slotMinutes = minutes + (i * 15);
-              const slotHours24 = hours24 + Math.floor(slotMinutes / 60);
-              const actualMinutes = slotMinutes % 60;
-              const slotPeriod = slotHours24 >= 12 ? 'PM' : 'AM';
-              const slotHours12 = slotHours24 % 12 || 12;
-              const slotTime = `${slotHours12}:${actualMinutes.toString().padStart(2, '0')} ${slotPeriod}`;
-              bookingsMap[courtName].add(slotTime);
-            }
-          };
-
-          // Build court lookup maps for parent/child relationships
-          const courts = currentFacility?.courts || [];
-          const courtById: Record<string, any> = {};
-          courts.forEach(c => { courtById[c.id] = c; });
-
-          // Map court ID -> court name for quick lookups
-          const courtIdToName: Record<string, string> = {};
-          courts.forEach(c => { courtIdToName[c.id] = c.name; });
-
-          // Find children for each parent court
-          const parentToChildren: Record<string, string[]> = {};
-          courts.forEach(c => {
-            if (c.parentCourtId) {
-              if (!parentToChildren[c.parentCourtId]) {
-                parentToChildren[c.parentCourtId] = [];
-              }
-              parentToChildren[c.parentCourtId].push(c.name);
-            }
-          });
-
-          response.data.bookings.forEach((booking: any) => {
-            const courtName = booking.courtName;
-            const [hours24, minutes] = booking.startTime.split(':').map(Number);
-
-            // Add booking slots to the booked court itself
-            addBookingSlots(courtName, hours24, minutes, booking.durationMinutes);
-
-            // Find this court's data to check relationships
-            const bookedCourt = courts.find(c => c.name === courtName);
-            if (bookedCourt) {
-              // If this is a child court, also block the parent court
-              if (bookedCourt.parentCourtId) {
-                const parentName = courtIdToName[bookedCourt.parentCourtId];
-                if (parentName) {
-                  addBookingSlots(parentName, hours24, minutes, booking.durationMinutes);
-                }
-              }
-              // If this is a parent court, also block all child courts
-              const children = parentToChildren[bookedCourt.id];
-              if (children) {
-                children.forEach(childName => {
-                  addBookingSlots(childName, hours24, minutes, booking.durationMinutes);
-                });
-              }
-            }
-          });
-          setExistingBookings(bookingsMap);
-        } else {
-          setExistingBookings({});
-        }
+          })
+        );
+        if (cancelled) return;
+        setExistingBookings(
+          buildExistingBookingsMap12h(
+            allCourts.map((c) => ({ id: c.id, name: c.name })),
+            byCourtId
+          )
+        );
       } catch (error) {
-        console.error('Error fetching bookings:', error);
-        setExistingBookings({});
+        console.error('Error fetching court availability:', error);
+        if (!cancelled) setExistingBookings({});
       }
-    };
+    })();
 
-    fetchBookings();
-  }, [isOpen, selectedFacility, selectedDate]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, selectedFacility, selectedDate, allCourts]);
 
   // Auto-select first available court and find soonest available time when court type changes or date changes
   useEffect(() => {

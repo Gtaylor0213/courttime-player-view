@@ -35,7 +35,7 @@
 | `/api/bulletin-board/:id/pin` | `src/api/client.ts:448` | `-` | ❌ web-only |
 | `/api/bulletin-board/:id/signup` | `src/api/client.ts:455; src/api/client.ts:461` | `mobile/app/(tabs)/community.tsx:263; mobile/app/(tabs)/community.tsx:281` | ✅ identical |
 | `/api/bulletin-board/:id/signup/:id` | `src/api/client.ts:467` | `-` | ❌ web-only |
-| `/api/court-config/:id/availability` | `-` | `mobile/src/components/EditBookingModal.tsx:93; mobile/app/(tabs)/book.tsx:246` | ❌ mobile-only |
+| `/api/court-config/:id/availability` | `src/api/client.ts` (courtConfigApi.getAvailability); BookingWizard; QuickReservePopup | `mobile/app/(tabs)/book.tsx`; EditBookingModal | ✅ both |
 | `/api/court-config/:id/schedule` | `src/api/client.ts:784; src/api/client.ts:801` | `-` | ❌ web-only |
 | `/api/court-config/blackouts/:id` | `src/api/client.ts:846; src/api/client.ts:853` | `-` | ❌ web-only |
 | `/api/court-config/facility/:id` | `-` | `mobile/src/components/CourtCalendarGrid.tsx:90` | ❌ mobile-only |
@@ -81,23 +81,22 @@
 | `/api/strikes/:id/revoke` | `src/api/client.ts:962` | `-` | ❌ web-only |
 | `/api/strikes/check/:id:id` | `src/api/client.ts:976` | `-` | ❌ web-only |
 | `/api/strikes/facility/:id${qs ` | `src/api/client.ts:938` | `-` | ❌ web-only |
-| `/api/strikes/user/:id` | `-` | `mobile/app/(tabs)/profile.tsx:90` | ❌ mobile-only |
+| `/api/strikes/user/:id` | `src/api/client.ts` (strikesApi.getByUser) | `mobile/app/(tabs)/profile.tsx` | ✅ both |
+| `/api/strikes/check/:userId` | `src/components/CourtCalendarView.tsx`; PlayerProfile | `mobile/app/(tabs)/index.tsx`; book; profile | ✅ both |
 | `/api/strikes/user/:id:id` | `src/api/client.ts:943` | `-` | ❌ web-only |
 | `/api/users/:id` | `src/api/client.ts:252; src/api/client.ts:260` | `-` | ❌ web-only |
 | `/api/users/:id/memberships` | `src/api/client.ts:256` | `-` | ❌ web-only |
 
 ## Notes on Mismatches
 
-- `/api/bookings/:id` uses different HTTP methods (web: `DELETE,GET` vs mobile: `DELETE`).
-- `/api/bulletin-board/:id` uses different HTTP methods (web: `DELETE,GET,PATCH` vs mobile: `DELETE,GET`).
-- `/api/members/:id` uses different HTTP methods (web: `POST` vs mobile: `GET`).
-- `/api/members/:id/:id` uses different HTTP methods (web: `DELETE,GET,PATCH` vs mobile: `DELETE`).
-- `/api/messages/:id` uses different HTTP methods (web: `POST` vs mobile: `GET`).
-- `/api/messages/:id/read` uses different HTTP methods (web: `PATCH` vs mobile: `POST`).
-- `/api/notifications/:id` uses different HTTP methods (web: `DELETE,GET` vs mobile: `GET`).
-- `/api/notifications/:id/read` uses different HTTP methods (web: `PATCH` vs mobile: `POST`).
-- `/api/notifications/:id/read-all` uses different HTTP methods (web: `PATCH` vs mobile: `POST`).
-- `/api/notifications/:id/unread-count` uses different HTTP methods (web: `PATCH` vs mobile: `GET`).
+Path patterns below aggregate **different operations** on similar routes (not necessarily bugs).
+
+- `/api/auth/me` — mobile uses Bearer `GET /api/auth/me`; web uses `GET /api/auth/me/:userId`.
+- `/api/bookings/:id` — web may `GET` or `DELETE`; mobile often `DELETE` only from player screens.
+- `/api/bulletin-board/:id` — web admins use `PATCH` (pin/edit); mobile uses `GET`/`POST`/`DELETE` for player flows.
+- `/api/members/:id` — web `POST` (create); mobile `GET` (list for messages).
+- Notification read routes: **both clients use `PATCH`** for `/read` and `/read-all` (community tab on mobile).
+- See [`docs/mobile-web-sync.md`](mobile-web-sync.md) for intentional web-only admin routes and mobile-only push device registration.
 
 ## Shared Response Envelope
 

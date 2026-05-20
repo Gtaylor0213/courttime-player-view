@@ -1009,6 +1009,11 @@ export const courtConfigApi = {
     return apiRequest(`/api/court-config/facility/${facilityId}?${qs.toString()}`);
   },
 
+  getAvailability: async (courtId: string, dateYmd: string) => {
+    const qs = new URLSearchParams({ date: dateYmd });
+    return apiRequest(`/api/court-config/${courtId}/availability?${qs.toString()}`);
+  },
+
   getSchedule: async (courtId: string) => {
     return apiRequest(`/api/court-config/${courtId}/schedule`);
   },

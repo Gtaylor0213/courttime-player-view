@@ -55,6 +55,19 @@ import {
   bookingWithDetailsToCalendarDetails,
 } from '../../src/utils/bookingCalendar';
 import { userFacingApiMessage, type ApiFailureShape } from '../../src/utils/apiUserMessages';
+import {
+  RESERVATION_LABEL_TYPE_KEYS,
+  getBookingTypeLabel,
+} from '../../../shared/constants/bookingTypes';
+import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/utils/strikeLockout';
+import { StrikeLockoutBanner } from '../../src/components/StrikeLockoutBanner';
+import {
+  buildTimeSlotsFromAvailability,
+  parseHHMMToMinutes,
+  formatMinutesAsHHMM,
+  type CourtAvailabilityData,
+  type TimeSlot,
+} from '../../../shared/utils/courtAvailability';
 
 export const ErrorBoundary = createRouteErrorBoundary('Book');
 
@@ -76,85 +89,7 @@ function formatTimeForToast(startHHMM: string): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-const BOOKING_TYPES = [
-  { key: 'match', label: 'Fun' },
-  { key: 'league_match', label: 'League Match' },
-  { key: 't2_match', label: 'Flex Match (T-2)' },
-  { key: 'lesson', label: 'Lesson' },
-  { key: 'ball_machine', label: 'Ball Machine' },
-];
-
-interface AvailabilityResponse {
-  date: string;
-  isOpen: boolean;
-  operatingHours: { open: string; close: string };
-  slotDuration: number;
-  existingBookings: Array<{ startTime: string; endTime: string }>;
-}
-
-interface TimeSlot {
-  startTime: string;
-  endTime: string;
-  available: boolean;
-}
-
-function parseHHMMToMinutes(t: string): number {
-  const parts = t.split(':');
-  return parseInt(parts[0] || '0', 10) * 60 + parseInt(parts[1] || '0', 10);
-}
-
-function formatMinutesAsHHMM(m: number): string {
-  const h = Math.floor(m / 60);
-  const min = m % 60;
-  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-}
-
-function buildTimeSlotsFromAvailability(
-  data: AvailabilityResponse,
-  selectedDate: string,
-  todayYmd: string
-): TimeSlot[] {
-  if (!data.isOpen) return [];
-  const slotDuration = data.slotDuration || 30;
-  const [openH, openM] = data.operatingHours.open.split(':').map(Number);
-  const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
-  const bookedTimes = new Set((data.existingBookings || []).map((b) => b.startTime));
-  const slots: TimeSlot[] = [];
-  let currentH = openH;
-  let currentM = openM;
-
-  while (currentH < closeH || (currentH === closeH && currentM < closeM)) {
-    const startTime = `${String(currentH).padStart(2, '0')}:${String(currentM).padStart(2, '0')}:00`;
-
-    let endM = currentM + slotDuration;
-    let endH = currentH;
-    if (endM >= 60) {
-      endH += Math.floor(endM / 60);
-      endM = endM % 60;
-    }
-    const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`;
-
-    const now = new Date();
-    const isToday = selectedDate === todayYmd;
-    const slotPast =
-      isToday &&
-      (currentH < now.getHours() || (currentH === now.getHours() && currentM <= now.getMinutes()));
-
-    slots.push({
-      startTime,
-      endTime,
-      available: !bookedTimes.has(startTime) && !slotPast,
-    });
-
-    currentM += slotDuration;
-    if (currentM >= 60) {
-      currentH += Math.floor(currentM / 60);
-      currentM = currentM % 60;
-    }
-  }
-
-  return slots;
-}
+type AvailabilityResponse = CourtAvailabilityData;
 
 function computeAvailableEndTimesHHMM(slots: TimeSlot[], startHHMM: string): string[] {
   const startMin = parseHHMMToMinutes(startHHMM);
@@ -187,7 +122,7 @@ interface RuleViolation {
 }
 
 function bookingTypeLabel(typeKey: string): string {
-  return BOOKING_TYPES.find((type) => type.key === typeKey)?.label ?? typeKey;
+  return getBookingTypeLabel(typeKey);
 }
 
 /** Dimmed overlay visible above the booking sheet */
@@ -217,6 +152,7 @@ export default function BookCourtScreen() {
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [strikeLockout, setStrikeLockout] = useState<StrikeLockoutStatus | null>(null);
   const [booking, setBooking] = useState(false);
   const [quickReserving, setQuickReserving] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
@@ -389,6 +325,20 @@ export default function BookCourtScreen() {
   useEffect(() => {
     setSelectedCourt(null);
   }, [facilityId]);
+
+  useEffect(() => {
+    if (!user?.id || !facilityId) {
+      setStrikeLockout(null);
+      return;
+    }
+    let cancelled = false;
+    fetchStrikeLockout((path) => api.get(path), user.id, facilityId).then((status) => {
+      if (!cancelled) setStrikeLockout(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, facilityId]);
 
   useEffect(() => {
     fetchTimeSlots();
@@ -1109,6 +1059,7 @@ export default function BookCourtScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
       >
       <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
+      <StrikeLockoutBanner status={strikeLockout} />
       {!facilityId && (
         <View style={styles.noFacility}>
           <Ionicons name="warning-outline" size={20} color={Colors.warning} />
@@ -1325,17 +1276,17 @@ export default function BookCourtScreen() {
                   style={{ marginBottom: Spacing.sm }}
                 >
                   <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                    {BOOKING_TYPES.map(bt => (
+                    {RESERVATION_LABEL_TYPE_KEYS.map((key) => (
                       <TouchableOpacity
-                        key={bt.key}
-                        style={[styles.typeChip, bookingType === bt.key && styles.typeChipSelected]}
-                        onPress={() => setBookingType(bt.key)}
+                        key={key}
+                        style={[styles.typeChip, bookingType === key && styles.typeChipSelected]}
+                        onPress={() => setBookingType(key)}
                         accessibilityRole="button"
-                        accessibilityLabel={`${bt.label} booking type`}
-                        accessibilityState={{ selected: bookingType === bt.key }}
+                        accessibilityLabel={`${getBookingTypeLabel(key)} booking type`}
+                        accessibilityState={{ selected: bookingType === key }}
                       >
-                        <Text style={[styles.typeChipText, bookingType === bt.key && styles.typeChipTextSelected]}>
-                          {bt.label}
+                        <Text style={[styles.typeChipText, bookingType === key && styles.typeChipTextSelected]}>
+                          {getBookingTypeLabel(key)}
                         </Text>
                       </TouchableOpacity>
                     ))}

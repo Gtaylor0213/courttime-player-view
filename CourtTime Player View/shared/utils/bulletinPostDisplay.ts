@@ -1,4 +1,4 @@
-import { parseApiBoolean } from '../../../shared/api/core';
+import { parseApiBoolean } from '../api/core';
 
 export const EVENT_SIGNUP_TYPES = new Set([
   'event',

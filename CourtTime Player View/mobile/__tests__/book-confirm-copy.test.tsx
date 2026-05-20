@@ -3,7 +3,7 @@ import renderer, { act } from 'react-test-renderer';
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { TouchableOpacity, Text, Modal, Pressable } from 'react-native';
 import BookCourtScreen from '../app/(tabs)/book';
-import { api } from '../src/api/client';
+import { api, paymentApi } from '../src/api/client';
 
 jest.mock('expo-calendar', () => ({
   requestCalendarPermissionsAsync: jest.fn(),
@@ -81,6 +81,10 @@ jest.mock('../src/components/CourtCalendarGrid', () => {
 
 jest.mock('../src/utils/alert', () => ({ showAlert: jest.fn(), showApiErrorAlert: jest.fn() }));
 jest.mock('../src/utils/haptics', () => ({ hapticSuccess: jest.fn(), hapticError: jest.fn() }));
+jest.mock('../src/components/StrikeLockoutBanner', () => ({
+  StrikeLockoutBanner: () => null,
+}));
+
 jest.mock('../src/hooks/useOfflineApi', () => ({
   useOfflineApi: jest.fn(() => ({
     bannerState: 'online',
@@ -120,6 +124,27 @@ async function pressByTestId(root: renderer.ReactTestRenderer, testId: string) {
   });
 }
 
+async function flushMicrotasks() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+/** Quick Reserve lives under the collapsed "More" tools section. */
+async function expandBookingTools(root: renderer.ReactTestRenderer) {
+  try {
+    const toggle = root.root.findByProps({ accessibilityLabel: 'Show booking tools' });
+    await act(async () => {
+      toggle.props.onPress?.();
+      await Promise.resolve();
+    });
+  } catch {
+    /* already expanded */
+  }
+}
+
 type TouchableLike = { props: { children?: unknown; onPress?: () => void } };
 type ModalLike = { props: { visible?: boolean; children?: unknown } };
 
@@ -152,9 +177,15 @@ function visibleModalTexts(root: renderer.ReactTestRenderer): string[] {
 
 describe('BookCourtScreen booking modal confirm copy', () => {
   let getSpy: jest.SpiedFunction<typeof api.get>;
+  let createBookingSpy: jest.SpiedFunction<typeof paymentApi.bookings.create>;
+  let tree: renderer.ReactTestRenderer | undefined;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    tree = undefined;
+    createBookingSpy = jest
+      .spyOn(paymentApi.bookings, 'create')
+      .mockResolvedValue({ success: true, data: {} });
     getSpy = jest.spyOn(api, 'get').mockImplementation(async (url: string) => {
       if (url.includes('/api/facilities/') && url.includes('/courts')) {
         return {
@@ -173,6 +204,12 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       if (url.includes('/api/court-config/facility/')) {
         return { success: true, data: { courtConfigs: [] } };
       }
+      if (url.includes('/api/strikes/check/')) {
+        return {
+          success: true,
+          data: { isLockedOut: false, activeStrikes: 0, threshold: 3 },
+        };
+      }
       if (url.includes('/availability')) {
         return {
           success: true,
@@ -189,7 +226,13 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      tree?.unmount();
+      tree = undefined;
+      await Promise.resolve();
+    });
+    createBookingSpy.mockRestore();
     getSpy.mockRestore();
     jest.useRealTimers();
   });
@@ -198,12 +241,10 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     jest.useFakeTimers({ advanceTimers: true });
     jest.setSystemTime(new Date('2026-05-04T07:00:00'));
 
-    let tree: renderer.ReactTestRenderer;
     await act(async () => {
       tree = renderer.create(<BookCourtScreen />);
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    await flushMicrotasks();
 
     await act(async () => {
       await pressByTestId(tree!, 'open-booking-modal');
@@ -256,32 +297,24 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       setSelectedBookDate: jest.fn(),
     }));
 
-    let postSpy: jest.SpiedFunction<typeof api.post>;
-    postSpy = jest.spyOn(api, 'post').mockResolvedValue({ success: true, data: {} });
-
-    let tree: renderer.ReactTestRenderer;
     await act(async () => {
       tree = renderer.create(<BookCourtScreen />);
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    await flushMicrotasks();
+
+    await expandBookingTools(tree!);
 
     await act(async () => {
       pressTouchableContainingText(tree!, 'Quick Reserve');
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    await flushMicrotasks();
 
     await act(async () => {
       pressTouchableContainingText(tree!, 'Confirm Booking');
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    await flushMicrotasks();
 
-    expect(postSpy).toHaveBeenCalledWith(
-      '/api/bookings',
+    expect(createBookingSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         courtId: 'court-1',
         facilityId: 'facility-1',
@@ -290,7 +323,6 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       })
     );
 
-    postSpy.mockRestore();
     (useAuth as jest.Mock).mockImplementation(() => ({
       user: { id: 'user-1', adminFacilities: ['facility-1'] },
       facilityId: 'facility-1',
@@ -304,29 +336,25 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     jest.setSystemTime(new Date('2026-05-04T07:00:00'));
 
     const { showAlert } = require('../src/utils/alert');
-    const postSpy = jest.spyOn(api, 'post').mockResolvedValue({ success: true, data: {} });
 
-    let tree: renderer.ReactTestRenderer;
     await act(async () => {
       tree = renderer.create(<BookCourtScreen />);
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    await flushMicrotasks();
 
     await act(async () => {
       await pressByTestId(tree!, 'open-booking-modal');
     });
+    await flushMicrotasks();
 
     await act(async () => {
       pressTouchableContainingText(tree!, 'Confirm Booking');
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    await flushMicrotasks();
 
     const bookedCall = (showAlert as jest.Mock).mock.calls.find((call: unknown[]) => call[0] === 'Booked!');
 
-    expect(postSpy).toHaveBeenCalledWith(
-      '/api/bookings',
+    expect(createBookingSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         courtId: 'court-1',
         facilityId: 'facility-1',
@@ -342,7 +370,6 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       ])
     );
 
-    postSpy.mockRestore();
     jest.useRealTimers();
   });
 });

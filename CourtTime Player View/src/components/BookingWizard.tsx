@@ -14,7 +14,11 @@ import {
   offerAddBookingToCalendar,
 } from '../utils/bookingCalendar';
 import { useAuth } from '../contexts/AuthContext';
-import { bookingApi, facilitiesApi } from '../api/client';
+import { bookingApi, courtConfigApi, facilitiesApi } from '../api/client';
+import {
+  buildExistingBookingsMapByCourtName,
+  type CourtAvailabilityData,
+} from '../../shared/utils/courtAvailability';
 import { toast } from 'sonner';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
@@ -141,33 +145,34 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     }
   }, [isOpen, facilityId]);
 
-  // Fetch existing bookings to determine court availability
+  // Per-court availability (same API as mobile book flow)
   useEffect(() => {
-    if (!isOpen || !facilityId || !date) return;
-    bookingApi.getByFacility(facilityId, date).then(res => {
-      if (res.success && res.data?.bookings) {
-        const map: Record<string, Set<string>> = {};
-        for (const b of res.data.bookings) {
-          const name = b.courtName || b.court_name;
-          if (!map[name]) map[name] = new Set();
-          // Add all 15-min slots this booking covers
-          const [sh, sm] = (b.startTime || b.start_time || '').split(':').map(Number);
-          const [eh, em] = (b.endTime || b.end_time || '').split(':').map(Number);
-          if (!isNaN(sh) && !isNaN(eh)) {
-            let t = sh * 60 + (sm || 0);
-            const end = eh * 60 + (em || 0);
-            while (t < end) {
-              const hh = Math.floor(t / 60);
-              const mm = t % 60;
-              map[name].add(`${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`);
-              t += 15;
-            }
+    if (!isOpen || !facilityId || !date || facilityCourts.length === 0) return;
+    let cancelled = false;
+
+    (async () => {
+      const byCourtId: Record<string, CourtAvailabilityData> = {};
+      await Promise.all(
+        facilityCourts.map(async (c) => {
+          const res = await courtConfigApi.getAvailability(c.id, date);
+          if (res.success && res.data) {
+            byCourtId[c.id] = res.data as CourtAvailabilityData;
           }
-        }
-        setExistingBookings(map);
-      }
-    });
-  }, [isOpen, facilityId, date]);
+        })
+      );
+      if (cancelled) return;
+      setExistingBookings(
+        buildExistingBookingsMapByCourtName(
+          facilityCourts.map((c) => ({ id: c.id, name: c.name })),
+          byCourtId
+        )
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, facilityId, date, facilityCourts]);
 
   // Build the primary court set from drag selection
   const dragSelectedCourts = useMemo(() => {

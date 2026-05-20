@@ -28,6 +28,8 @@ import { api } from '../../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import type { PlayerProfile } from '../../src/types/database';
 import { CachedImage } from '../../src/components/CachedImage';
+import { FacilityLockoutRow } from '../../src/components/StrikeLockoutBanner';
+import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/utils/strikeLockout';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Profile');
@@ -110,6 +112,7 @@ export default function ProfileScreen() {
 
   // Strike state
   const [strikes, setStrikes] = useState<any[]>([]);
+  const [lockoutStatuses, setLockoutStatuses] = useState<Record<string, StrikeLockoutStatus>>({});
 
   // Facility membership state
   const [showFindFacility, setShowFindFacility] = useState(false);
@@ -146,7 +149,20 @@ export default function ProfileScreen() {
       const list = Array.isArray(strikesRes.data) ? strikesRes.data : strikesRes.data.strikes || [];
       setStrikes(list);
     }
-  }, [user]);
+
+    const facilityIds = user.memberFacilities || [];
+    const statuses: Record<string, StrikeLockoutStatus> = {};
+    await Promise.all(
+      facilityIds.map(async (facilityId) => {
+        const status = await fetchStrikeLockout((path) => api.get(path), user.id, facilityId);
+        if (status) {
+          const name = facilities.find((f) => f.id === facilityId)?.name;
+          statuses[facilityId] = { ...status, facilityName: name };
+        }
+      })
+    );
+    setLockoutStatuses(statuses);
+  }, [user, facilities]);
 
   useEffect(() => {
     fetchProfile();
@@ -876,6 +892,25 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {facilities.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Strike & lockout status</Text>
+          <View style={styles.detailCard}>
+            {facilities.map((fac) => {
+              const status = lockoutStatuses[fac.id];
+              if (!status) {
+                return (
+                  <View key={fac.id} style={styles.detailRow}>
+                    <Text style={{ fontSize: FontSize.sm, color: Colors.textMuted }}>{fac.name}</Text>
+                  </View>
+                );
+              }
+              return <FacilityLockoutRow key={fac.id} facilityName={fac.name} status={status} />;
+            })}
+          </View>
+        </View>
+      )}
 
       {/* Strikes */}
       {strikes.length > 0 && (

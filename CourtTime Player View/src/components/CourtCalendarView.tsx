@@ -13,7 +13,10 @@ import { ReservationDetailsModal } from './ReservationDetailsModal';
 import { BulletinActivitySignupModal } from './BulletinActivitySignupModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
-import { bulletinBoardApi, facilitiesApi, usersApi, bookingApi, courtConfigApi, unwrapApiPayload } from '../api/client';
+import { bulletinBoardApi, facilitiesApi, usersApi, bookingApi, courtConfigApi, strikesApi, unwrapApiPayload } from '../api/client';
+import { StrikeLockoutAlerts } from './StrikeLockoutAlerts';
+import type { StrikeLockoutStatus } from '../../shared/utils/strikeLockout';
+import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { parseLocalDate } from '../utils/dateUtils';
 import { toast } from 'sonner';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
@@ -139,6 +142,7 @@ export function CourtCalendarView() {
     Record<string, CourtDayOperatingBounds>
   >({});
   const [loadingBookings, setLoadingBookings] = useState(false);
+  const [strikeLockout, setStrikeLockout] = useState<StrikeLockoutStatus | null>(null);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const calendarGridRef = useRef<HTMLTableElement>(null);
   const headerRowRef = useRef<HTMLTableRowElement | HTMLDivElement>(null);
@@ -335,6 +339,25 @@ export function CourtCalendarView() {
 
     fetchFacilities();
   }, [user?.memberFacilities, authLoading]);
+
+  useEffect(() => {
+    if (!user?.id || !selectedFacility) {
+      setStrikeLockout(null);
+      return;
+    }
+    let cancelled = false;
+    strikesApi.checkLockout(user.id, selectedFacility).then((res) => {
+      if (cancelled) return;
+      if (res.success) {
+        setStrikeLockout(parseStrikeLockoutStatus(res.data));
+      } else {
+        setStrikeLockout(null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, selectedFacility]);
 
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async (dateOverride?: Date | string) => {
@@ -2430,6 +2453,8 @@ export function CourtCalendarView() {
             </span>
           </div>
         )}
+
+        <StrikeLockoutAlerts status={strikeLockout} />
 
         {/* Controls Header */}
         <div className="flex-shrink-0 z-40 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">

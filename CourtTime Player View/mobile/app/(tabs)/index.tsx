@@ -28,7 +28,7 @@ import { QuickBook } from '../../src/components/QuickBook';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
-import { formatBulletinPostProminentDate } from '../../src/utils/bulletinPostDisplay';
+import { formatBulletinPostProminentDate } from '../../../shared/utils/bulletinPostDisplay';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import {
   addBookingToCalendarWithFeedback,

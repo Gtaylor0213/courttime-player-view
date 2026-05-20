@@ -56,6 +56,12 @@ export function PlayerProfile() {
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean | null>(null);
   const [emailBookingConfirmations, setEmailBookingConfirmations] = useState<boolean | null>(null);
   const [emailMembershipRequestAlerts, setEmailMembershipRequestAlerts] = useState<boolean | null>(null);
+  const [pushEnabled, setPushEnabled] = useState<boolean | null>(null);
+  const [pushBookingUpdates, setPushBookingUpdates] = useState<boolean | null>(null);
+  const [pushBookingReminders, setPushBookingReminders] = useState<boolean | null>(null);
+  const [pushStrikes, setPushStrikes] = useState<boolean | null>(null);
+  const [pushAnnouncements, setPushAnnouncements] = useState<boolean | null>(null);
+  const [pushWeather, setPushWeather] = useState<boolean | null>(null);
 
   const [profileData, setProfileData] = useState({
     firstName: '',
@@ -93,16 +99,34 @@ export function PlayerProfile() {
           setEmailNotificationsEnabled(p.emailNotificationsEnabled !== false);
           setEmailBookingConfirmations(p.emailBookingConfirmations !== false);
           setEmailMembershipRequestAlerts(p.emailMembershipRequestAlerts !== false);
+          setPushEnabled(p.pushEnabled !== false);
+          setPushBookingUpdates(p.pushBookingUpdates !== false);
+          setPushBookingReminders(p.pushBookingReminders !== false);
+          setPushStrikes(p.pushStrikes !== false);
+          setPushAnnouncements(p.pushAnnouncements !== false);
+          setPushWeather(p.pushWeather !== false);
         } else {
           setEmailNotificationsEnabled(true);
           setEmailBookingConfirmations(true);
           setEmailMembershipRequestAlerts(true);
+          setPushEnabled(true);
+          setPushBookingUpdates(true);
+          setPushBookingReminders(true);
+          setPushStrikes(true);
+          setPushAnnouncements(true);
+          setPushWeather(true);
         }
       } catch {
         if (!cancelled) {
           setEmailNotificationsEnabled(true);
           setEmailBookingConfirmations(true);
           setEmailMembershipRequestAlerts(true);
+          setPushEnabled(true);
+          setPushBookingUpdates(true);
+          setPushBookingReminders(true);
+          setPushStrikes(true);
+          setPushAnnouncements(true);
+          setPushWeather(true);
         }
       }
     })();
@@ -315,6 +339,33 @@ export function PlayerProfile() {
       toast.error(res.error || 'Could not update membership request email preference');
     } else {
       setEmailMembershipRequestAlerts(res.data?.preferences?.emailMembershipRequestAlerts !== false);
+    }
+  };
+
+  const handlePushPrefChange = async (
+    key:
+      | 'pushEnabled'
+      | 'pushBookingUpdates'
+      | 'pushBookingReminders'
+      | 'pushStrikes'
+      | 'pushAnnouncements'
+      | 'pushWeather',
+    enabled: boolean,
+    getter: () => boolean | null,
+    setter: (v: boolean) => void
+  ) => {
+    if (!user?.id || getter() === null) return;
+    const previous = getter();
+    setter(enabled);
+    const res = await userPreferencesApi.updateNotifications({ [key]: enabled });
+    if (!res.success) {
+      setter(previous ?? true);
+      toast.error(res.error || 'Could not update push notification preference');
+    } else {
+      const p = res.data?.preferences;
+      if (p) {
+        setter(p[key] !== false);
+      }
     }
   };
 
@@ -675,6 +726,45 @@ export function PlayerProfile() {
                   />
                 </div>
               )}
+
+              <p className="text-sm font-medium text-gray-900 pt-2 border-t border-gray-200">
+                Mobile push notifications
+              </p>
+              <p className="text-sm text-gray-600 -mt-1">
+                These settings apply to push notifications on the CourtTime mobile app.
+              </p>
+
+              {(
+                [
+                  ['push-master', 'pushEnabled', 'All push notifications', 'Master switch for mobile push alerts.', pushEnabled, setPushEnabled],
+                  ['push-booking', 'pushBookingUpdates', 'Booking updates', 'Confirmations, cancellations, and court changes.', pushBookingUpdates, setPushBookingUpdates],
+                  ['push-reminders', 'pushBookingReminders', 'Booking reminders', 'Heads-up before your court time starts.', pushBookingReminders, setPushBookingReminders],
+                  ['push-strikes', 'pushStrikes', 'Strikes & lockouts', 'Important account enforcement alerts.', pushStrikes, setPushStrikes],
+                  ['push-announcements', 'pushAnnouncements', 'Facility announcements', 'News, events, and admin posts.', pushAnnouncements, setPushAnnouncements],
+                  ['push-weather', 'pushWeather', 'Weather alerts', 'Court closures or warnings due to weather.', pushWeather, setPushWeather],
+                ] as const
+              ).map(([id, key, title, desc, value, setter]) => (
+                <div
+                  key={id}
+                  className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3"
+                >
+                  <div className="space-y-0.5 min-w-0">
+                    <Label htmlFor={id} className="text-base font-medium text-gray-900">
+                      {title}
+                    </Label>
+                    <p className="text-sm text-gray-600">{desc}</p>
+                  </div>
+                  <Switch
+                    id={id}
+                    className="shrink-0"
+                    checked={value ?? true}
+                    onCheckedChange={(enabled) =>
+                      handlePushPrefChange(key, enabled, () => value, setter)
+                    }
+                    disabled={value === null}
+                  />
+                </div>
+              ))}
             </CardContent>
           </Card>
 

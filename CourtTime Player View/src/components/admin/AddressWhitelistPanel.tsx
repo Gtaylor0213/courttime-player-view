@@ -1,11 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Home, Plus, Upload, X } from 'lucide-react';
 import { addressWhitelistApi } from '../../api/client';
+import {
+  parseWhitelistCsv,
+  parseWhitelistWorkbook,
+  toWhitelistImportEntries,
+} from '../../../shared/utils/parseWhitelistSpreadsheet';
 import { toast } from 'sonner';
 
 interface WhitelistEntry {
@@ -100,58 +104,11 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
     setWhitelistUploading(true);
 
     try {
-      let addresses: Array<{ address: string; lastName?: string; accountsLimit?: number; email?: string }> = [];
-
-      if (ext === 'csv') {
-        const text = await file.text();
-        const lines = text.split(/\r?\n/).filter((line) => line.trim());
-        if (lines.length > 0) {
-          const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/[\s_-]+/g, ''));
-          const addressCol = headers.findIndex((h) => h.includes('address') || h.includes('street'));
-          const lastNameCol = headers.findIndex((h) => /^(lastname|surname|familyname)$/.test(h));
-          const emailCol = headers.findIndex((h) => h === 'email' || h.includes('email'));
-          const limitCol = headers.findIndex((h) => h.includes('limit') || h.includes('max') || h.includes('account'));
-
-          if (addressCol >= 0) {
-            addresses = lines
-              .slice(1)
-              .map((line) => {
-                const cols = line.split(',').map((c) => c.trim());
-                return {
-                  address: cols[addressCol] || '',
-                  lastName: lastNameCol >= 0 ? cols[lastNameCol] : undefined,
-                  email: emailCol >= 0 ? cols[emailCol] : undefined,
-                  accountsLimit: limitCol >= 0 ? parseInt(cols[limitCol]) || undefined : undefined,
-                };
-              })
-              .filter((a) => a.address);
-          } else {
-            addresses = lines.slice(1).map((line) => ({ address: line.trim() })).filter((a) => a.address);
-          }
-        }
-      } else {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data);
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        if (rows.length > 0) {
-          const hdrs = Object.keys(rows[0]);
-          const addressKey =
-            hdrs.find((h) => /^(street|address|street.?address|full.?address)$/i.test(h.trim())) || hdrs[0];
-          const lastNameKey = hdrs.find((h) => /^(last.?name|lastname|surname|family.?name)$/i.test(h.trim()));
-          const emailKey = hdrs.find((h) => /^(email|e.?mail|email.?address)$/i.test(h.trim()));
-          const limitKey = hdrs.find((h) => /^(limit|max|accounts?.?limit)$/i.test(h.trim()));
-
-          addresses = rows
-            .map((row) => ({
-              address: String(row[addressKey] || '').trim(),
-              lastName: lastNameKey ? String(row[lastNameKey] || '').trim() || undefined : undefined,
-              email: emailKey ? String(row[emailKey] || '').trim() || undefined : undefined,
-              accountsLimit: limitKey ? parseInt(String(row[limitKey])) || undefined : undefined,
-            }))
-            .filter((a) => a.address);
-        }
-      }
+      const parsed =
+        ext === 'csv'
+          ? parseWhitelistCsv(await file.text())
+          : parseWhitelistWorkbook(await file.arrayBuffer());
+      const addresses = toWhitelistImportEntries(parsed);
 
       if (addresses.length === 0) {
         toast.error('No addresses found in file');
@@ -167,7 +124,13 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
 
       const response = await addressWhitelistApi.bulkAdd(facilityId, payload);
       if (response.success) {
-        toast.success(`Imported ${response.data?.added || addresses.length} addresses`);
+        const added = response.data?.added ?? 0;
+        const skipped = response.data?.skipped ?? 0;
+        const msg =
+          skipped > 0
+            ? `Imported ${added} of ${addresses.length} rows (${skipped} duplicate${skipped === 1 ? '' : 's'} skipped)`
+            : `Imported ${added} address${added === 1 ? '' : 'es'}`;
+        toast.success(msg);
         loadWhitelistAddresses();
       } else {
         toast.error(response.error || 'Failed to import addresses');

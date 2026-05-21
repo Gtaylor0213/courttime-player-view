@@ -1493,6 +1493,13 @@ export const paymentsApi = {
     return apiRequest(`/api/payments/history/${facilityId}`);
   },
 
+  createFacilityCheckout: async (facilityId: string, returnUrl: string) => {
+    return apiRequest('/api/payments/facility-checkout', {
+      method: 'POST',
+      body: JSON.stringify({ facilityId, returnUrl }),
+    });
+  },
+
   createPortalSession: async (facilityId: string, returnUrl: string) => {
     return apiRequest('/api/payments/portal-session', {
       method: 'POST',

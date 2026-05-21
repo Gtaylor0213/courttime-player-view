@@ -18,6 +18,37 @@ function getStripe(): Stripe | null {
   return new Stripe(key);
 }
 
+/** Resolve Stripe product ID for facility platform subscriptions. */
+async function resolveSubscriptionProductId(stripe: Stripe): Promise<string | null> {
+  const fromEnv = process.env.STRIPE_SUBSCRIPTION_PRODUCT_ID;
+  if (fromEnv) return fromEnv;
+
+  const priceId = process.env.STRIPE_PRICE_ID;
+  if (priceId) {
+    try {
+      const price = await stripe.prices.retrieve(priceId);
+      const product = price.product;
+      return typeof product === 'string' ? product : product.id;
+    } catch (err: any) {
+      console.error('Failed to resolve product from STRIPE_PRICE_ID:', err.message);
+    }
+  }
+  return null;
+}
+
+/** Whether the facility must complete Stripe checkout for a recurring annual subscription. */
+export function subscriptionNeedsPayment(sub: {
+  status: string;
+  amountCents: number;
+  stripeSubscriptionId?: string | null;
+}): boolean {
+  if (sub.status === 'pending_payment') return true;
+  if (sub.amountCents > 0 && !sub.stripeSubscriptionId) {
+    return sub.status !== 'active' && sub.status !== 'trialing';
+  }
+  return false;
+}
+
 /**
  * Validate a promo code
  */
@@ -166,6 +197,8 @@ export async function createCheckoutSession(params: {
   promoCode?: string;
   successUrl: string;
   cancelUrl: string;
+  facilityId?: string;
+  customerId?: string;
 }): Promise<{
   sessionId?: string;
   sessionUrl?: string;
@@ -186,12 +219,12 @@ export async function createCheckoutSession(params: {
     };
   }
 
-  const productId = process.env.STRIPE_SUBSCRIPTION_PRODUCT_ID;
+  const productId = await resolveSubscriptionProductId(stripe);
   if (!productId) {
     return {
       amountCents: params.amountCents,
       waived: false,
-      error: 'STRIPE_SUBSCRIPTION_PRODUCT_ID is not configured',
+      error: 'Stripe subscription product is not configured (STRIPE_SUBSCRIPTION_PRODUCT_ID or STRIPE_PRICE_ID)',
     };
   }
 
@@ -201,6 +234,7 @@ export async function createCheckoutSession(params: {
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
       mode: 'subscription',
+      customer: params.customerId || undefined,
       line_items: [{
         price_data: {
           currency: 'usd',
@@ -211,6 +245,7 @@ export async function createCheckoutSession(params: {
         quantity: 1,
       }],
       metadata: {
+        facilityId: params.facilityId || '',
         facilityName: params.facilityName,
         courtCount: String(params.courtCount),
         promoCode: params.promoCode || '',
@@ -275,6 +310,79 @@ export async function createCheckoutSession(params: {
     console.error('Stripe checkout session error:', error);
     return { amountCents: params.amountCents, waived: false, error: error.message };
   }
+}
+
+/**
+ * Create (or refresh) Stripe Checkout for an existing facility that still needs to pay.
+ * Links the session ID on facility_subscriptions for webhook matching.
+ */
+export async function createFacilitySubscriptionCheckout(
+  facilityId: string,
+  returnUrl: string
+): Promise<{
+  sessionId?: string;
+  sessionUrl?: string;
+  amountCents?: number;
+  error?: string;
+}> {
+  const sub = await getSubscriptionByFacilityId(facilityId);
+  if (!sub) {
+    return { error: 'No subscription found for this facility' };
+  }
+
+  if (!subscriptionNeedsPayment(sub)) {
+    return { error: 'This facility does not require payment at this time' };
+  }
+
+  const facResult = await query(`SELECT name FROM facilities WHERE id = $1`, [facilityId]);
+  const facilityName = facResult.rows[0]?.name || facilityId;
+  const courtCount = Number(sub.courtCount) || 1;
+  const amountCents = sub.amountCents > 0 ? sub.amountCents : getAmountForCourts(courtCount);
+
+  if (amountCents <= 0) {
+    return { error: 'No payment amount configured for this facility' };
+  }
+
+  const joiner = returnUrl.includes('?') ? '&' : '?';
+  const successUrl = `${returnUrl}${joiner}payment=success&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${returnUrl}${joiner}payment=cancelled`;
+
+  const result = await createCheckoutSession({
+    facilityName,
+    courtCount,
+    amountCents,
+    successUrl,
+    cancelUrl,
+    facilityId,
+    customerId: sub.stripeCustomerId || undefined,
+  });
+
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  if (result.sessionId) {
+    await query(
+      `UPDATE facility_subscriptions
+       SET stripe_checkout_session_id = $2,
+           status = 'pending_payment',
+           amount_cents = $3,
+           court_count = $4,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE facility_id = $1`,
+      [facilityId, result.sessionId, amountCents, courtCount]
+    );
+    await query(
+      `UPDATE facilities SET payment_status = 'pending' WHERE id = $1`,
+      [facilityId]
+    );
+  }
+
+  return {
+    sessionId: result.sessionId,
+    sessionUrl: result.sessionUrl,
+    amountCents: result.amountCents,
+  };
 }
 
 /**

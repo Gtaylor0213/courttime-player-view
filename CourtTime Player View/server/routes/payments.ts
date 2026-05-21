@@ -2,6 +2,7 @@ import express from 'express';
 import {
   validatePromoCode,
   createCheckoutSession,
+  createFacilitySubscriptionCheckout,
   verifyCheckoutSession,
   createPortalSession,
   getSubscriptionByFacilityId,
@@ -10,6 +11,8 @@ import {
 } from '../../src/services/paymentService';
 import { getAmountForCourts } from '../../src/services/subscriptionPricing';
 import { requireAuth } from '../middleware/auth';
+import { isFacilityAdmin } from '../../src/services/memberService';
+import { query } from '../../src/database/connection';
 
 async function resolveExpectedAmountCents(
   courtCount: number,
@@ -108,6 +111,44 @@ router.post('/verify-session', async (req, res, next) => {
     }
 
     const result = await verifyCheckoutSession(sessionId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/payments/facility-checkout
+ * Create Stripe Checkout for an existing facility that still needs to pay (annual recurring subscription).
+ */
+router.post('/facility-checkout', requireAuth, async (req, res, next) => {
+  try {
+    const { facilityId, returnUrl } = req.body;
+    const userId = req.user?.userId;
+
+    if (!facilityId || !returnUrl) {
+      return res.status(400).json({ success: false, error: 'Facility ID and return URL are required' });
+    }
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const adminFromTable = await query(
+      `SELECT 1 FROM facility_admins
+       WHERE facility_id = $1 AND user_id = $2 AND status = 'active'`,
+      [facilityId, userId]
+    );
+    const isAdmin =
+      adminFromTable.rows.length > 0 || (await isFacilityAdmin(facilityId, userId));
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, error: 'Facility admin access required' });
+    }
+
+    const result = await createFacilitySubscriptionCheckout(facilityId, returnUrl);
+    if (result.error) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);

@@ -12,33 +12,74 @@ interface BillingTabProps {
   facilityId: string;
 }
 
+function subscriptionNeedsPayment(sub: {
+  status?: string;
+  amountCents?: number;
+  stripeSubscriptionId?: string | null;
+}): boolean {
+  if (!sub) return false;
+  if (sub.status === 'pending_payment') return true;
+  const amount = sub.amountCents ?? 0;
+  if (amount > 0 && !sub.stripeSubscriptionId) {
+    return sub.status !== 'active' && sub.status !== 'trialing';
+  }
+  return false;
+}
+
 export function BillingTab({ facilityId }: BillingTabProps) {
   const [subscription, setSubscription] = useState<any>(null);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
-  useEffect(() => {
-    async function loadBillingData() {
-      try {
-        const [subResult, historyResult] = await Promise.all([
-          paymentsApi.getSubscription(facilityId),
-          paymentsApi.getPaymentHistory(facilityId),
-        ]);
-        if (subResult.success) setSubscription(subResult.data?.data || subResult.data);
-        if (historyResult.success) {
-          const history = historyResult.data?.data || historyResult.data;
-          setPaymentHistory(Array.isArray(history) ? history : []);
-        }
-      } catch (error) {
-        console.error('Failed to load billing data:', error);
-      } finally {
-        setLoading(false);
+  const loadBillingData = async () => {
+    try {
+      const [subResult, historyResult] = await Promise.all([
+        paymentsApi.getSubscription(facilityId),
+        paymentsApi.getPaymentHistory(facilityId),
+      ]);
+      if (subResult.success) setSubscription(subResult.data?.data || subResult.data);
+      if (historyResult.success) {
+        const history = historyResult.data?.data || historyResult.data;
+        setPaymentHistory(Array.isArray(history) ? history : []);
       }
+    } catch (error) {
+      console.error('Failed to load billing data:', error);
+    } finally {
+      setLoading(false);
     }
-    if (facilityId) loadBillingData();
+  };
+
+  useEffect(() => {
+    if (!facilityId) return;
+
+    async function handlePaymentReturn() {
+      const params = new URLSearchParams(window.location.search);
+      const payment = params.get('payment');
+      const sessionId = params.get('session_id');
+      if (payment !== 'success' || !sessionId) return;
+
+      try {
+        await paymentsApi.verifySession(sessionId);
+        toast.success('Payment received. Your annual subscription is activating…');
+      } catch {
+        toast.info('Payment submitted — refreshing subscription status…');
+      }
+
+      const url = new URL(window.location.href);
+      url.searchParams.delete('payment');
+      url.searchParams.delete('session_id');
+      window.history.replaceState({}, '', url.toString());
+
+      setLoading(true);
+      await loadBillingData();
+    }
+
+    loadBillingData();
+    handlePaymentReturn();
   }, [facilityId]);
 
   if (loading) {
@@ -59,6 +100,30 @@ export function BillingTab({ facilityId }: BillingTabProps) {
       </Alert>
     );
   }
+
+  const handlePaySubscription = async () => {
+    try {
+      setStartingCheckout(true);
+      const returnUrl = window.location.href.split('?')[0];
+      const result = await paymentsApi.createFacilityCheckout(facilityId, returnUrl);
+      const data = result.data?.data || result.data;
+      if (data?.sessionUrl) {
+        window.location.href = data.sessionUrl;
+        return;
+      }
+      if (result.success && !data?.sessionUrl && data?.sessionId?.startsWith('dev_session_')) {
+        toast.success('Payment completed (dev mode)');
+        await loadBillingData();
+        return;
+      }
+      toast.error(result.error || data?.error || 'Unable to start checkout');
+    } catch (error: any) {
+      console.error('Facility checkout error:', error);
+      toast.error('Failed to start payment');
+    } finally {
+      setStartingCheckout(false);
+    }
+  };
 
   const handleManageSubscription = async () => {
     try {
@@ -133,9 +198,40 @@ export function BillingTab({ facilityId }: BillingTabProps) {
   // Use current_period_end from Stripe if available, fallback to billing_period_end
   const renewalDate = subscription.currentPeriodEnd || subscription.billingPeriodEnd;
   const periodStart = subscription.currentPeriodStart || subscription.billingPeriodStart;
+  const needsPayment = subscriptionNeedsPayment(subscription);
+  const annualAmount = subscription.amountCents > 0
+    ? subscription.amountCents
+    : null;
 
   return (
     <div className="space-y-6">
+      {/* Payment required — complete annual recurring subscription */}
+      {needsPayment && (
+        <Alert className="border-orange-200 bg-orange-50">
+          <AlertCircle className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-900 space-y-3">
+            <p className="font-medium">Annual subscription payment required</p>
+            <p className="text-sm">
+              Your facility needs an active CourtTime subscription to continue. Pay now to start your
+              annual plan{annualAmount ? ` (${formatAmount(annualAmount)}/year for ${subscription.courtCount} courts)` : ''}.
+              Billing renews automatically each year until you cancel.
+            </p>
+            <Button
+              onClick={handlePaySubscription}
+              disabled={startingCheckout}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              {startingCheckout
+                ? 'Redirecting to Stripe…'
+                : annualAmount
+                  ? `Pay ${formatAmount(annualAmount)}/year`
+                  : 'Pay annual subscription'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Cancel at period end warning */}
       {subscription.cancelAtPeriodEnd && (
         <Alert className="border-amber-200 bg-amber-50">
@@ -231,17 +327,40 @@ export function BillingTab({ facilityId }: BillingTabProps) {
 
           <Separator />
           <div className="space-y-2">
-            <Button
-              onClick={handleManageSubscription}
-              disabled={openingPortal}
-              className="w-full"
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              {openingPortal ? 'Opening...' : 'Manage Subscription'}
-            </Button>
+            {needsPayment ? (
+              <Button
+                onClick={handlePaySubscription}
+                disabled={startingCheckout}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                {startingCheckout
+                  ? 'Redirecting to Stripe…'
+                  : annualAmount
+                    ? `Pay ${formatAmount(annualAmount)}/year — start subscription`
+                    : 'Pay annual subscription'}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleManageSubscription}
+                disabled={openingPortal}
+                className="w-full"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                {openingPortal ? 'Opening...' : 'Manage Subscription'}
+              </Button>
+            )}
+
+            {needsPayment && (
+              <p className="text-xs text-gray-500 text-center">
+                Secure checkout via Stripe. Your subscription will renew annually.
+              </p>
+            )}
 
             {/* Cancel button — only show for active/trialing subscriptions that aren't already cancelling */}
-            {(subscription.status === 'active' || subscription.status === 'trialing') && !subscription.cancelAtPeriodEnd && (
+            {!needsPayment &&
+              (subscription.status === 'active' || subscription.status === 'trialing') &&
+              !subscription.cancelAtPeriodEnd && (
               <>
                 {!showCancelConfirm ? (
                   <Button

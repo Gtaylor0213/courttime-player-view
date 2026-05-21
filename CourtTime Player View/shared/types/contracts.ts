@@ -40,7 +40,8 @@ export interface Court {
   name: string;
   courtNumber?: number;
   surfaceType?: "Hard" | "Clay" | "Grass" | "Synthetic";
-  courtType?: "Tennis" | "Pickleball" | "Dual";
+  /** Preset (Tennis, Pickleball, Dual Purpose) or facility-defined label (e.g. Clubhouse). */
+  courtType?: string;
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp?: boolean;

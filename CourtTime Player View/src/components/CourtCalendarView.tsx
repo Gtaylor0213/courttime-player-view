@@ -311,6 +311,7 @@ export function CourtCalendarView() {
                   id: court.id,
                   name: court.name,
                   type: court.type,
+                  typeLabel: String(court.courtType ?? '').trim() || court.type,
                   parentCourtId: court.parentCourtId,
                   isSplitCourt: court.isSplitCourt,
                   isWalkUp: court.isWalkUp,
@@ -2245,7 +2246,7 @@ export function CourtCalendarView() {
           {court.name}
         </div>
         <div className="truncate text-[10px] leading-none text-green-200 capitalize">
-          {court.type}
+          {(court as { typeLabel?: string }).typeLabel ?? court.type}
           {court.isWalkUp ? ' - Walk-up' : ''}
         </div>
       </th>
@@ -2262,7 +2263,7 @@ export function CourtCalendarView() {
           {court.name}
         </div>
         <div className="truncate text-[10px] leading-none text-green-200 capitalize">
-          {court.type}
+          {(court as { typeLabel?: string }).typeLabel ?? court.type}
           {court.isWalkUp ? ' - Walk-up' : ''}
         </div>
       </div>

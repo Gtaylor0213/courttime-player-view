@@ -30,6 +30,8 @@ import {
   type PaidCourtFormFields,
 } from './PaidCourtBookingFields';
 import { CourtScheduleEditor } from './CourtScheduleEditor';
+import { CourtTypeField } from './CourtTypeField';
+import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
 import { toast } from 'sonner';
 import {
   courtScheduleRowsToOperatingHoursMap,
@@ -277,24 +279,13 @@ function FacilityCourtFormBody({
             }
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor={id('courtType')}>Court Type</Label>
-          <Select
-            value={editingCourt.courtType}
-            onValueChange={(value) =>
-              setEditingCourt((prev) => (prev ? { ...prev, courtType: value } : prev))
-            }
-          >
-            <SelectTrigger id={id('courtType')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Tennis">Tennis</SelectItem>
-              <SelectItem value="Pickleball">Pickleball</SelectItem>
-              <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <CourtTypeField
+          id={id('courtType')}
+          value={editingCourt.courtType}
+          onChange={(courtType) =>
+            setEditingCourt((prev) => (prev ? { ...prev, courtType } : prev))
+          }
+        />
         <div className="space-y-2">
           <Label htmlFor={id('courtSurface')}>Surface Type</Label>
           <Select
@@ -1699,6 +1690,12 @@ export function FacilityManagement() {
 
   const handleSaveCourt = async () => {
     if (!editingCourt || !currentFacilityId) return;
+
+    const courtTypeError = validateStoredCourtType(editingCourt.courtType);
+    if (courtTypeError) {
+      toast.error(courtTypeError);
+      return;
+    }
 
     const wantsPayment = Boolean(editingCourt.requirePayment);
     const existingCourt =

@@ -60,13 +60,15 @@ import {
   courtFieldsAfterNumberChange,
   normalizeCourtNameAndNumber,
 } from '../../shared/utils/courtNaming';
+import { CourtTypeField } from './admin/CourtTypeField';
+import { validateStoredCourtType } from '../../shared/constants/courtTypes';
 
 interface Court extends PaidCourtFormFields {
   id: string;
   name: string;
   courtNumber: number;
   surfaceType: 'Hard' | 'Clay' | 'Grass' | 'Synthetic';
-  courtType: 'Tennis' | 'Pickleball' | 'Dual';
+  courtType: string;
   isIndoor: boolean;
   hasLights: boolean;
   canSplit: boolean;
@@ -1266,6 +1268,12 @@ export function FacilityRegistration() {
   };
 
   const addBulkCourts = () => {
+    const courtTypeError = validateStoredCourtType(bulkCourtData.courtType);
+    if (courtTypeError) {
+      toast.error(courtTypeError);
+      return;
+    }
+
     const count = parseInt(bulkCourtData.count);
     const startNum = parseInt(bulkCourtData.startingNumber);
 
@@ -3224,22 +3232,13 @@ export function FacilityRegistration() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Court Type</Label>
-                <Select
-                  value={bulkCourtData.courtType}
-                  onValueChange={(value: any) => setBulkCourtData(prev => ({ ...prev, courtType: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Tennis">Tennis</SelectItem>
-                    <SelectItem value="Pickleball">Pickleball</SelectItem>
-                    <SelectItem value="Dual">Dual Use</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <CourtTypeField
+                id="bulkCourtType"
+                value={bulkCourtData.courtType}
+                onChange={(courtType) =>
+                  setBulkCourtData((prev) => ({ ...prev, courtType }))
+                }
+              />
             </div>
             <div className="flex gap-4">
               <div className="flex items-center gap-2">
@@ -3320,22 +3319,11 @@ export function FacilityRegistration() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label>Court Type</Label>
-                  <Select
-                    value={court.courtType}
-                    onValueChange={(value: any) => updateCourt(court.id, { courtType: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Tennis">Tennis</SelectItem>
-                      <SelectItem value="Pickleball">Pickleball</SelectItem>
-                      <SelectItem value="Dual">Dual Use</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <CourtTypeField
+                  id={`courtType-${court.id}`}
+                  value={court.courtType}
+                  onChange={(courtType) => updateCourt(court.id, { courtType })}
+                />
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <Switch

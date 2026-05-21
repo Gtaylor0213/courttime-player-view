@@ -40,6 +40,8 @@ import {
   type PaidCourtFormFields,
 } from './PaidCourtBookingFields';
 import { CourtScheduleEditor } from './CourtScheduleEditor';
+import { CourtTypeField } from './CourtTypeField';
+import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
 
 interface Court extends PaidCourtFormFields {
   id: string;
@@ -297,6 +299,12 @@ export function CourtManagement() {
   const handleSave = async () => {
     if (!editingCourt || !currentFacilityId) return;
 
+    const courtTypeError = validateStoredCourtType(editingCourt.courtType);
+    if (courtTypeError) {
+      toast.error(courtTypeError);
+      return;
+    }
+
     const wantsPayment = Boolean(editingCourt.requirePayment);
     const existingCourt =
       !isAddingNew && editingCourt.id ? courts.find((c) => c.id === editingCourt.id) : undefined;
@@ -434,6 +442,13 @@ export function CourtManagement() {
 
   const handleBulkAdd = async () => {
     if (!currentFacilityId) return;
+
+    const courtTypeError = validateStoredCourtType(bulkAddForm.courtType);
+    if (courtTypeError) {
+      toast.error(courtTypeError);
+      return;
+    }
+
     const remaining = MAX_STANDARD_COURTS - activeCourts.length;
     if (bulkAddForm.count > remaining) {
       toast.error(`You can only add ${remaining} more court${remaining !== 1 ? 's' : ''} on your current plan (${MAX_STANDARD_COURTS} court maximum). Contact support@courttime.app for help.`);
@@ -490,6 +505,14 @@ export function CourtManagement() {
 
   const handleBulkEdit = async () => {
     if (selectedCourts.size === 0) return;
+
+    if (bulkEditForm.courtType) {
+      const courtTypeError = validateStoredCourtType(bulkEditForm.courtType);
+      if (courtTypeError) {
+        toast.error(courtTypeError);
+        return;
+      }
+    }
 
     const updates: Record<string, any> = {};
     if (bulkEditForm.courtType) updates.courtType = bulkEditForm.courtType;
@@ -710,24 +733,13 @@ export function CourtManagement() {
                       }
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="courtType">Court Type</Label>
-                    <Select
-                      value={editingCourt.courtType}
-                      onValueChange={(value) =>
-                        setEditingCourt((prev) => (prev ? { ...prev, courtType: value } : prev))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Tennis">Tennis</SelectItem>
-                        <SelectItem value="Pickleball">Pickleball</SelectItem>
-                        <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <CourtTypeField
+                    id="courtType"
+                    value={editingCourt.courtType}
+                    onChange={(courtType) =>
+                      setEditingCourt((prev) => (prev ? { ...prev, courtType } : prev))
+                    }
+                  />
                   <div className="space-y-2">
                     <Label htmlFor="courtSurface">Surface Type</Label>
                     <Select
@@ -829,22 +841,11 @@ export function CourtManagement() {
                       onChange={(e) => setBulkAddForm({ ...bulkAddForm, startingNumber: parseInt(e.target.value) || 1 })}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bulkCourtType">Court Type</Label>
-                    <Select
-                      value={bulkAddForm.courtType}
-                      onValueChange={(value) => setBulkAddForm({ ...bulkAddForm, courtType: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Tennis">Tennis</SelectItem>
-                        <SelectItem value="Pickleball">Pickleball</SelectItem>
-                        <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <CourtTypeField
+                    id="bulkCourtType"
+                    value={bulkAddForm.courtType}
+                    onChange={(courtType) => setBulkAddForm({ ...bulkAddForm, courtType })}
+                  />
                   <div className="space-y-2">
                     <Label htmlFor="bulkSurfaceType">Surface Type</Label>
                     <Select
@@ -1030,22 +1031,13 @@ export function CourtManagement() {
                       }
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label>Court Type</Label>
-                          <Select
-                            value={editingCourt.courtType}
-                            onValueChange={(value) =>
-                        setEditingCourt((prev) => (prev ? { ...prev, courtType: value } : prev))
-                      }
-                          >
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Tennis">Tennis</SelectItem>
-                              <SelectItem value="Pickleball">Pickleball</SelectItem>
-                              <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <CourtTypeField
+                          id={`courtType-${court.id}`}
+                          value={editingCourt.courtType}
+                          onChange={(courtType) =>
+                            setEditingCourt((prev) => (prev ? { ...prev, courtType } : prev))
+                          }
+                        />
                         <div className="space-y-2">
                           <Label>Surface Type</Label>
                           <Select
@@ -1189,16 +1181,18 @@ export function CourtManagement() {
                     {selectedCourts.size} court{selectedCourts.size !== 1 ? 's' : ''} selected
                   </span>
                   <div className="flex items-center gap-3 flex-wrap flex-1">
-                    <Select value={bulkEditForm.courtType} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, courtType: v })}>
-                      <SelectTrigger className="w-full sm:w-[140px]">
-                        <SelectValue placeholder="Court Type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Tennis">Tennis</SelectItem>
-                        <SelectItem value="Pickleball">Pickleball</SelectItem>
-                        <SelectItem value="Dual Purpose">Dual Purpose</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="w-full sm:min-w-[200px] sm:max-w-[280px]">
+                      <CourtTypeField
+                        id="bulkEditCourtType"
+                        label=""
+                        value={bulkEditForm.courtType}
+                        onChange={(courtType) =>
+                          setBulkEditForm({ ...bulkEditForm, courtType })
+                        }
+                        allowEmpty
+                        emptyPlaceholder="Court Type"
+                      />
+                    </div>
                     <Select value={bulkEditForm.surfaceType} onValueChange={(v) => setBulkEditForm({ ...bulkEditForm, surfaceType: v })}>
                       <SelectTrigger className="w-full sm:w-[140px]">
                         <SelectValue placeholder="Surface" />

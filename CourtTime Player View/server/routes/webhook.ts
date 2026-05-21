@@ -216,12 +216,27 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
  * customer.subscription.updated
  * Syncs cancel_at_period_end and status changes.
  */
+function subscriptionPeriodBounds(subscription: Stripe.Subscription): {
+  start: Date | null;
+  end: Date | null;
+} {
+  const item = subscription.items?.data?.[0];
+  const startSec =
+    subscription.current_period_start ?? item?.current_period_start ?? null;
+  const endSec =
+    subscription.current_period_end ?? item?.current_period_end ?? null;
+  return {
+    start: startSec ? new Date(startSec * 1000) : null,
+    end: endSec ? new Date(endSec * 1000) : null,
+  };
+}
+
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const subscriptionId = subscription.id;
   const cancelAtPeriodEnd = subscription.cancel_at_period_end;
   const status = subscription.status; // active, past_due, canceled, trialing, etc.
-  const currentPeriodStart = new Date(subscription.current_period_start * 1000);
-  const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+  const { start: currentPeriodStart, end: currentPeriodEnd } =
+    subscriptionPeriodBounds(subscription);
 
   console.log(`[WEBHOOK] subscription.updated — ${subscriptionId}, status=${status}, cancel=${cancelAtPeriodEnd}`);
 
@@ -233,8 +248,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     `UPDATE facility_subscriptions
      SET status = $2,
          cancel_at_period_end = $3,
-         current_period_start = $4,
-         current_period_end = $5,
+         current_period_start = COALESCE($4, current_period_start),
+         current_period_end = COALESCE($5, current_period_end),
          updated_at = CURRENT_TIMESTAMP
      WHERE stripe_subscription_id = $1`,
     [subscriptionId, ourStatus, cancelAtPeriodEnd, currentPeriodStart, currentPeriodEnd]

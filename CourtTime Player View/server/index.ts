@@ -131,7 +131,8 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  skip: skipRateLimitInDev,
+  skip: (req) =>
+    skipRateLimitInDev() || req.originalUrl.startsWith('/api/webhooks'),
 });
 
 const authLimiter = rateLimit({

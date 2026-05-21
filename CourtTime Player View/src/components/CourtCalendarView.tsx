@@ -1757,13 +1757,22 @@ export function CourtCalendarView() {
         if (!gesture || gesture.court !== courtName) return;
         gesture.armed = true;
         setMobileVerticalSelection(courtName, gesture.startSlotIndex, gesture.startSlotIndex);
+        attachDragTouchMove();
       }, MOBILE_DRAG_ARM_DELAY_MS);
 
       const touchId = touch.identifier;
+      let dragTouchMoveAttached = false;
 
-      const onTouchMove = (ev: TouchEvent) => {
+      const detachDragTouchMove = () => {
+        if (!dragTouchMoveAttached) return;
+        dragTouchMoveAttached = false;
+        window.removeEventListener('touchmove', onTouchMoveDrag, true);
+      };
+
+      /** Passive while waiting to arm — does not block native horizontal/vertical scroll. */
+      const onTouchMovePassive = (ev: TouchEvent) => {
         const gesture = mobileTouchGestureRef.current;
-        if (!gesture) return;
+        if (!gesture || gesture.armed) return;
         const finger = Array.from(ev.touches).find((t) => t.identifier === touchId);
         if (!finger) return;
 
@@ -1772,12 +1781,29 @@ export function CourtCalendarView() {
         const absX = Math.abs(deltaX);
         const absY = Math.abs(deltaY);
 
-        if (!gesture.armed) {
-          if (absX > MOBILE_MOVEMENT_THRESHOLD_PX || absY > MOBILE_MOVEMENT_THRESHOLD_PX) {
-            clearMobileDragArmTimer();
+        if (absX > MOBILE_MOVEMENT_THRESHOLD_PX || absY > MOBILE_MOVEMENT_THRESHOLD_PX) {
+          clearMobileDragArmTimer();
+          if (absX > MOBILE_MOVEMENT_THRESHOLD_PX && absX > absY + 2) {
+            gesture.horizontalSwipe = true;
+            releaseMobileTouchLocks();
+            mobileTouchCleanupRef.current?.();
+            mobileTouchCleanupRef.current = null;
+            mobileTouchGestureRef.current = null;
           }
-          return;
         }
+      };
+
+      /** After long-press arms — same vertical drag behavior as before. */
+      const onTouchMoveDrag = (ev: TouchEvent) => {
+        const gesture = mobileTouchGestureRef.current;
+        if (!gesture || !gesture.armed) return;
+        const finger = Array.from(ev.touches).find((t) => t.identifier === touchId);
+        if (!finger) return;
+
+        const deltaX = finger.clientX - gesture.startClientX;
+        const deltaY = finger.clientY - gesture.startClientY;
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
 
         if (absX > 10 && absX > absY + 2) {
           gesture.horizontalSwipe = true;
@@ -1801,6 +1827,13 @@ export function CourtCalendarView() {
         }
       };
 
+      const attachDragTouchMove = () => {
+        if (dragTouchMoveAttached) return;
+        dragTouchMoveAttached = true;
+        window.removeEventListener('touchmove', onTouchMovePassive, true);
+        window.addEventListener('touchmove', onTouchMoveDrag, { capture: true, passive: false });
+      };
+
       const onTouchEnd = (ev: TouchEvent) => {
         const endedHere = Array.from(ev.changedTouches).some((t) => t.identifier === touchId);
         if (!endedHere) return;
@@ -1811,11 +1844,12 @@ export function CourtCalendarView() {
         finalizeMobileTouch();
       };
 
-      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+      window.addEventListener('touchmove', onTouchMovePassive, { capture: true, passive: true });
       window.addEventListener('touchend', onTouchEnd, true);
       window.addEventListener('touchcancel', onTouchEnd, true);
       mobileTouchCleanupRef.current = () => {
-        window.removeEventListener('touchmove', onTouchMove, true);
+        window.removeEventListener('touchmove', onTouchMovePassive, true);
+        detachDragTouchMove();
         window.removeEventListener('touchend', onTouchEnd, true);
         window.removeEventListener('touchcancel', onTouchEnd, true);
       };
@@ -2104,7 +2138,7 @@ export function CourtCalendarView() {
       return (
         <td
           key={courtIndex}
-          className="relative border-r border-gray-200 last:border-r-0 p-0"
+          className={`relative border-r border-gray-200 last:border-r-0 p-0${isMobile && !calendarTouchLocked ? ' calendar-slot-pan-x' : ''}`}
           style={{
             width: effectiveCourtWidth,
             minWidth: effectiveCourtWidth,
@@ -2122,7 +2156,7 @@ export function CourtCalendarView() {
           <div
             data-slot-court={court.name}
             data-slot-time={topTime}
-            className={`absolute top-0 left-0 right-0 select-none ${!isMobile || calendarTouchLocked ? 'touch-none' : ''}
+            className={`absolute top-0 left-0 right-0 select-none ${calendarTouchLocked || !isMobile ? 'touch-none' : 'calendar-slot-pan-x'}
               ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
               ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
               ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
@@ -2160,7 +2194,7 @@ export function CourtCalendarView() {
             <div
               data-slot-court={court.name}
               data-slot-time={bottomTime}
-              className={`absolute left-0 right-0 select-none ${!isMobile || calendarTouchLocked ? 'touch-none' : ''}
+              className={`absolute left-0 right-0 select-none ${calendarTouchLocked || !isMobile ? 'touch-none' : 'calendar-slot-pan-x'}
                 ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
                 ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
                 ${!isWalkUpCourt && !bottomOutsideCourt && bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
@@ -2279,7 +2313,7 @@ export function CourtCalendarView() {
         return (
           <div
             key={`booking-${booking.bookingId || idx}`}
-            className={`absolute ${isBlocked ? '' : 'rounded-lg border cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${colorClass}`}
+            className={`absolute ${isBlocked ? '' : 'rounded-lg border cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${isMobile && !calendarTouchLocked ? 'calendar-booking-pan-x' : ''} ${colorClass}`}
             style={{
               top,
               left,
@@ -2782,7 +2816,7 @@ export function CourtCalendarView() {
 
             <div
               ref={calendarScrollRef}
-              className={`calendar-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain${calendarTouchLocked ? ' calendar-scroll--touch-locked' : ''}`}
+              className={`calendar-scroll calendar-scroll-mobile-y flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain${calendarTouchLocked ? ' calendar-scroll--touch-locked' : ''}`}
             >
               <div
                 className="flex min-w-0"

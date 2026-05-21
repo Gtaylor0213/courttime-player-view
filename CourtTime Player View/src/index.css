@@ -204,11 +204,22 @@ html {
   -webkit-touch-callout: none;
 }
 
-/* Mobile court body: horizontal swipe only; vertical scroll passes to parent */
+/* Mobile court body: horizontal swipe; vertical scroll passes to parent */
 .calendar-court-body-scroll {
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
+}
+
+/* touch-action is not inherited — slots/overlays must opt in so horizontal pan wins on phones */
+.calendar-slot-pan-x,
+.calendar-booking-pan-x {
+  touch-action: pan-x pan-y;
+}
+
+/* Mobile outer pane: vertical scroll only (court body handles horizontal) */
+.calendar-scroll-mobile-y {
+  touch-action: pan-y;
 }
 
 /* Active vertical slot drag on mobile web — matches native scroll lock */
@@ -222,6 +233,8 @@ html {
 .calendar-court-header-sync {
   scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 .calendar-time-col-sync::-webkit-scrollbar,

@@ -53,7 +53,8 @@ export function courtFieldsAfterNameChange(
   name: string,
   currentCourtNumber: number
 ): { name: string; courtNumber: number } {
-  return { name: name.trim(), courtNumber: currentCourtNumber };
+  // Preserve spaces while typing (e.g. "Court " before "1"); trim on save via normalizeCourtNameAndNumber.
+  return { name, courtNumber: currentCourtNumber };
 }
 
 /** Before save: default empty name only; never overwrite a custom label. */

@@ -38,9 +38,16 @@ describe('courtNaming', () => {
       courtNumber: 2,
       name: 'Stadium Court',
     });
-    expect(courtFieldsAfterNameChange('  North  ', 5)).toEqual({
-      courtNumber: 5,
+    expect(courtFieldsAfterNameChange('Court ', 1)).toEqual({
+      courtNumber: 1,
+      name: 'Court ',
+    });
+  });
+
+  it('normalizeCourtNameAndNumber trims whitespace on save', () => {
+    expect(normalizeCourtNameAndNumber({ name: '  North  ', courtNumber: 5 })).toEqual({
       name: 'North',
+      courtNumber: 5,
     });
   });
 

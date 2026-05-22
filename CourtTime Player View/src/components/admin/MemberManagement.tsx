@@ -408,7 +408,7 @@ export function MemberManagement() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="flex flex-wrap">
               <TabsTrigger value="members" className="px-4">Members</TabsTrigger>
-              <TabsTrigger value="whitelist" className="px-4">Address Whitelist</TabsTrigger>
+              <TabsTrigger value="whitelist" className="px-4">Add New Member</TabsTrigger>
               <TabsTrigger value="households" className="px-4">Households</TabsTrigger>
             </TabsList>
 

@@ -166,7 +166,7 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
     return (
       <Card>
         <CardContent className="py-8 text-center text-gray-500 text-sm">
-          Select a facility to manage the address whitelist.
+          Select a facility to add new members.
         </CardContent>
       </Card>
     );
@@ -177,7 +177,7 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Home className="h-5 w-5" />
-          Address Whitelist
+          Add New Member
         </CardTitle>
         <CardDescription>
           Approved addresses and last names auto-approve new members. Optional email sends a setup invite link.

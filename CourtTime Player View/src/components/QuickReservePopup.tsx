@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -43,6 +43,44 @@ interface QuickReservePopupProps {
   selectedFacilityId: string;
 }
 
+// 15-minute slots from 6 AM to 9 PM (12h labels)
+const ALL_TIME_SLOTS: string[] = [];
+for (let hour = 6; hour <= 21; hour++) {
+  for (let minute = 0; minute < 60; minute += 15) {
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+    ALL_TIME_SLOTS.push(`${displayHour}:${minute.toString().padStart(2, '0')} ${period}`);
+  }
+}
+
+function todayYmd(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+/** Next 15-minute slot at or after now (12h label). */
+function nextQuarterHourSlot(): string {
+  const now = new Date();
+  const roundedMinutes = Math.ceil(now.getMinutes() / 15) * 15;
+  const nextTime = new Date(now);
+  if (roundedMinutes >= 60) {
+    nextTime.setHours(now.getHours() + 1, 0, 0, 0);
+  } else {
+    nextTime.setMinutes(roundedMinutes, 0, 0);
+  }
+  let hours = nextTime.getHours();
+  const minutes = nextTime.getMinutes();
+  const period = hours >= 12 ? 'PM' : 'AM';
+  hours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+  return `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
+}
+
+function futureStartSlotIndex(selectedDate: string): number {
+  if (selectedDate !== todayYmd()) return 0;
+  const idx = ALL_TIME_SLOTS.indexOf(nextQuarterHourSlot());
+  return idx >= 0 ? idx : 0;
+}
+
 export function QuickReservePopup({
   isOpen,
   onClose,
@@ -77,36 +115,16 @@ export function QuickReservePopup({
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
 
+  // When false, soonest-slot autofill may run; set true after user picks a start time
+  const userPickedStartTimeRef = useRef(false);
+
   // Initialize with current date and time, reset notes when modal opens
   useEffect(() => {
     if (!isOpen) return;
 
-    const now = new Date();
-
-    // Set current date (using local date to avoid timezone issues)
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    setSelectedDate(dateStr);
-
-    // Set current time rounded to next 15-minute interval
-    const currentMinutes = now.getMinutes();
-    const roundedMinutes = Math.ceil(currentMinutes / 15) * 15;
-
-    const nextTime = new Date(now);
-    if (roundedMinutes >= 60) {
-      nextTime.setHours(now.getHours() + 1, 0, 0, 0);
-    } else {
-      nextTime.setMinutes(roundedMinutes, 0, 0);
-    }
-
-    let hours = nextTime.getHours();
-    const minutes = nextTime.getMinutes();
-    const period = hours >= 12 ? 'PM' : 'AM';
-    hours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-
-    setSelectedTime(`${hours}:${minutes.toString().padStart(2, '0')} ${period}`);
+    userPickedStartTimeRef.current = false;
+    setSelectedDate(todayYmd());
+    setSelectedTime(nextQuarterHourSlot());
 
     // Reset notes, booking type, advanced booking, and errors when modal opens
     setNotes('');
@@ -228,23 +246,16 @@ export function QuickReservePopup({
     };
   }, [isOpen, selectedFacility, selectedDate, allCourts]);
 
-  // Auto-select first available court and find soonest available time when court type changes or date changes
+  // Re-enable soonest-slot autofill when date or court type changes
   useEffect(() => {
-    if (selectedCourtType && availableCourts.length > 0 && selectedDate) {
-      // Generate time slots for checking
-      const generateTimeSlots = () => {
-        const slots = [];
-        for (let hour = 6; hour <= 21; hour++) {
-          for (let minute = 0; minute < 60; minute += 15) {
-            const period = hour >= 12 ? 'PM' : 'AM';
-            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-            const displayMinute = minute.toString().padStart(2, '0');
-            slots.push(`${displayHour}:${displayMinute} ${period}`);
-          }
-        }
-        return slots;
-      };
+    userPickedStartTimeRef.current = false;
+  }, [selectedDate, selectedCourtType]);
 
+  // Auto-select first available court and find soonest available time when court type or date changes
+  useEffect(() => {
+    if (userPickedStartTimeRef.current) return;
+
+    if (selectedCourtType && availableCourts.length > 0 && selectedDate) {
       // Generate all time slots that a booking would occupy based on duration
       const generateBookingSlots = (startTime: string, durationHours: string): string[] => {
         const slots: string[] = [];
@@ -278,43 +289,14 @@ export function QuickReservePopup({
         return !bookingSlots.some(slot => courtBookings.has(slot));
       };
 
-      const allTimeSlots = generateTimeSlots();
-
-      // Determine starting time index based on selected date
-      const now = new Date();
-      const todayYear = now.getFullYear();
-      const todayMonth = String(now.getMonth() + 1).padStart(2, '0');
-      const todayDay = String(now.getDate()).padStart(2, '0');
-      const todayStr = `${todayYear}-${todayMonth}-${todayDay}`;
-      const isToday = selectedDate === todayStr;
-
-      let startTimeIndex = 0; // Start from beginning for future dates
-
-      if (isToday) {
-        // For today, start from current time rounded up
-        const currentMinutes = now.getMinutes();
-        const roundedMinutes = Math.ceil(currentMinutes / 15) * 15;
-        const nextTime = new Date(now);
-        if (roundedMinutes >= 60) {
-          nextTime.setHours(now.getHours() + 1, 0, 0, 0);
-        } else {
-          nextTime.setMinutes(roundedMinutes, 0, 0);
-        }
-        let hours = nextTime.getHours();
-        const minutes = nextTime.getMinutes();
-        const period = hours >= 12 ? 'PM' : 'AM';
-        hours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-        const currentTimeSlot = `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
-        startTimeIndex = allTimeSlots.indexOf(currentTimeSlot);
-        if (startTimeIndex === -1) startTimeIndex = 0;
-      }
+      const startTimeIndex = futureStartSlotIndex(selectedDate);
 
       // Find the SOONEST available time across ALL courts of this type (checking full duration)
       let soonestSlot: { court: any; time: string; timeIndex: number } | null = null;
 
       // Check each time slot starting from the appropriate time
-      for (let i = startTimeIndex; i < allTimeSlots.length; i++) {
-        const timeSlot = allTimeSlots[i];
+      for (let i = startTimeIndex; i < ALL_TIME_SLOTS.length; i++) {
+        const timeSlot = ALL_TIME_SLOTS[i];
 
         // Check if ANY court is available for the full duration at this time
         for (const court of availableCourts) {
@@ -339,7 +321,7 @@ export function QuickReservePopup({
         const firstCourt = availableCourts[0];
         setSelectedCourtId(firstCourt.id);
         setSelectedCourt(firstCourt.name);
-        setSelectedTime(allTimeSlots[startTimeIndex] || allTimeSlots[0]);
+        setSelectedTime(ALL_TIME_SLOTS[startTimeIndex] || ALL_TIME_SLOTS[0]);
       }
     } else if (!selectedCourtType) {
       setSelectedCourt('');
@@ -392,37 +374,15 @@ export function QuickReservePopup({
     });
   }, [selectedCourtType, selectedTime, duration, availableCourts, existingBookings]);
 
-  // Generate time slots (15-minute intervals), filtering out fully booked times
+  // All future start times for the selected date (not limited to soonest or single-slot availability)
   const timeSlots = React.useMemo(() => {
-    const allSlots = [];
-    for (let hour = 6; hour <= 21; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const displayMinute = minute.toString().padStart(2, '0');
-        allSlots.push(`${displayHour}:${displayMinute} ${period}`);
-      }
+    const startIdx = futureStartSlotIndex(selectedDate);
+    const slots = ALL_TIME_SLOTS.slice(startIdx);
+    if (selectedTime && !slots.includes(selectedTime)) {
+      return [selectedTime, ...slots];
     }
-
-    // If no court type selected, return all slots
-    if (!selectedCourtType || availableCourts.length === 0) {
-      return allSlots;
-    }
-
-    // Filter out times where ALL courts of this type are booked
-    return allSlots.filter(timeSlot => {
-      // Check if at least one court is available at this time
-      for (const court of availableCourts) {
-        const courtBookings = existingBookings[court.name] || new Set();
-        if (!courtBookings.has(timeSlot)) {
-          // At least one court is available at this time
-          return true;
-        }
-      }
-      // All courts are booked at this time
-      return false;
-    });
-  }, [selectedCourtType, availableCourts, existingBookings]);
+    return slots;
+  }, [selectedDate, selectedTime]);
 
   const toggleRecurringDay = (day: string) => {
     setRecurringDays(prev =>
@@ -737,19 +697,11 @@ export function QuickReservePopup({
     return `${displayHours}:${minutes.toString().padStart(2, '0')} ${endPeriod}`;
   };
 
-  // Generate end time options (all slots after selected start time)
+  // End time options: all slots after the selected start time
   const endTimeSlots = React.useMemo(() => {
     if (!selectedTime) return [];
-    const allSlots: string[] = [];
-    for (let hour = 6; hour <= 21; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        allSlots.push(`${displayHour}:${minute.toString().padStart(2, '0')} ${period}`);
-      }
-    }
-    const startIdx = allSlots.indexOf(selectedTime);
-    return startIdx >= 0 ? allSlots.slice(startIdx + 1) : allSlots;
+    const startIdx = ALL_TIME_SLOTS.indexOf(selectedTime);
+    return startIdx >= 0 ? ALL_TIME_SLOTS.slice(startIdx + 1) : ALL_TIME_SLOTS;
   }, [selectedTime]);
 
   // Sync selectedEndTime when selectedTime or duration changes
@@ -881,6 +833,7 @@ export function QuickReservePopup({
               Start
             </Label>
             <Select value={selectedTime} onValueChange={(val) => {
+              userPickedStartTimeRef.current = true;
               setSelectedTime(val);
               // Keep same duration, recalculate end time via the effect
             }}>

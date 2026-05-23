@@ -1265,6 +1265,31 @@ export function CourtCalendarView() {
     });
   };
 
+  const handleCalendarDateSelect = (date: Date | undefined) => {
+    if (date) {
+      setSelectedDate(date);
+      setDatePickerOpen(false);
+    }
+  };
+
+  const renderDatePickerPopover = (buttonClassName: string) => (
+    <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" className={buttonClassName}>
+          {formatDate(selectedDate)}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="center">
+        <CalendarPicker
+          mode="single"
+          selected={selectedDate}
+          onSelect={handleCalendarDateSelect}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+
   const handleBookingClick = (court: string, time: string) => {
     const booking = bookings[court as keyof typeof bookings]?.[time];
     if (booking?.type === 'reservation' && booking.fullDetails) {
@@ -2534,26 +2559,13 @@ export function CourtCalendarView() {
                 <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" className="flex-1 min-w-0 justify-center text-center font-medium hover:bg-gray-100 text-sm">
-                      {formatDate(selectedDate)}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="center">
-                    <CalendarPicker
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={(date: Date | undefined) => {
-                        if (date) {
-                          setSelectedDate(date);
-                          setDatePickerOpen(false);
-                        }
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                {isMobile ? (
+                  renderDatePickerPopover('flex-1 min-w-0 justify-center text-center font-medium hover:bg-gray-100 text-sm')
+                ) : (
+                  <Button variant="ghost" className="flex-1 min-w-0 justify-center text-center font-medium hover:bg-gray-100 text-sm">
+                    {formatDate(selectedDate)}
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -2748,26 +2760,13 @@ export function CourtCalendarView() {
                   <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="ghost" className="text-center min-w-0 md:min-w-[200px] font-medium hover:bg-gray-100 text-sm">
-                        {formatDate(selectedDate)}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="center">
-                      <CalendarPicker
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={(date: Date | undefined) => {
-                          if (date) {
-                            setSelectedDate(date);
-                            setDatePickerOpen(false);
-                          }
-                        }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  {!isMobile ? (
+                    renderDatePickerPopover('text-center min-w-0 md:min-w-[200px] font-medium hover:bg-gray-100 text-sm')
+                  ) : (
+                    <Button variant="ghost" className="text-center min-w-0 md:min-w-[200px] font-medium hover:bg-gray-100 text-sm">
+                      {formatDate(selectedDate)}
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>

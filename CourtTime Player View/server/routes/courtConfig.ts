@@ -11,6 +11,7 @@ import {
   isTruthyClosed,
 } from '../../shared/utils/operatingHours';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+import { normalizeLocalDatetimeForStorage } from '../../src/utils/dateUtils';
 
 const router = express.Router();
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
@@ -417,12 +418,12 @@ router.get('/:courtId/blackouts', async (req, res, next) => {
 
     if (startDate) {
       params.push(startDate);
-      sql += ` AND end_datetime >= $${params.length}::timestamp`;
+      sql += ` AND end_datetime::date >= $${params.length}::date`;
     }
 
     if (endDate) {
       params.push(endDate);
-      sql += ` AND start_datetime <= $${params.length}::timestamp`;
+      sql += ` AND start_datetime::date <= $${params.length}::date`;
     }
 
     sql += ` ORDER BY start_datetime ASC`;
@@ -461,12 +462,12 @@ router.get('/facility/:facilityId/blackouts', async (req, res, next) => {
 
     if (startDate) {
       params.push(startDate);
-      sql += ` AND cb.end_datetime >= $${params.length}::timestamp`;
+      sql += ` AND cb.end_datetime::date >= $${params.length}::date`;
     }
 
     if (endDate) {
       params.push(endDate);
-      sql += ` AND cb.start_datetime <= $${params.length}::timestamp`;
+      sql += ` AND cb.start_datetime::date <= $${params.length}::date`;
     }
 
     sql += ` ORDER BY cb.start_datetime ASC`;
@@ -507,6 +508,9 @@ router.post('/blackouts', async (req, res, next) => {
       });
     }
 
+    const normalizedStart = normalizeLocalDatetimeForStorage(startDatetime);
+    const normalizedEnd = normalizeLocalDatetimeForStorage(endDatetime);
+
     const result = await query(
       `INSERT INTO court_blackouts (
         court_id, facility_id, blackout_type, title, description,
@@ -515,7 +519,7 @@ router.post('/blackouts', async (req, res, next) => {
       RETURNING *`,
       [
         courtId, facilityId, blackoutType || 'maintenance',
-        title, description, startDatetime, endDatetime,
+        title, description, normalizedStart, normalizedEnd,
         recurrenceRule, createdBy
       ]
     );
@@ -558,7 +562,16 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $8
       RETURNING *`,
-      [courtId, blackoutType, title, description, startDatetime, endDatetime, recurrenceRule, blackoutId]
+      [
+        courtId,
+        blackoutType,
+        title,
+        description,
+        startDatetime != null ? normalizeLocalDatetimeForStorage(startDatetime) : null,
+        endDatetime != null ? normalizeLocalDatetimeForStorage(endDatetime) : null,
+        recurrenceRule,
+        blackoutId,
+      ]
     );
 
     if (result.rows.length === 0) {

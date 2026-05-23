@@ -13,7 +13,11 @@ import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
-import { parseLocalDate } from '../../utils/dateUtils';
+import {
+  parseLocalDate,
+  toDatetimeLocalInput,
+  normalizeLocalDatetimeForStorage,
+} from '../../utils/dateUtils';
 import {
   facilitiesApi,
   adminApi,
@@ -1907,10 +1911,15 @@ export function FacilityManagement() {
 
   const handleSaveBlackout = async () => {
     if (!editingBlackout || !currentFacilityId) return;
+    const blackoutPayload = {
+      ...editingBlackout,
+      startDatetime: normalizeLocalDatetimeForStorage(editingBlackout.startDatetime),
+      endDatetime: normalizeLocalDatetimeForStorage(editingBlackout.endDatetime),
+    };
     try {
       setBlackoutSaving(true);
       if (editingBlackout.id) {
-        const response = await courtConfigApi.updateBlackout(editingBlackout.id, editingBlackout);
+        const response = await courtConfigApi.updateBlackout(editingBlackout.id, blackoutPayload);
         if (!response.success) {
           toast.error(response.error || 'Failed to update blackout');
           return;
@@ -1918,7 +1927,7 @@ export function FacilityManagement() {
         toast.success('Blackout updated');
       } else {
         const response = await courtConfigApi.createBlackout({
-          ...editingBlackout,
+          ...blackoutPayload,
           facilityId: currentFacilityId,
         });
         if (!response.success) {
@@ -3953,8 +3962,8 @@ export function FacilityManagement() {
                               blackoutType: b.blackout_type,
                               title: b.title,
                               description: b.description,
-                              startDatetime: b.start_datetime?.slice(0, 16),
-                              endDatetime: b.end_datetime?.slice(0, 16),
+                              startDatetime: toDatetimeLocalInput(b.start_datetime),
+                              endDatetime: toDatetimeLocalInput(b.end_datetime),
                             })}>
                               <Edit className="h-4 w-4" />
                             </Button>

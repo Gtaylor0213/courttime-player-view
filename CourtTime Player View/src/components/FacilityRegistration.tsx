@@ -18,21 +18,21 @@ function RegistrationProgressBar() {
   const progressPercent = totalSteps > 1 ? ((currentStep - 1) / (totalSteps - 1)) * 100 : 100;
 
   return (
-    <motion.div className="mb-6 md:mb-8">
-      <motion.div className="md:hidden space-y-3">
-        <motion.div className="flex items-center justify-between gap-3 text-sm">
+    <div className="mb-6 md:mb-8">
+      <div className="md:hidden space-y-3">
+        <div className="flex items-center justify-between gap-3 text-sm">
           <span className="font-semibold text-green-700 whitespace-nowrap">
             Step {currentStep} of {totalSteps}
           </span>
           <span className="text-gray-600 text-right truncate">{getStepLabel(currentStep)}</span>
-        </motion.div>
-        <motion.div className="h-2 rounded-full bg-gray-200 overflow-hidden" aria-hidden>
-          <motion.div
+        </div>
+        <div className="h-2 rounded-full bg-gray-200 overflow-hidden" aria-hidden>
+          <div
             className="h-full rounded-full bg-green-700 transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
-        </motion.div>
-        <motion.div
+        </div>
+        <div
           className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory"
           role="tablist"
           aria-label="Registration steps"
@@ -67,14 +67,14 @@ function RegistrationProgressBar() {
               </button>
             );
           })}
-        </motion.div>
+        </div>
         <p className="text-xs text-gray-500">
           Tap a step to jump ahead. All required fields must be completed before you submit.
         </p>
-      </motion.div>
+      </div>
 
-      <motion.div className="hidden md:block">
-        <motion.div className="flex justify-between mb-2">
+      <div className="hidden md:block">
+        <div className="flex justify-between mb-2">
           {Array.from({ length: totalSteps }).map((_, index) => {
             const stepNumber = index + 1;
             const isCurrent = stepNumber === currentStep;
@@ -95,9 +95,9 @@ function RegistrationProgressBar() {
             }
 
             return (
-              <motion.div key={stepNumber} className="flex-1 flex items-start min-w-0">
-                <motion.div className="flex flex-col items-center flex-1 min-w-0">
-                  <motion.div
+              <div key={stepNumber} className="flex-1 flex items-start min-w-0">
+                <div className="flex flex-col items-center flex-1 min-w-0">
+                  <div
                     role="button"
                     tabIndex={0}
                     onClick={() => goToStep(stepNumber)}
@@ -114,29 +114,29 @@ function RegistrationProgressBar() {
                     title={`Go to step ${stepNumber}: ${getStepLabel(stepNumber)}`}
                   >
                     {isVisited ? <Check className="h-5 w-5" /> : stepNumber}
-                  </motion.div>
-                  <motion.div
+                  </div>
+                  <div
                     className="text-xs mt-2 text-center px-0.5 leading-tight truncate w-full max-w-[5.5rem]"
                     style={{ color: isCurrent ? '#15803d' : '#6b7280', fontWeight: isCurrent ? 600 : 400 }}
                   >
                     {getStepLabel(stepNumber)}
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
                 {stepNumber < totalSteps && (
-                  <motion.div
+                  <div
                     className="flex-1 mx-2 mt-5 transition-colors min-w-[8px]"
                     style={{ backgroundColor: isVisited ? '#166534' : '#d1d5db', height: '2px' }}
                   />
                 )}
-              </motion.div>
+              </div>
             );
           })}
-        </motion.div>
+        </div>
         <p className="text-xs text-center text-gray-500">
           Click any step above to navigate. All required fields must be completed before registration.
         </p>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
@@ -155,16 +155,16 @@ function FacilityRegistrationContent() {
   } = useRegistration();
 
   return (
-    <motion.div className="facility-registration min-h-screen bg-gray-50 flex items-start sm:items-center justify-center px-3 py-4 sm:p-4 pb-24 sm:pb-4">
+    <div className="facility-registration min-h-screen bg-gray-50 flex items-start sm:items-center justify-center px-3 py-4 sm:p-4 pb-24 sm:pb-4">
       <Card className="w-full max-w-4xl shadow-sm">
         <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6">
-          <motion.div className="flex flex-col items-center mb-4 sm:mb-6">
+          <div className="flex flex-col items-center mb-4 sm:mb-6">
             <Button variant="ghost" onClick={() => navigate('/login')} className="self-start mb-3 sm:mb-4 -ml-2">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Login
             </Button>
             <img src={logoImage} alt="CourtTime" className="h-12 sm:h-16" />
-          </motion.div>
+          </div>
           <CardTitle className="text-xl sm:text-2xl">Facility Registration</CardTitle>
           <CardDescription>Register your tennis or pickleball facility with CourtTime</CardDescription>
         </CardHeader>
@@ -172,7 +172,7 @@ function FacilityRegistrationContent() {
         <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
           <RegistrationProgressBar />
 
-          <motion.div className="mt-6 sm:mt-8">
+          <div className="mt-6 sm:mt-8">
             {!preAuthenticated && currentStep === 1 && <AdminAccountStep />}
             {(preAuthenticated ? currentStep === 1 : currentStep === 2) && <FacilityInfoStep />}
             {(preAuthenticated ? currentStep === 2 : currentStep === 3) && <CourtsStep />}
@@ -180,9 +180,9 @@ function FacilityRegistrationContent() {
             {(preAuthenticated ? currentStep === 4 : currentStep === 5) && <AdminsStep />}
             {(preAuthenticated ? currentStep === 5 : currentStep === 6) && <ReviewStep />}
             {(preAuthenticated ? currentStep === 6 : currentStep === 7) && <PaymentStep />}
-          </motion.div>
+          </div>
 
-          <motion.div className="facility-reg-nav sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 sm:py-0 mt-6 sm:mt-8 bg-gray-50/95 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none border-t sm:border-t-0 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between z-10">
+          <div className="facility-reg-nav sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 sm:py-0 mt-6 sm:mt-8 bg-gray-50/95 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none border-t sm:border-t-0 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between z-10">
             <Button
               type="button"
               variant="outline"
@@ -209,10 +209,10 @@ function FacilityRegistrationContent() {
                 {isSubmitting ? 'Submitting...' : 'Complete Registration'}
               </Button>
             )}
-          </motion.div>
+          </div>
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   );
 }
 

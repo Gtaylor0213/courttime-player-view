@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { RULE_METADATA, CATEGORIES, getRulesByCategory, RuleMeta } from '../../facility-registration/rule-defaults';
-import { Info } from 'lucide-react';
+import { Button } from '../../ui/button';
+import { CardFooter } from '../../ui/card';
+import { Info, Save, X } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useAppContext } from '../../../contexts/AppContext';
 import {

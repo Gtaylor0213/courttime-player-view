@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, courtConfigApi } from '../api/client';
 import {
   buildExistingBookingsMap12h,
+  parseHHMMToMinutes,
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
@@ -43,14 +44,42 @@ interface QuickReservePopupProps {
   selectedFacilityId: string;
 }
 
-// 15-minute slots from 6 AM to 9 PM (12h labels)
-const ALL_TIME_SLOTS: string[] = [];
-for (let hour = 6; hour <= 21; hour++) {
-  for (let minute = 0; minute < 60; minute += 15) {
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-    ALL_TIME_SLOTS.push(`${displayHour}:${minute.toString().padStart(2, '0')} ${period}`);
-  }
+type FacilityCourt = QuickReservePopupProps['facilities'][number]['courts'][number];
+
+const QUICK_RESERVE_SLOT_STEP_MINUTES = 15;
+const MINUTES_PER_DAY = 24 * 60;
+
+function minutesTo12HourSlotLabel(totalMinutes: number): string {
+  const normalized = ((totalMinutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  const hour24 = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const displayHour = hour24 % 12 || 12;
+  return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+}
+
+function slotLabelToMinutes(label: string): number {
+  const [time, period] = label.split(' ');
+  const [hourStr, minuteStr] = (time || '').split(':');
+  let hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr || '0', 10);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return Number.NaN;
+  if (period === 'PM' && hour !== 12) hour += 12;
+  if (period === 'AM' && hour === 12) hour = 0;
+  return hour * 60 + minute;
+}
+
+function durationToMinutes(durationHours: string): number {
+  const duration = parseFloat(durationHours);
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  return Math.round(duration * 60);
+}
+
+function nextQuarterHourMinutes(): number {
+  const now = new Date();
+  const roundedMinutes = Math.ceil(now.getMinutes() / QUICK_RESERVE_SLOT_STEP_MINUTES) * QUICK_RESERVE_SLOT_STEP_MINUTES;
+  const totalMinutes = now.getHours() * 60 + roundedMinutes;
+  return Math.min(totalMinutes, MINUTES_PER_DAY);
 }
 
 function todayYmd(): string {
@@ -60,25 +89,93 @@ function todayYmd(): string {
 
 /** Next 15-minute slot at or after now (12h label). */
 function nextQuarterHourSlot(): string {
-  const now = new Date();
-  const roundedMinutes = Math.ceil(now.getMinutes() / 15) * 15;
-  const nextTime = new Date(now);
-  if (roundedMinutes >= 60) {
-    nextTime.setHours(now.getHours() + 1, 0, 0, 0);
-  } else {
-    nextTime.setMinutes(roundedMinutes, 0, 0);
-  }
-  let hours = nextTime.getHours();
-  const minutes = nextTime.getMinutes();
-  const period = hours >= 12 ? 'PM' : 'AM';
-  hours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-  return `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  return minutesTo12HourSlotLabel(Math.min(nextQuarterHourMinutes(), MINUTES_PER_DAY - QUICK_RESERVE_SLOT_STEP_MINUTES));
 }
 
-function futureStartSlotIndex(selectedDate: string): number {
-  if (selectedDate !== todayYmd()) return 0;
-  const idx = ALL_TIME_SLOTS.indexOf(nextQuarterHourSlot());
-  return idx >= 0 ? idx : 0;
+function futureStartMinutes(selectedDate: string): number {
+  return selectedDate === todayYmd() ? nextQuarterHourMinutes() : 0;
+}
+
+function roundUpToSlotStep(minutes: number): number {
+  return Math.ceil(minutes / QUICK_RESERVE_SLOT_STEP_MINUTES) * QUICK_RESERVE_SLOT_STEP_MINUTES;
+}
+
+function generateBookingSlots(startTime: string, durationHours: string): string[] {
+  const startMinutes = slotLabelToMinutes(startTime);
+  const durationMinutes = durationToMinutes(durationHours);
+  if (!Number.isFinite(startMinutes) || durationMinutes <= 0) return [];
+
+  const numSlots = Math.ceil(durationMinutes / QUICK_RESERVE_SLOT_STEP_MINUTES);
+  return Array.from({ length: numSlots }, (_, i) =>
+    minutesTo12HourSlotLabel(startMinutes + i * QUICK_RESERVE_SLOT_STEP_MINUTES)
+  );
+}
+
+function isWithinCourtHours(
+  court: FacilityCourt,
+  startTime: string,
+  durationHours: string,
+  availabilityByCourtId: Record<string, CourtAvailabilityData>
+): boolean {
+  const availability = availabilityByCourtId[court.id];
+  if (!availability?.isOpen) return false;
+
+  const startMinutes = slotLabelToMinutes(startTime);
+  const durationMinutes = durationToMinutes(durationHours);
+  const openMinutes = parseHHMMToMinutes(availability.operatingHours.open);
+  const closeMinutes = parseHHMMToMinutes(availability.operatingHours.close);
+
+  return (
+    Number.isFinite(startMinutes) &&
+    durationMinutes > 0 &&
+    startMinutes >= openMinutes &&
+    startMinutes + durationMinutes <= closeMinutes
+  );
+}
+
+function isCourtAvailableForDuration(
+  court: FacilityCourt,
+  startTime: string,
+  durationHours: string,
+  availabilityByCourtId: Record<string, CourtAvailabilityData>,
+  existingBookings: Record<string, Set<string>>
+): boolean {
+  if (!isWithinCourtHours(court, startTime, durationHours, availabilityByCourtId)) return false;
+  const courtBookings = existingBookings[court.name] || new Set();
+  const bookingSlots = generateBookingSlots(startTime, durationHours);
+  return !bookingSlots.some(slot => courtBookings.has(slot));
+}
+
+function buildBookableStartSlots(
+  courts: FacilityCourt[],
+  selectedDate: string,
+  durationHours: string,
+  availabilityByCourtId: Record<string, CourtAvailabilityData>
+): string[] {
+  const durationMinutes = durationToMinutes(durationHours);
+  if (!selectedDate || durationMinutes <= 0) return [];
+
+  const earliestStart = futureStartMinutes(selectedDate);
+  const slotMinutes = new Set<number>();
+
+  for (const court of courts) {
+    const availability = availabilityByCourtId[court.id];
+    if (!availability?.isOpen) continue;
+
+    const openMinutes = parseHHMMToMinutes(availability.operatingHours.open);
+    const closeMinutes = parseHHMMToMinutes(availability.operatingHours.close);
+    const firstStart = roundUpToSlotStep(Math.max(openMinutes, earliestStart));
+    const lastStart = closeMinutes - durationMinutes;
+
+    for (let t = firstStart; t <= lastStart; t += QUICK_RESERVE_SLOT_STEP_MINUTES) {
+      slotMinutes.add(t);
+    }
+  }
+
+  return [...slotMinutes]
+    .filter((minutes) => minutes >= 0 && minutes < MINUTES_PER_DAY)
+    .sort((a, b) => a - b)
+    .map(minutesTo12HourSlotLabel);
 }
 
 export function QuickReservePopup({
@@ -100,6 +197,7 @@ export function QuickReservePopup({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingBookings, setExistingBookings] = useState<any>({});
+  const [availabilityByCourtId, setAvailabilityByCourtId] = useState<Record<string, CourtAvailabilityData>>({});
   const [bookingErrors, setBookingErrors] = useState<Array<{ ruleCode: string; ruleName: string; message: string; severity: string }>>([]);
   const [bookingWarnings, setBookingWarnings] = useState<Array<{ ruleCode: string; ruleName: string; message: string }>>([]);
   const [isPrimeTime, setIsPrimeTime] = useState(false);
@@ -211,7 +309,10 @@ export function QuickReservePopup({
   // Per-court availability (same API as mobile book flow)
   useEffect(() => {
     if (!isOpen || !selectedFacility || !selectedDate || allCourts.length === 0) {
-      if (!isOpen) setExistingBookings({});
+      if (!isOpen) {
+        setExistingBookings({});
+        setAvailabilityByCourtId({});
+      }
       return;
     }
 
@@ -229,6 +330,7 @@ export function QuickReservePopup({
           })
         );
         if (cancelled) return;
+        setAvailabilityByCourtId(byCourtId);
         setExistingBookings(
           buildExistingBookingsMap12h(
             allCourts.map((c) => ({ id: c.id, name: c.name })),
@@ -237,7 +339,10 @@ export function QuickReservePopup({
         );
       } catch (error) {
         console.error('Error fetching court availability:', error);
-        if (!cancelled) setExistingBookings({});
+        if (!cancelled) {
+          setExistingBookings({});
+          setAvailabilityByCourtId({});
+        }
       }
     })();
 
@@ -256,51 +361,17 @@ export function QuickReservePopup({
     if (userPickedStartTimeRef.current) return;
 
     if (selectedCourtType && availableCourts.length > 0 && selectedDate) {
-      // Generate all time slots that a booking would occupy based on duration
-      const generateBookingSlots = (startTime: string, durationHours: string): string[] => {
-        const slots: string[] = [];
-        const [time, period] = startTime.split(' ');
-        const [hourStr, minuteStr] = time.split(':');
-        let hour = parseInt(hourStr);
-        let minute = parseInt(minuteStr);
-
-        // Convert to 24-hour format for calculation
-        if (period === 'PM' && hour !== 12) hour += 12;
-        if (period === 'AM' && hour === 12) hour = 0;
-
-        const durationMinutes = parseFloat(durationHours) * 60;
-        const numSlots = Math.ceil(durationMinutes / 15);
-
-        for (let i = 0; i < numSlots; i++) {
-          const slotHour24 = hour + Math.floor((minute + i * 15) / 60);
-          const slotMinute = (minute + i * 15) % 60;
-          const slotPeriod = slotHour24 >= 12 ? 'PM' : 'AM';
-          const slotHour12 = slotHour24 % 12 || 12;
-          slots.push(`${slotHour12}:${slotMinute.toString().padStart(2, '0')} ${slotPeriod}`);
-        }
-
-        return slots;
-      };
-
-      // Check if a court is available for the full duration at a given start time
-      const isCourtAvailableForDuration = (court: any, startTime: string): boolean => {
-        const courtBookings = existingBookings[court.name] || new Set();
-        const bookingSlots = generateBookingSlots(startTime, duration);
-        return !bookingSlots.some(slot => courtBookings.has(slot));
-      };
-
-      const startTimeIndex = futureStartSlotIndex(selectedDate);
-
       // Find the SOONEST available time across ALL courts of this type (checking full duration)
       let soonestSlot: { court: any; time: string; timeIndex: number } | null = null;
+      const startSlots = buildBookableStartSlots(availableCourts, selectedDate, duration, availabilityByCourtId);
 
       // Check each time slot starting from the appropriate time
-      for (let i = startTimeIndex; i < ALL_TIME_SLOTS.length; i++) {
-        const timeSlot = ALL_TIME_SLOTS[i];
+      for (let i = 0; i < startSlots.length; i++) {
+        const timeSlot = startSlots[i];
 
         // Check if ANY court is available for the full duration at this time
         for (const court of availableCourts) {
-          if (isCourtAvailableForDuration(court, timeSlot)) {
+          if (isCourtAvailableForDuration(court, timeSlot, duration, availabilityByCourtId, existingBookings)) {
             // Found an available court at this time for full duration!
             soonestSlot = { court, time: timeSlot, timeIndex: i };
             break;
@@ -317,17 +388,17 @@ export function QuickReservePopup({
         setSelectedCourt(soonestSlot.court.name);
         setSelectedTime(soonestSlot.time);
       } else {
-        // No available slots found, just select first court and first available time
+        // No available slots found within operating hours.
         const firstCourt = availableCourts[0];
         setSelectedCourtId(firstCourt.id);
         setSelectedCourt(firstCourt.name);
-        setSelectedTime(ALL_TIME_SLOTS[startTimeIndex] || ALL_TIME_SLOTS[0]);
+        setSelectedTime('');
       }
     } else if (!selectedCourtType) {
       setSelectedCourt('');
       setSelectedCourtId('');
     }
-  }, [selectedCourtType, availableCourts, existingBookings, selectedDate, duration]);
+  }, [selectedCourtType, availableCourts, existingBookings, availabilityByCourtId, selectedDate, duration]);
 
   // Calculate which courts are available at the selected time and duration
   const courtsWithAvailability = React.useMemo(() => {
@@ -335,54 +406,31 @@ export function QuickReservePopup({
       return [];
     }
 
-    // Generate all time slots that this booking would occupy based on duration
-    const generateBookingSlots = (startTime: string, durationHours: string): string[] => {
-      const slots: string[] = [];
-      const [time, period] = startTime.split(' ');
-      const [hourStr, minuteStr] = time.split(':');
-      let hour = parseInt(hourStr);
-      let minute = parseInt(minuteStr);
-
-      // Convert to 24-hour format for calculation
-      if (period === 'PM' && hour !== 12) hour += 12;
-      if (period === 'AM' && hour === 12) hour = 0;
-
-      const durationMinutes = parseFloat(durationHours) * 60;
-      const numSlots = Math.ceil(durationMinutes / 15);
-
-      for (let i = 0; i < numSlots; i++) {
-        const slotHour24 = hour + Math.floor((minute + i * 15) / 60);
-        const slotMinute = (minute + i * 15) % 60;
-        const slotPeriod = slotHour24 >= 12 ? 'PM' : 'AM';
-        const slotHour12 = slotHour24 % 12 || 12;
-        slots.push(`${slotHour12}:${slotMinute.toString().padStart(2, '0')} ${slotPeriod}`);
-      }
-
-      return slots;
-    };
-
     const bookingSlots = generateBookingSlots(selectedTime, duration);
 
     return availableCourts.map(court => {
       const courtBookings = existingBookings[court.name] || new Set();
       // Check if ANY of the booking slots conflict with existing bookings
-      const isAvailable = !bookingSlots.some(slot => courtBookings.has(slot));
+      const isAvailable =
+        isWithinCourtHours(court, selectedTime, duration, availabilityByCourtId) &&
+        !bookingSlots.some(slot => courtBookings.has(slot));
       return {
         ...court,
         isAvailable
       };
     });
-  }, [selectedCourtType, selectedTime, duration, availableCourts, existingBookings]);
+  }, [selectedCourtType, selectedTime, duration, availableCourts, existingBookings, availabilityByCourtId]);
 
-  // All future start times for the selected date (not limited to soonest or single-slot availability)
+  // All future start times that fit within at least one selected-type court's operating hours.
   const timeSlots = React.useMemo(() => {
-    const startIdx = futureStartSlotIndex(selectedDate);
-    const slots = ALL_TIME_SLOTS.slice(startIdx);
-    if (selectedTime && !slots.includes(selectedTime)) {
-      return [selectedTime, ...slots];
-    }
-    return slots;
-  }, [selectedDate, selectedTime]);
+    return buildBookableStartSlots(availableCourts, selectedDate, duration, availabilityByCourtId);
+  }, [availableCourts, selectedDate, duration, availabilityByCourtId]);
+
+  useEffect(() => {
+    if (!selectedTime || timeSlots.length === 0 || timeSlots.includes(selectedTime)) return;
+    userPickedStartTimeRef.current = false;
+    setSelectedTime(timeSlots[0]);
+  }, [selectedTime, timeSlots]);
 
   const toggleRecurringDay = (day: string) => {
     setRecurringDays(prev =>
@@ -465,6 +513,20 @@ export function QuickReservePopup({
 
     if (!selectedCourt || !selectedCourtId) {
       alert('Please select a court');
+      return;
+    }
+
+    if (!selectedTime || !selectedEndTime) {
+      alert('Please select an available time while the court is open');
+      return;
+    }
+
+    const selectedCourtsAreOpen = allSelectedCourts.every((court) => {
+      const fullCourt = availableCourts.find((c) => c.id === court.id);
+      return fullCourt && isCourtAvailableForDuration(fullCourt, selectedTime, duration, availabilityByCourtId, existingBookings);
+    });
+    if (!selectedCourtsAreOpen) {
+      alert('Selected court is not available for the full reservation time.');
       return;
     }
 
@@ -697,19 +759,47 @@ export function QuickReservePopup({
     return `${displayHours}:${minutes.toString().padStart(2, '0')} ${endPeriod}`;
   };
 
-  // End time options: all slots after the selected start time
+  // End time options: only times that remain inside the selected court's operating hours.
   const endTimeSlots = React.useMemo(() => {
     if (!selectedTime) return [];
-    const startIdx = ALL_TIME_SLOTS.indexOf(selectedTime);
-    return startIdx >= 0 ? ALL_TIME_SLOTS.slice(startIdx + 1) : ALL_TIME_SLOTS;
-  }, [selectedTime]);
+    const startMinutes = slotLabelToMinutes(selectedTime);
+    if (!Number.isFinite(startMinutes)) return [];
+
+    const eligibleCourts = selectedCourtId
+      ? availableCourts.filter((court) => court.id === selectedCourtId)
+      : availableCourts;
+    const endMinutes = new Set<number>();
+
+    for (const court of eligibleCourts) {
+      const availability = availabilityByCourtId[court.id];
+      if (!availability?.isOpen) continue;
+
+      const openMinutes = parseHHMMToMinutes(availability.operatingHours.open);
+      const closeMinutes = parseHHMMToMinutes(availability.operatingHours.close);
+      if (startMinutes < openMinutes || startMinutes >= closeMinutes) continue;
+
+      for (let t = startMinutes + QUICK_RESERVE_SLOT_STEP_MINUTES; t <= closeMinutes; t += QUICK_RESERVE_SLOT_STEP_MINUTES) {
+        endMinutes.add(t);
+      }
+    }
+
+    return [...endMinutes]
+      .filter((minutes) => minutes > 0 && minutes < MINUTES_PER_DAY)
+      .sort((a, b) => a - b)
+      .map(minutesTo12HourSlotLabel);
+  }, [selectedTime, selectedCourtId, availableCourts, availabilityByCourtId]);
 
   // Sync selectedEndTime when selectedTime or duration changes
   useEffect(() => {
-    if (selectedTime) {
-      setSelectedEndTime(calculateEndTime(selectedTime, duration));
+    if (!selectedTime) {
+      setSelectedEndTime('');
+      return;
     }
-  }, [selectedTime, duration]);
+    const calculatedEndTime = calculateEndTime(selectedTime, duration);
+    setSelectedEndTime(
+      endTimeSlots.includes(calculatedEndTime) ? calculatedEndTime : (endTimeSlots[0] || '')
+    );
+  }, [selectedTime, duration, endTimeSlots]);
 
   // When user picks an end time, derive duration
   const handleEndTimeChange = (newEndTime: string) => {
@@ -1068,7 +1158,7 @@ export function QuickReservePopup({
           <Button
             type="submit"
             form="quick-reserve-form"
-            disabled={isSubmitting || !selectedCourt}
+            disabled={isSubmitting || !selectedCourt || !selectedTime || !selectedEndTime}
             className="flex-1"
           >
             {isSubmitting ? 'Reserving...' : allSelectedCourts.length > 1 ? `Reserve ${allSelectedCourts.length} Courts` : 'Quick Reserve'}

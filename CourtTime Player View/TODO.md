@@ -67,8 +67,7 @@ No remaining TODO items. All features have been implemented.
 - [x] Purple hover (hover:bg-purple-100) for peak-hours slots
 - [x] Peak-hours legend indicator in calendar header
 
-### Phase 8: Rate Limiting + Email Notifications
-- [x] Install express-rate-limit, add tiered middleware (global 100/15min, auth 10/15min, sensitive 20/15min)
+### Phase 8: Email Notifications
 - [x] Create centralized emailService.ts (sendStrikeIssuedEmail, sendStrikeRevokedEmail, sendLockoutEmail)
 - [x] Add strike notification helpers to notificationService.ts (in-app notifications)
 - [x] Hook email + in-app notifications into bookingService.ts issueStrike() (auto strikes)

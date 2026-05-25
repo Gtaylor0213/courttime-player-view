@@ -5,7 +5,6 @@
 
 import express from 'express';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import os from 'os';
 import path from 'path';
@@ -120,50 +119,6 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Rate limiting middleware
-const isProduction = process.env.NODE_ENV === 'production';
-const skipRateLimitInDev = () => !isProduction;
-
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' },
-  skip: (req) =>
-    skipRateLimitInDev() || req.originalUrl.startsWith('/api/webhooks'),
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many authentication attempts, please try again later.' },
-  skip: skipRateLimitInDev,
-});
-
-const sensitiveLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' },
-  skip: skipRateLimitInDev,
-});
-
-// Apply global rate limit to all API routes
-app.use('/api', globalLimiter);
-
-// Apply stricter limits to auth endpoints
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/register', authLimiter);
-app.use('/api/auth/forgot-password', authLimiter);
-
-// Apply moderate limits to sensitive actions
-app.use('/api/auth/reset-password', sensitiveLimiter);
-app.use('/api/strikes', sensitiveLimiter);
 
 // Request logging middleware
 app.use((req, res, next) => {

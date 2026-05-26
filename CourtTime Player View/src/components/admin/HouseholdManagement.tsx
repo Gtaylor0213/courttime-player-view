@@ -25,7 +25,7 @@ interface HouseholdMember {
 interface HouseholdRecord {
   id: string;
   address: string;
-  lastName: string;
+  lastNames: string[];
   members: HouseholdMember[];
   /** One member per row — missing address or last name for address-based grouping */
   isUngrouped?: boolean;
@@ -56,23 +56,19 @@ export function HouseholdManagement() {
           const address = (member.streetAddress || '').trim();
           const fullName = (member.fullName || '').trim();
           const parsedLastName = fullName.split(' ').slice(1).join(' ').trim();
-          const lastNameKey = parsedLastName.toLowerCase();
-          const canGroupByAddress = Boolean(address && parsedLastName);
+          const canGroupByAddress = Boolean(address);
 
           let householdKey: string;
           let recordAddress: string;
-          let recordLastName: string;
           let isUngrouped: boolean;
 
           if (canGroupByAddress) {
-            householdKey = `${address.toLowerCase()}||${lastNameKey}`;
+            householdKey = address.toLowerCase();
             recordAddress = address;
-            recordLastName = parsedLastName;
             isUngrouped = false;
           } else {
             householdKey = `__ungrouped:${member.userId}`;
             recordAddress = address || 'No address on file';
-            recordLastName = parsedLastName;
             isUngrouped = true;
           }
 
@@ -80,13 +76,18 @@ export function HouseholdManagement() {
             groupedHouseholds.set(householdKey, {
               id: householdKey,
               address: recordAddress,
-              lastName: recordLastName,
+              lastNames: [],
               members: [],
               isUngrouped,
             });
           }
 
-          groupedHouseholds.get(householdKey)?.members.push({
+          const household = groupedHouseholds.get(householdKey);
+          if (parsedLastName && household && !household.lastNames.includes(parsedLastName)) {
+            household.lastNames.push(parsedLastName);
+          }
+
+          household?.members.push({
             userId: member.userId,
             firstName: fullName.split(' ')[0] || '',
             lastName: parsedLastName,
@@ -109,7 +110,7 @@ export function HouseholdManagement() {
           }
           const addr = a.address.localeCompare(b.address);
           if (addr !== 0) return addr;
-          return (a.lastName || '').localeCompare(b.lastName || '');
+          return (a.lastNames[0] || '').localeCompare(b.lastNames[0] || '');
         });
         setHouseholds(householdsList);
       } else {
@@ -128,7 +129,7 @@ export function HouseholdManagement() {
     if (!term) return true;
     return (
       h.address?.toLowerCase().includes(term) ||
-      h.lastName?.toLowerCase().includes(term) ||
+      h.lastNames.some(lastName => lastName.toLowerCase().includes(term)) ||
       h.members.some(m =>
         m.fullName?.toLowerCase().includes(term) ||
         m.email?.toLowerCase().includes(term)
@@ -224,18 +225,17 @@ export function HouseholdManagement() {
                               <span className="font-medium text-sm truncate">
                                 {household.address}
                               </span>
-                              {household.lastName && (
+                              {household.lastNames.length > 0 && (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                  {household.lastName}
+                                  {household.lastNames.slice(0, 2).join(', ')}
+                                  {household.lastNames.length > 2 ? ` +${household.lastNames.length - 2}` : ''}
                                 </Badge>
                               )}
                             </div>
                             <div className="text-xs text-gray-500 mt-0.5">
                               {household.isUngrouped
-                                ? 'Add street address and full name to include in address-based households'
-                                : household.lastName
-                                  ? `${household.lastName} household`
-                                  : 'Household group'}
+                                ? 'Add street address to include in address-based households'
+                                : 'All accounts at this address'}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 ml-2">

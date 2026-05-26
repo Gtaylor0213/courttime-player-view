@@ -363,8 +363,19 @@ export function MemberManagement() {
   };
 
   const filteredMembers = members.filter(member => {
-    const matchesSearch = member.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         member.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.trim().toLowerCase();
+    const searchableText = [
+      member.fullName,
+      member.email,
+      member.streetAddress,
+      member.city,
+      member.state,
+      member.zipCode,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    const matchesSearch = !term || searchableText.includes(term);
     const matchesStatus = filterStatus === 'all' || member.status === filterStatus;
     return matchesSearch && matchesStatus;
   });

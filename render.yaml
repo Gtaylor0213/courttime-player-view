@@ -3,7 +3,7 @@ services:
     name: courttime
     runtime: node
     rootDir: CourtTime Player View
-    buildCommand: npm install --include=dev && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV

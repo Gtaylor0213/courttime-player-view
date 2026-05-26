@@ -101,8 +101,8 @@ export const authApi = {
     });
   },
 
-  getMe: async (userId: string) => {
-    return apiRequest(`/api/auth/me/${userId}`);
+  getMe: async () => {
+    return apiRequest('/api/auth/me');
   },
 
   getTermsStatus: async () => {

@@ -38,7 +38,7 @@ I've set up a complete database infrastructure for your tennis court management 
 
 The database is now successfully connected using the **Session Pooler** with the correct endpoint:
 ```
-postgresql://postgres.azcctyqxxnkjnuilozfa:sANCuK6df0v1W65r@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+postgresql://postgres.<project-ref>:<password>@<region>.pooler.supabase.com:5432/postgres
 ```
 
 ### Connection Details:

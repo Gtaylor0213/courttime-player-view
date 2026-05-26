@@ -581,13 +581,18 @@ export function useRegistrationForm() {
         // Parse CSV as text
         const reader = new FileReader();
         reader.onloadend = () => {
-          const text = reader.result as string;
-          const addresses = parseWhitelistCsv(text);
-          setFormData(prev => ({ ...prev, parsedAddresses: addresses }));
-          if (addresses.length > 0) {
-            toast.success(`Parsed ${addresses.length} address${addresses.length !== 1 ? 'es' : ''} from file`);
-          } else {
-            toast.error('No addresses found in file');
+          try {
+            const text = reader.result as string;
+            const addresses = parseWhitelistCsv(text);
+            setFormData(prev => ({ ...prev, parsedAddresses: addresses }));
+            if (addresses.length > 0) {
+              toast.success(`Parsed ${addresses.length} address${addresses.length !== 1 ? 'es' : ''} from file`);
+            } else {
+              toast.error('No addresses found in file');
+            }
+          } catch (error) {
+            console.error('Error parsing CSV:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to read CSV file. Check the format and try again.');
           }
         };
         reader.readAsText(file);

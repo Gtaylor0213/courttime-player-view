@@ -15,6 +15,10 @@ import { query } from '../../src/database/connection';
 
 const router = express.Router();
 
+function allowUnsignedWebhookPayloads(): boolean {
+  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_UNSIGNED_STRIPE_WEBHOOKS === 'true';
+}
+
 router.post(
   '/stripe-connect',
   express.raw({ type: 'application/json' }),
@@ -32,11 +36,14 @@ router.post(
       if (webhookSecret) {
         const sig = req.headers['stripe-signature'] as string;
         event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-      } else {
+      } else if (allowUnsignedWebhookPayloads()) {
         event = JSON.parse(req.body.toString()) as Stripe.Event;
         console.warn(
-          '[CONNECT-WEBHOOK] STRIPE_WEBHOOK_SECRET_CONNECT not set — skipping signature verification'
+          '[CONNECT-WEBHOOK] Signature verification skipped by ALLOW_UNSIGNED_STRIPE_WEBHOOKS'
         );
+      } else {
+        console.error('[CONNECT-WEBHOOK] STRIPE_WEBHOOK_SECRET_CONNECT is required when Stripe is configured');
+        return res.status(500).send('Webhook signing secret is not configured');
       }
     } catch (err: any) {
       console.error('[CONNECT-WEBHOOK] Signature verification failed:', err.message);

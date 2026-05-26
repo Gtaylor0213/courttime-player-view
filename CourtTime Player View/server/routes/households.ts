@@ -4,9 +4,10 @@
  */
 
 import express from 'express';
-import { pool } from '../../src/database/connection';
+import { getPool } from '../../src/database/connection';
 
 const router = express.Router();
+const pool = { query: (text: string, params?: any[]) => getPool().query(text, params) };
 
 /**
  * GET /api/households/facility/:facilityId

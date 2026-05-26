@@ -1,5 +1,8 @@
 import * as XLSX from 'xlsx';
 
+export const WHITELIST_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+export const WHITELIST_IMPORT_MAX_ROWS = 5000;
+
 export interface ParsedWhitelistRow {
   streetAddress: string;
   city?: string;
@@ -211,6 +214,9 @@ function parseWithoutHeaders(rows: string[][]): ParsedWhitelistRow[] {
 /** Parse a 2D grid (from CSV or Excel) into whitelist rows. */
 export function parseRows2D(rows: string[][]): ParsedWhitelistRow[] {
   if (rows.length === 0) return [];
+  if (rows.length > WHITELIST_IMPORT_MAX_ROWS) {
+    throw new Error(`Whitelist imports are limited to ${WHITELIST_IMPORT_MAX_ROWS} rows`);
+  }
 
   const hasHeader = rowLooksLikeHeaderRow(rows[0]);
   if (hasHeader) {
@@ -221,10 +227,50 @@ export function parseRows2D(rows: string[][]): ParsedWhitelistRow[] {
 }
 
 export function csvToRows2D(text: string): string[][] {
-  const lines = text.split(/\r?\n/).filter((line) => line.trim());
-  return lines.map((line) =>
-    line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
-  );
+  if (text.length > WHITELIST_IMPORT_MAX_BYTES) {
+    throw new Error('Whitelist CSV file is too large');
+  }
+
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (ch === ',' && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+      continue;
+    }
+
+    if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && next === '\n') i += 1;
+      row.push(cell.trim());
+      if (row.some((value) => value !== '')) rows.push(row);
+      row = [];
+      cell = '';
+      continue;
+    }
+
+    cell += ch;
+  }
+
+  row.push(cell.trim());
+  if (row.some((value) => value !== '')) rows.push(row);
+  return rows;
 }
 
 export function parseWhitelistCsv(text: string): ParsedWhitelistRow[] {
@@ -232,6 +278,9 @@ export function parseWhitelistCsv(text: string): ParsedWhitelistRow[] {
 }
 
 export function parseWhitelistWorkbook(data: ArrayBuffer): ParsedWhitelistRow[] {
+  if (data.byteLength > WHITELIST_IMPORT_MAX_BYTES) {
+    throw new Error('Whitelist spreadsheet file is too large');
+  }
   const workbook = XLSX.read(data);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!sheet) return [];

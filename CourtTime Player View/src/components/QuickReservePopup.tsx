@@ -535,6 +535,15 @@ export function QuickReservePopup({
       return;
     }
 
+    const includesPaidCourt = allSelectedCourts.some((court) => {
+      const fullCourt = availableCourts.find((c) => c.id === court.id);
+      return Boolean(fullCourt?.requirePayment);
+    });
+    if (includesPaidCourt && (allSelectedCourts.length > 1 || advancedBooking)) {
+      alert('Paid court reservations must be booked one court and one time at a time.');
+      return;
+    }
+
     // Validate advanced booking
     if (advancedBooking) {
       if (recurringDays.length === 0) {

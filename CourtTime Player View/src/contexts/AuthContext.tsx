@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAccessToken(savedToken);
 
           // Refresh user data from API to get latest memberships
-          const result = await authApi.getMe(parsedUser.id);
+          const result = await authApi.getMe();
           if (result.success && result.data?.user) {
             const refreshedUser = result.data.user;
             setUser(refreshedUser);

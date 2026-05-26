@@ -137,7 +137,7 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
       }
     } catch (error) {
       console.error('Error importing whitelist file:', error);
-      toast.error('Failed to read file. Check the format and try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to read file. Check the format and try again.');
     } finally {
       setWhitelistUploading(false);
       if (whitelistFileRef.current) whitelistFileRef.current.value = '';

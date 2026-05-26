@@ -222,10 +222,12 @@ export default function CommunityScreen() {
         api.get(`/api/notifications/${user.id}/unread-count`),
       ]);
       if (notifRes.success && notifRes.data) {
-        setNotifications(notifRes.data.notifications || []);
+        const payload = unwrapApiPayload<{ notifications?: any[] }>(notifRes.data);
+        setNotifications(payload?.notifications || []);
       }
       if (countRes.success && countRes.data) {
-        setUnreadCount(countRes.data.count || 0);
+        const payload = unwrapApiPayload<{ count?: number }>(countRes.data);
+        setUnreadCount(payload?.count || 0);
       }
     } finally {
       setLoadingNotifications(false);

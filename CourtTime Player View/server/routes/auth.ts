@@ -106,7 +106,7 @@ router.post('/register', async (req, res, next) => {
       email,
       password,
       fullName,
-      userType || 'player',
+      'player',
       {
         phone,
         streetAddress,
@@ -290,6 +290,7 @@ router.post('/terms/accept', async (req, res, next) => {
 router.get('/me/:userId', async (req, res, next) => {
   try {
     const { userId } = req.params;
+    const authenticatedUserId = getAuthenticatedUserId(req);
 
     if (!userId) {
       return res.status(400).json({
@@ -298,7 +299,15 @@ router.get('/me/:userId', async (req, res, next) => {
       });
     }
 
-    const userWithMemberships = await getUserWithMemberships(userId);
+    if (!authenticatedUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (authenticatedUserId !== userId) {
+      return res.status(403).json({ success: false, error: 'Cannot access another user session' });
+    }
+
+    const userWithMemberships = await getUserWithMemberships(authenticatedUserId);
 
     if (!userWithMemberships) {
       return res.status(404).json({
@@ -323,18 +332,27 @@ router.get('/me/:userId', async (req, res, next) => {
 router.post('/add-facility', async (req, res, next) => {
   try {
     const { userId, facilityId, membershipType } = req.body;
+    const authenticatedUserId = getAuthenticatedUserId(req);
 
-    if (!userId || !facilityId) {
+    if (!authenticatedUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (userId && userId !== authenticatedUserId) {
+      return res.status(403).json({ success: false, error: 'Cannot add another user to a facility' });
+    }
+
+    if (!facilityId) {
       return res.status(400).json({
         success: false,
-        error: 'User ID and facility ID are required'
+        error: 'Facility ID is required'
       });
     }
 
-    const success = await addUserToFacility(userId, facilityId, membershipType);
+    const success = await addUserToFacility(authenticatedUserId, facilityId, membershipType);
 
     if (success) {
-      const userWithMemberships = await getUserWithMemberships(userId);
+      const userWithMemberships = await getUserWithMemberships(authenticatedUserId);
       res.json({
         success: true,
         user: userWithMemberships,

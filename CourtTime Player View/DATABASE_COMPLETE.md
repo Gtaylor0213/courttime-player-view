@@ -82,7 +82,7 @@ This is **idempotent** - safe to run multiple times.
 
 Your `.env` file is configured with:
 ```bash
-DATABASE_URL=postgresql://postgres.azcctyqxxnkjnuilozfa:sANCuK6df0v1W65r@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+DATABASE_URL=postgresql://postgres.<project-ref>:<password>@<region>.pooler.supabase.com:5432/postgres
 ```
 
 **Why Session Pooler?**

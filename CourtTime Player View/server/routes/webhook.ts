@@ -10,6 +10,10 @@ function getStripe(): Stripe | null {
   return new Stripe(key);
 }
 
+function allowUnsignedWebhookPayloads(): boolean {
+  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_UNSIGNED_STRIPE_WEBHOOKS === 'true';
+}
+
 /**
  * POST /api/webhooks/stripe
  * Stripe webhook endpoint — must receive raw body for signature verification.
@@ -32,10 +36,12 @@ router.post(
       if (webhookSecret) {
         const sig = req.headers['stripe-signature'] as string;
         event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-      } else {
-        // No webhook secret — parse directly (dev/testing only)
+      } else if (allowUnsignedWebhookPayloads()) {
         event = JSON.parse(req.body.toString()) as Stripe.Event;
-        console.warn('[WEBHOOK] No STRIPE_WEBHOOK_SECRET set — skipping signature verification');
+        console.warn('[WEBHOOK] Signature verification skipped by ALLOW_UNSIGNED_STRIPE_WEBHOOKS');
+      } else {
+        console.error('[WEBHOOK] STRIPE_WEBHOOK_SECRET is required when Stripe is configured');
+        return res.status(500).send('Webhook signing secret is not configured');
       }
     } catch (err: any) {
       console.error('[WEBHOOK] Signature verification failed:', err.message);

@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import {
   getDashboardStats,
   searchUsers,
@@ -20,6 +21,14 @@ import { query } from '../../src/database/connection';
 
 const router = express.Router();
 
+function secretsMatch(provided: string | undefined, expected: string): boolean {
+  if (!provided) return false;
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+  if (providedBuffer.length !== expectedBuffer.length) return false;
+  return crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
 // Support authentication middleware
 const supportAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const password = req.headers['x-developer-password'] as string;
@@ -33,7 +42,7 @@ const supportAuth = (req: express.Request, res: express.Response, next: express.
     });
   }
 
-  if (password !== envPassword) {
+  if (!secretsMatch(password, envPassword)) {
     return res.status(401).json({
       success: false,
       error: 'Invalid password'

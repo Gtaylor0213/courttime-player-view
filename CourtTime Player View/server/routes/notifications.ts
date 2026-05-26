@@ -4,12 +4,33 @@ import { query } from '../../src/database/connection';
 
 const router = express.Router();
 
+function requireCurrentUser(req: express.Request, res: express.Response): string | null {
+  const userId = req.user?.userId;
+  if (!userId) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return null;
+  }
+  return userId;
+}
+
+function requireSelf(req: express.Request, res: express.Response, requestedUserId: string): string | null {
+  const userId = requireCurrentUser(req, res);
+  if (!userId) return null;
+  if (userId !== requestedUserId) {
+    res.status(403).json({ success: false, error: 'Cannot access another user notifications' });
+    return null;
+  }
+  return userId;
+}
+
 // Register a push notification token for the current user
 router.post('/register-device', async (req, res) => {
   try {
-    const { userId, pushToken, platform } = req.body;
-    if (!userId || !pushToken) {
-      return res.status(400).json({ success: false, error: 'userId and pushToken are required' });
+    const userId = requireCurrentUser(req, res);
+    if (!userId) return;
+    const { pushToken, platform } = req.body;
+    if (!pushToken) {
+      return res.status(400).json({ success: false, error: 'pushToken is required' });
     }
 
     await query(
@@ -29,10 +50,9 @@ router.post('/register-device', async (req, res) => {
 // Unregister a push notification token (on logout)
 router.post('/unregister-device', async (req, res) => {
   try {
-    const { userId, pushToken } = req.body;
-    if (!userId) {
-      return res.status(400).json({ success: false, error: 'userId is required' });
-    }
+    const userId = requireCurrentUser(req, res);
+    if (!userId) return;
+    const { pushToken } = req.body;
 
     if (pushToken) {
       await query(`DELETE FROM user_push_tokens WHERE user_id = $1 AND push_token = $2`, [userId, pushToken]);
@@ -51,6 +71,7 @@ router.post('/unregister-device', async (req, res) => {
 router.get('/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!requireSelf(req, res, userId)) return;
     const notifications = await notificationService.getNotifications(userId);
 
     res.json({
@@ -70,6 +91,7 @@ router.get('/:userId', async (req, res) => {
 router.get('/:userId/unread-count', async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!requireSelf(req, res, userId)) return;
     const count = await notificationService.getUnreadCount(userId);
 
     res.json({
@@ -89,7 +111,18 @@ router.get('/:userId/unread-count', async (req, res) => {
 router.patch('/:notificationId/read', async (req, res) => {
   try {
     const { notificationId } = req.params;
-    await notificationService.markAsRead(notificationId);
+    const userId = requireCurrentUser(req, res);
+    if (!userId) return;
+    const result = await query(
+      `UPDATE notifications
+       SET is_read = true
+       WHERE id = $1 AND user_id = $2
+       RETURNING id`,
+      [notificationId, userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Notification not found' });
+    }
 
     res.json({
       success: true,
@@ -108,6 +141,7 @@ router.patch('/:notificationId/read', async (req, res) => {
 router.patch('/:userId/read-all', async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!requireSelf(req, res, userId)) return;
     await notificationService.markAllAsRead(userId);
 
     res.json({
@@ -127,16 +161,22 @@ router.patch('/:userId/read-all', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { userId, title, message, type, actionUrl, priority } = req.body;
+    const currentUserId = requireCurrentUser(req, res);
+    if (!currentUserId) return;
 
-    if (!userId || !title || !message || !type) {
+    if (userId && userId !== currentUserId) {
+      return res.status(403).json({ success: false, error: 'Cannot create notifications for another user' });
+    }
+
+    if (!title || !message || !type) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: userId, title, message, type'
+        error: 'Missing required fields: title, message, type'
       });
     }
 
     const notificationId = await notificationService.createNotification(
-      userId,
+      currentUserId,
       title,
       message,
       type,
@@ -161,7 +201,17 @@ router.post('/', async (req, res) => {
 router.delete('/:notificationId', async (req, res) => {
   try {
     const { notificationId } = req.params;
-    await notificationService.deleteNotification(notificationId);
+    const userId = requireCurrentUser(req, res);
+    if (!userId) return;
+    const result = await query(
+      `DELETE FROM notifications
+       WHERE id = $1 AND user_id = $2
+       RETURNING id`,
+      [notificationId, userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Notification not found' });
+    }
 
     res.json({
       success: true,

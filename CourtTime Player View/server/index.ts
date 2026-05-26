@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-import { testConnection, closePool } from '../src/database/connection';
+import { testConnection, closePool, getClient } from '../src/database/connection';
 import { processBulletinMinParticipantCancellations } from '../src/services/bulletinBoardService';
 
 /** Load `.env`, then fill gaps from `.env.development`, then override with `.env.local`. */
@@ -104,6 +104,7 @@ app.use(cors({
   origin: function (origin, callback) {
     const allowed = [
       process.env.APP_URL,
+      process.env.MOBILE_APP_URL,
       'http://localhost:5173',
       'http://127.0.0.1:5173',
       'http://localhost:8081',
@@ -111,8 +112,10 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin || allowed.includes(origin)) {
       callback(null, true);
+    } else if (process.env.NODE_ENV !== 'production') {
+      callback(null, true);
     } else {
-      callback(null, true); // Allow all in dev; production is same-origin anyway
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
@@ -122,7 +125,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  if (process.env.NODE_ENV !== 'production' || process.env.LOG_REQUESTS === 'true') {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  }
   next();
 });
 
@@ -267,7 +272,17 @@ async function startServer() {
     const runBulletinCancellationSweep = async () => {
       if (bulletinCancellationSweepRunning) return;
       bulletinCancellationSweepRunning = true;
+      let lockClient: Awaited<ReturnType<typeof getClient>> | null = null;
+      let lockAcquired = false;
       try {
+        lockClient = await getClient();
+        const lockResult = await lockClient.query(
+          'SELECT pg_try_advisory_lock(hashtext($1)) AS locked',
+          ['courttime:bulletin-min-participant-cancellations']
+        );
+        lockAcquired = Boolean(lockResult.rows[0]?.locked);
+        if (!lockAcquired) return;
+
         const cancelledCount = await processBulletinMinParticipantCancellations();
         if (cancelledCount > 0) {
           console.log(`📧 Bulletin events cancelled for min participants: ${cancelledCount}`);
@@ -275,6 +290,13 @@ async function startServer() {
       } catch (error) {
         console.error('Bulletin min participant cancellation sweep failed:', error);
       } finally {
+        if (lockClient && lockAcquired) {
+          await lockClient.query(
+            'SELECT pg_advisory_unlock(hashtext($1))',
+            ['courttime:bulletin-min-participant-cancellations']
+          ).catch((error) => console.error('Failed to release bulletin sweep lock:', error));
+        }
+        lockClient?.release();
         bulletinCancellationSweepRunning = false;
       }
     };

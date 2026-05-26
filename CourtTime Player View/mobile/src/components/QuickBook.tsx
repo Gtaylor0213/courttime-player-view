@@ -38,6 +38,11 @@ interface RuleViolation {
   severity?: string;
 }
 
+interface ExistingBookingWindow {
+  startMinutes: number;
+  endMinutes: number;
+}
+
 interface Props {
   userId: string;
   facilityId: string;
@@ -129,13 +134,14 @@ export function QuickBook({
       const bookingsList = Array.isArray((bookingsRes.data as any)?.bookings)
         ? (bookingsRes.data as any).bookings
         : [];
-      const bookedByCourtId = new Map<string, Set<string>>();
+      const bookedByCourtId = new Map<string, ExistingBookingWindow[]>();
       bookingsList.forEach((booking: any) => {
         const courtId = booking.courtId || booking.court_id;
-        const startTime = normalizeTimeWithSeconds(booking.startTime || booking.start_time || '');
-        if (!courtId || !startTime) return;
-        const existing = bookedByCourtId.get(courtId) || new Set<string>();
-        existing.add(startTime);
+        const startMinutes = parseTimeToMinutes(booking.startTime || booking.start_time || '');
+        const endMinutes = parseTimeToMinutes(booking.endTime || booking.end_time || '');
+        if (!courtId || startMinutes === null || endMinutes === null || endMinutes <= startMinutes) return;
+        const existing = bookedByCourtId.get(courtId) || [];
+        existing.push({ startMinutes, endMinutes });
         bookedByCourtId.set(courtId, existing);
       });
 
@@ -149,7 +155,7 @@ export function QuickBook({
         const openMinutes = parseTimeToMinutes(cfg?.openTime || '06:00');
         const closeMinutes = parseTimeToMinutes(cfg?.closeTime || '22:00');
         const slotDur = Math.max(15, Number(cfg?.slotDuration || 30));
-        const bookedTimes = bookedByCourtId.get(court.id) || new Set<string>();
+        const bookedWindows = bookedByCourtId.get(court.id) || [];
 
         const currentlyOpen =
           isOpen &&
@@ -171,19 +177,15 @@ export function QuickBook({
         let earliestStart: number | null = null;
 
         while (startMinutes + SLOT_DURATION_MIN <= closeMinutes) {
-          let contiguous = true;
-          for (let i = 0; i < slotsNeeded; i++) {
+          const endMinutes = startMinutes + SLOT_DURATION_MIN;
+          const withinOpenWindow = Array.from({ length: slotsNeeded }).every((_, i) => {
             const checkMinutes = startMinutes + i * slotDur;
-            if (checkMinutes >= closeMinutes) {
-              contiguous = false;
-              break;
-            }
-            if (bookedTimes.has(minutesToHHMMSS(checkMinutes))) {
-              contiguous = false;
-              break;
-            }
-          }
-          if (contiguous) {
+            return checkMinutes < closeMinutes;
+          });
+          const overlapsExistingBooking = bookedWindows.some((booking) =>
+            timeWindowsOverlap(startMinutes, endMinutes, booking.startMinutes, booking.endMinutes)
+          );
+          if (withinOpenWindow && !overlapsExistingBooking) {
             earliestStart = startMinutes;
             break;
           }
@@ -421,20 +423,20 @@ function roundUpToStep(minutes: number, step: number): number {
   return Math.ceil(minutes / step) * step;
 }
 
+function timeWindowsOverlap(
+  startA: number,
+  endA: number,
+  startB: number,
+  endB: number
+): boolean {
+  return startA < endB && endA > startB;
+}
+
 function minutesToHHMMSS(totalMinutes: number): string {
   const minutesInDay = 24 * 60;
   const normalized = ((Math.floor(totalMinutes) % minutesInDay) + minutesInDay) % minutesInDay;
   const h = Math.floor(normalized / 60);
   const m = normalized % 60;
-  return `${pad(h)}:${pad(m)}:00`;
-}
-
-function normalizeTimeWithSeconds(value: string): string | null {
-  const parts = value.split(':');
-  if (parts.length < 2) return null;
-  const h = Number(parts[0]);
-  const m = Number(parts[1]);
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return `${pad(h)}:${pad(m)}:00`;
 }
 

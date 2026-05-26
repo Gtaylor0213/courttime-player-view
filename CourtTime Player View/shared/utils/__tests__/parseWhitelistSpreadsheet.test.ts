@@ -71,6 +71,18 @@ describe('parseWhitelistSpreadsheet', () => {
     expect(rows).toHaveLength(2);
   });
 
+  it('parses quoted CSV fields containing commas', () => {
+    const csv = `Address,Last Name\n"123 Main St, Unit 4",Smith`;
+    const rows = parseWhitelistCsv(csv);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].streetAddress).toBe('123 Main St, Unit 4');
+  });
+
+  it('rejects imports over the row limit', () => {
+    const rows = Array.from({ length: 5001 }, (_, i) => [`${i} Main St`]);
+    expect(() => parseRows2D(rows)).toThrow(/limited to 5000 rows/);
+  });
+
   it('maps to admin import entries with joined address parts', () => {
     const entries = toWhitelistImportEntries([
       { streetAddress: '1 Court', city: 'Town', state: 'ST', zipCode: '12345', lastName: 'Lee' },

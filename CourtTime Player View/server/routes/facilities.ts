@@ -320,6 +320,9 @@ router.post('/register', async (req, res, next) => {
         isIndoor: court.isIndoor || false,
         hasLights: court.hasLights || false,
         isWalkUp: court.isWalkUp || false,
+        requirePayment: Boolean(court.requirePayment),
+        bookingAmountCents: court.bookingAmountCents != null ? parseInt(court.bookingAmountCents) : undefined,
+        guestFeeCents: court.guestFeeCents != null ? parseInt(court.guestFeeCents) : undefined,
         canSplit: court.canSplit || false,
         splitConfig: court.splitConfig
       })),

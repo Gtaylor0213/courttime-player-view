@@ -61,6 +61,37 @@ const PORT = Number(process.env.PORT) || 3001;
 /** Bind all interfaces so phones / Expo Go on the same Wi‑Fi can reach the API */
 const HOST = process.env.HOST || '0.0.0.0';
 
+function allowedCorsOrigins(): string[] {
+  const configured = [
+    process.env.APP_URL,
+    process.env.MOBILE_APP_URL,
+    'https://www.courttimeapp.com',
+    'https://courttimeapp.com',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:8081',
+  ].filter(Boolean) as string[];
+
+  const expanded = new Set<string>();
+  for (const origin of configured) {
+    const normalized = origin.replace(/\/$/, '');
+    expanded.add(normalized);
+    try {
+      const url = new URL(normalized);
+      if (url.hostname.startsWith('www.')) {
+        url.hostname = url.hostname.slice(4);
+        expanded.add(url.toString().replace(/\/$/, ''));
+      } else {
+        url.hostname = `www.${url.hostname}`;
+        expanded.add(url.toString().replace(/\/$/, ''));
+      }
+    } catch {
+      // Ignore malformed optional env values; exact value remains in the set.
+    }
+  }
+  return [...expanded];
+}
+
 function logLanApiUrls(port: number) {
   if (process.env.NODE_ENV === 'production') return;
   try {
@@ -102,20 +133,17 @@ app.use('/api/webhooks', connectWebhookRoutes);
 // Middleware
 app.use(cors({
   origin: function (origin, callback) {
-    const allowed = [
-      process.env.APP_URL,
-      process.env.MOBILE_APP_URL,
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://localhost:8081',
-    ].filter(Boolean);
+    const allowed = allowedCorsOrigins();
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin || allowed.includes(origin)) {
       callback(null, true);
     } else if (process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      // Do not throw here: module scripts/styles may include Origin headers.
+      // Omitting CORS headers blocks disallowed cross-origin callers without
+      // turning same-origin asset loads into 500s.
+      callback(null, false);
     }
   },
   credentials: true,

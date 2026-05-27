@@ -87,6 +87,16 @@ export function LoginPage() {
           <div className="text-center mb-8 lg:hidden">
             <img src={logoImage} alt="CourtTime" className="h-32 w-auto mx-auto mb-2 object-contain" />
             <p className="text-muted-foreground">Book courts with ease</p>
+            <button
+              type="button"
+              onClick={() => navigate('/about')}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            >
+              Learn More About CourtTime
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
           </div>
 
           {/* Logo above login card for desktop */}

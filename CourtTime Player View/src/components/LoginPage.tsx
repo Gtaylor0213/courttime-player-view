@@ -153,6 +153,14 @@ export function LoginPage() {
                 >
                   {isLoading ? 'Signing In...' : 'Sign In'}
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full lg:hidden"
+                  onClick={() => navigate('/about')}
+                >
+                  Learn More About CourtTime
+                </Button>
               </form>
 
               {/* Registration Options */}

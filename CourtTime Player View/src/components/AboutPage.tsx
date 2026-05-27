@@ -30,16 +30,16 @@ export function AboutPage() {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-green-700 to-green-800 shadow-md">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={logoImage} alt="CourtTime" className="h-10 w-auto brightness-0 invert" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center justify-center w-full sm:w-auto">
+            <img src={logoImage} alt="CourtTime" className="h-10 sm:h-11 w-auto max-w-[180px] sm:max-w-none brightness-0 invert flex-shrink-0" />
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" className="text-white hover:bg-white/20" onClick={() => navigate('/login')}>
+          <div className="flex w-full sm:w-auto items-center justify-center sm:justify-end gap-2 sm:gap-3">
+            <Button variant="ghost" className="text-white hover:bg-white/20 px-3 sm:px-4" onClick={() => navigate('/login')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Login
             </Button>
-            <Button className="bg-white text-green-800 hover:bg-green-50" onClick={() => navigate('/register/facility')}>
+            <Button className="bg-white text-green-800 hover:bg-green-50 px-3 sm:px-4" onClick={() => navigate('/register/facility')}>
               Register Your Facility
             </Button>
           </div>

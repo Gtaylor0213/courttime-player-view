@@ -4,18 +4,27 @@ import { Card, CardContent } from './ui/card';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import {
-  CalendarCheck,
-  Users,
-  Shield,
-  BarChart3,
-  Clock,
-  Mail,
   ArrowLeft,
+  BadgeCheck,
+  BarChart3,
+  Bell,
+  CalendarCheck,
   CheckCircle,
+  Clock,
+  Lock,
+  Mail,
+  Shield,
+  Sparkles,
+  Users,
+  UserCheck,
 } from 'lucide-react';
 
 export function AboutPage() {
   const navigate = useNavigate();
+  const supportEmail = 'reidbissell@courttimeapp.com';
+  const demoRequestHref = `mailto:${supportEmail}?subject=${encodeURIComponent('CourtTime Demo Request')}&body=${encodeURIComponent(
+    'Hi CourtTime team,\n\nI would like to schedule a demo for my facility.\n\nFacility name:\nNumber of courts:\nPreferred contact:\nPreferred demo time:\n\nThanks,',
+  )}`;
 
   return (
     <div className="min-h-screen bg-white">
@@ -49,12 +58,18 @@ export function AboutPage() {
         </div>
         <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-20 sm:py-32 text-center text-white">
           <h1 className="text-4xl sm:text-5xl font-bold mb-6">
-            Court Management Made Simple
+            Modern Court Management, Built for Real Clubs
           </h1>
           <p className="text-lg sm:text-xl text-gray-200 mb-8 max-w-2xl mx-auto leading-relaxed">
-            CourtTime is a modern booking and management platform built for tennis clubs,
-            HOA communities, recreation centers, and any facility with courts to manage.
+            CourtTime helps facilities run smooth daily operations with fair booking rules,
+            clean member management, and a better player experience from login to reservation.
           </p>
+          <div className="mb-8 flex flex-wrap justify-center gap-2">
+            <span className="rounded-full bg-white/15 border border-white/30 px-3 py-1 text-sm">Tennis clubs</span>
+            <span className="rounded-full bg-white/15 border border-white/30 px-3 py-1 text-sm">HOA communities</span>
+            <span className="rounded-full bg-white/15 border border-white/30 px-3 py-1 text-sm">Parks and rec</span>
+            <span className="rounded-full bg-white/15 border border-white/30 px-3 py-1 text-sm">Private facilities</span>
+          </div>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               size="lg"
@@ -71,48 +86,89 @@ export function AboutPage() {
             >
               Create a Player Account
             </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="text-base px-8 bg-white/10 border-white text-white hover:bg-white/20"
+              asChild
+            >
+              <a href={demoRequestHref}>Request a Demo</a>
+            </Button>
           </div>
         </div>
       </section>
 
-      {/* What We Offer */}
+      {/* Core Value */}
       <section className="py-16 sm:py-24 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4 text-green-800">What We Offer</h2>
+          <h2 className="text-3xl font-bold text-center mb-4 text-green-800">What to Expect from CourtTime</h2>
           <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
-            Everything your facility needs to manage courts, members, and bookings in one place.
+            The platform is designed to reduce admin workload while protecting fair access to courts.
           </p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             <FeatureCard
               icon={<CalendarCheck className="h-8 w-8 text-green-600" />}
-              title="Online Court Booking"
-              description="Members can view real-time availability and book courts instantly from any device. No more phone calls or paper sign-up sheets."
-            />
-            <FeatureCard
-              icon={<Users className="h-8 w-8 text-green-600" />}
-              title="Member Management"
-              description="Manage your member roster, track memberships, and control access. Support for households and family accounts."
+              title="Fast, Real-Time Booking"
+              description="Members can view live availability and book in seconds from any device without calling the front desk."
             />
             <FeatureCard
               icon={<Shield className="h-8 w-8 text-green-600" />}
-              title="Booking Rules & Policies"
-              description="Set custom rules for booking limits, advance booking windows, peak hours, and more."
+              title="Policy Enforcement Built In"
+              description="Apply booking rules automatically, including limits, windows, and strike-based lockouts when needed."
+            />
+            <FeatureCard
+              icon={<Users className="h-8 w-8 text-green-600" />}
+              title="Member and Household Management"
+              description="Manage members, households, approvals, and permissions in one place with less manual cleanup."
             />
             <FeatureCard
               icon={<BarChart3 className="h-8 w-8 text-green-600" />}
-              title="Admin Dashboard"
-              description="A full admin panel to manage courts, view bookings, send communications, and oversee your entire facility."
+              title="Admin Visibility"
+              description="Use a centralized dashboard to manage schedules, monitor usage, and take action quickly."
             />
             <FeatureCard
               icon={<Clock className="h-8 w-8 text-green-600" />}
-              title="Flexible Scheduling"
-              description="Configure operating hours, court-specific schedules, and support for indoor/outdoor courts with lighting options."
+              title="Flexible Court Setup"
+              description="Configure operating hours, court details, indoor/outdoor settings, and lighting options per court."
             />
             <FeatureCard
-              icon={<Mail className="h-8 w-8 text-green-600" />}
-              title="Communication Tools"
-              description="Built-in bulletin board, email blasts, and notification system to keep your community informed and engaged."
+              icon={<Bell className="h-8 w-8 text-green-600" />}
+              title="Member Communication"
+              description="Keep your community informed with announcements, notices, and email-based updates."
             />
+          </div>
+        </div>
+      </section>
+
+      {/* Emphasis section */}
+      <section className="bg-muted/30 py-16 sm:py-24 px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-4 text-green-800">What We Emphasize</h2>
+          <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
+            CourtTime focuses on consistency, fairness, and a better daily experience for both staff and players.
+          </p>
+          <div className="grid md:grid-cols-3 gap-6">
+            <Card className="border-green-200">
+              <CardContent className="pt-6">
+                <Sparkles className="h-7 w-7 text-green-600 mb-3" />
+                <h3 className="font-semibold text-lg mb-2">Simplicity for Staff</h3>
+                <p className="text-sm text-gray-600">Less time spent fixing booking conflicts and answering repetitive questions.</p>
+              </CardContent>
+            </Card>
+            <Card className="border-green-200">
+              <CardContent className="pt-6">
+                <Lock className="h-7 w-7 text-green-600 mb-3" />
+                <h3 className="font-semibold text-lg mb-2">Fair Access Controls</h3>
+                <p className="text-sm text-gray-600">Consistent rules and strike lockouts help keep court access fair for everyone.</p>
+              </CardContent>
+            </Card>
+            <Card className="border-green-200">
+              <CardContent className="pt-6">
+                <UserCheck className="h-7 w-7 text-green-600 mb-3" />
+                <h3 className="font-semibold text-lg mb-2">Cleaner Member Experience</h3>
+                <p className="text-sm text-gray-600">Players can register, book, and manage their account without unnecessary friction.</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
@@ -133,24 +189,37 @@ export function AboutPage() {
             <StepItem
               number={2}
               title="Enter Facility Details"
-              description="Provide your facility name, address, contact info, and upload a photo. Set your operating hours and court information."
+              description="Add your facility profile, locations, contacts, and operating details."
             />
             <StepItem
               number={3}
-              title="Configure Your Courts"
-              description="Add your courts with details like surface type, indoor/outdoor, and lighting. Add as many courts as you need — pricing scales per court."
+              title="Configure Courts and Rules"
+              description="Set up your courts, scheduling options, and booking policies to match how your facility operates."
             />
             <StepItem
               number={4}
-              title="Set Booking Rules"
-              description="Customize booking limits, peak hour restrictions, and other rules that fit your community."
-            />
-            <StepItem
-              number={5}
               title="Complete Payment & Go Live"
-              description="Finalize your subscription and start inviting members. Your facility is ready to accept bookings right away."
+              description="Finish annual billing, then invite members and start accepting bookings immediately."
             />
           </div>
+        </div>
+      </section>
+
+      {/* Demo request */}
+      <section className="py-16 sm:py-24 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <Card className="border-2 border-green-200 bg-green-50/40">
+            <CardContent className="pt-8 pb-8 text-center">
+              <BadgeCheck className="h-10 w-10 text-green-700 mx-auto mb-4" />
+              <h2 className="text-3xl font-bold mb-3 text-green-800">Want a Guided Demo?</h2>
+              <p className="text-gray-700 mb-6 max-w-2xl mx-auto">
+                Share your facility details and we will walk you through setup, booking rules, and the best configuration for your courts.
+              </p>
+              <Button asChild size="lg">
+                <a href={demoRequestHref}>Request a Demo</a>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
@@ -159,7 +228,8 @@ export function AboutPage() {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-4 text-green-800">Simple, Transparent Pricing</h2>
           <p className="text-gray-600 mb-12 max-w-2xl mx-auto">
-            $50 per court per year. Minimum $200/year, maximum $550/year.
+            Annual subscription pricing is based on court count: $50 per court per year,
+            with a $200 annual minimum and $550 annual maximum.
           </p>
           <Card className="border-2 border-green-200 shadow-lg max-w-lg mx-auto text-left">
             <CardContent className="pt-8 pb-8">
@@ -175,6 +245,7 @@ export function AboutPage() {
                 <PricingFeature text="Unlimited members and bookings" />
                 <PricingFeature text="Full admin dashboard" />
                 <PricingFeature text="Custom booking rules and policies" />
+                <PricingFeature text="Strike tracking and lockout controls" />
                 <PricingFeature text="Member communication tools" />
                 <PricingFeature text="Email notifications" />
                 <PricingFeature text="Bulletin board" />
@@ -203,8 +274,8 @@ export function AboutPage() {
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
             <div className="flex items-center gap-2 text-gray-700">
               <Mail className="h-5 w-5 text-green-600" />
-              <a href="mailto:support@courttime.app" className="hover:text-green-600 underline">
-                support@courttime.app
+              <a href={`mailto:${supportEmail}`} className="hover:text-green-600 underline">
+                {supportEmail}
               </a>
             </div>
           </div>

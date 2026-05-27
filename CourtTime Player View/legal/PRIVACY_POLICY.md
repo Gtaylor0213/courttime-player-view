@@ -109,11 +109,11 @@ You can turn off push notifications globally or per category (booking updates, r
 
 ### Access and portability
 
-You can request a copy of your personal data by emailing **support@courttimeapp.com**. We will respond within 30 days.
+You can request a copy of your personal data by emailing **reidbissell@courttimeapp.com**. We will respond within 30 days.
 
 ### Correction
 
-You can correct most data yourself in the app. For data you cannot edit (such as historical booking records), email **support@courttimeapp.com**.
+You can correct most data yourself in the app. For data you cannot edit (such as historical booking records), email **reidbissell@courttimeapp.com**.
 
 ### Deletion
 
@@ -127,7 +127,7 @@ If you are in the European Economic Area, the United Kingdom, or Switzerland, yo
 
 California residents have the right to know what personal information we collect, request deletion, and opt out of the "sale" or "sharing" of personal information. We do not sell or share personal information for cross-context behavioral advertising.
 
-To exercise any of these rights, email **support@courttimeapp.com**.
+To exercise any of these rights, email **reidbissell@courttimeapp.com**.
 
 ---
 
@@ -179,7 +179,7 @@ We may update this Privacy Policy from time to time. When we make material chang
 
 For privacy questions, requests, or complaints:
 
-**Email:** support@courttimeapp.com
+**Email:** reidbissell@courttimeapp.com
 **Mail:** [ENTITY NAME], [BUSINESS ADDRESS]
 
 If you are an EU/UK resident and unsatisfied with our response, you have the right to lodge a complaint with your local data protection authority.

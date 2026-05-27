@@ -176,5 +176,5 @@ We may update these Terms from time to time. When we make material changes, we w
 
 Questions about these Terms?
 
-**Email:** support@courttimeapp.com
+**Email:** reidbissell@courttimeapp.com
 **Mail:** [ENTITY NAME], [BUSINESS ADDRESS]

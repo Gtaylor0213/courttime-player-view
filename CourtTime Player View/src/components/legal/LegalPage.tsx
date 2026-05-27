@@ -80,8 +80,8 @@ export function LegalPage({ title, source }: Props) {
         <footer className="mt-12 border-t border-gray-200 pt-6 text-xs text-gray-500">
           <p>
             Questions? Email{' '}
-            <a href="mailto:support@courttimeapp.com" className="text-emerald-700 underline">
-              support@courttimeapp.com
+            <a href="mailto:reidbissell@courttimeapp.com" className="text-emerald-700 underline">
+              reidbissell@courttimeapp.com
             </a>
           </p>
         </footer>

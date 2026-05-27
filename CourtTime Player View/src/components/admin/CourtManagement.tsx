@@ -451,7 +451,7 @@ export function CourtManagement() {
 
     const remaining = MAX_STANDARD_COURTS - activeCourts.length;
     if (bulkAddForm.count > remaining) {
-      toast.error(`You can only add ${remaining} more court${remaining !== 1 ? 's' : ''} on your current plan (${MAX_STANDARD_COURTS} court maximum). Contact support@courttime.app for help.`);
+      toast.error(`You can only add ${remaining} more court${remaining !== 1 ? 's' : ''} on your current plan (${MAX_STANDARD_COURTS} court maximum). Contact reidbissell@courttimeapp.com for help.`);
       return;
     }
 
@@ -679,7 +679,7 @@ export function CourtManagement() {
               <AlertDescription className="text-yellow-800">
                 Your subscription supports up to {MAX_STANDARD_COURTS} courts at the annual plan maximum ($550/year). You have {activeCourts.length} active court{activeCourts.length !== 1 ? 's' : ''}.
                 To add more courts, contact us at{' '}
-                <a href="mailto:support@courttime.app" className="font-medium underline">support@courttime.app</a>.
+                <a href="mailto:reidbissell@courttimeapp.com" className="font-medium underline">reidbissell@courttimeapp.com</a>.
                 <Button variant="ghost" size="sm" className="ml-2 h-6 px-2 text-yellow-800" onClick={() => setShowLimitAlert(false)}>
                   <X className="h-3 w-3" />
                 </Button>

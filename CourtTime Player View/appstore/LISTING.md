@@ -81,7 +81,7 @@ CourtTime is free for members of participating facilities. Your facility adminis
 
 QUESTIONS?
 
-Email support@courttimeapp.com or visit courttimeapp.com/support.
+Email reidbissell@courttimeapp.com or visit courttimeapp.com/support.
 ```
 
 ---
@@ -120,7 +120,7 @@ If you want to drop something to make room for `racket`, `match`, or `pro`, the 
 | **Account Deletion URL** | `https://courttimeapp.com/delete-account` |
 | **Support URL** | `https://courttimeapp.com/support` |
 | **Marketing URL** | `https://courttimeapp.com/about` |
-| **Support email** | `support@courttimeapp.com` |
+| **Support email** | `reidbissell@courttimeapp.com` |
 
 ---
 

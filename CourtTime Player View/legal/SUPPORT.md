@@ -2,7 +2,7 @@
 
 We're here to help. The fastest way to reach us is by email — we typically respond within one business day.
 
-**Email:** [support@courttimeapp.com](mailto:support@courttimeapp.com)
+**Email:** [reidbissell@courttimeapp.com](mailto:reidbissell@courttimeapp.com)
 
 When you write in, please tell us:
 
@@ -98,7 +98,7 @@ Check three things:
 2. The **Push notifications** master toggle is on under **Profile → Notifications**.
 3. The category for the notification you expected (e.g. **Booking reminders**) is also on.
 
-If everything looks right but notifications still aren't arriving, email us at [support@courttimeapp.com](mailto:support@courttimeapp.com) — include your phone model and OS version.
+If everything looks right but notifications still aren't arriving, email us at [reidbissell@courttimeapp.com](mailto:reidbissell@courttimeapp.com) — include your phone model and OS version.
 
 ---
 
@@ -144,6 +144,6 @@ No. We never sell personal data and we don't run third-party advertising tracker
 
 ## Still need help?
 
-Email **[support@courttimeapp.com](mailto:support@courttimeapp.com)** with your account email, your facility, and a description of the issue. We respond within one business day, faster during U.S. business hours.
+Email **[reidbissell@courttimeapp.com](mailto:reidbissell@courttimeapp.com)** with your account email, your facility, and a description of the issue. We respond within one business day, faster during U.S. business hours.
 
 You can also review our [Privacy Policy](/privacy), [Terms of Service](/terms), or [Account Deletion](/delete-account) policy.

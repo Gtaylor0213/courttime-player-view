@@ -18,7 +18,7 @@ Search every file for these tokens and replace:
 - `[ENTITY NAME]` — your legal entity name (e.g. "CourtTime, LLC" or "CourtTime, Inc.")
 - `[BUSINESS ADDRESS]` — physical mailing address for legal notices
 - `[EFFECTIVE DATE]` — the date the policy/terms take effect
-- `support@courttimeapp.com` — replace with your real support email if different
+- `reidbissell@courttimeapp.com` — replace with your real support email if different
 
 ## Hosting requirements
 

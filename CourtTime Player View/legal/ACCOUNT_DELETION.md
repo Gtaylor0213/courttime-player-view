@@ -28,7 +28,7 @@ You have three ways to delete your account.
 
 ### By email
 
-Email **support@courttimeapp.com** from the email address on your account with the subject line "Delete my account." We will verify your identity and process the deletion within 30 days. We may ask you to confirm the request from a second device or via a verification link before we proceed.
+Email **reidbissell@courttimeapp.com** from the email address on your account with the subject line "Delete my account." We will verify your identity and process the deletion within 30 days. We may ask you to confirm the request from a second device or via a verification link before we proceed.
 
 ---
 
@@ -89,5 +89,5 @@ If you change your mind, you can sign up again at any time using the same email 
 
 ## Questions
 
-**Email:** support@courttimeapp.com
+**Email:** reidbissell@courttimeapp.com
 **Mail:** [ENTITY NAME], [BUSINESS ADDRESS]

@@ -7,6 +7,10 @@ import express from 'express';
 import { getPool } from '../../src/database/connection';
 import { sendStrikeIssuedEmail, sendStrikeRevokedEmail, sendLockoutEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
+import {
+  evaluateStrikeLockout,
+  parseStrikeRuleConfig,
+} from '../../shared/utils/strikeLockout';
 
 const router = express.Router();
 const pool = { query: (text: string, params?: any[]) => getPool().query(text, params) };
@@ -358,7 +362,6 @@ router.get('/check/:userId', async (req, res, next) => {
       });
     }
 
-    // Get facility's strike threshold config
     const configResult = await pool.query(
       `SELECT rule_config FROM facility_rule_configs frc
        JOIN booking_rule_definitions brd ON frc.rule_definition_id = brd.id
@@ -366,42 +369,38 @@ router.get('/check/:userId', async (req, res, next) => {
       [facilityId]
     );
 
-    const config = configResult.rows[0]?.rule_config || {
-      strike_threshold: 3,
-      strike_window_days: 30,
-      lockout_days: 7
-    };
+    if (configResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        isLockedOut: false,
+        activeStrikes: 0,
+        threshold: 0,
+        lockoutEndsAt: null,
+        strikeSystemEnabled: false,
+        strikes: [],
+      });
+    }
 
-    const threshold = config.strike_threshold || 3;
-    const windowDays = config.strike_window_days || 30;
-    const lockoutDays = config.lockout_days || 7;
+    const config = parseStrikeRuleConfig(configResult.rows[0].rule_config);
 
-    // Count active strikes in window
     const strikesResult = await pool.query(
-      `SELECT * FROM account_strikes
+      `SELECT issued_at as "issuedAt", expires_at as "expiresAt", revoked
+       FROM account_strikes
        WHERE user_id = $1 AND facility_id = $2
          AND revoked = false
+         AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
          AND issued_at > CURRENT_TIMESTAMP - INTERVAL '1 day' * $3
        ORDER BY issued_at DESC`,
-      [userId, facilityId, windowDays]
+      [userId, facilityId, config.strike_window_days]
     );
 
-    const activeStrikes = strikesResult.rows;
-    const isLockedOut = activeStrikes.length >= threshold;
-
-    let lockoutEndsAt = null;
-    if (isLockedOut && activeStrikes.length > 0) {
-      const mostRecent = new Date(activeStrikes[0].issued_at);
-      lockoutEndsAt = new Date(mostRecent.getTime() + lockoutDays * 24 * 60 * 60 * 1000);
-    }
+    const lockout = evaluateStrikeLockout(strikesResult.rows, config);
 
     res.json({
       success: true,
-      isLockedOut,
-      activeStrikes: activeStrikes.length,
-      threshold,
-      lockoutEndsAt: lockoutEndsAt?.toISOString(),
-      strikes: activeStrikes
+      ...lockout,
+      strikeSystemEnabled: true,
+      strikes: strikesResult.rows,
     });
   } catch (error) {
     next(error);

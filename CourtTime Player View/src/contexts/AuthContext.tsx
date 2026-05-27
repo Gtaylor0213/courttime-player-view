@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner@2.0.3';
-import { authApi } from '../api/client';
+import { authApi, resetSessionExpiryNotification } from '../api/client';
+import { isSessionAuthError } from '../../shared/utils/sessionAuth';
 import type { TermsAttachment } from '../api/client';
 import type { AuthResponseShape, AuthUserShape } from '../../shared/types';
 
@@ -58,7 +59,7 @@ interface AuthContextType {
   loading: boolean;
   termsLoading: boolean;
   pendingTermsAcceptances: PendingTermsAcceptance[];
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string, setupToken?: string) => Promise<boolean>;
   register: (email: string, password: string, fullName: string, userType?: 'player' | 'admin', additionalData?: RegistrationData) => Promise<boolean>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<boolean>;
@@ -97,9 +98,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [pendingTermsAcceptances, setPendingTermsAcceptances] = useState<PendingTermsAcceptance[]>([]);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  const clearStoredSession = () => {
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token');
+    setUser(null);
+    setAccessToken(null);
+    setPendingTermsAcceptances([]);
+  };
+
   // Initialize auth state
   useEffect(() => {
     initializeAuth();
+  }, []);
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      clearStoredSession();
+      toast.error('Your session expired. Please log in again.');
+    };
+    window.addEventListener('auth-session-expired', onSessionExpired);
+    return () => window.removeEventListener('auth-session-expired', onSessionExpired);
   }, []);
 
   const initializeAuth = async () => {
@@ -121,16 +139,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Update localStorage with fresh data
             localStorage.setItem('auth_user', JSON.stringify(refreshedUser));
             await loadTermsStatus(refreshedUser);
+          } else if (isSessionAuthError(result.error)) {
+            clearStoredSession();
           } else {
-            // Fall back to cached user if API fails
+            // Fall back to cached user if API fails (e.g. network)
             setUser(parsedUser);
             await loadTermsStatus(parsedUser);
           }
         } catch (parseError) {
           console.error('Failed to parse saved user:', parseError);
-          // Clear invalid data
-          localStorage.removeItem('auth_user');
-          localStorage.removeItem('auth_token');
+          clearStoredSession();
         }
       }
 
@@ -163,11 +181,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string, setupToken?: string): Promise<boolean> => {
     try {
       setLoading(true);
 
-      const result = await authApi.login(email, password);
+      const result = await authApi.login(email, password, setupToken);
 
       if (result.success && result.data) {
         const backendResponse = result.data as AuthResponseShape;
@@ -176,8 +194,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAccessToken(backendResponse.token);
           localStorage.setItem('auth_user', JSON.stringify(backendResponse.user));
           localStorage.setItem('auth_token', backendResponse.token);
+          resetSessionExpiryNotification();
           await loadTermsStatus(backendResponse.user);
-          toast.success('Logged in successfully');
+          toast.success(setupToken ? 'Logged in and joined facility' : 'Logged in successfully');
           return true;
         }
       }
@@ -229,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAccessToken(token);
         localStorage.setItem('auth_user', JSON.stringify(registeredUser));
         localStorage.setItem('auth_token', token);
+        resetSessionExpiryNotification();
         await loadTermsStatus(registeredUser);
         return true;
       } else {

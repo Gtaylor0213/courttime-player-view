@@ -34,6 +34,18 @@
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.625rem;
+  --focus-ring-width: 3px;
+  --focus-ring-opacity: 0.45;
+  --motion-fast: 150ms;
+  --motion-standard: 220ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --shadow-soft-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-soft-md: 0 8px 24px rgba(16, 24, 40, 0.08);
+  --calendar-scroll-track: #e4ebe7;
+  --calendar-scroll-thumb: #92a79f;
+  --calendar-scroll-thumb-hover: #6f877e;
+  --calendar-unavailable-stripe-a: #e8eeeb;
+  --calendar-unavailable-stripe-b: #d6e0db;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.627 0.194 149.214);
@@ -79,6 +91,11 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
+  --calendar-scroll-track: #2f3a35;
+  --calendar-scroll-thumb: #4a5f56;
+  --calendar-scroll-thumb-hover: #5f786d;
+  --calendar-unavailable-stripe-a: #2d3632;
+  --calendar-unavailable-stripe-b: #39443f;
 }
 
 @theme inline {
@@ -129,6 +146,8 @@
 
   body {
     @apply bg-background text-foreground;
+    transition: background-color var(--motion-standard) var(--ease-standard),
+      color var(--motion-standard) var(--ease-standard);
   }
 }
 
@@ -195,7 +214,7 @@ html {
 /* Custom scrollbar styles for calendar */
 .calendar-scroll {
   scrollbar-width: auto; /* Firefox */
-  scrollbar-color: #94a3b8 #e2e8f0; /* Firefox: thumb track */
+  scrollbar-color: var(--calendar-scroll-thumb) var(--calendar-scroll-track); /* Firefox: thumb track */
   /* Keeps overscroll in the grid; reduces parent pull-to-refresh / rubber-band on phones */
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
@@ -249,22 +268,22 @@ html {
 }
 
 .calendar-scroll::-webkit-scrollbar-track {
-  background: #e2e8f0;
+  background: var(--calendar-scroll-track);
   border-radius: 6px;
 }
 
 .calendar-scroll::-webkit-scrollbar-thumb {
-  background: #94a3b8;
+  background: var(--calendar-scroll-thumb);
   border-radius: 6px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--calendar-scroll-track);
 }
 
 .calendar-scroll::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: var(--calendar-scroll-thumb-hover);
 }
 
 .calendar-scroll::-webkit-scrollbar-corner {
-  background: #e2e8f0;
+  background: var(--calendar-scroll-track);
 }
 
 /* Respect reduced motion preferences */
@@ -304,10 +323,10 @@ html {
 .unavailable-stripe {
   background: repeating-linear-gradient(
     135deg,
-    #e5e7eb,
-    #e5e7eb 4px,
-    #d1d5db 4px,
-    #d1d5db 8px
+    var(--calendar-unavailable-stripe-a),
+    var(--calendar-unavailable-stripe-a) 4px,
+    var(--calendar-unavailable-stripe-b) 4px,
+    var(--calendar-unavailable-stripe-b) 8px
   );
   cursor: not-allowed;
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -11,6 +11,11 @@ import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png'
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const setupToken = searchParams.get('setupToken') || undefined;
+  const registerPath = setupToken
+    ? `/register?setupToken=${encodeURIComponent(setupToken)}`
+    : '/register';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,7 +26,7 @@ export function LoginPage() {
     setIsLoading(true);
     
     try {
-      const success = await login(email, password);
+      const success = await login(email, password, setupToken);
       if (success) {
         const from = (location.state as any)?.from?.pathname || '/calendar';
         navigate(from, { replace: true });
@@ -66,7 +71,7 @@ export function LoginPage() {
           </div>
           <button
             onClick={() => navigate('/about')}
-            className="mt-8 inline-flex items-center gap-2 px-6 py-3 border-2 border-white rounded-lg text-white font-medium hover:bg-white/20 transition-colors"
+            className="mt-8 inline-flex items-center gap-2 rounded-lg border-2 border-white px-6 py-3 text-white font-medium transition-colors duration-200 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
           >
             Learn More
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -91,9 +96,11 @@ export function LoginPage() {
 
           <Card>
             <CardHeader className="text-center">
-              <CardTitle>Welcome to CourtTime</CardTitle>
+              <CardTitle>{setupToken ? 'Log in to Join Facility' : 'Welcome to CourtTime'}</CardTitle>
               <CardDescription>
-                Sign in to manage facilities and book courts
+                {setupToken
+                  ? 'Use your existing CourtTime account to add this facility.'
+                  : 'Sign in to manage facilities and book courts'}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -115,7 +122,7 @@ export function LoginPage() {
                     <button
                       type="button"
                       onClick={() => navigate('/forgot-password')}
-                      className="text-sm text-green-600 hover:text-green-700 hover:underline"
+                      className="text-sm text-primary transition-colors hover:text-primary/80 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:rounded-sm"
                     >
                       Forgot password?
                     </button>
@@ -142,10 +149,10 @@ export function LoginPage() {
               <div className="mt-6 space-y-3">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300" />
+                    <div className="w-full border-t border-border" />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="bg-white px-2 text-muted-foreground">New to CourtTime?</span>
+                    <span className="bg-card px-2 text-muted-foreground">New to CourtTime?</span>
                   </div>
                 </div>
                 
@@ -153,7 +160,7 @@ export function LoginPage() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => navigate('/register')}
+                    onClick={() => navigate(registerPath)}
                   >
                     Create Player Account
                   </Button>

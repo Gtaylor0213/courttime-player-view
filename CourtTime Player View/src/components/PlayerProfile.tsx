@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { playerProfileApi, facilitiesApi, strikesApi, membersApi, usersApi, userPreferencesApi } from '../api/client';
+import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { toast } from 'sonner';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
@@ -206,8 +207,11 @@ export function PlayerProfile() {
         for (const fac of facilities) {
           try {
             const lockoutRes = await strikesApi.checkLockout(user.id, fac.facilityId);
-            if (lockoutRes.success && lockoutRes.data) {
-              statuses[fac.facilityId] = { ...lockoutRes.data, facilityName: fac.facilityName };
+            if (lockoutRes.success) {
+              const parsed = parseStrikeLockoutStatus(lockoutRes.data);
+              if (parsed) {
+                statuses[fac.facilityId] = { ...parsed, facilityName: fac.facilityName };
+              }
             }
           } catch {
             // Skip if not available
@@ -609,7 +613,7 @@ export function PlayerProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <div className="text-center">
           <div className="text-lg font-medium">Loading profile...</div>
         </div>
@@ -622,7 +626,7 @@ export function PlayerProfile() {
         <div className="max-w-4xl mx-auto p-4 md:p-8">
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-medium text-gray-900">Player Profile</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Player Profile</h1>
 
             <div className="flex items-center gap-4">
               <NotificationBell />
@@ -831,7 +835,7 @@ export function PlayerProfile() {
                       {profileData.memberFacilities.map((facility: any) => (
                         <div
                           key={facility.facilityId}
-                          className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                          className="rounded-lg border p-3 transition-colors hover:bg-accent/40"
                         >
                           <div className="flex justify-between items-start">
                             <div>
@@ -1075,7 +1079,7 @@ export function PlayerProfile() {
                     <div>
                       <button
                         onClick={() => setShowStrikeHistory(!showStrikeHistory)}
-                        className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors w-full"
+                        className="flex w-full items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm"
                       >
                         {showStrikeHistory ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         Strike History ({strikes.length} total)

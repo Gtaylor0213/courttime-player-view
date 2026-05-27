@@ -292,40 +292,34 @@ const ACC009: RuleEvaluator = {
   category: 'account',
 
   async evaluate(context: RuleContext, config: ACC009Config): Promise<RuleResult> {
-    const threshold = config.strike_threshold || 3;
-    const windowDays = config.strike_window_days || 30;
-    const lockoutDays = config.lockout_days || 7;
+    const { evaluateStrikeLockout, parseStrikeRuleConfig } = await import(
+      '../../../../shared/utils/strikeLockout'
+    );
+    const parsed = parseStrikeRuleConfig(config);
+    const lockout = evaluateStrikeLockout(
+      context.strikes.map((s) => ({
+        issuedAt: s.issuedAt,
+        revoked: s.revoked,
+        expiresAt: s.expiresAt,
+      })),
+      parsed,
+      context.currentDateTime
+    );
 
-    // Count active strikes within window
-    const windowStart = new Date();
-    windowStart.setDate(windowStart.getDate() - windowDays);
-
-    const activeStrikes = context.strikes.filter(s => {
-      const issuedAt = new Date(s.issuedAt);
-      return issuedAt >= windowStart;
-    });
-
-    if (activeStrikes.length >= threshold) {
-      // Calculate lockout end (based on most recent strike)
-      const mostRecent = activeStrikes.reduce((latest, s) =>
-        new Date(s.issuedAt) > new Date(latest.issuedAt) ? s : latest
-      );
-      const lockoutEnds = addDays(new Date(mostRecent.issuedAt), lockoutDays);
-
-      if (lockoutEnds > context.currentDateTime) {
-        return {
-          ruleCode: 'ACC-009',
-          ruleName: 'No-Show / Strike System',
-          passed: false,
-          severity: 'error',
-          message: `Your account is temporarily locked due to ${activeStrikes.length} strikes. Lockout ends ${lockoutEnds.toLocaleDateString()}.`,
-          details: {
-            strikeCount: activeStrikes.length,
-            threshold,
-            lockoutEndsAt: formatDate(lockoutEnds)
-          }
-        };
-      }
+    if (lockout.isLockedOut) {
+      const lockoutEnds = lockout.lockoutEndsAt ? new Date(lockout.lockoutEndsAt) : null;
+      return {
+        ruleCode: 'ACC-009',
+        ruleName: 'No-Show / Strike System',
+        passed: false,
+        severity: 'error',
+        message: `Your account is temporarily locked due to ${lockout.activeStrikes} strikes. Lockout ends ${lockoutEnds?.toLocaleDateString() ?? 'soon'}.`,
+        details: {
+          strikeCount: lockout.activeStrikes,
+          threshold: lockout.threshold,
+          lockoutEndsAt: lockoutEnds ? formatDate(lockoutEnds) : undefined,
+        },
+      };
     }
 
     return { ruleCode: 'ACC-009', ruleName: 'No-Show / Strike System', passed: true, severity: 'error' };

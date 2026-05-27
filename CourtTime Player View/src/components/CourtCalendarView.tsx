@@ -1309,6 +1309,11 @@ export function CourtCalendarView() {
   };
 
   const handleEmptySlotClick = (courtName: string, time: string, dragCells?: Set<string>) => {
+    if (strikeLockout?.isLockedOut) {
+      toast.error('Your account is locked due to strikes. You cannot book courts until the lockout ends.');
+      return;
+    }
+
     // Find the court object to get its ID
     const courtObj = courts.find(c => c.name === courtName);
     if (!courtObj) {
@@ -1693,6 +1698,10 @@ export function CourtCalendarView() {
   );
 
   const handlePointerDown = (courtName: string, time: string, event: React.PointerEvent) => {
+    if (strikeLockout?.isLockedOut) {
+      return;
+    }
+
     if (isMobile && event.pointerType === 'touch') {
       return;
     }

@@ -372,14 +372,14 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center bg-white rounded-lg border" style={{ height: 'calc(100dvh - 160px)' }}>
+      <div className="flex items-center justify-center rounded-lg border bg-card" style={{ height: 'calc(100dvh - 160px)' }}>
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="flex bg-white rounded-lg border overflow-hidden" style={{ height: 'calc(100dvh - 160px)' }}>
+    <div className="flex overflow-hidden rounded-lg border bg-card" style={{ height: 'calc(100dvh - 160px)' }}>
       {/* Conversations List */}
       <div className={cn(
         'w-full md:w-80 border-r flex flex-col h-full',
@@ -476,7 +476,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
                 {/* Mobile back button */}
                 <button
                   onClick={() => { setSelectedConversation(null); setNewConversationUser(null); }}
-                  className="md:hidden p-2 -ml-2 mr-1 rounded-md hover:bg-gray-100"
+                  className="md:hidden p-2 -ml-2 mr-1 rounded-md hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                   aria-label="Back to conversations"
                 >
                   <ChevronLeft className="h-5 w-5" />

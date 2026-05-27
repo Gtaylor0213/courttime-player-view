@@ -20,7 +20,7 @@ export function AboutPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-to-r from-green-700 to-green-800 shadow-lg">
+      <header className="sticky top-0 z-50 bg-gradient-to-r from-green-700 to-green-800 shadow-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logoImage} alt="CourtTime" className="h-10 w-auto brightness-0 invert" />
@@ -118,7 +118,7 @@ export function AboutPage() {
       </section>
 
       {/* How to Sign Up */}
-      <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50">
+      <section className="bg-muted/30 py-16 sm:py-24 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-4 text-green-800">How to Register Your Facility</h2>
           <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
@@ -193,7 +193,7 @@ export function AboutPage() {
       </section>
 
       {/* Contact */}
-      <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50">
+      <section className="bg-muted/30 py-16 sm:py-24 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-4 text-green-800">Questions? Get in Touch</h2>
           <p className="text-gray-600 mb-8 max-w-xl mx-auto">
@@ -219,9 +219,9 @@ export function AboutPage() {
             <span>&copy; {new Date().getFullYear()} CourtTime. All rights reserved.</span>
           </div>
           <div className="flex gap-4">
-            <button onClick={() => navigate('/login')} className="hover:text-green-600">Sign In</button>
-            <button onClick={() => navigate('/register')} className="hover:text-green-600">Create Account</button>
-            <button onClick={() => navigate('/register/facility')} className="hover:text-green-600">Register Facility</button>
+            <button onClick={() => navigate('/login')} className="transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm">Sign In</button>
+            <button onClick={() => navigate('/register')} className="transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm">Create Account</button>
+            <button onClick={() => navigate('/register/facility')} className="transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm">Register Facility</button>
           </div>
         </div>
       </footer>
@@ -231,7 +231,7 @@ export function AboutPage() {
 
 function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="transition-shadow hover:shadow-md">
       <CardContent className="pt-6">
         <div className="mb-4">{icon}</div>
         <h3 className="text-lg font-semibold mb-2">{title}</h3>

@@ -30,14 +30,14 @@ export function MessagesPage() {
         <div className="mb-4 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-medium">Messages</h1>
-            <p className="text-gray-600 mt-1">Chat with other players at your facility</p>
+            <p className="mt-1 text-muted-foreground">Chat with other players at your facility</p>
           </div>
           <NotificationBell />
         </div>
 
         {!hasFacility ? (
-          <div className="flex items-center justify-center text-center bg-white rounded-lg border" style={{ height: 'calc(100vh - 160px)' }}>
-            <p className="text-gray-500">You need to be a member of a facility to send messages.</p>
+          <div className="flex items-center justify-center rounded-lg border bg-card text-center" style={{ height: 'calc(100dvh - 160px)' }}>
+            <p className="text-muted-foreground">You need to be a member of a facility to send messages.</p>
           </div>
         ) : (
           <Messages

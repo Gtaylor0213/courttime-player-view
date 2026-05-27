@@ -175,7 +175,7 @@ router.post('/register', async (req, res, next) => {
  */
 router.post('/login', async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, setupToken } = req.body;
 
     // Validation
     if (!email || !password) {
@@ -192,15 +192,45 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json(result);
     }
 
+    let userForResponse = result.user!;
+
+    if (setupToken) {
+      const validation = await validateSetupToken(setupToken);
+      if (!validation.valid) {
+        return res.status(400).json({ success: false, error: validation.error });
+      }
+
+      if (userForResponse.email.trim().toLowerCase() !== validation.email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email must match the address on your setup invitation',
+        });
+      }
+
+      const added = await addUserToFacility(userForResponse.id, validation.facilityId);
+      if (!added) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to add facility to your account',
+        });
+      }
+
+      await consumeSetupToken(setupToken, userForResponse.id);
+      userForResponse = await getUserWithMemberships(userForResponse.id) || userForResponse;
+    }
+
     // Generate JWT token
     const token = generateToken({
-      userId: result.user!.id,
-      email: result.user!.email,
-      userType: (result.user!.userType as 'player' | 'admin') || 'player',
+      userId: userForResponse.id,
+      email: userForResponse.email,
+      userType: (userForResponse.userType as 'player' | 'admin') || 'player',
     });
 
-    res.json({ ...result, token });
+    res.json({ ...result, user: userForResponse, token });
   } catch (error) {
+    if (error instanceof Error && error.message.includes('max number of accounts')) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     next(error);
   }
 });

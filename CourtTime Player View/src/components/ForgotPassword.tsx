@@ -47,16 +47,16 @@ export function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <img src={logoImage} alt="CourtTime" className="h-16 w-auto mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900">CourtTime</h1>
-          <p className="text-gray-600 mt-2">Court Booking Made Simple</p>
+          <h1 className="text-3xl font-semibold text-foreground">CourtTime</h1>
+          <p className="mt-2 text-muted-foreground">Court Booking Made Simple</p>
         </div>
 
-        <Card className="shadow-xl">
+        <Card className="shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
@@ -78,7 +78,7 @@ export function ForgotPassword() {
                 </Alert>
 
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     Didn't receive the email? Check your spam folder or try again.
                   </p>
                   <Button
@@ -152,9 +152,9 @@ export function ForgotPassword() {
         </Card>
 
         {/* Additional Help */}
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-6 text-center text-sm text-muted-foreground">
           <p>Need help? Contact support at</p>
-          <a href="mailto:reidbissell@courttimeapp.com" className="text-green-600 hover:text-green-700 font-medium">
+          <a href="mailto:reidbissell@courttimeapp.com" className="font-medium text-primary transition-colors hover:text-primary/80">
             reidbissell@courttimeapp.com
           </a>
         </div>

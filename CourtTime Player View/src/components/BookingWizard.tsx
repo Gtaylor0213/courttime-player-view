@@ -607,7 +607,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{facility}</span>
               <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />{formatDateForDisplay(date)}</span>
             </div>
-            <div className="bg-green-50 p-2.5 rounded-md border border-green-200">
+            <div className="rounded-md border border-green-200 bg-green-50 p-2.5 shadow-sm">
               <div className="flex items-center gap-2 text-green-800">
                 <Clock className="h-4 w-4" />
                 <span className="font-medium">
@@ -733,7 +733,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           )}
 
           {advancedBooking && user?.userType === 'admin' && (
-            <div className="space-y-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+            <div className="space-y-3 rounded-md border border-border bg-muted/40 p-3">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Select Days of the Week</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -810,9 +810,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                   {additionalCourtIds.map(id => {
                     const c = facilityCourts.find(fc => fc.id === id);
                     return c ? (
-                      <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-800 border border-green-200 rounded-md text-xs">
+                      <span key={id} className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2 py-1 text-xs text-green-800">
                         {c.name}
-                        <button type="button" onClick={() => toggleAdditionalCourt(id)} className="hover:text-red-600">×</button>
+                        <button
+                          type="button"
+                          onClick={() => toggleAdditionalCourt(id)}
+                          className="rounded-sm transition-colors hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                        >
+                          ×
+                        </button>
                       </span>
                     ) : null;
                   })}

@@ -43,7 +43,7 @@ export function AuthenticatedLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-muted/30">
       <UnifiedSidebar
         userType={user?.userType || 'player'}
         currentPage={currentPage}
@@ -61,7 +61,7 @@ export function AuthenticatedLayout() {
         <header className="fixed top-0 left-0 right-0 z-30 flex items-center min-h-14 px-4 pt-[env(safe-area-inset-top,0px)] bg-gradient-to-r from-green-700 to-green-800 border-b border-green-900 shadow-md md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 -ml-2 rounded-md hover:bg-white/20 text-white"
+            className="p-2 -ml-2 rounded-md text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             aria-label="Open menu"
           >
             <Menu className="h-6 w-6" />

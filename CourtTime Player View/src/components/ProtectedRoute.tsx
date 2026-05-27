@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { membersApi } from '../api/client';
+import { useAppContext } from '../contexts/AppContext';
+import { membersApi, strikesApi } from '../api/client';
 import { TermsAcceptanceGate } from './TermsAcceptanceGate';
 import { PaymentLockoutScreen } from './PaymentLockoutScreen';
+import { StrikeLockoutScreen } from './StrikeLockoutScreen';
+import { facilityIdsFromAuthUser } from '../utils/memberFacilities';
+import {
+  parseStrikeLockoutStatus,
+  type StrikeLockoutStatus,
+} from '../../shared/utils/strikeLockout';
 
 export interface PaymentLockoutInfo {
   facilityId?: string;
@@ -33,10 +40,14 @@ function normalizeLockoutPayload(raw: unknown): PaymentLockoutInfo | null {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, termsLoading, pendingTermsAcceptances } = useAuth();
+  const { selectedFacilityId } = useAppContext();
   const location = useLocation();
   const [lockoutInfo, setLockoutInfo] = useState<PaymentLockoutInfo | null>(null);
   const [lockoutChecking, setLockoutChecking] = useState(false);
+  const [strikeLockout, setStrikeLockout] = useState<StrikeLockoutStatus | null>(null);
+  const [strikeLockoutChecking, setStrikeLockoutChecking] = useState(false);
   const isLockoutPaidPage = location.pathname === '/lockout-paid';
+  const isProfileRoute = location.pathname.startsWith('/profile');
 
   useEffect(() => {
     const handleLocked = (e: Event) => {
@@ -73,6 +84,34 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return () => { cancelled = true; };
   }, [user, isLockoutPaidPage]);
 
+  useEffect(() => {
+    if (!user?.id || user.userType === 'admin') {
+      setStrikeLockout(null);
+      return;
+    }
+
+    const facilityId =
+      selectedFacilityId && facilityIdsFromAuthUser(user).includes(selectedFacilityId)
+        ? selectedFacilityId
+        : facilityIdsFromAuthUser(user)[0];
+
+    if (!facilityId) {
+      setStrikeLockout(null);
+      return;
+    }
+
+    let cancelled = false;
+    setStrikeLockoutChecking(true);
+    strikesApi.checkLockout(user.id, facilityId).then((res) => {
+      if (cancelled) return;
+      setStrikeLockout(res.success ? parseStrikeLockoutStatus(res.data) : null);
+    }).finally(() => {
+      if (!cancelled) setStrikeLockoutChecking(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [user?.id, user?.userType, user?.memberFacilities, user?.adminFacilities, selectedFacilityId]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -88,7 +127,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (lockoutChecking && !lockoutInfo && user.userType !== 'admin' && !isLockoutPaidPage) {
+  if (
+    (lockoutChecking && !lockoutInfo && user.userType !== 'admin' && !isLockoutPaidPage) ||
+    (strikeLockoutChecking && user.userType !== 'admin')
+  ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -101,6 +143,19 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (lockoutInfo && user.userType !== 'admin' && !isLockoutPaidPage) {
     return <PaymentLockoutScreen lockout={lockoutInfo} />;
+  }
+
+  if (
+    strikeLockout?.isLockedOut &&
+    user.userType !== 'admin' &&
+    !isProfileRoute
+  ) {
+    return (
+      <StrikeLockoutScreen
+        status={strikeLockout}
+        facilityName={strikeLockout.facilityName}
+      />
+    );
   }
 
   if (termsLoading) {

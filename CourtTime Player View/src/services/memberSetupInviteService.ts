@@ -13,18 +13,26 @@ export function normalizeWhitelistEmail(email: string | null | undefined): strin
   return trimmed || null;
 }
 
-export function buildMemberSetupInviteHtml(email: string, facilityName: string, setupLink: string): string {
+export function buildMemberSetupInviteHtml(
+  email: string,
+  facilityName: string,
+  setupLink: string,
+  loginLink: string
+): string {
   return [
     '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">',
     '<h2 style="color: #2563eb;">Welcome to CourtTime</h2>',
     '<p>Hi there,</p>',
-    `<p><strong>${facilityName}</strong> is moving court booking to CourtTime. Use the link below to create your account — your email is already on the approved list.</p>`,
+    `<p><strong>${facilityName}</strong> is moving court booking to CourtTime. Your email is already on the approved list.</p>`,
     '<motionless>',
     '<div style="text-align: center; margin: 30px 0;">',
     `<a href="${setupLink}" style="background-color: #2563eb; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Create your account</a>`,
     '</div>',
-    `<p style="color: #666; font-size: 14px;">Please register using <strong>${email}</strong>. This link expires in ${TOKEN_EXPIRY_DAYS} days.</p>`,
-    `<p style="color: #666; font-size: 14px;">If you already have a CourtTime account, log in and request to join ${facilityName} from your profile.</p>`,
+    '<div style="text-align: center; margin: 20px 0;">',
+    `<a href="${loginLink}" style="background-color: #ffffff; color: #2563eb; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; border: 1px solid #2563eb;">Log in with an existing account</a>`,
+    '</div>',
+    `<p style="color: #666; font-size: 14px;">Please use <strong>${email}</strong>. These links expire in ${TOKEN_EXPIRY_DAYS} days.</p>`,
+    `<p style="color: #666; font-size: 14px;">Already use CourtTime for another facility? Log in with your existing account and we'll add ${facilityName} for you.</p>`,
     `<p style="color: #666; font-size: 14px;">If you didn't expect this email, you can safely ignore it.</p>`,
     '<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />',
     '<p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>',
@@ -65,7 +73,9 @@ export async function sendMemberSetupInviteEmail(
   }
 
   const appUrl = process.env.APP_URL || 'http://localhost:5173';
-  const setupLink = `${appUrl}/register?setupToken=${token}`;
+  const encodedToken = encodeURIComponent(token);
+  const setupLink = `${appUrl}/register?setupToken=${encodedToken}`;
+  const loginLink = `${appUrl}/login?setupToken=${encodedToken}`;
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'CourtTime <onboarding@resend.dev>';
 
   try {
@@ -79,7 +89,7 @@ export async function sendMemberSetupInviteEmail(
         from: fromEmail,
         to: [email],
         subject: `Set up your ${facilityName} CourtTime account`,
-        html: buildMemberSetupInviteHtml(email, facilityName, setupLink),
+        html: buildMemberSetupInviteHtml(email, facilityName, setupLink, loginLink),
       }),
     });
 

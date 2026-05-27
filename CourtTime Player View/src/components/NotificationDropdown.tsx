@@ -72,8 +72,8 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
       <DropdownMenuTrigger asChild>
         {children}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] max-w-96 max-h-96 overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b">
+      <DropdownMenuContent align="end" className="max-h-96 w-[calc(100vw-2rem)] max-w-96 overflow-y-auto rounded-xl border border-border bg-popover shadow-md">
+        <div className="flex items-center justify-between border-b p-4">
           <DropdownMenuLabel className="text-base font-medium p-0">
             Notifications
             {unreadCount > 0 && (
@@ -96,8 +96,8 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
         </div>
 
         {recentNotifications.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">
-            <Bell className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+          <div className="p-4 text-center text-muted-foreground">
+            <Bell className="mx-auto mb-2 h-8 w-8 text-muted-foreground/60" />
             <p className="text-sm">No notifications yet</p>
           </div>
         ) : (
@@ -108,7 +108,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
                 className={`p-0 focus:bg-transparent`}
                 onClick={() => !notification.read && markAsRead(notification.id)}
               >
-                <div className={`w-full p-3 cursor-pointer hover:bg-gray-50 transition-colors ${getPriorityColor(notification.priority, notification.read)}`}>
+                <div className={`w-full cursor-pointer p-3 transition-colors hover:bg-accent/60 ${getPriorityColor(notification.priority, notification.read)}`}>
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 mt-0.5">
                       {getNotificationIcon(notification.type)}
@@ -145,7 +145,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
                       )}
                       {!notification.read && (
                         <div className="absolute right-2 top-3">
-                          <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                          <div className="h-2.5 w-2.5 rounded-full bg-primary shadow-sm"></div>
                         </div>
                       )}
                     </div>

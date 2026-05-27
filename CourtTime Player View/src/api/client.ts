@@ -12,6 +12,7 @@ import {
   normalizeBookingCreateResponse,
   type ApiResponse as SharedApiResponse,
 } from '../../shared/api/core';
+import { isSessionAuthError } from '../../shared/utils/sessionAuth';
 
 export {
   unwrapApiPayload,
@@ -41,11 +42,27 @@ const _rawApiRequest = buildApiRequest({
   getToken: () => localStorage.getItem('auth_token'),
 });
 
+let sessionExpiryNotified = false;
+
+export function resetSessionExpiryNotification() {
+  sessionExpiryNotified = false;
+}
+
+function notifySessionExpired() {
+  if (!localStorage.getItem('auth_token') || sessionExpiryNotified) return;
+  sessionExpiryNotified = true;
+  localStorage.removeItem('auth_token');
+  window.dispatchEvent(new CustomEvent('auth-session-expired'));
+}
+
 // Intercept payment_locked (402) responses and broadcast to the UI so it can redirect.
 function apiRequest<T = unknown>(endpoint: string, options?: RequestInit) {
   return _rawApiRequest<T>(endpoint, options).then((result) => {
     if (!result.success && (result as any).error === 'payment_locked') {
       window.dispatchEvent(new CustomEvent('payment-locked', { detail: (result as any).lockout }));
+    }
+    if (!result.success && isSessionAuthError(result.error)) {
+      notifySessionExpired();
     }
     return result;
   });
@@ -87,10 +104,10 @@ export const authApi = {
     });
   },
 
-  login: async (email: string, password: string) => {
+  login: async (email: string, password: string, setupToken?: string) => {
     return apiRequest('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, setupToken }),
     });
   },
 

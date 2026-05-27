@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { facilitiesApi, playerProfileApi, facilityLocationsApi, courtConfigApi } from '../api/client';
+import { facilitiesApi, facilityLocationsApi, courtConfigApi } from '../api/client';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import {
@@ -19,6 +19,10 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeFacilityType } from '../../shared/constants/facilityTypes';
 import { toast } from 'sonner';
+import {
+  loadMemberFacilitiesForUser,
+  type MemberFacilityRow,
+} from '../utils/memberFacilities';
 
 interface FacilityData {
   id: string;
@@ -132,32 +136,15 @@ export function ClubInfo() {
       setLoading(true);
       setCourtOperatingHours({});
 
-      // Load user's member facilities to check if they're a member
+      // Load user's memberships (profile when possible; auth + public facility API as fallback)
       if (user?.id) {
-        const profileResponse = await playerProfileApi.getProfile(user.id);
-
-        // Check for facilities in the API response (handles both data.profile and direct profile)
-        let facilities = profileResponse.data?.profile?.memberFacilities
-          || profileResponse.data?.memberFacilities
-          || [];
-
-        // If API didn't return facilities, fall back to AuthContext
-        if (facilities.length === 0 && user.memberFacilities && user.memberFacilities.length > 0) {
-          // Create facility objects from IDs
-          facilities = user.memberFacilities.map(facilityId => ({
-            facilityId,
-            facilityName: '',
-            membershipType: 'Member',
-            status: 'active'
-          }));
-        }
-
+        const { facilities } = await loadMemberFacilitiesForUser(user.id, user);
         setMemberFacilities(facilities);
 
-        // Check if user is a member of this facility (from API response or AuthContext fallback)
-        const isActiveMember = facilities.some(
-          (f: any) => f.facilityId === clubId && f.status === 'active'
-        ) || (user.memberFacilities && user.memberFacilities.includes(clubId));
+        const isActiveMember =
+          facilities.some((f) => f.facilityId === clubId && f.status === 'active') ||
+          (user.memberFacilities?.includes(clubId!) ?? false) ||
+          (user.adminFacilities?.includes(clubId!) ?? false);
         setIsMember(isActiveMember);
       }
 
@@ -304,7 +291,7 @@ export function ClubInfo() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <div className="text-center">
           <div className="text-lg font-medium">Loading facility information...</div>
         </div>
@@ -314,11 +301,11 @@ export function ClubInfo() {
 
   if (!facility) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
+      <div className="p-8 flex items-center justify-center min-h-screen bg-muted/20">
         <Card className="max-w-md">
           <CardContent className="p-6 text-center">
             <h2 className="mb-2">Club not found</h2>
-            <p className="text-gray-600 mb-4">The requested club information could not be found.</p>
+            <p className="mb-4 text-muted-foreground">The requested club information could not be found.</p>
             <Button onClick={() => navigate('/calendar')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Go Back
@@ -372,24 +359,33 @@ export function ClubInfo() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {memberFacilities.map((membership: any) => {
+                {memberFacilities.map((membership: MemberFacilityRow) => {
                   const id = membership.facilityId;
                   const name = safeDisplayText(membership.facilityName) || 'Club';
                   const isCurrent = id === clubId;
+                  const memberLine = [
+                    user?.fullName,
+                    membership.membershipType || 'Member',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ');
                   return (
                     <button
                       key={id}
                       type="button"
                       onClick={() => navigate(`/club/${id}`)}
-                      className={`w-full text-left p-3 border rounded-lg transition-colors hover:bg-gray-50 ${
-                        isCurrent ? 'border-green-300 bg-green-50/50' : 'border-gray-200'
+                      className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent/40 ${
+                          isCurrent ? 'border-green-300 bg-green-50/50' : 'border-border'
                       }`}
                     >
-                      <p className="font-medium text-gray-900">{name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5 capitalize">
+                      <span className="block font-medium text-foreground">{name}</span>
+                      {memberLine ? (
+                        <span className="mt-0.5 block text-sm text-muted-foreground">{memberLine}</span>
+                      ) : null}
+                      <span className="mt-0.5 block text-xs capitalize text-muted-foreground">
                         {membership.status || 'active'}
                         {isCurrent ? ' · Viewing now' : ''}
-                      </p>
+                      </span>
                     </button>
                   );
                 })}

@@ -46,15 +46,19 @@ describe('memberSetupInviteService', () => {
   });
 
   describe('buildMemberSetupInviteHtml', () => {
-    it('includes setup link and facility name', () => {
+    it('includes create-account and existing-account links', () => {
       const html = buildMemberSetupInviteHtml(
         'player@club.com',
         'Sunset Tennis',
-        'https://app.courttime.test/register?setupToken=abc'
+        'https://app.courttime.test/register?setupToken=abc',
+        'https://app.courttime.test/login?setupToken=abc'
       );
       expect(html).toContain('Sunset Tennis');
       expect(html).toContain('player@club.com');
-      expect(html).toContain('setupToken=abc');
+      expect(html).toContain('Create your account');
+      expect(html).toContain('Log in with an existing account');
+      expect(html).toContain('https://app.courttime.test/register?setupToken=abc');
+      expect(html).toContain('https://app.courttime.test/login?setupToken=abc');
     });
   });
 

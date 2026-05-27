@@ -762,12 +762,12 @@ export function UserRegistration() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-muted/30">
       {/* Header with Logo Only */}
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-20">
-            <Button variant="ghost" onClick={() => navigate('/login')} className="flex items-center gap-2 hover:bg-gray-100">
+            <Button variant="ghost" onClick={() => navigate('/login')} className="flex items-center gap-2 hover:bg-accent">
               <ArrowLeft className="h-4 w-4" />
               Back to Login
             </Button>
@@ -783,7 +783,7 @@ export function UserRegistration() {
         <Card>
           <div className="flex flex-col md:flex-row">
             {/* Progress Steps - Horizontal on mobile, Vertical sidebar on desktop */}
-            <div className="w-full md:w-48 md:border-r border-b md:border-b-0 bg-gray-50 p-4">
+            <div className="w-full border-b bg-muted/40 p-4 md:w-48 md:border-b-0 md:border-r">
               <div className="flex flex-row md:flex-col items-center justify-center gap-3 md:gap-5 md:pt-3">
                 {/* Step 1 */}
                 <div className="flex flex-col items-center text-center">
@@ -796,14 +796,14 @@ export function UserRegistration() {
                   >
                     1
                   </div>
-                  <p className={`text-xs md:text-sm font-medium hidden md:block ${currentStep >= 1 ? 'text-green-600' : 'text-gray-500'}`}>
+                  <p className={`text-xs md:text-sm font-medium hidden md:block ${currentStep >= 1 ? 'text-green-600' : 'text-muted-foreground'}`}>
                     Personal Information
                   </p>
                 </div>
 
                 {/* Progress Line - Horizontal on mobile, Vertical on desktop */}
                 <div className="hidden md:flex justify-center">
-                  <div className="w-0.5 h-12 bg-gray-200">
+                  <div className="h-12 w-0.5 bg-border">
                     <div
                       className="w-full bg-green-600 transition-all duration-300"
                       style={{ height: `${currentStep >= 2 ? '100' : '0'}%` }}
@@ -811,7 +811,7 @@ export function UserRegistration() {
                   </div>
                 </div>
                 <div className="flex md:hidden items-center">
-                  <div className="h-0.5 w-12 bg-gray-200">
+                  <div className="h-0.5 w-12 bg-border">
                     <div
                       className="h-full bg-green-600 transition-all duration-300"
                       style={{ width: `${currentStep >= 2 ? '100' : '0'}%` }}
@@ -831,7 +831,7 @@ export function UserRegistration() {
                   >
                     2
                   </div>
-                  <p className={`text-xs md:text-sm font-medium hidden md:block ${currentStep >= 2 ? 'text-green-600' : 'text-gray-500'}`}>
+                  <p className={`text-xs md:text-sm font-medium hidden md:block ${currentStep >= 2 ? 'text-green-600' : 'text-muted-foreground'}`}>
                     Facilities
                   </p>
                 </div>
@@ -920,7 +920,7 @@ export function UserRegistration() {
             <CardContent className="space-y-4 overflow-hidden">
               <div
                 ref={joinTermsScrollRef}
-                className="h-72 overflow-y-auto border rounded-md p-3 text-sm"
+                className="h-72 overflow-y-auto rounded-md border border-border bg-muted/20 p-3 text-sm"
                 onScroll={(e) => {
                   const target = e.currentTarget;
                   const reachedBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 8;
@@ -931,7 +931,7 @@ export function UserRegistration() {
               </div>
 
               {!joinTermsScrolledToBottom && (
-                <p className="text-xs text-gray-500">Scroll to the bottom to enable acceptance.</p>
+                <p className="text-xs text-muted-foreground">Scroll to the bottom to enable acceptance.</p>
               )}
 
               <label className={`flex items-center gap-2 text-sm ${!joinTermsScrolledToBottom ? 'opacity-50' : ''}`}>

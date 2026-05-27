@@ -16,6 +16,7 @@ import { LockMemberPaymentDialog, type LockMemberTarget } from './LockMemberPaym
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
+import { isSessionAuthError } from '../../../shared/utils/sessionAuth';
 import { useAppContext } from '../../contexts/AppContext';
 import { HouseholdManagement } from './HouseholdManagement';
 import { AddressWhitelistPanel } from './AddressWhitelistPanel';
@@ -116,7 +117,7 @@ export function MemberManagement() {
 
       if (response.success && response.data?.members) {
         setMembers(response.data.members);
-      } else {
+      } else if (!isSessionAuthError(response.error)) {
         toast.error(response.error || 'Failed to load members');
       }
     } catch (error) {

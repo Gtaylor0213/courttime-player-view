@@ -48,6 +48,7 @@ export function UnifiedSidebar({
     const fetchMemberFacilities = async () => {
       const allFacilityIds = Array.from(new Set([
         ...(user?.memberFacilities || []),
+        ...(user?.adminFacilities || []),
       ]));
 
       if (allFacilityIds.length === 0) {
@@ -78,7 +79,7 @@ export function UnifiedSidebar({
     };
 
     fetchMemberFacilities();
-  }, [user?.memberFacilities]);
+  }, [user?.memberFacilities, user?.adminFacilities]);
 
   // Get user initials
   const getUserInitials = () => {
@@ -127,7 +128,7 @@ export function UnifiedSidebar({
     const button = (
       <button
         onClick={onClick}
-        className={`w-full rounded-lg px-3 py-2 text-left hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center transition-colors ${
+        className={`w-full rounded-lg px-3 py-2 text-left hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring flex items-center transition-colors ${
           isActive ? 'bg-green-50 text-green-700 border-l-4 border-green-600' : ''
         } ${isCollapsed ? 'justify-center' : ''}`}
       >
@@ -166,7 +167,7 @@ export function UnifiedSidebar({
 
       {/* Sidebar */}
       <div className={cn(
-        'fixed inset-y-0 left-0 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out flex flex-col',
+        'fixed inset-y-0 left-0 bg-card border-r border-border transition-all duration-300 ease-in-out flex flex-col',
         // Mobile: slide in/out with translate, always w-64
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         'w-64 z-50',
@@ -227,7 +228,7 @@ export function UnifiedSidebar({
                           const nextIndex = (currentIndex + 1) % memberFacilities.length;
                           handleFacilityChange(memberFacilities[nextIndex].id);
                         }}
-                        className="w-full rounded-lg px-3 py-2 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                        className="w-full rounded-lg px-3 py-2 flex items-center justify-center transition-colors hover:bg-accent"
                       >
                         <ChevronsUpDown className="h-4 w-4 text-gray-500" />
                       </button>
@@ -378,7 +379,7 @@ export function UnifiedSidebar({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="w-full flex items-center justify-center py-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        <DropdownMenuTrigger className="w-full flex items-center justify-center rounded-lg py-2 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring">
                           <Avatar className="h-8 w-8">
                             {user?.profileImageUrl && (
                               <AvatarImage src={user.profileImageUrl} alt={user.fullName || 'User'} />
@@ -412,7 +413,7 @@ export function UnifiedSidebar({
               {/* Expanded profile shown on mobile even when desktop is collapsed */}
               <div className="md:hidden">
                 <DropdownMenu>
-                  <DropdownMenuTrigger className="w-full flex items-center px-3 py-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                  <DropdownMenuTrigger className="w-full flex items-center rounded-lg px-3 py-2 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring">
                     <Avatar className="h-8 w-8 mr-3">
                       {user?.profileImageUrl && (
                         <AvatarImage src={user.profileImageUrl} alt={user.fullName || 'User'} />
@@ -441,7 +442,7 @@ export function UnifiedSidebar({
             </>
           ) : (
             <DropdownMenu>
-              <DropdownMenuTrigger className="w-full flex items-center px-3 py-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+              <DropdownMenuTrigger className="w-full flex items-center rounded-lg px-3 py-2 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring">
                 <Avatar className="h-8 w-8 mr-3">
                   {user?.profileImageUrl && (
                     <AvatarImage src={user.profileImageUrl} alt={user.fullName || 'User'} />

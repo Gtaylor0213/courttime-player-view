@@ -94,14 +94,14 @@ export function ResetPassword() {
 
   if (status === 'invalid-token') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <img src={logoImage} alt="CourtTime" className="h-16 w-auto mx-auto mb-4" />
-            <h1 className="text-3xl font-bold text-gray-900">CourtTime</h1>
+            <h1 className="text-3xl font-semibold text-foreground">CourtTime</h1>
           </div>
 
-          <Card className="shadow-xl">
+          <Card className="shadow-md">
             <CardContent className="p-6">
               <Alert className="border-red-200 bg-red-50 mb-4">
                 <AlertCircle className="h-4 w-4 text-red-600" />
@@ -112,7 +112,7 @@ export function ResetPassword() {
               </Alert>
 
               <div className="space-y-2">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   This password reset link may have expired or already been used.
                   Please request a new password reset link.
                 </p>
@@ -132,16 +132,16 @@ export function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <img src={logoImage} alt="CourtTime" className="h-16 w-auto mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900">CourtTime</h1>
-          <p className="text-gray-600 mt-2">Court Booking Made Simple</p>
+          <h1 className="text-3xl font-semibold text-foreground">CourtTime</h1>
+          <p className="mt-2 text-muted-foreground">Court Booking Made Simple</p>
         </div>
 
-        <Card className="shadow-xl">
+        <Card className="shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Lock className="h-5 w-5" />
@@ -201,7 +201,7 @@ export function ResetPassword() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-0 h-9 flex items-center text-gray-500 hover:text-gray-700"
+                      className="absolute right-3 top-0 flex h-9 items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:rounded-sm"
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" />
@@ -213,7 +213,7 @@ export function ResetPassword() {
                   {errors.password && (
                     <p className="text-sm text-red-500 mt-1">{errors.password}</p>
                   )}
-                  <p className="text-sm text-gray-500 mt-1">Minimum 8 characters</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Minimum 8 characters</p>
                 </div>
 
                 <div>
@@ -236,7 +236,7 @@ export function ResetPassword() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-0 h-9 flex items-center text-gray-500 hover:text-gray-700"
+                      className="absolute right-3 top-0 flex h-9 items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:rounded-sm"
                     >
                       {showConfirmPassword ? (
                         <EyeOff className="h-4 w-4" />
@@ -276,7 +276,7 @@ export function ResetPassword() {
         </Card>
 
         {/* Security Tips */}
-        <div className="mt-6 p-4 bg-green-50 rounded-lg">
+        <div className="mt-6 rounded-lg border border-primary/20 bg-primary/5 p-4">
           <h3 className="text-sm font-medium text-green-900 mb-2">Password Tips:</h3>
           <ul className="text-xs text-green-800 space-y-1">
             <li>• Use at least 8 characters</li>

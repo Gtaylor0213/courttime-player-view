@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from '../ui/alert';
 import {
   ArrowLeft, Building, MapPin, Clock, FileText,
   Plus, Trash2, Check, AlertCircle, Upload, Mail, User, Users,
-  Phone, CreditCard, Tag, LogIn, UserPlus, Camera, Grid3X3,
+  Phone, CreditCard, Tag, LogIn, UserPlus, Camera, Grid3X3, Eye, EyeOff,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { FACILITY_TYPE_OPTIONS } from '../../../shared/constants/facilityTypes';
@@ -52,6 +52,9 @@ export function AdminAccountStep() {
     handleValidatePromo, handleClearPromo, handlePayWithStripe,
     US_STATES,
   } = useRegistration();
+  const [showLoginPassword, setShowLoginPassword] = React.useState(false);
+  const [showAdminPassword, setShowAdminPassword] = React.useState(false);
+  const [showAdminConfirmPassword, setShowAdminConfirmPassword] = React.useState(false);
 
     // Choose mode — two clickable cards
     if (step1Mode === 'choose') {
@@ -141,14 +144,25 @@ export function AdminAccountStep() {
 
             <div>
               <Label htmlFor="loginPasswordField">Password</Label>
-              <Input
-                id="loginPasswordField"
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="Enter your password"
-                onKeyDown={(e) => e.key === 'Enter' && handleRegistrationLogin()}
-              />
+              <div className="relative">
+                <Input
+                  id="loginPasswordField"
+                  type={showLoginPassword ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="pr-10"
+                  onKeyDown={(e) => e.key === 'Enter' && handleRegistrationLogin()}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-0 flex h-9 items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:rounded-sm"
+                >
+                  {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {loginError && (
@@ -344,26 +358,46 @@ export function AdminAccountStep() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="adminPassword">Password *</Label>
-              <Input
-                id="adminPassword"
-                type="password"
-                value={formData.adminPassword}
-                onChange={(e) => handleInputChange('adminPassword', e.target.value)}
-                placeholder="Minimum 8 characters"
-                className={errors.adminPassword ? 'border-red-500' : ''}
-              />
+              <div className="relative">
+                <Input
+                  id="adminPassword"
+                  type={showAdminPassword ? 'text' : 'password'}
+                  value={formData.adminPassword}
+                  onChange={(e) => handleInputChange('adminPassword', e.target.value)}
+                  placeholder="Minimum 8 characters"
+                  className={errors.adminPassword ? 'border-red-500 pr-10' : 'pr-10'}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPassword(!showAdminPassword)}
+                  aria-label={showAdminPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-0 flex h-9 items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:rounded-sm"
+                >
+                  {showAdminPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {errors.adminPassword && <p className="text-sm text-red-500 mt-1">{errors.adminPassword}</p>}
             </div>
             <div>
               <Label htmlFor="adminConfirmPassword">Confirm Password *</Label>
-              <Input
-                id="adminConfirmPassword"
-                type="password"
-                value={formData.adminConfirmPassword}
-                onChange={(e) => handleInputChange('adminConfirmPassword', e.target.value)}
-                placeholder="Re-enter password"
-                className={errors.adminConfirmPassword ? 'border-red-500' : ''}
-              />
+              <div className="relative">
+                <Input
+                  id="adminConfirmPassword"
+                  type={showAdminConfirmPassword ? 'text' : 'password'}
+                  value={formData.adminConfirmPassword}
+                  onChange={(e) => handleInputChange('adminConfirmPassword', e.target.value)}
+                  placeholder="Re-enter password"
+                  className={errors.adminConfirmPassword ? 'border-red-500 pr-10' : 'pr-10'}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminConfirmPassword(!showAdminConfirmPassword)}
+                  aria-label={showAdminConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                  className="absolute right-3 top-0 flex h-9 items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:rounded-sm"
+                >
+                  {showAdminConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {errors.adminConfirmPassword && <p className="text-sm text-red-500 mt-1">{errors.adminConfirmPassword}</p>}
             </div>
           </div>

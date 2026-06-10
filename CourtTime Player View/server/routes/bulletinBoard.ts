@@ -13,9 +13,48 @@ import {
 import { query } from '../../src/database/connection';
 import { parseDollarsToCents } from '../../shared/utils/money';
 import { confirmBulletinSignupCheckout } from '../../src/services/stripeConnectService';
+import { sendBulletinPostShareEmail } from '../../src/services/emailService';
+import {
+  buildBulletinPostShareEmailContent,
+  formatBulletinPostProminentDate,
+} from '../../shared/utils/bulletinPostDisplay';
 
 const router = express.Router();
 const signupEnabledCategories = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
+
+function isValidShareEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function userCanShareBulletinPost(userId: string, facilityId: string): Promise<boolean> {
+  const access = await query(
+    `SELECT 1
+     FROM facility_memberships fm
+     WHERE fm.facility_id = $1 AND fm.user_id = $2 AND fm.status = 'active'
+     UNION
+     SELECT 1
+     FROM facility_admins fa
+     WHERE fa.facility_id = $1 AND fa.user_id = $2 AND fa.status = 'active'
+     LIMIT 1`,
+    [facilityId, userId]
+  );
+  return access.rows.length > 0;
+}
+
+async function userIsFacilityAdmin(userId: string, facilityId: string): Promise<boolean> {
+  const result = await query(
+    `SELECT 1
+     FROM facility_admins
+     WHERE facility_id = $1 AND user_id = $2 AND status = 'active'
+     LIMIT 1`,
+    [facilityId, userId]
+  );
+  return result.rows.length > 0;
+}
 
 /**
  * GET /api/bulletin-board/post/:postId
@@ -150,6 +189,192 @@ router.post('/signup/confirm', async (req, res, next) => {
     ) {
       return res.status(400).json({ success: false, error: error.message });
     }
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bulletin-board/:postId/share
+ * Email a bulletin post to someone (active member or facility admin)
+ */
+router.post('/:postId/share', async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const sendToAllMembers = Boolean(req.body?.sendToAllMembers);
+    const recipientEmail = String(req.body?.recipientEmail || '').trim().toLowerCase();
+    const personalMessage =
+      typeof req.body?.personalMessage === 'string' ? req.body.personalMessage.trim() : '';
+
+    if (!sendToAllMembers) {
+      if (!recipientEmail) {
+        return res.status(400).json({ success: false, error: 'recipientEmail is required' });
+      }
+      if (!isValidShareEmail(recipientEmail)) {
+        return res.status(400).json({ success: false, error: 'Enter a valid email address' });
+      }
+    }
+
+    const post = await getBulletinPostById(postId, req.user!.userId);
+    if (!post) {
+      return res.status(404).json({ success: false, error: 'Post not found' });
+    }
+
+    const canShare = await userCanShareBulletinPost(req.user!.userId, post.facilityId);
+    if (!canShare) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only active facility members and admins can share bulletin posts',
+      });
+    }
+
+    if (sendToAllMembers) {
+      const isAdmin = await userIsFacilityAdmin(req.user!.userId, post.facilityId);
+      if (!isAdmin) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only facility admins can email all members',
+        });
+      }
+    }
+
+    const senderResult = await query(`SELECT full_name FROM users WHERE id = $1`, [req.user!.userId]);
+    const senderName = senderResult.rows[0]?.full_name || 'A CourtTime member';
+    const appOrigin = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+
+    const sharePost = {
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      category: post.category,
+      facilityId: post.facilityId,
+      facilityName: (post as { facilityName?: string }).facilityName,
+      authorName: post.authorName,
+      drillStartAt: post.drillStartAt,
+      drillCourtName: post.drillCourtName,
+    };
+
+    const { subject, plainTextBody, shareUrl } = buildBulletinPostShareEmailContent(sharePost, {
+      senderName,
+      personalMessage: personalMessage || undefined,
+      appOrigin,
+    });
+
+    const eventLabel = formatBulletinPostProminentDate(sharePost, 'cardWithTime');
+    const locationLabel = sharePost.drillCourtName?.trim() || '';
+    const description = String(post.content || '').trim();
+    const typeLabel = post.category
+      ? post.category.charAt(0).toUpperCase() + post.category.slice(1)
+      : 'Post';
+    const facilityName = (post as { facilityName?: string }).facilityName || 'your club';
+
+    if (sendToAllMembers) {
+      const membersResult = await query(
+        `SELECT
+          u.id as "userId",
+          u.email,
+          u.full_name as "fullName"
+         FROM facility_memberships fm
+         JOIN users u ON fm.user_id = u.id
+         WHERE fm.facility_id = $1
+           AND fm.status = 'active'
+           AND u.email IS NOT NULL
+           AND TRIM(u.email) <> ''`,
+        [post.facilityId]
+      );
+
+      const recipients = membersResult.rows;
+      if (recipients.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No active members with email addresses found',
+        });
+      }
+
+      const normalizedResults: Array<{ email: string; success: boolean; error?: string }> = [];
+      for (let i = 0; i < recipients.length; i++) {
+        const member = recipients[i];
+        try {
+          const result = await sendBulletinPostShareEmail(
+            member.email,
+            facilityName,
+            subject,
+            plainTextBody,
+            shareUrl,
+            post.title,
+            typeLabel,
+            eventLabel,
+            locationLabel,
+            description,
+            senderName,
+            personalMessage || undefined,
+            member.userId
+          );
+          normalizedResults.push({
+            email: member.email,
+            success: result.success,
+            error: result.error,
+          });
+        } catch (error) {
+          normalizedResults.push({
+            email: member.email,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown email send error',
+          });
+        }
+
+        if (i < recipients.length - 1) {
+          await delay(250);
+        }
+      }
+
+      const sent = normalizedResults.filter((r) => r.success).length;
+      const failed = recipients.length - sent;
+      const firstErrorMessage = normalizedResults.find((r) => !r.success)?.error;
+
+      if (sent === 0) {
+        return res.status(502).json({
+          success: false,
+          error: firstErrorMessage || 'Could not send email to any members. Try again later.',
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          failed > 0
+            ? `Shared with ${sent} of ${recipients.length} members (${failed} failed)`
+            : `Shared with all ${sent} active members`,
+        data: { sent, failed, total: recipients.length },
+      });
+    }
+
+    const result = await sendBulletinPostShareEmail(
+      recipientEmail,
+      facilityName,
+      subject,
+      plainTextBody,
+      shareUrl,
+      post.title,
+      typeLabel,
+      eventLabel,
+      locationLabel,
+      description,
+      senderName,
+      personalMessage || undefined
+    );
+
+    if (!result.success) {
+      return res.status(502).json({
+        success: false,
+        error: result.error || 'Could not send email. Try again later.',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Shared with ${recipientEmail}`,
+    });
+  } catch (error) {
     next(error);
   }
 });

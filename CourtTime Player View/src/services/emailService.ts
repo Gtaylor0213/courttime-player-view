@@ -428,6 +428,57 @@ export async function sendMembershipRequestAdminEmail(
 }
 
 /**
+ * Email a bulletin board post to someone (member/admin share).
+ */
+export async function sendBulletinPostShareEmail(
+  recipientEmail: string,
+  facilityName: string,
+  subject: string,
+  plainTextBody: string,
+  shareUrl: string,
+  postTitle: string,
+  postTypeLabel: string,
+  eventLabel: string,
+  locationLabel: string,
+  description: string,
+  senderName?: string,
+  personalMessage?: string,
+  recipientUserId?: string
+): Promise<EmailSendResult> {
+  const safeFacility = escapeHtml(facilityName || 'your club');
+  const safeTitle = escapeHtml(postTitle);
+  const safeType = escapeHtml(postTypeLabel);
+  const safeEvent = escapeHtml(eventLabel);
+  const safeLocation = escapeHtml(locationLabel);
+  const safeDescription = escapeHtml(description).replace(/\n/g, '<br>');
+  const safeSender = senderName ? escapeHtml(senderName) : '';
+  const safePersonal = personalMessage ? escapeHtml(personalMessage).replace(/\n/g, '<br>') : '';
+  const safeUrl = escapeHtml(shareUrl);
+
+  const intro = safeSender
+    ? `<p style="color: #374151; margin-top: 0;"><strong>${safeSender}</strong> shared a bulletin board post with you from <strong>${safeFacility}</strong>.</p>`
+    : `<p style="color: #374151; margin-top: 0;">Someone shared a bulletin board post with you from <strong>${safeFacility}</strong>.</p>`;
+
+  const bodyContent = `
+    ${intro}
+    ${safePersonal ? `<p style="color: #374151; font-style: italic;">${safePersonal}</p>` : ''}
+    <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 20px 0;">
+      <h3 style="margin: 0 0 12px; color: #111827; font-size: 18px;">${safeTitle}</h3>
+      <p style="margin: 4px 0; color: #374151;"><strong>Type:</strong> ${safeType}</p>
+      ${safeEvent ? `<p style="margin: 4px 0; color: #374151;"><strong>When:</strong> ${safeEvent}</p>` : ''}
+      ${safeLocation ? `<p style="margin: 4px 0; color: #374151;"><strong>Where:</strong> ${safeLocation}</p>` : ''}
+      ${safeDescription ? `<p style="margin: 12px 0 0; color: #374151; line-height: 1.6;">${safeDescription}</p>` : ''}
+    </div>
+    <p style="margin: 24px 0 0;">
+      <a href="${safeUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">View bulletin post</a>
+    </p>
+    <p style="color: #6b7280; font-size: 13px; margin-top: 24px;">If the button does not work, copy this link: ${safeUrl}</p>
+  `;
+  const html = wrapInEmailLayout(bodyContent, facilityName);
+  return sendEmail(recipientEmail, subject, html, recipientUserId, 'general');
+}
+
+/**
  * Send bulletin event cancellation email when minimum participants are not met
  */
 export async function sendBulletinMinParticipantsNotMetEmail(

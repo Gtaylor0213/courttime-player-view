@@ -221,3 +221,97 @@ export function formatBulletinPostProminentDate(
     (format === 'short' || format === 'cardWithTime');
   return formatBulletinPostDate(date, useTime ? 'cardWithTime' : format);
 }
+
+export interface BulletinPostShareInput {
+  id: string;
+  title: string;
+  description?: string;
+  content?: string;
+  type?: string;
+  category?: string;
+  facilityId: string;
+  facilityName?: string;
+  authorName?: string;
+  drillStartAt?: string | null;
+  drillCourtName?: string | null;
+  eventDate?: string | null;
+  eventTime?: string | null;
+  location?: string | null;
+}
+
+/** Deep link URL for a bulletin post (web app). */
+export function buildBulletinPostShareUrl(
+  post: Pick<BulletinPostShareInput, 'id' | 'facilityId' | 'facilityName'>,
+  appOrigin?: string
+): string {
+  const origin = (appOrigin || (typeof window !== 'undefined' ? window.location.origin : '')).replace(
+    /\/$/,
+    ''
+  );
+  const base = origin || 'https://app.courttimeapp.com';
+  const params = new URLSearchParams({
+    clubId: post.facilityId,
+    postId: post.id,
+  });
+  if (post.facilityName) {
+    params.set('clubName', post.facilityName);
+  }
+  return `${base}/bulletin-board?${params.toString()}`;
+}
+
+function bulletinPostShareDescription(post: BulletinPostShareInput): string {
+  return String(post.description || post.content || '').trim();
+}
+
+function bulletinPostShareTypeLabel(post: BulletinPostShareInput): string {
+  const type = bulletinPostType(post);
+  if (!type) return 'Post';
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+/** Plain-text email content for sharing a bulletin post. */
+export function buildBulletinPostShareEmailContent(
+  post: BulletinPostShareInput,
+  options?: {
+    senderName?: string;
+    personalMessage?: string;
+    appOrigin?: string;
+  }
+): { subject: string; plainTextBody: string; shareUrl: string } {
+  const facilityName = post.facilityName?.trim() || 'your club';
+  const shareUrl = buildBulletinPostShareUrl(post, options?.appOrigin);
+  const description = bulletinPostShareDescription(post);
+  const typeLabel = bulletinPostShareTypeLabel(post);
+  const eventLabel = formatBulletinPostProminentDate(post, 'cardWithTime');
+  const location =
+    post.drillCourtName?.trim() ||
+    post.location?.trim() ||
+    '';
+
+  const subject = `${options?.senderName ? `${options.senderName} shared: ` : ''}${post.title} — ${facilityName}`;
+
+  const lines: string[] = [];
+  if (options?.personalMessage?.trim()) {
+    lines.push(options.personalMessage.trim(), '');
+  }
+  if (options?.senderName) {
+    lines.push(`${options.senderName} thought you might be interested in this bulletin board post at ${facilityName}:`, '');
+  } else {
+    lines.push(`A bulletin board post from ${facilityName}:`, '');
+  }
+  lines.push(post.title);
+  lines.push(`Type: ${typeLabel}`);
+  if (eventLabel) lines.push(`When: ${eventLabel}`);
+  if (location) lines.push(`Where: ${location}`);
+  if (post.authorName) lines.push(`Posted by: ${post.authorName}`);
+  if (description) {
+    lines.push('', description);
+  }
+  lines.push('', `View on CourtTime: ${shareUrl}`);
+
+  return {
+    subject,
+    plainTextBody: lines.join('\n'),
+    shareUrl,
+  };
+}

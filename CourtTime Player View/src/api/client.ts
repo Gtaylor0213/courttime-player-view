@@ -640,6 +640,16 @@ export const bulletinBoardApi = {
       method: 'DELETE',
     });
   },
+
+  sharePost: async (
+    postId: string,
+    data: { recipientEmail?: string; personalMessage?: string; sendToAllMembers?: boolean }
+  ) => {
+    return apiRequest(`/api/bulletin-board/${postId}/share`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 // Booking API

@@ -28,6 +28,7 @@ import {
   getBulletinPostSortTimestamp,
 } from '../utils/bulletinPostDisplay';
 import { toast } from 'sonner';
+import { BulletinPostShareModal } from './BulletinPostShareModal';
 
 
 interface BulletinPost {
@@ -144,7 +145,9 @@ export function BulletinBoard() {
   // Use clubId from URL params if present, otherwise use sidebar facility selection
   const selectedFacility = clubId || selectedFacilityId || 'all';
   const [selectedPost, setSelectedPost] = useState<BulletinPost | null>(null);
+  const [sharePostTarget, setSharePostTarget] = useState<BulletinPost | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const deepLinkPostIdRef = useRef<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [courtsByFacility, setCourtsByFacility] = useState<Record<string, Array<{ id: string; name: string }>>>({});
   const [stripeOnboardedByFacility, setStripeOnboardedByFacility] = useState<Record<string, boolean>>({});
@@ -175,6 +178,13 @@ export function BulletinBoard() {
   }, [memberFacilities, user?.adminFacilities]);
 
   const isAdmin = adminFacilities.length > 0 || (user?.adminFacilities?.length ?? 0) > 0;
+
+  const isAdminOfFacility = useCallback(
+    (facilityId: string) =>
+      adminFacilities.some((f: { facilityId: string }) => f.facilityId === facilityId) ||
+      (user?.adminFacilities || []).includes(facilityId),
+    [adminFacilities, user?.adminFacilities]
+  );
 
   // Map database response to frontend BulletinPost interface
   const mapPostFromApi = (post: any): BulletinPost => ({
@@ -312,6 +322,39 @@ export function BulletinBoard() {
     if (!user?.id) return;
     loadData();
   }, [user?.id, selectedFacility, loadData]);
+
+  // Open a post from share links (?postId=...) once posts are loaded.
+  useEffect(() => {
+    const postId = searchParams.get('postId');
+    const signupSuccess = searchParams.get('signupSuccess');
+    if (!postId || signupSuccess === '1' || loading) return;
+    if (deepLinkPostIdRef.current === postId) return;
+
+    const post = posts.find((p) => p.id === postId);
+    if (post) {
+      deepLinkPostIdRef.current = postId;
+      setSelectedPost(post);
+      return;
+    }
+
+    if (posts.length === 0) return;
+
+    deepLinkPostIdRef.current = postId;
+    void (async () => {
+      try {
+        const response = await bulletinBoardApi.getPost(postId);
+        const rawPost = (response as { post?: Record<string, unknown> }).post;
+        if (response.success && rawPost) {
+          setSelectedPost(mapPostFromApi(rawPost));
+        } else {
+          deepLinkPostIdRef.current = null;
+        }
+      } catch (err) {
+        deepLinkPostIdRef.current = null;
+        console.error('Deep link bulletin post error:', err);
+      }
+    })();
+  }, [searchParams, loading, posts]);
 
   // Keep detail modal in sync after refresh (e.g. paid flags, signup status).
   useEffect(() => {
@@ -1075,7 +1118,11 @@ export function BulletinBoard() {
                       {selectedPost.type === 'announcement' ? 'Acknowledge' : 'Register Interest'}
                     </Button>
                   )}
-                  <Button variant="outline" className="flex-1" onClick={() => toast.info('Share feature coming soon')}>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setSharePostTarget(selectedPost)}
+                  >
                     Share
                   </Button>
                   {isAdmin && (
@@ -1597,6 +1644,23 @@ export function BulletinBoard() {
           </Card>
         </div>
       )}
+
+      <BulletinPostShareModal
+        isOpen={Boolean(sharePostTarget)}
+        post={
+          sharePostTarget
+            ? {
+                id: sharePostTarget.id,
+                title: sharePostTarget.title,
+                facilityName: sharePostTarget.facilityName,
+              }
+            : null
+        }
+        canSendToAllMembers={
+          sharePostTarget ? isAdminOfFacility(sharePostTarget.facilityId) : false
+        }
+        onClose={() => setSharePostTarget(null)}
+      />
     </>
   );
 }

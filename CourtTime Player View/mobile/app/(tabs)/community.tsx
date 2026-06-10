@@ -137,7 +137,8 @@ function paramString(v: string | string[] | undefined): string | undefined {
 }
 
 export default function CommunityScreen() {
-  const { user, facilityId } = useAuth();
+  const { user, facilityId, facilities } = useAuth();
+  const currentFacilityName = facilities.find((f) => f.id === facilityId)?.name;
   const router = useRouter();
   const params = useLocalSearchParams<{
     signupSuccess?: string;
@@ -167,6 +168,12 @@ export default function CommunityScreen() {
   const [bulletinContent, setBulletinContent] = useState('');
   const [bulletinCategory, setBulletinCategory] = useState('announcement');
   const [bulletinCreating, setBulletinCreating] = useState(false);
+  const [showShareBulletin, setShowShareBulletin] = useState(false);
+  const [shareBulletinPost, setShareBulletinPost] = useState<any | null>(null);
+  const [shareMode, setShareMode] = useState<'one' | 'all'>('one');
+  const [shareRecipientEmail, setShareRecipientEmail] = useState('');
+  const [sharePersonalMessage, setSharePersonalMessage] = useState('');
+  const [shareBulletinSending, setShareBulletinSending] = useState(false);
 
   // Notifications state
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -407,6 +414,43 @@ export default function CommunityScreen() {
       showAlert('Error', res.error || 'Could not create post');
     }
     setBulletinCreating(false);
+  }
+
+  function openShareBulletin(post: any) {
+    setShareBulletinPost(post);
+    setShareMode('one');
+    setShareRecipientEmail('');
+    setSharePersonalMessage('');
+    setShowShareBulletin(true);
+  }
+
+  async function handleShareBulletin() {
+    if (!shareBulletinPost?.id) return;
+    if (shareMode === 'one') {
+      const email = shareRecipientEmail.trim();
+      if (!email) {
+        showAlert('Email required', 'Enter the recipient email address.');
+        return;
+      }
+    }
+
+    setShareBulletinSending(true);
+    try {
+      const res = await api.post(`/api/bulletin-board/${shareBulletinPost.id}/share`, {
+        recipientEmail: shareMode === 'one' ? shareRecipientEmail.trim() : undefined,
+        personalMessage: sharePersonalMessage.trim() || undefined,
+        sendToAllMembers: shareMode === 'all',
+      });
+      if (res.success) {
+        setShowShareBulletin(false);
+        setShareBulletinPost(null);
+        showAlert('Email sent', res.message || 'Shared successfully.');
+      } else {
+        showAlert('Could not send', res.error || 'Please try again.');
+      }
+    } finally {
+      setShareBulletinSending(false);
+    }
   }
 
   async function handleDeleteBulletin(postId: string) {
@@ -846,9 +890,15 @@ export default function CommunityScreen() {
             ) : null}
           </>
         )}
-        <Text style={styles.bulletinMeta}>
-          {post.authorName || 'Admin'} · {formatBulletinPostProminentDate({ ...post, type: post.category }, 'short')}
-        </Text>
+        <View style={styles.bulletinFooterRow}>
+          <Text style={styles.bulletinMeta}>
+            {post.authorName || 'Admin'} · {formatBulletinPostProminentDate({ ...post, type: post.category }, 'short')}
+          </Text>
+          <TouchableOpacity style={styles.iconAction} onPress={() => openShareBulletin(post)}>
+            <Ionicons name="share-outline" size={16} color={Colors.textSecondary} />
+            <Text style={styles.iconActionLabel}>Share</Text>
+          </TouchableOpacity>
+        </View>
       </Card>
     ),
     [user?.id, isAdmin, signupBusyId]
@@ -1125,6 +1175,79 @@ export default function CommunityScreen() {
         </View>
       </Modal>
 
+      {/* ── Share Bulletin Post Modal ── */}
+      <Modal
+        visible={showShareBulletin}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowShareBulletin(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowShareBulletin(false)}>
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Share by email</Text>
+            <TouchableOpacity onPress={handleShareBulletin} disabled={shareBulletinSending}>
+              <Text style={[styles.modalSave, shareBulletinSending && { opacity: 0.5 }]}>
+                {shareBulletinSending ? '...' : 'Send'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalBody}>
+            {isAdmin ? (
+              <>
+                <Text style={styles.formLabel}>Send to</Text>
+                <View style={styles.shareModeRow}>
+                  <TouchableOpacity
+                    style={[styles.shareModeChip, shareMode === 'one' && styles.shareModeChipActive]}
+                    onPress={() => setShareMode('one')}
+                  >
+                    <Text style={[styles.shareModeChipText, shareMode === 'one' && styles.shareModeChipTextActive]}>
+                      One person
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.shareModeChip, shareMode === 'all' && styles.shareModeChipActive]}
+                    onPress={() => setShareMode('all')}
+                  >
+                    <Text style={[styles.shareModeChipText, shareMode === 'all' && styles.shareModeChipTextActive]}>
+                      All members
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : null}
+            {shareMode === 'all' && isAdmin ? (
+              <Text style={styles.shareAllHint}>
+                Emails every active member{currentFacilityName ? ` at ${currentFacilityName}` : ''} with this bulletin post.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.formLabel}>Recipient email *</Text>
+                <Input
+                  style={styles.formInput}
+                  value={shareRecipientEmail}
+                  onChangeText={setShareRecipientEmail}
+                  placeholder="friend@example.com"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                />
+              </>
+            )}
+            <Text style={styles.formLabel}>Personal message (optional)</Text>
+            <Input
+              style={[styles.formInput, styles.formTextArea]}
+              value={sharePersonalMessage}
+              onChangeText={setSharePersonalMessage}
+              placeholder="Add a short note..."
+              multiline
+            />
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* ── Create Bulletin Post Modal ── */}
       <Modal visible={showCreateBulletin} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCreateBulletin(false)}>
         <View style={styles.modalContainer}>
@@ -1291,7 +1414,28 @@ const styles = StyleSheet.create({
   bulletinContent: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 22, marginBottom: Spacing.sm },
   bulletinEventRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   bulletinEventText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '500' },
-  bulletinMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: Spacing.sm },
+  bulletinFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  bulletinMeta: { flex: 1, fontSize: FontSize.xs, color: Colors.textMuted },
+  shareModeRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
+  shareModeChip: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+  },
+  shareModeChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '12' },
+  shareModeChipText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  shareModeChipTextActive: { color: Colors.primary },
+  shareAllHint: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md, lineHeight: 20 },
 
   // Drill signups
   drillStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.sm },

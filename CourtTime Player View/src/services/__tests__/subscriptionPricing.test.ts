@@ -16,10 +16,11 @@ describe('subscriptionPricing', () => {
     it('charges $50 per court between min and max', () => {
       expect(getAmountForCourts(5)).toBe(25000);
       expect(getAmountForCourts(10)).toBe(50000);
+      expect(getAmountForCourts(14)).toBe(70000);
     });
 
-    it('applies $550 maximum for 11+ courts', () => {
-      expect(getAmountForCourts(11)).toBe(MAX_SUBSCRIPTION_CENTS);
+    it('applies $750 maximum for 15+ courts', () => {
+      expect(getAmountForCourts(15)).toBe(MAX_SUBSCRIPTION_CENTS);
       expect(getAmountForCourts(20)).toBe(MAX_SUBSCRIPTION_CENTS);
     });
 

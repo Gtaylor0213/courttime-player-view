@@ -111,4 +111,108 @@ describe('processBulletinMinParticipantCancellations', () => {
     expect(cancelSql).toContain('cancellation_notified_at');
     expect(queryMock.mock.calls[3][1]).toEqual([postId]);
   });
+
+  it('cancels the associated court booking when one exists', async () => {
+    const postId = 'post-2';
+    const drillStartAt = new Date('2026-05-21T10:00:00Z').toISOString();
+
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: postId,
+            title: 'Saturday Clinic',
+            category: 'clinic',
+            facilityId: 'fac-1',
+            facilityName: 'Sunset Tennis',
+            drillStartAt,
+            minParticipants: 3,
+            registeredParticipants: 1,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ userId: 'user-c', email: 'c@club.com', fullName: 'Player C' }] })
+      .mockResolvedValueOnce({ rows: [{ bookingId: 'booking-99' }] }) // cancelBulletinCourtBooking SELECT
+      .mockResolvedValueOnce({ rowCount: 1 })                         // UPDATE bookings
+      .mockResolvedValueOnce({ rowCount: 1 });                        // UPDATE bulletin_posts
+
+    const count = await processBulletinMinParticipantCancellations();
+
+    expect(count).toBe(1);
+
+    const bookingCancelSql = String(queryMock.mock.calls[3][0]);
+    expect(bookingCancelSql).toContain('UPDATE bookings');
+    expect(bookingCancelSql).toContain("status = 'cancelled'");
+    expect(queryMock.mock.calls[3][1]).toEqual(['booking-99']);
+
+    const postCancelSql = String(queryMock.mock.calls[4][0]);
+    expect(postCancelSql).toContain('UPDATE bulletin_posts');
+    expect(postCancelSql).toContain('cancellation_notified_at');
+  });
+
+  it('marks the post cancelled with no emails when there are zero confirmed participants', async () => {
+    const postId = 'post-3';
+    const drillStartAt = new Date('2026-05-22T14:00:00Z').toISOString();
+
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: postId,
+            title: 'Empty Event',
+            category: 'event',
+            facilityId: 'fac-1',
+            facilityName: 'Sunset Tennis',
+            drillStartAt,
+            minParticipants: 2,
+            registeredParticipants: 0,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })                  // no participants
+      .mockResolvedValueOnce({ rows: [{ bookingId: null }] })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    const count = await processBulletinMinParticipantCancellations();
+
+    expect(count).toBe(1);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+
+    const postCancelSql = String(queryMock.mock.calls[3][0]);
+    expect(postCancelSql).toContain("status = 'cancelled'");
+    expect(postCancelSql).toContain('cancellation_notified_at');
+  });
+
+  it('processes multiple due posts and returns the correct count', async () => {
+    const drillStartAt = new Date('2026-05-23T09:00:00Z').toISOString();
+    const makePost = (id: string) => ({
+      id,
+      title: `Post ${id}`,
+      category: 'drill',
+      facilityId: 'fac-1',
+      facilityName: 'Sunset Tennis',
+      drillStartAt,
+      minParticipants: 4,
+      registeredParticipants: 1,
+    });
+
+    queryMock
+      .mockResolvedValueOnce({ rows: [makePost('p1'), makePost('p2')] })
+      // post p1
+      .mockResolvedValueOnce({ rows: [{ userId: 'u1', email: '1@club.com', fullName: 'One' }] })
+      .mockResolvedValueOnce({ rows: [{ bookingId: null }] })
+      .mockResolvedValueOnce({ rowCount: 1 })
+      // post p2
+      .mockResolvedValueOnce({ rows: [{ userId: 'u2', email: '2@club.com', fullName: 'Two' }] })
+      .mockResolvedValueOnce({ rows: [{ bookingId: null }] })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    const count = await processBulletinMinParticipantCancellations();
+
+    expect(count).toBe(2);
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    expect(refundMock).toHaveBeenCalledTimes(2);
+    expect(refundMock).toHaveBeenCalledWith('p1');
+    expect(refundMock).toHaveBeenCalledWith('p2');
+  });
 });

@@ -56,7 +56,7 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
         <div>
           <p className="text-sm font-medium">Paid court booking</p>
           <p className="text-xs text-gray-500">
-            Members pay with card before the reservation is confirmed
+            Members pay per hour with card before the reservation is confirmed
           </p>
         </div>
         <Switch
@@ -71,14 +71,14 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
       </div>
       {court.requirePayment && (
         <div className="space-y-2">
-          <Label>Booking fee (USD) *</Label>
+          <Label>Hourly rate (USD) *</Label>
           <Input
             type="number"
             min="0.01"
             step="0.01"
             value={court.bookingFeeDollars || ''}
             onChange={(e) => onChange({ bookingFeeDollars: e.target.value } as Partial<T>)}
-            placeholder="e.g. 25.00"
+            placeholder="e.g. 25.00 per hour"
           />
         </div>
       )}

@@ -314,7 +314,7 @@ export function CourtManagement() {
       parseBookingFeeDollars(editingCourt.bookingFeeDollars) ??
       (wantsPayment ? existingCourt?.bookingAmountCents ?? null : null);
     if (wantsPayment && !bookingAmountCents) {
-      toast.error('Enter a booking fee when paid court booking is enabled');
+      toast.error('Enter an hourly rate when paid court booking is enabled');
       return;
     }
     const guestFeeCents = parseBookingFeeDollars(editingCourt.guestFeeDollars);
@@ -934,7 +934,7 @@ export function CourtManagement() {
                             {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
                             {court.requirePayment && court.bookingAmountCents && (
                               <Badge className="bg-amber-100 text-amber-900 border-amber-200">
-                                Paid · ${(court.bookingAmountCents / 100).toFixed(2)}
+                                Paid · ${(court.bookingAmountCents / 100).toFixed(2)}/hr
                               </Badge>
                             )}
                             {court.guestFeeCents && (

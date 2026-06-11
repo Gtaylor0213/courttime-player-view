@@ -255,6 +255,18 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return `${h} hr ${m} min`;
   }, [durationMins]);
 
+  // Per-hour rate for a single paid court; total scales with selected duration
+  const primaryCourtHourlyRateCents = useMemo(() => {
+    if (selectedCourts.length !== 1) return null;
+    const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
+    return (meta?.requirePayment && meta?.bookingAmountCents) ? meta.bookingAmountCents : null;
+  }, [selectedCourts, facilityCourts]);
+
+  const courtTotalAmountCents = useMemo(() => {
+    if (!primaryCourtHourlyRateCents || durationMins <= 0) return null;
+    return Math.round(primaryCourtHourlyRateCents * (durationMins / 60));
+  }, [primaryCourtHourlyRateCents, durationMins]);
+
   const primaryCourtId = selectedCourts[0]?.courtId || courtId;
 
   const bookingDateYmd = useMemo(() => {
@@ -827,6 +839,19 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             </div>
           )}
 
+          {/* Court fee */}
+          {courtTotalAmountCents != null && selectedCourts.length === 1 && (
+            <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+              <span className="text-amber-800 font-medium">Court fee</span>
+              <span className="text-amber-900 font-semibold">
+                ${(courtTotalAmountCents / 100).toFixed(2)}
+                <span className="text-amber-600 font-normal ml-1">
+                  (${(primaryCourtHourlyRateCents! / 100).toFixed(2)}/hr × {durationLabel})
+                </span>
+              </span>
+            </div>
+          )}
+
           {/* Guest fee */}
           {primaryCourtGuestFeeCents && selectedCourts.length === 1 && !advancedBooking && (
             <div className="space-y-1.5 pt-2">
@@ -859,7 +884,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               disabled={isSubmitting}
               className="flex-1"
             >
-              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : hasPaidCourt ? 'Pay and Book' : 'Book Court'}
+              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : hasPaidCourt ? `Pay $${((courtTotalAmountCents ?? 0) / 100).toFixed(2)} and Book` : 'Book Court'}
             </Button>
           </div>
         </form>

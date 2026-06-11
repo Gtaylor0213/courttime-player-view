@@ -128,7 +128,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       guestFeeCents?: number | null;
     }>
   >([]);
-  const [bringGuest, setBringGuest] = useState(false);
+  const [guestCount, setGuestCount] = useState(0);
+  const [guestNames, setGuestNames] = useState<string[]>([]);
   const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast, addNotification } = useNotifications();
@@ -234,7 +235,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       setRecurringDays([]);
       setRecurringEndDate('');
       setAdditionalCourtIds([]);
-      setBringGuest(false);
+      setGuestCount(0);
+      setGuestNames([]);
     }
   }, [selectedSlots, isOpen, time]);
 
@@ -423,7 +425,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         const meta = facilityCourts.find((fc) => fc.id === c.courtId);
         return meta?.requirePayment && meta?.bookingAmountCents;
       });
-      const requiresSingleBooking = paidCourtInSelection || (bringGuest && Boolean(primaryCourtGuestFeeCents));
+      const requiresSingleBooking = paidCourtInSelection || (guestCount > 0 && Boolean(primaryCourtGuestFeeCents));
       if (requiresSingleBooking && (advancedBooking || selectedCourts.length > 1 || datesToBook.length > 1)) {
         showToast(
           'error',
@@ -471,7 +473,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               const res = await bookingApi.create({
                 ...req,
                 ...checkoutReturnUrls,
-                bringGuest: bringGuest || undefined,
+                guestCount: guestCount > 0 ? guestCount : undefined,
+                guestNames: guestCount > 0 && guestNames.some(n => n.trim()) ? guestNames.slice(0, guestCount) : undefined,
                 provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
               });
               if (res.requiresPayment && res.checkoutUrl) {
@@ -854,17 +857,50 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
           {/* Guest fee */}
           {primaryCourtGuestFeeCents && selectedCourts.length === 1 && !advancedBooking && (
-            <div className="space-y-1.5 pt-2">
+            <div className="space-y-2 pt-2">
+              <Label className="text-sm font-medium">
+                Guests (${(primaryCourtGuestFeeCents / 100).toFixed(2)} per guest, max 3)
+              </Label>
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="bring-guest"
-                  checked={bringGuest}
-                  onCheckedChange={(checked) => setBringGuest(checked === true)}
-                />
-                <Label htmlFor="bring-guest" className="text-sm font-medium cursor-pointer">
-                  Bringing a guest (+${(primaryCourtGuestFeeCents / 100).toFixed(2)} guest fee)
-                </Label>
+                {[0, 1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => {
+                      setGuestCount(n);
+                      setGuestNames(prev => Array.from({ length: n }, (_, i) => prev[i] || ''));
+                    }}
+                    className={`w-10 h-10 rounded-md border text-sm font-medium transition-colors ${
+                      guestCount === n
+                        ? 'border-green-600 bg-green-600 text-white'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-green-400'
+                    }`}
+                  >
+                    {n === 0 ? 'None' : n}
+                  </button>
+                ))}
+                {guestCount > 0 && (
+                  <span className="text-sm text-gray-600 ml-1">
+                    = ${((primaryCourtGuestFeeCents * guestCount) / 100).toFixed(2)} guest fee
+                  </span>
+                )}
               </div>
+              {guestCount > 0 && (
+                <div className="space-y-2 pt-1">
+                  {Array.from({ length: guestCount }, (_, i) => (
+                    <Input
+                      key={i}
+                      placeholder={`Guest ${i + 1} name`}
+                      value={guestNames[i] || ''}
+                      onChange={(e) => {
+                        const updated = [...guestNames];
+                        updated[i] = e.target.value;
+                        setGuestNames(updated);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -884,7 +920,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               disabled={isSubmitting}
               className="flex-1"
             >
-              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : hasPaidCourt ? `Pay $${((courtTotalAmountCents ?? 0) / 100).toFixed(2)} and Book` : 'Book Court'}
+              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : (hasPaidCourt || (guestCount > 0 && primaryCourtGuestFeeCents)) ? `Pay $${(((courtTotalAmountCents ?? 0) + (guestCount > 0 && primaryCourtGuestFeeCents ? primaryCourtGuestFeeCents * guestCount : 0)) / 100).toFixed(2)} and Book` : 'Book Court'}
             </Button>
           </div>
         </form>

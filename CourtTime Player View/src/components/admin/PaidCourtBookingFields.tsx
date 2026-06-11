@@ -86,9 +86,9 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
       {/* Guest fee */}
       <div className="flex items-center justify-between gap-4 pt-1 border-t">
         <div>
-          <p className="text-sm font-medium">Guest fee</p>
+          <p className="text-sm font-medium">Per-guest fee</p>
           <p className="text-xs text-gray-500">
-            Charge an additional fee when a member brings a guest
+            Charged per guest — members select how many guests (up to 3) when booking
           </p>
         </div>
         <Switch
@@ -104,14 +104,14 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
       </div>
       {court.enableGuestFee && (
         <div className="space-y-2">
-          <Label>Guest fee (USD) *</Label>
+          <Label>Per-guest fee (USD) *</Label>
           <Input
             type="number"
             min="0.01"
             step="0.01"
             value={court.guestFeeDollars || ''}
             onChange={(e) => onChange({ guestFeeDollars: e.target.value } as Partial<T>)}
-            placeholder="e.g. 10.00"
+            placeholder="e.g. 10.00 per guest"
           />
         </div>
       )}

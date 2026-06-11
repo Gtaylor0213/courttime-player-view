@@ -939,7 +939,7 @@ export function CourtManagement() {
                             )}
                             {court.guestFeeCents && (
                               <Badge className="bg-blue-100 text-blue-900 border-blue-200">
-                                Guest fee · ${(court.guestFeeCents / 100).toFixed(2)}
+                                Guest fee · ${(court.guestFeeCents / 100).toFixed(2)}/guest
                               </Badge>
                             )}
                             {isEditingThis && (

@@ -683,6 +683,8 @@ export const bookingApi = {
     successUrl?: string;
     cancelUrl?: string;
     bringGuest?: boolean;
+    guestCount?: number;
+    guestNames?: string[];
     provisionalSameRequestBookings?: Array<{
       bookingDate: string;
       courtId: string;

@@ -535,7 +535,7 @@ export function QuickReservePopup({
       return;
     }
 
-    const includesPaidCourt = allSelectedCourts.some((court) => {
+    const includesPaidCourt = user?.userType !== 'admin' && allSelectedCourts.some((court) => {
       const fullCourt = availableCourts.find((c) => c.id === court.id);
       return Boolean(fullCourt?.requirePayment);
     });

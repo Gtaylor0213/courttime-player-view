@@ -134,6 +134,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast, addNotification } = useNotifications();
   const { user } = useAuth();
+  const isAdmin = user?.userType === 'admin';
 
   // Fetch all courts for this facility when wizard opens
   useEffect(() => {
@@ -202,18 +203,20 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return Array.from(merged.entries()).map(([id, name]) => ({ court: name, courtId: id }));
   }, [dragSelectedCourts, additionalCourtIds, facilityCourts]);
 
-  const hasPaidCourt = useMemo(() =>
-    selectedCourts.some((c) => {
+  const hasPaidCourt = useMemo(() => {
+    if (isAdmin) return false;
+    return selectedCourts.some((c) => {
       const meta = facilityCourts.find((fc) => fc.id === c.courtId);
       return meta?.requirePayment && meta?.bookingAmountCents;
-    }),
-  [selectedCourts, facilityCourts]);
+    });
+  }, [isAdmin, selectedCourts, facilityCourts]);
 
   const primaryCourtGuestFeeCents = useMemo(() => {
+    if (isAdmin) return null;
     if (selectedCourts.length !== 1) return null;
     const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
     return meta?.guestFeeCents ?? null;
-  }, [selectedCourts, facilityCourts]);
+  }, [isAdmin, selectedCourts, facilityCourts]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -259,10 +262,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
   // Per-hour rate for a single paid court; total scales with selected duration
   const primaryCourtHourlyRateCents = useMemo(() => {
+    if (isAdmin) return null;
     if (selectedCourts.length !== 1) return null;
     const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
     return (meta?.requirePayment && meta?.bookingAmountCents) ? meta.bookingAmountCents : null;
-  }, [selectedCourts, facilityCourts]);
+  }, [isAdmin, selectedCourts, facilityCourts]);
 
   const courtTotalAmountCents = useMemo(() => {
     if (!primaryCourtHourlyRateCents || durationMins <= 0) return null;
@@ -421,7 +425,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       const endTime24 = convertTo24Hour(endTime);
       const datesToBook = generateRecurringDates().map(d => parseDateStr(d));
 
-      const paidCourtInSelection = selectedCourts.some((c) => {
+      const paidCourtInSelection = !isAdmin && selectedCourts.some((c) => {
         const meta = facilityCourts.find((fc) => fc.id === c.courtId);
         return meta?.requirePayment && meta?.bookingAmountCents;
       });

@@ -340,6 +340,18 @@ export function ClubInfo() {
 
   const maxBookingDurationHoursDisplay = getMaxBookingDurationHoursLabel(facility.bookingRules);
 
+  const currentClubMembership = memberFacilities.find(
+    (membership: MemberFacilityRow) => membership.facilityId === clubId
+  );
+  const currentClubMemberLine = currentClubMembership
+    ? [
+        user?.fullName,
+        currentClubMembership.membershipType || 'Member',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+
   return (
     <>
         {/* Content */}
@@ -349,46 +361,27 @@ export function ClubInfo() {
             <h1 className="text-2xl font-medium text-gray-900">Club Information</h1>
             <NotificationBell />
           </div>
-          {/* Your clubs — listed before request actions */}
-          {memberFacilities.length > 0 && (
+          {/* Current club membership — listed before request actions */}
+          {currentClubMembership && (
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
-                  Your Clubs
+                  Your Membership
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {memberFacilities.map((membership: MemberFacilityRow) => {
-                  const id = membership.facilityId;
-                  const name = safeDisplayText(membership.facilityName) || 'Club';
-                  const isCurrent = id === clubId;
-                  const memberLine = [
-                    user?.fullName,
-                    membership.membershipType || 'Member',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ');
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => navigate(`/club/${id}`)}
-                      className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent/40 ${
-                          isCurrent ? 'border-green-300 bg-green-50/50' : 'border-border'
-                      }`}
-                    >
-                      <span className="block font-medium text-foreground">{name}</span>
-                      {memberLine ? (
-                        <span className="mt-0.5 block text-sm text-muted-foreground">{memberLine}</span>
-                      ) : null}
-                      <span className="mt-0.5 block text-xs capitalize text-muted-foreground">
-                        {membership.status || 'active'}
-                        {isCurrent ? ' · Viewing now' : ''}
-                      </span>
-                    </button>
-                  );
-                })}
+              <CardContent>
+                <div className="rounded-lg border border-green-300 bg-green-50/50 p-3">
+                  <span className="block font-medium text-foreground">
+                    {safeDisplayText(currentClubMembership.facilityName) || facilityName}
+                  </span>
+                  {currentClubMemberLine ? (
+                    <span className="mt-0.5 block text-sm text-muted-foreground">{currentClubMemberLine}</span>
+                  ) : null}
+                  <span className="mt-0.5 block text-xs capitalize text-muted-foreground">
+                    {currentClubMembership.status || 'active'}
+                  </span>
+                </div>
               </CardContent>
             </Card>
           )}

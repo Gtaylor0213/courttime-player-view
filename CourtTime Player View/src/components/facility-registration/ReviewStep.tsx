@@ -30,6 +30,10 @@ import {
 import { useRegistration } from './RegistrationContext';
 import { AdminProfileFields } from './AdminProfileFields';
 import { FacilityOperatingHoursSection } from './FacilityOperatingHoursSection';
+import {
+  courtScheduleRowsToOperatingHoursMap,
+  formatGroupedOperatingHoursSummary,
+} from '../../../shared/utils/operatingHours';
 
 export function ReviewStep() {
   const {

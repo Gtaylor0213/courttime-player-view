@@ -45,6 +45,8 @@ export function CourtsStep() {
     courtFormMode, setCourtFormMode, bulkCourtData, setBulkCourtData,
     addCourt, addBulkCourts, updateCourt, removeCourt, updateCourtScheduleDay,
     resetCourtScheduleToFacilityDefaults, buildDefaultCourtSchedule,
+    tennisCourtsScheduleTemplate, updateTennisCourtsScheduleTemplateDay,
+    updateAllTennisCourtsScheduleTemplateDays, applyTennisCourtsScheduleToAll,
     addAdminInvite, updateAdminInvite, removeAdminInvite,
     preAuthenticated, loggedInDuringRegistration, buildRegistrationBookingRules,
     promoCode, setPromoCode, promoValidation, setPromoValidation,
@@ -58,8 +60,8 @@ export function CourtsStep() {
       <div>
         <h3 className="text-lg font-semibold mb-4">Court Setup</h3>
         <p className="text-sm text-gray-600 mb-6">
-          Add each court with its own operating hours, plus optional paid booking and guest fees. New courts
-          start from the facility hours you set on the previous step — adjust each court below as needed.
+          Set shared hours for all tennis courts below, then fine-tune any court individually.
+          Pickleball and other court types keep their own schedules.
         </p>
       </div>
 
@@ -177,6 +179,28 @@ export function CourtsStep() {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-green-200 bg-green-50/40">
+        <CardHeader>
+          <CardTitle className="text-base">Tennis courts — shared schedule</CardTitle>
+          <CardDescription>
+            Set hours once for every court with type Tennis. Use &quot;Apply to all tennis courts&quot; to
+            update existing courts, or edit each court&apos;s schedule below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <CourtScheduleEditor
+            schedule={tennisCourtsScheduleTemplate}
+            onUpdateDay={updateTennisCourtsScheduleTemplateDay}
+            onUpdateAllDays={updateAllTennisCourtsScheduleTemplateDays}
+            peakStartLabel="Prime Start"
+            peakEndLabel="Prime End"
+          />
+          <Button type="button" onClick={applyTennisCourtsScheduleToAll}>
+            Apply to all tennis courts
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="space-y-4 mt-6">
         <h4 className="font-semibold">Courts ({formData.courts.length})</h4>

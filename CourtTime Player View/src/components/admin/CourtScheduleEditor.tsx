@@ -25,18 +25,97 @@ export interface CourtScheduleDay {
 interface CourtScheduleEditorProps {
   schedule: CourtScheduleDay[];
   onUpdateDay: (dayOfWeek: number, field: string, value: unknown) => void;
+  /** When set, shows a row to apply open/close (and optional peak) times to every day at once. */
+  onUpdateAllDays?: (field: string, value: unknown) => void;
   peakStartLabel?: string;
   peakEndLabel?: string;
+}
+
+function AllDaysQuickSetRow({
+  schedule,
+  onUpdateAllDays,
+  peakStartLabel,
+  peakEndLabel,
+}: {
+  schedule: CourtScheduleDay[];
+  onUpdateAllDays: (field: string, value: unknown) => void;
+  peakStartLabel: string;
+  peakEndLabel: string;
+}) {
+  const referenceDay = schedule.find((day) => day.is_open) ?? schedule[0];
+  return (
+    <div className="rounded-lg border border-dashed border-green-300 bg-green-50/60 p-3 space-y-3">
+      <p className="text-xs font-medium text-gray-700">
+        All days — set once, applies to every day below
+      </p>
+      <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 md:grid-cols-4">
+        <div className="space-y-1">
+          <Label className="text-xs text-gray-600">Start time</Label>
+          <Input
+            type="time"
+            value={referenceDay?.open_time || '06:00'}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onUpdateAllDays('open_time', e.target.value)
+            }
+            className="w-full"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-gray-600">End time</Label>
+          <Input
+            type="time"
+            value={referenceDay?.close_time || '22:00'}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onUpdateAllDays('close_time', e.target.value)
+            }
+            className="w-full"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-gray-600">{peakStartLabel}</Label>
+          <Input
+            type="time"
+            value={referenceDay?.prime_time_start || ''}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onUpdateAllDays('prime_time_start', e.target.value || null)
+            }
+            className="w-full"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-gray-600">{peakEndLabel}</Label>
+          <Input
+            type="time"
+            value={referenceDay?.prime_time_end || ''}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onUpdateAllDays('prime_time_end', e.target.value || null)
+            }
+            className="w-full"
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function CourtScheduleEditor({
   schedule,
   onUpdateDay,
+  onUpdateAllDays,
   peakStartLabel = 'Peak Start',
   peakEndLabel = 'Peak End',
 }: CourtScheduleEditorProps) {
   return (
     <>
+      {onUpdateAllDays && (
+        <AllDaysQuickSetRow
+          schedule={schedule}
+          onUpdateAllDays={onUpdateAllDays}
+          peakStartLabel={peakStartLabel}
+          peakEndLabel={peakEndLabel}
+        />
+      )}
+
       {/* Mobile: stacked cards so start/end times are always visible */}
       <div className="space-y-3 md:hidden">
         {schedule.map((day) => (

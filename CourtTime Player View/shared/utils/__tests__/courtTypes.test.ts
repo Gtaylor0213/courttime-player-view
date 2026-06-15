@@ -4,12 +4,20 @@ import {
   courtTypeCustomLabel,
   courtTypeSelectValue,
   isStandardCourtType,
+  isTennisCourtType,
   resolveCourtTypeForSave,
   validateCourtType,
   validateStoredCourtType,
 } from '../../constants/courtTypes';
 
 describe('courtTypes', () => {
+  it('recognizes tennis court type', () => {
+    expect(isTennisCourtType('Tennis')).toBe(true);
+    expect(isTennisCourtType('tennis')).toBe(true);
+    expect(isTennisCourtType('Pickleball')).toBe(false);
+    expect(isTennisCourtType('Dual Purpose')).toBe(false);
+  });
+
   it('recognizes standard and dual aliases', () => {
     expect(isStandardCourtType('Tennis')).toBe(true);
     expect(isStandardCourtType('Dual Purpose')).toBe(true);

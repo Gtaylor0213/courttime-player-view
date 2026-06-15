@@ -11,6 +11,11 @@ const STANDARD_SET = new Set<string>(STANDARD_COURT_TYPE_VALUES);
 /** Legacy / registration values mapped to the standard Dual Purpose label. */
 const DUAL_ALIASES = new Set(['dual', 'dual use', 'dual purpose']);
 
+/** True when the court is typed as Tennis (not Pickleball, Dual Purpose, or custom). */
+export function isTennisCourtType(value: string | null | undefined): boolean {
+  return String(value ?? '').trim().toLowerCase() === 'tennis';
+}
+
 export function isStandardCourtType(value: string | null | undefined): boolean {
   if (value == null || String(value).trim() === '') return false;
   const trimmed = String(value).trim();

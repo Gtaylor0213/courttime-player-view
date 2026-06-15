@@ -9,7 +9,8 @@ import { PaidCourtBookingFields } from '../PaidCourtBookingFields';
 import { CourtTypeField } from '../CourtTypeField';
 import {
   courtFieldsAfterNameChange,
-  courtFieldsAfterNumberChange,
+  courtFieldsAfterNumberInputChange,
+  courtNumberInputDisplayValue,
 } from '../../../../shared/utils/courtNaming';
 import type { Court } from './facilityManagementTypes';
 
@@ -56,17 +57,15 @@ export function FacilityCourtFormBody({
           <Label htmlFor={id('courtNumber')}>Court Number</Label>
           <Input
             id={id('courtNumber')}
-            type="number"
-            value={editingCourt.courtNumber}
+            type="text"
+            inputMode="numeric"
+            value={courtNumberInputDisplayValue(editingCourt.courtNumber)}
             onChange={(e) =>
               setEditingCourt((prev) =>
                 prev
                   ? {
                       ...prev,
-                      ...courtFieldsAfterNumberChange(
-                        parseInt(e.target.value, 10) || 1,
-                        prev.name
-                      ),
+                      ...courtFieldsAfterNumberInputChange(e.target.value, prev.name),
                     }
                   : prev
               )

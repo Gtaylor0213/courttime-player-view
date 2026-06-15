@@ -23,8 +23,10 @@ import { toast } from 'sonner';
 import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
 import {
   courtFieldsAfterNameChange,
-  courtFieldsAfterNumberChange,
+  courtFieldsAfterNumberInputChange,
+  courtNumberInputDisplayValue,
   formatStandardCourtName,
+  isCourtNumberEmpty,
   normalizeCourtNameAndNumber,
 } from '../../../shared/utils/courtNaming';
 import {
@@ -302,6 +304,10 @@ export function CourtManagement() {
     const courtTypeError = validateStoredCourtType(editingCourt.courtType);
     if (courtTypeError) {
       toast.error(courtTypeError);
+      return;
+    }
+    if (isCourtNumberEmpty(editingCourt.courtNumber)) {
+      toast.error('Court number is required');
       return;
     }
 
@@ -716,17 +722,15 @@ export function CourtManagement() {
                     <Label htmlFor="courtNumber">Court Number</Label>
                     <Input
                       id="courtNumber"
-                      type="number"
-                      value={editingCourt.courtNumber}
+                      type="text"
+                      inputMode="numeric"
+                      value={courtNumberInputDisplayValue(editingCourt.courtNumber)}
                       onChange={(e) =>
                         setEditingCourt((prev) =>
                           prev
                             ? {
                                 ...prev,
-                                ...courtFieldsAfterNumberChange(
-                                  parseInt(e.target.value, 10) || 1,
-                                  prev.name
-                                ),
+                                ...courtFieldsAfterNumberInputChange(e.target.value, prev.name),
                               }
                             : prev
                         )
@@ -1014,17 +1018,15 @@ export function CourtManagement() {
                           <Label htmlFor={`courtNumber-${court.id}`}>Court Number</Label>
                           <Input
                             id={`courtNumber-${court.id}`}
-                            type="number"
-                            value={editingCourt.courtNumber}
+                            type="text"
+                            inputMode="numeric"
+                            value={courtNumberInputDisplayValue(editingCourt.courtNumber)}
                             onChange={(e) =>
                         setEditingCourt((prev) =>
                           prev
                             ? {
                                 ...prev,
-                                ...courtFieldsAfterNumberChange(
-                                  parseInt(e.target.value, 10) || 1,
-                                  prev.name
-                                ),
+                                ...courtFieldsAfterNumberInputChange(e.target.value, prev.name),
                               }
                             : prev
                         )

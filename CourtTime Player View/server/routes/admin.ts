@@ -1097,7 +1097,7 @@ router.post('/courts/:facilityId', async (req, res) => {
     const court = await createCourt({
       facilityId,
       name,
-      courtNumber: courtNumber || 1,
+      courtNumber: courtNumber != null ? Number(courtNumber) : 1,
       surfaceType: surfaceType || 'Hard',
       courtType: courtType || 'Tennis',
       isIndoor: isIndoor || false,

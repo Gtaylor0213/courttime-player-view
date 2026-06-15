@@ -21,6 +21,10 @@ import { PaidCourtBookingFields } from '../admin/PaidCourtBookingFields';
 import { CourtScheduleEditor } from '../admin/CourtScheduleEditor';
 import { CourtTypeField } from '../admin/CourtTypeField';
 import {
+  courtFieldsAfterNumberInputChange,
+  courtNumberInputDisplayValue,
+} from '../../../shared/utils/courtNaming';
+import {
   getAmountForCourts,
   formatAnnualPrice,
   PER_COURT_CENTS,
@@ -230,12 +234,11 @@ export function CourtsStep() {
                 <div>
                   <Label>Court Number</Label>
                   <Input
-                    type="number"
-                    value={court.courtNumber}
+                    type="text"
+                    inputMode="numeric"
+                    value={courtNumberInputDisplayValue(court.courtNumber)}
                     onChange={(e) =>
-                      updateCourt(court.id, {
-                        courtNumber: parseInt(e.target.value, 10) || 1,
-                      })
+                      updateCourt(court.id, courtFieldsAfterNumberInputChange(e.target.value, court.name))
                     }
                   />
                 </div>

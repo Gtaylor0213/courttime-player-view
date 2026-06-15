@@ -1,6 +1,41 @@
+/** Sentinel while the court number field is empty during editing. */
+export const EMPTY_COURT_NUMBER_DRAFT = -1;
+
 /** Standard display name for a court number (e.g. 3 → "Court 3"). */
 export function formatStandardCourtName(courtNumber: number): string {
   return `Court ${courtNumber}`;
+}
+
+export function isCourtNumberEmpty(courtNumber: number): boolean {
+  return courtNumber === EMPTY_COURT_NUMBER_DRAFT;
+}
+
+/** Value for the court number text input (blank while the user is clearing the field). */
+export function courtNumberInputDisplayValue(courtNumber: number): string {
+  return isCourtNumberEmpty(courtNumber) ? '' : String(courtNumber);
+}
+
+/**
+ * Parse raw court number field input. Empty string is allowed while typing.
+ * Non-numeric input is ignored (returns null).
+ */
+export function parseCourtNumberInput(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') return EMPTY_COURT_NUMBER_DRAFT;
+  const n = parseInt(trimmed, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+/** Apply a court number field edit (free text while typing). */
+export function courtFieldsAfterNumberInputChange(
+  raw: string,
+  currentName: string
+): { name: string; courtNumber: number } {
+  const parsed = parseCourtNumberInput(raw);
+  if (parsed === null) {
+    return { courtNumber: EMPTY_COURT_NUMBER_DRAFT, name: currentName };
+  }
+  return courtFieldsAfterNumberChange(parsed, currentName);
 }
 
 /** Parse names like "Court 3" or "Court 3a". Returns null for custom names. */
@@ -33,7 +68,13 @@ export function courtFieldsAfterNumberChange(
   courtNumber: number,
   currentName: string
 ): { name: string; courtNumber: number } {
-  const num = Math.max(1, Math.floor(courtNumber) || 1);
+  if (isCourtNumberEmpty(courtNumber)) {
+    return { courtNumber: EMPTY_COURT_NUMBER_DRAFT, name: currentName };
+  }
+  const num = Math.floor(courtNumber);
+  if (Number.isNaN(num)) {
+    return { courtNumber: EMPTY_COURT_NUMBER_DRAFT, name: currentName };
+  }
   const trimmed = (currentName || '').trim();
   if (!trimmed) {
     return { courtNumber: num, name: formatStandardCourtName(num) };
@@ -62,7 +103,9 @@ export function normalizeCourtNameAndNumber(input: {
   name: string;
   courtNumber: number;
 }): { name: string; courtNumber: number } {
-  const courtNumber = Math.max(1, Math.floor(input.courtNumber) || 1);
+  const courtNumber = isCourtNumberEmpty(input.courtNumber)
+    ? EMPTY_COURT_NUMBER_DRAFT
+    : Math.floor(input.courtNumber);
   const trimmed = (input.name || '').trim();
   return {
     courtNumber,

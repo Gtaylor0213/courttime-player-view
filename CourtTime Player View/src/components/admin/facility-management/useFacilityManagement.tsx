@@ -34,6 +34,7 @@ import {
 } from '../../../../shared/utils/operatingHours';
 import {
   formatStandardCourtName,
+  isCourtNumberEmpty,
   normalizeCourtNameAndNumber,
 } from '../../../../shared/utils/courtNaming';
 import { normalizeFacilityType } from '../../../../shared/constants/facilityTypes';
@@ -1181,6 +1182,10 @@ const handleSaveCourt = async () => {
   const courtTypeError = validateStoredCourtType(editingCourt.courtType);
   if (courtTypeError) {
     toast.error(courtTypeError);
+    return;
+  }
+  if (isCourtNumberEmpty(editingCourt.courtNumber)) {
+    toast.error('Court number is required');
     return;
   }
 

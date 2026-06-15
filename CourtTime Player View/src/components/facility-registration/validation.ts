@@ -1,4 +1,5 @@
 import { parseBookingFeeDollars } from '../admin/PaidCourtBookingFields';
+import { isCourtNumberEmpty } from '../../../shared/utils/courtNaming';
 import type { Step1Mode, RegistrationFormData } from './registrationTypes';
 import { parsedHasCreateAccountFields } from './registrationPath';
 import { getRuleEntry, hasValue } from './registrationRules';
@@ -77,6 +78,10 @@ export function getStepErrors(
       stepErrors.courts = 'At least one court is required';
     } else {
       for (const court of dataSource.courts) {
+        if (isCourtNumberEmpty(court.courtNumber)) {
+          stepErrors.courts = `Enter a court number for ${court.name || 'each court'}`;
+          break;
+        }
         if (court.requirePayment && !parseBookingFeeDollars(court.bookingFeeDollars)) {
           stepErrors.courts = `Enter a booking fee for ${court.name} or turn off paid court booking`;
           break;

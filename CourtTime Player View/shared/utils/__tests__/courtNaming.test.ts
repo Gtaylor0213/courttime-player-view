@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   courtFieldsAfterNameChange,
   courtFieldsAfterNumberChange,
+  courtFieldsAfterNumberInputChange,
   courtNameMatchesNumber,
+  EMPTY_COURT_NUMBER_DRAFT,
   formatStandardCourtName,
+  isCourtNumberEmpty,
   normalizeCourtNameAndNumber,
+  parseCourtNumberInput,
   parseStandardCourtName,
 } from '../courtNaming';
 
@@ -31,6 +35,20 @@ describe('courtNaming', () => {
       courtNumber: 7,
       name: 'Stadium Court',
     });
+    expect(courtFieldsAfterNumberChange(0, 'Court 3')).toEqual({
+      courtNumber: 0,
+      name: 'Court 0',
+    });
+  });
+
+  it('allows clearing the court number field while typing', () => {
+    expect(parseCourtNumberInput('')).toBe(EMPTY_COURT_NUMBER_DRAFT);
+    expect(courtFieldsAfterNumberInputChange('', 'Court 5')).toEqual({
+      courtNumber: EMPTY_COURT_NUMBER_DRAFT,
+      name: 'Court 5',
+    });
+    expect(isCourtNumberEmpty(EMPTY_COURT_NUMBER_DRAFT)).toBe(true);
+    expect(isCourtNumberEmpty(5)).toBe(false);
   });
 
   it('courtFieldsAfterNameChange keeps custom names and court number', () => {

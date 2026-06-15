@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { facilitiesApi } from '../api/client';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
+import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import { cn } from './ui/utils';
 
 interface Club {
@@ -70,7 +71,7 @@ export function UnifiedSidebar({
           }
         }
 
-        setMemberFacilities(facilitiesData);
+        setMemberFacilities(sortFacilitiesByName(facilitiesData));
       } catch (error) {
         console.error('Error fetching member facilities:', error);
       } finally {

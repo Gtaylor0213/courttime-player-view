@@ -11,6 +11,7 @@ import { Checkbox } from '../ui/checkbox';
 import { useAuth } from '../../contexts/AuthContext';
 import { bookingApi, membersApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
+import { sortFacilitiesByName } from '../../../shared/utils/facilitySort';
 import { parseLocalDate } from '../../utils/dateUtils';
 
 interface Member {
@@ -113,7 +114,7 @@ export function AdminBooking() {
           const adminFacilities = response.data.facilities.filter((f: any) =>
             userFacilities.includes(f.id)
           );
-          setFacilities(adminFacilities);
+          setFacilities(sortFacilitiesByName(adminFacilities));
           if (adminFacilities.length > 0) {
             setSelectedFacility(adminFacilities[0].id);
           }

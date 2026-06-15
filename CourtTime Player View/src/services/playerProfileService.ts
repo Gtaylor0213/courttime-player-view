@@ -101,7 +101,7 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfileWit
        JOIN facilities f ON fm.facility_id = f.id
        LEFT JOIN facility_admins fa ON fa.user_id = fm.user_id AND fa.facility_id = fm.facility_id AND fa.status = 'active'
        WHERE fm.user_id = $1 AND fm.status IN ('active', 'pending')
-       ORDER BY fm.created_at DESC`,
+       ORDER BY f.name ASC`,
       [userId]
     );
 

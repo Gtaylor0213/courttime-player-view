@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, bookingApi } from '../api/client';
+import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import { ArrowLeft, MapPin, Clock, Calendar, Filter, AlertTriangle } from 'lucide-react';
 
 interface FacilityData {
@@ -82,7 +83,7 @@ export function QuickReservation() {
           }
         }
 
-        setFacilities(facilitiesData);
+        setFacilities(sortFacilitiesByName(facilitiesData));
       } catch (error) {
         console.error('Error fetching facilities:', error);
       } finally {

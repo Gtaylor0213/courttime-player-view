@@ -23,6 +23,7 @@ import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User,
 import { Calendar as CalendarPicker } from './ui/calendar';
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import {
   fetchBookingCalendarDetails,
   offerAddBookingToCalendar,
@@ -330,7 +331,7 @@ export function CourtCalendarView() {
           }
         }
 
-        setMemberFacilities(facilitiesData);
+        setMemberFacilities(sortFacilitiesByName(facilitiesData));
       } catch (error) {
         console.error('Error fetching facilities:', error);
       } finally {

@@ -14,6 +14,7 @@ import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { toast } from 'sonner';
+import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 
 export function FindHittingPartner() {
   const navigate = useNavigate();
@@ -82,7 +83,7 @@ export function FindHittingPartner() {
         }
       }
 
-      setMemberFacilities(activeFacilities);
+      setMemberFacilities(sortFacilitiesByName(activeFacilities));
 
       // Set default facility for creating posts
       if (activeFacilities.length > 0 && !formData.facilityId) {

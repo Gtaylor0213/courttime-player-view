@@ -11,6 +11,7 @@ import type { PendingTermsAcceptance } from '../api/client';
 import { registerForPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications';
 import type { User } from '../types/database';
 import type { AuthResponseShape } from '../../../shared/types';
+import { sortFacilitiesByName } from '../../../shared/utils/facilitySort';
 
 /** Logged-in user: shared User plus auth payload extras (JWT /login|/register). */
 interface AuthUser extends User {
@@ -170,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         infos.push({ id: allIds[i], name: allIds[i] });
       }
     }
-    setFacilities(infos);
+    setFacilities(sortFacilitiesByName(infos));
     setSelectedFacilityId(resolvedSelectedFacilityId);
     if (resolvedSelectedFacilityId) {
       await saveFacilityId(resolvedSelectedFacilityId);

@@ -21,6 +21,7 @@ import {
   parseApiBoolean,
 } from '../api/client';
 import { formatCentsAsUsd, parseDollarsToCents } from '../../shared/utils/money';
+import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import {
   EVENT_SIGNUP_TYPES,
   formatBulletinPostProminentDate,
@@ -174,7 +175,7 @@ export function BulletinBoard() {
           }
         );
       });
-    return [...fromProfile, ...extras];
+    return sortFacilitiesByName([...fromProfile, ...extras]);
   }, [memberFacilities, user?.adminFacilities]);
 
   const isAdmin = adminFacilities.length > 0 || (user?.adminFacilities?.length ?? 0) > 0;
@@ -267,7 +268,7 @@ export function BulletinBoard() {
 
       if (seq !== loadSeqRef.current) return [];
 
-      setMemberFacilities(activeFacilities);
+      setMemberFacilities(sortFacilitiesByName(activeFacilities));
 
       let loadedPosts: BulletinPost[] = [];
 

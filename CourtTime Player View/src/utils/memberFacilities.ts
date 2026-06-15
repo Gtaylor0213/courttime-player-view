@@ -1,5 +1,6 @@
 import { facilitiesApi, playerProfileApi } from '../api/client';
 import { unwrapApiPayload } from '../../shared/api/core';
+import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 
 export type MemberFacilityRow = {
@@ -113,6 +114,8 @@ export async function loadMemberFacilitiesForUser(
     }
   }
 
-  const facilities = await enrichMemberFacilityRows(Array.from(byId.values()));
+  const facilities = sortFacilitiesByName(
+    await enrichMemberFacilityRows(Array.from(byId.values())),
+  );
   return { facilities, profileError };
 }

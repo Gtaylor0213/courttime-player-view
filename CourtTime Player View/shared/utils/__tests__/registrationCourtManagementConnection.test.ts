@@ -29,7 +29,7 @@ describe('registration → court management connection', () => {
     const court1Default = buildCourtScheduleRowsFromFacilityOperatingHours(facilityHours);
     const court1Custom = court1Default.map((day) =>
       day.day_of_week === 1
-        ? { ...day, open_time: '10:00', close_time: '22:00', prime_time_start: '17:00', prime_time_end: '20:00' }
+        ? { ...day, open_time: '10:00', close_time: '22:00' }
         : day
     );
 
@@ -37,8 +37,6 @@ describe('registration → court management connection', () => {
     const monday = rows.find((d) => d.day_of_week === 1);
     expect(monday?.open_time).toBe('10:00');
     expect(monday?.close_time).toBe('22:00');
-    expect(monday?.prime_time_start).toBe('17:00');
-    expect(monday?.prime_time_end).toBe('20:00');
   });
 
   it('court management list summary reads the same rows as GET /court-config schedule', () => {

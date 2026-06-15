@@ -193,8 +193,6 @@ export function CourtsStep() {
             schedule={tennisCourtsScheduleTemplate}
             onUpdateDay={updateTennisCourtsScheduleTemplateDay}
             onUpdateAllDays={updateAllTennisCourtsScheduleTemplateDays}
-            peakStartLabel="Prime Start"
-            peakEndLabel="Prime End"
           />
           <Button type="button" onClick={applyTennisCourtsScheduleToAll}>
             Apply to all tennis courts
@@ -363,8 +361,6 @@ export function CourtsStep() {
                   onUpdateDay={(dayOfWeek, field, value) =>
                     updateCourtScheduleDay(court.id, dayOfWeek, field, value)
                   }
-                  peakStartLabel="Prime Start"
-                  peakEndLabel="Prime End"
                 />
               </div>
 

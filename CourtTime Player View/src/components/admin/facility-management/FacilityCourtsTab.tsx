@@ -58,7 +58,7 @@ export function FacilityCourtsTab(props: Props) {
   <Card className="border-green-100 bg-green-50/40">
     <CardContent className="pt-6 text-sm text-gray-600">
       Add courts here with paid booking and guest fees. Use the clock icon on each court for
-      operating hours and prime-time windows — the same editor as Admin → Court Management.
+      operating hours — the same editor as Admin → Court Management.
       Fees and schedules saved here can be updated anytime from Court Management.
     </CardContent>
   </Card>
@@ -198,7 +198,7 @@ export function FacilityCourtsTab(props: Props) {
             <Card className="border-green-200 bg-green-50/50">
               <CardHeader>
                 <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
-                <CardDescription>Configure available/unavailable hours and optional prime-time windows per day</CardDescription>
+                <CardDescription>Configure available and unavailable hours for each day</CardDescription>
               </CardHeader>
               <CardContent>
                 {courtScheduleLoading ? (
@@ -210,8 +210,6 @@ export function FacilityCourtsTab(props: Props) {
                     <CourtScheduleEditor
                       schedule={courtSchedule}
                       onUpdateDay={updateCourtScheduleDay}
-                      peakStartLabel="Prime Start"
-                      peakEndLabel="Prime End"
                     />
 
                     <div className="flex flex-wrap gap-2 pt-4">

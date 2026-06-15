@@ -1128,7 +1128,7 @@ export function CourtManagement() {
                   <Card className="border-green-200 bg-green-50/50">
                     <CardHeader>
                       <CardTitle className="text-base">Operating Schedule — {court.name}</CardTitle>
-                      <CardDescription>Configure available/unavailable hours and optional prime-time windows per day</CardDescription>
+                      <CardDescription>Configure available and unavailable hours for each day</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {courtScheduleLoading ? (
@@ -1140,8 +1140,6 @@ export function CourtManagement() {
                           <CourtScheduleEditor
                             schedule={courtSchedule}
                             onUpdateDay={updateCourtScheduleDay}
-                            peakStartLabel="Prime Start"
-                            peakEndLabel="Prime End"
                           />
 
                           <div className="flex flex-wrap gap-2 pt-4">

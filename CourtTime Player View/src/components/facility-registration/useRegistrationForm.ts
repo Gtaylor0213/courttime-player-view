@@ -270,8 +270,6 @@ export function useRegistrationForm() {
       is_open: row.is_open,
       open_time: row.open_time,
       close_time: row.close_time,
-      prime_time_start: row.prime_time_start,
-      prime_time_end: row.prime_time_end,
     }));
 
   const updateCourtScheduleDay = (
@@ -327,8 +325,6 @@ export function useRegistrationForm() {
         is_open: row.is_open,
         open_time: row.open_time,
         close_time: row.close_time,
-        prime_time_start: row.prime_time_start,
-        prime_time_end: row.prime_time_end,
       }))
   );
 

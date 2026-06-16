@@ -10,6 +10,7 @@ import {
   cancelSubscription,
 } from '../../src/services/paymentService';
 import { getAmountForCourts } from '../../src/services/subscriptionPricing';
+import { finalizeCourtAddPayment } from '../../src/services/courtAddService';
 import { requireAuth } from '../middleware/auth';
 import { isFacilityAdmin } from '../../src/services/memberService';
 import { query } from '../../src/database/connection';
@@ -200,6 +201,52 @@ router.get('/history/:facilityId', requireAuth, async (req, res, next) => {
     const { facilityId } = req.params;
     const history = await getPaymentHistory(facilityId);
     res.json({ success: true, data: history });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/payments/court-add/confirm
+ * Confirm a completed court-add Stripe checkout (redirect fallback).
+ */
+router.post('/court-add/confirm', requireAuth, async (req, res, next) => {
+  try {
+    const { sessionId, facilityId } = req.body;
+    const userId = req.user?.userId;
+
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'Session ID is required' });
+    }
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (facilityId) {
+      const adminFromTable = await query(
+        `SELECT 1 FROM facility_admins
+         WHERE facility_id = $1 AND user_id = $2 AND status = 'active'`,
+        [facilityId, userId]
+      );
+      const isAdmin =
+        adminFromTable.rows.length > 0 || (await isFacilityAdmin(facilityId, userId));
+      if (!isAdmin) {
+        return res.status(403).json({ success: false, error: 'Facility admin access required' });
+      }
+    }
+
+    const result = await finalizeCourtAddPayment(sessionId);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error || 'Payment could not be verified' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        courts: result.courts,
+        alreadyFinalized: result.alreadyFinalized || false,
+      },
+    });
   } catch (error) {
     next(error);
   }

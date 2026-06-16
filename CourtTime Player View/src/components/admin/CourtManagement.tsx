@@ -44,6 +44,12 @@ import {
 import { CourtScheduleEditor } from './CourtScheduleEditor';
 import { CourtTypeField } from './CourtTypeField';
 import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
+import { MAX_COURTS_AT_LIST_PRICE } from '../../services/subscriptionPricing';
+import {
+  confirmCourtAddPaymentFromUrl,
+  getCourtAddReturnUrl,
+  handleCourtAddPaymentResponse,
+} from '../../utils/courtAddPayment';
 
 interface Court extends PaidCourtFormFields {
   id: string;
@@ -140,6 +146,15 @@ export function CourtManagement() {
     if (currentFacilityId) {
       loadCourts();
     }
+  }, [currentFacilityId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    void confirmCourtAddPaymentFromUrl(params, currentFacilityId || undefined).then((confirmed) => {
+      if (confirmed && currentFacilityId) {
+        void loadCourts();
+      }
+    });
   }, [currentFacilityId]);
 
   useEffect(() => {
@@ -248,18 +263,12 @@ export function CourtManagement() {
   };
 
   // --- Court Limit ---
-  const MAX_STANDARD_COURTS = 11;
   const activeCourts = courts.filter(c => c.status !== 'closed');
-  const atCourtLimit = activeCourts.length >= MAX_STANDARD_COURTS;
-  const [showLimitAlert, setShowLimitAlert] = useState(false);
+  const atSubscriptionCap = activeCourts.length >= MAX_COURTS_AT_LIST_PRICE;
 
   // --- Single Add/Edit ---
 
   const handleAddNew = () => {
-    if (atCourtLimit) {
-      setShowLimitAlert(true);
-      return;
-    }
     const maxNumber = courts.length > 0 ? Math.max(...courts.map(c => c.courtNumber)) : 0;
     const nextNumber = maxNumber + 1;
     setEditingCourt({
@@ -281,7 +290,6 @@ export function CourtManagement() {
     if (currentFacilityId) void loadStripeStatus(currentFacilityId);
     setIsAddingNew(true);
     setBulkAddMode(false);
-    setShowLimitAlert(false);
   };
 
   const handleEdit = (court: Court) => {
@@ -360,7 +368,6 @@ export function CourtManagement() {
 
       let response;
       if (isAddingNew || !editingCourt.id) {
-        // Create new court
         response = await adminApi.createCourt(currentFacilityId, {
           name: courtName,
           courtNumber,
@@ -369,6 +376,7 @@ export function CourtManagement() {
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
           isWalkUp: editingCourt.isWalkUp,
+          returnUrl: getCourtAddReturnUrl(),
           ...paymentPayload,
         });
       } else {
@@ -387,6 +395,28 @@ export function CourtManagement() {
       }
 
       if (response.success) {
+        if (isAddingNew || !editingCourt.id) {
+          const paymentResult = await handleCourtAddPaymentResponse(response, {
+            onDevConfirm: async (sessionId) => {
+              const confirmRes = await adminApi.createCourt(currentFacilityId, {
+                name: courtName,
+                courtNumber,
+                surfaceType: editingCourt.surfaceType,
+                courtType: editingCourt.courtType,
+                isIndoor: editingCourt.isIndoor,
+                hasLights: editingCourt.hasLights,
+                isWalkUp: editingCourt.isWalkUp,
+                paymentSessionId: sessionId,
+                ...paymentPayload,
+              });
+              if (!confirmRes.success) {
+                throw new Error(confirmRes.error || 'Failed to confirm court payment');
+              }
+            },
+          });
+          if (paymentResult === 'redirected') return;
+          if (paymentResult === 'failed') return;
+        }
         toast.success(isAddingNew ? 'Court created successfully' : 'Court updated successfully');
         setEditingCourt(null);
         setIsAddingNew(false);
@@ -434,14 +464,9 @@ export function CourtManagement() {
   // --- Bulk Add ---
 
   const handleBulkAddToggle = () => {
-    if (atCourtLimit) {
-      setShowLimitAlert(true);
-      return;
-    }
     setBulkAddMode(true);
     setEditingCourt(null);
     setIsAddingNew(false);
-    setShowLimitAlert(false);
     const maxNumber = courts.length > 0 ? Math.max(...courts.map(c => c.courtNumber)) : 0;
     setBulkAddForm(prev => ({ ...prev, startingNumber: maxNumber + 1 }));
   };
@@ -455,12 +480,6 @@ export function CourtManagement() {
       return;
     }
 
-    const remaining = MAX_STANDARD_COURTS - activeCourts.length;
-    if (bulkAddForm.count > remaining) {
-      toast.error(`You can only add ${remaining} more court${remaining !== 1 ? 's' : ''} on your current plan (${MAX_STANDARD_COURTS} court maximum). Contact reidbissell@courttimeapp.com for help.`);
-      return;
-    }
-
     try {
       setBulkAdding(true);
       const response = await adminApi.createCourtsBulk(currentFacilityId, {
@@ -470,9 +489,29 @@ export function CourtManagement() {
         courtType: bulkAddForm.courtType,
         isIndoor: bulkAddForm.isIndoor,
         hasLights: bulkAddForm.hasLights,
+        returnUrl: getCourtAddReturnUrl(),
       });
 
       if (response.success) {
+        const paymentResult = await handleCourtAddPaymentResponse(response, {
+          onDevConfirm: async (sessionId) => {
+            const confirmRes = await adminApi.createCourtsBulk(currentFacilityId, {
+              count: bulkAddForm.count,
+              startingNumber: bulkAddForm.startingNumber,
+              surfaceType: bulkAddForm.surfaceType,
+              courtType: bulkAddForm.courtType,
+              isIndoor: bulkAddForm.isIndoor,
+              hasLights: bulkAddForm.hasLights,
+              paymentSessionId: sessionId,
+            });
+            if (!confirmRes.success) {
+              throw new Error(confirmRes.error || 'Failed to confirm court payment');
+            }
+          },
+        });
+        if (paymentResult === 'redirected') return;
+        if (paymentResult === 'failed') return;
+
         toast.success(`${bulkAddForm.count} courts created successfully`);
         setBulkAddMode(false);
         await loadCourts();
@@ -653,7 +692,7 @@ export function CourtManagement() {
               {selectedCourts.size > 0 ? (
                 <p className="text-sm text-green-600 mt-1">{selectedCourts.size} court{selectedCourts.size !== 1 ? 's' : ''} selected</p>
               ) : (
-                <p className="text-sm text-gray-500 mt-1">{activeCourts.length}/{MAX_STANDARD_COURTS} courts</p>
+                <p className="text-sm text-gray-500 mt-1">{activeCourts.length} active court{activeCourts.length !== 1 ? 's' : ''}</p>
               )}
             </div>
             <div className="flex gap-2">
@@ -678,17 +717,13 @@ export function CourtManagement() {
             </div>
           </div>
 
-          {/* Court Limit Alert */}
-          {showLimitAlert && (
-            <Alert className="mb-6 border-yellow-200 bg-yellow-50">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <AlertDescription className="text-yellow-800">
-                Your subscription supports up to {MAX_STANDARD_COURTS} courts at the annual plan maximum ($550/year). You have {activeCourts.length} active court{activeCourts.length !== 1 ? 's' : ''}.
-                To add more courts, contact us at{' '}
-                <a href="mailto:reidbissell@courttimeapp.com" className="font-medium underline">reidbissell@courttimeapp.com</a>.
-                <Button variant="ghost" size="sm" className="ml-2 h-6 px-2 text-yellow-800" onClick={() => setShowLimitAlert(false)}>
-                  <X className="h-3 w-3" />
-                </Button>
+          {/* Subscription cap info */}
+          {atSubscriptionCap && (
+            <Alert className="mb-6 border-blue-200 bg-blue-50">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                Your facility is at the annual plan maximum ($550/year for up to {MAX_COURTS_AT_LIST_PRICE} courts).
+                Additional courts can be added at no extra platform charge.
               </AlertDescription>
             </Alert>
           )}

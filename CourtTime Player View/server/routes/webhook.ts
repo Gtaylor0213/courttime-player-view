@@ -85,6 +85,19 @@ router.post(
  */
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const sessionId = session.id;
+  const metadataType = session.metadata?.type;
+
+  if (metadataType === 'court_add') {
+    const { finalizeCourtAddPayment } = await import('../../src/services/courtAddService');
+    const result = await finalizeCourtAddPayment(sessionId);
+    if (!result.success && !result.alreadyFinalized) {
+      console.error('[WEBHOOK] court_add finalize failed:', result.error);
+    } else {
+      console.log(`[WEBHOOK] court_add finalized for session ${sessionId}`);
+    }
+    return;
+  }
+
   const subscriptionId = session.subscription as string | null;
   const customerId = session.customer as string | null;
 

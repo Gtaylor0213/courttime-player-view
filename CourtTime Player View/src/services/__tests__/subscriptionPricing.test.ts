@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  courtAddPaymentCents,
   getAmountForCourts,
+  isAtSubscriptionCap,
+  MAX_COURTS_AT_LIST_PRICE,
   MAX_SUBSCRIPTION_CENTS,
   MIN_SUBSCRIPTION_CENTS,
   PER_COURT_CENTS,
@@ -16,11 +19,10 @@ describe('subscriptionPricing', () => {
     it('charges $50 per court between min and max', () => {
       expect(getAmountForCourts(5)).toBe(25000);
       expect(getAmountForCourts(10)).toBe(50000);
-      expect(getAmountForCourts(14)).toBe(70000);
     });
 
-    it('applies $750 maximum for 15+ courts', () => {
-      expect(getAmountForCourts(15)).toBe(MAX_SUBSCRIPTION_CENTS);
+    it('applies $550 maximum for 11+ courts', () => {
+      expect(getAmountForCourts(11)).toBe(MAX_SUBSCRIPTION_CENTS);
       expect(getAmountForCourts(20)).toBe(MAX_SUBSCRIPTION_CENTS);
     });
 
@@ -31,6 +33,37 @@ describe('subscriptionPricing', () => {
     it('uses $50 per court constant', () => {
       expect(PER_COURT_CENTS).toBe(5000);
       expect(getAmountForCourts(6)).toBe(6 * PER_COURT_CENTS);
+    });
+  });
+
+  describe('isAtSubscriptionCap', () => {
+    it('returns true at 11 active courts', () => {
+      expect(isAtSubscriptionCap(11, 50000)).toBe(true);
+    });
+
+    it('returns true at $550 annual amount', () => {
+      expect(isAtSubscriptionCap(8, MAX_SUBSCRIPTION_CENTS)).toBe(true);
+    });
+
+    it('returns false below cap', () => {
+      expect(isAtSubscriptionCap(8, 40000)).toBe(false);
+    });
+  });
+
+  describe('courtAddPaymentCents', () => {
+    it('charges $50 for a single court below cap', () => {
+      expect(courtAddPaymentCents(1, 8, 40000)).toBe(PER_COURT_CENTS);
+    });
+
+    it('charges nothing at or above cap', () => {
+      expect(courtAddPaymentCents(1, MAX_COURTS_AT_LIST_PRICE, 50000)).toBe(0);
+      expect(courtAddPaymentCents(3, 12, MAX_SUBSCRIPTION_CENTS)).toBe(0);
+    });
+
+    it('charges only for courts before cap on bulk add', () => {
+      expect(courtAddPaymentCents(5, 10, 50000)).toBe(PER_COURT_CENTS);
+      expect(courtAddPaymentCents(2, 10, 50000)).toBe(PER_COURT_CENTS);
+      expect(courtAddPaymentCents(2, 9, 45000)).toBe(2 * PER_COURT_CENTS);
     });
   });
 });

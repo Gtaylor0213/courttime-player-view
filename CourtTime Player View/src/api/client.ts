@@ -10,6 +10,7 @@ import {
   parseApiBoolean,
   isStripeConnectReadyFromResponse,
   normalizeBookingCreateResponse,
+  normalizeCourtAddResponse,
   type ApiResponse as SharedApiResponse,
 } from '../../shared/api/core';
 import { isSessionAuthError } from '../../shared/utils/sessionAuth';
@@ -20,6 +21,7 @@ export {
   parseApiBoolean,
   isStripeConnectReadyFromResponse,
   normalizeBookingCreateResponse,
+  normalizeCourtAddResponse,
 };
 
 // Dev: always same-origin so Vite can proxy `/api` (ignores stray VITE_API_BASE_URL in .env).
@@ -825,11 +827,14 @@ export const adminApi = {
       splitNames: string[];
       splitType: string;
     };
+    returnUrl?: string;
+    paymentSessionId?: string;
   }) => {
-    return apiRequest(`/api/admin/courts/${facilityId}`, {
+    const res = await apiRequest(`/api/admin/courts/${facilityId}`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    return normalizeCourtAddResponse(res);
   },
 
   createCourtsBulk: async (facilityId: string, data: {
@@ -840,11 +845,14 @@ export const adminApi = {
     isIndoor: boolean;
     hasLights: boolean;
     isWalkUp?: boolean;
+    returnUrl?: string;
+    paymentSessionId?: string;
   }) => {
-    return apiRequest(`/api/admin/courts/${facilityId}/bulk`, {
+    const res = await apiRequest(`/api/admin/courts/${facilityId}/bulk`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    return normalizeCourtAddResponse(res);
   },
 
   bulkUpdateCourts: async (courtIds: string[], updates: {
@@ -1526,6 +1534,13 @@ export const paymentsApi = {
     return apiRequest('/api/payments/facility-checkout', {
       method: 'POST',
       body: JSON.stringify({ facilityId, returnUrl }),
+    });
+  },
+
+  confirmCourtAddPayment: async (sessionId: string, facilityId?: string) => {
+    return apiRequest('/api/payments/court-add/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, facilityId }),
     });
   },
 

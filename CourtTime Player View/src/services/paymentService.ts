@@ -425,7 +425,16 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
       };
     }
 
-    // Payment mode (legacy)
+    // One-time payment mode (court add fees, legacy payments)
+    if (session.mode === 'payment' && session.status === 'complete' && session.payment_status === 'paid') {
+      return {
+        verified: true,
+        paymentStatus: session.payment_status,
+        amountPaid: session.amount_total || 0,
+      };
+    }
+
+    // Payment mode fallback
     if (session.payment_status === 'paid') {
       return {
         verified: true,
@@ -618,6 +627,69 @@ export async function getPaymentHistory(facilityId: string) {
  * Cancel a facility's Stripe subscription at the end of the current billing period.
  * Does NOT immediately terminate — facility stays active until period end.
  */
+/**
+ * Create a one-time Stripe Checkout Session for adding courts post-registration.
+ */
+export async function createCourtAddCheckoutSession(params: {
+  facilityId: string;
+  pendingId: string;
+  amountCents: number;
+  returnUrl: string;
+}): Promise<{
+  sessionId?: string;
+  sessionUrl?: string;
+  error?: string;
+}> {
+  const stripe = getStripe();
+
+  if (!stripe) {
+    const devSessionId = `dev_session_${Date.now()}`;
+    return { sessionId: devSessionId, sessionUrl: undefined };
+  }
+
+  const facResult = await query(`SELECT name FROM facilities WHERE id = $1`, [params.facilityId]);
+  const facilityName = facResult.rows[0]?.name || params.facilityId;
+  const sub = await getSubscriptionByFacilityId(params.facilityId);
+
+  const joiner = params.returnUrl.includes('?') ? '&' : '?';
+  const successUrl = `${params.returnUrl}${joiner}court_payment=success&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${params.returnUrl}${joiner}court_payment=cancelled`;
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      customer: sub?.stripeCustomerId || undefined,
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Additional Court Fee',
+            description: `CourtTime platform fee — ${facilityName}`,
+          },
+          unit_amount: params.amountCents,
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        type: 'court_add',
+        facilityId: params.facilityId,
+        pendingId: params.pendingId,
+      },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+
+    return {
+      sessionId: session.id,
+      sessionUrl: session.url || undefined,
+    };
+  } catch (error: any) {
+    console.error('Court add checkout session error:', error);
+    return { error: error.message };
+  }
+}
+
 export async function cancelSubscription(facilityId: string): Promise<{
   success: boolean;
   error?: string;

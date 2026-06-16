@@ -66,6 +66,49 @@ export function normalizeBookingCreateResponse<
   };
 }
 
+/** Flatten court-add API responses so payment redirect fields are on the top level. */
+export function normalizeCourtAddResponse<
+  T extends { success?: boolean; data?: unknown; error?: string }
+>(res: T) {
+  if (!res.success) return res;
+
+  const envelope =
+    res.data && typeof res.data === 'object'
+      ? (res.data as {
+          success?: boolean;
+          requiresPayment?: boolean;
+          data?: {
+            checkoutUrl?: string;
+            sessionId?: string;
+            pendingId?: string;
+            court?: unknown;
+            courts?: unknown[];
+          };
+          court?: unknown;
+          courts?: unknown[];
+          error?: string;
+        })
+      : undefined;
+
+  if (!envelope) return res;
+
+  const paymentData = envelope.data;
+
+  return {
+    ...res,
+    ...envelope,
+    success: res.success && envelope.success !== false,
+    requiresPayment: Boolean(envelope.requiresPayment),
+    checkoutUrl: typeof paymentData?.checkoutUrl === 'string' ? paymentData.checkoutUrl : undefined,
+    sessionId: typeof paymentData?.sessionId === 'string' ? paymentData.sessionId : undefined,
+    pendingId: typeof paymentData?.pendingId === 'string' ? paymentData.pendingId : undefined,
+    court: paymentData?.court ?? envelope.court,
+    courts: paymentData?.courts ?? envelope.courts,
+    data: paymentData ?? envelope.data ?? res.data,
+    error: envelope.error ?? res.error,
+  };
+}
+
 /** Extract `posts` from bulletin-board GET responses (handles nested envelopes). */
 export function extractBulletinPosts(apiResponseData: unknown): unknown[] {
   if (!apiResponseData || typeof apiResponseData !== 'object') return [];

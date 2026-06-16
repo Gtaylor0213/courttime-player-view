@@ -10,13 +10,15 @@ import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
 import {
-  createCourt,
-  createCourtsBulk,
   createSplitCourt,
   deleteCourt,
   updateCourtsBulk,
   assertPaidCourtConfig,
 } from '../../src/services/courtService';
+import {
+  initiateCourtAddPayment,
+  finalizeCourtAddPayment,
+} from '../../src/services/courtAddService';
 import { inviteAdmin, getFacilityAdmins, removeAdmin } from '../../src/services/adminService';
 import {
   getCurrentTermsVersion,
@@ -26,8 +28,22 @@ import {
 } from '../../src/services/termsService';
 import { replaceAllCourtOperatingConfigsForFacility } from '../../src/services/courtOperatingConfigSync';
 import { facilityOperatingHoursScheduleFingerprint } from '../../shared/utils/operatingHours';
+import { isFacilityAdmin } from '../../src/services/memberService';
 
 const router = express.Router();
+
+async function requireFacilityAdmin(
+  facilityId: string,
+  userId: string | undefined
+): Promise<boolean> {
+  if (!userId) return false;
+  const adminFromTable = await query(
+    `SELECT 1 FROM facility_admins
+     WHERE facility_id = $1 AND user_id = $2 AND status = 'active'`,
+    [facilityId, userId]
+  );
+  return adminFromTable.rows.length > 0 || (await isFacilityAdmin(facilityId, userId));
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -1047,6 +1063,12 @@ router.delete('/courts/:courtId', async (req, res) => {
 router.post('/courts/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
+    const userId = (req as any).user?.userId as string | undefined;
+
+    if (!(await requireFacilityAdmin(facilityId, userId))) {
+      return res.status(403).json({ success: false, error: 'Facility admin access required' });
+    }
+
     const {
       name,
       courtNumber,
@@ -1064,7 +1086,22 @@ router.post('/courts/:facilityId', async (req, res) => {
       guestFeeDollars: guestFeeDollarsCreate,
       canSplit,
       splitConfig,
+      returnUrl,
+      paymentSessionId,
     } = req.body;
+
+    if (paymentSessionId) {
+      const finalized = await finalizeCourtAddPayment(paymentSessionId);
+      if (!finalized.success) {
+        return res.status(400).json({ success: false, error: finalized.error || 'Payment could not be verified' });
+      }
+      const court = finalized.courts?.[0];
+      return res.json({
+        success: true,
+        data: { court },
+        message: finalized.alreadyFinalized ? 'Court already created' : 'Court created successfully',
+      });
+    }
 
     if (!name) {
       return res.status(400).json({ success: false, error: 'Court name is required' });
@@ -1094,28 +1131,55 @@ router.post('/courts/:facilityId', async (req, res) => {
       ? splitConfig.splitType
       : 'Pickleball';
 
-    const court = await createCourt({
-      facilityId,
-      name,
-      courtNumber: courtNumber != null ? Number(courtNumber) : 1,
-      surfaceType: surfaceType || 'Hard',
-      courtType: courtType || 'Tennis',
-      isIndoor: isIndoor || false,
-      hasLights: hasLights || false,
-      isWalkUp: isWalkUp || false,
-      requirePayment: wantsPayment,
-      bookingAmountCents: wantsPayment ? amountCents : null,
-      guestFeeCents: guestFeeCreate,
-    });
+    const effectiveReturnUrl =
+      typeof returnUrl === 'string' && returnUrl.trim()
+        ? returnUrl.trim()
+        : `${req.protocol}://${req.get('host')}/admin/courts`;
 
-    if (shouldSplit) {
-      await createSplitCourt(court.id, {
-        splitNames: normalizedSplitNames,
-        splitType,
-        surfaceType: surfaceType || 'Hard',
+    const result = await initiateCourtAddPayment(
+      facilityId,
+      {
+        type: 'single',
+        court: {
+          name,
+          courtNumber: courtNumber != null ? Number(courtNumber) : 1,
+          surfaceType: surfaceType || 'Hard',
+          courtType: courtType || 'Tennis',
+          isIndoor: isIndoor || false,
+          hasLights: hasLights || false,
+          isWalkUp: isWalkUp || false,
+          requirePayment: wantsPayment,
+          bookingAmountCents: wantsPayment ? amountCents : null,
+          guestFeeCents: guestFeeCreate,
+        },
+        split: shouldSplit
+          ? {
+              canSplit: true,
+              splitNames: normalizedSplitNames,
+              splitType,
+            }
+          : undefined,
+      },
+      effectiveReturnUrl
+    );
+
+    if (result.error) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    if (result.requiresPayment) {
+      return res.json({
+        success: true,
+        requiresPayment: true,
+        data: {
+          checkoutUrl: result.checkoutUrl,
+          sessionId: result.sessionId,
+          pendingId: result.pendingId,
+        },
       });
     }
 
+    const court = result.courts?.[0];
     res.json({ success: true, data: { court } });
   } catch (error: any) {
     console.error('Error creating court:', error);
@@ -1130,30 +1194,83 @@ router.post('/courts/:facilityId', async (req, res) => {
 router.post('/courts/:facilityId/bulk', async (req, res) => {
   try {
     const { facilityId } = req.params;
-    const { count, startingNumber, surfaceType, courtType, isIndoor, hasLights, isWalkUp } = req.body;
+    const userId = (req as any).user?.userId as string | undefined;
+
+    if (!(await requireFacilityAdmin(facilityId, userId))) {
+      return res.status(403).json({ success: false, error: 'Facility admin access required' });
+    }
+
+    const {
+      count,
+      startingNumber,
+      surfaceType,
+      courtType,
+      isIndoor,
+      hasLights,
+      isWalkUp,
+      returnUrl,
+      paymentSessionId,
+    } = req.body;
+
+    if (paymentSessionId) {
+      const finalized = await finalizeCourtAddPayment(paymentSessionId);
+      if (!finalized.success) {
+        return res.status(400).json({ success: false, error: finalized.error || 'Payment could not be verified' });
+      }
+      return res.json({
+        success: true,
+        data: { courts: finalized.courts },
+        message: finalized.alreadyFinalized ? 'Courts already created' : `${finalized.courts?.length || 0} courts created`,
+      });
+    }
 
     const courtCount = parseInt(count);
     if (isNaN(courtCount) || courtCount < 1 || courtCount > 50) {
       return res.status(400).json({ success: false, error: 'Count must be between 1 and 50' });
     }
 
-    const courts = await createCourtsBulk(
+    const effectiveReturnUrl =
+      typeof returnUrl === 'string' && returnUrl.trim()
+        ? returnUrl.trim()
+        : `${req.protocol}://${req.get('host')}/admin/courts`;
+
+    const result = await initiateCourtAddPayment(
+      facilityId,
       {
-        facilityId,
-        surfaceType: surfaceType || 'Hard',
-        courtType: courtType || 'Tennis',
-        isIndoor: isIndoor || false,
-        hasLights: hasLights || false,
-        isWalkUp: isWalkUp || false,
+        type: 'bulk',
+        bulk: {
+          count: courtCount,
+          startingNumber: parseInt(startingNumber) || 1,
+          surfaceType: surfaceType || 'Hard',
+          courtType: courtType || 'Tennis',
+          isIndoor: isIndoor || false,
+          hasLights: hasLights || false,
+          isWalkUp: isWalkUp || false,
+        },
       },
-      courtCount,
-      parseInt(startingNumber) || 1
+      effectiveReturnUrl
     );
+
+    if (result.error) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    if (result.requiresPayment) {
+      return res.json({
+        success: true,
+        requiresPayment: true,
+        data: {
+          checkoutUrl: result.checkoutUrl,
+          sessionId: result.sessionId,
+          pendingId: result.pendingId,
+        },
+      });
+    }
 
     res.json({
       success: true,
-      data: { courts },
-      message: `${courts.length} courts created`,
+      data: { courts: result.courts },
+      message: `${result.courts?.length || 0} courts created`,
     });
   } catch (error: any) {
     console.error('Error bulk creating courts:', error);

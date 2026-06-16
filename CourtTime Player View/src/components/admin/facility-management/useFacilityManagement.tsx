@@ -39,6 +39,11 @@ import {
 } from '../../../../shared/utils/courtNaming';
 import { normalizeFacilityType } from '../../../../shared/constants/facilityTypes';
 import {
+  confirmCourtAddPaymentFromUrl,
+  getCourtAddReturnUrl,
+  handleCourtAddPaymentResponse,
+} from '../../../utils/courtAddPayment';
+import {
   type BookingRules,
   type Court,
   type FacilityContact,
@@ -189,6 +194,16 @@ useEffect(() => {
   if (activeTab === 'courts' && currentFacilityId) {
     void loadStripeStatus();
   }
+}, [activeTab, currentFacilityId]);
+
+useEffect(() => {
+  if (activeTab !== 'courts') return;
+  const params = new URLSearchParams(window.location.search);
+  void confirmCourtAddPaymentFromUrl(params, currentFacilityId || undefined).then((confirmed) => {
+    if (confirmed && currentFacilityId) {
+      void loadCourts();
+    }
+  });
 }, [activeTab, currentFacilityId]);
 
 const loadFacilityData = async () => {
@@ -1240,7 +1255,6 @@ const handleSaveCourt = async () => {
 
     let response;
     if (isAddingNewCourt || !editingCourt.id) {
-      // Create new court
       response = await adminApi.createCourt(currentFacilityId, {
         name: courtName,
         courtNumber,
@@ -1251,6 +1265,7 @@ const handleSaveCourt = async () => {
         isWalkUp: editingCourt.isWalkUp,
         canSplit: editingCourt.canSplit,
         splitConfig: editingCourt.splitConfig,
+        returnUrl: getCourtAddReturnUrl(),
         ...paymentPayload,
       });
     } else {
@@ -1271,6 +1286,30 @@ const handleSaveCourt = async () => {
     }
 
     if (response.success) {
+      if (isAddingNewCourt || !editingCourt.id) {
+        const paymentResult = await handleCourtAddPaymentResponse(response, {
+          onDevConfirm: async (sessionId) => {
+            const confirmRes = await adminApi.createCourt(currentFacilityId, {
+              name: courtName,
+              courtNumber,
+              surfaceType: editingCourt.surfaceType,
+              courtType: editingCourt.courtType,
+              isIndoor: editingCourt.isIndoor,
+              hasLights: editingCourt.hasLights,
+              isWalkUp: editingCourt.isWalkUp,
+              canSplit: editingCourt.canSplit,
+              splitConfig: editingCourt.splitConfig,
+              paymentSessionId: sessionId,
+              ...paymentPayload,
+            });
+            if (!confirmRes.success) {
+              throw new Error(confirmRes.error || 'Failed to confirm court payment');
+            }
+          },
+        });
+        if (paymentResult === 'redirected') return;
+        if (paymentResult === 'failed') return;
+      }
       toast.success(isAddingNewCourt ? 'Court created successfully' : 'Court updated successfully');
       setEditingCourt(null);
       setIsAddingNewCourt(false);

@@ -20,13 +20,16 @@ function getStripe(): Stripe | null {
 
 /** Resolve Stripe product ID for facility platform subscriptions. */
 async function resolveSubscriptionProductId(stripe: Stripe): Promise<string | null> {
+  const isPlaceholder = (value?: string) =>
+    !value?.trim() || /x{4,}/i.test(value) || value.includes('xxxxxxxx');
+
   const fromEnv = process.env.STRIPE_SUBSCRIPTION_PRODUCT_ID;
-  if (fromEnv) return fromEnv;
+  if (fromEnv && !isPlaceholder(fromEnv)) return fromEnv.trim();
 
   const priceId = process.env.STRIPE_PRICE_ID;
-  if (priceId) {
+  if (priceId && !isPlaceholder(priceId)) {
     try {
-      const price = await stripe.prices.retrieve(priceId);
+      const price = await stripe.prices.retrieve(priceId.trim());
       const product = price.product;
       return typeof product === 'string' ? product : product.id;
     } catch (err: any) {

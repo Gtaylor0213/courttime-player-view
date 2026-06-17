@@ -11,8 +11,16 @@ export interface UseRegistrationWizardParams {
   setFormData: React.Dispatch<React.SetStateAction<RegistrationFormData>>;
   promoCode: string;
   paymentWaived: boolean;
+  promoValidation: {
+    valid: boolean;
+    promoCodeId?: string;
+    discountType?: string;
+    finalAmountCents?: number;
+    message?: string;
+  } | null;
   setPromoCode: (value: string) => void;
   setPaymentWaived: (value: boolean) => void;
+  setPromoValidation: (value: UseRegistrationWizardParams['promoValidation']) => void;
   setPaymentSessionId: (value: string | null) => void;
   setPaymentComplete: (value: boolean) => void;
   setAutoSubmitAfterPayment: (value: boolean) => void;
@@ -27,8 +35,10 @@ export function useRegistrationWizard({
   setFormData,
   promoCode,
   paymentWaived,
+  promoValidation,
   setPromoCode,
   setPaymentWaived,
+  setPromoValidation,
   setPaymentSessionId,
   setPaymentComplete,
   setAutoSubmitAfterPayment,
@@ -55,6 +65,9 @@ export function useRegistrationWizard({
     sessionStorage.setItem('facilityRegistrationStep1Mode', step1Mode);
     sessionStorage.setItem('facilityRegistrationLoggedInDuring', loggedInDuringRegistration ? 'true' : 'false');
     sessionStorage.setItem('facilityRegistrationPromo', promoCode);
+    if (promoValidation) {
+      sessionStorage.setItem('facilityRegistrationPromoValidation', JSON.stringify(promoValidation));
+    }
     if (paymentWaived) {
       sessionStorage.setItem('facilityRegistrationWaived', 'true');
     }
@@ -66,6 +79,7 @@ export function useRegistrationWizard({
     const savedStep1Mode = sessionStorage.getItem('facilityRegistrationStep1Mode');
     const savedLoggedInDuring = sessionStorage.getItem('facilityRegistrationLoggedInDuring') === 'true';
     const savedPromo = sessionStorage.getItem('facilityRegistrationPromo');
+    const savedPromoValidation = sessionStorage.getItem('facilityRegistrationPromoValidation');
     const wasWaived = sessionStorage.getItem('facilityRegistrationWaived') === 'true';
 
     if (!savedData) return false;
@@ -83,6 +97,13 @@ export function useRegistrationWizard({
     }
     if (savedPromo) {
       setPromoCode(savedPromo);
+    }
+    if (savedPromoValidation) {
+      try {
+        setPromoValidation(JSON.parse(savedPromoValidation));
+      } catch {
+        setPromoValidation(null);
+      }
     }
     if (wasWaived) {
       setPaymentWaived(true);
@@ -107,6 +128,7 @@ export function useRegistrationWizard({
     sessionStorage.removeItem('facilityRegistrationStep1Mode');
     sessionStorage.removeItem('facilityRegistrationLoggedInDuring');
     sessionStorage.removeItem('facilityRegistrationPromo');
+    sessionStorage.removeItem('facilityRegistrationPromoValidation');
     sessionStorage.removeItem('facilityRegistrationWaived');
     sessionStorage.removeItem('facilityRegistrationPaymentSessionId');
   };
@@ -135,8 +157,11 @@ export function useRegistrationWizard({
             wasWaived ? 'Card saved! Finishing registration...' : 'Payment successful! Finishing registration...'
           );
         } else {
-          toast.error('Payment verification failed. Please try again.');
+          toast.error(verification?.error || 'Payment verification failed. Please try again.');
         }
+      }).catch((error: unknown) => {
+        console.error('Payment verification error:', error);
+        toast.error(error instanceof Error ? error.message : 'Payment verification failed. Please try again.');
       });
 
       window.history.replaceState({}, '', getRegistrationPathWithMobileSource(isMobileRegistration));

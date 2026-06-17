@@ -26,7 +26,7 @@ import {
 import { validateStoredCourtType, isTennisCourtType } from '../../../shared/constants/courtTypes';
 import { parseBookingFeeDollars } from '../admin/PaidCourtBookingFields';
 import { useAuth } from '../../contexts/AuthContext';
-import { getRegistrationPathWithMobileSource } from './registrationPath';
+import { getRegistrationPathWithMobileSource, resolveRegistrationValidationOptions } from './registrationPath';
 import { buildRegistrationBookingRules, hasValue } from './registrationRules';
 import { validateAllSteps, ERROR_FIELD_TARGETS } from './validation';
 import {
@@ -158,8 +158,10 @@ export function useRegistrationForm() {
     setFormData,
     promoCode,
     paymentWaived,
+    promoValidation,
     setPromoCode,
     setPaymentWaived,
+    setPromoValidation,
     setPaymentSessionId,
     setPaymentComplete,
     setAutoSubmitAfterPayment,
@@ -946,9 +948,16 @@ export function useRegistrationForm() {
 
   const handleSubmit = async () => {
     const submitFormData = mergeRegistrationFormData(formData);
+    const validationOptions = resolveRegistrationValidationOptions(submitFormData, {
+      user,
+      preAuthenticated,
+      step1Mode,
+      loggedInDuringRegistration,
+    });
+    const submitTotalSteps = validationOptions.preAuthenticated ? 6 : 7;
 
     // Validate ALL steps before submission
-    const validation = validateAllSteps(submitFormData, totalSteps, { preAuthenticated, step1Mode });
+    const validation = validateAllSteps(submitFormData, submitTotalSteps, validationOptions);
 
     if (!validation.isValid) {
       setErrors(validation.errors);
@@ -968,6 +977,27 @@ export function useRegistrationForm() {
       const bookingRulesPayload = buildRegistrationBookingRules(submitFormData.rulesConfig);
       // Merged session data (e.g. after Stripe return) — must match validation payload
       const fd = submitFormData;
+      const savedPromoCode =
+        promoCode.trim() ||
+        sessionStorage.getItem('facilityRegistrationPromo')?.trim() ||
+        '';
+      let effectivePromoValidation = promoValidation;
+      if (!effectivePromoValidation) {
+        const savedPromoValidation = sessionStorage.getItem('facilityRegistrationPromoValidation');
+        if (savedPromoValidation) {
+          try {
+            effectivePromoValidation = JSON.parse(savedPromoValidation);
+          } catch {
+            effectivePromoValidation = null;
+          }
+        }
+      }
+      const effectivePaymentWaived =
+        paymentWaived || sessionStorage.getItem('facilityRegistrationWaived') === 'true';
+      const effectivePaymentSessionId =
+        paymentSessionId ||
+        sessionStorage.getItem('facilityRegistrationPaymentSessionId') ||
+        undefined;
 
       // Prepare registration data
       const registrationData = {
@@ -1149,13 +1179,14 @@ export function useRegistrationForm() {
         existingUserId: user?.id,
 
         // Payment info
-        paymentSessionId:
-          paymentSessionId ||
-          sessionStorage.getItem('facilityRegistrationPaymentSessionId') ||
-          undefined,
-        promoCode: paymentWaived ? promoCode : undefined,
-        paymentAmountCents: paymentWaived ? 0 : (promoValidation?.valid ? promoValidation.finalAmountCents : getAmountForCourts(fd.courts.length)),
-        paymentWaived,
+        paymentSessionId: effectivePaymentSessionId,
+        promoCode: savedPromoCode || undefined,
+        paymentAmountCents: effectivePaymentWaived
+          ? 0
+          : (effectivePromoValidation?.valid
+            ? (effectivePromoValidation.finalAmountCents ?? getAmountForCourts(fd.courts.length))
+            : getAmountForCourts(fd.courts.length)),
+        paymentWaived: effectivePaymentWaived,
         customPricing: false,
       };
 

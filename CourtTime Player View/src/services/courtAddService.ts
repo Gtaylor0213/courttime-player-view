@@ -12,6 +12,7 @@ import {
   createCourtAddCheckoutSession,
   getSubscriptionByFacilityId,
   subscriptionNeedsPayment,
+  syncFacilitySubscriptionCourts,
   verifyCheckoutSession,
   validatePromoCode,
   incrementPromoCodeUsage,
@@ -186,13 +187,10 @@ export async function initiateCourtAddPayment(
 
   if (!evaluation.paymentRequired) {
     const courts = await executeCourtAddPayload(facilityId, payload);
-    await query(
-      `UPDATE facility_subscriptions
-       SET court_count = COALESCE(court_count, 0) + $2,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE facility_id = $1`,
-      [facilityId, courtsToAdd]
-    );
+    const syncResult = await syncFacilitySubscriptionCourts(facilityId);
+    if (!syncResult.success) {
+      console.error('Failed to sync subscription courts after court add:', syncResult.error);
+    }
     if (evaluation.promoCode && evaluation.baseAmountCents > 0) {
       await incrementPromoCodeUsage(evaluation.promoCode);
       await recordCourtAddPaymentHistory(
@@ -291,20 +289,6 @@ async function executeCourtAddPayload(
   return [created];
 }
 
-async function incrementSubscriptionCourtCount(
-  client: PoolClient,
-  facilityId: string,
-  courtsAdded: number
-): Promise<void> {
-  await client.query(
-    `UPDATE facility_subscriptions
-     SET court_count = COALESCE(court_count, 0) + $2,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE facility_id = $1`,
-    [facilityId, courtsAdded]
-  );
-}
-
 async function recordCourtAddPaymentHistory(
   facilityId: string,
   amountCents: number,
@@ -374,7 +358,7 @@ export async function finalizeCourtAddPayment(sessionId: string): Promise<{
   const payload = pending.payload as CourtAddPayload;
   const courtsToAdd = payload.type === 'bulk' ? payload.bulk.count : 1;
 
-  return transaction(async (client) => {
+  const txnResult = await transaction(async (client) => {
     const lockResult = await client.query(
       `SELECT id, facility_id, payload, amount_cents, promo_code_used, status
        FROM pending_court_additions
@@ -399,7 +383,6 @@ export async function finalizeCourtAddPayment(sessionId: string): Promise<{
       [row.id]
     );
 
-    await incrementSubscriptionCourtCount(client, row.facility_id, courtsToAdd);
     const promoCode = row.promo_code_used as string | null;
     if (promoCode) {
       await incrementPromoCodeUsage(promoCode, client);
@@ -413,6 +396,16 @@ export async function finalizeCourtAddPayment(sessionId: string): Promise<{
       client
     );
 
-    return { success: true, courts };
+    return { success: true, courts, facilityId: row.facility_id as string };
   });
+
+  if (txnResult.success && !txnResult.alreadyFinalized && txnResult.facilityId) {
+    const syncResult = await syncFacilitySubscriptionCourts(txnResult.facilityId);
+    if (!syncResult.success) {
+      console.error('Failed to sync subscription courts after paid court add:', syncResult.error);
+    }
+    return { success: true, courts: txnResult.courts };
+  }
+
+  return txnResult;
 }

@@ -19,6 +19,7 @@ import {
   initiateCourtAddPayment,
   finalizeCourtAddPayment,
 } from '../../src/services/courtAddService';
+import { syncFacilitySubscriptionCourts } from '../../src/services/paymentService';
 import { inviteAdmin, getFacilityAdmins, removeAdmin } from '../../src/services/adminService';
 import {
   getCurrentTermsVersion,
@@ -1017,6 +1018,13 @@ router.patch('/courts/:courtId', async (req, res) => {
       });
     }
 
+    if (rawStatus !== undefined) {
+      const syncResult = await syncFacilitySubscriptionCourts(facilityIdForCourt);
+      if (!syncResult.success) {
+        console.error('Failed to sync subscription courts after court status update:', syncResult.error);
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -1039,6 +1047,18 @@ router.patch('/courts/:courtId', async (req, res) => {
 router.delete('/courts/:courtId', async (req, res) => {
   try {
     const { courtId } = req.params;
+    const courtRow = await query<{ facility_id: string }>(
+      `SELECT facility_id FROM courts WHERE id = $1`,
+      [courtId]
+    );
+    if (courtRow.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Court not found',
+      });
+    }
+    const facilityId = courtRow.rows[0].facility_id;
+
     const removed = await deleteCourt(courtId);
     if (!removed) {
       return res.status(404).json({
@@ -1046,6 +1066,12 @@ router.delete('/courts/:courtId', async (req, res) => {
         error: 'Court not found',
       });
     }
+
+    const syncResult = await syncFacilitySubscriptionCourts(facilityId);
+    if (!syncResult.success) {
+      console.error('Failed to sync subscription courts after court delete:', syncResult.error);
+    }
+
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting court:', error);

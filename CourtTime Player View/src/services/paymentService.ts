@@ -366,8 +366,18 @@ export async function createFacilitySubscriptionCheckout(
 
   const facResult = await query(`SELECT name FROM facilities WHERE id = $1`, [facilityId]);
   const facilityName = facResult.rows[0]?.name || facilityId;
-  const courtCount = Number(sub.courtCount) || 1;
-  const amountCents = sub.amountCents > 0 ? sub.amountCents : getAmountForCourts(courtCount);
+  const syncResult = await syncFacilitySubscriptionCourts(facilityId);
+  if (!syncResult.success) {
+    console.error('Failed to sync subscription courts before checkout:', syncResult.error);
+  }
+  const refreshedSub = await getSubscriptionByFacilityId(facilityId);
+  if (!refreshedSub) {
+    return { error: 'No subscription found for this facility' };
+  }
+
+  const courtCount = Number(refreshedSub.courtCount) || syncResult.courtCount || 1;
+  const amountCents =
+    refreshedSub.amountCents > 0 ? refreshedSub.amountCents : getAmountForCourts(courtCount);
 
   if (amountCents <= 0) {
     return { error: 'No payment amount configured for this facility' };
@@ -384,7 +394,7 @@ export async function createFacilitySubscriptionCheckout(
     successUrl,
     cancelUrl,
     facilityId,
-    customerId: sub.stripeCustomerId || undefined,
+    customerId: refreshedSub.stripeCustomerId || undefined,
   });
 
   if (result.error) {
@@ -726,6 +736,130 @@ export async function createCourtAddCheckoutSession(params: {
   } catch (error: any) {
     console.error('Court add checkout session error:', error);
     return { error: error.message };
+  }
+}
+
+async function getActiveCourtCountForFacility(
+  facilityId: string,
+  client?: PoolClient
+): Promise<number> {
+  const sql = `SELECT COUNT(*)::int AS count
+     FROM courts
+     WHERE facility_id = $1 AND status != 'closed'`;
+  const result = client
+    ? await client.query(sql, [facilityId])
+    : await query(sql, [facilityId]);
+  return result.rows[0]?.count ?? 0;
+}
+
+/**
+ * Align facility_subscriptions (and Stripe renewal price) with active court count.
+ * Court-add fees are charged separately; subscription price changes apply at next renewal.
+ */
+export async function syncFacilitySubscriptionCourts(
+  facilityId: string,
+  options?: { courtCount?: number; client?: PoolClient }
+): Promise<{
+  success: boolean;
+  courtCount?: number;
+  amountCents?: number;
+  skipped?: boolean;
+  error?: string;
+}> {
+  const sub = await getSubscriptionByFacilityId(facilityId);
+  if (!sub) {
+    return { success: false, error: 'No subscription found for this facility' };
+  }
+
+  const courtCount =
+    options?.courtCount ?? (await getActiveCourtCountForFacility(facilityId, options?.client));
+  const amountCents = getAmountForCourts(Math.max(courtCount, 1));
+  const currentCourtCount = Number(sub.courtCount) || 0;
+  const currentAmountCents = Number(sub.amountCents) || 0;
+
+  const runUpdate = async (stripePriceId: string | null) => {
+    const sql = `UPDATE facility_subscriptions
+       SET court_count = $2,
+           amount_cents = $3,
+           stripe_price_id = COALESCE($4, stripe_price_id),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE facility_id = $1`;
+    const params = [facilityId, courtCount, amountCents, stripePriceId];
+    if (options?.client) {
+      await options.client.query(sql, params);
+    } else {
+      await query(sql, params);
+    }
+  };
+
+  if (!sub.stripeSubscriptionId) {
+    await runUpdate(null);
+    return { success: true, courtCount, amountCents, skipped: true };
+  }
+
+  if (courtCount === currentCourtCount && amountCents === currentAmountCents) {
+    return { success: true, courtCount, amountCents, skipped: true };
+  }
+
+  const stripe = getStripe();
+  if (!stripe) {
+    await runUpdate(null);
+    return { success: true, courtCount, amountCents, skipped: true };
+  }
+
+  try {
+    const stripeSubscription = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+    const subscriptionItem = stripeSubscription.items.data[0];
+    if (!subscriptionItem) {
+      return { success: false, error: 'Stripe subscription has no line items' };
+    }
+
+    const currentUnitAmount = subscriptionItem.price.unit_amount;
+    let newPriceId = sub.stripePriceId || null;
+
+    if (currentUnitAmount !== amountCents) {
+      const productId = await resolveSubscriptionProductId(stripe);
+      if (!productId) {
+        return {
+          success: false,
+          error: 'Stripe subscription product is not configured (STRIPE_SUBSCRIPTION_PRODUCT_ID or STRIPE_PRICE_ID)',
+        };
+      }
+
+      const price = await stripe.prices.create({
+        currency: 'usd',
+        product: productId,
+        unit_amount: amountCents,
+        recurring: { interval: 'year' },
+        metadata: {
+          facilityId,
+          courtCount: String(courtCount),
+        },
+      });
+      newPriceId = price.id;
+
+      await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        items: [{ id: subscriptionItem.id, price: newPriceId }],
+        proration_behavior: 'none',
+        metadata: {
+          ...stripeSubscription.metadata,
+          courtCount: String(courtCount),
+        },
+      });
+    } else if (String(stripeSubscription.metadata?.courtCount || '') !== String(courtCount)) {
+      await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        metadata: {
+          ...stripeSubscription.metadata,
+          courtCount: String(courtCount),
+        },
+      });
+    }
+
+    await runUpdate(newPriceId);
+    return { success: true, courtCount, amountCents };
+  } catch (error: any) {
+    console.error('syncFacilitySubscriptionCourts error:', error);
+    return { success: false, error: error.message };
   }
 }
 

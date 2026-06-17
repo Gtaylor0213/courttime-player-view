@@ -715,6 +715,10 @@ async function createBookingCore(bookingData: {
       };
     }
 
+    // Declared here so both the rules block and payment block can access them
+    let isPrimeTime = false;
+    let warnings: RuleResult[] = [];
+
     // Evaluate booking rules (unless skipped for admin override)
     if (!bookingData.skipRulesValidation) {
       const evaluation = await validateBooking({
@@ -740,43 +744,8 @@ async function createBookingCore(bookingData: {
         };
       }
 
-      // Store warnings and peak hours status for response
-      var isPrimeTime = evaluation.isPrimeTime;
-      var warnings = evaluation.warnings;
-    }
-
-    // Check for direct time slot conflicts on this court
-    const conflicts = await query(
-      `SELECT id FROM bookings
-       WHERE court_id = $1
-         AND booking_date = $2
-         AND status != 'cancelled'
-         AND (
-           (start_time <= $3 AND end_time > $3)
-           OR (start_time < $4 AND end_time >= $4)
-           OR (start_time >= $3 AND end_time <= $4)
-         )`,
-      [bookingData.courtId, bookingData.bookingDate, bookingData.startTime, bookingData.endTime]
-    );
-
-    if (conflicts.rows.length > 0) {
-      return {
-        success: false,
-        error: 'Time slot is already booked'
-      };
-    }
-
-    // Check split court parent/child conflicts
-    const splitAvailability = await query(
-      `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
-      [bookingData.courtId, bookingData.bookingDate, bookingData.startTime, bookingData.endTime]
-    );
-
-    if (!splitAvailability.rows[0]?.available) {
-      return {
-        success: false,
-        error: 'A related parent or split court is already booked at this time'
-      };
+      isPrimeTime = evaluation.isPrimeTime;
+      warnings = evaluation.warnings;
     }
 
     if (!bookingData.skipRulesValidation && !bookingData.skipPaymentCheck) {
@@ -839,53 +808,97 @@ async function createBookingCore(bookingData: {
       }
     }
 
-    // Insert the booking
-    const result = await query(
-      `INSERT INTO bookings (
-        series_id, court_id, user_id, facility_id, booking_date,
-        start_time, end_time, duration_minutes, booking_type,
-        activity_type, notes, bulletin_post_id, status, is_prime_time
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13)
-      RETURNING
-        id,
-        series_id as "seriesId",
-        court_id as "courtId",
-        user_id as "userId",
-        facility_id as "facilityId",
-        TO_CHAR(booking_date, 'YYYY-MM-DD') as "bookingDate",
-        start_time as "startTime",
-        end_time as "endTime",
-        duration_minutes as "durationMinutes",
-        status,
-        booking_type as "bookingType",
-        activity_type as "activityType",
-        notes,
-        is_prime_time as "isPrimeTime",
-        created_at as "createdAt",
-        updated_at as "updatedAt"`,
-      [
-        bookingData.seriesId || null,
-        bookingData.courtId,
-        bookingData.userId,
-        bookingData.facilityId,
-        bookingData.bookingDate,
-        bookingData.startTime,
-        bookingData.endTime,
-        bookingData.durationMinutes,
-        bookingData.bookingType || null,
-        bookingData.activityType || null,
-        bookingData.notes || null,
-        bookingData.bulletinPostId || null,
-        isPrimeTime || false
-      ]
-    );
+    // Atomically check conflicts and insert to prevent double-booking under concurrency.
+    // The FOR UPDATE lock on the court row serializes concurrent booking attempts for the same court.
+    let newBooking: any;
+    try {
+      newBooking = await transaction(async (client) => {
+        await client.query(
+          `SELECT id FROM courts WHERE id = $1 FOR UPDATE`,
+          [bookingData.courtId]
+        );
+
+        const conflicts = await client.query(
+          `SELECT id FROM bookings
+           WHERE court_id = $1
+             AND booking_date = $2
+             AND status != 'cancelled'
+             AND (
+               (start_time <= $3 AND end_time > $3)
+               OR (start_time < $4 AND end_time >= $4)
+               OR (start_time >= $3 AND end_time <= $4)
+             )`,
+          [bookingData.courtId, bookingData.bookingDate, bookingData.startTime, bookingData.endTime]
+        );
+        if (conflicts.rows.length > 0) {
+          throw Object.assign(new Error('Time slot is already booked'), { code: 'BOOKING_CONFLICT' });
+        }
+
+        const splitAvailability = await client.query(
+          `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
+          [bookingData.courtId, bookingData.bookingDate, bookingData.startTime, bookingData.endTime]
+        );
+        if (!splitAvailability.rows[0]?.available) {
+          throw Object.assign(
+            new Error('A related parent or split court is already booked at this time'),
+            { code: 'BOOKING_CONFLICT' }
+          );
+        }
+
+        const ins = await client.query(
+          `INSERT INTO bookings (
+            series_id, court_id, user_id, facility_id, booking_date,
+            start_time, end_time, duration_minutes, booking_type,
+            activity_type, notes, bulletin_post_id, status, is_prime_time
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13)
+          RETURNING
+            id,
+            series_id as "seriesId",
+            court_id as "courtId",
+            user_id as "userId",
+            facility_id as "facilityId",
+            TO_CHAR(booking_date, 'YYYY-MM-DD') as "bookingDate",
+            start_time as "startTime",
+            end_time as "endTime",
+            duration_minutes as "durationMinutes",
+            status,
+            booking_type as "bookingType",
+            activity_type as "activityType",
+            notes,
+            is_prime_time as "isPrimeTime",
+            created_at as "createdAt",
+            updated_at as "updatedAt"`,
+          [
+            bookingData.seriesId || null,
+            bookingData.courtId,
+            bookingData.userId,
+            bookingData.facilityId,
+            bookingData.bookingDate,
+            bookingData.startTime,
+            bookingData.endTime,
+            bookingData.durationMinutes,
+            bookingData.bookingType || null,
+            bookingData.activityType || null,
+            bookingData.notes || null,
+            bookingData.bulletinPostId || null,
+            isPrimeTime,
+          ]
+        );
+        return ins.rows[0];
+      });
+    } catch (txErr: any) {
+      if (txErr.code === 'BOOKING_CONFLICT') {
+        return { success: false, error: txErr.message };
+      }
+      throw txErr;
+    }
 
     return {
       success: true,
-      booking: result.rows[0],
-      warnings: warnings || [],
-      isPrimeTime: isPrimeTime || false
+      booking: newBooking,
+      warnings,
+      isPrimeTime,
     };
   } catch (error) {
     console.error('Error creating booking:', error);
@@ -1007,39 +1020,6 @@ export async function reconcilePaidCourtBookingsWithoutReservation(
   return recovered;
 }
 
-async function hasBookingConflict(
-  courtId: string,
-  bookingDate: string,
-  startTime: string,
-  endTime: string,
-  excludeBookingId?: string
-): Promise<boolean> {
-  const params: any[] = [courtId, bookingDate, startTime, endTime];
-  let sql = `SELECT id FROM bookings
-       WHERE court_id = $1
-         AND booking_date = $2
-         AND status != 'cancelled'
-         AND (
-           (start_time <= $3 AND end_time > $3)
-           OR (start_time < $4 AND end_time >= $4)
-           OR (start_time >= $3 AND end_time <= $4)
-         )`;
-
-  if (excludeBookingId) {
-    params.push(excludeBookingId);
-    sql += ` AND id != $${params.length}`;
-  }
-
-  const conflictResult = await query(sql, params);
-  if (conflictResult.rows.length > 0) return true;
-
-  const splitAvailability = await query(
-    `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
-    [courtId, bookingDate, startTime, endTime]
-  );
-  return !splitAvailability.rows[0]?.available;
-}
-
 export async function createRecurringBookingSeries(
   payload: RecurringSeriesRequest
 ): Promise<BookingResult & { seriesId?: string; bookings?: Booking[] }> {
@@ -1095,19 +1075,6 @@ async function createRecurringBookingSeriesCore(
         endTime: instance.endTime,
         durationMinutes: instance.durationMinutes
       });
-
-      const hasConflict = await hasBookingConflict(
-        instance.courtId,
-        instance.bookingDate,
-        instance.startTime,
-        instance.endTime
-      );
-      if (hasConflict) {
-        return {
-          success: false,
-          error: 'One or more recurring instances conflict with existing bookings.'
-        };
-      }
     }
 
     if (blockers.length > 0) {
@@ -1119,6 +1086,8 @@ async function createRecurringBookingSeriesCore(
       };
     }
 
+    // Conflict check and inserts share one transaction so concurrent bookings
+    // cannot steal a slot between validation and insert.
     const created = await transaction(async (client) => {
       const seriesResult = await client.query(
         `INSERT INTO booking_series (facility_id, created_by, notes)
@@ -1131,6 +1100,37 @@ async function createRecurringBookingSeriesCore(
       const rows: Booking[] = [];
 
       for (const instance of payload.instances) {
+        // Lock the court row to serialize concurrent booking attempts
+        await client.query(`SELECT id FROM courts WHERE id = $1 FOR UPDATE`, [instance.courtId]);
+
+        const conflicts = await client.query(
+          `SELECT id FROM bookings
+           WHERE court_id = $1 AND booking_date = $2 AND status != 'cancelled'
+             AND (
+               (start_time <= $3 AND end_time > $3)
+               OR (start_time < $4 AND end_time >= $4)
+               OR (start_time >= $3 AND end_time <= $4)
+             )`,
+          [instance.courtId, instance.bookingDate, instance.startTime, instance.endTime]
+        );
+        if (conflicts.rows.length > 0) {
+          throw Object.assign(
+            new Error('One or more recurring instances conflict with existing bookings.'),
+            { code: 'BOOKING_CONFLICT' }
+          );
+        }
+
+        const splitAvailability = await client.query(
+          `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
+          [instance.courtId, instance.bookingDate, instance.startTime, instance.endTime]
+        );
+        if (!splitAvailability.rows[0]?.available) {
+          throw Object.assign(
+            new Error('One or more recurring instances conflict with a parent or split court.'),
+            { code: 'BOOKING_CONFLICT' }
+          );
+        }
+
         const insert = await client.query(
           `INSERT INTO bookings (
              series_id, court_id, user_id, facility_id, booking_date,

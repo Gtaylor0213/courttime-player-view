@@ -86,6 +86,11 @@ router.get('/user/:userId', async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { upcoming } = req.query;
+    const callerUserId = req.user?.userId;
+
+    if (callerUserId !== userId && req.user?.userType !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
 
     const bookings = await getBookingsByUser(
       userId,
@@ -108,10 +113,15 @@ router.get('/user/:userId', async (req, res, next) => {
 router.get('/:bookingId/calendar.ics', async (req, res, next) => {
   try {
     const { bookingId } = req.params;
+    const callerUserId = req.user?.userId;
     const booking = await getBookingById(bookingId);
 
     if (!booking) {
       return res.status(404).send('Booking not found');
+    }
+
+    if (booking.userId !== callerUserId && req.user?.userType !== 'admin') {
+      return res.status(403).send('Access denied');
     }
 
     let facilityName = '';
@@ -195,30 +205,41 @@ router.post('/', async (req, res, next) => {
     } = req.body;
 
     // Validation
-    if (!courtId || !userId || !facilityId || !bookingDate || !startTime || !endTime || !durationMinutes) {
+    if (!courtId || !facilityId || !bookingDate || !startTime || !endTime || !durationMinutes) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields'
       });
     }
 
-    // Reject bookings from view-only members
-    const membershipCheck = await dbQuery(
-      `SELECT is_view_only FROM facility_memberships WHERE user_id = $1 AND facility_id = $2`,
-      [userId, facilityId]
-    );
-    if (membershipCheck.rows[0]?.is_view_only) {
-      return res.status(403).json({
-        success: false,
-        error: 'View-only members cannot make bookings'
-      });
+    const callerUserId = req.user?.userId;
+    if (!callerUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
     }
 
-    const isAdminBooking = req.user?.userType === 'admin';
+    const isAdminCaller = req.user?.userType === 'admin';
+    // Admins may book on behalf of another user; regular users always book as themselves
+    const effectiveUserId = isAdminCaller ? (userId || callerUserId) : callerUserId;
+
+    // Reject bookings from view-only members (skip check for admins)
+    if (!isAdminCaller) {
+      const membershipCheck = await dbQuery(
+        `SELECT is_view_only FROM facility_memberships WHERE user_id = $1 AND facility_id = $2`,
+        [effectiveUserId, facilityId]
+      );
+      if (membershipCheck.rows[0]?.is_view_only) {
+        return res.status(403).json({
+          success: false,
+          error: 'View-only members cannot make bookings'
+        });
+      }
+    }
+
+    const isAdminBooking = isAdminCaller;
 
     const result = await createBooking({
       courtId,
-      userId,
+      userId: effectiveUserId,
       facilityId,
       bookingDate,
       startTime,
@@ -264,7 +285,7 @@ router.post('/', async (req, res, next) => {
 
       const created = result.booking;
       await notificationService.notifyBookingConfirmed(
-        userId,
+        effectiveUserId,
         facilityName,
         courtName,
         startDateTime,
@@ -282,7 +303,7 @@ router.post('/', async (req, res, next) => {
       // Send confirmation email (fire-and-forget)
       const userQuery = await pool.query(
         'SELECT email, full_name as "fullName" FROM users WHERE id = $1',
-        [userId]
+        [effectiveUserId]
       );
       const userInfo = userQuery.rows[0];
       if (userInfo) {
@@ -292,7 +313,7 @@ router.post('/', async (req, res, next) => {
         sendBookingConfirmationEmail(
           userInfo.email, userInfo.fullName, facilityId, facilityName,
           courtName, dateFormatted, startFormatted, endFormatted, bookingType || 'General',
-          userId
+          effectiveUserId
         ).catch(err => console.error('Error sending booking confirmation email:', err));
       }
     } catch (notificationError) {
@@ -373,8 +394,14 @@ router.post('/payment/confirm', async (req, res, next) => {
 router.post('/recurring-series', async (req, res, next) => {
   try {
     const { userId, facilityId, bookingType, notes, instances } = req.body;
+    const callerUserId = req.user?.userId;
+    if (!callerUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const isAdminCaller = req.user?.userType === 'admin';
+    const effectiveUserId = isAdminCaller ? (userId || callerUserId) : callerUserId;
 
-    if (!userId || !facilityId || !Array.isArray(instances) || instances.length === 0) {
+    if (!effectiveUserId || !facilityId || !Array.isArray(instances) || instances.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields for recurring series'
@@ -392,7 +419,7 @@ router.post('/recurring-series', async (req, res, next) => {
     }
 
     const result = await createRecurringBookingSeries({
-      userId,
+      userId: effectiveUserId,
       facilityId,
       bookingType,
       notes,
@@ -416,19 +443,17 @@ router.post('/recurring-series', async (req, res, next) => {
 router.delete('/:bookingId', async (req, res, next) => {
   try {
     const { bookingId } = req.params;
-    const { userId, reason } = req.query;
+    const { reason } = req.query;
+    const callerUserId = req.user?.userId;
 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'User ID is required'
-      });
+    if (!callerUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
     }
 
     // Get booking details before cancelling
     const booking = await getBookingById(bookingId);
 
-    const result = await cancelBooking(bookingId, userId as string, reason as string);
+    const result = await cancelBooking(bookingId, callerUserId, reason as string);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -437,7 +462,7 @@ router.delete('/:bookingId', async (req, res, next) => {
     // Create notification for booking cancellation
     if (booking) {
       try {
-        const notificationRecipientId = booking.userId || (userId as string);
+        const notificationRecipientId = booking.userId || callerUserId;
         const facilityQuery = await pool.query('SELECT name FROM facilities WHERE id = $1', [booking.facilityId]);
         const courtQuery = await pool.query('SELECT name FROM courts WHERE id = $1', [booking.courtId]);
 
@@ -537,6 +562,11 @@ router.post('/validate', async (req, res, next) => {
  */
 router.post('/admin-override', async (req, res, next) => {
   try {
+    const callerUserId = req.user?.userId;
+    if (!callerUserId || req.user?.userType !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+
     const {
       courtId,
       userId,
@@ -547,7 +577,6 @@ router.post('/admin-override', async (req, res, next) => {
       durationMinutes,
       bookingType,
       notes,
-      overriddenBy,
       overrideReason,
       overrideRules
     } = req.body;
@@ -560,11 +589,20 @@ router.post('/admin-override', async (req, res, next) => {
       });
     }
 
-    if (!overriddenBy || !overrideReason) {
+    if (!overrideReason) {
       return res.status(400).json({
         success: false,
-        error: 'Admin override requires overriddenBy and overrideReason'
+        error: 'Admin override requires overrideReason'
       });
+    }
+
+    // Verify caller is an admin of the target facility
+    const adminCheck = await dbQuery(
+      `SELECT 1 FROM facility_admins WHERE user_id = $1 AND facility_id = $2 AND status = 'active'`,
+      [callerUserId, facilityId]
+    );
+    if (adminCheck.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Not an admin of this facility' });
     }
 
     const result = await createBookingWithOverride(
@@ -580,7 +618,7 @@ router.post('/admin-override', async (req, res, next) => {
         notes
       },
       {
-        adminUserId: overriddenBy,
+        adminUserId: callerUserId,
         reason: overrideReason,
         overriddenRules: overrideRules || []
       }
@@ -602,17 +640,15 @@ router.post('/admin-override', async (req, res, next) => {
  */
 router.post('/:bookingId/no-show', async (req, res, next) => {
   try {
-    const { bookingId } = req.params;
-    const { markedBy, reason } = req.body;
-
-    if (!markedBy) {
-      return res.status(400).json({
-        success: false,
-        error: 'markedBy is required'
-      });
+    const callerUserId = req.user?.userId;
+    if (!callerUserId || req.user?.userType !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
     }
 
-    const result = await markNoShow(bookingId, markedBy, reason);
+    const { bookingId } = req.params;
+    const { reason } = req.body;
+
+    const result = await markNoShow(bookingId, callerUserId, reason);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -631,6 +667,24 @@ router.post('/:bookingId/no-show', async (req, res, next) => {
 router.post('/:bookingId/check-in', async (req, res, next) => {
   try {
     const { bookingId } = req.params;
+    const callerUserId = req.user?.userId;
+    if (!callerUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const bookingForAuth = await getBookingById(bookingId);
+    if (!bookingForAuth) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+    if (bookingForAuth.userId !== callerUserId && req.user?.userType !== 'admin') {
+      const adminRow = await dbQuery(
+        `SELECT 1 FROM facility_admins WHERE user_id = $1 AND facility_id = $2 AND status = 'active'`,
+        [callerUserId, bookingForAuth.facilityId]
+      );
+      if (adminRow.rows.length === 0) {
+        return res.status(403).json({ success: false, error: 'Not authorized to check in this booking' });
+      }
+    }
 
     const result = await checkInBooking(bookingId);
 
@@ -652,6 +706,11 @@ router.get('/upcoming/:userId', async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { facilityId, limit } = req.query;
+    const callerUserId = req.user?.userId;
+
+    if (callerUserId !== userId && req.user?.userType !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
 
     let query = `
       SELECT

@@ -75,11 +75,12 @@ export function ReservationManagementModal({
     }
   }, [reservation, isEditing]);
 
-  // Check for conflicts whenever edit values change
+  // Check for conflicts whenever edit values change; cancel stale in-flight requests
   useEffect(() => {
-    if (isEditing && editDate && editStartTime && editDuration && editCourt) {
-      checkForConflicts();
-    }
+    if (!isEditing || !editDate || !editStartTime || !editDuration || !editCourt) return;
+    const controller = new AbortController();
+    checkForConflicts(controller.signal);
+    return () => controller.abort();
   }, [editDate, editStartTime, editDuration, editCourt, isEditing]);
 
   const loadCourts = async () => {
@@ -95,7 +96,7 @@ export function ReservationManagementModal({
     }
   };
 
-  const checkForConflicts = async () => {
+  const checkForConflicts = async (signal?: AbortSignal) => {
     if (!editDate || !editStartTime || !editDuration || !editCourt) return;
 
     setIsCheckingConflict(true);
@@ -111,26 +112,26 @@ export function ReservationManagementModal({
       // Get existing bookings for the selected court and date
       const response = await bookingApi.getByCourt(editCourt, editDate);
 
-      if (response.success && response.data?.bookings) {
-        // Check if any existing booking conflicts (excluding current booking)
-        const conflict = response.data.bookings.some((booking: any) => {
-          if (booking.id === reservation?.id) return false; // Skip current booking
-          if (booking.status === 'cancelled') return false; // Skip cancelled bookings
+      if (signal?.aborted) return;
 
-          // Check for time overlap
+      const bookingData = response.data as any;
+      if (response.success && bookingData?.bookings) {
+        // Check if any existing booking conflicts (excluding current booking)
+        const conflict = bookingData.bookings.some((booking: any) => {
+          if (booking.id === reservation?.id) return false;
+          if (booking.status === 'cancelled') return false;
           const existingStart = booking.startTime;
           const existingEnd = booking.endTime;
-
-          // Conflict if: new start < existing end AND new end > existing start
           return (editStartTime < existingEnd && endTime > existingStart);
         });
 
         setHasConflict(conflict);
       }
     } catch (error) {
+      if (signal?.aborted) return;
       console.error('Error checking conflicts:', error);
     } finally {
-      setIsCheckingConflict(false);
+      if (!signal?.aborted) setIsCheckingConflict(false);
     }
   };
 
@@ -139,9 +140,9 @@ export function ReservationManagementModal({
   const isOwnReservation = user?.id === reservation.userId;
   const isFacilityAdmin = !!user?.adminFacilities?.includes(reservation.facilityId);
 
-  // Format date for display
+  // Format date for display — append T00:00:00 so it parses as local time, not UTC midnight
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = new Date(`${dateStr}T00:00:00`);
     return date.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -214,10 +215,7 @@ export function ReservationManagementModal({
       const endMinutes = totalMinutes % 60;
       const endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}:00`;
 
-      // Cancel old booking
-      await bookingApi.cancel(reservation.id, user?.id || '');
-
-      // Create new booking with updated details
+      // Create the new booking first — if this fails the original is preserved
       const response = await bookingApi.create({
         courtId: editCourt,
         userId: user?.id || '',
@@ -229,26 +227,30 @@ export function ReservationManagementModal({
         notes: reservation.notes || ''
       });
 
-      if (response.success) {
-        const newBookingId = (response as { booking?: { id?: string } }).booking?.id;
-        setIsEditing(false);
-        onUpdate?.();
-        onClose();
-        const court = courts.find((c) => c.id === editCourt);
-        offerAddBookingToCalendar(
-          'Your reservation was updated.',
-          bookingWithDetailsToCalendarDetails({
-            ...reservation,
-            courtName: court?.name || reservation.courtName,
-            bookingDate: editDate,
-            startTime: editStartTime,
-            endTime,
-          }),
-          { alertTitle: 'Reservation updated', bookingId: newBookingId }
-        );
-      } else {
+      if (!response.success) {
         toast.error(response.error || 'Failed to update reservation');
+        return;
       }
+
+      // New booking secured — now cancel the old one
+      await bookingApi.cancel(reservation.id, user?.id || '');
+
+      const newBookingId = (response as { booking?: { id?: string } }).booking?.id;
+      setIsEditing(false);
+      onUpdate?.();
+      onClose();
+      const court = courts.find((c) => c.id === editCourt);
+      offerAddBookingToCalendar(
+        'Your reservation was updated.',
+        bookingWithDetailsToCalendarDetails({
+          ...reservation,
+          courtName: court?.name || reservation.courtName,
+          bookingDate: editDate,
+          startTime: editStartTime,
+          endTime,
+        }),
+        { alertTitle: 'Reservation updated', bookingId: newBookingId }
+      );
     } catch (error) {
       console.error('Error updating reservation:', error);
       toast.error('Failed to update reservation. Please try again.');

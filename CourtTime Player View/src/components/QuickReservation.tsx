@@ -26,7 +26,10 @@ export function QuickReservation() {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
-    return today.toISOString().split('T')[0]; // YYYY-MM-DD
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   });
   const [selectedCourtType, setSelectedCourtType] = useState('all');
   const [facilities, setFacilities] = useState<FacilityData[]>([]);

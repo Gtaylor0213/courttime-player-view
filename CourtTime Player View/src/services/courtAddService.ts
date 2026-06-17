@@ -399,7 +399,7 @@ export async function finalizeCourtAddPayment(sessionId: string): Promise<{
     return { success: true, courts, facilityId: row.facility_id as string };
   });
 
-  if (txnResult.success && !txnResult.alreadyFinalized && txnResult.facilityId) {
+  if (txnResult.success && txnResult.facilityId) {
     const syncResult = await syncFacilitySubscriptionCourts(txnResult.facilityId);
     if (!syncResult.success) {
       console.error('Failed to sync subscription courts after paid court add:', syncResult.error);

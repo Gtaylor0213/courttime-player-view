@@ -366,6 +366,10 @@ export async function createFacilitySubscriptionCheckout(
 
   const facResult = await query(`SELECT name FROM facilities WHERE id = $1`, [facilityId]);
   const facilityName = facResult.rows[0]?.name || facilityId;
+  // Sync court count and Stripe subscription price before creating the checkout session so
+  // the session reflects the current court count rather than a stale cached value. This may
+  // issue up to two Stripe API calls (retrieve + update) when the price has drifted; errors
+  // are non-fatal because we fall back to the DB value below.
   const syncResult = await syncFacilitySubscriptionCourts(facilityId);
   if (!syncResult.success) {
     console.error('Failed to sync subscription courts before checkout:', syncResult.error);

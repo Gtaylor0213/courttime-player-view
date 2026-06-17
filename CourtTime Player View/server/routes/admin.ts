@@ -1088,6 +1088,7 @@ router.post('/courts/:facilityId', async (req, res) => {
       splitConfig,
       returnUrl,
       paymentSessionId,
+      promoCode,
     } = req.body;
 
     if (paymentSessionId) {
@@ -1160,7 +1161,8 @@ router.post('/courts/:facilityId', async (req, res) => {
             }
           : undefined,
       },
-      effectiveReturnUrl
+      effectiveReturnUrl,
+      typeof promoCode === 'string' && promoCode.trim() ? promoCode.trim() : undefined
     );
 
     if (result.error) {
@@ -1210,6 +1212,7 @@ router.post('/courts/:facilityId/bulk', async (req, res) => {
       isWalkUp,
       returnUrl,
       paymentSessionId,
+      promoCode,
     } = req.body;
 
     if (paymentSessionId) {
@@ -1248,7 +1251,8 @@ router.post('/courts/:facilityId/bulk', async (req, res) => {
           isWalkUp: isWalkUp || false,
         },
       },
-      effectiveReturnUrl
+      effectiveReturnUrl,
+      typeof promoCode === 'string' && promoCode.trim() ? promoCode.trim() : undefined
     );
 
     if (result.error) {

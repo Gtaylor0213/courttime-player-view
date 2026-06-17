@@ -13,6 +13,8 @@ import {
   getSubscriptionByFacilityId,
   subscriptionNeedsPayment,
   verifyCheckoutSession,
+  validatePromoCode,
+  incrementPromoCodeUsage,
 } from './paymentService';
 import {
   createCourt,
@@ -69,19 +71,25 @@ export async function getActiveCourtCount(facilityId: string): Promise<number> {
 
 export async function evaluateCourtAddPayment(
   facilityId: string,
-  courtsToAdd: number
+  courtsToAdd: number,
+  promoCode?: string
 ): Promise<{
   paymentRequired: boolean;
   amountCents: number;
+  baseAmountCents: number;
   activeCourtCount: number;
   atCap: boolean;
   blockReason?: string;
+  promoValid?: boolean;
+  promoMessage?: string;
+  promoCode?: string;
 }> {
   const sub = await getSubscriptionByFacilityId(facilityId);
   if (!sub) {
     return {
       paymentRequired: false,
       amountCents: 0,
+      baseAmountCents: 0,
       activeCourtCount: 0,
       atCap: false,
       blockReason: 'No subscription found for this facility',
@@ -92,6 +100,7 @@ export async function evaluateCourtAddPayment(
     return {
       paymentRequired: false,
       amountCents: 0,
+      baseAmountCents: 0,
       activeCourtCount: 0,
       atCap: false,
       blockReason: 'Complete your annual subscription payment before adding courts',
@@ -101,13 +110,36 @@ export async function evaluateCourtAddPayment(
   const activeCourtCount = await getActiveCourtCount(facilityId);
   const amountCents = Number(sub.amountCents) || 0;
   const atCap = isAtSubscriptionCap(activeCourtCount, amountCents);
-  const paymentAmount = courtAddPaymentCents(courtsToAdd, activeCourtCount, amountCents);
+  const baseAmountCents = courtAddPaymentCents(courtsToAdd, activeCourtCount, amountCents);
+
+  let finalAmountCents = baseAmountCents;
+  let promoValid: boolean | undefined;
+  let promoMessage: string | undefined;
+  let appliedPromoCode: string | undefined;
+
+  if (promoCode?.trim() && baseAmountCents > 0) {
+    const trimmed = promoCode.trim();
+    const promo = await validatePromoCode(trimmed, {
+      baseAmountCents,
+      context: 'court_add',
+    });
+    promoValid = promo.valid;
+    promoMessage = promo.message;
+    if (promo.valid) {
+      finalAmountCents = promo.finalAmountCents ?? baseAmountCents;
+      appliedPromoCode = trimmed;
+    }
+  }
 
   return {
-    paymentRequired: paymentAmount > 0,
-    amountCents: paymentAmount,
+    paymentRequired: finalAmountCents > 0,
+    amountCents: finalAmountCents,
+    baseAmountCents,
     activeCourtCount,
     atCap,
+    promoValid,
+    promoMessage,
+    promoCode: appliedPromoCode,
   };
 }
 
@@ -115,14 +147,15 @@ export async function insertPendingCourtAddition(
   facilityId: string,
   payload: CourtAddPayload,
   amountCents: number,
-  stripeCheckoutSessionId?: string | null
+  stripeCheckoutSessionId?: string | null,
+  promoCode?: string | null
 ): Promise<string> {
   const result = await query(
     `INSERT INTO pending_court_additions
-       (facility_id, payload, amount_cents, stripe_checkout_session_id, status)
-     VALUES ($1, $2, $3, $4, 'PENDING')
+       (facility_id, payload, amount_cents, stripe_checkout_session_id, promo_code_used, status)
+     VALUES ($1, $2, $3, $4, $5, 'PENDING')
      RETURNING id`,
-    [facilityId, JSON.stringify(payload), amountCents, stripeCheckoutSessionId || null]
+    [facilityId, JSON.stringify(payload), amountCents, stripeCheckoutSessionId || null, promoCode || null]
   );
   return result.rows[0].id;
 }
@@ -130,7 +163,8 @@ export async function insertPendingCourtAddition(
 export async function initiateCourtAddPayment(
   facilityId: string,
   payload: CourtAddPayload,
-  returnUrl: string
+  returnUrl: string,
+  promoCode?: string
 ): Promise<{
   requiresPayment: boolean;
   checkoutUrl?: string;
@@ -140,10 +174,14 @@ export async function initiateCourtAddPayment(
   error?: string;
 }> {
   const courtsToAdd = payload.type === 'bulk' ? payload.bulk.count : 1;
-  const evaluation = await evaluateCourtAddPayment(facilityId, courtsToAdd);
+  const evaluation = await evaluateCourtAddPayment(facilityId, courtsToAdd, promoCode);
 
   if (evaluation.blockReason) {
     return { requiresPayment: false, error: evaluation.blockReason };
+  }
+
+  if (promoCode?.trim() && evaluation.baseAmountCents > 0 && evaluation.promoValid === false) {
+    return { requiresPayment: false, error: evaluation.promoMessage || 'Invalid promo code' };
   }
 
   if (!evaluation.paymentRequired) {
@@ -155,10 +193,26 @@ export async function initiateCourtAddPayment(
        WHERE facility_id = $1`,
       [facilityId, courtsToAdd]
     );
+    if (evaluation.promoCode && evaluation.baseAmountCents > 0) {
+      await incrementPromoCodeUsage(evaluation.promoCode);
+      await recordCourtAddPaymentHistory(
+        facilityId,
+        0,
+        courtsToAdd,
+        null,
+        evaluation.promoCode
+      );
+    }
     return { requiresPayment: false, courts };
   }
 
-  const pendingId = await insertPendingCourtAddition(facilityId, payload, evaluation.amountCents);
+  const pendingId = await insertPendingCourtAddition(
+    facilityId,
+    payload,
+    evaluation.amountCents,
+    null,
+    evaluation.promoCode || null
+  );
   const checkout = await createCourtAddCheckoutSession({
     facilityId,
     pendingId,
@@ -252,29 +306,40 @@ async function incrementSubscriptionCourtCount(
 }
 
 async function recordCourtAddPaymentHistory(
-  client: PoolClient,
   facilityId: string,
   amountCents: number,
   courtsAdded: number,
-  stripeSessionId?: string | null
+  stripeSessionId?: string | null,
+  promoCode?: string | null,
+  client?: PoolClient
 ): Promise<void> {
-  const subResult = await client.query(
+  const runQuery = client
+    ? (sql: string, params: unknown[]) => client.query(sql, params)
+    : (sql: string, params: unknown[]) => query(sql, params);
+
+  const subResult = await runQuery(
     `SELECT id FROM facility_subscriptions WHERE facility_id = $1`,
     [facilityId]
   );
   const subscriptionId = subResult.rows[0]?.id ?? null;
 
-  await client.query(
+  const description = promoCode && amountCents === 0
+    ? `Additional court fee waived (promo: ${promoCode})`
+    : `Additional court fee (${courtsAdded} court${courtsAdded !== 1 ? 's' : ''})`;
+
+  await runQuery(
     `INSERT INTO payment_history (
        facility_id, subscription_id, stripe_payment_intent_id,
-       amount_cents, status, description, payment_method_type
-     ) VALUES ($1, $2, $3, $4, 'succeeded', $5, 'card')`,
+       amount_cents, status, description, payment_method_type, promo_code_used
+     ) VALUES ($1, $2, $3, $4, 'succeeded', $5, $6, $7)`,
     [
       facilityId,
       subscriptionId,
       stripeSessionId || null,
       amountCents,
-      `Additional court fee (${courtsAdded} court${courtsAdded !== 1 ? 's' : ''})`,
+      description,
+      promoCode && amountCents === 0 ? 'promo_code' : 'card',
+      promoCode || null,
     ]
   );
 }
@@ -286,7 +351,7 @@ export async function finalizeCourtAddPayment(sessionId: string): Promise<{
   alreadyFinalized?: boolean;
 }> {
   const pendingResult = await query(
-    `SELECT id, facility_id, payload, amount_cents, status
+    `SELECT id, facility_id, payload, amount_cents, promo_code_used, status
      FROM pending_court_additions
      WHERE stripe_checkout_session_id = $1`,
     [sessionId]
@@ -311,7 +376,7 @@ export async function finalizeCourtAddPayment(sessionId: string): Promise<{
 
   return transaction(async (client) => {
     const lockResult = await client.query(
-      `SELECT id, facility_id, payload, amount_cents, status
+      `SELECT id, facility_id, payload, amount_cents, promo_code_used, status
        FROM pending_court_additions
        WHERE id = $1
        FOR UPDATE`,
@@ -335,12 +400,17 @@ export async function finalizeCourtAddPayment(sessionId: string): Promise<{
     );
 
     await incrementSubscriptionCourtCount(client, row.facility_id, courtsToAdd);
+    const promoCode = row.promo_code_used as string | null;
+    if (promoCode) {
+      await incrementPromoCodeUsage(promoCode, client);
+    }
     await recordCourtAddPaymentHistory(
-      client,
       row.facility_id,
       Number(row.amount_cents) || 0,
       courtsToAdd,
-      sessionId
+      sessionId,
+      promoCode,
+      client
     );
 
     return { success: true, courts };

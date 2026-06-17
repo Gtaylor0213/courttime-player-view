@@ -42,7 +42,8 @@ export function FacilityCourtsTab(props: Props) {
     updatePeakHourSlotTime, updatePeakHourSlotRule, togglePeakHourSlotExpanded,
     setPeakHourSlotCourtMode, togglePeakHourSlotCourt, togglePeakHourSlotDay,
     expandedPeakHourSlots, courts, courtsLoading, editingCourt, setEditingCourt,
-    isAddingNewCourt, courtSaving, stripeOnboarded, stripeStatusLoading,
+    isAddingNewCourt,     courtSaving, stripeOnboarded, stripeStatusLoading,
+    courtAddPromo,
     configuringCourtId, setConfiguringCourtId, courtSchedule, courtScheduleLoading, courtScheduleSaving,
     courtOperatingHours, courtHoursLoading, facilityCourtEditPanelRef,
     blackouts, blackoutsLoading, editingBlackout, setEditingBlackout,
@@ -86,6 +87,8 @@ export function FacilityCourtsTab(props: Props) {
           onCancel={handleCancelCourtEdit}
           stripeOnboarded={stripeOnboarded}
           stripeStatusLoading={stripeStatusLoading}
+          isAddingNew
+          courtAddPromo={courtAddPromo}
         />
       </CardContent>
     </Card>

@@ -50,6 +50,8 @@ import {
   getCourtAddReturnUrl,
   handleCourtAddPaymentResponse,
 } from '../../utils/courtAddPayment';
+import { useCourtAddPromo } from './useCourtAddPromo';
+import { CourtAddPromoSection } from './CourtAddPromoSection';
 
 interface Court extends PaidCourtFormFields {
   id: string;
@@ -265,6 +267,8 @@ export function CourtManagement() {
   // --- Court Limit ---
   const activeCourts = courts.filter(c => c.status !== 'closed');
   const atSubscriptionCap = activeCourts.length >= MAX_COURTS_AT_LIST_PRICE;
+  const courtsToAddForPromo = bulkAddMode ? bulkAddForm.count : 1;
+  const courtAddPromo = useCourtAddPromo(activeCourts.length, courtsToAddForPromo);
 
   // --- Single Add/Edit ---
 
@@ -290,6 +294,7 @@ export function CourtManagement() {
     if (currentFacilityId) void loadStripeStatus(currentFacilityId);
     setIsAddingNew(true);
     setBulkAddMode(false);
+    courtAddPromo.resetPromo();
   };
 
   const handleEdit = (court: Court) => {
@@ -377,6 +382,7 @@ export function CourtManagement() {
           hasLights: editingCourt.hasLights,
           isWalkUp: editingCourt.isWalkUp,
           returnUrl: getCourtAddReturnUrl(),
+          promoCode: courtAddPromo.appliedPromoCode,
           ...paymentPayload,
         });
       } else {
@@ -420,6 +426,7 @@ export function CourtManagement() {
         toast.success(isAddingNew ? 'Court created successfully' : 'Court updated successfully');
         setEditingCourt(null);
         setIsAddingNew(false);
+        courtAddPromo.resetPromo();
         await loadCourts();
       } else {
         toast.error(response.error || response.message || 'Failed to save court');
@@ -436,6 +443,7 @@ export function CourtManagement() {
     setEditingCourt(null);
     setIsAddingNew(false);
     setBulkAddMode(false);
+    courtAddPromo.resetPromo();
   };
 
   const handleDelete = async (id: string) => {
@@ -467,6 +475,7 @@ export function CourtManagement() {
     setBulkAddMode(true);
     setEditingCourt(null);
     setIsAddingNew(false);
+    courtAddPromo.resetPromo();
     const maxNumber = courts.length > 0 ? Math.max(...courts.map(c => c.courtNumber)) : 0;
     setBulkAddForm(prev => ({ ...prev, startingNumber: maxNumber + 1 }));
   };
@@ -490,6 +499,7 @@ export function CourtManagement() {
         isIndoor: bulkAddForm.isIndoor,
         hasLights: bulkAddForm.hasLights,
         returnUrl: getCourtAddReturnUrl(),
+        promoCode: courtAddPromo.appliedPromoCode,
       });
 
       if (response.success) {
@@ -514,6 +524,7 @@ export function CourtManagement() {
 
         toast.success(`${bulkAddForm.count} courts created successfully`);
         setBulkAddMode(false);
+        courtAddPromo.resetPromo();
         await loadCourts();
       } else {
         toast.error(response.error || 'Failed to create courts');
@@ -836,6 +847,20 @@ export function CourtManagement() {
                     stripeStatusLoading={stripeStatusLoading}
                   />
                 )}
+                <CourtAddPromoSection
+                  courtsToAdd={1}
+                  baseAmountCents={courtAddPromo.baseAmountCents}
+                  finalAmountCents={courtAddPromo.finalAmountCents}
+                  paymentRequired={courtAddPromo.paymentRequired}
+                  perCourtLabel={courtAddPromo.perCourtLabel}
+                  promoCode={courtAddPromo.promoCode}
+                  setPromoCode={courtAddPromo.setPromoCode}
+                  promoValidation={courtAddPromo.promoValidation}
+                  setPromoValidation={courtAddPromo.setPromoValidation}
+                  isValidatingPromo={courtAddPromo.isValidatingPromo}
+                  onValidate={courtAddPromo.handleValidatePromo}
+                  onClear={courtAddPromo.handleClearPromo}
+                />
                 <div className="flex gap-2 mt-6">
                   <Button onClick={handleSave} disabled={saving}>
                     <Save className="h-4 w-4 mr-2" />
@@ -918,6 +943,20 @@ export function CourtManagement() {
                     <Label htmlFor="bulkLights">Has Lights</Label>
                   </div>
                 </div>
+                <CourtAddPromoSection
+                  courtsToAdd={bulkAddForm.count}
+                  baseAmountCents={courtAddPromo.baseAmountCents}
+                  finalAmountCents={courtAddPromo.finalAmountCents}
+                  paymentRequired={courtAddPromo.paymentRequired}
+                  perCourtLabel={courtAddPromo.perCourtLabel}
+                  promoCode={courtAddPromo.promoCode}
+                  setPromoCode={courtAddPromo.setPromoCode}
+                  promoValidation={courtAddPromo.promoValidation}
+                  setPromoValidation={courtAddPromo.setPromoValidation}
+                  isValidatingPromo={courtAddPromo.isValidatingPromo}
+                  onValidate={courtAddPromo.handleValidatePromo}
+                  onClear={courtAddPromo.handleClearPromo}
+                />
                 <p className="text-sm text-gray-500 mt-3">
                   This will create Court {bulkAddForm.startingNumber} through Court {bulkAddForm.startingNumber + bulkAddForm.count - 1}.
                 </p>

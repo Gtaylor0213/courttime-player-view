@@ -829,6 +829,7 @@ export const adminApi = {
     };
     returnUrl?: string;
     paymentSessionId?: string;
+    promoCode?: string;
   }) => {
     const res = await apiRequest(`/api/admin/courts/${facilityId}`, {
       method: 'POST',
@@ -847,6 +848,7 @@ export const adminApi = {
     isWalkUp?: boolean;
     returnUrl?: string;
     paymentSessionId?: string;
+    promoCode?: string;
   }) => {
     const res = await apiRequest(`/api/admin/courts/${facilityId}/bulk`, {
       method: 'POST',
@@ -1494,10 +1496,19 @@ export const householdsApi = {
 
 // Payments API
 export const paymentsApi = {
-  validatePromo: async (code: string, courtCount?: number) => {
+  validatePromo: async (
+    code: string,
+    options?: { courtCount?: number; baseAmountCents?: number } | number
+  ) => {
+    const resolved =
+      typeof options === 'number' ? { courtCount: options } : options;
     return apiRequest('/api/payments/validate-promo', {
       method: 'POST',
-      body: JSON.stringify({ code, courtCount }),
+      body: JSON.stringify({
+        code,
+        courtCount: resolved?.courtCount,
+        baseAmountCents: resolved?.baseAmountCents,
+      }),
     });
   },
 

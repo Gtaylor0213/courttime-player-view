@@ -52,10 +52,13 @@ export function subscriptionNeedsPayment(sub: {
   return false;
 }
 
-/**
- * Validate a promo code
- */
-export async function validatePromoCode(code: string, courtCount?: number): Promise<{
+export type ValidatePromoOptions = {
+  courtCount?: number;
+  baseAmountCents?: number;
+  context?: 'subscription' | 'court_add';
+};
+
+export type PromoValidationResult = {
   valid: boolean;
   promoCodeId?: string;
   discountType?: string;
@@ -63,7 +66,17 @@ export async function validatePromoCode(code: string, courtCount?: number): Prom
   finalAmountCents?: number;
   trialMonths?: number;
   message?: string;
-}> {
+};
+
+/**
+ * Validate a promo code
+ */
+export async function validatePromoCode(
+  code: string,
+  options?: number | ValidatePromoOptions
+): Promise<PromoValidationResult> {
+  const opts: ValidatePromoOptions =
+    typeof options === 'number' ? { courtCount: options } : (options ?? {});
   const result = await query(
     `SELECT id, code, discount_type, discount_value, max_uses, current_uses, is_active, valid_from, valid_until, trial_months
      FROM promo_codes
@@ -92,8 +105,13 @@ export async function validatePromoCode(code: string, courtCount?: number): Prom
     return { valid: false, message: 'This promo code has reached its usage limit' };
   }
 
-  // Calculate final amount based on per-court pricing
-  const baseAmount = courtCount ? getAmountForCourts(courtCount) : MAX_SUBSCRIPTION_CENTS;
+  // Calculate final amount based on per-court pricing or an explicit base amount
+  const baseAmount =
+    opts.baseAmountCents != null
+      ? opts.baseAmountCents
+      : opts.courtCount
+        ? getAmountForCourts(opts.courtCount)
+        : MAX_SUBSCRIPTION_CENTS;
   let finalAmountCents = baseAmount;
   if (promo.discount_type === 'full') {
     finalAmountCents = 0;
@@ -106,14 +124,23 @@ export async function validatePromoCode(code: string, courtCount?: number): Prom
   // Build message based on trial months or discount
   let message: string;
   const trialMonths = promo.trial_months ? Number(promo.trial_months) : undefined;
-  const renewalPrice = formatAnnualPricePerYear(baseAmount);
+  const context = opts.context ?? 'subscription';
 
-  if (trialMonths) {
-    message = `Promo code applied — ${trialMonths} month${trialMonths > 1 ? 's' : ''} free trial! Card required for annual renewal (${renewalPrice}).`;
-  } else if (finalAmountCents === 0) {
-    message = `Promo code applied — first year free! Card required for annual renewal (${renewalPrice}).`;
+  if (context === 'court_add') {
+    if (finalAmountCents === 0) {
+      message = 'Promo code applied — court add fee waived!';
+    } else {
+      message = `Promo code applied — total: $${(finalAmountCents / 100).toFixed(2)}`;
+    }
   } else {
-    message = `Promo code applied — total: $${(finalAmountCents / 100).toFixed(2)}`;
+    const renewalPrice = formatAnnualPricePerYear(baseAmount);
+    if (trialMonths) {
+      message = `Promo code applied — ${trialMonths} month${trialMonths > 1 ? 's' : ''} free trial! Card required for annual renewal (${renewalPrice}).`;
+    } else if (finalAmountCents === 0) {
+      message = `Promo code applied — first year free! Card required for annual renewal (${renewalPrice}).`;
+    } else {
+      message = `Promo code applied — total: $${(finalAmountCents / 100).toFixed(2)}`;
+    }
   }
 
   return {
@@ -523,12 +550,21 @@ export async function recordPayment(
     [params.status === 'active' ? 'paid' : params.status, facilityId]
   );
 
-  // Increment promo code usage if one was used
   if (params.promoCode) {
-    await client.query(
-      `UPDATE promo_codes SET current_uses = current_uses + 1 WHERE LOWER(TRIM(code)) = LOWER(TRIM($1))`,
-      [params.promoCode]
-    );
+    await incrementPromoCodeUsage(params.promoCode, client);
+  }
+}
+
+/** Increment promo code usage count */
+export async function incrementPromoCodeUsage(
+  code: string,
+  client?: PoolClient
+): Promise<void> {
+  const sql = `UPDATE promo_codes SET current_uses = current_uses + 1 WHERE LOWER(TRIM(code)) = LOWER(TRIM($1))`;
+  if (client) {
+    await client.query(sql, [code]);
+  } else {
+    await query(sql, [code]);
   }
 }
 

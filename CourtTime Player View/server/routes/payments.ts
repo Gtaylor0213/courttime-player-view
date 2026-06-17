@@ -38,15 +38,22 @@ const router = express.Router();
  */
 router.post('/validate-promo', async (req, res, next) => {
   try {
-    const { code, courtCount } = req.body;
+    const { code, courtCount, baseAmountCents } = req.body;
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ success: false, error: 'Promo code is required' });
     }
 
     const parsedCourtCount =
       courtCount != null && Number.isFinite(Number(courtCount)) ? Number(courtCount) : undefined;
+    const parsedBaseAmount =
+      baseAmountCents != null && Number.isFinite(Number(baseAmountCents)) ? Number(baseAmountCents) : undefined;
+    const context = parsedBaseAmount != null ? 'court_add' as const : 'subscription' as const;
 
-    const result = await validatePromoCode(code.trim(), parsedCourtCount);
+    const result = await validatePromoCode(code.trim(), {
+      courtCount: parsedCourtCount,
+      baseAmountCents: parsedBaseAmount,
+      context,
+    });
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);

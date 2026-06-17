@@ -43,6 +43,7 @@ import {
   getCourtAddReturnUrl,
   handleCourtAddPaymentResponse,
 } from '../../../utils/courtAddPayment';
+import { useCourtAddPromo } from '../useCourtAddPromo';
 import {
   type BookingRules,
   type Court,
@@ -117,6 +118,8 @@ const [facilityData, setFacilityData] = useState<FacilityData>({
 
 // Court management state
 const [courts, setCourts] = useState<Court[]>([]);
+const activeCourtCount = courts.filter((c) => c.status !== 'closed').length;
+const courtAddPromo = useCourtAddPromo(activeCourtCount, 1);
 const [courtsLoading, setCourtsLoading] = useState(false);
 const [editingCourt, setEditingCourt] = useState<Court | null>(null);
 const [isAddingNewCourt, setIsAddingNewCourt] = useState(false);
@@ -1175,6 +1178,7 @@ const handleAddNewCourt = () => {
   });
   void loadStripeStatus();
   setIsAddingNewCourt(true);
+  courtAddPromo.resetPromo();
 };
 
 const handleEditCourt = (court: Court) => {
@@ -1266,6 +1270,7 @@ const handleSaveCourt = async () => {
         canSplit: editingCourt.canSplit,
         splitConfig: editingCourt.splitConfig,
         returnUrl: getCourtAddReturnUrl(),
+        promoCode: courtAddPromo.appliedPromoCode,
         ...paymentPayload,
       });
     } else {
@@ -1313,6 +1318,7 @@ const handleSaveCourt = async () => {
       toast.success(isAddingNewCourt ? 'Court created successfully' : 'Court updated successfully');
       setEditingCourt(null);
       setIsAddingNewCourt(false);
+      courtAddPromo.resetPromo();
       await loadCourts();
     } else {
       toast.error(response.error || 'Failed to save court');
@@ -1328,6 +1334,7 @@ const handleSaveCourt = async () => {
 const handleCancelCourtEdit = () => {
   setEditingCourt(null);
   setIsAddingNewCourt(false);
+  courtAddPromo.resetPromo();
 };
 
 const handleDeleteCourt = async (id: string) => {
@@ -1977,6 +1984,7 @@ const renderTabFooterSaveBar = () =>
     setEditingCourt,
     isAddingNewCourt,
     courtSaving,
+    courtAddPromo,
     stripeOnboarded,
     stripeStatusLoading,
     configuringCourtId,

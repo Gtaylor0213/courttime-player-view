@@ -13,6 +13,8 @@ import {
   courtNumberInputDisplayValue,
 } from '../../../../shared/utils/courtNaming';
 import type { Court } from './facilityManagementTypes';
+import { CourtAddPromoSection } from '../CourtAddPromoSection';
+import type { useCourtAddPromo } from '../useCourtAddPromo';
 
 export function FacilityCourtFormBody({
   editingCourt,
@@ -23,6 +25,8 @@ export function FacilityCourtFormBody({
   onCancel,
   stripeOnboarded,
   stripeStatusLoading,
+  isAddingNew = false,
+  courtAddPromo,
 }: {
   editingCourt: Court;
   setEditingCourt: React.Dispatch<React.SetStateAction<Court | null>>;
@@ -32,6 +36,8 @@ export function FacilityCourtFormBody({
   onCancel: () => void;
   stripeOnboarded: boolean | null;
   stripeStatusLoading: boolean;
+  isAddingNew?: boolean;
+  courtAddPromo?: ReturnType<typeof useCourtAddPromo>;
 }) {
   const id = (suffix: string) => `${idPrefix}-${suffix}`;
   return (
@@ -241,6 +247,23 @@ export function FacilityCourtFormBody({
         stripeStatusLoading={stripeStatusLoading}
         paymentsTabHint="Member Payments in the sidebar"
       />
+
+      {isAddingNew && courtAddPromo && (
+        <CourtAddPromoSection
+          courtsToAdd={1}
+          baseAmountCents={courtAddPromo.baseAmountCents}
+          finalAmountCents={courtAddPromo.finalAmountCents}
+          paymentRequired={courtAddPromo.paymentRequired}
+          perCourtLabel={courtAddPromo.perCourtLabel}
+          promoCode={courtAddPromo.promoCode}
+          setPromoCode={courtAddPromo.setPromoCode}
+          promoValidation={courtAddPromo.promoValidation}
+          setPromoValidation={courtAddPromo.setPromoValidation}
+          isValidatingPromo={courtAddPromo.isValidatingPromo}
+          onValidate={courtAddPromo.handleValidatePromo}
+          onClear={courtAddPromo.handleClearPromo}
+        />
+      )}
 
       <div className="flex gap-2 mt-6">
         <Button onClick={onSave} disabled={courtSaving}>

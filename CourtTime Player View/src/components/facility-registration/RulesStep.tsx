@@ -3,14 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
-import { Switch } from '../ui/switch';
+import {
+  BookingRuleSwitch,
+  BookingRuleToggleInput,
+} from '../booking-rules/BookingRuleToggleInput';
 import {
   Info, ShieldCheck, Clock, Calendar, Sun, Users
 } from 'lucide-react';
 import {
   RulesConfig,
   RuleEntry,
-  RuleMeta,
   RULE_METADATA,
 } from './rule-defaults';
 
@@ -47,86 +49,6 @@ function InstructionCard({ icon: Icon, text }: { icon: React.ElementType; text: 
     <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3 mb-4">
       <Icon className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
       <p className="text-sm text-green-800">{text}</p>
-    </div>
-  );
-}
-
-function RuleCard({
-  meta,
-  entry,
-  onToggle,
-  onConfigChange,
-}: {
-  meta: RuleMeta;
-  entry: RuleEntry;
-  onToggle: (enabled: boolean) => void;
-  onConfigChange: (field: string, value: any) => void;
-}) {
-  return (
-    <div className="p-3 border rounded-lg space-y-2">
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-        <div className="flex-1 min-w-0 sm:mr-3">
-          <Label className="font-medium text-sm">{meta.name}</Label>
-          <p className="text-xs text-gray-500 mt-0.5">{meta.description}</p>
-        </div>
-        <Switch
-          checked={entry.enabled}
-          onCheckedChange={onToggle}
-          className="shrink-0 self-start sm:self-center"
-        />
-      </div>
-      {entry.enabled && meta.fields.length > 0 && (
-        <div className="flex flex-wrap gap-3 pt-1">
-          {meta.fields.map((field) => (
-            <div key={field.key} className="flex items-center gap-2">
-              <Label className="text-xs text-gray-600 whitespace-nowrap">{field.label}:</Label>
-              {field.type === 'time' ? (
-                <Input
-                  type="time"
-                  className="w-28 h-8 text-sm"
-                  value={entry.config[field.key] || ''}
-                  onChange={(e) => onConfigChange(field.key, e.target.value)}
-                />
-              ) : field.type === 'select' ? (
-                <select
-                  className="h-8 text-sm border rounded px-2"
-                  value={String(entry.config[field.key] ?? '')}
-                  onChange={(e) => onConfigChange(field.key, e.target.value === 'true')}
-                >
-                  {field.options?.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    className="w-20 h-8 text-sm"
-                    min={field.min}
-                    max={field.max}
-                    step={field.step || 1}
-                    value={field.key === 'max_minutes_per_week'
-                      ? (entry.config[field.key] || 0) / 60
-                      : entry.config[field.key] ?? ''
-                    }
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      if (field.key === 'max_minutes_per_week') {
-                        onConfigChange(field.key, val * 60);
-                      } else {
-                        onConfigChange(field.key, val);
-                      }
-                    }}
-                  />
-                  {field.suffix && (
-                    <span className="text-xs text-gray-500">{field.suffix}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -235,25 +157,15 @@ export function RulesStep({
               icon={Info}
               text={`${maxAccountsPerAddressMeta.description} This rule is separate from the address whitelist.`}
             />
-            <div className="flex items-center justify-between">
-              <Label>Enable</Label>
-              <Switch
+            <div className="space-y-2">
+              <Label className="text-sm text-gray-600">Max Accounts</Label>
+              <BookingRuleToggleInput
                 checked={!!rules['HH-001']?.enabled}
                 onCheckedChange={(enabled) => onRuleEntryChange('HH-001', { enabled })}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-gray-600 whitespace-nowrap">Max Accounts:</Label>
-              <Input
-                type="number"
-                min={1}
-                max={50}
-                className="w-24"
                 value={rules['HH-001']?.config?.max_members ?? ''}
-                onChange={(e) =>
-                  onRuleConfigFieldChange('HH-001', 'max_members', parseInt(e.target.value, 10) || '')
+                onChange={(value) =>
+                  onRuleConfigFieldChange('HH-001', 'max_members', parseInt(value, 10) || '')
                 }
-                disabled={!rules['HH-001']?.enabled}
               />
             </div>
           </CardContent>
@@ -274,12 +186,23 @@ export function RulesStep({
             text="Control how many days ahead members can reserve courts."
           />
           {daysInAdvanceMeta && (
-            <RuleCard
-              meta={daysInAdvanceMeta}
-              entry={rules['ACC-005'] || { enabled: false, config: {} }}
-              onToggle={(enabled) => onRuleEntryChange('ACC-005', { enabled })}
-              onConfigChange={(field, value) => onRuleConfigFieldChange('ACC-005', field, value)}
-            />
+            <div className="p-3 border rounded-lg space-y-2">
+              <div>
+                <Label className="font-medium text-sm">{daysInAdvanceMeta.name}</Label>
+                <p className="text-xs text-gray-500 mt-0.5">{daysInAdvanceMeta.description}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <BookingRuleToggleInput
+                  checked={!!rules['ACC-005']?.enabled}
+                  onCheckedChange={(enabled) => onRuleEntryChange('ACC-005', { enabled })}
+                  value={rules['ACC-005']?.config?.max_days_ahead ?? ''}
+                  onChange={(value) => onRuleConfigFieldChange('ACC-005', 'max_days_ahead', parseInt(value, 10) || '')}
+                  min={1}
+                  max={365}
+                />
+                <span className="text-xs text-gray-500">days</span>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -298,51 +221,41 @@ export function RulesStep({
             text="Set the maximum allowed reservation length."
           />
           <div className="p-3 border rounded-lg space-y-2">
-            <div className="flex justify-between items-center">
-              <div className="flex-1 mr-3">
-                <Label className="font-medium text-sm">Max Reservation Duration</Label>
-                <p className="text-xs text-gray-500 mt-0.5">Maximum booking duration for a single reservation.</p>
-              </div>
-              <Switch
+            <div>
+              <Label className="font-medium text-sm">Max Reservation Duration</Label>
+              <p className="text-xs text-gray-500 mt-0.5">Maximum booking duration for a single reservation.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <BookingRuleToggleInput
                 checked={!!rules['CRT-005']?.enabled}
                 onCheckedChange={(enabled) => onRuleEntryChange('CRT-005', { enabled })}
+                value={(() => {
+                  const rawMinutes = rules['CRT-005']?.config?.max_duration_minutes;
+                  const minutes = Number(rawMinutes);
+                  if (!Number.isFinite(minutes) || minutes <= 0) {
+                    return '';
+                  }
+                  const hours = minutes / 60;
+                  return String(hours);
+                })()}
+                onChange={(rawHours) => {
+                  if (rawHours === '') {
+                    onRuleConfigFieldChange('CRT-005', 'max_duration_minutes', '');
+                    return;
+                  }
+                  const hours = parseFloat(rawHours);
+                  onRuleConfigFieldChange(
+                    'CRT-005',
+                    'max_duration_minutes',
+                    Number.isFinite(hours) ? Math.round(hours * 60) : ''
+                  );
+                }}
+                min={0.25}
+                max={8}
+                step={0.25}
               />
+              <span className="text-xs text-gray-500">hours</span>
             </div>
-            {!!rules['CRT-005']?.enabled && (
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-gray-600 whitespace-nowrap">Max Duration:</Label>
-                <Input
-                  type="number"
-                  className="w-24 h-8 text-sm"
-                  min={0.25}
-                  max={8}
-                  step={0.25}
-                  value={(() => {
-                    const rawMinutes = rules['CRT-005']?.config?.max_duration_minutes;
-                    const minutes = Number(rawMinutes);
-                    if (!Number.isFinite(minutes) || minutes <= 0) {
-                      return '';
-                    }
-                    const hours = minutes / 60;
-                    return Number.isInteger(hours) ? String(hours) : String(hours);
-                  })()}
-                  onChange={(e) => {
-                    const rawHours = e.target.value;
-                    if (rawHours === '') {
-                      onRuleConfigFieldChange('CRT-005', 'max_duration_minutes', '');
-                      return;
-                    }
-                    const hours = parseFloat(rawHours);
-                    onRuleConfigFieldChange(
-                      'CRT-005',
-                      'max_duration_minutes',
-                      Number.isFinite(hours) ? Math.round(hours * 60) : ''
-                    );
-                  }}
-                />
-                <span className="text-xs text-gray-500">hours</span>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -363,67 +276,43 @@ export function RulesStep({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Courts Per Week (Individual)</Label>
-              <div className="flex gap-2 items-center">
-                <Switch
-                  checked={!!rules['ACC-002']?.enabled}
-                  onCheckedChange={(enabled) => onRuleEntryChange('ACC-002', { enabled })}
-                />
-                <Input
-                  type="number"
-                  min={1}
-                  value={rules['ACC-002']?.config?.max_per_week ?? ''}
-                  onChange={(e) => onRuleConfigFieldChange('ACC-002', 'max_per_week', parseInt(e.target.value, 10) || 1)}
-                  disabled={!rules['ACC-002']?.enabled}
-                />
-              </div>
+              <BookingRuleToggleInput
+                checked={!!rules['ACC-002']?.enabled}
+                onCheckedChange={(enabled) => onRuleEntryChange('ACC-002', { enabled })}
+                value={rules['ACC-002']?.config?.max_per_week ?? ''}
+                onChange={(value) => onRuleConfigFieldChange('ACC-002', 'max_per_week', parseInt(value, 10) || 1)}
+                min={1}
+              />
             </div>
             <div className="space-y-2">
               <Label>Courts Per Day (Individual)</Label>
-              <div className="flex gap-2 items-center">
-                <Switch
-                  checked={!!rules['ACC-002']?.config?.max_per_day_enabled}
-                  onCheckedChange={(enabled) => onRuleConfigFieldChange('ACC-002', 'max_per_day_enabled', enabled)}
-                />
-                <Input
-                  type="number"
-                  min={1}
-                  value={rules['ACC-002']?.config?.max_per_day ?? ''}
-                  onChange={(e) => onRuleConfigFieldChange('ACC-002', 'max_per_day', parseInt(e.target.value, 10) || 1)}
-                  disabled={!rules['ACC-002']?.config?.max_per_day_enabled}
-                />
-              </div>
+              <BookingRuleToggleInput
+                checked={!!rules['ACC-002']?.config?.max_per_day_enabled}
+                onCheckedChange={(enabled) => onRuleConfigFieldChange('ACC-002', 'max_per_day_enabled', enabled)}
+                value={rules['ACC-002']?.config?.max_per_day ?? ''}
+                onChange={(value) => onRuleConfigFieldChange('ACC-002', 'max_per_day', parseInt(value, 10) || 1)}
+                min={1}
+              />
             </div>
             <div className="space-y-2">
               <Label>Courts Per Week (Household)</Label>
-              <div className="flex gap-2 items-center">
-                <Switch
-                  checked={!!rules['HH-003']?.enabled}
-                  onCheckedChange={(enabled) => onRuleEntryChange('HH-003', { enabled })}
-                />
-                <Input
-                  type="number"
-                  min={1}
-                  value={rules['HH-003']?.config?.max_per_week_household ?? rules['HH-003']?.config?.max_prime_per_week_household ?? ''}
-                  onChange={(e) => onRuleConfigFieldChange('HH-003', 'max_per_week_household', parseInt(e.target.value, 10) || 1)}
-                  disabled={!rules['HH-003']?.enabled}
-                />
-              </div>
+              <BookingRuleToggleInput
+                checked={!!rules['HH-003']?.enabled}
+                onCheckedChange={(enabled) => onRuleEntryChange('HH-003', { enabled })}
+                value={rules['HH-003']?.config?.max_per_week_household ?? rules['HH-003']?.config?.max_prime_per_week_household ?? ''}
+                onChange={(value) => onRuleConfigFieldChange('HH-003', 'max_per_week_household', parseInt(value, 10) || 1)}
+                min={1}
+              />
             </div>
             <div className="space-y-2">
               <Label>Courts Per Day (Household)</Label>
-              <div className="flex gap-2 items-center">
-                <Switch
-                  checked={!!rules['HH-003']?.config?.max_per_day_household_enabled}
-                  onCheckedChange={(enabled) => onRuleConfigFieldChange('HH-003', 'max_per_day_household_enabled', enabled)}
-                />
-                <Input
-                  type="number"
-                  min={1}
-                  value={rules['HH-003']?.config?.max_per_day_household ?? ''}
-                  onChange={(e) => onRuleConfigFieldChange('HH-003', 'max_per_day_household', parseInt(e.target.value, 10) || 1)}
-                  disabled={!rules['HH-003']?.config?.max_per_day_household_enabled}
-                />
-              </div>
+              <BookingRuleToggleInput
+                checked={!!rules['HH-003']?.config?.max_per_day_household_enabled}
+                onCheckedChange={(enabled) => onRuleConfigFieldChange('HH-003', 'max_per_day_household_enabled', enabled)}
+                value={rules['HH-003']?.config?.max_per_day_household ?? ''}
+                onChange={(value) => onRuleConfigFieldChange('HH-003', 'max_per_day_household', parseInt(value, 10) || 1)}
+                min={1}
+              />
             </div>
           </div>
         </CardContent>
@@ -443,7 +332,7 @@ export function RulesStep({
             text="Define specific hours as peak time with separate booking limits. This is optional and can be configured later from the admin dashboard."
           />
           <div className="flex items-center gap-3">
-            <Switch
+            <BookingRuleSwitch
               checked={rulesConfig.hasPeakHours}
               onCheckedChange={(checked) => onRulesChange({ hasPeakHours: checked })}
             />
@@ -507,22 +396,16 @@ export function RulesStep({
 
                           <div className="space-y-2 pt-1">
                             <Label className="text-sm">Max Reservation Duration</Label>
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs">Enable</Label>
-                              <Switch
-                                checked={slot.rules.maxDurationUnlimited}
-                                onCheckedChange={(checked) => onUpdatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', checked)}
-                              />
-                            </div>
                             <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
+                              <BookingRuleToggleInput
+                                checked={!slot.rules.maxDurationUnlimited}
+                                onCheckedChange={(checked) =>
+                                  onUpdatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', !checked)
+                                }
+                                value={slot.rules.maxDurationHours}
+                                onChange={(value) => onUpdatePeakHourSlotRule(slot.id, 'maxDurationHours', value)}
                                 min="0.5"
                                 step="0.5"
-                                className="w-24 h-8"
-                                value={slot.rules.maxDurationHours}
-                                disabled={slot.rules.maxDurationUnlimited}
-                                onChange={(e) => onUpdatePeakHourSlotRule(slot.id, 'maxDurationHours', e.target.value)}
                               />
                               <span className="text-xs text-gray-500 whitespace-nowrap">hours</span>
                             </div>
@@ -532,71 +415,51 @@ export function RulesStep({
                             <Label className="text-sm md:col-span-2">User-Based Limits</Label>
                             <div className="space-y-1">
                               <Label className="text-xs">Courts Per Day (Individual)</Label>
-                              <div className="flex items-center gap-2">
-                                <Switch
-                                  checked={slot.rules.maxBookingsPerDayUnlimited}
-                                  onCheckedChange={(checked) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', checked)}
-                                />
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  className="w-24 h-8"
-                                  value={slot.rules.maxBookingsPerDay}
-                                  disabled={slot.rules.maxBookingsPerDayUnlimited}
-                                  onChange={(e) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', e.target.value)}
-                                />
-                              </div>
+                              <BookingRuleToggleInput
+                                checked={!slot.rules.maxBookingsPerDayUnlimited}
+                                onCheckedChange={(checked) =>
+                                  onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', !checked)
+                                }
+                                value={slot.rules.maxBookingsPerDay}
+                                onChange={(value) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', value)}
+                                min="1"
+                              />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">Courts Per Week (Individual)</Label>
-                              <div className="flex items-center gap-2">
-                                <Switch
-                                  checked={slot.rules.maxBookingsPerWeekUnlimited}
-                                  onCheckedChange={(checked) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', checked)}
-                                />
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  className="w-24 h-8"
-                                  value={slot.rules.maxBookingsPerWeek}
-                                  disabled={slot.rules.maxBookingsPerWeekUnlimited}
-                                  onChange={(e) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', e.target.value)}
-                                />
-                              </div>
+                              <BookingRuleToggleInput
+                                checked={!slot.rules.maxBookingsPerWeekUnlimited}
+                                onCheckedChange={(checked) =>
+                                  onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', !checked)
+                                }
+                                value={slot.rules.maxBookingsPerWeek}
+                                onChange={(value) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', value)}
+                                min="1"
+                              />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">Courts Per Week (Household)</Label>
-                              <div className="flex items-center gap-2">
-                                <Switch
-                                  checked={slot.rules.maxBookingsPerWeekHouseholdUnlimited}
-                                  onCheckedChange={(checked) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', checked)}
-                                />
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  className="w-24 h-8"
-                                  value={slot.rules.maxBookingsPerWeekHousehold}
-                                  disabled={slot.rules.maxBookingsPerWeekHouseholdUnlimited}
-                                  onChange={(e) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', e.target.value)}
-                                />
-                              </div>
+                              <BookingRuleToggleInput
+                                checked={!slot.rules.maxBookingsPerWeekHouseholdUnlimited}
+                                onCheckedChange={(checked) =>
+                                  onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', !checked)
+                                }
+                                value={slot.rules.maxBookingsPerWeekHousehold}
+                                onChange={(value) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', value)}
+                                min="1"
+                              />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">Courts Per Day (Household)</Label>
-                              <div className="flex items-center gap-2">
-                                <Switch
-                                  checked={slot.rules.maxBookingsPerDayHouseholdUnlimited}
-                                  onCheckedChange={(checked) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHouseholdUnlimited', checked)}
-                                />
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  className="w-24 h-8"
-                                  value={slot.rules.maxBookingsPerDayHousehold}
-                                  disabled={slot.rules.maxBookingsPerDayHouseholdUnlimited}
-                                  onChange={(e) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHousehold', e.target.value)}
-                                />
-                              </div>
+                              <BookingRuleToggleInput
+                                checked={!slot.rules.maxBookingsPerDayHouseholdUnlimited}
+                                onCheckedChange={(checked) =>
+                                  onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHouseholdUnlimited', !checked)
+                                }
+                                value={slot.rules.maxBookingsPerDayHousehold}
+                                onChange={(value) => onUpdatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHousehold', value)}
+                                min="1"
+                              />
                             </div>
                           </div>
                         </div>

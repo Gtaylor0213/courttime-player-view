@@ -11,7 +11,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { TabsContent } from '../../ui/tabs';
 import { Badge } from '../../ui/badge';
-import { Switch } from '../../ui/switch';
+import {
+  BookingRuleSwitch,
+  BookingRuleToggleInput,
+} from '../../booking-rules/BookingRuleToggleInput';
 import { toast } from 'sonner';
 import { RULE_METADATA, CATEGORIES } from '../../facility-registration/rule-defaults';
 import { getFacilityTypeSelectOptions } from '../../../../shared/constants/facilityTypes';
@@ -153,27 +156,16 @@ export function FacilityRulesTab(props: Props) {
             {' '}This rule is separate from the address whitelist.
           </p>
         </div>
-        <div className="flex items-center justify-between">
-          <Label>Enable</Label>
-          <Switch
-            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+        <div className="space-y-2">
+          <Label className="text-sm text-gray-600">Max Accounts</Label>
+          <BookingRuleToggleInput
             checked={facilityData.bookingRules.householdMaxMembersEnabled}
             onCheckedChange={(v: boolean) => handleBookingRulesChange('householdMaxMembersEnabled', v)}
+            value={facilityData.bookingRules.householdMaxMembers}
+            onChange={(value) => handleBookingRulesChange('householdMaxMembers', value)}
             disabled={!isEditing}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-sm text-gray-600 whitespace-nowrap">Max Accounts:</Label>
-          <Input
-            type="number"
             min="1"
             max="50"
-            className="w-24"
-            value={facilityData.bookingRules.householdMaxMembers}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              handleBookingRulesChange('householdMaxMembers', e.target.value)
-            }
-            disabled={!isEditing || !facilityData.bookingRules.householdMaxMembersEnabled}
           />
         </div>
       </CardContent>
@@ -194,16 +186,17 @@ export function FacilityRulesTab(props: Props) {
             Define how far in advance members are allowed to reserve a court.
           </p>
         </div>
-        <div className="flex items-center justify-between">
-          <Label>Enable</Label>
-          <Switch
-            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+        <div className="space-y-2">
+          <Label>Days in Advance</Label>
+          <BookingRuleToggleInput
             checked={facilityData.bookingRules.daysInAdvanceEnabled}
             onCheckedChange={(v: boolean) => handleBookingRulesChange('daysInAdvanceEnabled', v)}
+            value={facilityData.bookingRules.daysInAdvance}
+            onChange={(value) => handleBookingRulesChange('daysInAdvance', value)}
             disabled={!isEditing}
+            min="0"
           />
         </div>
-        <Input type="number" min="0" value={facilityData.bookingRules.daysInAdvance} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('daysInAdvance', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.daysInAdvanceEnabled} />
       </CardContent>
       {renderSectionSaveFooter('days in advance')}
     </Card>
@@ -222,40 +215,29 @@ export function FacilityRulesTab(props: Props) {
             Control the maximum length of a single reservation.
           </p>
         </div>
-        <div className="flex items-center justify-between">
-          <Label>Enable</Label>
-          <Switch
-            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-            checked={facilityData.bookingRules.maxReservationDurationEnabled}
-            onCheckedChange={(v: boolean) => handleBookingRulesChange('maxReservationDurationEnabled', v)}
-            disabled={!isEditing}
-          />
+        <div className="space-y-2">
+          <Label>Max Reservation Duration</Label>
+          <div className="flex items-center gap-2">
+            <BookingRuleToggleInput
+              checked={facilityData.bookingRules.maxReservationDurationEnabled}
+              onCheckedChange={(v: boolean) => handleBookingRulesChange('maxReservationDurationEnabled', v)}
+              value={String((Number(facilityData.bookingRules.maxReservationDurationMinutes) || 0) / 60)}
+              onChange={(value) => {
+                const n = parseFloat(value);
+                if (!Number.isFinite(n)) {
+                  handleBookingRulesChange('maxReservationDurationMinutes', '0');
+                  return;
+                }
+                const minutes = Math.round(n * 60);
+                handleBookingRulesChange('maxReservationDurationMinutes', String(minutes));
+              }}
+              disabled={!isEditing}
+              min="0.25"
+              step="0.25"
+            />
+            <span className="text-sm text-gray-500 whitespace-nowrap">hours</span>
+          </div>
         </div>
-        {(() => {
-          const totalMinutes = Number(facilityData.bookingRules.maxReservationDurationMinutes) || 0;
-          const displayValue = String(totalMinutes / 60);
-          return (
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min="0.25"
-                step="0.25"
-                value={displayValue}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  const n = parseFloat(e.target.value);
-                  if (!Number.isFinite(n)) {
-                    handleBookingRulesChange('maxReservationDurationMinutes', '0');
-                    return;
-                  }
-                  const minutes = Math.round(n * 60);
-                  handleBookingRulesChange('maxReservationDurationMinutes', String(minutes));
-                }}
-                disabled={!isEditing || !facilityData.bookingRules.maxReservationDurationEnabled}
-              />
-              <span className="text-sm text-gray-500 whitespace-nowrap">hours</span>
-            </div>
-          );
-        })()}
       </CardContent>
       {renderSectionSaveFooter('max reservation duration')}
     </Card>
@@ -270,51 +252,47 @@ export function FacilityRulesTab(props: Props) {
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Courts Per Week (Individual)</Label>
-          <div className="flex gap-2 items-center">
-            <Switch
-              className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-              checked={facilityData.bookingRules.courtsPerWeekUserEnabled}
-              onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekUserEnabled', v)}
-              disabled={!isEditing}
-            />
-            <Input type="number" min="1" value={facilityData.bookingRules.courtsPerWeekUser} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerWeekUser', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerWeekUserEnabled} />
-          </div>
+          <BookingRuleToggleInput
+            checked={facilityData.bookingRules.courtsPerWeekUserEnabled}
+            onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekUserEnabled', v)}
+            value={facilityData.bookingRules.courtsPerWeekUser}
+            onChange={(value) => handleBookingRulesChange('courtsPerWeekUser', value)}
+            disabled={!isEditing}
+            min="1"
+          />
         </div>
         <div className="space-y-2">
           <Label>Courts Per Day (Individual)</Label>
-          <div className="flex gap-2 items-center">
-            <Switch
-              className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-              checked={facilityData.bookingRules.courtsPerDayUserEnabled}
-              onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayUserEnabled', v)}
-              disabled={!isEditing}
-            />
-            <Input type="number" min="1" value={facilityData.bookingRules.courtsPerDayUser} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerDayUser', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerDayUserEnabled} />
-          </div>
+          <BookingRuleToggleInput
+            checked={facilityData.bookingRules.courtsPerDayUserEnabled}
+            onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayUserEnabled', v)}
+            value={facilityData.bookingRules.courtsPerDayUser}
+            onChange={(value) => handleBookingRulesChange('courtsPerDayUser', value)}
+            disabled={!isEditing}
+            min="1"
+          />
         </div>
         <div className="space-y-2">
           <Label>Courts Per Week (Household)</Label>
-          <div className="flex gap-2 items-center">
-            <Switch
-              className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-              checked={facilityData.bookingRules.courtsPerWeekHouseholdEnabled}
-              onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekHouseholdEnabled', v)}
-              disabled={!isEditing}
-            />
-            <Input type="number" min="1" value={facilityData.bookingRules.courtsPerWeekHousehold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerWeekHousehold', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerWeekHouseholdEnabled} />
-          </div>
+          <BookingRuleToggleInput
+            checked={facilityData.bookingRules.courtsPerWeekHouseholdEnabled}
+            onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekHouseholdEnabled', v)}
+            value={facilityData.bookingRules.courtsPerWeekHousehold}
+            onChange={(value) => handleBookingRulesChange('courtsPerWeekHousehold', value)}
+            disabled={!isEditing}
+            min="1"
+          />
         </div>
         <div className="space-y-2">
           <Label>Courts Per Day (Household)</Label>
-          <div className="flex gap-2 items-center">
-            <Switch
-              className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-              checked={facilityData.bookingRules.courtsPerDayHouseholdEnabled}
-              onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayHouseholdEnabled', v)}
-              disabled={!isEditing}
-            />
-            <Input type="number" min="1" value={facilityData.bookingRules.courtsPerDayHousehold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBookingRulesChange('courtsPerDayHousehold', e.target.value)} disabled={!isEditing || !facilityData.bookingRules.courtsPerDayHouseholdEnabled} />
-          </div>
+          <BookingRuleToggleInput
+            checked={facilityData.bookingRules.courtsPerDayHouseholdEnabled}
+            onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayHouseholdEnabled', v)}
+            value={facilityData.bookingRules.courtsPerDayHousehold}
+            onChange={(value) => handleBookingRulesChange('courtsPerDayHousehold', value)}
+            disabled={!isEditing}
+            min="1"
+          />
         </div>
       </CardContent>
       {renderSectionSaveFooter('user-based limits')}
@@ -328,8 +306,7 @@ export function FacilityRulesTab(props: Props) {
             <Calendar className="h-5 w-5" />
             Peak Hours Policy
           </span>
-          <Switch
-            className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+          <BookingRuleSwitch
             checked={facilityData.bookingRules.hasPeakHours}
             onCheckedChange={(checked: boolean) => handleBookingRulesChange('hasPeakHours', checked)}
             disabled={!isEditing}
@@ -404,28 +381,17 @@ export function FacilityRulesTab(props: Props) {
                         </div>
                         <div className="space-y-2 pt-1">
                           <Label className="text-sm">Max Reservation Duration</Label>
-                          <div className="flex items-center justify-between">
-                            <Label className="text-xs">Enable</Label>
-                            <Switch
-                              className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
+                          <div className="flex items-center gap-2">
+                            <BookingRuleToggleInput
                               checked={!slot.rules.maxDurationUnlimited}
                               onCheckedChange={(checked: boolean) =>
                                 updatePeakHourSlotRule(slot.id, 'maxDurationUnlimited', !checked)
                               }
+                              value={slot.rules.maxDurationHours}
+                              onChange={(value) => updatePeakHourSlotRule(slot.id, 'maxDurationHours', value)}
                               disabled={!isEditing}
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
                               min="0.5"
                               step="0.5"
-                              className="w-24 h-8"
-                              value={slot.rules.maxDurationUnlimited ? '' : slot.rules.maxDurationHours}
-                              disabled={!isEditing || slot.rules.maxDurationUnlimited}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                updatePeakHourSlotRule(slot.id, 'maxDurationHours', e.target.value)
-                              }
                             />
                             <span className="text-xs text-gray-500 whitespace-nowrap">hours</span>
                           </div>
@@ -434,95 +400,55 @@ export function FacilityRulesTab(props: Props) {
                           <Label className="text-sm md:col-span-2">User-Based Limits</Label>
                           <div className="space-y-1">
                             <Label className="text-xs">Courts Per Day (Individual)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-                                checked={!slot.rules.maxBookingsPerDayUnlimited}
-                                onCheckedChange={(checked: boolean) =>
-                                  updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', !checked)
-                                }
-                                disabled={!isEditing}
-                              />
-                              <Input
-                                type="number"
-                                min="1"
-                                className="w-24 h-8"
-                                value={slot.rules.maxBookingsPerDayUnlimited ? '' : slot.rules.maxBookingsPerDay}
-                                disabled={!isEditing || slot.rules.maxBookingsPerDayUnlimited}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  updatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', e.target.value)
-                                }
-                              />
-                            </div>
+                            <BookingRuleToggleInput
+                              checked={!slot.rules.maxBookingsPerDayUnlimited}
+                              onCheckedChange={(checked: boolean) =>
+                                updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayUnlimited', !checked)
+                              }
+                              value={slot.rules.maxBookingsPerDay}
+                              onChange={(value) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerDay', value)}
+                              disabled={!isEditing}
+                              min="1"
+                            />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Courts Per Week (Individual)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-                                checked={!slot.rules.maxBookingsPerWeekUnlimited}
-                                onCheckedChange={(checked: boolean) =>
-                                  updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', !checked)
-                                }
-                                disabled={!isEditing}
-                              />
-                              <Input
-                                type="number"
-                                min="1"
-                                className="w-24 h-8"
-                                value={slot.rules.maxBookingsPerWeekUnlimited ? '' : slot.rules.maxBookingsPerWeek}
-                                disabled={!isEditing || slot.rules.maxBookingsPerWeekUnlimited}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', e.target.value)
-                                }
-                              />
-                            </div>
+                            <BookingRuleToggleInput
+                              checked={!slot.rules.maxBookingsPerWeekUnlimited}
+                              onCheckedChange={(checked: boolean) =>
+                                updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekUnlimited', !checked)
+                              }
+                              value={slot.rules.maxBookingsPerWeek}
+                              onChange={(value) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeek', value)}
+                              disabled={!isEditing}
+                              min="1"
+                            />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Courts Per Week (Household)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-                                checked={!slot.rules.maxBookingsPerWeekHouseholdUnlimited}
-                                onCheckedChange={(checked: boolean) =>
-                                  updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', !checked)
-                                }
-                                disabled={!isEditing}
-                              />
-                              <Input
-                                type="number"
-                                min="1"
-                                className="w-24 h-8"
-                                value={slot.rules.maxBookingsPerWeekHouseholdUnlimited ? '' : slot.rules.maxBookingsPerWeekHousehold}
-                                disabled={!isEditing || slot.rules.maxBookingsPerWeekHouseholdUnlimited}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', e.target.value)
-                                }
-                              />
-                            </div>
+                            <BookingRuleToggleInput
+                              checked={!slot.rules.maxBookingsPerWeekHouseholdUnlimited}
+                              onCheckedChange={(checked: boolean) =>
+                                updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHouseholdUnlimited', !checked)
+                              }
+                              value={slot.rules.maxBookingsPerWeekHousehold}
+                              onChange={(value) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerWeekHousehold', value)}
+                              disabled={!isEditing}
+                              min="1"
+                            />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Courts Per Day (Household)</Label>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                className="data-[state=checked]:bg-emerald-600 data-[state=checked]:hover:bg-emerald-600/90"
-                                checked={!slot.rules.maxBookingsPerDayHouseholdUnlimited}
-                                onCheckedChange={(checked: boolean) =>
-                                  updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHouseholdUnlimited', !checked)
-                                }
-                                disabled={!isEditing}
-                              />
-                              <Input
-                                type="number"
-                                min="1"
-                                className="w-24 h-8"
-                                value={slot.rules.maxBookingsPerDayHouseholdUnlimited ? '' : slot.rules.maxBookingsPerDayHousehold}
-                                disabled={!isEditing || slot.rules.maxBookingsPerDayHouseholdUnlimited}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHousehold', e.target.value)
-                                }
-                              />
-                            </div>
+                            <BookingRuleToggleInput
+                              checked={!slot.rules.maxBookingsPerDayHouseholdUnlimited}
+                              onCheckedChange={(checked: boolean) =>
+                                updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHouseholdUnlimited', !checked)
+                              }
+                              value={slot.rules.maxBookingsPerDayHousehold}
+                              onChange={(value) => updatePeakHourSlotRule(slot.id, 'maxBookingsPerDayHousehold', value)}
+                              disabled={!isEditing}
+                              min="1"
+                            />
                           </div>
                         </div>
                       </div>

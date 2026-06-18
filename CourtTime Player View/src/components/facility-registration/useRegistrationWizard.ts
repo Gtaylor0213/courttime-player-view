@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { paymentsApi } from '../../api/client';
 import { mergeRegistrationFormData } from '../../../shared/utils/facilityRegistrationForm';
@@ -56,6 +56,10 @@ export function useRegistrationWizard({
 
   const preAuthenticated = !!user && !loggedInDuringRegistration;
   const totalSteps = preAuthenticated ? 6 : 7;
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [currentStep]);
 
   const persistRegistrationToSession = () => {
     const merged = mergeRegistrationFormData(formData);

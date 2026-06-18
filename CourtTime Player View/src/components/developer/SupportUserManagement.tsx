@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Mail, Key, User, Building2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Mail, Key, User, Building2, Pencil, Save } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Label } from '../ui/label';
-import { searchUsers, getUserProfile, sendPasswordResetEmail, setTemporaryPassword } from '../../api/supportClient';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { searchUsers, getUserProfile, sendPasswordResetEmail, setTemporaryPassword, updateUserAccount } from '../../api/supportClient';
 import { toast } from 'sonner';
 
 interface Props {
@@ -23,6 +24,9 @@ export function SupportUserManagement({ selectedUserId, onSelectUser }: Props) {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
   const [settingPassword, setSettingPassword] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(false);
+  const [accountForm, setAccountForm] = useState({ fullName: '', email: '', phone: '', userType: 'player' });
+  const [savingAccount, setSavingAccount] = useState(false);
 
   // Debounced search
   useEffect(() => {
@@ -42,7 +46,15 @@ export function SupportUserManagement({ selectedUserId, onSelectUser }: Props) {
     (async () => {
       setProfileLoading(true);
       const res = await getUserProfile(selectedUserId);
-      if (res.success) setProfile(res.data);
+      if (res.success) {
+        setProfile(res.data);
+        setAccountForm({
+          fullName: res.data.fullName || '',
+          email: res.data.email || '',
+          phone: res.data.phone || '',
+          userType: res.data.userType || 'player',
+        });
+      }
       setProfileLoading(false);
     })();
   }, [selectedUserId]);
@@ -68,9 +80,34 @@ export function SupportUserManagement({ selectedUserId, onSelectUser }: Props) {
     setSettingPassword(false);
   };
 
+  const handleSaveAccount = async () => {
+    if (!selectedUserId) return;
+    setSavingAccount(true);
+    const res = await updateUserAccount(selectedUserId, accountForm);
+    if (res.success) {
+      toast.success('Account updated');
+      setEditingAccount(false);
+      const refreshed = await getUserProfile(selectedUserId);
+      if (refreshed.success) setProfile(refreshed.data);
+    } else {
+      toast.error(res.error || 'Failed to update account');
+    }
+    setSavingAccount(false);
+  };
+
+  const generateTempPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+    let pwd = '';
+    for (let i = 0; i < 12; i++) pwd += chars[Math.floor(Math.random() * chars.length)];
+    setTempPassword(pwd);
+  };
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">User Management</h1>
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Account Management</h1>
+        <p className="text-sm text-gray-500 mt-1">Search users, edit accounts, reset passwords, and view memberships</p>
+      </div>
 
       {/* Search */}
       <div className="relative">
@@ -131,29 +168,70 @@ export function SupportUserManagement({ selectedUserId, onSelectUser }: Props) {
           {profile && !profileLoading && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">{profile.fullName}</CardTitle>
-                <p className="text-sm text-gray-500">{profile.email}</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">{profile.fullName}</CardTitle>
+                    <p className="text-sm text-gray-500">{profile.email}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setEditingAccount(!editingAccount)}>
+                    {editingAccount ? 'Cancel' : <><Pencil className="h-4 w-4 mr-1" /> Edit</>}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Contact info */}
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-gray-500 text-xs">Phone</p>
-                    <p>{profile.phone || '—'}</p>
+                {editingAccount ? (
+                  <div className="space-y-3 border rounded-lg p-3 bg-gray-50">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Full Name</Label>
+                      <Input value={accountForm.fullName} onChange={(e) => setAccountForm((p) => ({ ...p, fullName: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Email</Label>
+                      <Input type="email" value={accountForm.email} onChange={(e) => setAccountForm((p) => ({ ...p, email: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Phone</Label>
+                      <Input value={accountForm.phone} onChange={(e) => setAccountForm((p) => ({ ...p, phone: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">User Type</Label>
+                      <Select value={accountForm.userType} onValueChange={(v) => setAccountForm((p) => ({ ...p, userType: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="player">Player</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={handleSaveAccount} disabled={savingAccount} size="sm">
+                      <Save className="h-4 w-4 mr-1" />
+                      {savingAccount ? 'Saving...' : 'Save Account'}
+                    </Button>
                   </div>
-                  <div>
-                    <p className="text-gray-500 text-xs">Type</p>
-                    <p className="capitalize">{profile.userType}</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-500 text-xs">Phone</p>
+                      <p>{profile.phone || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">Type</p>
+                      <p className="capitalize">{profile.userType}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-gray-500 text-xs">Address</p>
+                      <p>{[profile.streetAddress, profile.city, profile.state, profile.zipCode].filter(Boolean).join(', ') || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">Account Created</p>
+                      <p>{new Date(profile.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">User ID</p>
+                      <p className="font-mono text-xs truncate">{profile.id}</p>
+                    </div>
                   </div>
-                  <div className="col-span-2">
-                    <p className="text-gray-500 text-xs">Address</p>
-                    <p>{[profile.streetAddress, profile.city, profile.state, profile.zipCode].filter(Boolean).join(', ') || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500 text-xs">Account Created</p>
-                    <p>{new Date(profile.createdAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
+                )}
 
                 {/* Memberships */}
                 {profile.memberships.length > 0 && (
@@ -178,15 +256,14 @@ export function SupportUserManagement({ selectedUserId, onSelectUser }: Props) {
                   </div>
                 )}
 
-                {/* Password actions */}
                 <div className="border-t pt-4 space-y-2">
                   <p className="text-sm font-medium">Password Management</p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={handleSendResetEmail}>
                       <Mail className="h-4 w-4 mr-2" />
                       Send Reset Email
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setShowPasswordDialog(true)}>
+                    <Button variant="outline" size="sm" onClick={() => { setShowPasswordDialog(true); generateTempPassword(); }}>
                       <Key className="h-4 w-4 mr-2" />
                       Set Temporary Password
                     </Button>
@@ -210,12 +287,16 @@ export function SupportUserManagement({ selectedUserId, onSelectUser }: Props) {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>New Password</Label>
-              <Input
-                type="text"
-                placeholder="Minimum 8 characters"
-                value={tempPassword}
-                onChange={(e) => setTempPassword(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="Minimum 8 characters"
+                  value={tempPassword}
+                  onChange={(e) => setTempPassword(e.target.value)}
+                  className="font-mono"
+                />
+                <Button type="button" variant="outline" onClick={generateTempPassword}>Generate</Button>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>Cancel</Button>

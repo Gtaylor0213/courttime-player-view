@@ -6,9 +6,10 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Search, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, Trash2, AlertTriangle } from 'lucide-react';
 import { Switch } from '../ui/switch';
-import { getFacilities, getFacility, updateFacility, getFacilityRules, updateFacilityRule } from '../../api/supportClient';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { getFacilities, getFacility, updateFacility, getFacilityRules, updateFacilityRule, getFacilityDeletePreview, deleteFacility } from '../../api/supportClient';
 import { toast } from 'sonner';
 
 interface Props {
@@ -27,6 +28,15 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
   const [rulesLoading, setRulesLoading] = useState(false);
   const [expandedRule, setExpandedRule] = useState<string | null>(null);
   const [ruleSaving, setRuleSaving] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePreview, setDeletePreview] = useState<any>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const reloadFacilities = async () => {
+    const res = await getFacilities();
+    if (res.success) setFacilities(res.data);
+  };
 
   useEffect(() => {
     (async () => {
@@ -35,6 +45,36 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
       setLoading(false);
     })();
   }, []);
+
+  const openDeleteDialog = async () => {
+    if (!selectedFacilityId) return;
+    setDeleteConfirmName('');
+    setDeleteDialogOpen(true);
+    const res = await getFacilityDeletePreview(selectedFacilityId);
+    if (res.success) setDeletePreview(res.data);
+    else setDeletePreview(null);
+  };
+
+  const handleDeleteFacility = async () => {
+    if (!selectedFacilityId || !deletePreview) return;
+    setDeleting(true);
+    const res = await deleteFacility(selectedFacilityId);
+    if (res.success) {
+      toast.success(`"${res.data.facilityName}" has been permanently deleted`);
+      setDeleteDialogOpen(false);
+      onSelectFacility(null);
+      setFacility(null);
+      setDeletePreview(null);
+      await reloadFacilities();
+    } else {
+      toast.error(res.error || 'Failed to delete facility');
+    }
+    setDeleting(false);
+  };
+
+  const canConfirmDelete =
+    deletePreview &&
+    deleteConfirmName.trim().toLowerCase() === deletePreview.facilityName.trim().toLowerCase();
 
   useEffect(() => {
     if (!selectedFacilityId) { setFacility(null); return; }
@@ -298,6 +338,25 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
                 </div>
               </CardContent>
             </Card>
+
+            <Card className="border-red-200">
+              <CardHeader>
+                <CardTitle className="text-base text-red-700 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Danger Zone
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-gray-600">
+                  Permanently delete this facility and all associated data — members, courts, bookings,
+                  subscriptions, and payment history. This cannot be undone.
+                </p>
+                <Button variant="destructive" size="sm" onClick={openDeleteDialog}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Facility
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="contacts">
@@ -420,6 +479,58 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
           </TabsContent>
         </Tabs>
       )}
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-700">Delete Facility</DialogTitle>
+            <DialogDescription>
+              This action is permanent and cannot be reversed.
+            </DialogDescription>
+          </DialogHeader>
+          {deletePreview ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm space-y-1">
+                <p className="font-semibold text-red-800">{deletePreview.facilityName}</p>
+                <p className="text-red-700 font-mono text-xs">{deletePreview.facilityId}</p>
+                <p className="text-red-600 pt-1">
+                  Will remove {deletePreview.memberCount} member{deletePreview.memberCount !== 1 ? 's' : ''},{' '}
+                  {deletePreview.courtCount} court{deletePreview.courtCount !== 1 ? 's' : ''},{' '}
+                  and {deletePreview.bookingCount} booking{deletePreview.bookingCount !== 1 ? 's' : ''}.
+                </p>
+                {deletePreview.hasStripeSubscription && (
+                  <p className="text-amber-700 text-xs pt-1">
+                    Note: This facility has an active Stripe subscription record. Cancel it in Stripe separately if needed.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Type <span className="font-semibold">{deletePreview.facilityName}</span> to confirm</Label>
+                <Input
+                  value={deleteConfirmName}
+                  onChange={(e) => setDeleteConfirmName(e.target.value)}
+                  placeholder={deletePreview.facilityName}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteFacility}
+                  disabled={!canConfirmDelete || deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Delete Permanently'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-center py-6">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

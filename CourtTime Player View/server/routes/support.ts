@@ -15,6 +15,16 @@ import {
   getFacilityCourts,
   updateCourt,
   updateFacility,
+  getFacilityDeletePreview,
+  deleteFacility,
+  getAllSubscriptions,
+  updateSubscription,
+  getSubscriptionPayments,
+  getPromoCodes,
+  createPromoCode,
+  updatePromoCode,
+  globalSearch,
+  updateUserAccount,
 } from '../../src/services/supportService';
 import { requestPasswordReset } from '../../src/services/passwordResetService';
 import { query } from '../../src/database/connection';
@@ -142,6 +152,124 @@ router.post('/users/:userId/set-temporary-password', async (req, res) => {
   }
 });
 
+router.patch('/users/:userId', async (req, res) => {
+  try {
+    const { email, fullName, phone, userType } = req.body;
+    const updated = await updateUserAccount(req.params.userId, {
+      email,
+      fullName,
+      phone,
+      userType,
+    });
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    res.json({ success: true, data: updated });
+  } catch (error: any) {
+    console.error('[Support] User update error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Global Search ──────────────────────────────────────────
+
+router.get('/search', async (req, res) => {
+  try {
+    const q = (req.query.q as string) || '';
+    const results = await globalSearch(q);
+    res.json({ success: true, data: results });
+  } catch (error: any) {
+    console.error('[Support] Search error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Subscriptions ──────────────────────────────────────────
+
+router.get('/subscriptions', async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    const subscriptions = await getAllSubscriptions({
+      status: status as string | undefined,
+      search: search as string | undefined,
+    });
+    res.json({ success: true, data: subscriptions });
+  } catch (error: any) {
+    console.error('[Support] Subscriptions list error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/subscriptions/:facilityId', async (req, res) => {
+  try {
+    const updated = await updateSubscription(req.params.facilityId, req.body);
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Subscription not found' });
+    }
+    res.json({ success: true, data: updated });
+  } catch (error: any) {
+    console.error('[Support] Subscription update error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/subscriptions/:facilityId/payments', async (req, res) => {
+  try {
+    const payments = await getSubscriptionPayments(req.params.facilityId);
+    res.json({ success: true, data: payments });
+  } catch (error: any) {
+    console.error('[Support] Subscription payments error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Promo Codes ────────────────────────────────────────────
+
+router.get('/promo-codes', async (_req, res) => {
+  try {
+    const codes = await getPromoCodes();
+    res.json({ success: true, data: codes });
+  } catch (error: any) {
+    console.error('[Support] Promo codes error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/promo-codes', async (req, res) => {
+  try {
+    const { code, description, discountType, discountValue, trialMonths, maxUses, isInternal } = req.body;
+    if (!code?.trim()) {
+      return res.status(400).json({ success: false, error: 'Code is required' });
+    }
+    const created = await createPromoCode({
+      code,
+      description,
+      discountType,
+      discountValue,
+      trialMonths,
+      maxUses,
+      isInternal,
+    });
+    res.json({ success: true, data: created });
+  } catch (error: any) {
+    console.error('[Support] Promo code create error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/promo-codes/:id', async (req, res) => {
+  try {
+    const updated = await updatePromoCode(req.params.id, req.body);
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Promo code not found' });
+    }
+    res.json({ success: true, data: updated });
+  } catch (error: any) {
+    console.error('[Support] Promo code update error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ── Facilities ─────────────────────────────────────────────
 
 router.get('/facilities', async (_req, res) => {
@@ -176,6 +304,32 @@ router.patch('/facilities/:id', async (req, res) => {
     res.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[Support] Facility update error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/facilities/:id/delete-preview', async (req, res) => {
+  try {
+    const preview = await getFacilityDeletePreview(req.params.id);
+    if (!preview) {
+      return res.status(404).json({ success: false, error: 'Facility not found' });
+    }
+    res.json({ success: true, data: preview });
+  } catch (error: any) {
+    console.error('[Support] Facility delete preview error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/facilities/:id', async (req, res) => {
+  try {
+    const deleted = await deleteFacility(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Facility not found' });
+    }
+    res.json({ success: true, data: deleted, message: `Facility "${deleted.facilityName}" deleted` });
+  } catch (error: any) {
+    console.error('[Support] Facility delete error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

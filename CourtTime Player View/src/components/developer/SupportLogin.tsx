@@ -38,9 +38,9 @@ export function SupportLogin({ onAuthenticated }: SupportLoginProps) {
               <Shield className="h-8 w-8 text-indigo-600" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Support Manager Console</CardTitle>
+          <CardTitle className="text-2xl">Business Command Center</CardTitle>
           <CardDescription>
-            Enter your support password to access the management interface.
+            Sign in to manage accounts, subscriptions, facilities, and everything CourtTime.
           </CardDescription>
         </CardHeader>
         <CardContent>

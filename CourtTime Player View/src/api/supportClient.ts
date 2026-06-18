@@ -98,6 +98,28 @@ export async function setTemporaryPassword(userId: string, password: string) {
   }
 }
 
+export async function updateUserAccount(
+  userId: string,
+  data: { email?: string; fullName?: string; phone?: string; userType?: string }
+) {
+  try {
+    return await supportFetch(`/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  } catch {
+    return { success: false, error: 'Failed to update user' };
+  }
+}
+
+export async function globalSearch(q: string) {
+  try {
+    return await supportFetch(`/search?q=${encodeURIComponent(q)}`);
+  } catch {
+    return { success: false, error: 'Failed to search' };
+  }
+}
+
 // ── Facilities ─────────────────────────────────────────────
 
 export async function getFacilities() {
@@ -124,6 +146,22 @@ export async function updateFacility(id: string, data: Record<string, any>) {
     });
   } catch {
     return { success: false, error: 'Failed to update facility' };
+  }
+}
+
+export async function getFacilityDeletePreview(id: string) {
+  try {
+    return await supportFetch(`/facilities/${id}/delete-preview`);
+  } catch {
+    return { success: false, error: 'Failed to load delete preview' };
+  }
+}
+
+export async function deleteFacility(id: string) {
+  try {
+    return await supportFetch(`/facilities/${id}`, { method: 'DELETE' });
+  } catch {
+    return { success: false, error: 'Failed to delete facility' };
   }
 }
 
@@ -242,5 +280,69 @@ export async function getFacilityViolations(facilityId: string) {
     return await supportFetch(`/facilities/${facilityId}/violations`);
   } catch {
     return { success: false, error: 'Failed to fetch violations' };
+  }
+}
+
+// ── Subscriptions ──────────────────────────────────────────
+
+export async function getSubscriptions(filters?: { status?: string; search?: string }) {
+  try {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.search) params.append('search', filters.search);
+    return await supportFetch(`/subscriptions?${params}`);
+  } catch {
+    return { success: false, error: 'Failed to fetch subscriptions' };
+  }
+}
+
+export async function updateSubscription(facilityId: string, data: Record<string, any>) {
+  try {
+    return await supportFetch(`/subscriptions/${facilityId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  } catch {
+    return { success: false, error: 'Failed to update subscription' };
+  }
+}
+
+export async function getSubscriptionPayments(facilityId: string) {
+  try {
+    return await supportFetch(`/subscriptions/${facilityId}/payments`);
+  } catch {
+    return { success: false, error: 'Failed to fetch payments' };
+  }
+}
+
+// ── Promo Codes ────────────────────────────────────────────
+
+export async function getPromoCodes() {
+  try {
+    return await supportFetch('/promo-codes');
+  } catch {
+    return { success: false, error: 'Failed to fetch promo codes' };
+  }
+}
+
+export async function createPromoCode(data: Record<string, any>) {
+  try {
+    return await supportFetch('/promo-codes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  } catch {
+    return { success: false, error: 'Failed to create promo code' };
+  }
+}
+
+export async function updatePromoCode(id: string, data: Record<string, any>) {
+  try {
+    return await supportFetch(`/promo-codes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  } catch {
+    return { success: false, error: 'Failed to update promo code' };
   }
 }

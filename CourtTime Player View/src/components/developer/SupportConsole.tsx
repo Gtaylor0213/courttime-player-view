@@ -8,6 +8,8 @@ import { SupportFacilityManagement } from './SupportFacilityManagement';
 import { SupportMemberManagement } from './SupportMemberManagement';
 import { SupportBookingManagement } from './SupportBookingManagement';
 import { SupportCourtManagement } from './SupportCourtManagement';
+import { SupportSubscriptionManagement } from './SupportSubscriptionManagement';
+import { SupportPromoCodes } from './SupportPromoCodes';
 
 export type SupportView =
   | 'dashboard'
@@ -15,7 +17,9 @@ export type SupportView =
   | 'facilities'
   | 'members'
   | 'bookings'
-  | 'courts';
+  | 'courts'
+  | 'subscriptions'
+  | 'promos';
 
 export function SupportConsole() {
   const [authenticated, setAuthenticated] = useState(isSupportAuthenticated());
@@ -78,6 +82,15 @@ export function SupportConsole() {
             onSelectFacility={(id) => setSelectedFacilityId(id)}
           />
         );
+      case 'subscriptions':
+        return (
+          <SupportSubscriptionManagement
+            selectedFacilityId={selectedFacilityId}
+            onSelectFacility={(id) => setSelectedFacilityId(id)}
+          />
+        );
+      case 'promos':
+        return <SupportPromoCodes />;
       default:
         return <SupportDashboard onNavigate={navigateTo} />;
     }

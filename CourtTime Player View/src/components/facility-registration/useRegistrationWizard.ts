@@ -61,6 +61,12 @@ export function useRegistrationWizard({
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [currentStep]);
 
+  useEffect(() => {
+    if (currentStep > totalSteps) {
+      setCurrentStep(totalSteps);
+    }
+  }, [totalSteps, currentStep]);
+
   const persistRegistrationToSession = () => {
     const merged = mergeRegistrationFormData(formData);
     const { facilityImage: _fi, addressWhitelistFile: _af, facilityImagePreview: _fp, ...serializable } = merged;
@@ -97,7 +103,8 @@ export function useRegistrationWizard({
     }
 
     if (savedStep) {
-      setCurrentStep(parseInt(savedStep, 10));
+      const restoredStep = parseInt(savedStep, 10);
+      setCurrentStep(Math.min(restoredStep, totalSteps));
     }
     if (savedPromo) {
       setPromoCode(savedPromo);
@@ -179,7 +186,7 @@ export function useRegistrationWizard({
 
   const goToStep = (step: number) => {
     if (step >= 1 && step <= totalSteps) {
-      setErrors({});
+      if (step > currentStep) setErrors({});
       setCurrentStep(step);
     }
   };

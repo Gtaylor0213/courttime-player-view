@@ -20,9 +20,10 @@ export function getStepErrors(
   options: {
     preAuthenticated: boolean;
     step1Mode: Step1Mode;
+    existingUserId?: string;
   }
 ): Record<string, string> {
-  const { preAuthenticated, step1Mode } = options;
+  const { preAuthenticated, step1Mode, existingUserId } = options;
   const stepErrors: Record<string, string> = {};
 
   if (!preAuthenticated && step === 1) {
@@ -33,6 +34,10 @@ export function getStepErrors(
 
     if (effectiveStep1Mode === 'choose' || effectiveStep1Mode === 'login') {
       stepErrors.step1Mode = 'Please create an account or log in to continue';
+    } else if (effectiveStep1Mode === 'loggedIn') {
+      if (!existingUserId && !dataSource.adminEmail.trim()) {
+        stepErrors.step1Mode = 'Your login session is missing. Please log in again to continue';
+      }
     } else if (effectiveStep1Mode === 'create') {
       if (!dataSource.adminFirstName.trim()) stepErrors.adminFirstName = 'First name is required';
       if (!dataSource.adminLastName.trim()) stepErrors.adminLastName = 'Last name is required';
@@ -138,7 +143,7 @@ export function getStepErrors(
 export function stepHasErrors(
   step: number,
   formData: RegistrationFormData,
-  options: { preAuthenticated: boolean; step1Mode: Step1Mode }
+  options: { preAuthenticated: boolean; step1Mode: Step1Mode; existingUserId?: string }
 ): boolean {
   return Object.keys(getStepErrors(step, formData, options)).length > 0;
 }
@@ -146,7 +151,7 @@ export function stepHasErrors(
 export function validateAllSteps(
   dataSource: RegistrationFormData,
   totalSteps: number,
-  options: { preAuthenticated: boolean; step1Mode: Step1Mode }
+  options: { preAuthenticated: boolean; step1Mode: Step1Mode; existingUserId?: string }
 ): {
   isValid: boolean;
   errors: Record<string, string>;

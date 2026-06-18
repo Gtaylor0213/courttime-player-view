@@ -9,7 +9,7 @@ import {
   FacilityRegistrationData
 } from '../../src/services/facilityService';
 import { getCurrentTermsVersion } from '../../src/services/termsService';
-import { generateToken } from '../middleware/auth';
+import { generateToken, optionalAuth } from '../middleware/auth';
 import { verifyCheckoutSession, validatePromoCode } from '../../src/services/paymentService';
 import { getAmountForCourts } from '../../src/services/subscriptionPricing';
 
@@ -137,7 +137,7 @@ router.get('/:id/terms', async (req, res, next) => {
  * POST /api/facilities/register
  * Register a new facility with facility administrator
  */
-router.post('/register', async (req, res, next) => {
+router.post('/register', optionalAuth, async (req, res, next) => {
   try {
     const {
       // Facility Administrator Account (if creating new user)
@@ -262,6 +262,16 @@ router.post('/register', async (req, res, next) => {
       });
     }
 
+    // If an existing user ID is provided, the caller must be authenticated as that user.
+    // Accepting an arbitrary existingUserId from the body without verification would let
+    // anyone claim any account as their facility admin.
+    if (existingUserId && req.user?.userId !== existingUserId) {
+      return res.status(403).json({
+        success: false,
+        error: 'You must be logged in as the specified account to register a facility under it'
+      });
+    }
+
     // Prepare registration data
     const registrationData: FacilityRegistrationData = {
       adminEmail,
@@ -295,9 +305,9 @@ router.post('/register', async (req, res, next) => {
       termsAttachments: termsAndConditions?.trim() ? termsAttachments || [] : [],
       requiredReviewSeconds: termsAndConditions?.trim() ? normalizedRequiredReviewSeconds : 0,
       restrictionType: restrictionType || 'account',
-      maxBookingsPerWeek: parseInt(maxBookingsPerWeek) || 3,
-      maxBookingDurationHours: parseFloat(maxBookingDurationHours) || 2,
-      advanceBookingDays: parseInt(advanceBookingDays) || 14,
+      maxBookingsPerWeek: (() => { const v = parseInt(maxBookingsPerWeek); return Number.isFinite(v) ? v : 3; })(),
+      maxBookingDurationHours: (() => { const v = parseFloat(maxBookingDurationHours); return Number.isFinite(v) ? v : 2; })(),
+      advanceBookingDays: (() => { const v = parseInt(advanceBookingDays); return Number.isFinite(v) ? v : 14; })(),
       restrictionsApplyToAdmins: false,
       adminRestrictions: undefined,
       peakHoursPolicy: peakHoursPolicy
@@ -312,20 +322,26 @@ router.post('/register', async (req, res, next) => {
             applyToAdmins: false,
           }
         : undefined,
-      courts: courts.map((court: any) => ({
-        name: court.name,
-        courtNumber: parseInt(court.courtNumber),
-        surfaceType: court.surfaceType,
-        courtType: court.courtType,
-        isIndoor: court.isIndoor || false,
-        hasLights: court.hasLights || false,
-        isWalkUp: court.isWalkUp || false,
-        requirePayment: Boolean(court.requirePayment),
-        bookingAmountCents: court.bookingAmountCents != null ? parseInt(court.bookingAmountCents) : undefined,
-        guestFeeCents: court.guestFeeCents != null ? parseInt(court.guestFeeCents) : undefined,
-        canSplit: court.canSplit || false,
-        splitConfig: court.splitConfig
-      })),
+      courts: courts.map((court: any) => {
+        const courtNumber = parseInt(court.courtNumber);
+        if (!Number.isFinite(courtNumber) || courtNumber < 1) {
+          throw Object.assign(new Error(`Court "${court.name || '(unnamed)'}" has an invalid court number`), { status: 400 });
+        }
+        return {
+          name: court.name,
+          courtNumber,
+          surfaceType: court.surfaceType,
+          courtType: court.courtType,
+          isIndoor: court.isIndoor || false,
+          hasLights: court.hasLights || false,
+          isWalkUp: court.isWalkUp || false,
+          requirePayment: Boolean(court.requirePayment),
+          bookingAmountCents: court.bookingAmountCents != null ? parseInt(court.bookingAmountCents) : undefined,
+          guestFeeCents: court.guestFeeCents != null ? parseInt(court.guestFeeCents) : undefined,
+          canSplit: court.canSplit || false,
+          splitConfig: court.splitConfig,
+        };
+      }),
       ruleConfigs: Array.isArray(ruleConfigs) ? ruleConfigs : undefined,
       adminInvites: adminInvites?.map((invite: any) => invite.email || invite).filter(Boolean),
       hoaAddresses: hoaAddresses || undefined,
@@ -406,7 +422,10 @@ router.post('/register', async (req, res, next) => {
   } catch (error: any) {
     console.error('Facility registration error:', error);
 
-    // Handle specific errors
+    if (error.status === 400) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+
     if (error.message?.includes('already exists')) {
       return res.status(409).json({
         success: false,

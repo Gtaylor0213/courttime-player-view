@@ -96,12 +96,12 @@ export function buildRegistrationBookingRules(rulesConfig: RulesConfig) {
     hasWeekendPolicy: rulesConfig.hasWeekendPolicy,
     weekendPolicyApplyToAdmins: false,
     weekendPolicy: {
-      maxBookingsPerWeekend: '',
-      maxBookingsUnlimited: true,
-      maxDurationHours: '',
-      maxDurationUnlimited: true,
-      advanceBookingDays: '',
-      advanceBookingUnlimited: true,
+      maxBookingsPerWeekend: rulesConfig.weekendPolicy?.maxBookingsPerWeekend ?? '',
+      maxBookingsUnlimited: rulesConfig.weekendPolicy?.maxBookingsUnlimited ?? true,
+      maxDurationHours: rulesConfig.weekendPolicy?.maxDurationHours ?? '',
+      maxDurationUnlimited: rulesConfig.weekendPolicy?.maxDurationUnlimited ?? true,
+      advanceBookingDays: rulesConfig.weekendPolicy?.advanceBookingDays ?? '',
+      advanceBookingUnlimited: rulesConfig.weekendPolicy?.advanceBookingUnlimited ?? true,
     },
   };
 }

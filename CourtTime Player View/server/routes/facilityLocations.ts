@@ -1,7 +1,16 @@
 import express from 'express';
 import { query } from '../../src/database/connection';
+import { requireAuth } from '../middleware/auth';
 
 const router = express.Router();
+
+async function assertFacilityAdmin(userId: string, facilityId: string): Promise<boolean> {
+  const result = await query(
+    `SELECT 1 FROM facility_admins WHERE user_id = $1 AND facility_id = $2 LIMIT 1`,
+    [userId, facilityId]
+  );
+  return result.rows.length > 0;
+}
 
 /**
  * GET /api/facility-locations/:facilityId
@@ -29,13 +38,17 @@ router.get('/:facilityId', async (req, res, next) => {
  * POST /api/facility-locations/:facilityId
  * Add a secondary location.
  */
-router.post('/:facilityId', async (req, res, next) => {
+router.post('/:facilityId', requireAuth, async (req, res, next) => {
   try {
     const { facilityId } = req.params;
     const { locationName, streetAddress, city, state, zipCode, phone } = req.body;
 
     if (!locationName || !streetAddress || !city || !state || !zipCode) {
       return res.status(400).json({ success: false, error: 'Location name and full address are required' });
+    }
+
+    if (!await assertFacilityAdmin(req.user!.userId, String(facilityId))) {
+      return res.status(403).json({ success: false, error: 'You must be an admin of this facility' });
     }
 
     const result = await query(
@@ -57,10 +70,14 @@ router.post('/:facilityId', async (req, res, next) => {
  * PATCH /api/facility-locations/:facilityId/:locationId
  * Update a secondary location.
  */
-router.patch('/:facilityId/:locationId', async (req, res, next) => {
+router.patch('/:facilityId/:locationId', requireAuth, async (req, res, next) => {
   try {
     const { facilityId, locationId } = req.params;
     const { locationName, streetAddress, city, state, zipCode, phone } = req.body;
+
+    if (!await assertFacilityAdmin(req.user!.userId, String(facilityId))) {
+      return res.status(403).json({ success: false, error: 'You must be an admin of this facility' });
+    }
 
     const result = await query(
       `UPDATE facility_secondary_locations
@@ -69,12 +86,12 @@ router.patch('/:facilityId/:locationId', async (req, res, next) => {
            city = COALESCE($3, city),
            state = COALESCE($4, state),
            zip_code = COALESCE($5, zip_code),
-           phone = $6,
+           phone = COALESCE($6, phone),
            updated_at = NOW()
        WHERE id = $7 AND facility_id = $8
        RETURNING id, location_name as "locationName", street_address as "streetAddress",
                  city, state, zip_code as "zipCode", phone`,
-      [locationName, streetAddress, city, state, zipCode, phone || null, locationId, facilityId]
+      [locationName, streetAddress, city, state, zipCode, phone ?? null, locationId, facilityId]
     );
 
     if (result.rows.length === 0) {
@@ -91,9 +108,13 @@ router.patch('/:facilityId/:locationId', async (req, res, next) => {
  * DELETE /api/facility-locations/:facilityId/:locationId
  * Remove a secondary location.
  */
-router.delete('/:facilityId/:locationId', async (req, res, next) => {
+router.delete('/:facilityId/:locationId', requireAuth, async (req, res, next) => {
   try {
     const { facilityId, locationId } = req.params;
+
+    if (!await assertFacilityAdmin(req.user!.userId, String(facilityId))) {
+      return res.status(403).json({ success: false, error: 'You must be an admin of this facility' });
+    }
 
     const result = await query(
       `DELETE FROM facility_secondary_locations WHERE id = $1 AND facility_id = $2 RETURNING id`,

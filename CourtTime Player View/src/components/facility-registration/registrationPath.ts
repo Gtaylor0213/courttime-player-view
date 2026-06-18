@@ -37,9 +37,9 @@ export function resolveRegistrationValidationOptions(
     step1Mode: Step1Mode;
     loggedInDuringRegistration: boolean;
   }
-): { preAuthenticated: boolean; step1Mode: Step1Mode } {
+): { preAuthenticated: boolean; step1Mode: Step1Mode; existingUserId?: string } {
   if (typeof sessionStorage === 'undefined') {
-    return { preAuthenticated: live.preAuthenticated, step1Mode: live.step1Mode };
+    return { preAuthenticated: live.preAuthenticated, step1Mode: live.step1Mode, existingUserId: live.user?.id };
   }
 
   const savedStep1Mode = sessionStorage.getItem('facilityRegistrationStep1Mode');
@@ -56,5 +56,5 @@ export function resolveRegistrationValidationOptions(
     step1Mode = 'loggedIn';
   }
 
-  return { preAuthenticated, step1Mode };
+  return { preAuthenticated, step1Mode, existingUserId: live.user?.id };
 }

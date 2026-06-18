@@ -180,6 +180,9 @@ function FacilityRegistrationContent() {
             {(preAuthenticated ? currentStep === 4 : currentStep === 5) && <AdminsStep />}
             {(preAuthenticated ? currentStep === 5 : currentStep === 6) && <ReviewStep />}
             {(preAuthenticated ? currentStep === 6 : currentStep === 7) && <PaymentStep />}
+            {/* Safety fallback: if no step matched (e.g. totalSteps changed mid-wizard),
+                show the first step so the form is never blank. */}
+            {currentStep < 1 || currentStep > totalSteps ? <FacilityInfoStep /> : null}
           </div>
 
           <div className="facility-reg-nav sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 sm:py-0 mt-6 sm:mt-8 bg-gray-50/95 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none border-t sm:border-t-0 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between z-10">

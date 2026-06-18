@@ -280,7 +280,7 @@ export function useRegistrationForm() {
   };
 
   const buildDefaultCourtSchedule = (
-    operatingHours: typeof formData.operatingHours = formData.operatingHours
+    operatingHours: typeof formData.operatingHours
   ): CourtScheduleDay[] =>
     buildCourtScheduleRowsFromFacilityOperatingHours(operatingHours).map((row) => ({
       day_of_week: row.day_of_week,
@@ -757,26 +757,25 @@ export function useRegistrationForm() {
   // Navigate to a specific step (always allowed)
 
   const addCourt = () => {
-    const newCourt: RegistrationCourt = {
-      id: `court-${Date.now()}`,
-      name: `RegistrationCourt ${formData.courts.length + 1}`,
-      courtNumber: formData.courts.length + 1,
-      surfaceType: 'Hard',
-      courtType: 'Tennis',
-      isIndoor: false,
-      hasLights: false,
-      canSplit: false,
-      requirePayment: false,
-      bookingFeeDollars: '',
-      enableGuestFee: false,
-      guestFeeCents: null,
-      guestFeeDollars: '',
-      operatingSchedule: buildDefaultCourtSchedule(),
-    };
-    setFormData(prev => ({
-      ...prev,
-      courts: [...prev.courts, newCourt]
-    }));
+    setFormData(prev => {
+      const newCourt: RegistrationCourt = {
+        id: `court-${Date.now()}`,
+        name: `RegistrationCourt ${prev.courts.length + 1}`,
+        courtNumber: prev.courts.length + 1,
+        surfaceType: 'Hard',
+        courtType: 'Tennis',
+        isIndoor: false,
+        hasLights: false,
+        canSplit: false,
+        requirePayment: false,
+        bookingFeeDollars: '',
+        enableGuestFee: false,
+        guestFeeCents: null,
+        guestFeeDollars: '',
+        operatingSchedule: buildDefaultCourtSchedule(prev.operatingHours),
+      };
+      return { ...prev, courts: [...prev.courts, newCourt] };
+    });
 
     if (errors.courts) {
       setErrors(prev => ({ ...prev, courts: '' }));
@@ -798,33 +797,35 @@ export function useRegistrationForm() {
       return;
     }
 
-    const scheduleForBulkCourt = buildDefaultCourtSchedule();
-
-    const newCourts: RegistrationCourt[] = [];
-    for (let i = 0; i < count; i++) {
-      const courtNumber = startNum + i;
-      newCourts.push({
-        id: `court-${Date.now()}-${i}`,
-        name: `RegistrationCourt ${courtNumber}`,
-        courtNumber,
-        surfaceType: bulkCourtData.surfaceType,
-        courtType: bulkCourtData.courtType,
-        isIndoor: bulkCourtData.isIndoor,
-        hasLights: bulkCourtData.hasLights,
-        canSplit: false,
-        requirePayment: false,
-        bookingFeeDollars: '',
-        enableGuestFee: false,
-        guestFeeCents: null,
-        guestFeeDollars: '',
-        operatingSchedule: cloneCourtSchedule(scheduleForBulkCourt),
-      });
+    if (isNaN(startNum) || startNum < 1) {
+      toast.error('Please enter a valid starting court number (1 or greater)');
+      return;
     }
 
-    setFormData(prev => ({
-      ...prev,
-      courts: [...prev.courts, ...newCourts]
-    }));
+    setFormData(prev => {
+      const scheduleForBulkCourt = buildDefaultCourtSchedule(prev.operatingHours);
+      const newCourts: RegistrationCourt[] = [];
+      for (let i = 0; i < count; i++) {
+        const courtNumber = startNum + i;
+        newCourts.push({
+          id: `court-${Date.now()}-${i}`,
+          name: `RegistrationCourt ${courtNumber}`,
+          courtNumber,
+          surfaceType: bulkCourtData.surfaceType,
+          courtType: bulkCourtData.courtType,
+          isIndoor: bulkCourtData.isIndoor,
+          hasLights: bulkCourtData.hasLights,
+          canSplit: false,
+          requirePayment: false,
+          bookingFeeDollars: '',
+          enableGuestFee: false,
+          guestFeeCents: null,
+          guestFeeDollars: '',
+          operatingSchedule: cloneCourtSchedule(scheduleForBulkCourt),
+        });
+      }
+      return { ...prev, courts: [...prev.courts, ...newCourts] };
+    });
 
     if (errors.courts) {
       setErrors(prev => ({ ...prev, courts: '' }));
@@ -954,8 +955,10 @@ export function useRegistrationForm() {
 
       // Prepare registration data
       const registrationData = {
-        // Facility Administrator Account (if creating new user — not logged in)
-        ...(user ? {} : {
+        // Facility Administrator Account (only when creating a brand-new user).
+        // Use step1Mode (restored from session before auto-submit fires) instead of
+        // the live `user` object, which may be null on Stripe redirect before auth rehydrates.
+        ...(step1Mode === 'create' ? {
           adminEmail: fd.adminEmail,
           adminPassword: fd.adminPassword,
           adminFullName: `${fd.adminFirstName} ${fd.adminLastName}`.trim(),
@@ -966,7 +969,7 @@ export function useRegistrationForm() {
           adminCity: fd.adminCity,
           adminState: fd.adminState,
           adminZipCode: fd.adminZipCode,
-        }),
+        } : {}),
 
         // Admin profile fields (for both new and existing users)
         ...(fd.adminProfilePicture && { adminProfilePicture: fd.adminProfilePicture }),
@@ -1128,8 +1131,8 @@ export function useRegistrationForm() {
         // Address Whitelist
         hoaAddresses: fd.parsedAddresses.length > 0 ? fd.parsedAddresses : undefined,
 
-        // Existing user ID (if already logged in)
-        existingUserId: user?.id,
+        // Existing user ID (if already logged in — never sent for the create-account path)
+        existingUserId: step1Mode !== 'create' ? user?.id : undefined,
 
         // Payment info
         paymentSessionId: effectivePaymentSessionId,

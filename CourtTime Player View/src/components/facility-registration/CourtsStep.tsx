@@ -18,7 +18,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { FACILITY_TYPE_OPTIONS } from '../../../shared/constants/facilityTypes';
 import { RulesStep } from './RulesStep';
 import { PaidCourtBookingFields } from '../admin/PaidCourtBookingFields';
-import { CourtScheduleEditor } from '../admin/CourtScheduleEditor';
 import { CourtTypeField } from '../admin/CourtTypeField';
 import {
   courtFieldsAfterNumberInputChange,
@@ -47,10 +46,7 @@ export function CourtsStep() {
     removePeakHourSlot, updatePeakHourSlot, togglePeakHourSlotDay,
     updatePeakHourSlotRule, handleAddressWhitelistChange, removeAddressWhitelist,
     courtFormMode, setCourtFormMode, bulkCourtData, setBulkCourtData,
-    addCourt, addBulkCourts, updateCourt, removeCourt, updateCourtScheduleDay,
-    resetCourtScheduleToFacilityDefaults, buildDefaultCourtSchedule,
-    tennisCourtsScheduleTemplate, updateTennisCourtsScheduleTemplateDay,
-    updateAllTennisCourtsScheduleTemplateDays, applyTennisCourtsScheduleToAll,
+    addCourt, addBulkCourts, updateCourt, removeCourt,
     addAdminInvite, updateAdminInvite, removeAdminInvite,
     preAuthenticated, loggedInDuringRegistration, buildRegistrationBookingRules,
     promoCode, setPromoCode, promoValidation, setPromoValidation,
@@ -64,10 +60,14 @@ export function CourtsStep() {
       <div>
         <h3 className="text-lg font-semibold mb-4">Court Setup</h3>
         <p className="text-sm text-gray-600 mb-6">
-          Set shared hours for all tennis courts below, then fine-tune any court individually.
-          Pickleball and other court types keep their own schedules.
+          Add your courts and set the default hours they share. You can customize individual court
+          schedules later in Facility Management.
         </p>
       </div>
+
+      <FacilityOperatingHoursSection description={
+        'Sets the weekly open and close times for every court you add below.'
+      } />
 
       {errors.courts && (
         <Alert variant="destructive">
@@ -183,26 +183,6 @@ export function CourtsStep() {
           </CardContent>
         </Card>
       )}
-
-      <Card className="border-green-200 bg-green-50/40">
-        <CardHeader>
-          <CardTitle className="text-base">Tennis courts — shared schedule</CardTitle>
-          <CardDescription>
-            Set hours once for every court with type Tennis. Use &quot;Apply to all tennis courts&quot; to
-            update existing courts, or edit each court&apos;s schedule below.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <CourtScheduleEditor
-            schedule={tennisCourtsScheduleTemplate}
-            onUpdateDay={updateTennisCourtsScheduleTemplateDay}
-            onUpdateAllDays={updateAllTennisCourtsScheduleTemplateDays}
-          />
-          <Button type="button" onClick={applyTennisCourtsScheduleToAll}>
-            Apply to all tennis courts
-          </Button>
-        </CardContent>
-      </Card>
 
       <div className="space-y-4 mt-6">
         <h4 className="font-semibold">Courts ({formData.courts.length})</h4>
@@ -337,34 +317,11 @@ export function CourtsStep() {
                 )}
               </div>
 
-              <div className="mt-4 border-t pt-4 space-y-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h5 className="text-sm font-medium">Operating hours</h5>
-                    <p className="text-xs text-gray-500">
-                      Weekly schedule for this court only
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => resetCourtScheduleToFacilityDefaults(court.id)}
-                  >
-                    Use facility default hours
-                  </Button>
-                </div>
-                <CourtScheduleEditor
-                  schedule={
-                    court.operatingSchedule?.length === 7
-                      ? court.operatingSchedule
-                      : buildDefaultCourtSchedule()
-                  }
-                  onUpdateDay={(dayOfWeek, field, value) =>
-                    updateCourtScheduleDay(court.id, dayOfWeek, field, value)
-                  }
-                />
+              <div className="mt-4 border-t pt-4">
+                <p className="text-xs text-gray-500">
+                  Operating hours follow the default schedule above. You can customize this
+                  court&apos;s hours later under Facility Management → Court Management.
+                </p>
               </div>
 
               <PaidCourtBookingFields

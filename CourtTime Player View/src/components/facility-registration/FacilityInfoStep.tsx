@@ -29,8 +29,6 @@ import {
 } from '../../services/subscriptionPricing';
 import { useRegistration } from './RegistrationContext';
 import { AdminProfileFields } from './AdminProfileFields';
-import { FacilityOperatingHoursSection } from './FacilityOperatingHoursSection';
-
 export function FacilityInfoStep() {
   const {
     formData, errors, user, step1Mode, setStep1Mode, loginEmail, setLoginEmail,
@@ -553,11 +551,6 @@ export function FacilityInfoStep() {
       </Card>
 
       <Separator className="my-6" />
-
-      <FacilityOperatingHoursSection description={
-        'Sets the weekly open and close times for every court. You can customize individual courts later under Facility Management → Court Management.'
-      } />
-
 
       <div>
         <h4 className="font-semibold mb-4">Timezone</h4>

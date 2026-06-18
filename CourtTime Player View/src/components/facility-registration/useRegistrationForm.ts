@@ -23,7 +23,7 @@ import {
   courtFieldsAfterNumberChange,
   normalizeCourtNameAndNumber,
 } from '../../../shared/utils/courtNaming';
-import { validateStoredCourtType, isTennisCourtType } from '../../../shared/constants/courtTypes';
+import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
 import { parseBookingFeeDollars } from '../admin/PaidCourtBookingFields';
 import { useAuth } from '../../contexts/AuthContext';
 import { getRegistrationPathWithMobileSource, resolveRegistrationValidationOptions } from './registrationPath';
@@ -252,16 +252,31 @@ export function useRegistrationForm() {
   };
 
   const handleOperatingHoursChange = (day: string, field: 'open' | 'close' | 'closed', value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      operatingHours: {
+    setFormData((prev) => {
+      const operatingHours = {
         ...prev.operatingHours,
         [day]: {
           ...prev.operatingHours[day as keyof typeof prev.operatingHours],
-          [field]: value
-        }
-      }
-    }));
+          [field]: value,
+        },
+      };
+      const defaultSchedule = buildCourtScheduleRowsFromFacilityOperatingHours(operatingHours).map(
+        (row) => ({
+          day_of_week: row.day_of_week,
+          is_open: row.is_open,
+          open_time: row.open_time,
+          close_time: row.close_time,
+        })
+      );
+      return {
+        ...prev,
+        operatingHours,
+        courts: prev.courts.map((court) => ({
+          ...court,
+          operatingSchedule: defaultSchedule.map((scheduleDay) => ({ ...scheduleDay })),
+        })),
+      };
+    });
   };
 
   const buildDefaultCourtSchedule = (
@@ -311,66 +326,6 @@ export function useRegistrationForm() {
 
   const cloneCourtSchedule = (schedule: CourtScheduleDay[]): CourtScheduleDay[] =>
     schedule.map((day) => ({ ...day }));
-
-  const [tennisCourtsScheduleTemplate, setTennisCourtsScheduleTemplate] = useState<CourtScheduleDay[]>(
-    () =>
-      buildCourtScheduleRowsFromFacilityOperatingHours({
-        monday: { open: '08:00', close: '20:00', closed: false },
-        tuesday: { open: '08:00', close: '20:00', closed: false },
-        wednesday: { open: '08:00', close: '20:00', closed: false },
-        thursday: { open: '08:00', close: '20:00', closed: false },
-        friday: { open: '08:00', close: '20:00', closed: false },
-        saturday: { open: '09:00', close: '18:00', closed: false },
-        sunday: { open: '09:00', close: '18:00', closed: false },
-      }).map((row) => ({
-        day_of_week: row.day_of_week,
-        is_open: row.is_open,
-        open_time: row.open_time,
-        close_time: row.close_time,
-      }))
-  );
-
-  const updateTennisCourtsScheduleTemplateDay = (
-    dayOfWeek: number,
-    field: string,
-    value: unknown
-  ) => {
-    setTennisCourtsScheduleTemplate((prev) =>
-      prev.map((day) =>
-        day.day_of_week === dayOfWeek ? { ...day, [field]: value } : day
-      )
-    );
-  };
-
-  const updateAllTennisCourtsScheduleTemplateDays = (field: string, value: unknown) => {
-    setTennisCourtsScheduleTemplate((prev) =>
-      prev.map((day) => ({ ...day, [field]: value }))
-    );
-  };
-
-  const applyTennisCourtsScheduleToAll = () => {
-    const template = cloneCourtSchedule(tennisCourtsScheduleTemplate);
-    const tennisCount = formData.courts.filter((court) => isTennisCourtType(court.courtType)).length;
-    if (tennisCount === 0) {
-      toast.error('Add at least one tennis court before applying a shared schedule');
-      return;
-    }
-    setFormData((prev) => ({
-      ...prev,
-      courts: prev.courts.map((court) =>
-        isTennisCourtType(court.courtType)
-          ? { ...court, operatingSchedule: cloneCourtSchedule(template) }
-          : court
-      ),
-    }));
-    toast.success(
-      `Applied shared schedule to ${tennisCount} tennis court${tennisCount !== 1 ? 's' : ''}`
-    );
-  };
-
-  const getTennisCourtSchedule = (): CourtScheduleDay[] =>
-    cloneCourtSchedule(tennisCourtsScheduleTemplate);
-
 
   // --- Rules config handlers ---
   const handleRulesChange = (updates: Partial<RulesConfig>) => {
@@ -816,7 +771,7 @@ export function useRegistrationForm() {
       enableGuestFee: false,
       guestFeeCents: null,
       guestFeeDollars: '',
-      operatingSchedule: getTennisCourtSchedule(),
+      operatingSchedule: buildDefaultCourtSchedule(),
     };
     setFormData(prev => ({
       ...prev,
@@ -843,9 +798,7 @@ export function useRegistrationForm() {
       return;
     }
 
-    const scheduleForBulkCourt = isTennisCourtType(bulkCourtData.courtType)
-      ? getTennisCourtSchedule()
-      : buildDefaultCourtSchedule();
+    const scheduleForBulkCourt = buildDefaultCourtSchedule();
 
     const newCourts: RegistrationCourt[] = [];
     for (let i = 0; i < count; i++) {
@@ -1378,10 +1331,6 @@ export function useRegistrationForm() {
     buildDefaultCourtSchedule,
     updateCourtScheduleDay,
     resetCourtScheduleToFacilityDefaults,
-    tennisCourtsScheduleTemplate,
-    updateTennisCourtsScheduleTemplateDay,
-    updateAllTennisCourtsScheduleTemplateDays,
-    applyTennisCourtsScheduleToAll,
     handleRulesChange,
     handleRuleEntryChange,
     handleRuleConfigFieldChange,

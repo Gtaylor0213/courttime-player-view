@@ -5,6 +5,22 @@ import { mergeRegistrationFormData } from '../../../shared/utils/facilityRegistr
 import type { RegistrationFormData, Step1Mode } from './registrationTypes';
 import { getRegistrationPathWithMobileSource, parsedHasCreateAccountFields } from './registrationPath';
 
+function scrollRegistrationToTop() {
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+
+  const scroll = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    document.querySelector('.facility-registration')?.scrollIntoView({ block: 'start' });
+  };
+
+  scroll();
+  requestAnimationFrame(scroll);
+}
+
 export interface UseRegistrationWizardParams {
   user: { id?: string; email?: string; fullName?: string } | null;
   formData: RegistrationFormData;
@@ -58,7 +74,11 @@ export function useRegistrationWizard({
   const totalSteps = preAuthenticated ? 6 : 7;
 
   useLayoutEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    scrollRegistrationToTop();
+  }, [currentStep]);
+
+  useEffect(() => {
+    scrollRegistrationToTop();
   }, [currentStep]);
 
   useEffect(() => {

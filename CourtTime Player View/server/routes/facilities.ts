@@ -340,6 +340,8 @@ router.post('/register', optionalAuth, async (req, res, next) => {
           requirePayment: Boolean(court.requirePayment),
           bookingAmountCents: court.bookingAmountCents != null ? parseInt(court.bookingAmountCents) : undefined,
           guestFeeCents: court.guestFeeCents != null ? parseInt(court.guestFeeCents) : undefined,
+          ballMachineFeeCents:
+            court.ballMachineFeeCents != null ? parseInt(court.ballMachineFeeCents) : undefined,
           canSplit: court.canSplit || false,
           splitConfig: court.splitConfig,
           operatingSchedule: Array.isArray(court.operatingSchedule)

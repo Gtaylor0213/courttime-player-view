@@ -215,10 +215,11 @@ export function ReviewStep() {
           <CardTitle className="text-base">Courts ({formData.courts.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {(formData.courtFeesMode !== 'none') && (
+          {(formData.courtFeesMode !== 'none' || formData.courtFeesBallMachineEnabled) && (
             <div className="mb-4 pb-4 border-b border-gray-100 text-sm text-gray-600">
               <span className="font-medium text-gray-900">Fees (all courts): </span>
-              {COURT_FEES_MODE_OPTIONS.find((option) => option.value === formData.courtFeesMode)?.label}
+              {formData.courtFeesMode !== 'none' &&
+                COURT_FEES_MODE_OPTIONS.find((option) => option.value === formData.courtFeesMode)?.label}
               {(formData.courtFeesMode === 'paid_booking' || formData.courtFeesMode === 'both') &&
                 formData.courtFeesBookingDollars && (
                   <> · Paid ${formData.courtFeesBookingDollars}/hr</>
@@ -227,6 +228,9 @@ export function ReviewStep() {
                 formData.courtFeesGuestDollars && (
                   <> · Guest fee ${formData.courtFeesGuestDollars}</>
                 )}
+              {formData.courtFeesBallMachineEnabled && formData.courtFeesBallMachineDollars && (
+                <> · Ball machine ${formData.courtFeesBallMachineDollars}/hr</>
+              )}
             </div>
           )}
           <div className="space-y-2 text-sm">

@@ -92,11 +92,14 @@ export function getStepErrors(
       const mode = dataSource.courtFeesMode ?? 'none';
       const wantsPaidBooking = mode === 'paid_booking' || mode === 'both';
       const wantsGuestFee = mode === 'guest_fee' || mode === 'both';
+      const wantsBallMachineFee = Boolean(dataSource.courtFeesBallMachineEnabled);
 
       if (wantsPaidBooking && !parseBookingFeeDollars(dataSource.courtFeesBookingDollars)) {
         stepErrors.courts = 'Enter an hourly booking rate or choose a different fee type';
       } else if (wantsGuestFee && !parseBookingFeeDollars(dataSource.courtFeesGuestDollars)) {
         stepErrors.courts = 'Enter a guest fee amount or choose a different fee type';
+      } else if (wantsBallMachineFee && !parseBookingFeeDollars(dataSource.courtFeesBallMachineDollars)) {
+        stepErrors.courts = 'Enter a ball machine hourly rate or turn that option off';
       }
     }
   }

@@ -51,6 +51,8 @@ export interface Court {
   bookingAmountCents?: number | null;
   /** Guest fee (cents), independent of requirePayment. */
   guestFeeCents?: number | null;
+  /** Ball machine hourly fee (cents), independent of requirePayment. */
+  ballMachineFeeCents?: number | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }

@@ -49,6 +49,7 @@ export function CourtsStep() {
     courtFormMode, setCourtFormMode, bulkCourtData, setBulkCourtData,
     addCourt, addBulkCourts, updateCourt, removeCourt,
     handleCourtFeesModeChange, handleCourtFeesBookingChange, handleCourtFeesGuestChange,
+    handleCourtFeesBallMachineEnabledChange, handleCourtFeesBallMachineChange,
     addAdminInvite, updateAdminInvite, removeAdminInvite,
     preAuthenticated, loggedInDuringRegistration, buildRegistrationBookingRules,
     promoCode, setPromoCode, promoValidation, setPromoValidation,
@@ -75,10 +76,14 @@ export function CourtsStep() {
         mode={formData.courtFeesMode}
         bookingFeeDollars={formData.courtFeesBookingDollars}
         guestFeeDollars={formData.courtFeesGuestDollars}
+        ballMachineEnabled={formData.courtFeesBallMachineEnabled}
+        ballMachineFeeDollars={formData.courtFeesBallMachineDollars}
         courtCount={formData.courts.length}
         onModeChange={handleCourtFeesModeChange}
         onBookingFeeChange={handleCourtFeesBookingChange}
         onGuestFeeChange={handleCourtFeesGuestChange}
+        onBallMachineEnabledChange={handleCourtFeesBallMachineEnabledChange}
+        onBallMachineFeeChange={handleCourtFeesBallMachineChange}
       />
 
       {errors.courts && (

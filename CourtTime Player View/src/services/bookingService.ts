@@ -524,6 +524,7 @@ export type PendingCourtBookingPayload = {
   notes?: string;
   isPrimeTime?: boolean;
   bringGuest?: boolean;
+  addBallMachine?: boolean;
 };
 
 function sameMemberId(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -568,6 +569,8 @@ export function parsePendingCourtBooking(raw: unknown): PendingCourtBookingPaylo
     activityType: r.activityType ? String(r.activityType) : undefined,
     notes: r.notes ? String(r.notes) : undefined,
     isPrimeTime: r.isPrimeTime === true || r.is_prime_time === true,
+    bringGuest: r.bringGuest === true || r.bring_guest === true,
+    addBallMachine: r.addBallMachine === true || r.add_ball_machine === true,
   };
 }
 
@@ -674,6 +677,7 @@ export async function createBooking(bookingData: {
   skipRulesValidation?: boolean;  // For admin override
   skipPaymentCheck?: boolean; // After Stripe payment or admin override
   bringGuest?: boolean;
+  addBallMachine?: boolean;
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
   successUrl?: string;
   cancelUrl?: string;
@@ -699,6 +703,7 @@ async function createBookingCore(bookingData: {
   skipRulesValidation?: boolean;
   skipPaymentCheck?: boolean;
   bringGuest?: boolean;
+  addBallMachine?: boolean;
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
   successUrl?: string;
   cancelUrl?: string;
@@ -750,7 +755,8 @@ async function createBookingCore(bookingData: {
 
     if (!bookingData.skipRulesValidation && !bookingData.skipPaymentCheck) {
       const paidCourt = await query(
-        `SELECT c.name, c.require_payment, c.booking_amount_cents, c.guest_fee_cents, f.stripe_onboarded
+        `SELECT c.name, c.require_payment, c.booking_amount_cents, c.guest_fee_cents,
+                c.ball_machine_fee_cents, f.stripe_onboarded
          FROM courts c
          JOIN facilities f ON f.id = c.facility_id
          WHERE c.id = $1`,
@@ -759,7 +765,8 @@ async function createBookingCore(bookingData: {
       const courtRow = paidCourt.rows[0];
       const needsPayment =
         (courtRow?.require_payment && courtRow.booking_amount_cents) ||
-        (bookingData.bringGuest && courtRow?.guest_fee_cents);
+        (bookingData.bringGuest && courtRow?.guest_fee_cents) ||
+        (bookingData.addBallMachine && courtRow?.ball_machine_fee_cents);
       if (needsPayment) {
         const { syncConnectOnboardingStatus, createCourtBookingCheckoutSession } = await import(
           './stripeConnectService'
@@ -792,6 +799,7 @@ async function createBookingCore(bookingData: {
             notes: bookingData.notes,
             isPrimeTime: isPrimeTime || false,
             bringGuest: bookingData.bringGuest || false,
+            addBallMachine: bookingData.addBallMachine || false,
           },
           successUrl:
             bookingData.successUrl ||
@@ -849,9 +857,10 @@ async function createBookingCore(bookingData: {
           `INSERT INTO bookings (
             series_id, court_id, user_id, facility_id, booking_date,
             start_time, end_time, duration_minutes, booking_type,
-            activity_type, notes, bulletin_post_id, status, is_prime_time
+            activity_type, notes, bulletin_post_id, status, is_prime_time,
+            bring_guest, add_ball_machine
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, $14, $15)
           RETURNING
             id,
             series_id as "seriesId",
@@ -883,6 +892,8 @@ async function createBookingCore(bookingData: {
             bookingData.notes || null,
             bookingData.bulletinPostId || null,
             isPrimeTime,
+            bookingData.bringGuest || false,
+            bookingData.addBallMachine || false,
           ]
         );
         return ins.rows[0];

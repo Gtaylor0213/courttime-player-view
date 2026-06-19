@@ -873,6 +873,8 @@ router.patch('/courts/:courtId', async (req, res) => {
       bookingFeeDollars,
       guestFeeCents: rawGuestFeeCents,
       guestFeeDollars,
+      ballMachineFeeCents: rawBallMachineFeeCents,
+      ballMachineFeeDollars,
       status: rawStatus,
       canSplit,
       splitConfig
@@ -924,6 +926,14 @@ router.patch('/courts/:courtId', async (req, res) => {
     } else if (rawGuestFeeCents === null || guestFeeDollars === '') {
       guestFeeValue = null;
     }
+    let ballMachineFeeValue: number | null | undefined;
+    if (rawBallMachineFeeCents != null && rawBallMachineFeeCents !== '') {
+      ballMachineFeeValue = parseInt(String(rawBallMachineFeeCents), 10);
+    } else if (ballMachineFeeDollars != null && ballMachineFeeDollars !== '') {
+      ballMachineFeeValue = Math.round(parseFloat(String(ballMachineFeeDollars)) * 100);
+    } else if (rawBallMachineFeeCents === null || ballMachineFeeDollars === '') {
+      ballMachineFeeValue = null;
+    }
     const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
       ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
       : [];
@@ -960,6 +970,10 @@ router.patch('/courts/:courtId', async (req, res) => {
           WHEN $14::boolean THEN $15::integer
           ELSE guest_fee_cents
         END,
+        ball_machine_fee_cents = CASE
+          WHEN $17::boolean THEN $18::integer
+          ELSE ball_machine_fee_cents
+        END,
         status = COALESCE($10, status),
         is_split_court = CASE WHEN $16::boolean THEN $11 ELSE is_split_court END,
         split_configuration = CASE WHEN $16::boolean THEN $12 ELSE split_configuration END,
@@ -978,6 +992,7 @@ router.patch('/courts/:courtId', async (req, res) => {
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
         guest_fee_cents as "guestFeeCents",
+        ball_machine_fee_cents as "ballMachineFeeCents",
         status,
         parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration",
@@ -1001,6 +1016,8 @@ router.patch('/courts/:courtId', async (req, res) => {
       guestFeeValue !== undefined,
       guestFeeValue ?? null,
       updateSplitFields,
+      ballMachineFeeValue !== undefined,
+      ballMachineFeeValue ?? null,
     ]);
 
     if (result.rows.length === 0) {
@@ -1110,6 +1127,8 @@ router.post('/courts/:facilityId', async (req, res) => {
       bookingFeeDollars,
       guestFeeCents: rawGuestFeeCentsCreate,
       guestFeeDollars: guestFeeDollarsCreate,
+      ballMachineFeeCents: rawBallMachineFeeCentsCreate,
+      ballMachineFeeDollars: ballMachineFeeDollarsCreate,
       canSplit,
       splitConfig,
       returnUrl,
@@ -1150,6 +1169,13 @@ router.post('/courts/:facilityId', async (req, res) => {
       guestFeeCreate = Math.round(parseFloat(String(guestFeeDollarsCreate)) * 100);
     }
 
+    let ballMachineFeeCreate: number | null = null;
+    if (rawBallMachineFeeCentsCreate != null && rawBallMachineFeeCentsCreate !== '') {
+      ballMachineFeeCreate = parseInt(String(rawBallMachineFeeCentsCreate), 10);
+    } else if (ballMachineFeeDollarsCreate != null && ballMachineFeeDollarsCreate !== '') {
+      ballMachineFeeCreate = Math.round(parseFloat(String(ballMachineFeeDollarsCreate)) * 100);
+    }
+
     const normalizedSplitNames: string[] = Array.isArray(splitConfig?.splitNames)
       ? splitConfig.splitNames.map((n: unknown) => String(n || '').trim()).filter((n: string) => n.length > 0)
       : [];
@@ -1178,6 +1204,7 @@ router.post('/courts/:facilityId', async (req, res) => {
           requirePayment: wantsPayment,
           bookingAmountCents: wantsPayment ? amountCents : null,
           guestFeeCents: guestFeeCreate,
+          ballMachineFeeCents: ballMachineFeeCreate,
         },
         split: shouldSplit
           ? {

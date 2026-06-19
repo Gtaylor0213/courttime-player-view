@@ -33,9 +33,11 @@ import { api, paymentApi } from '../../src/api/client';
 import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
 import {
   courtGuestFeeCents,
+  courtBallMachineFeeCents,
   courtRequiresPayment,
   formatCentsAsUsd,
   openStripeCheckout,
+  scaleHourlyFeeCents,
 } from '../../src/utils/payments';
 import { Colors, Gradients, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
@@ -182,6 +184,7 @@ export default function BookCourtScreen() {
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [bringGuest, setBringGuest] = useState(false);
+  const [addBallMachine, setAddBallMachine] = useState(false);
 
   // Rule violations modal payload (shown when modalKind === 'violations')
   const [violations, setViolations] = useState<RuleViolation[]>([]);
@@ -239,9 +242,11 @@ export default function BookCourtScreen() {
     setRecurringDays([]);
     setRecurringEndDate('');
     setBringGuest(false);
+    setAddBallMachine(false);
   }, [modalKind]);
 
   const primaryCourtGuestFee = selectedCourt ? courtGuestFeeCents(selectedCourt) : null;
+  const primaryCourtBallMachineFee = selectedCourt ? courtBallMachineFeeCents(selectedCourt) : null;
   const selectedCourtRequiresPayment = selectedCourt ? courtRequiresPayment(selectedCourt) : false;
   const bookingCheckoutUrls = courtBookingCheckoutUrls();
 
@@ -674,11 +679,12 @@ export default function BookCourtScreen() {
     const needsPaidCheckout =
       selectedCourtRequiresPayment ||
       extraCourtsRequirePayment ||
-      Boolean(bringGuest && primaryCourtGuestFee);
+      Boolean(bringGuest && primaryCourtGuestFee) ||
+      Boolean(addBallMachine && primaryCourtBallMachineFee);
     if (needsPaidCheckout && allCourtIds.length > 1) {
       showAlert(
         'Paid booking',
-        'Paid courts and guest fees must be booked one court at a time.'
+        'Paid courts, guest fees, and ball machine rentals must be booked one court at a time.'
       );
       hapticError();
       setBooking(false);
@@ -689,7 +695,7 @@ export default function BookCourtScreen() {
       if (needsPaidCheckout) {
         showAlert(
           'Paid booking',
-          'Paid courts and guest fees cannot be booked as a recurring series. Book one reservation at a time.'
+          'Paid courts, guest fees, and ball machine rentals cannot be booked as a recurring series. Book one reservation at a time.'
         );
         hapticError();
         setBooking(false);
@@ -781,6 +787,7 @@ export default function BookCourtScreen() {
         notes: bookingNotes.trim() || undefined,
         ...bookingCheckoutUrls,
         bringGuest: bringGuest || undefined,
+        addBallMachine: addBallMachine || undefined,
         ...(priorInThisRequest.length > 0
           ? { provisionalSameRequestBookings: [...priorInThisRequest] }
           : {}),
@@ -1436,7 +1443,34 @@ export default function BookCourtScreen() {
                   </View>
                 ) : null}
 
-                {(selectedCourtRequiresPayment || (bringGuest && primaryCourtGuestFee)) &&
+                {primaryCourtBallMachineFee && additionalCourtIds.length === 0 && !recurringBookingEnabled ? (
+                  <View style={styles.guestFeeRow}>
+                    <View style={styles.guestFeeText}>
+                      <Text style={styles.modalLabel}>Add ball machine</Text>
+                      <Text style={styles.guestFeeHint}>
+                        +{formatCentsAsUsd(primaryCourtBallMachineFee)}/hr
+                        {addBallMachine && modalStartTime && modalEndTime
+                          ? ` (${formatCentsAsUsd(
+                              scaleHourlyFeeCents(
+                                primaryCourtBallMachineFee,
+                                calcDuration(modalStartTime, modalEndTime)
+                              )
+                            )} total)`
+                          : ''}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={addBallMachine}
+                      onValueChange={setAddBallMachine}
+                      trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+                      thumbColor={addBallMachine ? Colors.primary : Colors.textMuted}
+                    />
+                  </View>
+                ) : null}
+
+                {(selectedCourtRequiresPayment ||
+                  (bringGuest && primaryCourtGuestFee) ||
+                  (addBallMachine && primaryCourtBallMachineFee)) &&
                 additionalCourtIds.length === 0 ? (
                   <Text style={styles.paidBookingHint}>
                     Card payment via Stripe is required to confirm this reservation.
@@ -1461,7 +1495,9 @@ export default function BookCourtScreen() {
                   title={
                     additionalCourtIds.length > 0
                       ? `Book ${1 + additionalCourtIds.length} Courts`
-                      : selectedCourtRequiresPayment || (bringGuest && primaryCourtGuestFee)
+                      : selectedCourtRequiresPayment ||
+                          (bringGuest && primaryCourtGuestFee) ||
+                          (addBallMachine && primaryCourtBallMachineFee)
                         ? 'Pay and Book'
                         : 'Confirm Booking'
                   }

@@ -1142,6 +1142,16 @@ const loadCourts = async () => {
             c.guestFeeCents ?? c.guest_fee_cents
           ),
           enableGuestFee: Boolean(c.guestFeeCents ?? c.guest_fee_cents),
+          ballMachineFeeCents:
+            c.ballMachineFeeCents != null
+              ? Number(c.ballMachineFeeCents)
+              : c.ball_machine_fee_cents != null
+                ? Number(c.ball_machine_fee_cents)
+                : null,
+          ballMachineFeeDollars: formatCentsToDollars(
+            c.ballMachineFeeCents ?? c.ball_machine_fee_cents
+          ),
+          enableBallMachineFee: Boolean(c.ballMachineFeeCents ?? c.ball_machine_fee_cents),
         }));
       setCourts(normalized);
       void loadCourtOperatingHours(normalized);
@@ -1173,6 +1183,9 @@ const handleAddNewCourt = () => {
     enableGuestFee: false,
     guestFeeCents: null,
     guestFeeDollars: '',
+    enableBallMachineFee: false,
+    ballMachineFeeCents: null,
+    ballMachineFeeDollars: '',
     status: 'available',
     canSplit: false,
   });
@@ -1190,6 +1203,9 @@ const handleEditCourt = (court: Court) => {
     enableGuestFee: Boolean(court.guestFeeCents),
     guestFeeDollars:
       court.guestFeeDollars || formatCentsToDollars(court.guestFeeCents),
+    enableBallMachineFee: Boolean(court.ballMachineFeeCents),
+    ballMachineFeeDollars:
+      court.ballMachineFeeDollars || formatCentsToDollars(court.ballMachineFeeCents),
   });
   void loadStripeStatus();
   setIsAddingNewCourt(false);
@@ -1228,6 +1244,12 @@ const handleSaveCourt = async () => {
     toast.error('Enter a valid guest fee amount');
     return;
   }
+  const ballMachineFeeCents = parseBookingFeeDollars(editingCourt.ballMachineFeeDollars);
+  const hasBallMachineFee = Boolean(editingCourt.enableBallMachineFee);
+  if (hasBallMachineFee && !ballMachineFeeCents) {
+    toast.error('Enter a valid ball machine hourly rate');
+    return;
+  }
   if (turningOnPaidBooking && stripeOnboarded === false) {
     toast.error('Complete Stripe Connect setup on the Member Payments page before enabling paid courts');
     return;
@@ -1239,6 +1261,11 @@ const handleSaveCourt = async () => {
   }
   if (hasGuestFee && stripeOnboarded === false) {
     toast.info('Guest fee saved, but Stripe Connect must be set up before members can be charged');
+  }
+  if (hasBallMachineFee && stripeOnboarded === false) {
+    toast.info(
+      'Ball machine fee saved, but Stripe Connect must be set up before members can be charged'
+    );
   }
 
   try {
@@ -1255,6 +1282,8 @@ const handleSaveCourt = async () => {
       bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
       guestFeeCents: hasGuestFee ? guestFeeCents : null,
       guestFeeDollars: hasGuestFee ? editingCourt.guestFeeDollars : '',
+      ballMachineFeeCents: hasBallMachineFee ? ballMachineFeeCents : null,
+      ballMachineFeeDollars: hasBallMachineFee ? editingCourt.ballMachineFeeDollars : '',
     };
 
     let response;

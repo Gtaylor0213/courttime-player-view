@@ -126,10 +126,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       requirePayment?: boolean;
       bookingAmountCents?: number | null;
       guestFeeCents?: number | null;
+      ballMachineFeeCents?: number | null;
     }>
   >([]);
   const [guestCount, setGuestCount] = useState(0);
   const [guestNames, setGuestNames] = useState<string[]>([]);
+  const [addBallMachine, setAddBallMachine] = useState(false);
   const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast, addNotification } = useNotifications();
@@ -218,6 +220,13 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return meta?.guestFeeCents ?? null;
   }, [isAdmin, selectedCourts, facilityCourts]);
 
+  const primaryCourtBallMachineFeeCents = useMemo(() => {
+    if (isAdmin) return null;
+    if (selectedCourts.length !== 1) return null;
+    const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
+    return meta?.ballMachineFeeCents ?? null;
+  }, [isAdmin, selectedCourts, facilityCourts]);
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -240,6 +249,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       setAdditionalCourtIds([]);
       setGuestCount(0);
       setGuestNames([]);
+      setAddBallMachine(false);
     }
   }, [selectedSlots, isOpen, time]);
 
@@ -272,6 +282,18 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     if (!primaryCourtHourlyRateCents || durationMins <= 0) return null;
     return Math.round(primaryCourtHourlyRateCents * (durationMins / 60));
   }, [primaryCourtHourlyRateCents, durationMins]);
+
+  const ballMachineTotalCents = useMemo(() => {
+    if (!addBallMachine || !primaryCourtBallMachineFeeCents || durationMins <= 0) return 0;
+    return Math.round(primaryCourtBallMachineFeeCents * (durationMins / 60));
+  }, [addBallMachine, primaryCourtBallMachineFeeCents, durationMins]);
+
+  const guestFeeTotalCents = useMemo(() => {
+    if (guestCount <= 0 || !primaryCourtGuestFeeCents) return 0;
+    return primaryCourtGuestFeeCents * guestCount;
+  }, [guestCount, primaryCourtGuestFeeCents]);
+
+  const checkoutTotalCents = (courtTotalAmountCents ?? 0) + guestFeeTotalCents + ballMachineTotalCents;
 
   const primaryCourtId = selectedCourts[0]?.courtId || courtId;
 
@@ -429,12 +451,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         const meta = facilityCourts.find((fc) => fc.id === c.courtId);
         return meta?.requirePayment && meta?.bookingAmountCents;
       });
-      const requiresSingleBooking = paidCourtInSelection || (guestCount > 0 && Boolean(primaryCourtGuestFeeCents));
+      const requiresSingleBooking =
+        paidCourtInSelection ||
+        (guestCount > 0 && Boolean(primaryCourtGuestFeeCents)) ||
+        (addBallMachine && Boolean(primaryCourtBallMachineFeeCents));
       if (requiresSingleBooking && (advancedBooking || selectedCourts.length > 1 || datesToBook.length > 1)) {
         showToast(
           'error',
           'Paid courts',
-          'Paid courts and guest fees must be booked one reservation at a time (no recurring or multi-court checkout).'
+          'Paid courts, guest fees, and ball machine rentals must be booked one reservation at a time (no recurring or multi-court checkout).'
         );
         setIsSubmitting(false);
         return;
@@ -479,6 +504,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                 ...checkoutReturnUrls,
                 guestCount: guestCount > 0 ? guestCount : undefined,
                 guestNames: guestCount > 0 && guestNames.some(n => n.trim()) ? guestNames.slice(0, guestCount) : undefined,
+                bringGuest: guestCount > 0 || undefined,
+                addBallMachine: addBallMachine || undefined,
                 provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
               });
               if (res.requiresPayment && res.checkoutUrl) {
@@ -908,6 +935,26 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             </div>
           )}
 
+          {/* Ball machine */}
+          {primaryCourtBallMachineFeeCents && selectedCourts.length === 1 && !advancedBooking && (
+            <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
+              <div>
+                <Label htmlFor="addBallMachine" className="text-sm font-medium cursor-pointer">
+                  Add ball machine
+                </Label>
+                <p className="text-xs text-gray-500">
+                  ${(primaryCourtBallMachineFeeCents / 100).toFixed(2)}/hr
+                  {addBallMachine && durationLabel ? ` × ${durationLabel} = $${(ballMachineTotalCents / 100).toFixed(2)}` : ''}
+                </p>
+              </div>
+              <Checkbox
+                id="addBallMachine"
+                checked={addBallMachine}
+                onCheckedChange={(checked) => setAddBallMachine(checked === true)}
+              />
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex gap-2 pt-4">
             <Button
@@ -924,7 +971,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               disabled={isSubmitting}
               className="flex-1"
             >
-              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : (hasPaidCourt || (guestCount > 0 && primaryCourtGuestFeeCents)) ? `Pay $${(((courtTotalAmountCents ?? 0) + (guestCount > 0 && primaryCourtGuestFeeCents ? primaryCourtGuestFeeCents * guestCount : 0)) / 100).toFixed(2)} and Book` : 'Book Court'}
+              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : (hasPaidCourt || guestFeeTotalCents > 0 || ballMachineTotalCents > 0) ? `Pay $${(checkoutTotalCents / 100).toFixed(2)} and Book` : 'Book Court'}
             </Button>
           </div>
         </form>

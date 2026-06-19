@@ -692,6 +692,7 @@ export const bookingApi = {
     successUrl?: string;
     cancelUrl?: string;
     bringGuest?: boolean;
+    addBallMachine?: boolean;
     guestCount?: number;
     guestNames?: string[];
     provisionalSameRequestBookings?: Array<{
@@ -829,6 +830,8 @@ export const adminApi = {
     bookingFeeDollars?: string;
     guestFeeCents?: number | null;
     guestFeeDollars?: string;
+    ballMachineFeeCents?: number | null;
+    ballMachineFeeDollars?: string;
     canSplit?: boolean;
     splitConfig?: {
       splitNames: string[];
@@ -891,6 +894,8 @@ export const adminApi = {
     bookingFeeDollars?: string;
     guestFeeCents?: number | null;
     guestFeeDollars?: string;
+    ballMachineFeeCents?: number | null;
+    ballMachineFeeDollars?: string;
     enableGuestFee?: boolean;
     status?: string;
     canSplit?: boolean;

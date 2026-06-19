@@ -199,6 +199,7 @@ router.post('/', async (req, res, next) => {
       bookingType,
       notes,
       bringGuest,
+      addBallMachine,
       provisionalSameRequestBookings,
       successUrl,
       cancelUrl,
@@ -248,6 +249,7 @@ router.post('/', async (req, res, next) => {
       bookingType,
       notes,
       bringGuest: bringGuest === true,
+      addBallMachine: addBallMachine === true,
       provisionalSameRequestBookings: Array.isArray(provisionalSameRequestBookings)
         ? provisionalSameRequestBookings
         : undefined,

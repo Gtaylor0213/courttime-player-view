@@ -14,9 +14,18 @@ export function courtFeeFieldsFromSettings(
   mode: CourtFeesMode,
   bookingFeeDollars: string,
   guestFeeDollars: string,
+  ballMachineEnabled: boolean,
+  ballMachineFeeDollars: string,
 ): Pick<
   PaidCourtFormFields,
-  'requirePayment' | 'bookingFeeDollars' | 'enableGuestFee' | 'guestFeeDollars' | 'guestFeeCents'
+  | 'requirePayment'
+  | 'bookingFeeDollars'
+  | 'enableGuestFee'
+  | 'guestFeeDollars'
+  | 'guestFeeCents'
+  | 'enableBallMachineFee'
+  | 'ballMachineFeeDollars'
+  | 'ballMachineFeeCents'
 > {
   const wantsPaidBooking = mode === 'paid_booking' || mode === 'both';
   const wantsGuestFee = mode === 'guest_fee' || mode === 'both';
@@ -27,6 +36,9 @@ export function courtFeeFieldsFromSettings(
     enableGuestFee: wantsGuestFee,
     guestFeeDollars: wantsGuestFee ? guestFeeDollars : '',
     guestFeeCents: null,
+    enableBallMachineFee: ballMachineEnabled,
+    ballMachineFeeDollars: ballMachineEnabled ? ballMachineFeeDollars : '',
+    ballMachineFeeCents: null,
   };
 }
 
@@ -35,7 +47,15 @@ export function applyCourtFeesToCourts(
   mode: CourtFeesMode,
   bookingFeeDollars: string,
   guestFeeDollars: string,
+  ballMachineEnabled: boolean,
+  ballMachineFeeDollars: string,
 ): RegistrationCourt[] {
-  const feeFields = courtFeeFieldsFromSettings(mode, bookingFeeDollars, guestFeeDollars);
+  const feeFields = courtFeeFieldsFromSettings(
+    mode,
+    bookingFeeDollars,
+    guestFeeDollars,
+    ballMachineEnabled,
+    ballMachineFeeDollars,
+  );
   return courts.map((court) => ({ ...court, ...feeFields }));
 }

@@ -132,6 +132,11 @@ export function FacilityCourtsTab(props: Props) {
                         Guest fee · ${(court.guestFeeCents / 100).toFixed(2)}
                       </Badge>
                     )}
+                    {court.ballMachineFeeCents && (
+                      <Badge className="bg-purple-100 text-purple-900 border-purple-200">
+                        Ball machine · ${(court.ballMachineFeeCents / 100).toFixed(2)}/hr
+                      </Badge>
+                    )}
                     {isEditingThis && (
                       <Badge className="bg-green-100 text-green-800 border-green-200">Editing</Badge>
                     )}

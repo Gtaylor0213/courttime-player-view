@@ -99,6 +99,8 @@ export interface RegistrationFormData {
   courtFeesMode: CourtFeesMode;
   courtFeesBookingDollars: string;
   courtFeesGuestDollars: string;
+  courtFeesBallMachineEnabled: boolean;
+  courtFeesBallMachineDollars: string;
   adminInvites: AdminInvite[];
 }
 
@@ -169,6 +171,8 @@ export function createInitialRegistrationFormData(user?: {
     courtFeesMode: 'none',
     courtFeesBookingDollars: '',
     courtFeesGuestDollars: '',
+    courtFeesBallMachineEnabled: false,
+    courtFeesBallMachineDollars: '',
     adminInvites: [],
   };
 }

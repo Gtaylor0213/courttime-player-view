@@ -352,6 +352,7 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
         guest_fee_cents as "guestFeeCents",
+        ball_machine_fee_cents as "ballMachineFeeCents",
         created_at as "createdAt",
         updated_at as "updatedAt"
       FROM courts
@@ -771,6 +772,7 @@ export interface CourtCreateData {
   requirePayment?: boolean;
   bookingAmountCents?: number | null;
   guestFeeCents?: number | null;
+  ballMachineFeeCents?: number | null;
   operatingSchedule?: CourtScheduleRowInput[];
 }
 
@@ -1201,13 +1203,17 @@ export async function registerFacility(
           : null;
       const guestFeeCents =
         court.guestFeeCents != null && court.guestFeeCents > 0 ? court.guestFeeCents : null;
+      const ballMachineFeeCents =
+        court.ballMachineFeeCents != null && court.ballMachineFeeCents > 0
+          ? court.ballMachineFeeCents
+          : null;
 
       const courtResult = await client.query(
         `INSERT INTO courts (
           facility_id, name, court_number, surface_type, court_type,
           is_indoor, has_lights, is_walk_up, require_payment, booking_amount_cents,
-          guest_fee_cents, status, is_split_court, split_configuration
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'available', $12, $13)
+          guest_fee_cents, ball_machine_fee_cents, status, is_split_court, split_configuration
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'available', $13, $14)
         RETURNING
           id, facility_id as "facilityId", name, court_number as "courtNumber",
           surface_type as "surfaceType", court_type as "courtType",
@@ -1215,6 +1221,7 @@ export async function registerFacility(
           COALESCE(require_payment, false) as "requirePayment",
           booking_amount_cents as "bookingAmountCents",
           guest_fee_cents as "guestFeeCents",
+          ball_machine_fee_cents as "ballMachineFeeCents",
           status,
           is_split_court as "isSplitCourt", split_configuration as "splitConfiguration"`,
         [
@@ -1229,6 +1236,7 @@ export async function registerFacility(
           wantsPayment,
           bookingAmountCents,
           guestFeeCents,
+          ballMachineFeeCents,
           court.canSplit || false,
           court.splitConfig ? JSON.stringify(court.splitConfig) : null,
         ]

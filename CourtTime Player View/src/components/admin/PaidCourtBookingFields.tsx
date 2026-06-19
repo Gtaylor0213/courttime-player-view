@@ -10,6 +10,9 @@ export type PaidCourtFormFields = {
   enableGuestFee?: boolean;
   guestFeeCents?: number | null;
   guestFeeDollars?: string;
+  enableBallMachineFee?: boolean;
+  ballMachineFeeCents?: number | null;
+  ballMachineFeeDollars?: string;
 };
 
 export function formatCentsToDollars(cents: number | null | undefined): string {
@@ -44,7 +47,8 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
       {!stripeStatusLoading && stripeOnboarded === false && (
         <p className="text-xs text-amber-700">
           Stripe Connect is not set up yet. Complete setup under {paymentsTabHint} before members
-          can be charged for paid courts or guest fees. You can still save fee amounts below.
+          can be charged for paid courts, guest fees, or ball machine rentals. You can still save
+          fee amounts below.
         </p>
       )}
       {!stripeStatusLoading && stripeOnboarded === true && (
@@ -112,6 +116,39 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
             value={court.guestFeeDollars || ''}
             onChange={(e) => onChange({ guestFeeDollars: e.target.value } as Partial<T>)}
             placeholder="e.g. 10.00 per guest"
+          />
+        </div>
+      )}
+
+      {/* Ball machine fee */}
+      <div className="flex items-center justify-between gap-4 pt-1 border-t">
+        <div>
+          <p className="text-sm font-medium">Ball machine</p>
+          <p className="text-xs text-gray-500">
+            Charged per hour — members can add a ball machine when booking
+          </p>
+        </div>
+        <Switch
+          checked={Boolean(court.enableBallMachineFee)}
+          onCheckedChange={(checked) =>
+            onChange({
+              enableBallMachineFee: checked,
+              ballMachineFeeDollars: checked ? court.ballMachineFeeDollars : '',
+              ballMachineFeeCents: checked ? court.ballMachineFeeCents : null,
+            } as Partial<T>)
+          }
+        />
+      </div>
+      {court.enableBallMachineFee && (
+        <div className="space-y-2">
+          <Label>Ball machine rate (USD) *</Label>
+          <Input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={court.ballMachineFeeDollars || ''}
+            onChange={(e) => onChange({ ballMachineFeeDollars: e.target.value } as Partial<T>)}
+            placeholder="e.g. 15.00 per hour"
           />
         </div>
       )}

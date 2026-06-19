@@ -121,6 +121,8 @@ export function useRegistrationForm() {
     courtFeesMode: 'none' as CourtFeesMode,
     courtFeesBookingDollars: '',
     courtFeesGuestDollars: '',
+    courtFeesBallMachineEnabled: false,
+    courtFeesBallMachineDollars: '',
 
     // Step 5: Additional Admins
     adminInvites: [] as AdminInvite[],
@@ -767,6 +769,8 @@ export function useRegistrationForm() {
         prev.courtFeesMode,
         prev.courtFeesBookingDollars,
         prev.courtFeesGuestDollars,
+        prev.courtFeesBallMachineEnabled,
+        prev.courtFeesBallMachineDollars,
       );
       const newCourt: RegistrationCourt = {
         id: `court-${Date.now()}`,
@@ -814,6 +818,8 @@ export function useRegistrationForm() {
         prev.courtFeesMode,
         prev.courtFeesBookingDollars,
         prev.courtFeesGuestDollars,
+        prev.courtFeesBallMachineEnabled,
+        prev.courtFeesBallMachineDollars,
       );
       const newCourts: RegistrationCourt[] = [];
       for (let i = 0; i < count; i++) {
@@ -881,6 +887,8 @@ export function useRegistrationForm() {
         mode,
         prev.courtFeesBookingDollars,
         prev.courtFeesGuestDollars,
+        prev.courtFeesBallMachineEnabled,
+        prev.courtFeesBallMachineDollars,
       ),
     }));
     if (errors.courts) {
@@ -897,6 +905,8 @@ export function useRegistrationForm() {
         prev.courtFeesMode,
         bookingFeeDollars,
         prev.courtFeesGuestDollars,
+        prev.courtFeesBallMachineEnabled,
+        prev.courtFeesBallMachineDollars,
       ),
     }));
     if (errors.courts) {
@@ -913,6 +923,44 @@ export function useRegistrationForm() {
         prev.courtFeesMode,
         prev.courtFeesBookingDollars,
         guestFeeDollars,
+        prev.courtFeesBallMachineEnabled,
+        prev.courtFeesBallMachineDollars,
+      ),
+    }));
+    if (errors.courts) {
+      setErrors((prev) => ({ ...prev, courts: '' }));
+    }
+  };
+
+  const handleCourtFeesBallMachineEnabledChange = (enabled: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      courtFeesBallMachineEnabled: enabled,
+      courts: applyCourtFeesToCourts(
+        prev.courts,
+        prev.courtFeesMode,
+        prev.courtFeesBookingDollars,
+        prev.courtFeesGuestDollars,
+        enabled,
+        prev.courtFeesBallMachineDollars,
+      ),
+    }));
+    if (errors.courts) {
+      setErrors((prev) => ({ ...prev, courts: '' }));
+    }
+  };
+
+  const handleCourtFeesBallMachineChange = (ballMachineFeeDollars: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      courtFeesBallMachineDollars: ballMachineFeeDollars,
+      courts: applyCourtFeesToCourts(
+        prev.courts,
+        prev.courtFeesMode,
+        prev.courtFeesBookingDollars,
+        prev.courtFeesGuestDollars,
+        prev.courtFeesBallMachineEnabled,
+        ballMachineFeeDollars,
       ),
     }));
     if (errors.courts) {
@@ -1156,6 +1204,7 @@ export function useRegistrationForm() {
         courts: fd.courts.map(court => {
           const wantsPayment = Boolean(court.requirePayment);
           const hasGuestFee = Boolean(court.enableGuestFee);
+          const hasBallMachineFee = Boolean(court.enableBallMachineFee);
           const { name, courtNumber } = normalizeCourtNameAndNumber({
             name: court.name,
             courtNumber: court.courtNumber,
@@ -1175,6 +1224,9 @@ export function useRegistrationForm() {
               : null,
             guestFeeCents: hasGuestFee
               ? parseBookingFeeDollars(court.guestFeeDollars)
+              : null,
+            ballMachineFeeCents: hasBallMachineFee
+              ? parseBookingFeeDollars(court.ballMachineFeeDollars)
               : null,
             operatingSchedule: court.operatingSchedule,
           };
@@ -1417,6 +1469,8 @@ export function useRegistrationForm() {
     handleCourtFeesModeChange,
     handleCourtFeesBookingChange,
     handleCourtFeesGuestChange,
+    handleCourtFeesBallMachineEnabledChange,
+    handleCourtFeesBallMachineChange,
     addAdminInvite,
     updateAdminInvite,
     removeAdminInvite,

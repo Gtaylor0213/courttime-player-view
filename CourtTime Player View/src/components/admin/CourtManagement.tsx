@@ -250,6 +250,16 @@ export function CourtManagement() {
             c.guestFeeCents ?? c.guest_fee_cents
           ),
           enableGuestFee: Boolean(c.guestFeeCents ?? c.guest_fee_cents),
+          ballMachineFeeCents:
+            c.ballMachineFeeCents != null
+              ? Number(c.ballMachineFeeCents)
+              : c.ball_machine_fee_cents != null
+                ? Number(c.ball_machine_fee_cents)
+                : null,
+          ballMachineFeeDollars: formatCentsToDollars(
+            c.ballMachineFeeCents ?? c.ball_machine_fee_cents
+          ),
+          enableBallMachineFee: Boolean(c.ballMachineFeeCents ?? c.ball_machine_fee_cents),
         }));
         setCourts(normalized);
         void loadCourtOperatingHours(normalized);
@@ -289,6 +299,9 @@ export function CourtManagement() {
       enableGuestFee: false,
       guestFeeCents: null,
       guestFeeDollars: '',
+      enableBallMachineFee: false,
+      ballMachineFeeCents: null,
+      ballMachineFeeDollars: '',
       status: 'available',
     });
     if (currentFacilityId) void loadStripeStatus(currentFacilityId);
@@ -306,6 +319,9 @@ export function CourtManagement() {
       enableGuestFee: Boolean(court.guestFeeCents),
       guestFeeDollars:
         court.guestFeeDollars || formatCentsToDollars(court.guestFeeCents),
+      enableBallMachineFee: Boolean(court.ballMachineFeeCents),
+      ballMachineFeeDollars:
+        court.ballMachineFeeDollars || formatCentsToDollars(court.ballMachineFeeCents),
     });
     if (currentFacilityId) void loadStripeStatus(currentFacilityId);
     setIsAddingNew(false);
@@ -342,6 +358,12 @@ export function CourtManagement() {
       toast.error('Enter a valid guest fee amount');
       return;
     }
+    const ballMachineFeeCents = parseBookingFeeDollars(editingCourt.ballMachineFeeDollars);
+    const hasBallMachineFee = Boolean(editingCourt.enableBallMachineFee);
+    if (hasBallMachineFee && !ballMachineFeeCents) {
+      toast.error('Enter a valid ball machine hourly rate');
+      return;
+    }
     if (turningOnPaidBooking && stripeOnboarded === false) {
       toast.error('Complete Stripe Connect setup under Member Payments first');
       return;
@@ -353,6 +375,11 @@ export function CourtManagement() {
     }
     if (hasGuestFee && stripeOnboarded === false) {
       toast.info('Guest fee saved, but Stripe Connect must be set up before members can be charged');
+    }
+    if (hasBallMachineFee && stripeOnboarded === false) {
+      toast.info(
+        'Ball machine fee saved, but Stripe Connect must be set up before members can be charged'
+      );
     }
 
     try {
@@ -369,6 +396,8 @@ export function CourtManagement() {
         bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
         guestFeeCents: hasGuestFee ? guestFeeCents : null,
         guestFeeDollars: hasGuestFee ? editingCourt.guestFeeDollars : '',
+        ballMachineFeeCents: hasBallMachineFee ? ballMachineFeeCents : null,
+        ballMachineFeeDollars: hasBallMachineFee ? editingCourt.ballMachineFeeDollars : '',
       };
 
       let response;
@@ -1018,6 +1047,11 @@ export function CourtManagement() {
                             {court.guestFeeCents && (
                               <Badge className="bg-blue-100 text-blue-900 border-blue-200">
                                 Guest fee · ${(court.guestFeeCents / 100).toFixed(2)}/guest
+                              </Badge>
+                            )}
+                            {court.ballMachineFeeCents && (
+                              <Badge className="bg-purple-100 text-purple-900 border-purple-200">
+                                Ball machine · ${(court.ballMachineFeeCents / 100).toFixed(2)}/hr
                               </Badge>
                             )}
                             {isEditingThis && (

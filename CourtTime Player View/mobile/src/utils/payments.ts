@@ -37,6 +37,16 @@ export function courtGuestFeeCents(court: { guestFeeCents?: number | null }): nu
   return Number.isFinite(cents) && cents > 0 ? cents : null;
 }
 
+export function courtBallMachineFeeCents(court: { ballMachineFeeCents?: number | null }): number | null {
+  const cents = court.ballMachineFeeCents != null ? Number(court.ballMachineFeeCents) : 0;
+  return Number.isFinite(cents) && cents > 0 ? cents : null;
+}
+
+export function scaleHourlyFeeCents(hourlyCents: number, durationMinutes: number): number {
+  if (durationMinutes <= 0) return 0;
+  return Math.round(hourlyCents * (durationMinutes / 60));
+}
+
 export function isPaidBulletinSignup(post: {
   requirePayment?: boolean;
   signupAmountCents?: number | null;

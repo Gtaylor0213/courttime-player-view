@@ -3,26 +3,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Switch } from '../ui/switch';
 import { COURT_FEES_MODE_OPTIONS, type CourtFeesMode } from './courtFees';
 
 type Props = {
   mode: CourtFeesMode;
   bookingFeeDollars: string;
   guestFeeDollars: string;
+  ballMachineEnabled: boolean;
+  ballMachineFeeDollars: string;
   courtCount: number;
   onModeChange: (mode: CourtFeesMode) => void;
   onBookingFeeChange: (value: string) => void;
   onGuestFeeChange: (value: string) => void;
+  onBallMachineEnabledChange: (enabled: boolean) => void;
+  onBallMachineFeeChange: (value: string) => void;
 };
 
 export function FacilityCourtFeesSection({
   mode,
   bookingFeeDollars,
   guestFeeDollars,
+  ballMachineEnabled,
+  ballMachineFeeDollars,
   courtCount,
   onModeChange,
   onBookingFeeChange,
   onGuestFeeChange,
+  onBallMachineEnabledChange,
+  onBallMachineFeeChange,
 }: Props) {
   const showPaidBooking = mode === 'paid_booking' || mode === 'both';
   const showGuestFee = mode === 'guest_fee' || mode === 'both';
@@ -32,8 +41,8 @@ export function FacilityCourtFeesSection({
       <CardHeader>
         <CardTitle className="text-base">Court fees</CardTitle>
         <CardDescription>
-          Do you want to charge fees or guest fees? These settings apply to all courts
-          {courtCount > 0 ? ` (${courtCount})` : ''}.
+          Do you want to charge fees, guest fees, or ball machine rentals? These settings apply to all
+          courts{courtCount > 0 ? ` (${courtCount})` : ''}.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -90,6 +99,30 @@ export function FacilityCourtFeesSection({
               value={guestFeeDollars}
               onChange={(e) => onGuestFeeChange(e.target.value)}
               placeholder="e.g. 10.00 per guest"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-4 pt-1 border-t">
+          <div>
+            <p className="text-sm font-medium">Ball machine</p>
+            <p className="text-xs text-gray-500">
+              Charged per hour — members can add a ball machine when booking
+            </p>
+          </div>
+          <Switch checked={ballMachineEnabled} onCheckedChange={onBallMachineEnabledChange} />
+        </div>
+        {ballMachineEnabled && (
+          <div className="space-y-2">
+            <Label htmlFor="facilityBallMachineFee">Ball machine rate (USD) *</Label>
+            <Input
+              id="facilityBallMachineFee"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={ballMachineFeeDollars}
+              onChange={(e) => onBallMachineFeeChange(e.target.value)}
+              placeholder="e.g. 15.00 per hour"
             />
           </div>
         )}

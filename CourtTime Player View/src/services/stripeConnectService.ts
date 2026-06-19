@@ -888,6 +888,7 @@ export async function createCourtBookingCheckoutSession(params: {
        c.require_payment,
        c.booking_amount_cents,
        c.guest_fee_cents,
+       c.ball_machine_fee_cents,
        f.name AS facility_name,
        f.stripe_account_id,
        f.stripe_onboarded,
@@ -903,7 +904,8 @@ export async function createCourtBookingCheckoutSession(params: {
   const court = courtResult.rows[0];
   const hasBookingFee = court.require_payment && court.booking_amount_cents;
   const hasGuestFee = pb.bringGuest && court.guest_fee_cents;
-  if (!hasBookingFee && !hasGuestFee) {
+  const hasBallMachineFee = pb.addBallMachine && court.ball_machine_fee_cents;
+  if (!hasBookingFee && !hasGuestFee && !hasBallMachineFee) {
     throw new Error('This court does not require payment to book');
   }
   if (!court.stripe_account_id || !court.stripe_onboarded) {
@@ -912,7 +914,11 @@ export async function createCourtBookingCheckoutSession(params: {
 
   const bookingAmountCents = hasBookingFee ? Number(court.booking_amount_cents) : 0;
   const guestAmountCents = hasGuestFee ? Number(court.guest_fee_cents) : 0;
-  const totalAmountCents = bookingAmountCents + guestAmountCents;
+  const durationMinutes = pb.durationMinutes > 0 ? pb.durationMinutes : 60;
+  const ballMachineAmountCents = hasBallMachineFee
+    ? Math.round(Number(court.ball_machine_fee_cents) * (durationMinutes / 60))
+    : 0;
+  const totalAmountCents = bookingAmountCents + guestAmountCents + ballMachineAmountCents;
   const platformFeePercent = Number(court.platform_fee_percent ?? 0);
   const platformFeeCents = Math.max(0, Math.round((totalAmountCents * platformFeePercent) / 100));
 
@@ -981,6 +987,19 @@ export async function createCourtBookingCheckoutSession(params: {
         product_data: {
           name: `Guest fee — ${court.name}`,
           description: `${court.facility_name} · ${dateLabel}`,
+        },
+      },
+    });
+  }
+  if (ballMachineAmountCents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        unit_amount: ballMachineAmountCents,
+        product_data: {
+          name: `Ball machine — ${court.name}`,
+          description: `${court.facility_name} · ${dateLabel} ${pb.startTime}–${pb.endTime}`,
         },
       },
     });

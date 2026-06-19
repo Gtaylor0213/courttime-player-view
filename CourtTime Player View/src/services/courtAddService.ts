@@ -37,6 +37,7 @@ export type SingleCourtAddPayload = {
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
     guestFeeCents?: number | null;
+    ballMachineFeeCents?: number | null;
   };
   split?: {
     canSplit: boolean;
@@ -276,6 +277,7 @@ async function executeCourtAddPayload(
     requirePayment: court.requirePayment || false,
     bookingAmountCents: court.requirePayment ? court.bookingAmountCents ?? null : null,
     guestFeeCents: court.guestFeeCents ?? null,
+    ballMachineFeeCents: court.ballMachineFeeCents ?? null,
   });
 
   if (split?.canSplit && split.splitNames.length > 0) {

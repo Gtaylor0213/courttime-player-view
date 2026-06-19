@@ -30,6 +30,7 @@ import {
 import { useRegistration } from './RegistrationContext';
 import { AdminProfileFields } from './AdminProfileFields';
 import { FacilityOperatingHoursSection } from './FacilityOperatingHoursSection';
+import { COURT_FEES_MODE_OPTIONS } from './courtFees';
 import {
   courtScheduleRowsToOperatingHoursMap,
   formatGroupedOperatingHoursSummary,
@@ -213,6 +214,20 @@ export function ReviewStep() {
           <CardTitle className="text-base">Courts ({formData.courts.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          {(formData.courtFeesMode !== 'none') && (
+            <div className="mb-4 pb-4 border-b border-gray-100 text-sm text-gray-600">
+              <span className="font-medium text-gray-900">Fees (all courts): </span>
+              {COURT_FEES_MODE_OPTIONS.find((option) => option.value === formData.courtFeesMode)?.label}
+              {(formData.courtFeesMode === 'paid_booking' || formData.courtFeesMode === 'both') &&
+                formData.courtFeesBookingDollars && (
+                  <> · Paid ${formData.courtFeesBookingDollars}/hr</>
+                )}
+              {(formData.courtFeesMode === 'guest_fee' || formData.courtFeesMode === 'both') &&
+                formData.courtFeesGuestDollars && (
+                  <> · Guest fee ${formData.courtFeesGuestDollars}</>
+                )}
+            </div>
+          )}
           <div className="space-y-2 text-sm">
             {formData.courts.map((court) => {
               const schedule =
@@ -231,12 +246,6 @@ export function ReviewStep() {
                 <span className="text-gray-600 text-sm">
                   {court.surfaceType} · {court.courtType} · {court.isIndoor ? 'Indoor' : 'Outdoor'}
                   {court.canSplit && ` · Splits into ${court.splitConfig?.splitNames.join(', ')}`}
-                  {court.requirePayment && court.bookingFeeDollars && (
-                    <> · Paid ${court.bookingFeeDollars}</>
-                  )}
-                  {court.enableGuestFee && court.guestFeeDollars && (
-                    <> · Guest fee ${court.guestFeeDollars}</>
-                  )}
                 </span>
               </div>
               );

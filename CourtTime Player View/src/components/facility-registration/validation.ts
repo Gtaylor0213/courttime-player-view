@@ -87,14 +87,16 @@ export function getStepErrors(
           stepErrors.courts = `Enter a court number for ${court.name || 'each court'}`;
           break;
         }
-        if (court.requirePayment && !parseBookingFeeDollars(court.bookingFeeDollars)) {
-          stepErrors.courts = `Enter a booking fee for ${court.name} or turn off paid court booking`;
-          break;
-        }
-        if (court.enableGuestFee && !parseBookingFeeDollars(court.guestFeeDollars)) {
-          stepErrors.courts = `Enter a guest fee amount for ${court.name}`;
-          break;
-        }
+      }
+
+      const mode = dataSource.courtFeesMode ?? 'none';
+      const wantsPaidBooking = mode === 'paid_booking' || mode === 'both';
+      const wantsGuestFee = mode === 'guest_fee' || mode === 'both';
+
+      if (wantsPaidBooking && !parseBookingFeeDollars(dataSource.courtFeesBookingDollars)) {
+        stepErrors.courts = 'Enter an hourly booking rate or choose a different fee type';
+      } else if (wantsGuestFee && !parseBookingFeeDollars(dataSource.courtFeesGuestDollars)) {
+        stepErrors.courts = 'Enter a guest fee amount or choose a different fee type';
       }
     }
   }

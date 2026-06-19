@@ -26,6 +26,7 @@ import {
 } from '../../../shared/utils/courtNaming';
 import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
 import { parseBookingFeeDollars } from '../admin/PaidCourtBookingFields';
+import { applyCourtFeesToCourts, courtFeeFieldsFromSettings, type CourtFeesMode } from './courtFees';
 import { useAuth } from '../../contexts/AuthContext';
 import { getRegistrationPathWithMobileSource, resolveRegistrationValidationOptions } from './registrationPath';
 import { buildRegistrationBookingRules, hasValue } from './registrationRules';
@@ -117,6 +118,9 @@ export function useRegistrationForm() {
 
     // Step 4: Courts (will be filled dynamically)
     courts: [] as RegistrationCourt[],
+    courtFeesMode: 'none' as CourtFeesMode,
+    courtFeesBookingDollars: '',
+    courtFeesGuestDollars: '',
 
     // Step 5: Additional Admins
     adminInvites: [] as AdminInvite[],
@@ -759,6 +763,11 @@ export function useRegistrationForm() {
 
   const addCourt = () => {
     setFormData(prev => {
+      const feeFields = courtFeeFieldsFromSettings(
+        prev.courtFeesMode,
+        prev.courtFeesBookingDollars,
+        prev.courtFeesGuestDollars,
+      );
       const newCourt: RegistrationCourt = {
         id: `court-${Date.now()}`,
         name: formatStandardCourtName(prev.courts.length + 1),
@@ -768,11 +777,7 @@ export function useRegistrationForm() {
         isIndoor: false,
         hasLights: false,
         canSplit: false,
-        requirePayment: false,
-        bookingFeeDollars: '',
-        enableGuestFee: false,
-        guestFeeCents: null,
-        guestFeeDollars: '',
+        ...feeFields,
         operatingSchedule: buildDefaultCourtSchedule(prev.operatingHours),
       };
       return { ...prev, courts: [...prev.courts, newCourt] };
@@ -805,6 +810,11 @@ export function useRegistrationForm() {
 
     setFormData(prev => {
       const scheduleForBulkCourt = buildDefaultCourtSchedule(prev.operatingHours);
+      const feeFields = courtFeeFieldsFromSettings(
+        prev.courtFeesMode,
+        prev.courtFeesBookingDollars,
+        prev.courtFeesGuestDollars,
+      );
       const newCourts: RegistrationCourt[] = [];
       for (let i = 0; i < count; i++) {
         const courtNumber = startNum + i;
@@ -817,11 +827,7 @@ export function useRegistrationForm() {
           isIndoor: bulkCourtData.isIndoor,
           hasLights: bulkCourtData.hasLights,
           canSplit: false,
-          requirePayment: false,
-          bookingFeeDollars: '',
-          enableGuestFee: false,
-          guestFeeCents: null,
-          guestFeeDollars: '',
+          ...feeFields,
           operatingSchedule: cloneCourtSchedule(scheduleForBulkCourt),
         });
       }
@@ -864,6 +870,54 @@ export function useRegistrationForm() {
         return merged;
       })
     }));
+  };
+
+  const handleCourtFeesModeChange = (mode: CourtFeesMode) => {
+    setFormData((prev) => ({
+      ...prev,
+      courtFeesMode: mode,
+      courts: applyCourtFeesToCourts(
+        prev.courts,
+        mode,
+        prev.courtFeesBookingDollars,
+        prev.courtFeesGuestDollars,
+      ),
+    }));
+    if (errors.courts) {
+      setErrors((prev) => ({ ...prev, courts: '' }));
+    }
+  };
+
+  const handleCourtFeesBookingChange = (bookingFeeDollars: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      courtFeesBookingDollars: bookingFeeDollars,
+      courts: applyCourtFeesToCourts(
+        prev.courts,
+        prev.courtFeesMode,
+        bookingFeeDollars,
+        prev.courtFeesGuestDollars,
+      ),
+    }));
+    if (errors.courts) {
+      setErrors((prev) => ({ ...prev, courts: '' }));
+    }
+  };
+
+  const handleCourtFeesGuestChange = (guestFeeDollars: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      courtFeesGuestDollars: guestFeeDollars,
+      courts: applyCourtFeesToCourts(
+        prev.courts,
+        prev.courtFeesMode,
+        prev.courtFeesBookingDollars,
+        guestFeeDollars,
+      ),
+    }));
+    if (errors.courts) {
+      setErrors((prev) => ({ ...prev, courts: '' }));
+    }
   };
 
   const removeCourt = (courtId: string) => {
@@ -1360,6 +1414,9 @@ export function useRegistrationForm() {
     addBulkCourts,
     updateCourt,
     removeCourt,
+    handleCourtFeesModeChange,
+    handleCourtFeesBookingChange,
+    handleCourtFeesGuestChange,
     addAdminInvite,
     updateAdminInvite,
     removeAdminInvite,

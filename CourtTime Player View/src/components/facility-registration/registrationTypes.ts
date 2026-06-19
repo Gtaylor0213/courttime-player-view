@@ -1,5 +1,6 @@
 import type { PaidCourtFormFields } from '../admin/PaidCourtBookingFields';
 import type { CourtScheduleDay } from '../admin/CourtScheduleEditor';
+import type { CourtFeesMode } from './courtFees';
 import { DEFAULT_RULES_CONFIG, type RulesConfig } from './rule-defaults';
 
 export interface RegistrationCourt extends PaidCourtFormFields {
@@ -95,6 +96,9 @@ export interface RegistrationFormData {
   enableTermsAndConditions: boolean;
   termsAndConditions: string;
   courts: RegistrationCourt[];
+  courtFeesMode: CourtFeesMode;
+  courtFeesBookingDollars: string;
+  courtFeesGuestDollars: string;
   adminInvites: AdminInvite[];
 }
 
@@ -162,6 +166,9 @@ export function createInitialRegistrationFormData(user?: {
     enableTermsAndConditions: false,
     termsAndConditions: '',
     courts: [],
+    courtFeesMode: 'none',
+    courtFeesBookingDollars: '',
+    courtFeesGuestDollars: '',
     adminInvites: [],
   };
 }

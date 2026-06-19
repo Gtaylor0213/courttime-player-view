@@ -17,7 +17,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { FACILITY_TYPE_OPTIONS } from '../../../shared/constants/facilityTypes';
 import { RulesStep } from './RulesStep';
-import { PaidCourtBookingFields } from '../admin/PaidCourtBookingFields';
 import { CourtTypeField } from '../admin/CourtTypeField';
 import {
   courtFieldsAfterNameChange,
@@ -34,6 +33,7 @@ import {
 import { useRegistration } from './RegistrationContext';
 import { AdminProfileFields } from './AdminProfileFields';
 import { FacilityOperatingHoursSection } from './FacilityOperatingHoursSection';
+import { FacilityCourtFeesSection } from './FacilityCourtFeesSection';
 
 export function CourtsStep() {
   const {
@@ -48,6 +48,7 @@ export function CourtsStep() {
     updatePeakHourSlotRule, handleAddressWhitelistChange, removeAddressWhitelist,
     courtFormMode, setCourtFormMode, bulkCourtData, setBulkCourtData,
     addCourt, addBulkCourts, updateCourt, removeCourt,
+    handleCourtFeesModeChange, handleCourtFeesBookingChange, handleCourtFeesGuestChange,
     addAdminInvite, updateAdminInvite, removeAdminInvite,
     preAuthenticated, loggedInDuringRegistration, buildRegistrationBookingRules,
     promoCode, setPromoCode, promoValidation, setPromoValidation,
@@ -69,6 +70,16 @@ export function CourtsStep() {
       <FacilityOperatingHoursSection description={
         'Sets the weekly open and close times for every court you add below.'
       } />
+
+      <FacilityCourtFeesSection
+        mode={formData.courtFeesMode}
+        bookingFeeDollars={formData.courtFeesBookingDollars}
+        guestFeeDollars={formData.courtFeesGuestDollars}
+        courtCount={formData.courts.length}
+        onModeChange={handleCourtFeesModeChange}
+        onBookingFeeChange={handleCourtFeesBookingChange}
+        onGuestFeeChange={handleCourtFeesGuestChange}
+      />
 
       {errors.courts && (
         <Alert variant="destructive">
@@ -329,14 +340,6 @@ export function CourtsStep() {
                   court&apos;s hours later under Facility Management → Court Management.
                 </p>
               </div>
-
-              <PaidCourtBookingFields
-                court={court}
-                onChange={(patch) => updateCourt(court.id, patch)}
-                stripeOnboarded={false}
-                stripeStatusLoading={false}
-                paymentsTabHint="Member Payments (after registration)"
-              />
             </CardContent>
           </Card>
         ))}

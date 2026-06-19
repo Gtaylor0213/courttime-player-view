@@ -21,6 +21,7 @@ import {
 import {
   courtFieldsAfterNameChange,
   courtFieldsAfterNumberChange,
+  formatStandardCourtName,
   normalizeCourtNameAndNumber,
 } from '../../../shared/utils/courtNaming';
 import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
@@ -760,7 +761,7 @@ export function useRegistrationForm() {
     setFormData(prev => {
       const newCourt: RegistrationCourt = {
         id: `court-${Date.now()}`,
-        name: `RegistrationCourt ${prev.courts.length + 1}`,
+        name: formatStandardCourtName(prev.courts.length + 1),
         courtNumber: prev.courts.length + 1,
         surfaceType: 'Hard',
         courtType: 'Tennis',
@@ -809,7 +810,7 @@ export function useRegistrationForm() {
         const courtNumber = startNum + i;
         newCourts.push({
           id: `court-${Date.now()}-${i}`,
-          name: `RegistrationCourt ${courtNumber}`,
+          name: formatStandardCourtName(courtNumber),
           courtNumber,
           surfaceType: bulkCourtData.surfaceType,
           courtType: bulkCourtData.courtType,
@@ -842,7 +843,7 @@ export function useRegistrationForm() {
         if (court.id !== courtId) return court;
 
         let merged = { ...court, ...updates };
-        if (updates.courtNumber !== undefined) {
+        if (updates.courtNumber !== undefined && updates.name === undefined) {
           merged = { ...merged, ...courtFieldsAfterNumberChange(updates.courtNumber, court.name) };
         }
         if (updates.name !== undefined) {

@@ -20,6 +20,7 @@ import { RulesStep } from './RulesStep';
 import { PaidCourtBookingFields } from '../admin/PaidCourtBookingFields';
 import { CourtTypeField } from '../admin/CourtTypeField';
 import {
+  courtFieldsAfterNameChange,
   courtFieldsAfterNumberInputChange,
   courtNumberInputDisplayValue,
 } from '../../../shared/utils/courtNaming';
@@ -207,7 +208,12 @@ export function CourtsStep() {
                   <p className="text-xs text-gray-500">Shown on the calendar — any label you want.</p>
                   <Input
                     value={court.name}
-                    onChange={(e) => updateCourt(court.id, { name: e.target.value })}
+                    onChange={(e) =>
+                      updateCourt(
+                        court.id,
+                        courtFieldsAfterNameChange(e.target.value, court.courtNumber)
+                      )
+                    }
                     placeholder="e.g. Center Court"
                   />
                 </div>

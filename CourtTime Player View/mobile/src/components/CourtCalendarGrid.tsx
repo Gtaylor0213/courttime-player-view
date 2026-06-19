@@ -24,6 +24,7 @@ import { EmptyState } from './EmptyState';
 import { createPollingTransport } from '../../../shared/api/sync';
 import { getOperatingHoursForDay, isTruthyClosed } from '../../../shared/utils/operatingHours';
 import { userFacingApiMessage, type ApiFailureShape } from '../utils/apiUserMessages';
+import { formatCourtCalendarSubtitle } from '../../../shared/utils/courtNaming';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -964,7 +965,13 @@ export function CourtCalendarGrid({
             ]}
           >
             <Text style={styles.courtHeaderText} numberOfLines={1}>{court.name}</Text>
-            <Text style={styles.courtHeaderMeta}>{court.courtType || 'Tennis'}</Text>
+            <Text style={styles.courtHeaderMeta}>
+              {formatCourtCalendarSubtitle({
+                typeLabel: court.courtType || 'Tennis',
+                surfaceType: court.surfaceType,
+                isWalkUp: court.isWalkUp,
+              })}
+            </Text>
           </View>
         ))}
         {Array.from({ length: Math.max(0, COURTS_PER_PAGE - pageCourts.length) }).map((_, idx) => {

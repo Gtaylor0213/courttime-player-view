@@ -23,6 +23,7 @@ import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User,
 import { Calendar as CalendarPicker } from './ui/calendar';
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+import { formatCourtCalendarSubtitle } from '../../shared/utils/courtNaming';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import {
   fetchBookingCalendarDetails,
@@ -272,7 +273,7 @@ export function CourtCalendarView() {
 
       try {
         setLoadingFacilities(true);
-        const facilitiesData: Array<{ id: string; name: string; type: string; status?: string; courts: Array<{ id: string; name: string; type: string; parentCourtId?: string | null; isSplitCourt?: boolean; isWalkUp?: boolean }>; operatingHours?: any; timezone?: string }> = [];
+        const facilitiesData: Array<{ id: string; name: string; type: string; status?: string; courts: Array<{ id: string; name: string; type: string; typeLabel: string; surfaceType?: string; parentCourtId?: string | null; isSplitCourt?: boolean; isWalkUp?: boolean }>; operatingHours?: any; timezone?: string }> = [];
 
         for (const facilityId of allFacilityIds) {
           // Fetch facility details
@@ -304,6 +305,7 @@ export function CourtCalendarView() {
                                 ? parseInt(String(court.court_number), 10)
                                 : undefined,
                       type: (court.courtType ?? court.court_type)?.toLowerCase?.() || 'tennis',
+                      surfaceType: court.surfaceType ?? court.surface_type,
                       parentCourtId: court.parentCourtId ?? court.parent_court_id ?? null,
                       isSplitCourt: court.isSplitCourt || court.is_split_court || false,
                       isWalkUp: court.isWalkUp === true || court.is_walk_up === true,
@@ -313,6 +315,7 @@ export function CourtCalendarView() {
                   name: court.name,
                   type: court.type,
                   typeLabel: String(court.courtType ?? '').trim() || court.type,
+                  surfaceType: court.surfaceType,
                   parentCourtId: court.parentCourtId,
                   isSplitCourt: court.isSplitCourt,
                   isWalkUp: court.isWalkUp,
@@ -2281,8 +2284,11 @@ export function CourtCalendarView() {
           {court.name}
         </div>
         <div className="truncate text-[10px] leading-none text-green-200 capitalize">
-          {(court as { typeLabel?: string }).typeLabel ?? court.type}
-          {court.isWalkUp ? ' - Walk-up' : ''}
+          {formatCourtCalendarSubtitle({
+            typeLabel: (court as { typeLabel?: string }).typeLabel ?? court.type,
+            surfaceType: (court as { surfaceType?: string }).surfaceType,
+            isWalkUp: court.isWalkUp,
+          })}
         </div>
       </th>
     ));
@@ -2298,8 +2304,11 @@ export function CourtCalendarView() {
           {court.name}
         </div>
         <div className="truncate text-[10px] leading-none text-green-200 capitalize">
-          {(court as { typeLabel?: string }).typeLabel ?? court.type}
-          {court.isWalkUp ? ' - Walk-up' : ''}
+          {formatCourtCalendarSubtitle({
+            typeLabel: (court as { typeLabel?: string }).typeLabel ?? court.type,
+            surfaceType: (court as { surfaceType?: string }).surfaceType,
+            isWalkUp: court.isWalkUp,
+          })}
         </div>
       </div>
     ));

@@ -89,6 +89,25 @@ export function courtFieldsAfterNumberChange(
   return { courtNumber: num, name: trimmed };
 }
 
+/** True when the court surface is clay (handles "Clay", "Clay Court", etc.). */
+export function isClayCourtSurface(surfaceType: string | null | undefined): boolean {
+  return String(surfaceType ?? '').trim().toLowerCase().includes('clay');
+}
+
+/** Subtitle under the court name on booking calendars (type + optional clay + walk-up). */
+export function formatCourtCalendarSubtitle(options: {
+  typeLabel: string;
+  surfaceType?: string | null;
+  isWalkUp?: boolean;
+}): string {
+  const base = String(options.typeLabel ?? '').trim() || 'Tennis';
+  let text = isClayCourtSurface(options.surfaceType) ? `${base} · Clay` : base;
+  if (options.isWalkUp) {
+    text = `${text} - Walk-up`;
+  }
+  return text;
+}
+
 /** Name is free text for calendar display; court number stays independent. */
 export function courtFieldsAfterNameChange(
   name: string,

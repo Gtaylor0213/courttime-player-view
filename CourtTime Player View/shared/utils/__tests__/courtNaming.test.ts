@@ -5,7 +5,9 @@ import {
   courtFieldsAfterNumberInputChange,
   courtNameMatchesNumber,
   EMPTY_COURT_NUMBER_DRAFT,
+  formatCourtCalendarSubtitle,
   formatStandardCourtName,
+  isClayCourtSurface,
   isCourtNumberEmpty,
   normalizeCourtNameAndNumber,
   parseCourtNumberInput,
@@ -13,6 +15,25 @@ import {
 } from '../courtNaming';
 
 describe('courtNaming', () => {
+  it('detects clay court surfaces', () => {
+    expect(isClayCourtSurface('Clay')).toBe(true);
+    expect(isClayCourtSurface('Clay Court')).toBe(true);
+    expect(isClayCourtSurface('Hard Court')).toBe(false);
+    expect(isClayCourtSurface(undefined)).toBe(false);
+  });
+
+  it('formats calendar subtitles with clay and walk-up', () => {
+    expect(
+      formatCourtCalendarSubtitle({ typeLabel: 'Tennis', surfaceType: 'Clay Court' })
+    ).toBe('Tennis · Clay');
+    expect(
+      formatCourtCalendarSubtitle({ typeLabel: 'Pickleball', surfaceType: 'Clay' })
+    ).toBe('Pickleball · Clay');
+    expect(
+      formatCourtCalendarSubtitle({ typeLabel: 'Tennis', surfaceType: 'Hard Court', isWalkUp: true })
+    ).toBe('Tennis - Walk-up');
+  });
+
   it('formats and parses standard court names', () => {
     expect(formatStandardCourtName(4)).toBe('Court 4');
     expect(parseStandardCourtName('Court 4')).toEqual({ courtNumber: 4, suffix: '' });

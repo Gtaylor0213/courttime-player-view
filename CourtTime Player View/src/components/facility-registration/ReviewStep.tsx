@@ -34,6 +34,7 @@ import { COURT_FEES_MODE_OPTIONS } from './courtFees';
 import {
   courtScheduleRowsToOperatingHoursMap,
   formatGroupedOperatingHoursSummary,
+  formatWallTimeRange12Hour,
 } from '../../../shared/utils/operatingHours';
 
 export function ReviewStep() {
@@ -101,7 +102,7 @@ export function ReviewStep() {
         .map((day) => dayLabels[day] || '?')
         .join(', ');
       const parts = [
-        `${slot.startTime || '--:--'}-${slot.endTime || '--:--'}`,
+        formatWallTimeRange12Hour(slot.startTime, slot.endTime),
         days || 'No days selected',
       ];
       return `Slot ${index + 1}: ${parts.join(' · ')}`;

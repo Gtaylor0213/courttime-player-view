@@ -166,6 +166,18 @@ export function normalizeDayHours(hours: DayHoursInput): NormalizedDayHours {
     if (!value || value.toLowerCase() === 'closed') {
       return { closed: true, display: 'Closed' };
     }
+    const rangeMatch = value.match(
+      /^(\d{1,2}:\d{2}(?::\d{2})?)\s*[–-]\s*(\d{1,2}:\d{2}(?::\d{2})?)$/
+    );
+    if (rangeMatch && !/[aApP][mM]/.test(value)) {
+      const openDisplay = to12HourTime(rangeMatch[1]);
+      const closeDisplay = to12HourTime(rangeMatch[2]);
+      return {
+        closed: false,
+        display: `${openDisplay} – ${closeDisplay}`,
+        openDisplay,
+      };
+    }
     return { closed: false, display: value };
   }
   const h = hours as Record<string, unknown>;
@@ -469,11 +481,25 @@ export function groupOperatingHoursForCompactDisplay(
 /** e.g. "9:00 AM – 9:00 PM" → "9am-9pm" for compact inline summaries */
 export function compactHoursDisplayLabel(label: string): string {
   if (!label || label.toLowerCase() === 'closed') return 'Closed';
-  return label
+  let normalized = label;
+  if (!/[aApP][mM]/.test(normalized)) {
+    const parts = normalized.split(/\s*[–-]\s*/);
+    if (parts.length === 2) {
+      normalized = `${to12HourTime(parts[0])} – ${to12HourTime(parts[1])}`;
+    }
+  }
+  return normalized
     .replace(/\s*–\s*/g, '-')
     .replace(/:00/g, '')
     .replace(/\s/g, '')
     .toLowerCase();
+}
+
+/** Format a HH:MM (24h) time range for display, e.g. "5:00 PM – 9:00 PM". */
+export function formatWallTimeRange12Hour(start?: string, end?: string): string {
+  const startLabel = start?.trim() ? to12HourTime(start) : '--:--';
+  const endLabel = end?.trim() ? to12HourTime(end) : '--:--';
+  return `${startLabel} – ${endLabel}`;
 }
 
 /** One-line grouped hours for admin lists (e.g. "Mon-Fri 9am-9pm · Sat-Sun 10am-10pm"). */

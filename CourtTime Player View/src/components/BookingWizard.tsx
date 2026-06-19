@@ -206,26 +206,23 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   }, [dragSelectedCourts, additionalCourtIds, facilityCourts]);
 
   const hasPaidCourt = useMemo(() => {
-    if (isAdmin) return false;
     return selectedCourts.some((c) => {
       const meta = facilityCourts.find((fc) => fc.id === c.courtId);
       return meta?.requirePayment && meta?.bookingAmountCents;
     });
-  }, [isAdmin, selectedCourts, facilityCourts]);
+  }, [selectedCourts, facilityCourts]);
 
   const primaryCourtGuestFeeCents = useMemo(() => {
-    if (isAdmin) return null;
     if (selectedCourts.length !== 1) return null;
     const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
     return meta?.guestFeeCents ?? null;
-  }, [isAdmin, selectedCourts, facilityCourts]);
+  }, [selectedCourts, facilityCourts]);
 
   const primaryCourtBallMachineFeeCents = useMemo(() => {
-    if (isAdmin) return null;
     if (selectedCourts.length !== 1) return null;
     const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
     return meta?.ballMachineFeeCents ?? null;
-  }, [isAdmin, selectedCourts, facilityCourts]);
+  }, [selectedCourts, facilityCourts]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -272,11 +269,10 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
   // Per-hour rate for a single paid court; total scales with selected duration
   const primaryCourtHourlyRateCents = useMemo(() => {
-    if (isAdmin) return null;
     if (selectedCourts.length !== 1) return null;
     const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
     return (meta?.requirePayment && meta?.bookingAmountCents) ? meta.bookingAmountCents : null;
-  }, [isAdmin, selectedCourts, facilityCourts]);
+  }, [selectedCourts, facilityCourts]);
 
   const courtTotalAmountCents = useMemo(() => {
     if (!primaryCourtHourlyRateCents || durationMins <= 0) return null;
@@ -447,7 +443,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       const endTime24 = convertTo24Hour(endTime);
       const datesToBook = generateRecurringDates().map(d => parseDateStr(d));
 
-      const paidCourtInSelection = !isAdmin && selectedCourts.some((c) => {
+      const paidCourtInSelection = selectedCourts.some((c) => {
         const meta = facilityCourts.find((fc) => fc.id === c.courtId);
         return meta?.requirePayment && meta?.bookingAmountCents;
       });

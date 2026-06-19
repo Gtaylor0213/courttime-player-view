@@ -39,7 +39,18 @@ interface QuickReservePopupProps {
     id: string;
     name: string;
     type: string;
-    courts: Array<{ id: string; name: string; type: string; parentCourtId?: string | null; isSplitCourt?: boolean; isWalkUp?: boolean }>;
+    courts: Array<{
+      id: string;
+      name: string;
+      type: string;
+      parentCourtId?: string | null;
+      isSplitCourt?: boolean;
+      isWalkUp?: boolean;
+      requirePayment?: boolean;
+      bookingAmountCents?: number | null;
+      guestFeeCents?: number | null;
+      ballMachineFeeCents?: number | null;
+    }>;
   }>;
   selectedFacilityId: string;
 }
@@ -535,9 +546,9 @@ export function QuickReservePopup({
       return;
     }
 
-    const includesPaidCourt = user?.userType !== 'admin' && allSelectedCourts.some((court) => {
+    const includesPaidCourt = allSelectedCourts.some((court) => {
       const fullCourt = availableCourts.find((c) => c.id === court.id);
-      return Boolean(fullCourt?.requirePayment);
+      return Boolean(fullCourt?.requirePayment && fullCourt?.bookingAmountCents);
     });
     if (includesPaidCourt && (allSelectedCourts.length > 1 || advancedBooking)) {
       alert('Paid court reservations must be booked one court and one time at a time.');

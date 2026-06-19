@@ -309,6 +309,25 @@ export function CourtCalendarView() {
                       parentCourtId: court.parentCourtId ?? court.parent_court_id ?? null,
                       isSplitCourt: court.isSplitCourt || court.is_split_court || false,
                       isWalkUp: court.isWalkUp === true || court.is_walk_up === true,
+                      requirePayment: court.requirePayment === true || court.require_payment === true,
+                      bookingAmountCents:
+                        court.bookingAmountCents != null
+                          ? Number(court.bookingAmountCents)
+                          : court.booking_amount_cents != null
+                            ? Number(court.booking_amount_cents)
+                            : null,
+                      guestFeeCents:
+                        court.guestFeeCents != null
+                          ? Number(court.guestFeeCents)
+                          : court.guest_fee_cents != null
+                            ? Number(court.guest_fee_cents)
+                            : null,
+                      ballMachineFeeCents:
+                        court.ballMachineFeeCents != null
+                          ? Number(court.ballMachineFeeCents)
+                          : court.ball_machine_fee_cents != null
+                            ? Number(court.ball_machine_fee_cents)
+                            : null,
                     }))
                 ).map((court) => ({
                   id: court.id,
@@ -319,6 +338,10 @@ export function CourtCalendarView() {
                   parentCourtId: court.parentCourtId,
                   isSplitCourt: court.isSplitCourt,
                   isWalkUp: court.isWalkUp,
+                  requirePayment: court.requirePayment,
+                  bookingAmountCents: court.bookingAmountCents,
+                  guestFeeCents: court.guestFeeCents,
+                  ballMachineFeeCents: court.ballMachineFeeCents,
                 }))
               : [];
 

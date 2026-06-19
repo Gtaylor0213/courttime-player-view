@@ -236,8 +236,6 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    const isAdminBooking = isAdminCaller;
-
     const result = await createBooking({
       courtId,
       userId: effectiveUserId,
@@ -255,7 +253,6 @@ router.post('/', async (req, res, next) => {
         : undefined,
       successUrl: typeof successUrl === 'string' ? successUrl : undefined,
       cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
-      skipPaymentCheck: isAdminBooking,
     });
 
     if (!result.success) {

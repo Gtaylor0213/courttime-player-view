@@ -335,27 +335,28 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
 export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
   const result = await query(`
     SELECT
-      id,
-      facility_id as "facilityId",
-      name,
-      court_number as "courtNumber",
-      surface_type as "surfaceType",
-      court_type as "courtType",
-      is_indoor as "isIndoor",
-      has_lights as "hasLights",
-      is_walk_up as "isWalkUp",
-      status,
-      parent_court_id as "parentCourtId",
-      split_configuration as "splitConfiguration",
-      is_split_court as "isSplitCourt",
-      COALESCE(require_payment, false) as "requirePayment",
-      booking_amount_cents as "bookingAmountCents",
-      guest_fee_cents as "guestFeeCents",
-      ball_machine_fee_cents as "ballMachineFeeCents",
-      created_at as "createdAt",
-      updated_at as "updatedAt"
-    FROM courts
-    WHERE facility_id = $1
+      c.id,
+      c.facility_id as "facilityId",
+      c.name,
+      c.court_number as "courtNumber",
+      c.surface_type as "surfaceType",
+      c.court_type as "courtType",
+      c.is_indoor as "isIndoor",
+      c.has_lights as "hasLights",
+      c.is_walk_up as "isWalkUp",
+      c.status,
+      c.parent_court_id as "parentCourtId",
+      c.split_configuration as "splitConfiguration",
+      c.is_split_court as "isSplitCourt",
+      (COALESCE(c.require_payment, false) OR COALESCE(p.require_payment, false)) as "requirePayment",
+      COALESCE(c.booking_amount_cents, p.booking_amount_cents) as "bookingAmountCents",
+      COALESCE(c.guest_fee_cents, p.guest_fee_cents) as "guestFeeCents",
+      COALESCE(c.ball_machine_fee_cents, p.ball_machine_fee_cents) as "ballMachineFeeCents",
+      c.created_at as "createdAt",
+      c.updated_at as "updatedAt"
+    FROM courts c
+    LEFT JOIN courts p ON p.id = c.parent_court_id
+    WHERE c.facility_id = $1
   `, [facilityId]);
 
   return sortCourtsForDisplay(result.rows);

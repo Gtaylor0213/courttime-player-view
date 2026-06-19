@@ -17,6 +17,7 @@ import type { FacilityRuleConfig } from './rulesEngine/types';
 import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
 import { buildTermsAcceptanceBookingBlocker } from './termsService';
+import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
 
 /**
  * Serialize booking creates per user + facility so concurrent multi-court POSTs
@@ -780,20 +781,12 @@ async function createBookingCore(bookingData: {
       warnings = evaluation.warnings;
     }
 
-    if (!bookingData.skipRulesValidation && !bookingData.skipPaymentCheck) {
-      const paidCourt = await query(
-        `SELECT c.name, c.require_payment, c.booking_amount_cents, c.guest_fee_cents,
-                c.ball_machine_fee_cents, f.stripe_onboarded
-         FROM courts c
-         JOIN facilities f ON f.id = c.facility_id
-         WHERE c.id = $1`,
-        [bookingData.courtId]
-      );
-      const courtRow = paidCourt.rows[0];
-      const needsPayment =
-        (courtRow?.require_payment && courtRow.booking_amount_cents) ||
-        (bookingData.bringGuest && courtRow?.guest_fee_cents) ||
-        (bookingData.addBallMachine && courtRow?.ball_machine_fee_cents);
+    if (!bookingData.skipPaymentCheck) {
+      const courtRow = await loadCourtPaymentSettings(bookingData.courtId);
+      const needsPayment = courtBookingNeedsPayment(courtRow, {
+        bringGuest: bookingData.bringGuest,
+        addBallMachine: bookingData.addBallMachine,
+      });
       if (needsPayment) {
         const { syncConnectOnboardingStatus, createCourtBookingCheckoutSession } = await import(
           './stripeConnectService'

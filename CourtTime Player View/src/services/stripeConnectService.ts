@@ -12,6 +12,7 @@
 
 import Stripe from 'stripe';
 import { query } from '../database/connection';
+import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
 
 export type PaymentCategory = 'BALL_MACHINE' | 'CLINIC' | 'DRILL' | 'DUES' | 'OTHER';
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
@@ -880,32 +881,14 @@ export async function createCourtBookingCheckoutSession(params: {
   }
 
   const pb = params.pendingBooking;
-  const courtResult = await query(
-    `SELECT
-       c.id,
-       c.name,
-       c.facility_id,
-       c.require_payment,
-       c.booking_amount_cents,
-       c.guest_fee_cents,
-       c.ball_machine_fee_cents,
-       f.name AS facility_name,
-       f.stripe_account_id,
-       f.stripe_onboarded,
-       f.platform_fee_percent
-     FROM courts c
-     JOIN facilities f ON f.id = c.facility_id
-     WHERE c.id = $1`,
-    [pb.courtId]
-  );
-  if (courtResult.rows.length === 0) {
+  const court = await loadCourtPaymentSettings(pb.courtId);
+  if (!court) {
     throw new Error('Court not found');
   }
-  const court = courtResult.rows[0];
   const hasBookingFee = court.require_payment && court.booking_amount_cents;
   const hasGuestFee = pb.bringGuest && court.guest_fee_cents;
   const hasBallMachineFee = pb.addBallMachine && court.ball_machine_fee_cents;
-  if (!hasBookingFee && !hasGuestFee && !hasBallMachineFee) {
+  if (!courtBookingNeedsPayment(court, { bringGuest: pb.bringGuest, addBallMachine: pb.addBallMachine })) {
     throw new Error('This court does not require payment to book');
   }
   if (!court.stripe_account_id || !court.stripe_onboarded) {

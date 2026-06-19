@@ -12,7 +12,7 @@ export function FacilityOperatingHoursSection({ description }: { description?: s
     <div>
       <h4 className="font-semibold mb-4 flex items-center gap-2">
         <Clock className="h-4 w-4" />
-        Court hours (default for all courts)
+        Court hours
       </h4>
       {description && <p className="text-sm text-gray-600 mb-3">{description}</p>}
       <div className="space-y-3">

@@ -325,7 +325,7 @@ export function CourtsStep() {
 
               <div className="mt-4 border-t pt-4">
                 <p className="text-xs text-gray-500">
-                  Operating hours follow the default schedule above. You can customize this
+                  Court hours follow the default schedule above. You can customize this
                   court&apos;s hours later under Facility Management → Court Management.
                 </p>
               </div>

@@ -559,7 +559,7 @@ export function FacilityDetailsTab(props: Props) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
-          Court hours (default for all courts)
+          Court hours
         </CardTitle>
         <CardDescription>
           Weekly open and close times for the facility calendar and for every court&apos;s schedule. Saving updates Court Management for all courts (prime-time and slot settings you set per court are kept). You can still fine-tune each court under the Court Management tab.

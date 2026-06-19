@@ -333,37 +333,32 @@ export async function getFacilityById(facilityId: string): Promise<Facility | nu
  * Get courts for a facility
  */
 export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
-  try {
-    const result = await query(`
-      SELECT
-        id,
-        facility_id as "facilityId",
-        name,
-        court_number as "courtNumber",
-        surface_type as "surfaceType",
-        court_type as "courtType",
-        is_indoor as "isIndoor",
-        has_lights as "hasLights",
-        is_walk_up as "isWalkUp",
-        status,
-        parent_court_id as "parentCourtId",
-        split_configuration as "splitConfiguration",
-        is_split_court as "isSplitCourt",
-        COALESCE(require_payment, false) as "requirePayment",
-        booking_amount_cents as "bookingAmountCents",
-        guest_fee_cents as "guestFeeCents",
-        ball_machine_fee_cents as "ballMachineFeeCents",
-        created_at as "createdAt",
-        updated_at as "updatedAt"
-      FROM courts
-      WHERE facility_id = $1
-    `, [facilityId]);
+  const result = await query(`
+    SELECT
+      id,
+      facility_id as "facilityId",
+      name,
+      court_number as "courtNumber",
+      surface_type as "surfaceType",
+      court_type as "courtType",
+      is_indoor as "isIndoor",
+      has_lights as "hasLights",
+      is_walk_up as "isWalkUp",
+      status,
+      parent_court_id as "parentCourtId",
+      split_configuration as "splitConfiguration",
+      is_split_court as "isSplitCourt",
+      COALESCE(require_payment, false) as "requirePayment",
+      booking_amount_cents as "bookingAmountCents",
+      guest_fee_cents as "guestFeeCents",
+      ball_machine_fee_cents as "ballMachineFeeCents",
+      created_at as "createdAt",
+      updated_at as "updatedAt"
+    FROM courts
+    WHERE facility_id = $1
+  `, [facilityId]);
 
-    return sortCourtsForDisplay(result.rows);
-  } catch (error) {
-    console.error('Get facility courts error:', error);
-    return [];
-  }
+  return sortCourtsForDisplay(result.rows);
 }
 
 /**

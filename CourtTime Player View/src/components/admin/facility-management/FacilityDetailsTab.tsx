@@ -24,6 +24,7 @@ import {
   toDatetimeLocalInput,
 } from '../../../utils/dateUtils';
 import { formatGroupedOperatingHoursSummary } from '../../../../shared/utils/operatingHours';
+import { CourtHoursEditor } from '../../booking-rules/CourtHoursEditor';
 
 type Props = UseFacilityManagementReturn;
 
@@ -592,43 +593,10 @@ export function FacilityDetailsTab(props: Props) {
         </div>
 
         {isEditing ? (
-          <div className="space-y-4">
-            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
-              <div key={day} className="flex flex-col gap-3 p-3 bg-gray-50 rounded-lg sm:flex-row sm:items-center sm:gap-4">
-                <div className="font-medium capitalize sm:w-28">{day}</div>
-                <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:flex sm:flex-1 sm:items-center sm:gap-2">
-                  <div className="space-y-1 sm:space-y-0">
-                    <Label className="text-xs text-gray-600 sm:hidden">Start time</Label>
-                    <Input
-                      type="time"
-                      value={facilityData.operatingHours[day]?.open || '08:00'}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOperatingHoursChange(day, 'open', e.target.value)}
-                      disabled={facilityData.operatingHours[day]?.closed}
-                      className="w-full sm:w-32"
-                    />
-                  </div>
-                  <div className="space-y-1 sm:space-y-0">
-                    <Label className="text-xs text-gray-600 sm:hidden">End time</Label>
-                    <Input
-                      type="time"
-                      value={facilityData.operatingHours[day]?.close || '20:00'}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOperatingHoursChange(day, 'close', e.target.value)}
-                      disabled={facilityData.operatingHours[day]?.closed}
-                      className="w-full sm:w-32"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 sm:shrink-0">
-                  <Switch
-                    id={`closed-${day}`}
-                    checked={facilityData.operatingHours[day]?.closed || false}
-                    onCheckedChange={(checked: boolean) => handleOperatingHoursChange(day, 'closed', checked)}
-                  />
-                  <Label htmlFor={`closed-${day}`} className="text-sm text-gray-600">Closed</Label>
-                </div>
-              </div>
-            ))}
-          </div>
+          <CourtHoursEditor
+            operatingHours={facilityData.operatingHours}
+            onChange={handleOperatingHoursChange}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (

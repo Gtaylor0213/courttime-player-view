@@ -1,6 +1,5 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Separator } from '../ui/separator';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
@@ -8,6 +7,7 @@ import {
   BookingRuleSwitch,
   BookingRuleToggleInput,
 } from '../booking-rules/BookingRuleToggleInput';
+import { MaxAccountsAndUserLimitsSection } from '../booking-rules/MaxAccountsAndUserLimitsSection';
 import {
   Info, ShieldCheck, Clock, Calendar, Sun, Users
 } from 'lucide-react';
@@ -83,7 +83,7 @@ export function RulesStep({
         <CardContent className="space-y-4">
           <InstructionCard
             icon={Info}
-            text="Set general facility policies and choose whether to restrict bookings by individual account or by household address."
+            text="Set general facility policies and member expectations shown to users during booking."
           />
           <div>
             <Label htmlFor="generalRules">General Usage Rules *</Label>
@@ -100,7 +100,22 @@ export function RulesStep({
               <p className="text-sm text-red-500 mt-1">{errors.generalRules}</p>
             )}
           </div>
+        </CardContent>
+      </Card>
 
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Restriction Type
+          </CardTitle>
+          <CardDescription>Controls whether household limits are enforced</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <InstructionCard
+            icon={Info}
+            text="Choose whether booking limits apply per individual account or are shared by household."
+          />
           <div
             id="restrictionTypeGroup"
             className={`rounded-lg border p-3 ${
@@ -144,86 +159,59 @@ export function RulesStep({
         </CardContent>
       </Card>
 
-      {/* Max accounts per address (HH-001) */}
       {maxAccountsPerAddressMeta && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Max Accounts Per Address
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <InstructionCard
-              icon={Info}
-              text={`${maxAccountsPerAddressMeta.description} This rule is separate from the address whitelist.`}
-            />
-            <div className="space-y-2">
-              <Label className="text-sm text-gray-600">Max Accounts</Label>
-              <BookingRuleToggleInput
-                checked={!!rules['HH-001']?.enabled}
-                onCheckedChange={(enabled) => onRuleEntryChange('HH-001', { enabled })}
-                value={rules['HH-001']?.config?.max_members ?? ''}
-                onChange={(value) =>
-                  onRuleConfigFieldChange('HH-001', 'max_members', parseInt(value, 10) || '')
-                }
-              />
-            </div>
-
-            <Separator className="my-6" />
-
-            <div className="space-y-4">
-              <div>
-                <Label className="text-base font-medium">User-Based Limits</Label>
-                <p className="text-xs text-gray-500 mt-1">
-                  Configure how many courts can be booked by individuals and households across daily and weekly limits.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Courts Per Week (Individual)</Label>
-                  <BookingRuleToggleInput
-                    checked={!!rules['ACC-002']?.enabled}
-                    onCheckedChange={(enabled) => onRuleEntryChange('ACC-002', { enabled })}
-                    value={rules['ACC-002']?.config?.max_per_week ?? ''}
-                    onChange={(value) => onRuleConfigFieldChange('ACC-002', 'max_per_week', parseInt(value, 10) || 1)}
-                    min={1}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Courts Per Day (Individual)</Label>
-                  <BookingRuleToggleInput
-                    checked={!!rules['ACC-002']?.config?.max_per_day_enabled}
-                    onCheckedChange={(enabled) => onRuleConfigFieldChange('ACC-002', 'max_per_day_enabled', enabled)}
-                    value={rules['ACC-002']?.config?.max_per_day ?? ''}
-                    onChange={(value) => onRuleConfigFieldChange('ACC-002', 'max_per_day', parseInt(value, 10) || 1)}
-                    min={1}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Courts Per Week (Household)</Label>
-                  <BookingRuleToggleInput
-                    checked={!!rules['HH-003']?.enabled}
-                    onCheckedChange={(enabled) => onRuleEntryChange('HH-003', { enabled })}
-                    value={rules['HH-003']?.config?.max_per_week_household ?? rules['HH-003']?.config?.max_prime_per_week_household ?? ''}
-                    onChange={(value) => onRuleConfigFieldChange('HH-003', 'max_per_week_household', parseInt(value, 10) || 1)}
-                    min={1}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Courts Per Day (Household)</Label>
-                  <BookingRuleToggleInput
-                    checked={!!rules['HH-003']?.config?.max_per_day_household_enabled}
-                    onCheckedChange={(enabled) => onRuleConfigFieldChange('HH-003', 'max_per_day_household_enabled', enabled)}
-                    value={rules['HH-003']?.config?.max_per_day_household ?? ''}
-                    onChange={(value) => onRuleConfigFieldChange('HH-003', 'max_per_day_household', parseInt(value, 10) || 1)}
-                    min={1}
-                  />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <MaxAccountsAndUserLimitsSection
+          maxAccountsDescription={`${maxAccountsPerAddressMeta.description} This rule is separate from the address whitelist.`}
+          maxAccountsEnabled={!!rules['HH-001']?.enabled}
+          maxAccountsValue={rules['HH-001']?.config?.max_members ?? ''}
+          onMaxAccountsEnabledChange={(enabled) => onRuleEntryChange('HH-001', { enabled })}
+          onMaxAccountsValueChange={(value) =>
+            onRuleConfigFieldChange('HH-001', 'max_members', parseInt(value, 10) || '')
+          }
+          userLimits={{
+            courtsPerWeekUserEnabled: !!rules['ACC-002']?.enabled,
+            courtsPerWeekUser: rules['ACC-002']?.config?.max_per_week ?? '',
+            courtsPerDayUserEnabled: !!rules['ACC-002']?.config?.max_per_day_enabled,
+            courtsPerDayUser: rules['ACC-002']?.config?.max_per_day ?? '',
+            courtsPerWeekHouseholdEnabled: !!rules['HH-003']?.enabled,
+            courtsPerWeekHousehold:
+              rules['HH-003']?.config?.max_per_week_household ??
+              rules['HH-003']?.config?.max_prime_per_week_household ??
+              '',
+            courtsPerDayHouseholdEnabled: !!rules['HH-003']?.config?.max_per_day_household_enabled,
+            courtsPerDayHousehold: rules['HH-003']?.config?.max_per_day_household ?? '',
+          }}
+          onUserLimitChange={(field, value) => {
+            switch (field) {
+              case 'courtsPerWeekUserEnabled':
+                onRuleEntryChange('ACC-002', { enabled: value as boolean });
+                break;
+              case 'courtsPerWeekUser':
+                onRuleConfigFieldChange('ACC-002', 'max_per_week', parseInt(value as string, 10) || 1);
+                break;
+              case 'courtsPerDayUserEnabled':
+                onRuleConfigFieldChange('ACC-002', 'max_per_day_enabled', value as boolean);
+                break;
+              case 'courtsPerDayUser':
+                onRuleConfigFieldChange('ACC-002', 'max_per_day', parseInt(value as string, 10) || 1);
+                break;
+              case 'courtsPerWeekHouseholdEnabled':
+                onRuleEntryChange('HH-003', { enabled: value as boolean });
+                break;
+              case 'courtsPerWeekHousehold':
+                onRuleConfigFieldChange('HH-003', 'max_per_week_household', parseInt(value as string, 10) || 1);
+                break;
+              case 'courtsPerDayHouseholdEnabled':
+                onRuleConfigFieldChange('HH-003', 'max_per_day_household_enabled', value as boolean);
+                break;
+              case 'courtsPerDayHousehold':
+                onRuleConfigFieldChange('HH-003', 'max_per_day_household', parseInt(value as string, 10) || 1);
+                break;
+              default:
+                break;
+            }
+          }}
+        />
       )}
 
       {/* Days in Advance */}

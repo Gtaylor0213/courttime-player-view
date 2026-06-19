@@ -11,7 +11,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { TabsContent } from '../../ui/tabs';
 import { Badge } from '../../ui/badge';
-import { Separator } from '../../ui/separator';
+import { MaxAccountsAndUserLimitsSection } from '../../booking-rules/MaxAccountsAndUserLimitsSection';
 import {
   BookingRuleSwitch,
   BookingRuleToggleInput,
@@ -141,95 +141,37 @@ export function FacilityRulesTab(props: Props) {
       {renderSectionSaveFooter('restriction type')}
     </Card>
 
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Max Accounts Per Address
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
-          <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-green-800">
-            {RULE_METADATA.find((m) => m.code === 'HH-001')?.description ??
-              'Limits how many member accounts can join from the same street address. When off, there is no limit.'}
-            {' '}This rule is separate from the address whitelist.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-sm text-gray-600">Max Accounts</Label>
-          <BookingRuleToggleInput
-            checked={facilityData.bookingRules.householdMaxMembersEnabled}
-            onCheckedChange={(v: boolean) => handleBookingRulesChange('householdMaxMembersEnabled', v)}
-            value={facilityData.bookingRules.householdMaxMembers}
-            onChange={(value) => handleBookingRulesChange('householdMaxMembers', value)}
-            disabled={!isEditing}
-            min="1"
-            max="50"
-          />
-        </div>
-
-        <Separator className="my-6" />
-
-        <div className="space-y-4">
-          <div>
-            <Label className="text-base font-medium">User-Based Limits</Label>
-            <p className="text-xs text-gray-500 mt-1">
-              Configure how many courts can be booked by individuals and households across daily and weekly limits.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Courts Per Week (Individual)</Label>
-              <BookingRuleToggleInput
-                checked={facilityData.bookingRules.courtsPerWeekUserEnabled}
-                onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekUserEnabled', v)}
-                value={facilityData.bookingRules.courtsPerWeekUser}
-                onChange={(value) => handleBookingRulesChange('courtsPerWeekUser', value)}
-                disabled={!isEditing}
-                min="1"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Courts Per Day (Individual)</Label>
-              <BookingRuleToggleInput
-                checked={facilityData.bookingRules.courtsPerDayUserEnabled}
-                onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayUserEnabled', v)}
-                value={facilityData.bookingRules.courtsPerDayUser}
-                onChange={(value) => handleBookingRulesChange('courtsPerDayUser', value)}
-                disabled={!isEditing}
-                min="1"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Courts Per Week (Household)</Label>
-              <BookingRuleToggleInput
-                checked={facilityData.bookingRules.courtsPerWeekHouseholdEnabled}
-                onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerWeekHouseholdEnabled', v)}
-                value={facilityData.bookingRules.courtsPerWeekHousehold}
-                onChange={(value) => handleBookingRulesChange('courtsPerWeekHousehold', value)}
-                disabled={!isEditing}
-                min="1"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Courts Per Day (Household)</Label>
-              <BookingRuleToggleInput
-                checked={facilityData.bookingRules.courtsPerDayHouseholdEnabled}
-                onCheckedChange={(v: boolean) => handleBookingRulesChange('courtsPerDayHouseholdEnabled', v)}
-                value={facilityData.bookingRules.courtsPerDayHousehold}
-                onChange={(value) => handleBookingRulesChange('courtsPerDayHousehold', value)}
-                disabled={!isEditing}
-                min="1"
-              />
-            </div>
-          </div>
-        </div>
-      </CardContent>
-      {renderSectionSaveFooter('max accounts per address')}
-      {renderSectionSaveFooter('user-based limits')}
-    </Card>
+    <MaxAccountsAndUserLimitsSection
+      maxAccountsDescription={`${
+        RULE_METADATA.find((m) => m.code === 'HH-001')?.description ??
+        'Limits how many member accounts can join from the same street address. When off, there is no limit.'
+      } This rule is separate from the address whitelist.`}
+      maxAccountsEnabled={facilityData.bookingRules.householdMaxMembersEnabled}
+      maxAccountsValue={facilityData.bookingRules.householdMaxMembers}
+      onMaxAccountsEnabledChange={(v) => handleBookingRulesChange('householdMaxMembersEnabled', v)}
+      onMaxAccountsValueChange={(value) => handleBookingRulesChange('householdMaxMembers', value)}
+      userLimits={{
+        courtsPerWeekUserEnabled: facilityData.bookingRules.courtsPerWeekUserEnabled,
+        courtsPerWeekUser: facilityData.bookingRules.courtsPerWeekUser,
+        courtsPerDayUserEnabled: facilityData.bookingRules.courtsPerDayUserEnabled,
+        courtsPerDayUser: facilityData.bookingRules.courtsPerDayUser,
+        courtsPerWeekHouseholdEnabled: facilityData.bookingRules.courtsPerWeekHouseholdEnabled,
+        courtsPerWeekHousehold: facilityData.bookingRules.courtsPerWeekHousehold,
+        courtsPerDayHouseholdEnabled: facilityData.bookingRules.courtsPerDayHouseholdEnabled,
+        courtsPerDayHousehold: facilityData.bookingRules.courtsPerDayHousehold,
+      }}
+      onUserLimitChange={(field, value) => {
+        handleBookingRulesChange(field, value as never);
+      }}
+      disabled={!isEditing}
+      maxAccountsMax="50"
+      footer={
+        <>
+          {renderSectionSaveFooter('max accounts per address')}
+          {renderSectionSaveFooter('user-based limits')}
+        </>
+      }
+    />
 
     <Card>
       <CardHeader className="pb-2">

@@ -3,8 +3,8 @@
  * Manages user session with JWT token + secure storage
  */
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Platform } from 'react-native';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
+import { AppState, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { api, setToken, getToken, removeToken, cacheUser, getCachedUser, clearCache } from '../api/client';
 import type { PendingTermsAcceptance } from '../api/client';
@@ -48,6 +48,7 @@ interface AuthContextType extends AuthState {
   updateUser: (updates: Partial<AuthUser>) => Promise<void>;
   pendingTermsAcceptances: PendingTermsAcceptance[];
   acceptTermsAndContinue: (facilityId: string) => Promise<boolean>;
+  refreshTermsStatus: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -180,14 +181,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function loadTermsStatus(currentUser: AuthUser | null) {
-    if (!currentUser || currentUser.userType === 'admin') {
+    if (!currentUser) {
       setPendingTermsAcceptances([]);
       return;
     }
     try {
       const res = await api.get('/api/auth/terms/status');
-      if (res.success && res.data?.pendingAcceptances) {
-        setPendingTermsAcceptances(res.data.pendingAcceptances);
+      if (res.success) {
+        const payload = res.data as { pendingAcceptances?: PendingTermsAcceptance[] } | undefined;
+        setPendingTermsAcceptances(payload?.pendingAcceptances ?? []);
       } else {
         setPendingTermsAcceptances([]);
       }
@@ -195,6 +197,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPendingTermsAcceptances([]);
     }
   }
+
+  const refreshTermsStatus = useCallback(async () => {
+    await loadTermsStatus(state.user);
+  }, [state.user]);
+
+  useEffect(() => {
+    if (!state.user) return;
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void loadTermsStatus(state.user);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [state.user?.id]);
 
   async function refreshSession(): Promise<boolean> {
     try {
@@ -282,6 +300,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function acceptTermsAndContinue(facilityId: string): Promise<boolean> {
     const res = await api.post('/api/auth/terms/accept', { facilityId });
     if (!res.success) return false;
+    setPendingTermsAcceptances((prev) => prev.filter((item) => item.facilityId !== facilityId));
     await loadTermsStatus(state.user);
     return true;
   }
@@ -328,7 +347,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [facilities, selectedFacilityId]);
 
   return (
-    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, refreshSession, updateUser, pendingTermsAcceptances, acceptTermsAndContinue }}>
+    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, refreshSession, updateUser, pendingTermsAcceptances, acceptTermsAndContinue, refreshTermsStatus }}>
       {children}
     </AuthContext.Provider>
   );

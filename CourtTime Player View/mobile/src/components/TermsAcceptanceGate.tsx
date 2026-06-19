@@ -78,7 +78,7 @@ export function TermsAcceptanceGate() {
         <Text style={styles.title}>Terms & Conditions Update</Text>
         <Text style={styles.subtitle}>
           You must accept the latest Terms & Conditions for{' '}
-          <Text style={styles.facilityName}>{current.facilityName}</Text> to continue.
+          <Text style={styles.facilityName}>{current.facilityName}</Text> before you can book a court or continue using the club.
         </Text>
         <Text style={styles.versionMeta}>
           Version {current.currentVersionNumber} · Published{' '}

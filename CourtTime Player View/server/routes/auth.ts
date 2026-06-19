@@ -274,10 +274,6 @@ router.get('/terms/status', async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    if (userWithMemberships.userType === 'admin') {
-      return res.json({ success: true, pendingAcceptances: [] });
-    }
-
     const pendingAcceptances = await getUserPendingTermsAcceptances(userId);
     res.json({ success: true, pendingAcceptances });
   } catch (error) {

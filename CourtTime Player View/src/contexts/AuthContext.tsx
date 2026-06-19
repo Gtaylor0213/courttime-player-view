@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner@2.0.3';
 import { authApi, resetSessionExpiryNotification } from '../api/client';
 import { isSessionAuthError } from '../../shared/utils/sessionAuth';
@@ -112,6 +112,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
+
+    const refreshOnFocus = () => {
+      void loadTermsStatus(user);
+    };
+
+    window.addEventListener('focus', refreshOnFocus);
+    return () => window.removeEventListener('focus', refreshOnFocus);
+  }, [user?.id]);
+
+  useEffect(() => {
     const onSessionExpired = () => {
       clearStoredSession();
       toast.error('Your session expired. Please log in again.');
@@ -138,13 +149,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(refreshedUser);
             // Update localStorage with fresh data
             localStorage.setItem('auth_user', JSON.stringify(refreshedUser));
-            await loadTermsStatus(refreshedUser);
+            await loadTermsStatus(refreshedUser, { blockUi: true });
           } else if (isSessionAuthError(result.error)) {
             clearStoredSession();
           } else {
             // Fall back to cached user if API fails (e.g. network)
             setUser(parsedUser);
-            await loadTermsStatus(parsedUser);
+            await loadTermsStatus(parsedUser, { blockUi: true });
           }
         } catch (parseError) {
           console.error('Failed to parse saved user:', parseError);
@@ -159,17 +170,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loadTermsStatus = async (currentUser: User | null) => {
-    if (!currentUser || currentUser.userType === 'admin') {
+  const loadTermsStatus = async (
+    currentUser: User | null,
+    options?: { blockUi?: boolean }
+  ) => {
+    if (!currentUser) {
       setPendingTermsAcceptances([]);
       return;
     }
 
+    const blockUi = options?.blockUi ?? false;
+
     try {
-      setTermsLoading(true);
+      if (blockUi) setTermsLoading(true);
       const response = await authApi.getTermsStatus();
-      if (response.success && response.data?.pendingAcceptances) {
-        setPendingTermsAcceptances(response.data.pendingAcceptances);
+      if (response.success) {
+        const payload = response.data as { pendingAcceptances?: PendingTermsAcceptance[] } | undefined;
+        setPendingTermsAcceptances(payload?.pendingAcceptances ?? []);
       } else {
         setPendingTermsAcceptances([]);
       }
@@ -177,7 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Failed to load terms status:', error);
       setPendingTermsAcceptances([]);
     } finally {
-      setTermsLoading(false);
+      if (blockUi) setTermsLoading(false);
     }
   };
 
@@ -195,7 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('auth_user', JSON.stringify(backendResponse.user));
           localStorage.setItem('auth_token', backendResponse.token);
           resetSessionExpiryNotification();
-          await loadTermsStatus(backendResponse.user);
+          await loadTermsStatus(backendResponse.user, { blockUi: true });
           toast.success(setupToken ? 'Logged in and joined facility' : 'Logged in successfully');
           return true;
         }
@@ -249,7 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('auth_user', JSON.stringify(registeredUser));
         localStorage.setItem('auth_token', token);
         resetSessionExpiryNotification();
-        await loadTermsStatus(registeredUser);
+        await loadTermsStatus(registeredUser, { blockUi: true });
         return true;
       } else {
         toast.error(result.error || 'Registration failed');
@@ -307,9 +324,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return accessToken;
   };
 
-  const refreshTermsStatus = async () => {
+  const refreshTermsStatus = useCallback(async () => {
     await loadTermsStatus(user);
-  };
+  }, [user?.id, user?.userType]);
 
   const acceptTermsAndContinue = async (facilityId: string): Promise<boolean> => {
     try {
@@ -319,6 +336,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
+      setPendingTermsAcceptances((prev) => prev.filter((item) => item.facilityId !== facilityId));
       await loadTermsStatus(user);
       toast.success('Terms & Conditions accepted');
       return true;

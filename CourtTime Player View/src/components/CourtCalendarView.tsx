@@ -130,7 +130,7 @@ export function CourtCalendarView() {
   const [searchParams] = useSearchParams();
   const { selectedFacilityId = 'sunrise-valley' } = useAppContext();
   const { unreadCount } = useNotifications();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshTermsStatus } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const selectedFacility = selectedFacilityId;
   const [selectedView, setSelectedView] = useState('week');
@@ -363,6 +363,11 @@ export function CourtCalendarView() {
       cancelled = true;
     };
   }, [user?.id, selectedFacility]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void refreshTermsStatus();
+  }, [user?.id, selectedFacility, refreshTermsStatus]);
 
   // Function to fetch bookings (can be called directly)
   const fetchBookings = React.useCallback(async (dateOverride?: Date | string) => {

@@ -59,7 +59,7 @@ export function TermsAcceptanceGate() {
           <CardHeader>
             <CardTitle className="text-2xl">Terms & Conditions Update Required</CardTitle>
             <p className="text-sm text-gray-600">
-              You must accept the latest Terms & Conditions for <strong>{current.facilityName}</strong> to continue.
+              You must accept the latest Terms & Conditions for <strong>{current.facilityName}</strong> before you can book a court or continue using the club.
             </p>
             <p className="text-xs text-gray-500">
               Version {current.currentVersionNumber} published on {new Date(current.publishedAt).toLocaleString()}

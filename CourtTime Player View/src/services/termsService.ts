@@ -178,6 +178,36 @@ export async function publishTermsVersion(
   });
 }
 
+export async function getPendingTermsAcceptanceForFacility(
+  userId: string,
+  facilityId: string
+): Promise<PendingTermsAcceptance | null> {
+  const pending = await getUserPendingTermsAcceptances(userId);
+  return pending.find((item) => item.facilityId === facilityId) ?? null;
+}
+
+export async function buildTermsAcceptanceBookingBlocker(
+  userId: string,
+  facilityId: string
+): Promise<{
+  ruleCode: string;
+  ruleName: string;
+  message: string;
+  severity: 'error';
+  passed: false;
+} | null> {
+  const pending = await getPendingTermsAcceptanceForFacility(userId, facilityId);
+  if (!pending) return null;
+
+  return {
+    ruleCode: 'TERMS-NOT-ACCEPTED',
+    ruleName: 'Terms & Conditions acceptance required',
+    message: `You must accept the updated Terms & Conditions for ${pending.facilityName} before booking a court.`,
+    severity: 'error',
+    passed: false,
+  };
+}
+
 export async function getUserPendingTermsAcceptances(userId: string): Promise<PendingTermsAcceptance[]> {
   const result = await query(
     `SELECT

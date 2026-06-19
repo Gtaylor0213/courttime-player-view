@@ -143,7 +143,7 @@ export default function BookCourtScreen() {
     bookingPaymentCancelled?: string;
     session_id?: string;
   }>();
-  const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate } = useAuth();
+  const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate, refreshTermsStatus } = useAuth();
   const { bannerState, lastCachedAt, retryConnectivity } = useOfflineApi();
   const facilityList = facilities ?? [];
   const currentFacilityName = facilityList.find(f => f.id === facilityId)?.name;
@@ -217,6 +217,11 @@ export default function BookCourtScreen() {
       setSelectedCourt(null);
     }
   }, [selectedBookDate]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void refreshTermsStatus();
+  }, [user?.id, facilityId, refreshTermsStatus]);
 
   useEffect(() => {
     setSelectedBookDate(selectedDate);

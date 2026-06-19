@@ -16,6 +16,7 @@ import {
 import type { FacilityRuleConfig } from './rulesEngine/types';
 import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
+import { buildTermsAcceptanceBookingBlocker } from './termsService';
 
 /**
  * Serialize booking creates per user + facility so concurrent multi-court POSTs
@@ -604,6 +605,20 @@ export async function validateBooking(bookingData: {
   /** Earlier instances in the same multi-create/recurring request (not in DB yet) */
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
 }): Promise<EvaluationResult> {
+  const termsBlocker = await buildTermsAcceptanceBookingBlocker(
+    bookingData.userId,
+    bookingData.facilityId
+  );
+  if (termsBlocker) {
+    return {
+      allowed: false,
+      results: [termsBlocker],
+      blockers: [termsBlocker],
+      warnings: [],
+      isPrimeTime: false,
+    };
+  }
+
   const walkUpCourt = await query(
     `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
     [bookingData.courtId]
@@ -709,6 +724,18 @@ async function createBookingCore(bookingData: {
   cancelUrl?: string;
 }): Promise<BookingResult> {
   try {
+    const termsBlocker = await buildTermsAcceptanceBookingBlocker(
+      bookingData.userId,
+      bookingData.facilityId
+    );
+    if (termsBlocker) {
+      return {
+        success: false,
+        error: termsBlocker.message,
+        ruleViolations: [termsBlocker],
+      };
+    }
+
     const walkUpCourt = await query(
       `SELECT name FROM courts WHERE id = $1 AND is_walk_up = true`,
       [bookingData.courtId]
@@ -1223,6 +1250,18 @@ export async function createBookingWithOverride(
   const adminId = override.adminUserId;
   const overrideReason = override.reason;
   try {
+    const termsBlocker = await buildTermsAcceptanceBookingBlocker(
+      bookingData.userId,
+      bookingData.facilityId
+    );
+    if (termsBlocker) {
+      return {
+        success: false,
+        error: termsBlocker.message,
+        ruleViolations: [termsBlocker],
+      };
+    }
+
     const walkUpCourt = await query(
       `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
       [bookingData.courtId]

@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Search, X, ChevronDown, ChevronUp, Trash2, AlertTriangle } from 'lucide-react';
 import { Switch } from '../ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
-import { getFacilities, getFacility, updateFacility, getFacilityRules, updateFacilityRule, getFacilityDeletePreview, deleteFacility } from '../../api/supportClient';
+import { getFacilities, getFacility, updateFacility, getFacilityRules, updateFacilityRule, getFacilityDeletePreview, deleteFacility, getFacilityFeatureFlags, updateFacilityFeatureFlag } from '../../api/supportClient';
+import { FEATURE_FLAGS, FEATURE_FLAG_LABELS } from '../../../shared/constants/featureFlags';
 import { toast } from 'sonner';
 
 interface Props {
@@ -32,6 +33,9 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
   const [deletePreview, setDeletePreview] = useState<any>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [features, setFeatures] = useState<Record<string, boolean>>({});
+  const [featuresLoading, setFeaturesLoading] = useState(false);
+  const [featureSaving, setFeatureSaving] = useState<string | null>(null);
 
   const reloadFacilities = async () => {
     const res = await getFacilities();
@@ -159,6 +163,34 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
     setRuleSaving(null);
   };
 
+  const loadFeatures = async () => {
+    if (!selectedFacilityId) return;
+    setFeaturesLoading(true);
+    const res = await getFacilityFeatureFlags(selectedFacilityId);
+    if (res.success && res.data) {
+      const map: Record<string, boolean> = {};
+      for (const row of res.data) map[row.feature_key] = row.is_enabled;
+      setFeatures(map);
+    }
+    setFeaturesLoading(false);
+  };
+
+  const handleToggleFeature = async (key: string, currentValue: boolean) => {
+    if (!selectedFacilityId) return;
+    setFeatureSaving(key);
+    setFeatures(prev => ({ ...prev, [key]: !currentValue }));
+    const res = await updateFacilityFeatureFlag(selectedFacilityId, key, !currentValue);
+    if (!res.success) {
+      setFeatures(prev => ({ ...prev, [key]: currentValue }));
+      toast.error(res.error || 'Failed to update feature');
+    } else {
+      toast.success(`Feature ${!currentValue ? 'enabled' : 'disabled'}`);
+    }
+    setFeatureSaving(null);
+  };
+
+  const allFeatureKeys = Object.values(FEATURE_FLAGS) as string[];
+
   const rulesByCategory = useMemo(() => {
     const grouped: Record<string, any[]> = {};
     for (const rule of rules) {
@@ -262,6 +294,7 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
               <TabsTrigger value="general" className="px-4">General Info</TabsTrigger>
               <TabsTrigger value="contacts" className="px-4">Contacts</TabsTrigger>
               <TabsTrigger value="rules" className="px-4" onClick={() => { if (rules.length === 0) loadRules(); }}>Rules</TabsTrigger>
+              <TabsTrigger value="features" className="px-4" onClick={() => { if (Object.keys(features).length === 0) loadFeatures(); }}>Features</TabsTrigger>
             </TabsList>
           </div>
 
@@ -470,6 +503,39 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
                             </div>
                           ))}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="features">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Feature Flags</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {featuresLoading ? (
+                  <div className="flex justify-center py-10">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+                  </div>
+                ) : allFeatureKeys.length === 0 ? (
+                  <p className="text-sm text-gray-400">No feature flags defined yet. Add keys to <code className="text-xs bg-gray-100 px-1 rounded">shared/constants/featureFlags.ts</code> to get started.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {allFeatureKeys.map((key) => (
+                      <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="text-sm font-medium">{FEATURE_FLAG_LABELS[key] || key}</p>
+                          <p className="text-xs font-mono text-gray-400">{key}</p>
+                        </div>
+                        <Switch
+                          checked={features[key] === true}
+                          onCheckedChange={() => handleToggleFeature(key, features[key] === true)}
+                          disabled={featureSaving === key}
+                        />
                       </div>
                     ))}
                   </div>

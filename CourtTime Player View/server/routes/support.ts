@@ -26,6 +26,7 @@ import {
   globalSearch,
   updateUserAccount,
 } from '../../src/services/supportService';
+import { getFacilityFeatureFlags, setFeatureFlag } from '../../src/services/featureFlagService';
 import { requestPasswordReset } from '../../src/services/passwordResetService';
 import { query } from '../../src/database/connection';
 
@@ -431,6 +432,32 @@ router.patch('/bookings/:bookingId/status', async (req, res) => {
     res.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('[Support] Booking status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Feature Flags ──────────────────────────────────────────
+
+router.get('/facilities/:id/features', async (req, res) => {
+  try {
+    const flags = await getFacilityFeatureFlags(req.params.id);
+    res.json({ success: true, data: flags });
+  } catch (error: any) {
+    console.error('[Support] Feature flags get error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/facilities/:id/features/:key', async (req, res) => {
+  try {
+    const { is_enabled } = req.body;
+    if (typeof is_enabled !== 'boolean') {
+      return res.status(400).json({ success: false, error: 'is_enabled must be a boolean' });
+    }
+    await setFeatureFlag(req.params.id, req.params.key, is_enabled, 'support');
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[Support] Feature flag update error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

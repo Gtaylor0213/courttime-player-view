@@ -273,6 +273,27 @@ export async function updateFacilityRule(facilityId: string, ruleCode: string, d
   }
 }
 
+// ── Feature Flags ──────────────────────────────────────────
+
+export async function getFacilityFeatureFlags(facilityId: string) {
+  try {
+    return await supportFetch(`/facilities/${facilityId}/features`);
+  } catch {
+    return { success: false, error: 'Failed to fetch feature flags' };
+  }
+}
+
+export async function updateFacilityFeatureFlag(facilityId: string, featureKey: string, enabled: boolean) {
+  try {
+    return await supportFetch(`/facilities/${facilityId}/features/${featureKey}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_enabled: enabled }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to update feature flag' };
+  }
+}
+
 // ── Violations ─────────────────────────────────────────────
 
 export async function getFacilityViolations(facilityId: string) {

@@ -222,6 +222,7 @@ export const facilitiesApi = {
 
     // Operating Hours
     operatingHours: Record<string, { open: string; close: string; closed?: boolean }>;
+    timezone?: string;
 
     // Facility Rules
     generalRules: string;
@@ -289,6 +290,12 @@ export const facilitiesApi = {
         splitNames: string[];
         splitType: string;
       };
+      operatingSchedule?: Array<{
+        day_of_week: number;
+        is_open: boolean;
+        open_time: string;
+        close_time: string;
+      }>;
     }>;
 
     // Admin Invites

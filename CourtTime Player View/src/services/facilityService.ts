@@ -829,6 +829,7 @@ export interface FacilityRegistrationData {
 
   // Operating Hours
   operatingHours: Record<string, { open: string; close: string; closed?: boolean }>;
+  timezone?: string;
 
   // Facility Rules
   generalRules: string;
@@ -1236,13 +1237,11 @@ export async function registerFacility(
       const createdCourt = courtResult.rows[0];
       createdCourts.push(createdCourt);
 
-      if (court.operatingSchedule?.length) {
-        const scheduleRows = normalizeCourtOperatingScheduleRows(
-          court.operatingSchedule,
-          data.operatingHours
-        );
-        await writeCourtOperatingSchedule(client, createdCourt.id, scheduleRows);
-      }
+      const scheduleRows = normalizeCourtOperatingScheduleRows(
+        court.operatingSchedule,
+        data.operatingHours
+      );
+      await writeCourtOperatingSchedule(client, createdCourt.id, scheduleRows);
 
       // If court can split, create child courts
       if (court.canSplit && court.splitConfig?.splitNames && court.splitConfig.splitNames.length > 0) {

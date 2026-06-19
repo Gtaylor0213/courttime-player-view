@@ -166,6 +166,7 @@ router.post('/register', optionalAuth, async (req, res, next) => {
 
       // Operating Hours
       operatingHours,
+      timezone,
 
       // Facility Rules
       generalRules,
@@ -299,6 +300,7 @@ router.post('/register', optionalAuth, async (req, res, next) => {
         l.zipCode?.trim()
       ) || [],
       operatingHours: operatingHours || {},
+      timezone: timezone || undefined,
       generalRules: generalRules || '',
       bookingRules: bookingRules ? JSON.stringify(bookingRules) : undefined,
       termsAndConditions: termsAndConditions?.trim() || undefined,
@@ -340,6 +342,9 @@ router.post('/register', optionalAuth, async (req, res, next) => {
           guestFeeCents: court.guestFeeCents != null ? parseInt(court.guestFeeCents) : undefined,
           canSplit: court.canSplit || false,
           splitConfig: court.splitConfig,
+          operatingSchedule: Array.isArray(court.operatingSchedule)
+            ? court.operatingSchedule
+            : undefined,
         };
       }),
       ruleConfigs: Array.isArray(ruleConfigs) ? ruleConfigs : undefined,

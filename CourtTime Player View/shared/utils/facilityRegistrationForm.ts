@@ -66,6 +66,19 @@ export function mergeRegistrationFormData<T extends Record<string, unknown>>(
       (merged as Record<string, unknown>).facilityType = parsed.facilityType;
     }
 
+    const liveCourts = (formData as Record<string, unknown>).courts;
+    const storedCourts = parsed.courts;
+    if (
+      Array.isArray(storedCourts) &&
+      storedCourts.length > 0 &&
+      (!Array.isArray(liveCourts) || liveCourts.length === 0)
+    ) {
+      (merged as Record<string, unknown>).courts = storedCourts;
+      if (parsed.operatingHours && typeof parsed.operatingHours === 'object') {
+        (merged as Record<string, unknown>).operatingHours = parsed.operatingHours;
+      }
+    }
+
     return merged;
   } catch {
     return formData;

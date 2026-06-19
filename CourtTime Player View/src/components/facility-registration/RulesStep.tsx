@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Separator } from '../ui/separator';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
@@ -168,6 +169,59 @@ export function RulesStep({
                 }
               />
             </div>
+
+            <Separator className="my-6" />
+
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">User-Based Limits</Label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Configure how many courts can be booked by individuals and households across daily and weekly limits.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Courts Per Week (Individual)</Label>
+                  <BookingRuleToggleInput
+                    checked={!!rules['ACC-002']?.enabled}
+                    onCheckedChange={(enabled) => onRuleEntryChange('ACC-002', { enabled })}
+                    value={rules['ACC-002']?.config?.max_per_week ?? ''}
+                    onChange={(value) => onRuleConfigFieldChange('ACC-002', 'max_per_week', parseInt(value, 10) || 1)}
+                    min={1}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Courts Per Day (Individual)</Label>
+                  <BookingRuleToggleInput
+                    checked={!!rules['ACC-002']?.config?.max_per_day_enabled}
+                    onCheckedChange={(enabled) => onRuleConfigFieldChange('ACC-002', 'max_per_day_enabled', enabled)}
+                    value={rules['ACC-002']?.config?.max_per_day ?? ''}
+                    onChange={(value) => onRuleConfigFieldChange('ACC-002', 'max_per_day', parseInt(value, 10) || 1)}
+                    min={1}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Courts Per Week (Household)</Label>
+                  <BookingRuleToggleInput
+                    checked={!!rules['HH-003']?.enabled}
+                    onCheckedChange={(enabled) => onRuleEntryChange('HH-003', { enabled })}
+                    value={rules['HH-003']?.config?.max_per_week_household ?? rules['HH-003']?.config?.max_prime_per_week_household ?? ''}
+                    onChange={(value) => onRuleConfigFieldChange('HH-003', 'max_per_week_household', parseInt(value, 10) || 1)}
+                    min={1}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Courts Per Day (Household)</Label>
+                  <BookingRuleToggleInput
+                    checked={!!rules['HH-003']?.config?.max_per_day_household_enabled}
+                    onCheckedChange={(enabled) => onRuleConfigFieldChange('HH-003', 'max_per_day_household_enabled', enabled)}
+                    value={rules['HH-003']?.config?.max_per_day_household ?? ''}
+                    onChange={(value) => onRuleConfigFieldChange('HH-003', 'max_per_day_household', parseInt(value, 10) || 1)}
+                    min={1}
+                  />
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -255,64 +309,6 @@ export function RulesStep({
                 step={0.25}
               />
               <span className="text-xs text-gray-500">hours</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* User-Based Limits */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            User-Based Limits
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <InstructionCard
-            icon={Info}
-            text="Configure how many courts can be booked by individuals and households across daily and weekly limits."
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Courts Per Week (Individual)</Label>
-              <BookingRuleToggleInput
-                checked={!!rules['ACC-002']?.enabled}
-                onCheckedChange={(enabled) => onRuleEntryChange('ACC-002', { enabled })}
-                value={rules['ACC-002']?.config?.max_per_week ?? ''}
-                onChange={(value) => onRuleConfigFieldChange('ACC-002', 'max_per_week', parseInt(value, 10) || 1)}
-                min={1}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Courts Per Day (Individual)</Label>
-              <BookingRuleToggleInput
-                checked={!!rules['ACC-002']?.config?.max_per_day_enabled}
-                onCheckedChange={(enabled) => onRuleConfigFieldChange('ACC-002', 'max_per_day_enabled', enabled)}
-                value={rules['ACC-002']?.config?.max_per_day ?? ''}
-                onChange={(value) => onRuleConfigFieldChange('ACC-002', 'max_per_day', parseInt(value, 10) || 1)}
-                min={1}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Courts Per Week (Household)</Label>
-              <BookingRuleToggleInput
-                checked={!!rules['HH-003']?.enabled}
-                onCheckedChange={(enabled) => onRuleEntryChange('HH-003', { enabled })}
-                value={rules['HH-003']?.config?.max_per_week_household ?? rules['HH-003']?.config?.max_prime_per_week_household ?? ''}
-                onChange={(value) => onRuleConfigFieldChange('HH-003', 'max_per_week_household', parseInt(value, 10) || 1)}
-                min={1}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Courts Per Day (Household)</Label>
-              <BookingRuleToggleInput
-                checked={!!rules['HH-003']?.config?.max_per_day_household_enabled}
-                onCheckedChange={(enabled) => onRuleConfigFieldChange('HH-003', 'max_per_day_household_enabled', enabled)}
-                value={rules['HH-003']?.config?.max_per_day_household ?? ''}
-                onChange={(value) => onRuleConfigFieldChange('HH-003', 'max_per_day_household', parseInt(value, 10) || 1)}
-                min={1}
-              />
             </div>
           </div>
         </CardContent>

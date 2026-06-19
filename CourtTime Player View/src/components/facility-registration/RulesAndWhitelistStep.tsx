@@ -110,7 +110,7 @@ export function RulesAndWhitelistStep() {
             </label>
           )}
           <p className="text-xs text-gray-500 mt-2">
-            The file should have "Address" and "Last Name" columns (one entry per row). Members will be auto-approved when their address and last name match an entry on this list. Configure max accounts per address in the Max Accounts Per Address section above.
+            The file should have "Address" and "Last Name" columns (one entry per row). Members will be auto-approved when their address and last name match an entry on this list. Configure max accounts per address and booking limits in the Max Accounts Per Address section above.
           </p>
         </CardContent>
       </Card>

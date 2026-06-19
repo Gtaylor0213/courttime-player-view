@@ -63,16 +63,9 @@ export function ReviewStep() {
     const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const reviewRuleRows = [
       {
-        label: 'Days in Advance',
-        enabled: bookingRulesReview.daysInAdvanceEnabled,
-        value: bookingRulesReview.daysInAdvance ? `${bookingRulesReview.daysInAdvance} day(s)` : '',
-      },
-      {
-        label: 'Max Reservation Duration',
-        enabled: bookingRulesReview.maxReservationDurationEnabled,
-        value: bookingRulesReview.maxBookingDurationHours
-          ? `${bookingRulesReview.maxBookingDurationHours} hour(s)`
-          : '',
+        label: 'Max Accounts Per Address',
+        enabled: bookingRulesReview.householdMaxMembersEnabled,
+        value: bookingRulesReview.householdMaxMembers,
       },
       {
         label: 'Courts Per Week (Individual)',
@@ -93,6 +86,18 @@ export function ReviewStep() {
         label: 'Courts Per Day (Household)',
         enabled: bookingRulesReview.courtsPerDayHouseholdEnabled,
         value: bookingRulesReview.courtsPerDayHousehold,
+      },
+      {
+        label: 'Days in Advance',
+        enabled: bookingRulesReview.daysInAdvanceEnabled,
+        value: bookingRulesReview.daysInAdvance ? `${bookingRulesReview.daysInAdvance} day(s)` : '',
+      },
+      {
+        label: 'Max Reservation Duration',
+        enabled: bookingRulesReview.maxReservationDurationEnabled,
+        value: bookingRulesReview.maxBookingDurationHours
+          ? `${bookingRulesReview.maxBookingDurationHours} hour(s)`
+          : '',
       },
     ];
     const peakHoursSummaries = formData.rulesConfig.peakHoursSlots.map((slot, index) => {

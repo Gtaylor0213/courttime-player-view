@@ -4,20 +4,23 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, ChevronsUpDown, Mail, X, CreditCard } from 'lucide-react';
+import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { facilitiesApi } from '../api/client';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from './ui/select';
 import { cn } from './ui/utils';
 
 interface Club {
   id: string;
   name: string;
 }
+
+const CLUB_ACTION_REQUEST = '__request_club__';
+const CLUB_ACTION_CREATE = '__create_facility__';
 
 interface UnifiedSidebarProps {
   userType: 'player' | 'admin' | null;
@@ -98,6 +101,68 @@ export function UnifiedSidebar({
     navigate(path);
     setSidebarOpen(false);
   };
+
+  const handleClubSelectChange = (value: string) => {
+    if (value === CLUB_ACTION_REQUEST) {
+      handleNav('/profile');
+      return;
+    }
+    if (value === CLUB_ACTION_CREATE) {
+      handleNav('/register/facility');
+      return;
+    }
+    handleFacilityChange(value);
+  };
+
+  const selectedClubName =
+    safeDisplayText(memberFacilities.find((f) => f.id === selectedFacilityId)?.name) || 'Your clubs';
+
+  const clubDropdownItems = (
+    <>
+      {memberFacilities.map((facility) => (
+        <SelectItem key={facility.id} value={facility.id}>
+          {safeDisplayText(facility.name) || 'Club'}
+        </SelectItem>
+      ))}
+      <SelectSeparator />
+      <SelectItem value={CLUB_ACTION_REQUEST} className="text-green-700">
+        <span className="flex items-center gap-2">
+          <UserSearch className="h-3.5 w-3.5" />
+          Request a club
+        </span>
+      </SelectItem>
+      <SelectItem value={CLUB_ACTION_CREATE} className="text-green-700">
+        <span className="flex items-center gap-2">
+          <Plus className="h-3.5 w-3.5" />
+          Create a facility
+        </span>
+      </SelectItem>
+    </>
+  );
+
+  const clubMenuItems = (
+    <>
+      {memberFacilities.map((facility) => (
+        <DropdownMenuItem
+          key={facility.id}
+          onClick={() => handleFacilityChange(facility.id)}
+          className={facility.id === selectedFacilityId ? 'bg-green-50 text-green-700' : undefined}
+        >
+          <Building2 className="h-4 w-4 mr-2" />
+          {safeDisplayText(facility.name) || 'Club'}
+        </DropdownMenuItem>
+      ))}
+      {memberFacilities.length > 0 && <DropdownMenuSeparator />}
+      <DropdownMenuItem onClick={() => handleNav('/profile')}>
+        <UserSearch className="h-4 w-4 mr-2" />
+        Request a club
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => handleNav('/register/facility')}>
+        <Plus className="h-4 w-4 mr-2" />
+        Create a facility
+      </DropdownMenuItem>
+    </>
+  );
 
   const handleFacilityChange = (nextFacilityId: string) => {
     if (!nextFacilityId || nextFacilityId === selectedFacilityId) {
@@ -216,49 +281,49 @@ export function UnifiedSidebar({
 
         {/* Navigation */}
         <nav className={cn('flex-1 p-4 space-y-6 overflow-y-auto', isCollapsed && 'md:p-2')}>
-          {/* Facility Selector — shown for any user with 2+ facilities */}
-          {!loadingFacilities && memberFacilities.length >= 2 && (
+          {/* Club selector dropdown */}
+          {!loadingFacilities && (
             isCollapsed ? (
               <div className="hidden md:block">
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button
-                        onClick={() => {
-                          const currentIndex = memberFacilities.findIndex(f => f.id === selectedFacilityId);
-                          const nextIndex = (currentIndex + 1) % memberFacilities.length;
-                          handleFacilityChange(memberFacilities[nextIndex].id);
-                        }}
-                        className="w-full rounded-lg px-3 py-2 flex items-center justify-center transition-colors hover:bg-accent"
-                      >
-                        <ChevronsUpDown className="h-4 w-4 text-gray-500" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="w-full rounded-lg px-3 py-2 flex items-center justify-center transition-colors hover:bg-accent"
+                            aria-label={selectedClubName}
+                          >
+                            <Building2 className="h-4 w-4 text-gray-500" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="right" align="start" className="w-56">
+                          {clubMenuItems}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TooltipTrigger>
                     <TooltipContent side="right">
-                      <p>{safeDisplayText(memberFacilities.find(f => f.id === selectedFacilityId)?.name) || 'Switch facility'}</p>
+                      <p>{selectedClubName}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
-            ) : null
-          )}
-          {/* Facility selector — expanded view (desktop expanded + mobile always) */}
-          {!loadingFacilities && memberFacilities.length >= 2 && (
-            <div className={cn(isCollapsed && 'md:hidden')}>
-              <Select value={selectedFacilityId} onValueChange={handleFacilityChange}>
-                <SelectTrigger className="w-full h-9 text-sm bg-green-50 border-green-200">
-                  <Building2 className="h-3.5 w-3.5 mr-2 text-green-600 flex-shrink-0" />
-                  <SelectValue placeholder="Select facility" />
-                </SelectTrigger>
-                <SelectContent>
-                  {memberFacilities.map((facility) => (
-                    <SelectItem key={facility.id} value={facility.id}>
-                      {safeDisplayText(facility.name) || 'Club'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            ) : (
+              <div className={cn(isCollapsed && 'md:hidden')}>
+                <Select
+                  value={selectedFacilityId || undefined}
+                  onValueChange={handleClubSelectChange}
+                >
+                  <SelectTrigger className="w-full h-9 text-sm bg-green-50 border-green-200">
+                    <Building2 className="h-3.5 w-3.5 mr-2 text-green-600 flex-shrink-0" />
+                    <SelectValue placeholder="Your clubs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clubDropdownItems}
+                  </SelectContent>
+                </Select>
+              </div>
+            )
           )}
 
           {/* Admin Navigation Section — only if user is admin of the selected facility */}

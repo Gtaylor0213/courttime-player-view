@@ -87,6 +87,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const sessionId = session.id;
   const metadataType = session.metadata?.type;
 
+  if (metadataType === 'pro_shop') {
+    const { finalizeOrder } = await import('../../src/services/proShopService');
+    await finalizeOrder(sessionId);
+    console.log(`[WEBHOOK] pro_shop order finalized for session ${sessionId}`);
+    return;
+  }
+
   if (metadataType === 'court_add') {
     const { finalizeCourtAddPayment } = await import('../../src/services/courtAddService');
     const result = await finalizeCourtAddPayment(sessionId);

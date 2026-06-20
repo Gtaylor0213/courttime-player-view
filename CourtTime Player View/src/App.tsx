@@ -37,6 +37,8 @@ import { MemberManagement } from './components/admin/MemberManagement';
 import { HouseholdManagement } from './components/admin/HouseholdManagement';
 import { AdminCommunication } from './components/admin/AdminCommunication';
 import { AdminMemberPayments } from './components/admin/AdminMemberPayments';
+import ProShopAdmin from './components/admin/ProShopAdmin';
+import ProShop from './components/ProShop';
 
 // Support Console
 import { SupportConsole } from './components/developer';
@@ -96,6 +98,8 @@ export default function App() {
               <Route path="/admin/households" element={<HouseholdManagement />} />
               <Route path="/admin/communication" element={<AdminCommunication />} />
               <Route path="/admin/member-payments" element={<AdminMemberPayments />} />
+              <Route path="/admin/pro-shop" element={<ProShopAdmin />} />
+              <Route path="/shop" element={<ProShop />} />
               <Route path="/admin/email-blast" element={<Navigate to="/admin/communication" replace />} />
             </Route>
 

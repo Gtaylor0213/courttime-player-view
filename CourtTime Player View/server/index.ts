@@ -54,6 +54,7 @@ import stripeConnectRoutes from './routes/stripeConnect';
 import paymentItemsRoutes from './routes/paymentItems';
 import connectPaymentsRoutes from './routes/connectPayments';
 import connectWebhookRoutes from './routes/connectWebhook';
+import proShopRoutes from './routes/proShop';
 import { requireAuth, requireNotPaymentLocked } from './middleware/auth';
 
 const app = express();
@@ -217,6 +218,7 @@ app.use('/api/strikes', requireAuth, requireNotPaymentLocked, strikesRoutes);
 app.use('/api/court-config', requireAuth, requireNotPaymentLocked, courtConfigRoutes);
 app.use('/api/rules', requireAuth, requireNotPaymentLocked, rulesRoutes);
 app.use('/api/households', requireAuth, requireNotPaymentLocked, householdsRoutes);
+app.use('/api/pro-shop', requireAuth, proShopRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

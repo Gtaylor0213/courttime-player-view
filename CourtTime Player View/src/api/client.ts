@@ -1760,3 +1760,40 @@ export const facilityLocationsApi = {
     });
   },
 };
+
+export const proShopApi = {
+  getShopProducts: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/products/${facilityId}`),
+
+  createCheckout: (facilityId: string, items: { product_id: string; quantity: number }[]) =>
+    apiRequest(`/api/pro-shop/checkout/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+
+  getMyOrders: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/my-orders/${facilityId}`),
+
+  adminGetProducts: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/admin/products/${facilityId}`),
+
+  adminCreateProduct: (facilityId: string, data: Record<string, any>) =>
+    apiRequest(`/api/pro-shop/admin/products/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  adminUpdateProduct: (productId: string, data: Record<string, any>) =>
+    apiRequest(`/api/pro-shop/admin/products/${productId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  adminDeleteProduct: (productId: string) =>
+    apiRequest(`/api/pro-shop/admin/products/${productId}`, {
+      method: 'DELETE',
+    }),
+
+  adminGetOrders: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/admin/orders/${facilityId}`),
+};

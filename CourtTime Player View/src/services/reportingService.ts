@@ -104,7 +104,7 @@ export async function getTransactionReport(
        u.email                  AS member_email,
        'pro_shop'               AS type,
        COALESCE(
-         (SELECT string_agg(COALESCE(p.name, oi.product_name_snapshot, 'Item') || ' ×' || oi.quantity::text, ', '
+         (SELECT string_agg(COALESCE(p.name, 'Item') || ' x' || oi.quantity::text, ', ')
           FROM pro_shop_order_items oi
           LEFT JOIN pro_shop_products p ON p.id = oi.product_id
           WHERE oi.order_id = o.id),

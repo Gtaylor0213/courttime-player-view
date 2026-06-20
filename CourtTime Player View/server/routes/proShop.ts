@@ -11,6 +11,16 @@ import {
   createCheckoutSession,
   getAdminOrders,
   getUserOrders,
+  getProShopSettings,
+  updateProShopSettings,
+  getMembersWithCardStatus,
+  getMemberCardStatus,
+  chargeImmediately,
+  addToTab,
+  getTabDetail,
+  getAllTabs,
+  billMemberTab,
+  billAllTabs,
 } from '../../src/services/proShopService';
 
 const router = express.Router();
@@ -161,6 +171,162 @@ router.get('/admin/orders/:facilityId', async (req, res) => {
     res.json({ success: true, data: orders });
   } catch (error: any) {
     console.error('[ProShop] Admin get orders error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Settings ───────────────────────────────────────────────
+
+router.get('/admin/settings/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const settings = await getProShopSettings(facilityId);
+    res.json({ success: true, data: settings });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/admin/settings/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const { tab_billing_day, require_card } = req.body;
+    const settings = await updateProShopSettings(facilityId, { tab_billing_day, require_card });
+    res.json({ success: true, data: settings });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// ── Members list (for assign UI) ───────────────────────────
+
+router.get('/admin/members/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const members = await getMembersWithCardStatus(facilityId);
+    res.json({ success: true, data: members });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Assign to member (charge now or tab) ───────────────────
+
+router.post('/admin/assign/charge/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const { user_id, items } = req.body;
+    if (!user_id || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'user_id and items are required' });
+    }
+    const result = await chargeImmediately(facilityId, user_id, req.user!.userId, items);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('[ProShop] Admin charge error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/admin/assign/tab/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const { user_id, items } = req.body;
+    if (!user_id || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'user_id and items are required' });
+    }
+    const result = await addToTab(facilityId, user_id, req.user!.userId, items);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('[ProShop] Add to tab error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// ── Tabs ───────────────────────────────────────────────────
+
+router.get('/admin/tabs/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const tabs = await getAllTabs(facilityId);
+    res.json({ success: true, data: tabs });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/admin/bill-tab/:facilityId/:userId', async (req, res) => {
+  try {
+    const { facilityId, userId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const result = await billMemberTab(facilityId, userId);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('[ProShop] Bill tab error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/admin/bill-all/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const results = await billAllTabs(facilityId);
+    res.json({ success: true, data: results });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Member tab & card status ────────────────────────────────
+
+router.get('/my-tab/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    const tab = await getTabDetail(facilityId, req.user!.userId);
+    res.json({ success: true, data: tab });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/my-card/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    const card = await getMemberCardStatus(facilityId, req.user!.userId);
+    res.json({ success: true, data: card });
+  } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });

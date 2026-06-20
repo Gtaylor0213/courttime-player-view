@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
-import { ShoppingBag, ShoppingCart, X, Plus, Minus, CheckCircle } from 'lucide-react';
+import { ShoppingBag, ShoppingCart, X, Plus, Minus, CheckCircle, Receipt, AlertTriangle } from 'lucide-react';
 import { proShopApi } from '../api/client';
 import { useAppContext } from '../contexts/AppContext';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -26,6 +26,7 @@ type CartItem = { product: any; quantity: number };
 export default function ProShop() {
   const { selectedFacilityId: currentFacilityId } = useAppContext();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
@@ -33,6 +34,9 @@ export default function ProShop() {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [tab, setTab] = useState<{ unbilled_cents: number; items: any[] } | null>(null);
+  const [cardStatus, setCardStatus] = useState<{ has_card: boolean; card_brand?: string; card_last4?: string } | null>(null);
+  const [requireCard, setRequireCard] = useState(false);
 
   useEffect(() => {
     if (searchParams.get('order') === 'success') {
@@ -44,7 +48,22 @@ export default function ProShop() {
   useEffect(() => {
     if (!currentFacilityId) return;
     loadProducts();
+    loadTabAndCard();
   }, [currentFacilityId]);
+
+  const loadTabAndCard = async () => {
+    const [tabRes, cardRes, settingsRes] = await Promise.all([
+      proShopApi.getMyTab(currentFacilityId!),
+      proShopApi.getMyCard(currentFacilityId!),
+      proShopApi.adminGetSettings(currentFacilityId!).catch(() => null),
+    ]);
+    if (tabRes.success) {
+      const t = (tabRes.data as any)?.data;
+      if (t && Number(t.unbilled_cents) > 0) setTab(t);
+    }
+    if (cardRes.success) setCardStatus((cardRes.data as any)?.data ?? null);
+    if (settingsRes?.success) setRequireCard(!!(settingsRes.data as any)?.data?.require_card);
+  };
 
   const loadProducts = async () => {
     setLoading(true);
@@ -149,6 +168,35 @@ export default function ProShop() {
           )}
         </Button>
       </div>
+
+      {/* Card-on-file warning */}
+      {requireCard && cardStatus && !cardStatus.has_card && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-800">No card on file</p>
+            <p className="text-xs text-amber-600">
+              This facility requires a saved payment card. Add one in{' '}
+              <button onClick={() => navigate('/payments')} className="underline font-medium">Payments</button>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Open tab balance */}
+      {tab && Number(tab.unbilled_cents) > 0 && (
+        <div className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+          <Receipt className="h-5 w-5 text-indigo-600 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-indigo-800">
+              Open tab: {formatPrice(Number(tab.unbilled_cents))}
+            </p>
+            <p className="text-xs text-indigo-600">
+              {(tab.items ?? []).map((i: any) => `${i.product_name} ×${i.quantity}`).join(', ')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Order success banner */}
       {orderSuccess && (

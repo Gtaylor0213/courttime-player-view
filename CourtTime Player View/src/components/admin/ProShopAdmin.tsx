@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
-import { ShoppingBag, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ShoppingBag, Plus, Pencil, Trash2, CreditCard, AlertTriangle, CheckCircle, Receipt } from 'lucide-react';
 import { proShopApi } from '../../api/client';
 import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
@@ -48,43 +48,55 @@ const emptyForm = {
 };
 
 export default function ProShopAdmin() {
-  const { selectedFacilityId: currentFacilityId } = useAppContext();
+  const { selectedFacilityId: facilityId } = useAppContext();
+
+  // ── Products ──────────────────────────────────────────────
   const [products, setProducts] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ordersLoading, setOrdersLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // ── Orders ────────────────────────────────────────────────
+  const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // ── Assign ────────────────────────────────────────────────
+  const [members, setMembers] = useState<any[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [assignMemberId, setAssignMemberId] = useState('');
+  const [assignItems, setAssignItems] = useState<{ product_id: string; quantity: number }[]>([]);
+  const [assignMode, setAssignMode] = useState<'charge' | 'tab'>('charge');
+  const [assigning, setAssigning] = useState(false);
+
+  // ── Tabs ──────────────────────────────────────────────────
+  const [tabs, setTabs] = useState<any[]>([]);
+  const [tabsLoading, setTabsLoading] = useState(false);
+  const [billingId, setBillingId] = useState<string | null>(null);
+  const [billingAll, setBillingAll] = useState(false);
+
+  // ── Settings ──────────────────────────────────────────────
+  const [settingsForm, setSettingsForm] = useState({ tab_billing_day: 1, require_card: false });
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
   useEffect(() => {
-    if (!currentFacilityId) return;
+    if (!facilityId) return;
     loadProducts();
-  }, [currentFacilityId]);
+  }, [facilityId]);
+
+  // ── Products ──────────────────────────────────────────────
 
   const loadProducts = async () => {
     setLoading(true);
-    const res = await proShopApi.adminGetProducts(currentFacilityId!);
+    const res = await proShopApi.adminGetProducts(facilityId!);
     if (res.success) setProducts((res.data as any)?.data ?? []);
     else toast.error((res.error as string) || 'Failed to load products');
     setLoading(false);
   };
 
-  const loadOrders = async () => {
-    setOrdersLoading(true);
-    const res = await proShopApi.adminGetOrders(currentFacilityId!);
-    if (res.success) setOrders((res.data as any)?.data ?? []);
-    else toast.error((res.error as string) || 'Failed to load orders');
-    setOrdersLoading(false);
-  };
-
-  const openAdd = () => {
-    setEditingProduct(null);
-    setForm({ ...emptyForm });
-    setModalOpen(true);
-  };
+  const openAdd = () => { setEditingProduct(null); setForm({ ...emptyForm }); setModalOpen(true); };
 
   const openEdit = (product: any) => {
     setEditingProduct(product);
@@ -111,12 +123,10 @@ export default function ProShopAdmin() {
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.category || !form.price) {
-      toast.error('Name, category, and price are required');
-      return;
+      toast.error('Name, category, and price are required'); return;
     }
     const price_cents = Math.round(parseFloat(form.price) * 100);
     if (isNaN(price_cents) || price_cents < 0) { toast.error('Invalid price'); return; }
-
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
@@ -126,15 +136,10 @@ export default function ProShopAdmin() {
       image_data: form.image_data,
       is_active: form.is_active,
     };
-
     setSaving(true);
     let res: any;
-    if (editingProduct) {
-      res = await proShopApi.adminUpdateProduct(editingProduct.id, payload);
-    } else {
-      res = await proShopApi.adminCreateProduct(currentFacilityId!, payload);
-    }
-
+    if (editingProduct) res = await proShopApi.adminUpdateProduct(editingProduct.id, payload);
+    else res = await proShopApi.adminCreateProduct(facilityId!, payload);
     if (res.success) {
       toast.success(editingProduct ? 'Product updated' : 'Product added');
       setModalOpen(false);
@@ -171,7 +176,125 @@ export default function ProShopAdmin() {
     }
   };
 
-  if (!currentFacilityId) {
+  // ── Orders ────────────────────────────────────────────────
+
+  const loadOrders = async () => {
+    setOrdersLoading(true);
+    const res = await proShopApi.adminGetOrders(facilityId!);
+    if (res.success) setOrders((res.data as any)?.data ?? []);
+    else toast.error((res.error as string) || 'Failed to load orders');
+    setOrdersLoading(false);
+  };
+
+  // ── Assign ────────────────────────────────────────────────
+
+  const loadMembers = async () => {
+    setMembersLoading(true);
+    const res = await proShopApi.adminGetMembers(facilityId!);
+    if (res.success) setMembers((res.data as any)?.data ?? []);
+    else toast.error((res.error as string) || 'Failed to load members');
+    setMembersLoading(false);
+  };
+
+  const toggleAssignItem = (productId: string) => {
+    setAssignItems(prev => {
+      const existing = prev.find(i => i.product_id === productId);
+      if (existing) return prev.filter(i => i.product_id !== productId);
+      return [...prev, { product_id: productId, quantity: 1 }];
+    });
+  };
+
+  const setAssignQty = (productId: string, qty: number) => {
+    if (qty < 1) return;
+    setAssignItems(prev => prev.map(i => i.product_id === productId ? { ...i, quantity: qty } : i));
+  };
+
+  const assignTotal = assignItems.reduce((sum, item) => {
+    const product = products.find(p => p.id === item.product_id);
+    return sum + (product?.price_cents ?? 0) * item.quantity;
+  }, 0);
+
+  const handleAssign = async () => {
+    if (!assignMemberId) { toast.error('Select a member'); return; }
+    if (assignItems.length === 0) { toast.error('Select at least one product'); return; }
+    setAssigning(true);
+    const fn = assignMode === 'charge' ? proShopApi.adminAssignCharge : proShopApi.adminAssignTab;
+    const res = await fn(facilityId!, assignMemberId, assignItems);
+    if (res.success) {
+      const member = members.find(m => m.id === assignMemberId);
+      toast.success(
+        assignMode === 'charge'
+          ? `${formatPrice(assignTotal)} charged to ${member?.full_name}`
+          : `${formatPrice(assignTotal)} added to ${member?.full_name}'s tab`
+      );
+      setAssignMemberId('');
+      setAssignItems([]);
+      if (assignMode === 'tab') loadTabs();
+    } else {
+      toast.error((res.error as string) || 'Assignment failed');
+    }
+    setAssigning(false);
+  };
+
+  // ── Tabs ──────────────────────────────────────────────────
+
+  const loadTabs = async () => {
+    setTabsLoading(true);
+    const res = await proShopApi.adminGetTabs(facilityId!);
+    if (res.success) setTabs((res.data as any)?.data ?? []);
+    else toast.error((res.error as string) || 'Failed to load tabs');
+    setTabsLoading(false);
+  };
+
+  const handleBillTab = async (userId: string) => {
+    setBillingId(userId);
+    const res = await proShopApi.adminBillTab(facilityId!, userId);
+    if (res.success) {
+      toast.success('Tab billed successfully');
+      await loadTabs();
+    } else {
+      toast.error((res.error as string) || 'Billing failed');
+    }
+    setBillingId(null);
+  };
+
+  const handleBillAll = async () => {
+    if (!confirm('Bill all members with open tab balances?')) return;
+    setBillingAll(true);
+    const res = await proShopApi.adminBillAll(facilityId!);
+    if (res.success) {
+      const results = (res.data as any)?.data ?? [];
+      const succeeded = results.filter((r: any) => r.success).length;
+      const failed = results.filter((r: any) => !r.success).length;
+      toast.success(`Billed ${succeeded} member(s)${failed > 0 ? `, ${failed} failed` : ''}`);
+      await loadTabs();
+    } else {
+      toast.error((res.error as string) || 'Billing failed');
+    }
+    setBillingAll(false);
+  };
+
+  const tabsTotal = tabs.reduce((sum: number, t: any) => sum + Number(t.unbilled_cents), 0);
+
+  // ── Settings ──────────────────────────────────────────────
+
+  const loadSettings = async () => {
+    const res = await proShopApi.adminGetSettings(facilityId!);
+    if (res.success) {
+      const s = (res.data as any)?.data ?? {};
+      setSettingsForm({ tab_billing_day: s.tab_billing_day ?? 1, require_card: s.require_card ?? false });
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true);
+    const res = await proShopApi.adminUpdateSettings(facilityId!, settingsForm);
+    if (res.success) toast.success('Settings saved');
+    else toast.error((res.error as string) || 'Failed to save settings');
+    setSettingsSaving(false);
+  };
+
+  if (!facilityId) {
     return (
       <Card>
         <CardContent className="py-10 text-center text-sm text-gray-400">
@@ -192,16 +315,17 @@ export default function ProShopAdmin() {
         <TabsList>
           <TabsTrigger value="products">Products</TabsTrigger>
           <TabsTrigger value="orders" onClick={() => { if (orders.length === 0) loadOrders(); }}>Orders</TabsTrigger>
+          <TabsTrigger value="assign" onClick={() => { if (members.length === 0) loadMembers(); }}>Assign</TabsTrigger>
+          <TabsTrigger value="tabs" onClick={() => { if (tabs.length === 0) loadTabs(); }}>Tabs</TabsTrigger>
+          <TabsTrigger value="settings" onClick={loadSettings}>Settings</TabsTrigger>
         </TabsList>
 
-        {/* ── Products tab ── */}
+        {/* ── Products ── */}
         <TabsContent value="products">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Inventory</CardTitle>
-              <Button size="sm" onClick={openAdd}>
-                <Plus className="h-4 w-4 mr-1" /> Add Product
-              </Button>
+              <Button size="sm" onClick={openAdd}><Plus className="h-4 w-4 mr-1" /> Add Product</Button>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -237,21 +361,12 @@ export default function ProShopAdmin() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <Switch
-                          checked={p.is_active}
-                          onCheckedChange={() => handleToggleActive(p)}
-                          title={p.is_active ? 'Hide from shop' : 'Show in shop'}
-                        />
+                        <Switch checked={p.is_active} onCheckedChange={() => handleToggleActive(p)} />
                         <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(p)}
-                          disabled={deletingId === p.id}
-                          className="text-red-500 hover:text-red-700"
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(p)}
+                          disabled={deletingId === p.id} className="text-red-500 hover:text-red-700">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -263,12 +378,10 @@ export default function ProShopAdmin() {
           </Card>
         </TabsContent>
 
-        {/* ── Orders tab ── */}
+        {/* ── Orders ── */}
         <TabsContent value="orders">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Orders</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Orders</CardTitle></CardHeader>
             <CardContent>
               {ordersLoading ? (
                 <div className="flex justify-center py-10">
@@ -300,6 +413,231 @@ export default function ProShopAdmin() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Assign to Member ── */}
+        <TabsContent value="assign">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Assign Items to a Member</CardTitle>
+              <p className="text-sm text-gray-500 mt-1">
+                Charge a member's saved card immediately, or add items to their running tab.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {membersLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+                </div>
+              ) : (
+                <>
+                  {/* Member picker */}
+                  <div className="space-y-2">
+                    <Label>Member</Label>
+                    <Select value={assignMemberId} onValueChange={setAssignMemberId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a member…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {members.map(m => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <span className="flex items-center gap-2">
+                              {m.full_name}
+                              {m.has_card
+                                ? <span className="text-xs text-green-600">✓ card on file</span>
+                                : <span className="text-xs text-amber-500">no card</span>}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {assignMemberId && !members.find(m => m.id === assignMemberId)?.has_card && (
+                      <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                        This member has no card on file. You can add items to their tab, but cannot charge immediately.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Product list */}
+                  <div className="space-y-2">
+                    <Label>Products</Label>
+                    {products.filter(p => p.is_active).length === 0 ? (
+                      <p className="text-sm text-gray-400">No active products.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {products.filter(p => p.is_active).map(p => {
+                          const selected = assignItems.find(i => i.product_id === p.id);
+                          return (
+                            <div key={p.id}
+                              className={`flex items-center gap-3 p-2.5 border rounded-lg cursor-pointer transition-colors ${selected ? 'border-indigo-400 bg-indigo-50' : 'hover:bg-gray-50'}`}
+                              onClick={() => toggleAssignItem(p.id)}
+                            >
+                              <input type="checkbox" readOnly checked={!!selected}
+                                className="h-4 w-4 accent-indigo-600 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium">{p.name}</span>
+                                <span className="text-xs text-gray-500 ml-2">{formatPrice(p.price_cents)}</span>
+                              </div>
+                              {selected && (
+                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <button onClick={() => setAssignQty(p.id, selected.quantity - 1)}
+                                    className="w-6 h-6 rounded border text-gray-600 text-sm flex items-center justify-center hover:bg-gray-100">−</button>
+                                  <span className="w-8 text-center text-sm">{selected.quantity}</span>
+                                  <button onClick={() => setAssignQty(p.id, selected.quantity + 1)}
+                                    className="w-6 h-6 rounded border text-gray-600 text-sm flex items-center justify-center hover:bg-gray-100">+</button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Charge mode */}
+                  {assignItems.length > 0 && (
+                    <div className="space-y-3 pt-1 border-t">
+                      <div className="flex items-center justify-between text-sm font-semibold">
+                        <span>Total</span>
+                        <span>{formatPrice(assignTotal)}</span>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setAssignMode('charge')}
+                          className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${assignMode === 'charge' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
+                        >
+                          <CreditCard className="h-4 w-4" />
+                          <div className="text-left">
+                            <div className="font-medium">Charge Now</div>
+                            <div className="text-xs text-gray-500">Charge card immediately</div>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => setAssignMode('tab')}
+                          className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${assignMode === 'tab' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
+                        >
+                          <Receipt className="h-4 w-4" />
+                          <div className="text-left">
+                            <div className="font-medium">Add to Tab</div>
+                            <div className="text-xs text-gray-500">Bill on billing day</div>
+                          </div>
+                        </button>
+                      </div>
+                      <Button className="w-full" onClick={handleAssign} disabled={assigning}>
+                        {assigning ? 'Processing…' : assignMode === 'charge' ? `Charge ${formatPrice(assignTotal)}` : `Add to Tab`}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Tabs ── */}
+        <TabsContent value="tabs">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Member Tabs</CardTitle>
+                {tabs.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {tabs.length} member{tabs.length !== 1 ? 's' : ''} · {formatPrice(tabsTotal)} total outstanding
+                  </p>
+                )}
+              </div>
+              {tabs.length > 0 && (
+                <Button size="sm" onClick={handleBillAll} disabled={billingAll}>
+                  {billingAll ? 'Billing…' : `Bill All (${formatPrice(tabsTotal)})`}
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {tabsLoading ? (
+                <div className="flex justify-center py-10">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+                </div>
+              ) : tabs.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No open tabs.</p>
+              ) : (
+                <div className="space-y-2">
+                  {tabs.map((t: any) => (
+                    <div key={t.user_id} className="flex items-center gap-3 p-3 border rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{t.member_name}</p>
+                        <p className="text-xs text-gray-500">
+                          {(t.items ?? []).map((i: any) => `${i.product_name} ×${i.quantity}`).join(', ')}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {t.has_card ? (
+                            <span className="text-xs text-green-600 flex items-center gap-1">
+                              <CheckCircle className="h-3 w-3" />
+                              {t.card_brand ? `${t.card_brand} ····${t.card_last4}` : 'Card on file'}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-amber-600 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              No card on file
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-sm font-bold">{formatPrice(Number(t.unbilled_cents))}</span>
+                        <Button size="sm" variant="outline"
+                          onClick={() => handleBillTab(t.user_id)}
+                          disabled={!t.has_card || billingId === t.user_id || billingAll}
+                          title={!t.has_card ? 'Member needs a card on file' : undefined}
+                        >
+                          {billingId === t.user_id ? 'Billing…' : 'Bill Now'}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Settings ── */}
+        <TabsContent value="settings">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Pro Shop Settings</CardTitle></CardHeader>
+            <CardContent className="space-y-5 max-w-sm">
+              <div className="space-y-2">
+                <Label>Tab Billing Day</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={settingsForm.tab_billing_day}
+                  onChange={e => setSettingsForm(p => ({ ...p, tab_billing_day: Math.min(28, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                />
+                <p className="text-xs text-gray-500">
+                  Day of the month (1–28) when member tabs are charged. Use the "Bill All" button on that day.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Require Card on File</Label>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Members see a prompt to add their card when visiting the shop.
+                  </p>
+                </div>
+                <Switch
+                  checked={settingsForm.require_card}
+                  onCheckedChange={(v: boolean) => setSettingsForm(p => ({ ...p, require_card: v }))}
+                />
+              </div>
+
+              <Button onClick={handleSaveSettings} disabled={settingsSaving}>
+                {settingsSaving ? 'Saving…' : 'Save Settings'}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -349,13 +687,9 @@ export default function ProShopAdmin() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Stock Quantity</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={form.stock}
+                <Input type="number" min="0" value={form.stock}
                   onChange={e => setForm(p => ({ ...p, stock: e.target.value }))}
-                  placeholder="Leave blank for unlimited"
-                />
+                  placeholder="Leave blank for unlimited" />
               </div>
               <div className="space-y-2">
                 <Label>Visible in Shop</Label>
@@ -371,10 +705,8 @@ export default function ProShopAdmin() {
               {form.image_data && (
                 <div className="relative w-24 h-24 mb-2">
                   <img src={form.image_data} alt="preview" className="w-24 h-24 object-cover rounded border" />
-                  <button
-                    onClick={() => setForm(p => ({ ...p, image_data: null }))}
-                    className="absolute -top-1 -right-1 bg-white border rounded-full w-5 h-5 flex items-center justify-center text-gray-500 hover:text-red-500 text-xs"
-                  >×</button>
+                  <button onClick={() => setForm(p => ({ ...p, image_data: null }))}
+                    className="absolute -top-1 -right-1 bg-white border rounded-full w-5 h-5 flex items-center justify-center text-gray-500 hover:text-red-500 text-xs">×</button>
                 </div>
               )}
               <Input type="file" accept="image/*" onChange={handleImageChange} className="cursor-pointer" />
@@ -384,7 +716,7 @@ export default function ProShopAdmin() {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
               <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : editingProduct ? 'Save Changes' : 'Add Product'}
+                {saving ? 'Saving…' : editingProduct ? 'Save Changes' : 'Add Product'}
               </Button>
             </div>
           </div>

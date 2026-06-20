@@ -41,7 +41,7 @@ function TiersTab({ facilityId }: { facilityId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     const res = await annualFeesApi.getTiers(facilityId);
-    if (res.success) setTiers(res.data);
+    if (res.success) setTiers(((res.data as any)?.data ?? []) as any[]);
     setLoading(false);
   }, [facilityId]);
 
@@ -237,8 +237,8 @@ function MembersTab({ facilityId }: { facilityId: string }) {
       annualFeesApi.getMembers(facilityId),
       annualFeesApi.getTiers(facilityId),
     ]);
-    if (mRes.success) setMembers(mRes.data);
-    if (tRes.success) setTiers(tRes.data.filter((t: any) => t.isActive));
+    if (mRes.success) setMembers(((mRes.data as any)?.data ?? []) as any[]);
+    if (tRes.success) setTiers((((tRes.data as any)?.data ?? []) as any[]).filter((t: any) => t.isActive));
     setLoading(false);
   }, [facilityId]);
 
@@ -344,9 +344,10 @@ function BillingTab({ facilityId }: { facilityId: string }) {
 
   useEffect(() => {
     annualFeesApi.getConfig(facilityId).then(res => {
-      if (res.success && res.data) {
-        setConfig(res.data);
-        setConfigForm({ month: String(res.data.billingMonth), day: String(res.data.billingDay) });
+      const cfg = (res.data as any)?.data;
+      if (res.success && cfg) {
+        setConfig(cfg);
+        setConfigForm({ month: String(cfg.billingMonth), day: String(cfg.billingDay) });
       }
     });
     loadHistory();
@@ -355,14 +356,14 @@ function BillingTab({ facilityId }: { facilityId: string }) {
   async function loadHistory() {
     setHistoryLoading(true);
     const res = await annualFeesApi.getBillingHistory(facilityId);
-    if (res.success) setHistory(res.data);
+    if (res.success) setHistory(((res.data as any)?.data ?? []) as any[]);
     setHistoryLoading(false);
   }
 
   async function saveConfig() {
     setConfigSaving(true);
     const res = await annualFeesApi.saveConfig(facilityId, Number(configForm.month), Number(configForm.day));
-    if (res.success) { setConfig(res.data); toast.success('Billing date saved'); }
+    if (res.success) { setConfig((res.data as any)?.data); toast.success('Billing date saved'); }
     else toast.error(res.error ?? 'Failed to save');
     setConfigSaving(false);
   }
@@ -370,7 +371,7 @@ function BillingTab({ facilityId }: { facilityId: string }) {
   async function loadPreview() {
     setPreviewLoading(true);
     const res = await annualFeesApi.previewBilling(facilityId);
-    if (res.success) setPreview(res.data);
+    if (res.success) setPreview((res.data as any)?.data);
     else toast.error(res.error ?? 'Failed to load preview');
     setPreviewLoading(false);
   }
@@ -380,8 +381,9 @@ function BillingTab({ facilityId }: { facilityId: string }) {
     setRunning(true);
     const res = await annualFeesApi.runBilling(facilityId);
     if (res.success) {
-      setLastResult(res.data);
-      toast.success(`Billing complete — ${res.data.chargedCount} charged, ${res.data.lockoutCount} payment lockouts applied`);
+      const result = (res.data as any)?.data;
+      setLastResult(result);
+      toast.success(`Billing complete — ${result?.chargedCount} charged, ${result?.lockoutCount} payment lockouts applied`);
       setPreview(null);
       loadHistory();
     } else {
@@ -395,7 +397,7 @@ function BillingTab({ facilityId }: { facilityId: string }) {
     setExpandedRun(runId);
     if (!runRecords[runId]) {
       const res = await annualFeesApi.getBillingRunRecords(facilityId, runId);
-      if (res.success) setRunRecords(prev => ({ ...prev, [runId]: res.data }));
+      if (res.success) setRunRecords(prev => ({ ...prev, [runId]: ((res.data as any)?.data ?? []) as any[] }));
     }
   }
 

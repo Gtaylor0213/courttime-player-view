@@ -8,6 +8,7 @@ import {
   registerFacility,
   FacilityRegistrationData
 } from '../../src/services/facilityService';
+import { getFacilityFeatureFlags } from '../../src/services/featureFlagService';
 import { getCurrentTermsVersion } from '../../src/services/termsService';
 import { generateToken, optionalAuth } from '../middleware/auth';
 import { verifyCheckoutSession, validatePromoCode } from '../../src/services/paymentService';
@@ -441,6 +442,16 @@ router.post('/register', optionalAuth, async (req, res, next) => {
     }
 
     next(error);
+  }
+});
+
+router.get('/:id/feature-flags', async (req, res) => {
+  try {
+    const rows = await getFacilityFeatureFlags(req.params.id);
+    const enabled = rows.filter((r: any) => r.is_enabled).map((r: any) => r.feature_key);
+    res.json({ success: true, data: enabled });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

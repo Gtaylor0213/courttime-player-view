@@ -38,7 +38,8 @@ export function UnifiedSidebar({
   currentPage,
 }: UnifiedSidebarProps) {
   const { user } = useAuth();
-  const { selectedFacilityId, setSelectedFacilityId, sidebarOpen, setSidebarOpen } = useAppContext();
+  const { selectedFacilityId, setSelectedFacilityId, sidebarOpen, setSidebarOpen, enabledFeatures } = useAppContext();
+  const proShopEnabled = enabledFeatures.includes('pro_shop');
   const location = useLocation();
   const navigate = useNavigate();
   const [memberFacilities, setMemberFacilities] = React.useState<Club[]>([]);
@@ -375,12 +376,14 @@ export function UnifiedSidebar({
                   label="Bulletin Board"
                   isActive={currentPage === 'bulletin-board'}
                 />
-                <SidebarButton
-                  onClick={() => handleNav('/admin/pro-shop')}
-                  icon={ShoppingBag}
-                  label="Pro Shop"
-                  isActive={currentPage === 'pro-shop-admin'}
-                />
+                {proShopEnabled && (
+                  <SidebarButton
+                    onClick={() => handleNav('/admin/pro-shop')}
+                    icon={ShoppingBag}
+                    label="Pro Shop"
+                    isActive={currentPage === 'pro-shop-admin'}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -414,12 +417,14 @@ export function UnifiedSidebar({
                 label="Payments"
                 isActive={currentPage === 'payments'}
               />
-              <SidebarButton
-                onClick={() => handleNav('/shop')}
-                icon={ShoppingCart}
-                label="Shop"
-                isActive={currentPage === 'shop'}
-              />
+              {proShopEnabled && (
+                <SidebarButton
+                  onClick={() => handleNav('/shop')}
+                  icon={ShoppingCart}
+                  label="Shop"
+                  isActive={currentPage === 'shop'}
+                />
+              )}
               {!user?.adminFacilities?.includes(selectedFacilityId) && (
                 <SidebarButton
                   onClick={() => handleNav('/bulletin-board')}

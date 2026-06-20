@@ -26,11 +26,18 @@ export class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="max-w-lg w-full bg-white rounded-lg shadow-lg p-8 text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-4">
               An unexpected error occurred. Please try refreshing the page.
             </p>
+            {this.state.error && (
+              <pre className="text-left text-xs bg-gray-100 rounded p-3 mb-6 overflow-auto max-h-40 text-red-700">
+                {this.state.error.message}
+                {'\n'}
+                {this.state.error.stack}
+              </pre>
+            )}
             <button
               onClick={() => {
                 this.setState({ hasError: false, error: null });

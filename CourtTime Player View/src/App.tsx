@@ -1,3 +1,4 @@
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -39,6 +40,7 @@ import { AdminCommunication } from './components/admin/AdminCommunication';
 import { AdminMemberPayments } from './components/admin/AdminMemberPayments';
 import ProShopAdmin from './components/admin/ProShopAdmin';
 import ProShop from './components/ProShop';
+import AnnualFeesAdmin from './components/admin/AnnualFeesAdmin';
 
 // Support Console
 import { SupportConsole } from './components/developer';
@@ -99,6 +101,7 @@ export default function App() {
               <Route path="/admin/communication" element={<AdminCommunication />} />
               <Route path="/admin/member-payments" element={<AdminMemberPayments />} />
               <Route path="/admin/pro-shop" element={<ProShopAdmin />} />
+              <Route path="/admin/annual-fees" element={<AnnualFeesAdmin />} />
               <Route path="/shop" element={<ProShop />} />
               <Route path="/admin/email-blast" element={<Navigate to="/admin/communication" replace />} />
             </Route>

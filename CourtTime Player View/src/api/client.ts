@@ -1796,4 +1796,95 @@ export const proShopApi = {
 
   adminGetOrders: (facilityId: string) =>
     apiRequest(`/api/pro-shop/admin/orders/${facilityId}`),
+
+  adminGetSettings: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/admin/settings/${facilityId}`),
+
+  adminUpdateSettings: (facilityId: string, data: { tab_billing_day?: number; require_card?: boolean }) =>
+    apiRequest(`/api/pro-shop/admin/settings/${facilityId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  adminGetMembers: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/admin/members/${facilityId}`),
+
+  adminAssignCharge: (facilityId: string, userId: string, items: { product_id: string; quantity: number }[]) =>
+    apiRequest(`/api/pro-shop/admin/assign/charge/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, items }),
+    }),
+
+  adminAssignTab: (facilityId: string, userId: string, items: { product_id: string; quantity: number }[]) =>
+    apiRequest(`/api/pro-shop/admin/assign/tab/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, items }),
+    }),
+
+  adminGetTabs: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/admin/tabs/${facilityId}`),
+
+  adminBillTab: (facilityId: string, userId: string) =>
+    apiRequest(`/api/pro-shop/admin/bill-tab/${facilityId}/${userId}`, { method: 'POST' }),
+
+  adminBillAll: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/admin/bill-all/${facilityId}`, { method: 'POST' }),
+
+  getMyTab: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/my-tab/${facilityId}`),
+
+  getMyCard: (facilityId: string) =>
+    apiRequest(`/api/pro-shop/my-card/${facilityId}`),
+};
+
+export const annualFeesApi = {
+  getConfig: (facilityId: string) =>
+    apiRequest(`/api/annual-fees/config/${facilityId}`),
+
+  saveConfig: (facilityId: string, billingMonth: number, billingDay: number) =>
+    apiRequest(`/api/annual-fees/config/${facilityId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ billingMonth, billingDay }),
+    }),
+
+  getTiers: (facilityId: string) =>
+    apiRequest(`/api/annual-fees/tiers/${facilityId}`),
+
+  createTier: (facilityId: string, data: { name: string; amountCents: number; description?: string }) =>
+    apiRequest(`/api/annual-fees/tiers/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateTier: (facilityId: string, tierId: string, data: Record<string, any>) =>
+    apiRequest(`/api/annual-fees/tiers/${facilityId}/${tierId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteTier: (facilityId: string, tierId: string) =>
+    apiRequest(`/api/annual-fees/tiers/${facilityId}/${tierId}`, {
+      method: 'DELETE',
+    }),
+
+  getMembers: (facilityId: string) =>
+    apiRequest(`/api/annual-fees/members/${facilityId}`),
+
+  assignMemberTier: (facilityId: string, userId: string, tierId: string | null) =>
+    apiRequest(`/api/annual-fees/members/${facilityId}/${userId}/tier`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tierId }),
+    }),
+
+  previewBilling: (facilityId: string) =>
+    apiRequest(`/api/annual-fees/billing/preview/${facilityId}`),
+
+  runBilling: (facilityId: string) =>
+    apiRequest(`/api/annual-fees/billing/run/${facilityId}`, { method: 'POST' }),
+
+  getBillingHistory: (facilityId: string) =>
+    apiRequest(`/api/annual-fees/billing/history/${facilityId}`),
+
+  getBillingRunRecords: (facilityId: string, runId: string) =>
+    apiRequest(`/api/annual-fees/billing/runs/${runId}/${facilityId}`),
 };

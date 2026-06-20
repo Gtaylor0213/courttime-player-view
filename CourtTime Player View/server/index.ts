@@ -55,6 +55,7 @@ import paymentItemsRoutes from './routes/paymentItems';
 import connectPaymentsRoutes from './routes/connectPayments';
 import connectWebhookRoutes from './routes/connectWebhook';
 import proShopRoutes from './routes/proShop';
+import annualFeesRoutes from './routes/annualFees';
 import { requireAuth, requireNotPaymentLocked } from './middleware/auth';
 
 const app = express();
@@ -219,6 +220,7 @@ app.use('/api/court-config', requireAuth, requireNotPaymentLocked, courtConfigRo
 app.use('/api/rules', requireAuth, requireNotPaymentLocked, rulesRoutes);
 app.use('/api/households', requireAuth, requireNotPaymentLocked, householdsRoutes);
 app.use('/api/pro-shop', requireAuth, proShopRoutes);
+app.use('/api/annual-fees', requireAuth, annualFeesRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

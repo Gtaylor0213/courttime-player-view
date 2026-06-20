@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { ShoppingBag, ShoppingCart, X, Plus, Minus, CheckCircle } from 'lucide-react';
 import { proShopApi } from '../api/client';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext } from '../contexts/AppContext';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -25,7 +24,7 @@ function formatPrice(cents: number) {
 type CartItem = { product: any; quantity: number };
 
 export default function ProShop() {
-  const { currentFacilityId } = useAppContext();
+  const { selectedFacilityId: currentFacilityId } = useAppContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,11 +50,11 @@ export default function ProShop() {
     setLoading(true);
     const res = await proShopApi.getShopProducts(currentFacilityId!);
     if (res.success) {
-      setProducts(res.data);
-    } else if (res.error?.includes('not enabled') || res.status === 403) {
+      setProducts(res.data as any[]);
+    } else if ((res.error as string)?.includes('not enabled')) {
       setUnavailable(true);
     } else {
-      toast.error(res.error || 'Failed to load shop');
+      toast.error((res.error as string) || 'Failed to load shop');
     }
     setLoading(false);
   };
@@ -92,16 +91,16 @@ export default function ProShop() {
     const items = cart.map(i => ({ product_id: i.product.id, quantity: i.quantity }));
     const res = await proShopApi.createCheckout(currentFacilityId!, items);
     if (res.success) {
-      if (res.data.devMode) {
-        // Dev mode — no real Stripe, just show success
+      const data = res.data as any;
+      if (data.devMode) {
         setCart([]);
         setCartOpen(false);
         setOrderSuccess(true);
       } else {
-        window.location.href = res.data.url;
+        window.location.href = data.url;
       }
     } else {
-      toast.error(res.error || 'Checkout failed');
+      toast.error((res.error as string) || 'Checkout failed');
     }
     setCheckingOut(false);
   };

@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ShoppingBag, Plus, Pencil, Trash2 } from 'lucide-react';
 import { proShopApi } from '../../api/client';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
 
 const CATEGORIES = [
@@ -48,7 +48,7 @@ const emptyForm = {
 };
 
 export default function ProShopAdmin() {
-  const { currentFacilityId } = useAppContext();
+  const { selectedFacilityId: currentFacilityId } = useAppContext();
   const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,16 +67,16 @@ export default function ProShopAdmin() {
   const loadProducts = async () => {
     setLoading(true);
     const res = await proShopApi.adminGetProducts(currentFacilityId!);
-    if (res.success) setProducts(res.data);
-    else toast.error(res.error || 'Failed to load products');
+    if (res.success) setProducts(res.data as any[]);
+    else toast.error((res.error as string) || 'Failed to load products');
     setLoading(false);
   };
 
   const loadOrders = async () => {
     setOrdersLoading(true);
     const res = await proShopApi.adminGetOrders(currentFacilityId!);
-    if (res.success) setOrders(res.data);
-    else toast.error(res.error || 'Failed to load orders');
+    if (res.success) setOrders(res.data as any[]);
+    else toast.error((res.error as string) || 'Failed to load orders');
     setOrdersLoading(false);
   };
 
@@ -128,7 +128,7 @@ export default function ProShopAdmin() {
     };
 
     setSaving(true);
-    let res;
+    let res: any;
     if (editingProduct) {
       res = await proShopApi.adminUpdateProduct(editingProduct.id, payload);
     } else {
@@ -140,7 +140,7 @@ export default function ProShopAdmin() {
       setModalOpen(false);
       await loadProducts();
     } else {
-      toast.error(res.error || 'Failed to save product');
+      toast.error((res.error as string) || 'Failed to save product');
     }
     setSaving(false);
   };
@@ -150,7 +150,7 @@ export default function ProShopAdmin() {
     setDeletingId(product.id);
     const res = await proShopApi.adminDeleteProduct(product.id);
     if (res.success) {
-      const msg = res.data?.reason === 'deactivated'
+      const msg = (res.data as any)?.reason === 'deactivated'
         ? `"${product.name}" deactivated (has order history)`
         : `"${product.name}" deleted`;
       toast.success(msg);
@@ -320,7 +320,7 @@ export default function ProShopAdmin() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Category *</Label>
-                <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
+                <Select value={form.category} onValueChange={(v: string) => setForm(p => ({ ...p, category: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -360,7 +360,7 @@ export default function ProShopAdmin() {
               <div className="space-y-2">
                 <Label>Visible in Shop</Label>
                 <div className="flex items-center h-10">
-                  <Switch checked={form.is_active} onCheckedChange={v => setForm(p => ({ ...p, is_active: v }))} />
+                  <Switch checked={form.is_active} onCheckedChange={(v: boolean) => setForm(p => ({ ...p, is_active: v }))} />
                   <span className="ml-2 text-sm text-gray-500">{form.is_active ? 'Visible' : 'Hidden'}</span>
                 </div>
               </div>

@@ -67,7 +67,7 @@ export default function ProShopAdmin() {
   const loadProducts = async () => {
     setLoading(true);
     const res = await proShopApi.adminGetProducts(currentFacilityId!);
-    if (res.success) setProducts(res.data as any[]);
+    if (res.success) setProducts((res.data as any)?.data ?? []);
     else toast.error((res.error as string) || 'Failed to load products');
     setLoading(false);
   };
@@ -75,7 +75,7 @@ export default function ProShopAdmin() {
   const loadOrders = async () => {
     setOrdersLoading(true);
     const res = await proShopApi.adminGetOrders(currentFacilityId!);
-    if (res.success) setOrders(res.data as any[]);
+    if (res.success) setOrders((res.data as any)?.data ?? []);
     else toast.error((res.error as string) || 'Failed to load orders');
     setOrdersLoading(false);
   };

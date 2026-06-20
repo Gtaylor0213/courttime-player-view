@@ -50,7 +50,7 @@ export default function ProShop() {
     setLoading(true);
     const res = await proShopApi.getShopProducts(currentFacilityId!);
     if (res.success) {
-      setProducts(res.data as any[]);
+      setProducts((res.data as any)?.data ?? []);
     } else if ((res.error as string)?.includes('not enabled')) {
       setUnavailable(true);
     } else {
@@ -91,7 +91,7 @@ export default function ProShop() {
     const items = cart.map(i => ({ product_id: i.product.id, quantity: i.quantity }));
     const res = await proShopApi.createCheckout(currentFacilityId!, items);
     if (res.success) {
-      const data = res.data as any;
+      const data = (res.data as any)?.data ?? res.data as any;
       if (data.devMode) {
         setCart([]);
         setCartOpen(false);

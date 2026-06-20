@@ -1837,6 +1837,16 @@ export const proShopApi = {
     apiRequest(`/api/pro-shop/my-card/${facilityId}`),
 };
 
+export const reportingApi = {
+  getTransactions: (
+    facilityId: string,
+    params: { start: string; end: string; type?: string }
+  ) => {
+    const qs = new URLSearchParams({ start: params.start, end: params.end, type: params.type ?? 'all' });
+    return apiRequest(`/api/reports/transactions/${facilityId}?${qs}`);
+  },
+};
+
 export const annualFeesApi = {
   getConfig: (facilityId: string) =>
     apiRequest(`/api/annual-fees/config/${facilityId}`),

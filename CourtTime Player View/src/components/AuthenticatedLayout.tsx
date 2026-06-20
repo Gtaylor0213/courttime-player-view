@@ -17,6 +17,9 @@ function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/admin/households')) return 'household-management';
   if (pathname.startsWith('/admin/communication')) return 'communication';
   if (pathname.startsWith('/admin/member-payments')) return 'member-payments';
+  if (pathname.startsWith('/admin/pro-shop')) return 'pro-shop-admin';
+  if (pathname.startsWith('/admin/annual-fees')) return 'annual-fees';
+  if (pathname.startsWith('/admin/reports')) return 'reports';
   if (pathname.startsWith('/admin')) return 'admin-dashboard';
   if (pathname.startsWith('/calendar')) return 'court-calendar';
   if (pathname.startsWith('/profile')) return 'profile';

@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus, ShoppingBag, ShoppingCart, DollarSign } from 'lucide-react';
+import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus, ShoppingBag, ShoppingCart, DollarSign, BarChart2 } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
@@ -393,6 +393,12 @@ export function UnifiedSidebar({
                     isActive={currentPage === 'annual-fees'}
                   />
                 )}
+                <SidebarButton
+                  onClick={() => handleNav('/admin/reports')}
+                  icon={BarChart2}
+                  label="Reports"
+                  isActive={currentPage === 'reports'}
+                />
               </div>
             </div>
           )}

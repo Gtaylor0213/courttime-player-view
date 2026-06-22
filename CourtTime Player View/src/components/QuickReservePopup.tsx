@@ -853,7 +853,7 @@ export function QuickReservePopup({
 
   return (
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-green-600" />
@@ -866,7 +866,7 @@ export function QuickReservePopup({
         
         <div className="flex-1 overflow-y-auto min-h-0">
           <form onSubmit={handleSubmit} id="quick-reserve-form" className="h-full flex flex-col">
-            <div className="flex-1 space-y-3 overflow-y-auto pb-24">
+            <div className="flex-1 space-y-3 overflow-y-auto pb-4">
               {/* Facility Selection */}
               <div className="flex items-center gap-3">
                 <Label htmlFor="facility" className="flex items-center gap-2 min-w-[80px]">

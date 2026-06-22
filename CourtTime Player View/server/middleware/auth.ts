@@ -77,22 +77,40 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
  * Middleware: Block payment-locked members from using the app.
  * Returns 402 with lockout info so the frontend can redirect to a payment wall.
  * Admin routes are expected to bypass this via route ordering in index.ts.
+ *
+ * When a facilityId can be extracted from the request (params, body, or query),
+ * the check is scoped to that facility only — a user locked at Facility A should
+ * still be able to book / interact at Facility B where they owe nothing.
  */
 export async function requireNotPaymentLocked(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.user) { next(); return; }
 
   // Inline import to avoid circular deps at module load time
   const { query } = await import('../../src/database/connection');
-  const result = await query(
-    `SELECT fm.facility_id, fm.payment_locked_at, fm.lockout_amount_cents, fm.lockout_description,
-            f.name as facility_name
-     FROM facility_memberships fm
-     JOIN facilities f ON f.id = fm.facility_id
-     WHERE fm.user_id = $1 AND fm.is_payment_locked = true
-     ORDER BY fm.payment_locked_at DESC NULLS LAST
-     LIMIT 1`,
-    [req.user.userId]
-  ).catch(() => ({ rows: [] as any[] }));
+
+  const facilityId: string | undefined =
+    (req.params as any)?.facilityId ||
+    (req.body as any)?.facilityId ||
+    (req.query as any)?.facilityId;
+
+  const sqlQuery = facilityId
+    ? `SELECT fm.facility_id, fm.payment_locked_at, fm.lockout_amount_cents, fm.lockout_description,
+              f.name as facility_name
+         FROM facility_memberships fm
+         JOIN facilities f ON f.id = fm.facility_id
+        WHERE fm.user_id = $1 AND fm.facility_id = $2 AND fm.is_payment_locked = true
+        LIMIT 1`
+    : `SELECT fm.facility_id, fm.payment_locked_at, fm.lockout_amount_cents, fm.lockout_description,
+              f.name as facility_name
+         FROM facility_memberships fm
+         JOIN facilities f ON f.id = fm.facility_id
+        WHERE fm.user_id = $1 AND fm.is_payment_locked = true
+        ORDER BY fm.payment_locked_at DESC NULLS LAST
+        LIMIT 1`;
+
+  const params = facilityId ? [req.user.userId, facilityId] : [req.user.userId];
+
+  const result = await query(sqlQuery, params).catch(() => ({ rows: [] as any[] }));
 
   if (result.rows.length > 0) {
     const row = result.rows[0];

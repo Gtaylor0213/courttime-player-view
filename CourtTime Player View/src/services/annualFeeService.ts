@@ -437,29 +437,16 @@ export async function runAnnualBilling(
     }
 
     if (!stripe || !stripeAccountId || !stripeOnboarded) {
-      // Stripe not configured — lock the member out so they can't access the app
-      await query(
-        `UPDATE facility_memberships
-            SET is_payment_locked = true,
-                payment_locked_at = NOW(),
-                lockout_amount_cents = $3,
-                lockout_description = $4,
-                updated_at = NOW()
-          WHERE user_id = $1 AND facility_id = $2`,
-        [
-          member.user_id,
-          facilityId,
-          amountCents,
-          `Annual membership fee - ${member.tier_name} (${billingYear})`,
-        ]
-      );
+      // Stripe not configured — mark as failed but do NOT lock the member out.
+      // The facility hasn't set up payments, so the member has no way to pay;
+      // blocking them would punish them for the facility's missing setup.
       await query(
         `INSERT INTO annual_fee_billing_records
            (run_id, facility_id, user_id, tier_id, tier_name, amount_cents, billing_year, status, error_message)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'lockout_applied', 'Stripe not configured')`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'failed', 'Stripe not configured')`,
         [runId, facilityId, member.user_id, member.tier_id, member.tier_name, amountCents, billingYear]
       );
-      lockoutCount++;
+      failedCount++;
       continue;
     }
 

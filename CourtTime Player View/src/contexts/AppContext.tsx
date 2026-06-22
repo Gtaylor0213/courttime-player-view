@@ -40,6 +40,7 @@ interface AppContextType {
   selectedFacilityId: string;
   setSelectedFacilityId: (id: string) => void;
   enabledFeatures: string[];
+  featuresLoaded: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -58,6 +59,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
+  const [featuresLoaded, setFeaturesLoaded] = useState(false);
   const [selectedFacilityId, setSelectedFacilityIdState] = useState<string>(
     () => loadStoredFacilityId() || 'sunrise-valley'
   );
@@ -107,11 +109,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [location.search, user, setSelectedFacilityId]);
 
   useEffect(() => {
-    if (!selectedFacilityId) { setEnabledFeatures([]); return; }
+    if (!selectedFacilityId) { setEnabledFeatures([]); setFeaturesLoaded(true); return; }
     fetch(`/api/facilities/${selectedFacilityId}/feature-flags`)
       .then(r => r.json())
       .then(res => { if (res.success) setEnabledFeatures(res.data); })
-      .catch(() => setEnabledFeatures([]));
+      .catch(() => setEnabledFeatures([]))
+      .finally(() => setFeaturesLoaded(true));
   }, [selectedFacilityId]);
 
   const toggleSidebar = () => setSidebarCollapsed(prev => !prev);
@@ -125,6 +128,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       selectedFacilityId,
       setSelectedFacilityId,
       enabledFeatures,
+      featuresLoaded,
     }}>
       {children}
     </AppContext.Provider>

@@ -57,6 +57,7 @@ import connectWebhookRoutes from './routes/connectWebhook';
 import proShopRoutes from './routes/proShop';
 import annualFeesRoutes from './routes/annualFees';
 import reportingRoutes from './routes/reporting';
+import pickleRoutes from './routes/pickle';
 import { requireAuth, requireNotPaymentLocked } from './middleware/auth';
 
 const app = express();
@@ -223,6 +224,7 @@ app.use('/api/households', requireAuth, requireNotPaymentLocked, householdsRoute
 app.use('/api/pro-shop', requireAuth, proShopRoutes);
 app.use('/api/annual-fees', requireAuth, annualFeesRoutes);
 app.use('/api/reports', requireAuth, reportingRoutes);
+app.use('/api/pickle', requireAuth, pickleRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

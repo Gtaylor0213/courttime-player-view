@@ -2,7 +2,8 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
-import { AppProvider } from './contexts/AppContext';
+import { AppProvider, useAppContext } from './contexts/AppContext';
+import { useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/sonner';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthenticatedLayout } from './components/AuthenticatedLayout';
@@ -45,6 +46,39 @@ import AdminReports from './components/admin/AdminReports';
 
 // Support Console
 import { SupportConsole } from './components/developer';
+
+// Pickle (CourtTime-Pickle) — only rendered when 'pickleball' feature flag is enabled
+import { PickleOrgRegistration } from './components/pickle/PickleOrgRegistration';
+import { PickleLocationRegistration } from './components/pickle/PickleLocationRegistration';
+import { PickleOrgLayout } from './components/pickle/corporate/PickleOrgLayout';
+import { PickleOrgOverview } from './components/pickle/corporate/PickleOrgOverview';
+import { PickleLocationsList } from './components/pickle/corporate/PickleLocationsList';
+import { PickleLocationDetail } from './components/pickle/corporate/PickleLocationDetail';
+import { PickleAddLocationWizard } from './components/pickle/corporate/PickleAddLocationWizard';
+import { PickleMembershipAdmin } from './components/pickle/membership/PickleMembershipAdmin';
+import { PickleProgramCatalog } from './components/pickle/programs/PickleProgramCatalog';
+import { PickleProShopAdmin } from './components/pickle/retail/PickleProShopAdmin';
+import { PickleOrgReports } from './components/pickle/reporting/PickleOrgReports';
+import { PickleCampaignAdmin } from './components/pickle/campaigns/PickleCampaignAdmin';
+import {
+  PickleFranchiseAdminLayout,
+  PickleFranchiseDashboard,
+  PickleFranchiseSetupWizard,
+  PickleFranchiseMemberManagement,
+  PickleFranchisePrograms,
+  PickleFranchiseProShop,
+  PickleFranchiseStripe,
+} from './components/pickle/franchise';
+import { PickleLeaderboard } from './components/pickle/leaderboard/PickleLeaderboard';
+
+function PickleRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const { enabledFeatures, featuresLoaded } = useAppContext();
+  if (!user) return <Navigate to="/login" replace />;
+  if (!featuresLoaded) return null;
+  if (!enabledFeatures.includes('pickleball')) return <Navigate to="/calendar" replace />;
+  return <>{children}</>;
+}
 
 // Legal pages (public, no auth)
 import { PrivacyPolicyPage } from './components/legal/PrivacyPolicyPage';
@@ -107,6 +141,30 @@ export default function App() {
               <Route path="/shop" element={<ProShop />} />
               <Route path="/admin/email-blast" element={<Navigate to="/admin/communication" replace />} />
             </Route>
+
+            {/* Pickle (CourtTime-Pickle) routes — gated by 'pickleball' feature flag */}
+            <Route path="/pickle/register" element={<PickleRoute><PickleOrgRegistration /></PickleRoute>} />
+            <Route path="/pickle/register/location/:facilityId" element={<PickleRoute><PickleLocationRegistration /></PickleRoute>} />
+            <Route path="/pickle/location/:facilityId/setup" element={<PickleRoute><PickleFranchiseSetupWizard /></PickleRoute>} />
+            <Route path="/pickle/location/:facilityId" element={<PickleRoute><PickleFranchiseAdminLayout /></PickleRoute>}>
+              <Route index element={<PickleFranchiseDashboard />} />
+              <Route path="members" element={<PickleFranchiseMemberManagement />} />
+              <Route path="programs" element={<PickleFranchisePrograms />} />
+              <Route path="pro-shop" element={<PickleFranchiseProShop />} />
+              <Route path="stripe" element={<PickleFranchiseStripe />} />
+            </Route>
+            <Route path="/pickle/org/:orgId" element={<PickleRoute><PickleOrgLayout /></PickleRoute>}>
+              <Route index element={<PickleOrgOverview />} />
+              <Route path="locations" element={<PickleLocationsList />} />
+              <Route path="locations/add" element={<PickleAddLocationWizard />} />
+              <Route path="locations/:locId" element={<PickleLocationDetail />} />
+              <Route path="memberships" element={<PickleMembershipAdmin />} />
+              <Route path="programs" element={<PickleProgramCatalog />} />
+              <Route path="pro-shop" element={<PickleProShopAdmin />} />
+              <Route path="reports" element={<PickleOrgReports />} />
+              <Route path="campaigns" element={<PickleCampaignAdmin />} />
+            </Route>
+            <Route path="/pickle/leaderboard/:orgId" element={<PickleRoute><PickleLeaderboard /></PickleRoute>} />
 
             {/* Default redirect */}
             <Route path="/" element={<Navigate to="/calendar" replace />} />

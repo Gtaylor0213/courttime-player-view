@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { BarChart2, Download, TrendingUp } from 'lucide-react';
+import { BarChart2, Download, TrendingUp, RefreshCw, AlertCircle } from 'lucide-react';
 import { reportingApi } from '../../api/client';
 import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
@@ -91,10 +91,12 @@ export default function AdminReports() {
   const [summary, setSummary] = useState<SummaryRow[]>([]);
   const [grandTotal, setGrandTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadReport = useCallback(async () => {
     if (!facilityId) return;
     setLoading(true);
+    setErrorMsg(null);
     const res = await reportingApi.getTransactions(facilityId, { start: startDate, end: endDate, type: typeFilter });
     if (res.success) {
       const d = (res.data as any)?.data;
@@ -102,7 +104,9 @@ export default function AdminReports() {
       setSummary(d?.summary ?? []);
       setGrandTotal(d?.grand_total_cents ?? 0);
     } else {
-      toast.error((res.error as string) || 'Failed to load report');
+      const msg = (res.error as string) || 'Failed to load report';
+      setErrorMsg(msg);
+      toast.error(msg);
     }
     setLoading(false);
   }, [facilityId, startDate, endDate, typeFilter]);
@@ -168,6 +172,9 @@ export default function AdminReports() {
               </Select>
             </div>
             <div className="flex gap-2 ml-auto">
+              <Button size="sm" onClick={loadReport} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Run Report
+              </Button>
               <Button variant="outline" size="sm"
                 onClick={() => exportCsv(transactions, startDate, endDate)}
                 disabled={transactions.length === 0}
@@ -178,6 +185,13 @@ export default function AdminReports() {
           </div>
         </CardContent>
       </Card>
+
+      {errorMsg && (
+        <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16">

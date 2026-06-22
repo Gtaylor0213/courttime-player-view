@@ -53,73 +53,88 @@ export async function getTransactionReport(
 ): Promise<TransactionReport> {
 
   // Source 1: facility_revenue_log (court bookings, guest fees, payment items, etc.)
-  const revenueRows = await query(
-    `SELECT
-       frl.id,
-       frl.paid_at              AS date,
-       u.full_name              AS member_name,
-       u.email                  AS member_email,
-       frl.payment_type         AS type,
-       COALESCE(pi.name, initcap(replace(lower(frl.payment_type), '_', ' '))) AS description,
-       frl.amount_cents,
-       'paid'                   AS status
-     FROM facility_revenue_log frl
-     LEFT JOIN users u ON u.id = frl.member_id
-     LEFT JOIN connect_payments cp
-            ON cp.id = frl.source_id AND frl.source_type = 'connect_payment'
-     LEFT JOIN payment_items pi ON pi.id = cp.payment_item_id
-     WHERE frl.facility_id = $1
-       AND frl.payment_type != 'PLATFORM_SUBSCRIPTION'
-       AND frl.paid_at >= $2::timestamptz
-       AND frl.paid_at <  $3::timestamptz + INTERVAL '1 day'`,
-    [facilityId, startDate, endDate]
-  );
+  let revenueRows = { rows: [] as any[] };
+  try {
+    revenueRows = await query(
+      `SELECT
+         frl.id,
+         frl.paid_at              AS date,
+         u.full_name              AS member_name,
+         u.email                  AS member_email,
+         frl.payment_type         AS type,
+         COALESCE(pi.name, initcap(replace(lower(frl.payment_type), '_', ' '))) AS description,
+         frl.amount_cents,
+         'paid'                   AS status
+       FROM facility_revenue_log frl
+       LEFT JOIN users u ON u.id = frl.member_id
+       LEFT JOIN connect_payments cp
+              ON cp.id = frl.source_id AND frl.source_type = 'connect_payment'
+       LEFT JOIN payment_items pi ON pi.id = cp.payment_item_id
+       WHERE frl.facility_id = $1
+         AND frl.payment_type != 'PLATFORM_SUBSCRIPTION'
+         AND frl.paid_at >= $2::timestamptz
+         AND frl.paid_at <  $3::timestamptz + INTERVAL '1 day'`,
+      [facilityId, startDate, endDate]
+    );
+  } catch (err) {
+    console.error('[Reports] Revenue log query failed:', err);
+  }
 
   // Source 2: annual_fee_billing_records
-  const annualRows = await query(
-    `SELECT
-       afbr.id::text            AS id,
-       afbr.processed_at        AS date,
-       u.full_name              AS member_name,
-       u.email                  AS member_email,
-       'annual_fee'             AS type,
-       CONCAT(COALESCE(afbr.tier_name, 'Annual Fee'), ' (', afbr.billing_year, ')') AS description,
-       afbr.amount_cents,
-       afbr.status
-     FROM annual_fee_billing_records afbr
-     JOIN users u ON u.id = afbr.user_id
-     WHERE afbr.facility_id = $1
-       AND afbr.status = 'charged'
-       AND afbr.processed_at >= $2::timestamptz
-       AND afbr.processed_at <  $3::timestamptz + INTERVAL '1 day'`,
-    [facilityId, startDate, endDate]
-  );
+  let annualRows = { rows: [] as any[] };
+  try {
+    annualRows = await query(
+      `SELECT
+         afbr.id::text            AS id,
+         afbr.processed_at        AS date,
+         u.full_name              AS member_name,
+         u.email                  AS member_email,
+         'annual_fee'             AS type,
+         CONCAT(COALESCE(afbr.tier_name, 'Annual Fee'), ' (', afbr.billing_year, ')') AS description,
+         afbr.amount_cents,
+         afbr.status
+       FROM annual_fee_billing_records afbr
+       JOIN users u ON u.id = afbr.user_id
+       WHERE afbr.facility_id = $1
+         AND afbr.status = 'charged'
+         AND afbr.processed_at >= $2::timestamptz
+         AND afbr.processed_at <  $3::timestamptz + INTERVAL '1 day'`,
+      [facilityId, startDate, endDate]
+    );
+  } catch (err) {
+    console.error('[Reports] Annual fees query failed:', err);
+  }
 
   // Source 3: pro_shop_orders
-  const proShopRows = await query(
-    `SELECT
-       o.id::text               AS id,
-       o.created_at             AS date,
-       u.full_name              AS member_name,
-       u.email                  AS member_email,
-       'pro_shop'               AS type,
-       COALESCE(
-         (SELECT string_agg(COALESCE(p.name, 'Item') || ' x' || oi.quantity::text, ', ')
-          FROM pro_shop_order_items oi
-          LEFT JOIN pro_shop_products p ON p.id = oi.product_id
-          WHERE oi.order_id = o.id),
-         'Pro Shop Order'
-       )                        AS description,
-       o.total_cents            AS amount_cents,
-       o.status
-     FROM pro_shop_orders o
-     JOIN users u ON u.id = o.user_id
-     WHERE o.facility_id = $1
-       AND o.status = 'paid'
-       AND o.created_at >= $2::timestamptz
-       AND o.created_at <  $3::timestamptz + INTERVAL '1 day'`,
-    [facilityId, startDate, endDate]
-  );
+  let proShopRows = { rows: [] as any[] };
+  try {
+    proShopRows = await query(
+      `SELECT
+         o.id::text               AS id,
+         o.created_at             AS date,
+         u.full_name              AS member_name,
+         u.email                  AS member_email,
+         'pro_shop'               AS type,
+         COALESCE(
+           (SELECT string_agg(COALESCE(p.name, 'Item') || ' x' || oi.quantity::text, ', ')
+            FROM pro_shop_order_items oi
+            LEFT JOIN pro_shop_products p ON p.id = oi.product_id
+            WHERE oi.order_id = o.id),
+           'Pro Shop Order'
+         )                        AS description,
+         o.total_cents            AS amount_cents,
+         o.status
+       FROM pro_shop_orders o
+       JOIN users u ON u.id = o.user_id
+       WHERE o.facility_id = $1
+         AND o.status = 'paid'
+         AND o.created_at >= $2::timestamptz
+         AND o.created_at <  $3::timestamptz + INTERVAL '1 day'`,
+      [facilityId, startDate, endDate]
+    );
+  } catch (err) {
+    console.error('[Reports] Pro shop query failed:', err);
+  }
 
   // Merge all rows
   let all: Transaction[] = [

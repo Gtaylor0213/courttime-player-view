@@ -32,17 +32,16 @@ export interface TransactionReport {
   transaction_count: number;
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  COURT_BOOKING:    'Court Booking',
-  GUEST_FEE:        'Guest Fee',
-  BULLETIN_SIGNUP:  'Bulletin Signup',
-  PAYMENT_ITEM:     'Payment Item',
-  annual_fee:       'Annual Fee',
-  pro_shop:         'Pro Shop',
-};
-
 export function typeLabel(type: string): string {
-  return TYPE_LABEL[type] ?? type;
+  const labels: Record<string, string> = {
+    court_booking:   'Court Booking',
+    guest_fee:       'Guest Fee',
+    bulletin_signup: 'Bulletin Signup',
+    payment_item:    'Payment Item',
+    annual_fee:      'Annual Fee',
+    pro_shop:        'Pro Shop',
+  };
+  return labels[type] ?? type;
 }
 
 export async function getTransactionReport(
@@ -52,32 +51,43 @@ export async function getTransactionReport(
   typeFilter?: string
 ): Promise<TransactionReport> {
 
-  // Source 1: facility_revenue_log (court bookings, guest fees, payment items, etc.)
-  let revenueRows = { rows: [] as any[] };
+  // Source 1: connect_payments (court bookings, bulletin signups, payment items)
+  // Querying this table directly is more reliable than facility_revenue_log,
+  // which depends on the Stripe webhook having fired and migration 045 being applied.
+  let connectRows = { rows: [] as any[] };
   try {
-    revenueRows = await query(
+    connectRows = await query(
       `SELECT
-         frl.id,
-         frl.paid_at              AS date,
-         u.full_name              AS member_name,
-         u.email                  AS member_email,
-         frl.payment_type         AS type,
-         COALESCE(pi.name, initcap(replace(lower(frl.payment_type), '_', ' '))) AS description,
-         frl.amount_cents,
-         'paid'                   AS status
-       FROM facility_revenue_log frl
-       LEFT JOIN users u ON u.id = frl.member_id
-       LEFT JOIN connect_payments cp
-              ON cp.id = frl.source_id AND frl.source_type = 'connect_payment'
+         cp.id,
+         COALESCE(cp.paid_at, cp.created_at)  AS date,
+         u.full_name                           AS member_name,
+         u.email                               AS member_email,
+         CASE
+           WHEN cp.bulletin_post_id IS NOT NULL            THEN 'bulletin_signup'
+           WHEN cp.booking_id IS NOT NULL
+             OR cp.pending_booking IS NOT NULL             THEN 'court_booking'
+           ELSE 'payment_item'
+         END                                   AS type,
+         COALESCE(
+           pi.name,
+           CASE WHEN cp.bulletin_post_id IS NOT NULL THEN 'Event Signup' END,
+           CASE WHEN cp.booking_id IS NOT NULL
+                  OR cp.pending_booking IS NOT NULL THEN 'Court Booking' END,
+           'Payment'
+         )                                     AS description,
+         cp.amount_cents,
+         lower(cp.status)                      AS status
+       FROM connect_payments cp
+       JOIN users u ON u.id = cp.member_id
        LEFT JOIN payment_items pi ON pi.id = cp.payment_item_id
-       WHERE frl.facility_id = $1
-         AND frl.payment_type != 'PLATFORM_SUBSCRIPTION'
-         AND frl.paid_at >= $2::timestamptz
-         AND frl.paid_at <  $3::timestamptz + INTERVAL '1 day'`,
+       WHERE cp.club_id = $1
+         AND cp.status = 'PAID'
+         AND COALESCE(cp.paid_at, cp.created_at) >= $2::timestamptz
+         AND COALESCE(cp.paid_at, cp.created_at) <  $3::timestamptz + INTERVAL '1 day'`,
       [facilityId, startDate, endDate]
     );
   } catch (err) {
-    console.error('[Reports] Revenue log query failed:', err);
+    console.error('[Reports] Connect payments query failed:', err);
   }
 
   // Source 2: annual_fee_billing_records
@@ -138,12 +148,12 @@ export async function getTransactionReport(
 
   // Merge all rows
   let all: Transaction[] = [
-    ...revenueRows.rows.map((r: any) => ({
+    ...connectRows.rows.map((r: any) => ({
       id: r.id,
       date: r.date,
       member_name: r.member_name,
       member_email: r.member_email,
-      type: (r.type as string).toLowerCase().replace(/ /g, '_') as TransactionType,
+      type: r.type as TransactionType,
       description: r.description,
       amount_cents: Number(r.amount_cents),
       status: r.status,

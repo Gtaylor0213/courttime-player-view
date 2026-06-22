@@ -88,6 +88,32 @@ export async function requireNotPaymentLocked(req: Request, res: Response, next:
   // Inline import to avoid circular deps at module load time
   const { query } = await import('../../src/database/connection');
 
+  // Stripe payment callbacks — user has already paid, never block these.
+  if (
+    req.method === 'POST' &&
+    (req.originalUrl.includes('/api/bookings/payment/confirm') ||
+     req.originalUrl.includes('/api/bookings/payment/reconcile'))
+  ) {
+    next(); return;
+  }
+
+  // Pay-per-court booking creation — if the court charges per booking the
+  // booking service will redirect to Stripe, so the annual-fee lock must not
+  // block this path.  Check the court's require_payment flag (inheriting from
+  // parent court for split courts) before doing the lockout query.
+  const courtId: string | undefined = (req.body as any)?.courtId;
+  if (courtId && req.method === 'POST') {
+    const courtResult = await query(
+      `SELECT (COALESCE(c.require_payment, false) OR COALESCE(p.require_payment, false)) AS require_payment
+         FROM courts c LEFT JOIN courts p ON p.id = c.parent_court_id
+        WHERE c.id = $1`,
+      [courtId]
+    ).catch(() => ({ rows: [] as any[] }));
+    if (courtResult.rows[0]?.require_payment) {
+      next(); return;
+    }
+  }
+
   const facilityId: string | undefined =
     (req.params as any)?.facilityId ||
     (req.body as any)?.facilityId ||

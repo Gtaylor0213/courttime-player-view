@@ -57,7 +57,6 @@ import connectWebhookRoutes from './routes/connectWebhook';
 import proShopRoutes from './routes/proShop';
 import annualFeesRoutes from './routes/annualFees';
 import reportingRoutes from './routes/reporting';
-import pickleRoutes from './routes/pickle';
 import { requireAuth, requireNotPaymentLocked } from './middleware/auth';
 
 const app = express();

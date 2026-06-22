@@ -68,21 +68,48 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
     let cancelled = false;
     setLockoutChecking(true);
-    membersApi.getMyPaymentLockout().then((res) => {
-      if (cancelled || !res.success) return;
-      const payload = (res.data as { isLocked?: boolean; lockout?: unknown }) ?? res;
-      if (payload.isLocked && payload.lockout) {
-        const info = normalizeLockoutPayload(payload);
-        if (info) setLockoutInfo(info);
-      } else {
-        setLockoutInfo(null);
-      }
-    }).finally(() => {
+
+    const checkPromise = selectedFacilityId
+      ? membersApi.getLockoutInfo(selectedFacilityId).then((res) => {
+          if (cancelled) return;
+          if (!res.success) { setLockoutInfo(null); return; }
+          const payload = (res.data as {
+            isLocked?: boolean;
+            facilityId?: string;
+            facilityName?: string | null;
+            amountCents?: number | null;
+            description?: string | null;
+            lockedAt?: string | null;
+          }) ?? {};
+          if (payload.isLocked) {
+            setLockoutInfo({
+              facilityId: payload.facilityId ?? selectedFacilityId,
+              facilityName: payload.facilityName ?? undefined,
+              amountCents: payload.amountCents ?? null,
+              description: payload.description ?? null,
+              lockedAt: payload.lockedAt ?? undefined,
+            });
+          } else {
+            setLockoutInfo(null);
+          }
+        })
+      : membersApi.getMyPaymentLockout().then((res) => {
+          if (cancelled || !res.success) return;
+          const payload = (res.data as { isLocked?: boolean; lockout?: unknown }) ?? res;
+          if (payload.isLocked && payload.lockout) {
+            const info = normalizeLockoutPayload(payload);
+            if (info) setLockoutInfo(info);
+          } else {
+            setLockoutInfo(null);
+          }
+        });
+
+    checkPromise.finally(() => {
       if (!cancelled) setLockoutChecking(false);
     });
 
     return () => { cancelled = true; };
-  }, [user, isLockoutPaidPage]);
+  }, [user, isLockoutPaidPage, selectedFacilityId]);
 
   useEffect(() => {
     if (!user?.id || user.userType === 'admin') {

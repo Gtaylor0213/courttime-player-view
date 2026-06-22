@@ -9,6 +9,7 @@ import {
   setMemberAsAdmin,
   isFacilityAdmin
 } from '../../src/services/memberService';
+import { query as dbQuery } from '../../src/database/connection';
 
 const router = express.Router();
 
@@ -361,9 +362,14 @@ router.get('/:facilityId/me/lockout-info', async (req, res, next) => {
     const member = await getMemberDetails(facilityId, userId);
     if (!member) return res.status(404).json({ success: false, error: 'Membership not found' });
 
+    const facilityResult = await dbQuery('SELECT name FROM facilities WHERE id = $1', [facilityId]);
+    const facilityName: string | null = facilityResult.rows[0]?.name ?? null;
+
     res.json({
       success: true,
       isLocked: member.isPaymentLocked,
+      facilityId,
+      facilityName,
       amountCents: member.lockoutAmountCents ?? null,
       description: member.lockoutDescription ?? null,
       lockedAt: member.paymentLockedAt ?? null,

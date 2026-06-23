@@ -97,6 +97,12 @@ export async function requireNotPaymentLocked(req: Request, res: Response, next:
     next(); return;
   }
 
+  // Read-only user booking history — locked users should still be able to view
+  // their existing reservations; only write actions should be gated.
+  if (req.method === 'GET' && req.originalUrl.includes('/api/bookings/user/')) {
+    next(); return;
+  }
+
   // Pay-per-court booking creation — if the court charges per booking the
   // booking service will redirect to Stripe, so the annual-fee lock must not
   // block this path.  Check the court's require_payment flag (inheriting from

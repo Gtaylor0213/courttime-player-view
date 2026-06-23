@@ -94,10 +94,10 @@ export function MyReservations() {
         const bookings: Reservation[] = data?.bookings ?? data ?? [];
         setReservations(Array.isArray(bookings) ? bookings : []);
       } else {
-        toast.error('Failed to load reservations');
+        toast.error(response.error || 'Failed to load reservations');
       }
-    } catch {
-      toast.error('Failed to load reservations');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load reservations');
     } finally {
       setLoading(false);
     }

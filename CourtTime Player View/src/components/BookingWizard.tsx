@@ -637,7 +637,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
   return (
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-md max-h-[calc(100dvh-5rem)] overflow-y-auto top-4 translate-y-0">
+      <DialogContent className="sm:max-w-md max-h-[90dvh] sm:max-h-[calc(100dvh-5rem)] overflow-y-auto sm:top-4 sm:translate-y-0">
         <DialogHeader>
           <DialogTitle>Book Court</DialogTitle>
         </DialogHeader>

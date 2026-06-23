@@ -20,6 +20,7 @@ import {
   getPaymentItem,
   isClubAdmin,
   isClubMember,
+  syncSetupSessionForMember,
 } from '../../src/services/stripeConnectService';
 
 const router = express.Router();
@@ -134,7 +135,7 @@ router.post('/setup-checkout', requireAuth, async (req, res) => {
     }
     const base = defaultAppUrl();
     const finalSuccessUrl =
-      successUrl || `${base}/payments?setup=success`;
+      successUrl || `${base}/payments?setup=success&session_id={CHECKOUT_SESSION_ID}`;
     const finalCancelUrl = cancelUrl || `${base}/payments`;
 
     const { url } = await createMemberSetupCheckoutSession({
@@ -147,6 +148,30 @@ router.post('/setup-checkout', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[CONNECT-PAYMENTS] setup-checkout failed:', err);
     return res.status(400).json({ success: false, error: err.message || 'Failed to start card setup' });
+  }
+});
+
+/**
+ * POST /api/payments/sync-setup-session
+ * Called after returning from Stripe setup checkout to save the card without
+ * waiting for the webhook. Idempotent — safe to call even if webhook already ran.
+ */
+router.post('/sync-setup-session', requireAuth, async (req, res) => {
+  try {
+    const { clubId, sessionId } = req.body || {};
+    if (!clubId || !sessionId) {
+      return res.status(400).json({ success: false, error: 'clubId and sessionId are required' });
+    }
+    const userId = req.user!.userId;
+    const member = await isClubMember(userId, clubId);
+    if (!member) {
+      return res.status(403).json({ success: false, error: 'Not a member of this club' });
+    }
+    await syncSetupSessionForMember(userId, clubId, sessionId);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('[CONNECT-PAYMENTS] sync-setup-session failed:', err);
+    return res.status(400).json({ success: false, error: err.message || 'Failed to sync payment method' });
   }
 });
 

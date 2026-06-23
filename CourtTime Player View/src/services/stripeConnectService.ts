@@ -570,6 +570,34 @@ export async function syncMemberPaymentMethodFromSetupSession(
   );
 }
 
+// Called directly from the success-redirect flow so card is saved without waiting for webhook.
+export async function syncSetupSessionForMember(
+  userId: string,
+  clubId: string,
+  sessionId: string
+): Promise<void> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error('Stripe is not configured on this server');
+
+  const clubResult = await query(
+    `SELECT stripe_account_id FROM facilities WHERE id = $1`,
+    [clubId]
+  );
+  const stripeAccount = clubResult.rows[0]?.stripe_account_id as string | undefined;
+  if (!stripeAccount) throw new Error('Club Stripe account not found');
+
+  const session = await stripe.checkout.sessions.retrieve(sessionId, { stripeAccount });
+
+  if (session.metadata?.userId !== userId || session.metadata?.clubId !== clubId) {
+    throw new Error('Session does not belong to this user or club');
+  }
+  if (session.status !== 'complete') {
+    throw new Error('Setup session is not yet complete');
+  }
+
+  await syncMemberPaymentMethodFromSetupSession(session);
+}
+
 export async function detachMemberPaymentMethod(userId: string, clubId: string): Promise<void> {
   const stripe = getStripe();
   if (!stripe) throw new Error('Stripe is not configured on this server');

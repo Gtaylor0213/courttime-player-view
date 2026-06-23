@@ -100,11 +100,18 @@ export function MemberPayments() {
 
   useEffect(() => {
     if (searchParams.get('setup') !== 'success' || !selectedFacilityId) return;
-    void loadSavedCard(selectedFacilityId).then(() => {
+    const sessionId = searchParams.get('session_id');
+    const sync = async () => {
+      if (sessionId) {
+        await connectPaymentsApi.syncSetupSession({ clubId: selectedFacilityId, sessionId });
+      }
+      await loadSavedCard(selectedFacilityId);
       toast.success('Card saved for faster checkout');
       searchParams.delete('setup');
+      searchParams.delete('session_id');
       setSearchParams(searchParams, { replace: true });
-    });
+    };
+    void sync();
   }, [searchParams, selectedFacilityId, loadSavedCard, setSearchParams]);
 
   const handleAddOrUpdateCard = async () => {
@@ -114,7 +121,7 @@ export function MemberPayments() {
       const base = window.location.origin;
       const res = await connectPaymentsApi.setupCheckout({
         clubId: selectedFacilityId,
-        successUrl: `${base}/payments?setup=success`,
+        successUrl: `${base}/payments?setup=success&session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${base}/payments`,
       });
       const url = res.data?.data?.url || res.data?.url;

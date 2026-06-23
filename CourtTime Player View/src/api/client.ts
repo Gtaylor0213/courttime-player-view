@@ -1704,6 +1704,12 @@ export const connectPaymentsApi = {
       body: JSON.stringify(data),
     });
   },
+  syncSetupSession: async (data: { clubId: string; sessionId: string }) => {
+    return apiRequest('/api/payments/sync-setup-session', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
   removePaymentMethod: async (clubId: string) => {
     return apiRequest(`/api/payments/payment-method?clubId=${encodeURIComponent(clubId)}`, {
       method: 'DELETE',

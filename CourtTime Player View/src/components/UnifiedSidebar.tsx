@@ -393,12 +393,14 @@ export function UnifiedSidebar({
                     isActive={currentPage === 'annual-fees'}
                   />
                 )}
-                <SidebarButton
-                  onClick={() => handleNav('/admin/reports')}
-                  icon={BarChart2}
-                  label="Reports"
-                  isActive={currentPage === 'reports'}
-                />
+                {(proShopEnabled || annualFeesEnabled) && (
+                  <SidebarButton
+                    onClick={() => handleNav('/admin/reports')}
+                    icon={BarChart2}
+                    label="Reports"
+                    isActive={currentPage === 'reports'}
+                  />
+                )}
               </div>
             </div>
           )}

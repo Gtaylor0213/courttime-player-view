@@ -19,6 +19,7 @@ import { AboutPage } from './components/AboutPage';
 // Player pages
 import { CourtCalendarView } from './components/CourtCalendarView';
 import { PlayerProfile } from './components/PlayerProfile';
+import { MyReservations } from './components/MyReservations';
 import { QuickReservation } from './components/QuickReservation';
 import { ClubInfo } from './components/ClubInfo';
 import { BulletinBoard } from './components/BulletinBoard';
@@ -83,6 +84,7 @@ export default function App() {
               </ProtectedRoute>
             }>
               <Route path="/calendar" element={<CourtCalendarView />} />
+              <Route path="/my-reservations" element={<MyReservations />} />
               <Route path="/profile" element={<PlayerProfile />} />
               <Route path="/quick-reservation" element={<QuickReservation />} />
               <Route path="/club/:clubId" element={<ClubInfo />} />

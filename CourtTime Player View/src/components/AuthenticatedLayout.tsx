@@ -21,6 +21,7 @@ function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/admin/annual-fees')) return 'annual-fees';
   if (pathname.startsWith('/admin/reports')) return 'reports';
   if (pathname.startsWith('/admin')) return 'admin-dashboard';
+  if (pathname.startsWith('/my-reservations')) return 'my-reservations';
   if (pathname.startsWith('/calendar')) return 'court-calendar';
   if (pathname.startsWith('/profile')) return 'profile';
   if (pathname.startsWith('/quick-reservation')) return 'quick-reservation';

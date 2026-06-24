@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Lock, ExternalLink } from 'lucide-react';
+import { Lock, ExternalLink, CalendarDays } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { membersApi, unwrapApiPayload } from '../api/client';
 
 interface LockoutInfo {
@@ -135,6 +136,13 @@ export function PaymentLockoutScreen({ lockout }: PaymentLockoutScreenProps) {
               {checkingOut ? 'Redirecting to Stripe…' : 'Pay Now to Restore Access'}
             </button>
           )}
+          <Link
+            to="/my-reservations"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-800 underline"
+          >
+            <CalendarDays className="h-4 w-4" />
+            View or cancel existing reservations
+          </Link>
           <button
             type="button"
             onClick={() => window.location.reload()}

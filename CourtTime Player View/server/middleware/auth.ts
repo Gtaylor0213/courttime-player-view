@@ -97,9 +97,15 @@ export async function requireNotPaymentLocked(req: Request, res: Response, next:
     next(); return;
   }
 
-  // Read-only user booking history — locked users should still be able to view
-  // their existing reservations; only write actions should be gated.
-  if (req.method === 'GET' && req.originalUrl.includes('/api/bookings/user/')) {
+  // All booking reads are informational — locked users may still view the calendar
+  // and their reservation history. Only write actions (create, cancel, etc.) are gated.
+  if (req.method === 'GET' && req.originalUrl.startsWith('/api/bookings')) {
+    next(); return;
+  }
+
+  // Cancelling a booking — locked users must be able to cancel their own reservations.
+  // Ownership is enforced inside cancelBooking(); the lockout must not prevent this.
+  if (req.method === 'DELETE' && /^\/api\/bookings\/[^/]+(\?|$)/.test(req.originalUrl)) {
     next(); return;
   }
 

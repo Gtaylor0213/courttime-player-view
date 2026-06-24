@@ -47,6 +47,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [strikeLockout, setStrikeLockout] = useState<StrikeLockoutStatus | null>(null);
   const [strikeLockoutChecking, setStrikeLockoutChecking] = useState(false);
   const isLockoutPaidPage = location.pathname === '/lockout-paid';
+  const isMyReservationsRoute = location.pathname === '/my-reservations';
   const isProfileRoute = location.pathname.startsWith('/profile');
 
   useEffect(() => {
@@ -170,7 +171,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  if (lockoutInfo && user.userType !== 'admin' && !isLockoutPaidPage) {
+  if (lockoutInfo && user.userType !== 'admin' && !isLockoutPaidPage && !isMyReservationsRoute) {
     return <PaymentLockoutScreen lockout={lockoutInfo} />;
   }
 

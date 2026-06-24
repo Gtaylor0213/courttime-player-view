@@ -522,7 +522,10 @@ export async function syncMemberPaymentMethodFromSetupSession(
     typeof session.setup_intent === 'string'
       ? session.setup_intent
       : session.setup_intent?.id;
-  if (!setupIntentId) return;
+  if (!setupIntentId) {
+    console.error('[STRIPE-CONNECT] syncMemberPaymentMethod: setup_intent missing from completed session', session.id);
+    return;
+  }
 
   const setupIntent = await stripe.setupIntents.retrieve(setupIntentId, {
     stripeAccount,
@@ -531,7 +534,10 @@ export async function syncMemberPaymentMethodFromSetupSession(
     typeof setupIntent.payment_method === 'string'
       ? setupIntent.payment_method
       : setupIntent.payment_method?.id;
-  if (!pmId) return;
+  if (!pmId) {
+    console.error('[STRIPE-CONNECT] syncMemberPaymentMethod: payment_method missing from setup intent', setupIntentId);
+    return;
+  }
 
   const customerId =
     typeof session.customer === 'string' ? session.customer : session.customer?.id;
@@ -545,7 +551,10 @@ export async function syncMemberPaymentMethodFromSetupSession(
 
   const pm = await stripe.paymentMethods.retrieve(pmId, { stripeAccount });
   const card = pm.card;
-  if (!card) return;
+  if (!card) {
+    console.error('[STRIPE-CONNECT] syncMemberPaymentMethod: payment method is not a card', pmId, pm.type);
+    return;
+  }
 
   await query(
     `UPDATE facility_memberships
@@ -589,6 +598,13 @@ export async function syncSetupSessionForMember(
   const session = await stripe.checkout.sessions.retrieve(sessionId, { stripeAccount });
 
   if (session.metadata?.userId !== userId || session.metadata?.clubId !== clubId) {
+    console.error('[STRIPE-CONNECT] syncSetupSession metadata mismatch', {
+      sessionId,
+      metaUserId: session.metadata?.userId,
+      requestUserId: userId,
+      metaClubId: session.metadata?.clubId,
+      requestClubId: clubId,
+    });
     throw new Error('Session does not belong to this user or club');
   }
   if (session.status !== 'complete') {

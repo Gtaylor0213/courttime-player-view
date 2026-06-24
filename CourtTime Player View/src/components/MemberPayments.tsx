@@ -102,14 +102,26 @@ export function MemberPayments() {
     if (searchParams.get('setup') !== 'success' || !selectedFacilityId) return;
     const sessionId = searchParams.get('session_id');
     const sync = async () => {
-      if (sessionId) {
-        await connectPaymentsApi.syncSetupSession({ clubId: selectedFacilityId, sessionId });
+      try {
+        let syncOk = true;
+        if (sessionId) {
+          const syncRes = await connectPaymentsApi.syncSetupSession({ clubId: selectedFacilityId, sessionId });
+          if (!syncRes.success) {
+            syncOk = false;
+            toast.error(syncRes.error || 'Could not save card — please try again from the Payments page');
+          }
+        }
+        await loadSavedCard(selectedFacilityId);
+        if (syncOk) {
+          toast.success('Card saved successfully');
+        }
+      } catch (err: any) {
+        toast.error(err?.message || 'Could not save card — please try again');
+      } finally {
+        searchParams.delete('setup');
+        searchParams.delete('session_id');
+        setSearchParams(searchParams, { replace: true });
       }
-      await loadSavedCard(selectedFacilityId);
-      toast.success('Card saved for faster checkout');
-      searchParams.delete('setup');
-      searchParams.delete('session_id');
-      setSearchParams(searchParams, { replace: true });
     };
     void sync();
   }, [searchParams, selectedFacilityId, loadSavedCard, setSearchParams]);

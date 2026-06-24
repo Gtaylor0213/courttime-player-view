@@ -9,6 +9,7 @@ import {
   updateProduct,
   deleteProduct,
   createCheckoutSession,
+  createGuestCheckoutSession,
   getAdminOrders,
   getUserOrders,
   getProShopSettings,
@@ -17,10 +18,12 @@ import {
   getMemberCardStatus,
   chargeImmediately,
   addToTab,
+  recordMemberCashSale,
   getTabDetail,
   getAllTabs,
   billMemberTab,
   billAllTabs,
+  recordGuestSale,
 } from '../../src/services/proShopService';
 
 const router = express.Router();
@@ -258,6 +261,70 @@ router.post('/admin/assign/tab/:facilityId', async (req, res) => {
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('[ProShop] Add to tab error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// ── Member cash sale ───────────────────────────────────────
+
+router.post('/admin/assign/cash/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const { user_id, items } = req.body;
+    if (!user_id || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'user_id and items are required' });
+    }
+    const result = await recordMemberCashSale(facilityId, user_id, req.user!.userId, items);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('[ProShop] Member cash sale error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// ── Guest sale ─────────────────────────────────────────────
+
+router.post('/admin/guest-sale/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!await checkFlag(facilityId, res)) return;
+    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const { guest_name, guest_email, items, payment_mode } = req.body;
+    if (!guest_name || typeof guest_name !== 'string' || !guest_name.trim()) {
+      return res.status(400).json({ success: false, error: 'guest_name is required' });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'items must be a non-empty array' });
+    }
+
+    if (payment_mode === 'stripe') {
+      const result = await createGuestCheckoutSession(
+        facilityId,
+        guest_name.trim(),
+        guest_email?.trim() || null,
+        req.user!.userId,
+        items
+      );
+      return res.json({ success: true, data: result });
+    }
+
+    // Default: cash / external payment — record as paid immediately
+    const result = await recordGuestSale(
+      facilityId,
+      req.user!.userId,
+      guest_name.trim(),
+      guest_email?.trim() || null,
+      items
+    );
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('[ProShop] Guest sale error:', error);
     res.status(400).json({ success: false, error: error.message });
   }
 });

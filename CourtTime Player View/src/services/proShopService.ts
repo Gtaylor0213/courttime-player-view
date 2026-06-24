@@ -201,6 +201,100 @@ export async function createCheckoutSession(
   }
 }
 
+export async function createGuestCheckoutSession(
+  facilityId: string,
+  guestName: string,
+  guestEmail: string | null,
+  adminId: string,
+  items: { product_id: string; quantity: number }[]
+): Promise<{ url: string | null; orderId: string; devMode: boolean }> {
+  const productIds = items.map(i => i.product_id);
+  const productsResult = await query(
+    `SELECT id, name, price_cents, stock_quantity FROM pro_shop_products
+     WHERE id = ANY($1::uuid[]) AND facility_id = $2 AND is_active = true`,
+    [productIds, facilityId]
+  );
+  const productMap = new Map(productsResult.rows.map((p: any) => [p.id, p]));
+
+  let totalCents = 0;
+  const lineItems: { product_id: string; quantity: number; price_cents: number; name: string }[] = [];
+
+  for (const item of items) {
+    const product = productMap.get(item.product_id) as any;
+    if (!product) throw new Error(`Product ${item.product_id} not found or not available`);
+    if (product.stock_quantity !== null && product.stock_quantity < item.quantity) {
+      throw new Error(`Insufficient stock for "${product.name}"`);
+    }
+    lineItems.push({ product_id: item.product_id, quantity: item.quantity, price_cents: product.price_cents, name: product.name });
+    totalCents += product.price_cents * item.quantity;
+  }
+
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query(
+      `INSERT INTO pro_shop_orders
+         (facility_id, user_id, guest_name, guest_email, charged_by, status, total_cents)
+       VALUES ($1, NULL, $2, $3, $4, 'pending', $5) RETURNING id`,
+      [facilityId, guestName, guestEmail ?? null, adminId, totalCents]
+    );
+    const orderId = orderResult.rows[0].id;
+
+    for (const item of lineItems) {
+      await client.query(
+        `INSERT INTO pro_shop_order_items (order_id, product_id, quantity, price_cents_at_purchase)
+         VALUES ($1, $2, $3, $4)`,
+        [orderId, item.product_id, item.quantity, item.price_cents]
+      );
+    }
+
+    const stripe = getStripe();
+    if (!stripe) {
+      await client.query(
+        `UPDATE pro_shop_orders SET stripe_checkout_session_id = $1, status = 'paid', updated_at = NOW() WHERE id = $2`,
+        [`dev_session_${Date.now()}`, orderId]
+      );
+      await client.query('COMMIT');
+      return { url: null, orderId, devMode: true };
+    }
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: 'payment',
+      line_items: lineItems.map(i => ({
+        price_data: {
+          currency: 'usd',
+          product_data: { name: i.name },
+          unit_amount: i.price_cents,
+        },
+        quantity: i.quantity,
+      })),
+      metadata: { type: 'pro_shop_guest', order_id: orderId, facility_id: facilityId },
+      success_url: `${getBaseUrl()}/shop?order=success`,
+      cancel_url: `${getBaseUrl()}/shop`,
+    };
+
+    if (guestEmail) {
+      sessionParams.customer_email = guestEmail;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    await client.query(
+      `UPDATE pro_shop_orders SET stripe_checkout_session_id = $1, updated_at = NOW() WHERE id = $2`,
+      [session.id, orderId]
+    );
+
+    await client.query('COMMIT');
+    return { url: session.url, orderId, devMode: false };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function finalizeOrder(sessionId: string): Promise<void> {
   const orderResult = await query(
     `SELECT id FROM pro_shop_orders WHERE stripe_checkout_session_id = $1`,
@@ -249,7 +343,9 @@ export async function getAdminOrders(facilityId: string) {
   const result = await query(
     `SELECT
        o.id, o.status, o.total_cents, o.created_at, o.stripe_checkout_session_id,
-       u.full_name AS member_name, u.email AS member_email,
+       COALESCE(u.full_name, o.guest_name) AS member_name,
+       COALESCE(u.email, o.guest_email)    AS member_email,
+       (o.user_id IS NULL)                 AS is_guest,
        json_agg(json_build_object(
          'product_id', oi.product_id,
          'name', p.name,
@@ -257,15 +353,81 @@ export async function getAdminOrders(facilityId: string) {
          'price_cents', oi.price_cents_at_purchase
        ) ORDER BY p.name) AS items
      FROM pro_shop_orders o
-     JOIN users u ON u.id = o.user_id
+     LEFT JOIN users u ON u.id = o.user_id
      JOIN pro_shop_order_items oi ON oi.order_id = o.id
      JOIN pro_shop_products p ON p.id = oi.product_id
      WHERE o.facility_id = $1
-     GROUP BY o.id, u.full_name, u.email
+     GROUP BY o.id, u.full_name, u.email, o.guest_name, o.guest_email
      ORDER BY o.created_at DESC`,
     [facilityId]
   );
   return result.rows;
+}
+
+export async function recordGuestSale(
+  facilityId: string,
+  adminId: string,
+  guestName: string,
+  guestEmail: string | null,
+  items: { product_id: string; quantity: number }[]
+) {
+  const productIds = items.map(i => i.product_id);
+  const productsResult = await query(
+    `SELECT id, name, price_cents, stock_quantity FROM pro_shop_products
+     WHERE id = ANY($1::uuid[]) AND facility_id = $2 AND is_active = true`,
+    [productIds, facilityId]
+  );
+  if (productsResult.rows.length !== productIds.length) {
+    throw new Error('One or more products not found');
+  }
+
+  const productMap = new Map(productsResult.rows.map((p: any) => [p.id, p]));
+  const lineItems: { product_id: string; quantity: number; price_cents: number; name: string }[] = [];
+  let totalCents = 0;
+
+  for (const item of items) {
+    const product = productMap.get(item.product_id) as any;
+    if (product.stock_quantity !== null && product.stock_quantity < item.quantity) {
+      throw new Error(`Insufficient stock for "${product.name}"`);
+    }
+    lineItems.push({ product_id: item.product_id, quantity: item.quantity, price_cents: product.price_cents, name: product.name });
+    totalCents += product.price_cents * item.quantity;
+  }
+
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query(
+      `INSERT INTO pro_shop_orders
+         (facility_id, user_id, guest_name, guest_email, charged_by, status, total_cents)
+       VALUES ($1, NULL, $2, $3, $4, 'paid', $5) RETURNING id`,
+      [facilityId, guestName, guestEmail ?? null, adminId, totalCents]
+    );
+    const orderId = orderResult.rows[0].id;
+
+    for (const item of lineItems) {
+      await client.query(
+        `INSERT INTO pro_shop_order_items (order_id, product_id, quantity, price_cents_at_purchase)
+         VALUES ($1, $2, $3, $4)`,
+        [orderId, item.product_id, item.quantity, item.price_cents]
+      );
+      await client.query(
+        `UPDATE pro_shop_products
+         SET stock_quantity = GREATEST(0, stock_quantity - $1), updated_at = NOW()
+         WHERE id = $2 AND stock_quantity IS NOT NULL`,
+        [item.quantity, item.product_id]
+      );
+    }
+
+    await client.query('COMMIT');
+    return { orderId, totalCents };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Settings ───────��───────────────────────────────────────
@@ -319,6 +481,69 @@ export async function getMemberCardStatus(facilityId: string, userId: string) {
     [facilityId, userId]
   );
   return result.rows[0] ?? { has_card: false };
+}
+
+// ── Member cash sale ──────────────────────────────────────
+
+export async function recordMemberCashSale(
+  facilityId: string,
+  userId: string,
+  adminId: string,
+  items: { product_id: string; quantity: number }[]
+) {
+  const productIds = items.map(i => i.product_id);
+  const productsResult = await query(
+    `SELECT id, name, price_cents, stock_quantity FROM pro_shop_products
+     WHERE id = ANY($1::uuid[]) AND facility_id = $2 AND is_active = true`,
+    [productIds, facilityId]
+  );
+  if (productsResult.rows.length !== productIds.length) {
+    throw new Error('One or more products not found');
+  }
+
+  const productMap = new Map(productsResult.rows.map((p: any) => [p.id, p]));
+  const lineItems: { product_id: string; quantity: number; price_cents: number }[] = [];
+  let totalCents = 0;
+
+  for (const item of items) {
+    const product = productMap.get(item.product_id) as any;
+    if (product.stock_quantity !== null && product.stock_quantity < item.quantity) {
+      throw new Error(`Insufficient stock for "${product.name}"`);
+    }
+    lineItems.push({ product_id: item.product_id, quantity: item.quantity, price_cents: product.price_cents });
+    totalCents += product.price_cents * item.quantity;
+  }
+
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    const orderResult = await client.query(
+      `INSERT INTO pro_shop_orders (facility_id, user_id, charged_by, status, total_cents)
+       VALUES ($1, $2, $3, 'paid', $4) RETURNING id`,
+      [facilityId, userId, adminId, totalCents]
+    );
+    const orderId = orderResult.rows[0].id;
+    for (const item of lineItems) {
+      await client.query(
+        `INSERT INTO pro_shop_order_items (order_id, product_id, quantity, price_cents_at_purchase)
+         VALUES ($1, $2, $3, $4)`,
+        [orderId, item.product_id, item.quantity, item.price_cents]
+      );
+      await client.query(
+        `UPDATE pro_shop_products
+         SET stock_quantity = GREATEST(0, stock_quantity - $1), updated_at = NOW()
+         WHERE id = $2 AND stock_quantity IS NOT NULL`,
+        [item.quantity, item.product_id]
+      );
+    }
+    await client.query('COMMIT');
+    return { orderId, totalCents };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Tab management ───────���─────────────────────────────────

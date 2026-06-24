@@ -120,11 +120,11 @@ export async function getTransactionReport(
   try {
     proShopRows = await query(
       `SELECT
-         o.id::text               AS id,
-         o.created_at             AS date,
-         u.full_name              AS member_name,
-         u.email                  AS member_email,
-         'pro_shop'               AS type,
+         o.id::text                                AS id,
+         o.created_at                              AS date,
+         COALESCE(u.full_name, o.guest_name)       AS member_name,
+         COALESCE(u.email, o.guest_email)          AS member_email,
+         'pro_shop'                                AS type,
          COALESCE(
            (SELECT string_agg(COALESCE(p.name, 'Item') || ' x' || oi.quantity::text, ', ')
             FROM pro_shop_order_items oi
@@ -135,7 +135,7 @@ export async function getTransactionReport(
          o.total_cents            AS amount_cents,
          o.status
        FROM pro_shop_orders o
-       JOIN users u ON u.id = o.user_id
+       LEFT JOIN users u ON u.id = o.user_id
        WHERE o.facility_id = $1
          AND o.status = 'paid'
          AND o.created_at >= $2::timestamptz

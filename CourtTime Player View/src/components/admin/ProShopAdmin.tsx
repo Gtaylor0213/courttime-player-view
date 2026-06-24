@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
-import { ShoppingBag, Plus, Pencil, Trash2, CreditCard, AlertTriangle, CheckCircle, Receipt } from 'lucide-react';
+import { ShoppingBag, Plus, Pencil, Trash2, CreditCard, AlertTriangle, CheckCircle, Receipt, Copy, ExternalLink } from 'lucide-react';
 import { proShopApi } from '../../api/client';
 import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
@@ -68,8 +68,13 @@ export default function ProShopAdmin() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [assignMemberId, setAssignMemberId] = useState('');
   const [assignItems, setAssignItems] = useState<{ product_id: string; quantity: number }[]>([]);
-  const [assignMode, setAssignMode] = useState<'charge' | 'tab'>('charge');
+  const [assignMode, setAssignMode] = useState<'charge' | 'tab' | 'cash'>('charge');
   const [assigning, setAssigning] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<'member' | 'guest'>('member');
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPaymentMode, setGuestPaymentMode] = useState<'cash' | 'stripe'>('cash');
+  const [guestPaymentLink, setGuestPaymentLink] = useState<string | null>(null);
 
   // ── Tabs ──────────────────────────────────────────────────
   const [tabs, setTabs] = useState<any[]>([]);
@@ -215,17 +220,59 @@ export default function ProShopAdmin() {
   }, 0);
 
   const handleAssign = async () => {
+    if (assignTarget === 'guest') {
+      if (!guestName.trim()) { toast.error('Guest name is required'); return; }
+      if (assignItems.length === 0) { toast.error('Select at least one product'); return; }
+      if (guestPaymentMode === 'stripe' && !guestEmail.trim()) {
+        toast.error('Guest email is required for a payment link'); return;
+      }
+      setAssigning(true);
+      setGuestPaymentLink(null);
+      const res = await proShopApi.adminGuestSale(
+        facilityId!,
+        guestName.trim(),
+        guestEmail.trim() || null,
+        assignItems,
+        guestPaymentMode
+      );
+      if (res.success) {
+        const data = (res.data as any)?.data ?? res.data;
+        if (guestPaymentMode === 'stripe') {
+          if (data?.devMode) {
+            toast.success(`Dev mode: guest sale recorded for ${guestName.trim()}`);
+            setGuestName(''); setGuestEmail(''); setAssignItems([]);
+          } else {
+            setGuestPaymentLink(data?.url ?? null);
+            toast.success('Payment link generated — share it with the guest');
+          }
+        } else {
+          toast.success(`${formatPrice(assignTotal)} cash sale recorded for ${guestName.trim()}`);
+          setGuestName(''); setGuestEmail(''); setAssignItems([]);
+        }
+      } else {
+        toast.error((res.error as string) || 'Guest sale failed');
+      }
+      setAssigning(false);
+      return;
+    }
+
     if (!assignMemberId) { toast.error('Select a member'); return; }
     if (assignItems.length === 0) { toast.error('Select at least one product'); return; }
     setAssigning(true);
-    const fn = assignMode === 'charge' ? proShopApi.adminAssignCharge : proShopApi.adminAssignTab;
+    const fn = assignMode === 'charge'
+      ? proShopApi.adminAssignCharge
+      : assignMode === 'cash'
+        ? proShopApi.adminAssignCash
+        : proShopApi.adminAssignTab;
     const res = await fn(facilityId!, assignMemberId, assignItems);
     if (res.success) {
       const member = members.find(m => m.id === assignMemberId);
       toast.success(
         assignMode === 'charge'
           ? `${formatPrice(assignTotal)} charged to ${member?.full_name}`
-          : `${formatPrice(assignTotal)} added to ${member?.full_name}'s tab`
+          : assignMode === 'cash'
+            ? `${formatPrice(assignTotal)} cash sale recorded for ${member?.full_name}`
+            : `${formatPrice(assignTotal)} added to ${member?.full_name}'s tab`
       );
       setAssignMemberId('');
       setAssignItems([]);
@@ -394,9 +441,10 @@ export default function ProShopAdmin() {
                   {orders.map((o) => (
                     <div key={o.id} className="p-3 border rounded-lg space-y-1">
                       <div className="flex items-center justify-between">
-                        <div>
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium">{o.member_name}</span>
-                          <span className="text-xs text-gray-400 ml-2">{o.member_email}</span>
+                          {o.is_guest && <Badge variant="secondary" className="text-xs">Guest</Badge>}
+                          {o.member_email && <span className="text-xs text-gray-400">{o.member_email}</span>}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold">{formatPrice(o.total_cents)}</span>
@@ -417,48 +465,181 @@ export default function ProShopAdmin() {
           </Card>
         </TabsContent>
 
-        {/* ── Assign to Member ── */}
+        {/* ── Assign to Member / Guest ── */}
         <TabsContent value="assign">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Assign Items to a Member</CardTitle>
+              <CardTitle className="text-base">Record a Sale</CardTitle>
               <p className="text-sm text-gray-500 mt-1">
-                Charge a member's saved card immediately, or add items to their running tab.
+                Assign items to a facility member or record a walk-in guest sale.
               </p>
             </CardHeader>
             <CardContent className="space-y-5">
-              {membersLoading ? (
-                <div className="flex justify-center py-8">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
-                </div>
-              ) : (
-                <>
-                  {/* Member picker */}
-                  <div className="space-y-2">
-                    <Label>Member</Label>
-                    <Select value={assignMemberId} onValueChange={setAssignMemberId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a member…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map(m => (
-                          <SelectItem key={m.id} value={m.id}>
-                            <span className="flex items-center gap-2">
-                              {m.full_name}
-                              {m.has_card
-                                ? <span className="text-xs text-green-600">✓ card on file</span>
-                                : <span className="text-xs text-amber-500">no card</span>}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {assignMemberId && !members.find(m => m.id === assignMemberId)?.has_card && (
-                      <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
-                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                        This member has no card on file. You can add items to their tab, but cannot charge immediately.
+              {/* Member / Guest toggle */}
+              <div className="flex rounded-lg border overflow-hidden">
+                <button
+                  onClick={() => { setAssignTarget('member'); setAssignItems([]); setGuestPaymentLink(null); }}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${assignTarget === 'member' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                  Member
+                </button>
+                <button
+                  onClick={() => { setAssignTarget('guest'); setAssignItems([]); setAssignMode('charge'); setGuestPaymentLink(null); }}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${assignTarget === 'guest' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                  Guest
+                </button>
+              </div>
+
+              {assignTarget === 'member' ? (
+                membersLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Member picker */}
+                    <div className="space-y-2">
+                      <Label>Member</Label>
+                      <Select value={assignMemberId} onValueChange={setAssignMemberId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a member…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {members.map(m => (
+                            <SelectItem key={m.id} value={m.id}>
+                              <span className="flex items-center gap-2">
+                                {m.full_name}
+                                {m.has_card
+                                  ? <span className="text-xs text-green-600">✓ card on file</span>
+                                  : <span className="text-xs text-amber-500">no card</span>}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {assignMemberId && !members.find(m => m.id === assignMemberId)?.has_card && (
+                        <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+                          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                          This member has no card on file. You can add items to their tab, but cannot charge immediately.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Product list */}
+                    <div className="space-y-2">
+                      <Label>Products</Label>
+                      {products.filter(p => p.is_active).length === 0 ? (
+                        <p className="text-sm text-gray-400">No active products.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {products.filter(p => p.is_active).map(p => {
+                            const selected = assignItems.find(i => i.product_id === p.id);
+                            return (
+                              <div key={p.id}
+                                className={`flex items-center gap-3 p-2.5 border rounded-lg cursor-pointer transition-colors ${selected ? 'border-indigo-400 bg-indigo-50' : 'hover:bg-gray-50'}`}
+                                onClick={() => toggleAssignItem(p.id)}
+                              >
+                                <input type="checkbox" readOnly checked={!!selected}
+                                  className="h-4 w-4 accent-indigo-600 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm font-medium">{p.name}</span>
+                                  <span className="text-xs text-gray-500 ml-2">{formatPrice(p.price_cents)}</span>
+                                </div>
+                                {selected && (
+                                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => setAssignQty(p.id, selected.quantity - 1)}
+                                      className="w-6 h-6 rounded border text-gray-600 text-sm flex items-center justify-center hover:bg-gray-100">−</button>
+                                    <span className="w-8 text-center text-sm">{selected.quantity}</span>
+                                    <button onClick={() => setAssignQty(p.id, selected.quantity + 1)}
+                                      className="w-6 h-6 rounded border text-gray-600 text-sm flex items-center justify-center hover:bg-gray-100">+</button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Charge mode */}
+                    {assignItems.length > 0 && (
+                      <div className="space-y-3 pt-1 border-t">
+                        <div className="flex items-center justify-between text-sm font-semibold">
+                          <span>Total</span>
+                          <span>{formatPrice(assignTotal)}</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => setAssignMode('charge')}
+                            className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${assignMode === 'charge' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
+                          >
+                            <CreditCard className="h-4 w-4" />
+                            <div className="text-left">
+                              <div className="font-medium">Charge Now</div>
+                              <div className="text-xs text-gray-500">Charge card immediately</div>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => setAssignMode('cash')}
+                            className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${assignMode === 'cash' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
+                          >
+                            <Receipt className="h-4 w-4" />
+                            <div className="text-left">
+                              <div className="font-medium">Cash / External</div>
+                              <div className="text-xs text-gray-500">Collect payment in person</div>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => setAssignMode('tab')}
+                            className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${assignMode === 'tab' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
+                          >
+                            <Receipt className="h-4 w-4" />
+                            <div className="text-left">
+                              <div className="font-medium">Add to Tab</div>
+                              <div className="text-xs text-gray-500">Bill on billing day</div>
+                            </div>
+                          </button>
+                        </div>
+                        <Button className="w-full" onClick={handleAssign} disabled={assigning}>
+                          {assigning
+                            ? 'Processing…'
+                            : assignMode === 'charge'
+                              ? `Charge ${formatPrice(assignTotal)}`
+                              : assignMode === 'cash'
+                                ? `Record Cash Sale (${formatPrice(assignTotal)})`
+                                : `Add to Tab`}
+                        </Button>
                       </div>
                     )}
+                  </>
+                )
+              ) : (
+                /* ── Guest mode ── */
+                <>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>Guest Name *</Label>
+                      <Input
+                        value={guestName}
+                        onChange={e => setGuestName(e.target.value)}
+                        placeholder="e.g. Jane Smith"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>
+                        Guest Email
+                        {guestPaymentMode === 'stripe'
+                          ? <span className="text-red-500 ml-1">*</span>
+                          : <span className="text-gray-400 font-normal ml-1">(optional)</span>}
+                      </Label>
+                      <Input
+                        type="email"
+                        value={guestEmail}
+                        onChange={e => setGuestEmail(e.target.value)}
+                        placeholder="e.g. jane@example.com"
+                      />
+                    </div>
                   </div>
 
                   {/* Product list */}
@@ -497,37 +678,76 @@ export default function ProShopAdmin() {
                     )}
                   </div>
 
-                  {/* Charge mode */}
                   {assignItems.length > 0 && (
                     <div className="space-y-3 pt-1 border-t">
                       <div className="flex items-center justify-between text-sm font-semibold">
                         <span>Total</span>
                         <span>{formatPrice(assignTotal)}</span>
                       </div>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => setAssignMode('charge')}
-                          className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${assignMode === 'charge' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
-                        >
-                          <CreditCard className="h-4 w-4" />
-                          <div className="text-left">
-                            <div className="font-medium">Charge Now</div>
-                            <div className="text-xs text-gray-500">Charge card immediately</div>
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => setAssignMode('tab')}
-                          className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${assignMode === 'tab' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
-                        >
-                          <Receipt className="h-4 w-4" />
-                          <div className="text-left">
-                            <div className="font-medium">Add to Tab</div>
-                            <div className="text-xs text-gray-500">Bill on billing day</div>
-                          </div>
-                        </button>
+
+                      {/* Payment method */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-gray-500 uppercase tracking-wide">Payment Method</Label>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => { setGuestPaymentMode('cash'); setGuestPaymentLink(null); }}
+                            className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${guestPaymentMode === 'cash' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
+                          >
+                            <Receipt className="h-4 w-4 flex-shrink-0" />
+                            <div className="text-left">
+                              <div className="font-medium">Cash / External</div>
+                              <div className="text-xs text-gray-500">Collect payment in person</div>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => { setGuestPaymentMode('stripe'); setGuestPaymentLink(null); }}
+                            className={`flex-1 flex items-center gap-2 p-3 border rounded-lg text-sm transition-colors ${guestPaymentMode === 'stripe' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}`}
+                          >
+                            <CreditCard className="h-4 w-4 flex-shrink-0" />
+                            <div className="text-left">
+                              <div className="font-medium">Payment Link</div>
+                              <div className="text-xs text-gray-500">Guest pays via Stripe</div>
+                            </div>
+                          </button>
+                        </div>
+                        {guestPaymentMode === 'stripe' && (
+                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                            A Stripe checkout link will be generated. Share it with the guest so they can pay on their phone.
+                          </p>
+                        )}
                       </div>
+
                       <Button className="w-full" onClick={handleAssign} disabled={assigning}>
-                        {assigning ? 'Processing…' : assignMode === 'charge' ? `Charge ${formatPrice(assignTotal)}` : `Add to Tab`}
+                        {assigning
+                          ? (guestPaymentMode === 'stripe' ? 'Generating Link…' : 'Recording…')
+                          : guestPaymentMode === 'stripe'
+                            ? `Generate Payment Link (${formatPrice(assignTotal)})`
+                            : `Record Cash Sale (${formatPrice(assignTotal)})`}
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Payment link result */}
+                  {guestPaymentLink && (
+                    <div className="space-y-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                        <p className="text-sm font-medium text-green-800">Payment link ready</p>
+                      </div>
+                      <p className="text-xs text-green-700 break-all font-mono">{guestPaymentLink}</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="flex-1"
+                          onClick={() => { navigator.clipboard.writeText(guestPaymentLink); toast.success('Link copied'); }}>
+                          <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy Link
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1"
+                          onClick={() => window.open(guestPaymentLink, '_blank')}>
+                          <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open
+                        </Button>
+                      </div>
+                      <Button size="sm" variant="ghost" className="w-full text-xs text-gray-500"
+                        onClick={() => { setGuestPaymentLink(null); setGuestName(''); setGuestEmail(''); setAssignItems([]); }}>
+                        Start a new sale
                       </Button>
                     </div>
                   )}

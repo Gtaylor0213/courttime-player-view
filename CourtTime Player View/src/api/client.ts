@@ -1827,6 +1827,12 @@ export const proShopApi = {
       body: JSON.stringify({ user_id: userId, items }),
     }),
 
+  adminAssignCash: (facilityId: string, userId: string, items: { product_id: string; quantity: number }[]) =>
+    apiRequest(`/api/pro-shop/admin/assign/cash/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, items }),
+    }),
+
   adminGetTabs: (facilityId: string) =>
     apiRequest(`/api/pro-shop/admin/tabs/${facilityId}`),
 
@@ -1835,6 +1841,18 @@ export const proShopApi = {
 
   adminBillAll: (facilityId: string) =>
     apiRequest(`/api/pro-shop/admin/bill-all/${facilityId}`, { method: 'POST' }),
+
+  adminGuestSale: (
+    facilityId: string,
+    guestName: string,
+    guestEmail: string | null,
+    items: { product_id: string; quantity: number }[],
+    paymentMode: 'cash' | 'stripe' = 'cash'
+  ) =>
+    apiRequest(`/api/pro-shop/admin/guest-sale/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify({ guest_name: guestName, guest_email: guestEmail, items, payment_mode: paymentMode }),
+    }),
 
   getMyTab: (facilityId: string) =>
     apiRequest(`/api/pro-shop/my-tab/${facilityId}`),

@@ -7,7 +7,7 @@ import { Calendar, Users, TrendingUp, DollarSign, Download, Filter, BarChart3, P
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
-import { adminApi } from '../../api/client';
+import { adminApi, unwrapApiPayload } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
@@ -106,9 +106,31 @@ export function AdminDashboard() {
       setLoading(true);
       const response = await adminApi.getDashboardStats(currentFacilityId);
 
-      if (response.success && response.data?.data) {
-        setStats(response.data.data.stats);
-        setRecentActivity(response.data.data.recentActivity || []);
+      if (response.success) {
+        const raw = response.data as Record<string, unknown> | undefined;
+        const payload =
+          unwrapApiPayload<{
+            stats?: DashboardStats;
+            recentActivity?: RecentActivity[];
+          }>(response.data) ??
+          (raw?.stats ? (raw as { stats?: DashboardStats; recentActivity?: RecentActivity[] }) : undefined) ??
+          (raw?.data && typeof raw.data === 'object'
+            ? (raw.data as { stats?: DashboardStats; recentActivity?: RecentActivity[] })
+            : undefined);
+
+        if (payload?.stats) {
+          const stats = payload.stats;
+          setStats({
+            ...stats,
+            revenueCents: Number(stats.revenueCents ?? 0),
+            revenueDollars:
+              stats.revenueDollars ??
+              (Number(stats.revenueCents ?? 0) / 100).toFixed(2),
+          });
+          setRecentActivity(payload.recentActivity || []);
+        } else {
+          toast.error('Failed to load dashboard data');
+        }
       } else {
         toast.error(response.error || 'Failed to load dashboard data');
       }
@@ -405,7 +427,11 @@ export function AdminDashboard() {
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">${parseFloat(stats.revenueDollars).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        <div className="text-2xl font-bold">${(
+                          (stats.revenueCents != null
+                            ? Number(stats.revenueCents)
+                            : Math.round(parseFloat(stats.revenueDollars || '0') * 100)) / 100
+                        ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         <p className="text-xs text-muted-foreground">This month</p>
                       </CardContent>
                     </Card>

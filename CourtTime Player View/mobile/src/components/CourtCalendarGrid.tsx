@@ -1018,6 +1018,13 @@ export function CourtCalendarGrid({
           nestedScrollEnabled
           scrollEnabled={!touchCaptureActive}
         >
+          <View
+            style={{
+              width: totalPages * SCREEN_WIDTH,
+              height: gridContentHeight,
+              position: 'relative',
+            }}
+          >
           {Array.from({ length: totalPages }).map((_, renderPageIndex) => {
             const renderPageCourts = courts.slice(
               renderPageIndex * COURTS_PER_PAGE,
@@ -1025,7 +1032,13 @@ export function CourtCalendarGrid({
             );
 
             return (
-              <View key={`page-${renderPageIndex}`} style={styles.pageContent}>
+              <View
+                key={`page-${renderPageIndex}`}
+                style={[
+                  styles.pageContent,
+                  { position: 'absolute', left: renderPageIndex * SCREEN_WIDTH, top: 0 },
+                ]}
+              >
                 {timeRows.map((time, rowIndex) => {
                   const past = isPast(rowIndex);
 
@@ -1217,15 +1230,25 @@ export function CourtCalendarGrid({
                     </View>
                   );
                 })}
-                {currentTimeIndicatorY !== null && (
-                  <View pointerEvents="none" style={[styles.currentTimeLineWrap, { top: currentTimeIndicatorY }]}>
-                    <View style={styles.currentTimeDot} />
-                    <View style={styles.currentTimeLine} />
-                  </View>
-                )}
               </View>
             );
           })}
+          {currentTimeIndicatorY !== null && (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.currentTimeLineWrap,
+                {
+                  top: currentTimeIndicatorY,
+                  width: totalPages * SCREEN_WIDTH - TIME_LABEL_WIDTH,
+                },
+              ]}
+            >
+              <View style={styles.currentTimeDot} />
+              <View style={styles.currentTimeLine} />
+            </View>
+          )}
+          </View>
         </ScrollView>
         </ScrollView>
       </View>
@@ -1463,7 +1486,6 @@ const styles = StyleSheet.create({
   currentTimeLineWrap: {
     position: 'absolute',
     left: TIME_LABEL_WIDTH,
-    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 5,

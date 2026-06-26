@@ -2455,7 +2455,7 @@ export function CourtCalendarView() {
           position: 'absolute',
           top: `${lineTop}px`,
           left: 0,
-          right: 0,
+          width: timeColOffset + courtGridWidth,
           zIndex: 20,
           height: '2px',
         }}
@@ -2495,9 +2495,10 @@ export function CourtCalendarView() {
     if (currentTimeLinePosition === null) return null;
     return (
       <div
-        className="pointer-events-none absolute left-0 right-0"
+        className="pointer-events-none absolute left-0"
         style={{
           top: `${currentTimeLinePosition}px`,
+          width: courtGridWidth,
           height: '2px',
           zIndex: 20,
         }}

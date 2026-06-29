@@ -19,6 +19,11 @@ export const BOOKING_TYPES = {
     color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
     bgColor: 'bg-yellow-100'
   },
+  group_lesson: {
+    label: 'Group Lesson',
+    color: 'bg-cyan-100 text-cyan-800 border-cyan-300',
+    bgColor: 'bg-cyan-100'
+  },
   ball_machine: {
     label: 'Ball Machine',
     color: 'bg-orange-100 text-orange-800 border-orange-300',
@@ -63,6 +68,7 @@ export const RESERVATION_LABEL_TYPE_KEYS: readonly BookingTypeKey[] = [
   'league_match',
   't2_match',
   'lesson',
+  'group_lesson',
   'ball_machine',
 ] as const;
 

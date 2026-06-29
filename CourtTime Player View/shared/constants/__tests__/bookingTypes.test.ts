@@ -12,6 +12,7 @@ describe('bookingTypes', () => {
       'league_match',
       't2_match',
       'lesson',
+      'group_lesson',
       'ball_machine',
     ]);
   });

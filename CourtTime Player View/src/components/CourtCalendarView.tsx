@@ -35,8 +35,8 @@ import {
 } from '../utils/bulletinPostDisplay';
 
 // Layout constants
-const ROW_HEIGHT = 50;            // 30-min visible row height
-const SUB_SLOT_HEIGHT = 25;       // 15-min subdivision height
+const ROW_HEIGHT = 50;            // unused (kept for reference)
+const SUB_SLOT_HEIGHT = 25;       // 30-min row height (desktop)
 const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 38;
@@ -1059,7 +1059,7 @@ export function CourtCalendarView() {
 
     const currentMinutes = (hours * 60) + minutes;
     if (currentMinutes < dayStartMinutes || currentMinutes > dayEndMinutes) return null;
-    const position = ((currentMinutes - dayStartMinutes) / 15) * effectiveSubSlotHeight;
+    const position = ((currentMinutes - dayStartMinutes) / 30) * effectiveSubSlotHeight;
 
     return position;
   }, [currentTime, selectedDate, isToday, dayStartMinutes, dayEndMinutes, facilityTimezone, effectiveSubSlotHeight]);
@@ -1197,10 +1197,10 @@ export function CourtCalendarView() {
     return slot24 >= startNorm && slot24 < endNorm;
   }, [primeTimeConfigs, selectedDate]);
 
-  // Generate time slots for the day (15-minute intervals)
+  // Generate time slots for the day (30-minute intervals)
   const allTimeSlots = React.useMemo(() => {
     const slots: string[] = [];
-    for (let minuteOfDay = dayStartMinutes; minuteOfDay <= dayEndMinutes; minuteOfDay += 15) {
+    for (let minuteOfDay = dayStartMinutes; minuteOfDay <= dayEndMinutes; minuteOfDay += 30) {
       const hour = Math.floor(minuteOfDay / 60);
       const minute = minuteOfDay % 60;
       const period = hour >= 12 ? 'PM' : 'AM';
@@ -1261,12 +1261,18 @@ export function CourtCalendarView() {
 
       Object.entries(courtBookings).forEach(([time, booking]: [string, any]) => {
         if (booking?.isFirstSlot) {
-          const startIdx = allTimeSlots.indexOf(time);
-          if (startIdx === -1) return;
+          let startIdx = allTimeSlots.indexOf(time);
+          if (startIdx === -1) {
+            // Booking starts at a non-30-min boundary (e.g. :15/:45) — compute from exact startTime
+            const startMins = parseApiTimeToMinutes(booking.startTime);
+            if (startMins === null || startMins < dayStartMinutes) return;
+            startIdx = Math.floor((startMins - dayStartMinutes) / 30);
+          }
           const slotCountFromData = Number(booking.slotCount);
+          // slotCount stored in 15-min units; convert to 30-min units for overlay sizing
           const slotCount = Number.isFinite(slotCountFromData) && slotCountFromData > 0
-            ? slotCountFromData
-            : Math.ceil(parseInt(booking.duration) / 15);
+            ? Math.ceil(slotCountFromData / 2)
+            : Math.ceil(parseInt(booking.duration) / 30);
           if (!Number.isFinite(slotCount) || slotCount <= 0) return;
           overlays.push({
             courtIndex,
@@ -2111,33 +2117,22 @@ export function CourtCalendarView() {
   }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger, isMobile]);
 
   const courtGridWidth = courts.length * effectiveCourtWidth;
-  const calendarGridHeight = measuredHeaderHeight + visibleTimeSlots.length * effectiveRowHeight;
+  const calendarGridHeight = measuredHeaderHeight + visibleTimeSlots.length * effectiveSubSlotHeight;
 
   const renderTimeLabelRow = (visibleIdx: number, time30: string, asTableCell: boolean) => {
     const isHourLabel = time30.endsWith(':00 AM') || time30.endsWith(':00 PM');
     const rowStartMinute = parseInt(time30.split(' ')[0].split(':')[1], 10);
     const rowEndsOnHour = Number.isFinite(rowStartMinute) && ((rowStartMinute + 30) % 60 === 0);
-    const bottomTime = allTimeSlots[visibleIdx * 2 + 1];
     const borderBottom = rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb';
     const content = (
-      <>
-        {bottomTime && (
-          <div
-            className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-dashed border-gray-200"
-            style={{ top: effectiveSubSlotHeight }}
-          />
-        )}
-        <div
-          className="relative z-[2] flex items-center justify-center px-2"
-          style={{
-            height: bottomTime ? effectiveSubSlotHeight : effectiveRowHeight,
-          }}
-        >
-          <span className={`text-xs whitespace-nowrap ${isHourLabel ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
-            {time30}
-          </span>
-        </div>
-      </>
+      <div
+        className="relative z-[2] flex items-center justify-center px-2"
+        style={{ height: effectiveSubSlotHeight }}
+      >
+        <span className={`text-xs whitespace-nowrap ${isHourLabel ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+          {time30}
+        </span>
+      </div>
     );
 
     if (asTableCell) {
@@ -2164,7 +2159,7 @@ export function CourtCalendarView() {
         style={{
           width: effectiveTimeColWidth,
           minWidth: effectiveTimeColWidth,
-          height: effectiveRowHeight,
+          height: effectiveSubSlotHeight,
           borderBottom,
         }}
       >
@@ -2177,30 +2172,19 @@ export function CourtCalendarView() {
     const time30 = visibleTimeSlots[visibleIdx];
     const rowStartMinute = parseInt(time30.split(' ')[0].split(':')[1], 10);
     const rowEndsOnHour = Number.isFinite(rowStartMinute) && ((rowStartMinute + 30) % 60 === 0);
-    const topTime = allTimeSlots[visibleIdx * 2];
-    const bottomTime = allTimeSlots[visibleIdx * 2 + 1];
+    const topTime = allTimeSlots[visibleIdx];
 
     return courts.map((court, courtIndex) => {
       const topBooking = bookings[court.name as keyof typeof bookings]?.[topTime];
-      const bottomBooking = bottomTime ? bookings[court.name as keyof typeof bookings]?.[bottomTime] : null;
       const topBlocked = topBooking?.type === 'blocked';
-      const bottomBlocked = bottomBooking?.type === 'blocked';
       const topPast = isPastTime(topTime);
-      const bottomPast = bottomTime ? isPastTime(bottomTime) : false;
       const topSelected = dragState.selectedCells.has(`${court.name}|${topTime}`);
-      const bottomSelected = bottomTime ? dragState.selectedCells.has(`${court.name}|${bottomTime}`) : false;
       const topPrime = isPrimeTimeSlot(court.id, topTime);
-      const bottomPrime = bottomTime ? isPrimeTimeSlot(court.id, bottomTime) : false;
       const isWalkUpCourt = court.isWalkUp === true;
       const topOutsideCourt =
         !isWalkUpCourt &&
         !topBooking &&
         !!(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime));
-      const bottomOutsideCourt =
-        !!bottomTime &&
-        !isWalkUpCourt &&
-        !bottomBooking &&
-        !!(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime));
 
       return (
         <td
@@ -2209,21 +2193,15 @@ export function CourtCalendarView() {
           style={{
             width: effectiveCourtWidth,
             minWidth: effectiveCourtWidth,
-            height: effectiveRowHeight,
+            height: effectiveSubSlotHeight,
             verticalAlign: 'top',
             borderBottom: rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb',
           }}
         >
-          {bottomTime && (
-            <div
-              className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-gray-200"
-              style={{ top: effectiveSubSlotHeight }}
-            />
-          )}
           <div
             data-slot-court={court.name}
             data-slot-time={topTime}
-            className={`absolute top-0 left-0 right-0 select-none ${calendarTouchLocked || !isMobile ? 'touch-none' : 'calendar-slot-pan-x'}
+            className={`absolute top-0 left-0 right-0 bottom-0 select-none ${calendarTouchLocked || !isMobile ? 'touch-none' : 'calendar-slot-pan-x'}
               ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
               ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
               ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
@@ -2232,7 +2210,6 @@ export function CourtCalendarView() {
               ${topBooking && !topBlocked ? 'cursor-pointer' : ''}
               ${topSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
             `}
-            style={{ height: effectiveSubSlotHeight }}
             onClick={() => {
               if (dragJustFinishedRef.current) return;
               if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
@@ -2257,45 +2234,6 @@ export function CourtCalendarView() {
               extendDragSelection(court.name, topTime)
             }
           />
-          {bottomTime && (
-            <div
-              data-slot-court={court.name}
-              data-slot-time={bottomTime}
-              className={`absolute left-0 right-0 select-none ${calendarTouchLocked || !isMobile ? 'touch-none' : 'calendar-slot-pan-x'}
-                ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
-                ${!isWalkUpCourt && bottomOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
-                ${!isWalkUpCourt && !bottomOutsideCourt && bottomBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
-                ${!isWalkUpCourt && !bottomOutsideCourt && bottomPast && !bottomBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
-                ${!isWalkUpCourt && !bottomOutsideCourt && !bottomPast && !bottomBooking && !bottomBlocked ? `cursor-pointer ${bottomPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
-                ${bottomBooking && !bottomBlocked ? 'cursor-pointer' : ''}
-                ${bottomSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
-              `}
-              style={{ top: effectiveSubSlotHeight, height: effectiveSubSlotHeight }}
-              onClick={() => {
-                if (dragJustFinishedRef.current) return;
-                if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
-                if (court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) return;
-                if (bottomBlocked || (bottomPast && !bottomBooking)) return;
-                if (bottomBooking) handleBookingClick(court.name, bottomTime);
-                else handleEmptySlotClick(court.name, bottomTime);
-              }}
-              onPointerDown={(e) =>
-                !isWalkUpCourt &&
-                !bottomBooking &&
-                !bottomPast &&
-                !bottomBlocked &&
-                !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
-                handlePointerDown(court.name, bottomTime, e)
-              }
-              onPointerEnter={() =>
-                !isWalkUpCourt &&
-                !bottomPast &&
-                !bottomBlocked &&
-                !(court.id && isCourtSlotOutsideOperatingHours(court.id, bottomTime)) &&
-                extendDragSelection(court.name, bottomTime)
-              }
-            />
-          )}
         </td>
       );
     });
@@ -2370,12 +2308,12 @@ export function CourtCalendarView() {
           && bookingEndMinutes !== null
           && bookingEndMinutes > bookingStartMinutes;
         const top = hasExactRange
-          ? (isMobile ? 0 : measuredHeaderHeight) + ((bookingStartMinutes - dayStartMinutesForOverlay) / 15) * effectiveSubSlotHeight + (isBlocked ? 0 : 2)
+          ? (isMobile ? 0 : measuredHeaderHeight) + ((bookingStartMinutes - dayStartMinutesForOverlay) / 30) * effectiveSubSlotHeight + (isBlocked ? 0 : 2)
           : (isMobile ? 0 : measuredHeaderHeight) + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
         const left = timeColOffset + overlay.courtIndex * effectiveCourtWidth + (isBlocked ? 0 : 4);
         const width = effectiveCourtWidth - (isBlocked ? 0 : 8);
         const height = hasExactRange
-          ? (((bookingEndMinutes - bookingStartMinutes) / 15) * effectiveSubSlotHeight) - (isBlocked ? 0 : 4)
+          ? (((bookingEndMinutes - bookingStartMinutes) / 30) * effectiveSubSlotHeight) - (isBlocked ? 0 : 4)
           : overlay.slotCount * effectiveSubSlotHeight - (isBlocked ? 0 : 4);
         const colorClass = isBlocked
           ? 'bg-gray-200 text-gray-500 border-0'
@@ -2383,9 +2321,14 @@ export function CourtCalendarView() {
             ? getBookingTypeBadgeColor(booking.bookingType)
             : 'bg-blue-50 text-blue-900 border-blue-200';
 
+        const tooltipText = isBlocked
+          ? `Blocked${booking.player ? ` — ${booking.player}` : ''}`
+          : [booking.player, booking.duration, booking.startTime && booking.endTime ? `${booking.startTime.slice(0,5)}–${booking.endTime.slice(0,5)}` : ''].filter(Boolean).join(' · ');
+
         return (
           <div
             key={`booking-${booking.bookingId || idx}`}
+            title={tooltipText}
             className={`absolute ${isBlocked ? '' : 'rounded-lg border cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${isMobile && !calendarTouchLocked ? 'calendar-booking-pan-x' : ''} ${colorClass}`}
             style={{
               top,
@@ -2868,7 +2811,7 @@ export function CourtCalendarView() {
             >
               <div
                 className="flex min-w-0"
-                style={{ height: visibleTimeSlots.length * effectiveRowHeight }}
+                style={{ height: visibleTimeSlots.length * effectiveSubSlotHeight }}
               >
                 <div
                   className="shrink-0 relative z-20 bg-green-50 border-r border-green-100"
@@ -2888,7 +2831,7 @@ export function CourtCalendarView() {
                   >
                     <tbody>
                       {visibleTimeSlots.map((time30, visibleIdx) => (
-                        <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
+                        <tr key={visibleIdx} style={{ height: effectiveSubSlotHeight }}>
                           {renderCourtCellsForRow(visibleIdx)}
                         </tr>
                       ))}
@@ -2922,7 +2865,7 @@ export function CourtCalendarView() {
               </thead>
               <tbody>
                 {visibleTimeSlots.map((time30, visibleIdx) => (
-                  <tr key={visibleIdx} style={{ height: effectiveRowHeight }}>
+                  <tr key={visibleIdx} style={{ height: effectiveSubSlotHeight }}>
                     {renderTimeLabelRow(visibleIdx, time30, true)}
                     {renderCourtCellsForRow(visibleIdx)}
                   </tr>

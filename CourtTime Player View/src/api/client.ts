@@ -667,6 +667,10 @@ export const bookingApi = {
     return apiRequest(`/api/bookings/facility/${facilityId}?date=${date}`);
   },
 
+  getByFacilityRange: async (facilityId: string, startDate: string, endDate: string) => {
+    return apiRequest(`/api/bookings/facility/${facilityId}/range?startDate=${startDate}&endDate=${endDate}`);
+  },
+
   getByCourt: async (courtId: string, date: string) => {
     return apiRequest(`/api/bookings/court/${courtId}?date=${date}`);
   },

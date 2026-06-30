@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   getBookingsByFacilityAndDate,
+  getBookingsByFacilityAndDateRange,
   getBookingsByCourtAndDate,
   getBookingsByUser,
   createBooking,
@@ -23,6 +24,34 @@ import {
 const pool = { query: (text: string, params?: any[]) => getPool().query(text, params) };
 
 const router = express.Router();
+
+/**
+ * GET /api/bookings/facility/:facilityId/range
+ * Get bookings for a facility across a date range (for week/month views)
+ */
+router.get('/facility/:facilityId/range', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate parameters are required'
+      });
+    }
+
+    const bookings = await getBookingsByFacilityAndDateRange(
+      facilityId,
+      startDate as string,
+      endDate as string
+    );
+
+    res.json({ success: true, bookings });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * GET /api/bookings/facility/:facilityId

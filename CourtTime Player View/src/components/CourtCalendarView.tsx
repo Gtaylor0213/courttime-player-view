@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { BookingWizard } from './BookingWizard';
 import { QuickReservePopup } from './QuickReservePopup';
+import { WeekMonthCalendarView } from './WeekMonthCalendarView';
 import { NotificationBell } from './NotificationBell';
 import { ReservationDetailsModal } from './ReservationDetailsModal';
 import { BulletinActivitySignupModal } from './BulletinActivitySignupModal';
@@ -19,7 +20,7 @@ import type { StrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { parseLocalDate } from '../utils/dateUtils';
 import { toast } from 'sonner';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
+import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
 import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
@@ -128,12 +129,14 @@ const formatCurrentTime = (tz: string = 'America/New_York'): string => {
 export function CourtCalendarView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { selectedFacilityId = 'sunrise-valley' } = useAppContext();
+  const { selectedFacilityId = 'sunrise-valley', enabledFeatures } = useAppContext();
   const { unreadCount } = useNotifications();
   const { user, loading: authLoading, refreshTermsStatus } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const selectedFacility = selectedFacilityId;
   const [selectedView, setSelectedView] = useState('week');
+  const weekMonthViewEnabled = enabledFeatures.includes('week_month_view');
+  const [calendarViewMode, setCalendarViewMode] = useState<'court' | 'week' | 'month'>('court');
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [currentTime, setCurrentTime] = useState(getFacilityDate());
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
@@ -2546,6 +2549,7 @@ export function CourtCalendarView() {
                 </div>
               </div>
 
+              {calendarViewMode === 'court' && (
               <div className="mt-2 flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
                   <ChevronLeft className="h-4 w-4" />
@@ -2561,6 +2565,7 @@ export function CourtCalendarView() {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
+              )}
 
               {mobileControlsExpanded && (
                 <div
@@ -2590,6 +2595,39 @@ export function CourtCalendarView() {
                       Quick Reserve
                     </Button>
                   </div>
+
+                  {/* Mobile view mode switcher */}
+                  {weekMonthViewEnabled && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">View</p>
+                      <div className="flex gap-1.5">
+                        <Button
+                          variant={calendarViewMode === 'court' ? 'default' : 'outline'}
+                          size="sm"
+                          className="flex-1 text-xs"
+                          onClick={() => setCalendarViewMode('court')}
+                        >
+                          Courts
+                        </Button>
+                        <Button
+                          variant={calendarViewMode === 'week' ? 'default' : 'outline'}
+                          size="sm"
+                          className="flex-1 text-xs"
+                          onClick={() => setCalendarViewMode('week')}
+                        >
+                          Week
+                        </Button>
+                        <Button
+                          variant={calendarViewMode === 'month' ? 'default' : 'outline'}
+                          size="sm"
+                          className="flex-1 text-xs"
+                          onClick={() => setCalendarViewMode('month')}
+                        >
+                          Month
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Court Type</p>
@@ -2744,9 +2782,43 @@ export function CourtCalendarView() {
                     <Calendar className="h-4 w-4" />
                     Quick Reserve
                   </Button>
+
+                  {/* View mode switcher — only when feature is enabled */}
+                  {weekMonthViewEnabled && (
+                    <div className="flex items-center gap-1 rounded-md border border-gray-200 bg-white p-0.5">
+                      <Button
+                        variant={calendarViewMode === 'court' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setCalendarViewMode('court')}
+                      >
+                        <Grid3X3 className="h-3.5 w-3.5 mr-1" />
+                        Courts
+                      </Button>
+                      <Button
+                        variant={calendarViewMode === 'week' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setCalendarViewMode('week')}
+                      >
+                        <Calendar className="h-3.5 w-3.5 mr-1" />
+                        Week
+                      </Button>
+                      <Button
+                        variant={calendarViewMode === 'month' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setCalendarViewMode('month')}
+                      >
+                        <CalendarDays className="h-3.5 w-3.5 mr-1" />
+                        Month
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Date Navigation with Picker */}
+                {/* Date Navigation with Picker — only shown in court view */}
+                {calendarViewMode === 'court' && (
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
                     <ChevronLeft className="h-4 w-4" />
@@ -2762,6 +2834,7 @@ export function CourtCalendarView() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
+                )}
               </div>
             </div>
           </div>
@@ -2769,7 +2842,19 @@ export function CourtCalendarView() {
 
         {/* Calendar Grid Container */}
         <div className="flex-1 min-h-0 flex flex-col px-4 py-2">
-        {courts.length === 0 ? (
+        {calendarViewMode !== 'court' ? (
+          <WeekMonthCalendarView
+            facilityId={selectedFacility}
+            facilityName={currentFacility?.name || ''}
+            viewMode={calendarViewMode}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            onSwitchToCourtView={(date) => {
+              setSelectedDate(date);
+              setCalendarViewMode('court');
+            }}
+          />
+        ) : courts.length === 0 ? (
           <div
             className="bg-white rounded-lg shadow-lg border border-gray-200 p-4 md:p-8 text-center text-gray-500 h-full"
           >

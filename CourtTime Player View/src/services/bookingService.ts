@@ -388,6 +388,50 @@ export async function getBookingsByFacilityAndDate(
   }
 }
 
+export async function getBookingsByFacilityAndDateRange(
+  facilityId: string,
+  startDate: string,
+  endDate: string
+): Promise<Booking[]> {
+  try {
+    const result = await query(
+      `SELECT
+        b.id,
+        b.series_id as "seriesId",
+        b.court_id as "courtId",
+        b.user_id as "userId",
+        b.facility_id as "facilityId",
+        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
+        b.start_time as "startTime",
+        b.end_time as "endTime",
+        b.duration_minutes as "durationMinutes",
+        b.status,
+        b.booking_type as "bookingType",
+        b.notes,
+        b.bulletin_post_id as "bulletinPostId",
+        b.created_at as "createdAt",
+        b.updated_at as "updatedAt",
+        c.name as "courtName",
+        u.full_name as "userName",
+        u.email as "userEmail"
+      FROM bookings b
+      JOIN courts c ON b.court_id = c.id
+      JOIN users u ON b.user_id = u.id
+      WHERE b.facility_id = $1
+        AND b.booking_date >= $2
+        AND b.booking_date <= $3
+        AND b.status != 'cancelled'
+      ORDER BY b.booking_date, b.start_time`,
+      [facilityId, startDate, endDate]
+    );
+
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching bookings by range:', error);
+    return [];
+  }
+}
+
 /**
  * Get bookings for a specific court and date
  */

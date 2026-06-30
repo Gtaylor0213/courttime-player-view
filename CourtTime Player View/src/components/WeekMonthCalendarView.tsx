@@ -105,25 +105,34 @@ export function WeekMonthCalendarView({
     [selectedDate]
   );
 
-  const { startDate, endDate } = useMemo(() => {
+  // All dates that need to be fetched (7 for week, N for month)
+  const fetchDayStrs = useMemo(() => {
     if (viewMode === 'week') {
-      const end = new Date(weekStart);
-      end.setDate(end.getDate() + 6);
-      return { startDate: toDateStr(weekStart), endDate: toDateStr(end) };
+      return weekDays.map(toDateStr);
     }
-    return { startDate: toDateStr(monthStart), endDate: toDateStr(monthEnd) };
-  }, [viewMode, weekStart, monthStart, monthEnd]);
+    const daysInMonth = monthEnd.getDate();
+    return Array.from({ length: daysInMonth }, (_, i) =>
+      toDateStr(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), i + 1))
+    );
+  }, [viewMode, weekDays, monthEnd, selectedDate]);
+
+  // Stable key for the effect dependency — avoids reference churn from array recreation
+  const fetchKey = fetchDayStrs.join(',');
 
   useEffect(() => {
-    if (!facilityId) return;
+    if (!facilityId || fetchDayStrs.length === 0) return;
     setLoading(true);
-    (bookingApi as any).getByFacilityRange(facilityId, startDate, endDate)
-      .then((res: any) => {
-        setBookings(res?.success && Array.isArray(res.bookings) ? res.bookings : []);
-      })
-      .catch(() => setBookings([]))
-      .finally(() => setLoading(false));
-  }, [facilityId, startDate, endDate]);
+    Promise.all(
+      fetchDayStrs.map(ds =>
+        bookingApi.getByFacility(facilityId, ds)
+          .then((res: any) => (res?.success && Array.isArray(res.bookings) ? res.bookings : []))
+          .catch(() => [])
+      )
+    ).then(results => {
+      setBookings((results as Booking[][]).flat());
+    }).finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facilityId, fetchKey]);
 
   const bookingsByDate = useMemo(() => {
     const map: Record<string, Booking[]> = {};

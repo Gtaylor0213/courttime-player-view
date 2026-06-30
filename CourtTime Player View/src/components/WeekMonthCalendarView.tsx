@@ -125,7 +125,7 @@ export function WeekMonthCalendarView({
     Promise.all(
       fetchDayStrs.map(ds =>
         bookingApi.getByFacility(facilityId, ds)
-          .then((res: any) => (res?.success && Array.isArray(res.bookings) ? res.bookings : []))
+          .then((res: any) => (res?.success && Array.isArray(res.data?.bookings) ? res.data.bookings : []))
           .catch(() => [])
       )
     ).then(results => {

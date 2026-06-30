@@ -1,0 +1,95 @@
+-- Enable Row Level Security on every public table flagged by the Supabase
+-- Security Advisor (rls_disabled_in_public / sensitive_columns_exposed lints).
+--
+-- The app never reads/writes through Supabase's auto-generated PostgREST API
+-- (no supabase-js client, no anon key anywhere in this codebase) -- the
+-- backend connects directly over Postgres as the `postgres` role via
+-- DATABASE_URL, which has BYPASSRLS and is unaffected by RLS. Enabling RLS
+-- with no policies simply closes the unused public API surface; it does not
+-- change app behavior.
+
+ALTER TABLE IF EXISTS public.account_strikes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.address_whitelist ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.annual_fee_billing_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.annual_fee_billing_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.annual_fee_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.annual_fee_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.booking_analytics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.booking_cancellations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.booking_rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.booking_rule_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.booking_series ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.booking_violations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.bulletin_drill_signups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.bulletin_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.connect_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.court_allowed_activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.court_blackouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.court_operating_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.courts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.email_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.event_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facilities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_admins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_features ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_revenue_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_rule_configs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_secondary_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_terms_conditions_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.facility_usage_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.franchise_organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.hitting_partner_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.hoa_addresses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.household_groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.household_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.league_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.leagues ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.location_inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.member_entitlement_ledger ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.member_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.member_terms_acceptances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.membership_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_admins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_location_invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_location_provisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_membership_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_product_rollouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_product_skus ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_program_rollouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_program_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.org_sku_rollouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.payment_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.payment_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pending_court_additions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pickle_campaign_sends ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pickle_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pickle_player_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pickle_revenue_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.player_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.player_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.player_visits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pro_shop_order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pro_shop_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pro_shop_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pro_shop_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pro_shop_tab_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.pro_shop_tabs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.program_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.program_registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.promo_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.retail_order_lines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.retail_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.user_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.user_push_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.user_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.users ENABLE ROW LEVEL SECURITY;

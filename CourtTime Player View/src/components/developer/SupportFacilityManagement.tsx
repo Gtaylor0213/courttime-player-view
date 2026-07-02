@@ -81,7 +81,9 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
     deleteConfirmName.trim().toLowerCase() === deletePreview.facilityName.trim().toLowerCase();
 
   useEffect(() => {
-    if (!selectedFacilityId) { setFacility(null); return; }
+    if (!selectedFacilityId) { setFacility(null); setRules([]); setFeatures({}); return; }
+    setRules([]);
+    setFeatures({});
     (async () => {
       setLoading(true);
       const res = await getFacility(selectedFacilityId);
@@ -91,6 +93,8 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
       }
       setLoading(false);
     })();
+    loadRules();
+    loadFeatures();
   }, [selectedFacilityId]);
 
   const handleSave = async () => {
@@ -293,8 +297,8 @@ export function SupportFacilityManagement({ selectedFacilityId, onSelectFacility
             <TabsList>
               <TabsTrigger value="general" className="px-4">General Info</TabsTrigger>
               <TabsTrigger value="contacts" className="px-4">Contacts</TabsTrigger>
-              <TabsTrigger value="rules" className="px-4" onClick={() => { if (rules.length === 0) loadRules(); }}>Rules</TabsTrigger>
-              <TabsTrigger value="features" className="px-4" onClick={() => { if (Object.keys(features).length === 0) loadFeatures(); }}>Features</TabsTrigger>
+              <TabsTrigger value="rules" className="px-4">Rules</TabsTrigger>
+              <TabsTrigger value="features" className="px-4">Features</TabsTrigger>
             </TabsList>
           </div>
 

@@ -5,9 +5,22 @@
 
 import express from 'express';
 import { getPool } from '../../src/database/connection';
+import { ensureFacilityAdmin, isFacilityAdminUser, facilityIdForHousehold } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 const pool = { query: (text: string, params?: any[]) => getPool().query(text, params) };
+
+/** True when the caller administers the household's facility or belongs to the household. */
+async function canViewHousehold(householdId: string, userId: string | undefined): Promise<boolean> {
+  if (!userId) return false;
+  const facilityId = await facilityIdForHousehold(householdId);
+  if (facilityId && (await isFacilityAdminUser(facilityId, userId))) return true;
+  const member = await getPool().query(
+    `SELECT 1 FROM household_members WHERE household_id = $1 AND user_id = $2`,
+    [householdId, userId]
+  );
+  return member.rows.length > 0;
+}
 
 /**
  * GET /api/households/facility/:facilityId
@@ -16,6 +29,8 @@ const pool = { query: (text: string, params?: any[]) => getPool().query(text, pa
 router.get('/facility/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     const result = await pool.query(
       `SELECT hg.*,
@@ -42,6 +57,10 @@ router.get('/facility/:facilityId', async (req, res, next) => {
 router.get('/:householdId', async (req, res, next) => {
   try {
     const { householdId } = req.params;
+
+    if (!(await canViewHousehold(householdId, req.user?.userId))) {
+      return res.status(403).json({ success: false, error: 'Not authorized to view this household' });
+    }
 
     const householdResult = await pool.query(
       `SELECT * FROM household_groups WHERE id = $1`,
@@ -88,6 +107,12 @@ router.get('/user/:userId', async (req, res, next) => {
         success: false,
         error: 'facilityId query parameter is required'
       });
+    }
+
+    // A member may look up their own household; otherwise the caller must be a facility admin.
+    if (req.user?.userId !== userId &&
+        !(await isFacilityAdminUser(String(facilityId), req.user?.userId))) {
+      return res.status(403).json({ success: false, error: 'Facility admin access required' });
     }
 
     const result = await pool.query(
@@ -151,6 +176,8 @@ router.post('/', async (req, res, next) => {
       });
     }
 
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     // Check if household already exists for this address
     const existing = await pool.query(
       `SELECT id FROM household_groups
@@ -201,6 +228,10 @@ router.put('/:householdId', async (req, res, next) => {
       householdName
     } = req.body;
 
+    const updateFacilityId = await facilityIdForHousehold(householdId);
+    if (!updateFacilityId) return res.status(404).json({ success: false, error: 'Household not found' });
+    if (!(await ensureFacilityAdmin(updateFacilityId, req.user?.userId, res))) return;
+
     const result = await pool.query(
       `UPDATE household_groups SET
         max_members = COALESCE($1, max_members),
@@ -237,6 +268,10 @@ router.delete('/:householdId', async (req, res, next) => {
   try {
     const { householdId } = req.params;
     const { force } = req.query;
+
+    const deleteFacilityId = await facilityIdForHousehold(householdId);
+    if (!deleteFacilityId) return res.status(404).json({ success: false, error: 'Household not found' });
+    if (!(await ensureFacilityAdmin(deleteFacilityId, req.user?.userId, res))) return;
 
     // Check for members
     const membersResult = await pool.query(
@@ -288,6 +323,10 @@ router.post('/:householdId/members', async (req, res, next) => {
         error: 'userId is required'
       });
     }
+
+    const addFacilityId = await facilityIdForHousehold(householdId);
+    if (!addFacilityId) return res.status(404).json({ success: false, error: 'Household not found' });
+    if (!(await ensureFacilityAdmin(addFacilityId, req.user?.userId, res))) return;
 
     // Get household to check max members and facility
     const householdResult = await pool.query(
@@ -367,6 +406,10 @@ router.put('/:householdId/members/:userId', async (req, res, next) => {
     const { householdId, userId } = req.params;
     const { isPrimary, verificationStatus } = req.body;
 
+    const memberFacilityId = await facilityIdForHousehold(householdId);
+    if (!memberFacilityId) return res.status(404).json({ success: false, error: 'Household not found' });
+    if (!(await ensureFacilityAdmin(memberFacilityId, req.user?.userId, res))) return;
+
     // If setting as primary, unset other primaries
     if (isPrimary) {
       await pool.query(
@@ -408,6 +451,10 @@ router.delete('/:householdId/members/:userId', async (req, res, next) => {
   try {
     const { householdId, userId } = req.params;
 
+    const removeFacilityId = await facilityIdForHousehold(householdId);
+    if (!removeFacilityId) return res.status(404).json({ success: false, error: 'Household not found' });
+    if (!(await ensureFacilityAdmin(removeFacilityId, req.user?.userId, res))) return;
+
     const result = await pool.query(
       `DELETE FROM household_members
        WHERE household_id = $1 AND user_id = $2
@@ -439,6 +486,10 @@ router.get('/:householdId/bookings', async (req, res, next) => {
   try {
     const { householdId } = req.params;
     const { includePast } = req.query;
+
+    if (!(await canViewHousehold(householdId, req.user?.userId))) {
+      return res.status(403).json({ success: false, error: 'Not authorized to view this household' });
+    }
 
     let query = `
       SELECT b.*, u.first_name, u.last_name, c.name as court_name
@@ -491,6 +542,8 @@ router.post('/auto-create', async (req, res, next) => {
         error: 'facilityId is required'
       });
     }
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     // Get HOA addresses not already linked to households
     const addressesResult = await pool.query(

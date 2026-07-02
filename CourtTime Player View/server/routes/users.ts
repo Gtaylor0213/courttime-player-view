@@ -5,6 +5,24 @@ import { transaction } from '../../src/database/connection';
 
 const router = express.Router();
 
+/**
+ * These routes operate on a user account identified by :id. A caller may only
+ * act on their own account. Returns the authenticated user id when it matches
+ * the requested id, otherwise writes a 401/403 and returns null.
+ */
+function requireSelf(req: express.Request, res: express.Response, requestedId: string): string | null {
+  const userId = req.user?.userId;
+  if (!userId) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return null;
+  }
+  if (userId !== requestedId) {
+    res.status(403).json({ success: false, error: 'Cannot access another user account' });
+    return null;
+  }
+  return userId;
+}
+
 type DeleteTableOptions = {
   userColumn?: string;
   extraWhere?: string;
@@ -37,6 +55,7 @@ async function safeDeleteByUser(
 router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
+    if (!requireSelf(req, res, id)) return;
     const user = await getUserById(id);
 
     if (!user) {
@@ -62,6 +81,7 @@ router.get('/:id', async (req, res, next) => {
 router.get('/:id/memberships', async (req, res, next) => {
   try {
     const { id } = req.params;
+    if (!requireSelf(req, res, id)) return;
     const user = await getUserWithMemberships(id);
 
     if (!user) {
@@ -87,7 +107,11 @@ router.get('/:id/memberships', async (req, res, next) => {
 router.patch('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    if (!requireSelf(req, res, id)) return;
+
+    // Never allow privilege fields (e.g. userType) to be changed through the
+    // self-service profile endpoint — that would be account/role escalation.
+    const { userType: _ignoredUserType, ...updates } = req.body ?? {};
 
     const success = await updateUserProfile(id, updates);
 
@@ -164,15 +188,10 @@ router.delete('/me', requireAuth, async (req, res, next) => {
 router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { requestingUserId } = req.body;
 
-    // Security: only allow self-deletion (or a support override can be added later)
-    if (requestingUserId && requestingUserId !== id) {
-      return res.status(403).json({
-        success: false,
-        error: 'You may only delete your own account'
-      });
-    }
+    // Security: only allow self-deletion. Identity comes from the verified JWT,
+    // never from a client-supplied body field.
+    if (!requireSelf(req, res, id)) return;
 
     const result = await deleteUser(id);
 

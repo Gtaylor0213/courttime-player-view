@@ -17,6 +17,11 @@ router.get('/conversations/:facilityId/:userId', async (req, res) => {
   try {
     const { facilityId, userId } = req.params;
 
+    // A user may only read their own conversations.
+    if (req.user?.userId !== userId) {
+      return res.status(403).json({ success: false, error: 'Cannot access another user conversations' });
+    }
+
     const result = await query(`
       SELECT
         c.id,
@@ -108,15 +113,13 @@ router.get('/conversations/:facilityId/:userId', async (req, res) => {
 router.delete('/message/:messageId', async (req, res) => {
   try {
     const { messageId } = req.params;
-    const userId =
-      (typeof req.body?.userId === 'string' && req.body.userId) ||
-      (typeof req.query?.userId === 'string' && req.query.userId) ||
-      null;
+    // Identity comes from the verified JWT — a caller can only delete messages they sent.
+    const userId = req.user?.userId;
 
     if (!userId) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
-        error: 'Missing userId (body or query)'
+        error: 'Authentication required'
       });
     }
 
@@ -163,6 +166,20 @@ router.delete('/message/:messageId', async (req, res) => {
 router.get('/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    // Only participants of the conversation may read its messages.
+    const participantCheck = await query(
+      `SELECT 1 FROM conversations
+        WHERE id = $1 AND (participant1_id = $2 OR participant2_id = $2)`,
+      [conversationId, callerId]
+    );
+    if (participantCheck.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Cannot access this conversation' });
+    }
 
     const result = await query(`
       SELECT
@@ -198,9 +215,14 @@ router.get('/:conversationId', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { senderId, recipientId, facilityId, messageText } = req.body;
+    const { recipientId, facilityId, messageText } = req.body;
+    // The sender is always the authenticated caller, never a client-supplied id.
+    const senderId = req.user?.userId;
+    if (!senderId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
 
-    if (!senderId || !recipientId || !facilityId || !messageText) {
+    if (!recipientId || !facilityId || !messageText) {
       console.error('Missing required fields:', {
         hasSenderId: !!senderId,
         hasRecipientId: !!recipientId,
@@ -316,13 +338,24 @@ router.post('/', async (req, res) => {
 router.patch('/:conversationId/read', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { userId } = req.body;
+    // Identity comes from the verified JWT, not the request body.
+    const userId = req.user?.userId;
 
     if (!userId) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
-        error: 'Missing required field: userId'
+        error: 'Authentication required'
       });
+    }
+
+    // Only a participant may mark a conversation's messages read.
+    const participantCheck = await query(
+      `SELECT 1 FROM conversations
+        WHERE id = $1 AND (participant1_id = $2 OR participant2_id = $2)`,
+      [conversationId, userId]
+    );
+    if (participantCheck.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Cannot access this conversation' });
     }
 
     await query(`

@@ -12,6 +12,7 @@ import {
 } from '../../shared/utils/operatingHours';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { normalizeLocalDatetimeForStorage } from '../../src/utils/dateUtils';
+import { ensureFacilityAdmin, facilityIdForCourt, facilityIdForBlackout } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
@@ -269,6 +270,10 @@ router.put('/:courtId/schedule', async (req, res, next) => {
     const { courtId } = req.params;
     const { schedule } = req.body;
 
+    const scheduleFacilityId = await facilityIdForCourt(courtId);
+    if (!scheduleFacilityId) return res.status(404).json({ success: false, error: 'Court not found' });
+    if (!(await ensureFacilityAdmin(scheduleFacilityId, req.user?.userId, res))) return;
+
     if (!Array.isArray(schedule)) {
       return res.status(400).json({
         success: false,
@@ -351,6 +356,10 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
       minDuration,
       maxDuration
     } = req.body;
+
+    const dayFacilityId = await facilityIdForCourt(courtId);
+    if (!dayFacilityId) return res.status(404).json({ success: false, error: 'Court not found' });
+    if (!(await ensureFacilityAdmin(dayFacilityId, req.user?.userId, res))) return;
 
     const result = await query(
       `INSERT INTO court_operating_config (
@@ -508,6 +517,8 @@ router.post('/blackouts', async (req, res, next) => {
       });
     }
 
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     const normalizedStart = normalizeLocalDatetimeForStorage(startDatetime);
     const normalizedEnd = normalizeLocalDatetimeForStorage(endDatetime);
 
@@ -549,6 +560,10 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
       endDatetime,
       recurrenceRule
     } = req.body;
+
+    const blackoutFacilityId = await facilityIdForBlackout(blackoutId);
+    if (!blackoutFacilityId) return res.status(404).json({ success: false, error: 'Blackout not found' });
+    if (!(await ensureFacilityAdmin(blackoutFacilityId, req.user?.userId, res))) return;
 
     const result = await query(
       `UPDATE court_blackouts SET
@@ -597,6 +612,10 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
 router.delete('/blackouts/:blackoutId', async (req, res, next) => {
   try {
     const { blackoutId } = req.params;
+
+    const blackoutFacilityId = await facilityIdForBlackout(blackoutId);
+    if (!blackoutFacilityId) return res.status(404).json({ success: false, error: 'Blackout not found' });
+    if (!(await ensureFacilityAdmin(blackoutFacilityId, req.user?.userId, res))) return;
 
     const result = await query(
       `DELETE FROM court_blackouts WHERE id = $1 RETURNING id`,

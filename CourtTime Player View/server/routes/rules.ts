@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { getPool } from '../../src/database/connection';
+import { ensureFacilityAdmin } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 
@@ -202,6 +203,7 @@ router.get('/facility/:facilityId/effective', async (req, res, next) => {
 router.post('/facility/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
     const {
       ruleCode,
       ruleConfig,
@@ -326,6 +328,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
 router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
   try {
     const { facilityId, ruleCode } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
     if (isHiddenRuleCode(ruleCode) || !isAllowedRuleCode(ruleCode)) {
       return res.status(404).json({
         success: false,
@@ -412,6 +415,7 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
 router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
   try {
     const { facilityId, ruleCode } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
     if (isHiddenRuleCode(ruleCode) || !isAllowedRuleCode(ruleCode)) {
       return res.status(404).json({
         success: false,
@@ -462,6 +466,7 @@ router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
 router.post('/facility/:facilityId/bulk', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
     const { rules } = req.body;
 
     if (!Array.isArray(rules)) {
@@ -561,6 +566,7 @@ router.post('/facility/:facilityId/bulk', async (req, res, next) => {
 router.post('/facility/:facilityId/enable-all', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     // Get all rule definitions
     const defResult = await getDbPool().query(
@@ -610,6 +616,7 @@ router.post('/facility/:facilityId/enable-all', async (req, res, next) => {
 router.post('/facility/:facilityId/disable-all', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     await getDbPool().query(
       `DELETE FROM facility_rule_configs

@@ -42,8 +42,8 @@ router.post(
           '[CONNECT-WEBHOOK] Signature verification skipped by ALLOW_UNSIGNED_STRIPE_WEBHOOKS'
         );
       } else {
-        console.error('[CONNECT-WEBHOOK] STRIPE_WEBHOOK_SECRET_CONNECT is required when Stripe is configured');
-        return res.status(500).send('Webhook signing secret is not configured');
+        console.error('[CONNECT-WEBHOOK] STRIPE_WEBHOOK_SECRET_CONNECT env var is not set — cannot verify webhook signature. Set this in your environment to process Connect webhook events.');
+        return res.status(200).json({ received: true, warning: 'webhook secret not configured' });
       }
     } catch (err: any) {
       console.error('[CONNECT-WEBHOOK] Signature verification failed:', err.message);

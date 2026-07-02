@@ -9,6 +9,7 @@ import {
   getAccountCountAtAddress,
   getWhitelistWithMembers
 } from '../../src/services/addressWhitelistService';
+import { ensureFacilityAdmin } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 
@@ -19,6 +20,7 @@ const router = express.Router();
 router.get('/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
     const addresses = await getWhitelistedAddresses(facilityId);
 
     res.json({
@@ -37,6 +39,7 @@ router.get('/:facilityId', async (req, res, next) => {
 router.get('/:facilityId/with-members', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
     const entries = await getWhitelistWithMembers(facilityId);
 
     res.json({
@@ -56,6 +59,8 @@ router.post('/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
     const { address, accountsLimit, lastName, email } = req.body;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     if (!address) {
       return res.status(400).json({
@@ -91,6 +96,8 @@ router.post('/:facilityId/bulk', async (req, res, next) => {
     const { facilityId } = req.params;
     const { addresses } = req.body;
 
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
       return res.status(400).json({
         success: false,
@@ -113,6 +120,8 @@ router.delete('/:facilityId/:addressId', async (req, res, next) => {
   try {
     const { facilityId, addressId } = req.params;
 
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     const result = await removeWhitelistedAddress(facilityId, addressId);
 
     if (!result.success) {
@@ -133,6 +142,8 @@ router.patch('/:facilityId/:addressId', async (req, res, next) => {
   try {
     const { facilityId, addressId } = req.params;
     const { accountsLimit, email } = req.body;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     if (accountsLimit === undefined && email === undefined) {
       return res.status(400).json({

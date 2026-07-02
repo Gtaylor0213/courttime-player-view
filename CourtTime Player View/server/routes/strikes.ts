@@ -11,6 +11,7 @@ import {
   evaluateStrikeLockout,
   parseStrikeRuleConfig,
 } from '../../shared/utils/strikeLockout';
+import { ensureFacilityAdmin, isFacilityAdminUser, facilityIdForStrike } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 const pool = { query: (text: string, params?: any[]) => getPool().query(text, params) };
@@ -23,6 +24,8 @@ router.get('/facility/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
     const { activeOnly, userId } = req.query;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     let query = `
       SELECT s.*, u.first_name, u.last_name, u.email,
@@ -65,6 +68,14 @@ router.get('/user/:userId', async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { facilityId, activeOnly, windowDays } = req.query;
+
+    // A member may read their own strikes; otherwise the caller must be an admin
+    // of the facility whose strikes are being requested.
+    if (req.user?.userId !== userId) {
+      if (!facilityId || !(await isFacilityAdminUser(String(facilityId), req.user?.userId))) {
+        return res.status(403).json({ success: false, error: 'Facility admin access required' });
+      }
+    }
 
     let query = `
       SELECT s.*, b.booking_date, b.start_time, c.name as court_name
@@ -139,9 +150,16 @@ router.get('/:strikeId', async (req, res, next) => {
       });
     }
 
+    // The subject of the strike may view it; otherwise the caller must be a facility admin.
+    const strike = result.rows[0];
+    if (strike.user_id !== req.user?.userId &&
+        !(await isFacilityAdminUser(strike.facility_id, req.user?.userId))) {
+      return res.status(403).json({ success: false, error: 'Facility admin access required' });
+    }
+
     res.json({
       success: true,
-      strike: result.rows[0]
+      strike
     });
   } catch (error) {
     next(error);
@@ -161,7 +179,6 @@ router.post('/', async (req, res, next) => {
       strikeReason,
       relatedBookingId,
       relatedRuleId,
-      issuedBy,
       expiresAt
     } = req.body;
 
@@ -171,6 +188,10 @@ router.post('/', async (req, res, next) => {
         error: 'Missing required fields: userId, facilityId, strikeType'
       });
     }
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+    // Attribution comes from the authenticated admin, never a client-supplied value.
+    const issuedBy = req.user!.userId;
 
     if (!['no_show', 'late_cancel', 'manual'].includes(strikeType)) {
       return res.status(400).json({
@@ -256,14 +277,13 @@ router.post('/', async (req, res, next) => {
 router.post('/:strikeId/revoke', async (req, res, next) => {
   try {
     const { strikeId } = req.params;
-    const { revokedBy, revokeReason } = req.body;
+    const { revokeReason } = req.body;
 
-    if (!revokedBy) {
-      return res.status(400).json({
-        success: false,
-        error: 'revokedBy is required'
-      });
-    }
+    const revokeFacilityId = await facilityIdForStrike(strikeId);
+    if (!revokeFacilityId) return res.status(404).json({ success: false, error: 'Strike not found' });
+    if (!(await ensureFacilityAdmin(revokeFacilityId, req.user?.userId, res))) return;
+    // Attribution comes from the authenticated admin, never a client-supplied value.
+    const revokedBy = req.user!.userId;
 
     const result = await pool.query(
       `UPDATE account_strikes SET
@@ -325,6 +345,10 @@ router.delete('/:strikeId', async (req, res, next) => {
   try {
     const { strikeId } = req.params;
 
+    const deleteFacilityId = await facilityIdForStrike(strikeId);
+    if (!deleteFacilityId) return res.status(404).json({ success: false, error: 'Strike not found' });
+    if (!(await ensureFacilityAdmin(deleteFacilityId, req.user?.userId, res))) return;
+
     const result = await pool.query(
       `DELETE FROM account_strikes WHERE id = $1 RETURNING id`,
       [strikeId]
@@ -360,6 +384,12 @@ router.get('/check/:userId', async (req, res, next) => {
         success: false,
         error: 'facilityId query parameter is required'
       });
+    }
+
+    // A member may check their own lockout status; otherwise the caller must be a facility admin.
+    if (req.user?.userId !== userId &&
+        !(await isFacilityAdminUser(String(facilityId), req.user?.userId))) {
+      return res.status(403).json({ success: false, error: 'Facility admin access required' });
     }
 
     const configResult = await pool.query(

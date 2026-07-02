@@ -10,6 +10,7 @@ import {
   isFacilityAdmin
 } from '../../src/services/memberService';
 import { query as dbQuery } from '../../src/database/connection';
+import { ensureFacilityAdmin, isFacilityAdminUser } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 
@@ -42,6 +43,8 @@ router.get('/:facilityId', async (req, res, next) => {
     const { facilityId } = req.params;
     const { search } = req.query;
 
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     const members = await getFacilityMembers(
       facilityId,
       search && typeof search === 'string' ? search : undefined
@@ -63,6 +66,9 @@ router.get('/:facilityId', async (req, res, next) => {
 router.get('/:facilityId/:userId', async (req, res, next) => {
   try {
     const { facilityId, userId } = req.params;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     const member = await getMemberDetails(facilityId, userId);
 
     if (!member) {
@@ -89,6 +95,8 @@ router.patch('/:facilityId/:userId', async (req, res, next) => {
   try {
     const { facilityId, userId } = req.params;
     const updates = req.body;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     // Validate updates
     const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'isViewOnly', 'isPaymentLocked', 'endDate', 'suspendedUntil'];
@@ -132,6 +140,8 @@ router.delete('/:facilityId/:userId', async (req, res, next) => {
   try {
     const { facilityId, userId } = req.params;
 
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     const success = await removeMemberFromFacility(facilityId, userId);
 
     if (success) {
@@ -158,6 +168,8 @@ router.post('/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
     const { userId, membershipType, isFacilityAdmin } = req.body;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     if (!userId) {
       return res.status(400).json({
@@ -200,6 +212,8 @@ router.put('/:facilityId/:userId/admin', async (req, res, next) => {
     const { facilityId, userId } = req.params;
     const { isAdmin } = req.body;
 
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     if (typeof isAdmin !== 'boolean') {
       return res.status(400).json({
         success: false,
@@ -235,6 +249,8 @@ router.put('/:facilityId/:userId/view-only', async (req, res, next) => {
   try {
     const { facilityId, userId } = req.params;
     const { isViewOnly } = req.body;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     if (typeof isViewOnly !== 'boolean') {
       return res.status(400).json({
@@ -272,6 +288,8 @@ router.put('/:facilityId/:userId/payment-lockout', async (req, res, next) => {
     const { facilityId, userId } = req.params;
     const { isPaymentLocked } = req.body;
 
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
     if (typeof isPaymentLocked !== 'boolean') {
       return res.status(400).json({
         success: false,
@@ -306,6 +324,13 @@ router.put('/:facilityId/:userId/payment-lockout', async (req, res, next) => {
 router.get('/:facilityId/:userId/is-admin', async (req, res, next) => {
   try {
     const { facilityId, userId } = req.params;
+
+    // A member may check their own admin status; otherwise the caller must be an admin.
+    const callerId = req.user?.userId;
+    if (callerId !== userId && !(await isFacilityAdminUser(facilityId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Facility admin access required' });
+    }
+
     const isAdmin = await isFacilityAdmin(facilityId, userId);
 
     res.json({
@@ -326,6 +351,8 @@ router.post('/:facilityId/:userId/lockout-payment', async (req, res, next) => {
   try {
     const { facilityId, userId } = req.params;
     const { amountCents, description } = req.body;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     if (!amountCents || typeof amountCents !== 'number' || amountCents <= 0) {
       return res.status(400).json({ success: false, error: 'amountCents must be a positive number' });

@@ -34,6 +34,13 @@ import {
 } from '../../src/services/facilityRevenueService';
 import { facilityOperatingHoursScheduleFingerprint } from '../../shared/utils/operatingHours';
 import { isFacilityAdmin } from '../../src/services/memberService';
+import {
+  isFacilityAdminUser,
+  facilityIdForCourt,
+  facilityIdForBooking,
+  facilityIdForSeries,
+  facilityIdForAdminRecord,
+} from '../middleware/facilityAdmin';
 
 const router = express.Router();
 
@@ -41,14 +48,50 @@ async function requireFacilityAdmin(
   facilityId: string,
   userId: string | undefined
 ): Promise<boolean> {
-  if (!userId) return false;
-  const adminFromTable = await query(
-    `SELECT 1 FROM facility_admins
-     WHERE facility_id = $1 AND user_id = $2 AND status = 'active'`,
-    [facilityId, userId]
-  );
-  return adminFromTable.rows.length > 0 || (await isFacilityAdmin(facilityId, userId));
+  return isFacilityAdminUser(facilityId, userId);
 }
+
+/**
+ * Every route in this router is an admin operation. Authorize by resolving the
+ * target facility from the route param and confirming the authenticated caller
+ * administers it. Registered per param name via router.param so it runs before
+ * the matched handler. The one param-less route (/courts/bulk-update) guards
+ * itself inline.
+ */
+function guardParam(resolve: (value: string) => Promise<string | null>) {
+  return async (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+    value: string
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const facilityId = await resolve(value);
+      if (!facilityId) {
+        res.status(404).json({ success: false, error: 'Resource not found' });
+        return;
+      }
+      if (!(await isFacilityAdminUser(facilityId, userId))) {
+        res.status(403).json({ success: false, error: 'Facility admin access required' });
+        return;
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+router.param('facilityId', guardParam(async (id) => id));
+router.param('courtId', guardParam(facilityIdForCourt));
+router.param('bookingId', guardParam(facilityIdForBooking));
+router.param('seriesId', guardParam(facilityIdForSeries));
+router.param('adminId', guardParam(facilityIdForAdminRecord));
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -781,6 +824,18 @@ router.patch('/courts/bulk-update', async (req, res) => {
 
     if (!updates || typeof updates !== 'object') {
       return res.status(400).json({ success: false, error: 'updates object is required' });
+    }
+
+    // Authorize: caller must administer the facility that owns every court in the batch.
+    const userId = req.user?.userId;
+    for (const courtId of courtIds) {
+      const facilityId = await facilityIdForCourt(String(courtId));
+      if (!facilityId) {
+        return res.status(404).json({ success: false, error: `Court not found: ${courtId}` });
+      }
+      if (!(await isFacilityAdminUser(facilityId, userId))) {
+        return res.status(403).json({ success: false, error: 'Facility admin access required' });
+      }
     }
 
     const updatedCount = await updateCourtsBulk(courtIds, updates);

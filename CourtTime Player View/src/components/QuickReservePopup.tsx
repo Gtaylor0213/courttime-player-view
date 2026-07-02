@@ -19,6 +19,7 @@ import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/booking
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import {
   bookingWithDetailsToCalendarDetails,
   offerAddBookingToCalendar,
@@ -197,7 +198,10 @@ export function QuickReservePopup({
   selectedFacilityId
 }: QuickReservePopupProps) {
   const { user } = useAuth();
+  const isAdmin = user?.userType === 'admin';
   const [selectedFacility, setSelectedFacility] = useState(selectedFacilityId);
+  const [facilityFeatures, setFacilityFeatures] = useState<string[]>([]);
+  const canUseRecurring = isAdmin || facilityFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [selectedCourt, setSelectedCourt] = useState('');
   const [selectedCourtId, setSelectedCourtId] = useState('');
@@ -253,6 +257,15 @@ export function QuickReservePopup({
     setSelectedCourtId('');
     setSelectedCourtType(null);
     setAdditionalCourtIds([]);
+  }, [selectedFacility]);
+
+  // Fetch feature flags for the currently selected facility
+  useEffect(() => {
+    if (!selectedFacility) { setFacilityFeatures([]); return; }
+    fetch(`/api/facilities/${selectedFacility}/feature-flags`)
+      .then(r => r.json())
+      .then(res => { if (res.success) setFacilityFeatures(res.data); })
+      .catch(() => setFacilityFeatures([]));
   }, [selectedFacility]);
 
   // Peak-hours status from rules engine (same logic as booking validation)
@@ -1041,8 +1054,8 @@ export function QuickReservePopup({
             </div>
           )}
 
-          {/* Advanced Booking Checkbox - Admin only */}
-          {user?.userType === 'admin' && (
+          {/* Advanced Booking Checkbox - admins always; players when enabled for the facility */}
+          {canUseRecurring && (
           <div className="flex items-center gap-2 pt-2">
             <Checkbox
               id="advanced-booking"
@@ -1056,7 +1069,7 @@ export function QuickReservePopup({
           )}
 
           {/* Recurring Options - Show when Advanced Booking is checked */}
-          {advancedBooking && user?.userType === 'admin' && (
+          {advancedBooking && canUseRecurring && (
             <div className="space-y-3 p-3 bg-gray-50 rounded-md border border-gray-200">
               {/* Days of the Week */}
               <div className="space-y-2">

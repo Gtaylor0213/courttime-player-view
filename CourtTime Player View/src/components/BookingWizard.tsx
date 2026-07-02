@@ -14,6 +14,7 @@ import {
   offerAddBookingToCalendar,
 } from '../utils/bookingCalendar';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppContext } from '../contexts/AppContext';
 import { bookingApi, courtConfigApi, facilitiesApi } from '../api/client';
 import {
   buildExistingBookingsMapByCourtName,
@@ -24,6 +25,7 @@ import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/booking
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 
 interface RuleViolation {
   ruleCode: string;
@@ -136,7 +138,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast, addNotification } = useNotifications();
   const { user } = useAuth();
+  const { enabledFeatures } = useAppContext();
   const isAdmin = user?.userType === 'admin';
+  const canUseRecurring = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
 
   // Fetch all courts for this facility when wizard opens
   useEffect(() => {
@@ -759,8 +763,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             />
           </div>
 
-          {/* Recurring Booking - Admin only */}
-          {user?.userType === 'admin' && (
+          {/* Recurring Booking - admins always; players when enabled for the facility */}
+          {canUseRecurring && (
           <div className="flex items-center gap-2 pt-2">
             <Checkbox
               id="recurring-booking"
@@ -774,7 +778,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           </div>
           )}
 
-          {advancedBooking && user?.userType === 'admin' && (
+          {advancedBooking && canUseRecurring && (
             <div className="space-y-3 rounded-md border border-border bg-muted/40 p-3">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Select Days of the Week</Label>

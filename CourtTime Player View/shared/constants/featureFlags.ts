@@ -5,6 +5,7 @@ export const FEATURE_FLAGS = {
   ANNUAL_MEMBERSHIP_FEES: 'annual_membership_fees',
   PICKLEBALL: 'pickleball',
   WEEK_MONTH_VIEW: 'week_month_view',
+  PLAYER_RECURRING_BOOKINGS: 'player_recurring_bookings',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -14,4 +15,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   annual_membership_fees: 'Annual Membership Fees',
   pickleball: 'Pickleball (CourtTime-Pickle)',
   week_month_view: 'Week/Month Calendar Overview',
+  player_recurring_bookings: 'Player Recurring Bookings',
 };

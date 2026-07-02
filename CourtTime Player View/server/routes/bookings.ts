@@ -15,6 +15,8 @@ import {
 } from '../../src/services/bookingService';
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
+import { isFeatureEnabled } from '../../src/services/featureFlagService';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { query as dbQuery, getPool } from '../../src/database/connection';
 import {
   bookingWithDetailsToCalendarDetails,
@@ -434,6 +436,16 @@ router.post('/recurring-series', async (req, res, next) => {
         success: false,
         error: 'Missing required fields for recurring series'
       });
+    }
+
+    if (!isAdminCaller) {
+      const playerRecurringEnabled = await isFeatureEnabled(facilityId, FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
+      if (!playerRecurringEnabled) {
+        return res.status(403).json({
+          success: false,
+          error: 'Recurring bookings are not enabled for players at this facility'
+        });
+      }
     }
 
     const missing = instances.some((i: any) =>

@@ -375,7 +375,7 @@ export function FacilityDetailsTab(props: Props) {
         {secondaryLocations.length > 0 && (
           <div className="space-y-3">
             {secondaryLocations.map((loc) => (
-              <div key={loc.id} className="p-3 border rounded-lg bg-gray-50">
+              <div key={loc.id} className="p-4 border rounded-lg space-y-3">
                 {editingSecondaryLocationId === loc.id ? (
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -445,14 +445,8 @@ export function FacilityDetailsTab(props: Props) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-medium text-sm">{loc.locationName}</p>
-                      <p className="text-sm text-gray-600">{loc.streetAddress}</p>
-                      <p className="text-sm text-gray-600">{loc.city}, {loc.state} {loc.zipCode}</p>
-                      {loc.phone && <p className="text-sm text-gray-500">{loc.phone}</p>}
-                    </div>
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-end gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -470,6 +464,39 @@ export function FacilityDetailsTab(props: Props) {
                         <Trash2 className="h-4 w-4 mr-1" />
                         Delete
                       </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="md:col-span-2 space-y-1">
+                        <Label>Location Name</Label>
+                        <Input value={loc.locationName} disabled />
+                      </div>
+                      <div className="md:col-span-2 space-y-1">
+                        <Label>Street Address</Label>
+                        <Input value={loc.streetAddress} disabled />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>City</Label>
+                        <Input value={loc.city} disabled />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label>State</Label>
+                          <Select value={loc.state} disabled>
+                            <SelectTrigger><SelectValue placeholder="State" /></SelectTrigger>
+                            <SelectContent>
+                              {US_STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label>ZIP Code</Label>
+                          <Input value={loc.zipCode} disabled />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Phone</Label>
+                        <Input value={loc.phone} disabled />
+                      </div>
                     </div>
                   </div>
                 )}

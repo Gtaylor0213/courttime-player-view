@@ -2130,8 +2130,7 @@ export function CourtCalendarView() {
     const borderBottom = rowEndsOnHour ? '1px solid #d1d5db' : '1px dashed #e5e7eb';
     const content = (
       <div
-        className="relative z-[2] flex items-center justify-center px-2"
-        style={{ height: effectiveSubSlotHeight }}
+        className="relative z-[2] flex h-full items-center justify-center px-2"
       >
         <span className={`text-xs whitespace-nowrap ${isHourLabel ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
           {time30}
@@ -2146,6 +2145,7 @@ export function CourtCalendarView() {
           style={{
             width: effectiveTimeColWidth,
             minWidth: effectiveTimeColWidth,
+            height: effectiveSubSlotHeight,
             verticalAlign: 'top',
             position: 'relative',
             borderBottom,

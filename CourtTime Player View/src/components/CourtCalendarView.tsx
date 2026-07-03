@@ -167,7 +167,8 @@ export function CourtCalendarView() {
     selectedSlots: undefined as Array<{ court: string; courtId: string; time: string }> | undefined
   });
 
-  // Drag selection state
+  // Drag selection state — `court` holds the court ID and cells are `${courtId}|${time}`
+  // (IDs, not names: a facility can have same-named courts of different types).
   const [dragState, setDragState] = useState({
     isDragging: false,
     startCell: null as { court: string, time: string } | null,
@@ -184,7 +185,7 @@ export function CourtCalendarView() {
   const suppressPointerDownForTouchRef = useRef(false);
   const handlePointerDragEndRef = useRef<() => void>(() => {});
   const handleEmptySlotClickRef = useRef<
-    (courtName: string, time: string, dragCells?: Set<string>) => void
+    (courtId: string, time: string, dragCells?: Set<string>) => void
   >(() => {});
 
   /** Mobile web: long-press vertical drag (mirrors CourtCalendarGrid). */
@@ -443,7 +444,9 @@ export function CourtCalendarView() {
         setCourtDayOperatingByCourtId({});
       }
 
-      // Transform API bookings to match the format expected by the UI
+      // Transform API bookings to match the format expected by the UI.
+      // Keyed by court ID (not name) — facilities can have same-named courts
+      // of different types (e.g. "Court 3" tennis and "Court 3" pickleball).
       const transformedBookings: any = {};
 
       // Build court lookup maps for parent/child relationships
@@ -459,14 +462,14 @@ export function CourtCalendarView() {
       allFacilityCourts.forEach((c: any) => {
         if (c.parentCourtId) {
           if (!parentToChildren[c.parentCourtId]) parentToChildren[c.parentCourtId] = [];
-          parentToChildren[c.parentCourtId].push(c.name);
+          parentToChildren[c.parentCourtId].push(c.id);
         }
       });
 
       // Helper to add slot entries for a court
-      const addSlotsForCourt = (targetCourtName: string, booking: any, isBlocked: boolean, blockedBy?: string) => {
-        if (!transformedBookings[targetCourtName]) {
-          transformedBookings[targetCourtName] = {};
+      const addSlotsForCourt = (targetCourtId: string, booking: any, isBlocked: boolean, blockedBy?: string) => {
+        if (!transformedBookings[targetCourtId]) {
+          transformedBookings[targetCourtId] = {};
         }
 
         const [startHours, startMinutes] = booking.startTime.split(':').map(Number);
@@ -493,13 +496,13 @@ export function CourtCalendarView() {
           const slotIndex = Math.floor((slotStartTotalMinutes - startTotalMinutes) / 15);
 
           // Don't overwrite real bookings with blocked entries
-          if (transformedBookings[targetCourtName][slotTime]) {
+          if (transformedBookings[targetCourtId][slotTime]) {
             slotStartTotalMinutes += 15;
             continue;
           }
 
           if (isBlocked) {
-            transformedBookings[targetCourtName][slotTime] = {
+            transformedBookings[targetCourtId][slotTime] = {
               player: `Blocked (${blockedBy})`,
               duration: `${booking.durationMinutes}min`,
               type: 'blocked',
@@ -515,7 +518,7 @@ export function CourtCalendarView() {
               booking.notes
                 ? String(booking.notes)
                 : booking.userName || 'Reserved';
-            transformedBookings[targetCourtName][slotTime] = {
+            transformedBookings[targetCourtId][slotTime] = {
               player: activityLabel,
               duration: `${booking.durationMinutes}min`,
               type: 'reservation',
@@ -538,9 +541,9 @@ export function CourtCalendarView() {
       };
 
       // Helper to add blackout slots for a court across a time range
-      const addBlackoutSlots = (courtName: string, startHour: number, startMin: number, endHour: number, endMin: number, title: string) => {
-        if (!transformedBookings[courtName]) {
-          transformedBookings[courtName] = {};
+      const addBlackoutSlots = (courtId: string, startHour: number, startMin: number, endHour: number, endMin: number, title: string) => {
+        if (!transformedBookings[courtId]) {
+          transformedBookings[courtId] = {};
         }
         let h = startHour;
         let m = startMin;
@@ -551,8 +554,8 @@ export function CourtCalendarView() {
           const displayHour = h > 12 ? h - 12 : h === 0 ? 12 : h;
           const slotTime = `${displayHour}:${m.toString().padStart(2, '0')} ${period}`;
 
-          if (!transformedBookings[courtName][slotTime]) {
-            transformedBookings[courtName][slotTime] = {
+          if (!transformedBookings[courtId][slotTime]) {
+            transformedBookings[courtId][slotTime] = {
               player: title || 'Blackout',
               duration: '',
               type: 'blocked',
@@ -588,14 +591,13 @@ export function CourtCalendarView() {
 
         if (b.court_id) {
           // Court-specific blackout
-          const courtName = courtIdToName[b.court_id];
-          if (courtName) {
-            addBlackoutSlots(courtName, startH, startM, endH, endM, label);
+          if (courtIdToName[b.court_id]) {
+            addBlackoutSlots(b.court_id, startH, startM, endH, endM, label);
           }
         } else {
           // Facility-wide blackout — apply to all courts
           allFacilityCourts.forEach((c: any) => {
-            addBlackoutSlots(c.name, startH, startM, endH, endM, label);
+            addBlackoutSlots(c.id, startH, startM, endH, endM, label);
           });
         }
       });
@@ -603,26 +605,24 @@ export function CourtCalendarView() {
       if (response.success && response.data?.bookings) {
         response.data.bookings.forEach((booking: any) => {
           const courtName = booking.courtName;
-          const startTime = formatTimeTo12Hour(booking.startTime);
+          const bookingCourtId = booking.courtId || courtNameToId[courtName];
+          if (!bookingCourtId) return;
 
           // Add real booking slots
-          addSlotsForCourt(courtName, booking, false);
+          addSlotsForCourt(bookingCourtId, booking, false);
 
           // Propagate blocks to related parent/child courts
-          const bookedCourt = allFacilityCourts.find((c: any) => c.name === courtName);
+          const bookedCourt = allFacilityCourts.find((c: any) => c.id === bookingCourtId);
           if (bookedCourt) {
             // If child court is booked, block the parent
-            if (bookedCourt.parentCourtId) {
-              const parentName = courtIdToName[bookedCourt.parentCourtId];
-              if (parentName) {
-                addSlotsForCourt(parentName, booking, true, courtName);
-              }
+            if (bookedCourt.parentCourtId && courtIdToName[bookedCourt.parentCourtId]) {
+              addSlotsForCourt(bookedCourt.parentCourtId, booking, true, courtName);
             }
             // If parent court is booked, block all children
             const children = parentToChildren[bookedCourt.id];
             if (children) {
-              children.forEach((childName: string) => {
-                addSlotsForCourt(childName, booking, true, courtName);
+              children.forEach((childId: string) => {
+                addSlotsForCourt(childId, booking, true, courtName);
               });
             }
           }
@@ -900,14 +900,6 @@ export function CourtCalendarView() {
     };
   }, [authLoading, user?.id, searchParams, fetchBookings]);
 
-  // Helper to convert 24h time to 12h format (e.g., "14:00:00" -> "2:00 PM")
-  const formatTimeTo12Hour = (time24: string): string => {
-    const [hours24, minutes] = time24.split(':').map(Number);
-    const period = hours24 >= 12 ? 'PM' : 'AM';
-    const hours12 = hours24 % 12 || 12;
-    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
-  };
-
   // Hardcoded fallback facilities (for users without memberships)
   const fallbackFacilities = [
     { 
@@ -915,10 +907,10 @@ export function CourtCalendarView() {
       name: 'Sunrise Valley HOA', 
       type: 'HOA Tennis & Pickleball Courts',
       courts: [
-        { name: 'Tennis Court 1', type: 'tennis' },
-        { name: 'Tennis Court 2', type: 'tennis' },
-        { name: 'Pickleball Court 1', type: 'pickleball' },
-        { name: 'Pickleball Court 2', type: 'pickleball' }
+        { id: 'sunrise-valley-tennis-1', name: 'Tennis Court 1', type: 'tennis' },
+        { id: 'sunrise-valley-tennis-2', name: 'Tennis Court 2', type: 'tennis' },
+        { id: 'sunrise-valley-pickleball-1', name: 'Pickleball Court 1', type: 'pickleball' },
+        { id: 'sunrise-valley-pickleball-2', name: 'Pickleball Court 2', type: 'pickleball' }
       ]
     },
     { 
@@ -926,10 +918,10 @@ export function CourtCalendarView() {
       name: 'Downtown Tennis Center', 
       type: 'Tennis Club',
       courts: [
-        { name: 'Court 1', type: 'tennis' },
-        { name: 'Court 2', type: 'tennis' },
-        { name: 'Court 3', type: 'tennis' },
-        { name: 'Court 4', type: 'tennis' }
+        { id: 'downtown-tennis-1', name: 'Court 1', type: 'tennis' },
+        { id: 'downtown-tennis-2', name: 'Court 2', type: 'tennis' },
+        { id: 'downtown-tennis-3', name: 'Court 3', type: 'tennis' },
+        { id: 'downtown-tennis-4', name: 'Court 4', type: 'tennis' }
       ]
     },
     { 
@@ -937,10 +929,10 @@ export function CourtCalendarView() {
       name: 'Riverside Tennis Club', 
       type: 'Premium Tennis Club',
       courts: [
-        { name: 'Center Court', type: 'tennis' },
-        { name: 'Court A', type: 'tennis' },
-        { name: 'Court B', type: 'tennis' },
-        { name: 'Practice Court', type: 'tennis' }
+        { id: 'riverside-center-court', name: 'Center Court', type: 'tennis' },
+        { id: 'riverside-court-a', name: 'Court A', type: 'tennis' },
+        { id: 'riverside-court-b', name: 'Court B', type: 'tennis' },
+        { id: 'riverside-practice-court', name: 'Practice Court', type: 'tennis' }
       ]
     },
     {
@@ -948,12 +940,12 @@ export function CourtCalendarView() {
       name: 'Westside Pickleball Club',
       type: 'Pickleball Club',
       courts: [
-        { name: 'Court 1', type: 'pickleball' },
-        { name: 'Court 2', type: 'pickleball' },
-        { name: 'Court 3', type: 'pickleball' },
-        { name: 'Court 4', type: 'pickleball' },
-        { name: 'Court 5', type: 'pickleball' },
-        { name: 'Court 6', type: 'pickleball' }
+        { id: 'westside-pickleball-1', name: 'Court 1', type: 'pickleball' },
+        { id: 'westside-pickleball-2', name: 'Court 2', type: 'pickleball' },
+        { id: 'westside-pickleball-3', name: 'Court 3', type: 'pickleball' },
+        { id: 'westside-pickleball-4', name: 'Court 4', type: 'pickleball' },
+        { id: 'westside-pickleball-5', name: 'Court 5', type: 'pickleball' },
+        { id: 'westside-pickleball-6', name: 'Court 6', type: 'pickleball' }
       ]
     },
     {
@@ -961,12 +953,12 @@ export function CourtCalendarView() {
       name: 'Eastgate Sports Complex',
       type: 'Multi-Sport Complex',
       courts: [
-        { name: 'Tennis Court A', type: 'tennis' },
-        { name: 'Tennis Court B', type: 'tennis' },
-        { name: 'Pickleball Court 1', type: 'pickleball' },
-        { name: 'Pickleball Court 2', type: 'pickleball' },
-        { name: 'Pickleball Court 3', type: 'pickleball' },
-        { name: 'Pickleball Court 4', type: 'pickleball' }
+        { id: 'eastgate-tennis-a', name: 'Tennis Court A', type: 'tennis' },
+        { id: 'eastgate-tennis-b', name: 'Tennis Court B', type: 'tennis' },
+        { id: 'eastgate-pickleball-1', name: 'Pickleball Court 1', type: 'pickleball' },
+        { id: 'eastgate-pickleball-2', name: 'Pickleball Court 2', type: 'pickleball' },
+        { id: 'eastgate-pickleball-3', name: 'Pickleball Court 3', type: 'pickleball' },
+        { id: 'eastgate-pickleball-4', name: 'Pickleball Court 4', type: 'pickleball' }
       ]
     }
   ];
@@ -1252,14 +1244,14 @@ export function CourtCalendarView() {
   const bookingOverlays = useMemo(() => {
     const overlays: Array<{
       courtIndex: number;
-      courtName: string;
+      courtId: string;
       startSlotIndex: number;
       slotCount: number;
       booking: any;
     }> = [];
 
     courts.forEach((court, courtIndex) => {
-      const courtBookings = bookings[court.name];
+      const courtBookings = bookings[court.id];
       if (!courtBookings) return;
 
       Object.entries(courtBookings).forEach(([time, booking]: [string, any]) => {
@@ -1279,7 +1271,7 @@ export function CourtCalendarView() {
           if (!Number.isFinite(slotCount) || slotCount <= 0) return;
           overlays.push({
             courtIndex,
-            courtName: court.name,
+            courtId: court.id,
             startSlotIndex: startIdx,
             slotCount,
             booking,
@@ -1331,8 +1323,8 @@ export function CourtCalendarView() {
     </Popover>
   );
 
-  const handleBookingClick = (court: string, time: string) => {
-    const booking = bookings[court as keyof typeof bookings]?.[time];
+  const handleBookingClick = (courtId: string, time: string) => {
+    const booking = bookings[courtId as keyof typeof bookings]?.[time];
     if (booking?.type === 'reservation' && booking.fullDetails) {
       const details = booking.fullDetails;
       if (isBulletinActivityBooking(details) && details.bulletinPostId) {
@@ -1349,16 +1341,15 @@ export function CourtCalendarView() {
     }
   };
 
-  const handleEmptySlotClick = (courtName: string, time: string, dragCells?: Set<string>) => {
+  const handleEmptySlotClick = (courtId: string, time: string, dragCells?: Set<string>) => {
     if (strikeLockout?.isLockedOut) {
       toast.error('Your account is locked due to strikes. You cannot book courts until the lockout ends.');
       return;
     }
 
-    // Find the court object to get its ID
-    const courtObj = courts.find(c => c.name === courtName);
+    const courtObj = courts.find(c => c.id === courtId);
     if (!courtObj) {
-      console.error('Court not found:', courtName);
+      console.error('Court not found:', courtId);
       return;
     }
     if (courtObj.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) {
@@ -1378,9 +1369,8 @@ export function CourtCalendarView() {
     // If we have selected cells from dragging, open booking wizard with them
     if (dragCells && dragCells.size > 0) {
       const hasOutside = Array.from(dragCells).some((cellId) => {
-        const [cName, tSlot] = cellId.split('|');
-        const co = courts.find((c) => c.name === cName);
-        return !!(co?.id && isCourtSlotOutsideOperatingHours(co.id, tSlot));
+        const [cId, tSlot] = cellId.split('|');
+        return !!(cId && isCourtSlotOutsideOperatingHours(cId, tSlot));
       });
       if (hasOutside) {
         toast.info("That selection includes times outside that court's operating hours.");
@@ -1388,18 +1378,18 @@ export function CourtCalendarView() {
       }
 
       const selectedSlots = Array.from(dragCells).map(cellId => {
-        const [court, timeSlot] = cellId.split('|');
-        const slotCourtObj = courts.find(c => c.name === court);
+        const [slotCourtId, timeSlot] = cellId.split('|');
+        const slotCourtObj = courts.find(c => c.id === slotCourtId);
         return {
-          court,
-          courtId: slotCourtObj?.id || '',
+          court: slotCourtObj?.name || '',
+          courtId: slotCourtId,
           time: timeSlot
         };
       });
 
       setBookingWizard({
         isOpen: true,
-        court: courtName,
+        court: courtObj.name,
         courtId: courtObj.id,
         time: time,
         date: dateStr,
@@ -1411,7 +1401,7 @@ export function CourtCalendarView() {
       // Single slot booking
       setBookingWizard({
         isOpen: true,
-        court: courtName,
+        court: courtObj.name,
         courtId: courtObj.id,
         time,
         date: dateStr,
@@ -1425,13 +1415,13 @@ export function CourtCalendarView() {
 
   // Drag handlers — pointer events + window pointermove so touch drags across cells
   // (touch never receives mouseenter while moving; elementFromPoint fixes that).
-  const extendDragSelection = useCallback((courtName: string, time: string) => {
+  const extendDragSelection = useCallback((courtId: string, time: string) => {
     setDragState(prev => {
       const base = prev.isDragging && prev.startCell ? prev : dragStateRef.current;
       if (!base.isDragging || !base.startCell) return prev;
 
-      const startCourtIndex = courts.findIndex(c => c.name === base.startCell!.court);
-      const currentCourtIndex = courts.findIndex(c => c.name === courtName);
+      const startCourtIndex = courts.findIndex(c => c.id === base.startCell!.court);
+      const currentCourtIndex = courts.findIndex(c => c.id === courtId);
       const startTimeIndex = timeSlots.indexOf(base.startCell!.time);
       const currentTimeIndex = timeSlots.indexOf(time);
 
@@ -1449,17 +1439,17 @@ export function CourtCalendarView() {
         const c = courts[ci];
         for (let ti = beginTimeIdx; ti <= endTimeIdx; ti++) {
           const slot = timeSlots[ti];
-          const slotBooking = bookings[c.name as keyof typeof bookings]?.[slot];
+          const slotBooking = bookings[c.id as keyof typeof bookings]?.[slot];
           const outside = c.id ? isCourtSlotOutsideOperatingHours(c.id, slot) : false;
           if (!slotBooking && !outside) {
-            newSelectedCells.add(`${c.name}|${slot}`);
+            newSelectedCells.add(`${c.id}|${slot}`);
           }
         }
       }
 
       const next = {
         ...base,
-        endCell: { court: courtName, time },
+        endCell: { court: courtId, time },
         selectedCells: newSelectedCells
       };
       dragStateRef.current = next;
@@ -1468,7 +1458,7 @@ export function CourtCalendarView() {
   }, [courts, timeSlots, bookings, isCourtSlotOutsideOperatingHours]);
 
   const setMobileVerticalSelection = useCallback(
-    (courtName: string, startIndex: number, endIndex: number) => {
+    (courtId: string, startIndex: number, endIndex: number) => {
       const beginIdx = Math.min(startIndex, endIndex);
       const endIdx = Math.max(startIndex, endIndex);
       const startTime = allTimeSlots[beginIdx];
@@ -1479,24 +1469,23 @@ export function CourtCalendarView() {
       for (let ti = beginIdx; ti <= endIdx; ti++) {
         const slot = allTimeSlots[ti];
         if (!slot) continue;
-        const slotBooking = bookings[courtName as keyof typeof bookings]?.[slot];
-        const courtObj = courts.find((c) => c.name === courtName);
-        const outside = courtObj?.id ? isCourtSlotOutsideOperatingHours(courtObj.id, slot) : false;
+        const slotBooking = bookings[courtId as keyof typeof bookings]?.[slot];
+        const outside = isCourtSlotOutsideOperatingHours(courtId, slot);
         if (!slotBooking && !outside) {
-          newSelectedCells.add(`${courtName}|${slot}`);
+          newSelectedCells.add(`${courtId}|${slot}`);
         }
       }
 
       const next = {
         isDragging: true,
-        startCell: { court: courtName, time: startTime },
-        endCell: { court: courtName, time: endTime },
+        startCell: { court: courtId, time: startTime },
+        endCell: { court: courtId, time: endTime },
         selectedCells: newSelectedCells,
       };
       dragStateRef.current = next;
       setDragState(next);
     },
-    [allTimeSlots, bookings, courts, isCourtSlotOutsideOperatingHours]
+    [allTimeSlots, bookings, isCourtSlotOutsideOperatingHours]
   );
 
   const clearMobileDragArmTimer = useCallback(() => {
@@ -1608,7 +1597,7 @@ export function CourtCalendarView() {
       const slotIndex = Math.floor((y - headerH) / effectiveSubSlotHeight);
       if (slotIndex < 0 || slotIndex >= allTimeSlots.length) return null;
 
-      return { court: courts[courtIndex].name, time: allTimeSlots[slotIndex] };
+      return { court: courts[courtIndex].id, time: allTimeSlots[slotIndex] };
     },
     [
       allTimeSlots,
@@ -1625,7 +1614,7 @@ export function CourtCalendarView() {
 
   const startSlotDragTracking = useCallback(
     (
-      courtName: string,
+      courtId: string,
       time: string,
       startClientX: number,
       startClientY: number,
@@ -1653,7 +1642,7 @@ export function CourtCalendarView() {
       };
 
       const resolvedStart = resolveSlotFromPoint(startClientX, startClientY);
-      armDrag(resolvedStart?.court ?? courtName, resolvedStart?.time ?? time);
+      armDrag(resolvedStart?.court ?? courtId, resolvedStart?.time ?? time);
 
       if (pointerType === 'mouse' && captureTarget?.setPointerCapture) {
         try {
@@ -1739,7 +1728,7 @@ export function CourtCalendarView() {
     [extendDragSelection, resolveSlotFromPoint]
   );
 
-  const handlePointerDown = (courtName: string, time: string, event: React.PointerEvent) => {
+  const handlePointerDown = (courtId: string, time: string, event: React.PointerEvent) => {
     if (strikeLockout?.isLockedOut) {
       return;
     }
@@ -1753,18 +1742,17 @@ export function CourtCalendarView() {
       return;
     }
 
-    const booking = bookings[courtName as keyof typeof bookings]?.[time];
+    const booking = bookings[courtId as keyof typeof bookings]?.[time];
     if (booking) return;
 
-    const courtObj = courts.find((c) => c.name === courtName);
-    if (courtObj?.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) return;
+    if (isCourtSlotOutsideOperatingHours(courtId, time)) return;
 
     if (event.pointerType === 'mouse' || event.pointerType === 'touch') {
       event.preventDefault();
     }
 
     const captureTarget = event.currentTarget as HTMLElement | null;
-    startSlotDragTracking(courtName, time, event.clientX, event.clientY, 'pointer', {
+    startSlotDragTracking(courtId, time, event.clientX, event.clientY, 'pointer', {
       pointerId: event.pointerId,
       pointerType: event.pointerType,
       captureTarget,
@@ -1780,18 +1768,18 @@ export function CourtCalendarView() {
       const slot = (e.target as HTMLElement | null)?.closest?.('[data-slot-court][data-slot-time]');
       if (!slot || !root.contains(slot)) return;
 
-      const courtName = slot.getAttribute('data-slot-court');
+      const courtId = slot.getAttribute('data-slot-court');
       const time = slot.getAttribute('data-slot-time');
-      if (!courtName || !time) return;
+      if (!courtId || !time) return;
 
-      const booking = bookings[courtName as keyof typeof bookings]?.[time];
+      const booking = bookings[courtId as keyof typeof bookings]?.[time];
       if (booking) return;
 
-      const courtObj = courts.find((c) => c.name === courtName);
+      const courtObj = courts.find((c) => c.id === courtId);
       if (courtObj?.isWalkUp) return;
-      if (courtObj?.id && isCourtSlotOutsideOperatingHours(courtObj.id, time)) return;
+      if (isCourtSlotOutsideOperatingHours(courtId, time)) return;
       if (isPastTime(time)) return;
-      const slotBooking = bookings[courtName as keyof typeof bookings]?.[time];
+      const slotBooking = bookings[courtId as keyof typeof bookings]?.[time];
       const blocked = slotBooking?.type === 'blocked';
       if (blocked) return;
 
@@ -1802,7 +1790,7 @@ export function CourtCalendarView() {
 
       if (!isMobile) {
         e.preventDefault();
-        startSlotDragTracking(courtName, time, touch.clientX, touch.clientY, 'touch-native', {
+        startSlotDragTracking(courtId, time, touch.clientX, touch.clientY, 'touch-native', {
           captureTarget: slot as HTMLElement,
           activeTouchId: touch.identifier,
         });
@@ -1821,7 +1809,7 @@ export function CourtCalendarView() {
       mobileTouchGestureRef.current = {
         startClientX: touch.clientX,
         startClientY: touch.clientY,
-        court: courtName,
+        court: courtId,
         startTime: time,
         startSlotIndex,
         armed: false,
@@ -1831,9 +1819,9 @@ export function CourtCalendarView() {
 
       mobileDragArmTimerRef.current = setTimeout(() => {
         const gesture = mobileTouchGestureRef.current;
-        if (!gesture || gesture.court !== courtName) return;
+        if (!gesture || gesture.court !== courtId) return;
         gesture.armed = true;
-        setMobileVerticalSelection(courtName, gesture.startSlotIndex, gesture.startSlotIndex);
+        setMobileVerticalSelection(courtId, gesture.startSlotIndex, gesture.startSlotIndex);
         attachDragTouchMove();
       }, MOBILE_DRAG_ARM_DELAY_MS);
 
@@ -2179,10 +2167,10 @@ export function CourtCalendarView() {
     const topTime = allTimeSlots[visibleIdx];
 
     return courts.map((court, courtIndex) => {
-      const topBooking = bookings[court.name as keyof typeof bookings]?.[topTime];
+      const topBooking = bookings[court.id as keyof typeof bookings]?.[topTime];
       const topBlocked = topBooking?.type === 'blocked';
       const topPast = isPastTime(topTime);
-      const topSelected = dragState.selectedCells.has(`${court.name}|${topTime}`);
+      const topSelected = dragState.selectedCells.has(`${court.id}|${topTime}`);
       const topPrime = isPrimeTimeSlot(court.id, topTime);
       const isWalkUpCourt = court.isWalkUp === true;
       const topOutsideCourt =
@@ -2203,7 +2191,7 @@ export function CourtCalendarView() {
           }}
         >
           <div
-            data-slot-court={court.name}
+            data-slot-court={court.id}
             data-slot-time={topTime}
             className={`absolute top-0 left-0 right-0 bottom-0 select-none ${calendarTouchLocked || !isMobile ? 'touch-none' : 'calendar-slot-pan-x'}
               ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
@@ -2219,8 +2207,8 @@ export function CourtCalendarView() {
               if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
               if (court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) return;
               if (topBlocked || (topPast && !topBooking)) return;
-              if (topBooking) handleBookingClick(court.name, topTime);
-              else handleEmptySlotClick(court.name, topTime);
+              if (topBooking) handleBookingClick(court.id, topTime);
+              else handleEmptySlotClick(court.id, topTime);
             }}
             onPointerDown={(e) =>
               !isWalkUpCourt &&
@@ -2228,14 +2216,14 @@ export function CourtCalendarView() {
               !topPast &&
               !topBlocked &&
               !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
-              handlePointerDown(court.name, topTime, e)
+              handlePointerDown(court.id, topTime, e)
             }
             onPointerEnter={() =>
               !isWalkUpCourt &&
               !topPast &&
               !topBlocked &&
               !(court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) &&
-              extendDragSelection(court.name, topTime)
+              extendDragSelection(court.id, topTime)
             }
           />
         </td>
@@ -2345,7 +2333,7 @@ export function CourtCalendarView() {
                 ? 'none'
                 : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
             }}
-            onClick={() => !isBlocked && handleBookingClick(overlay.courtName, allTimeSlots[overlay.startSlotIndex])}
+            onClick={() => !isBlocked && handleBookingClick(overlay.courtId, allTimeSlots[overlay.startSlotIndex])}
           >
             <div className={`${isBlocked ? 'px-1.5 py-1' : 'px-2 py-1'} h-full flex flex-col overflow-hidden`}>
               <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>

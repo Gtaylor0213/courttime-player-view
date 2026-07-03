@@ -238,7 +238,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
   const buildPath = path.join(__dirname, '../build');
-  app.use(express.static(buildPath));
+  // Hashed bundles are immutable; index.html must always revalidate so
+  // browsers pick up new deploys instead of running a stale bundle.
+  app.use('/assets', express.static(path.join(buildPath, 'assets'), { maxAge: '1y', immutable: true }));
+  app.use(express.static(buildPath, {
+    index: false,
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+  }));
 
   // Handle React routing - return index.html for unknown routes (not static assets)
   // Express 5 requires {*path} syntax instead of *
@@ -247,6 +253,7 @@ if (process.env.NODE_ENV === 'production') {
       res.status(404).end();
       return;
     }
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(buildPath, 'index.html'));
   });
 } else {

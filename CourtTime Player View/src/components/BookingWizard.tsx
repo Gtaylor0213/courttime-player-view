@@ -53,6 +53,10 @@ interface BookingWizardProps {
   onBookingCreated?: () => void;
 }
 
+// Calendar grid cells are 30-minute slots; a drag selection's end time is the
+// last selected cell's start plus this interval.
+const CALENDAR_SLOT_MINUTES = 30;
+
 // Generate all 15-min time slots from 6 AM to 9 PM in 12h format
 const ALL_TIME_SLOTS: string[] = [];
 for (let hour = 6; hour <= 21; hour++) {
@@ -106,7 +110,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [endTime, setEndTime] = useState(() => {
     if (selectedSlots && selectedSlots.length > 1) {
       const sorted = sortSlotsByTime(selectedSlots);
-      return addMinutesTo12h(sorted[sorted.length - 1].time, 15);
+      return addMinutesTo12h(sorted[sorted.length - 1].time, CALENDAR_SLOT_MINUTES);
     }
     return addMinutesTo12h(time, 60);
   });
@@ -234,7 +238,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       if (selectedSlots && selectedSlots.length > 1) {
         const sorted = sortSlotsByTime(selectedSlots);
         setStartTime(sorted[0].time);
-        setEndTime(addMinutesTo12h(sorted[sorted.length - 1].time, 15));
+        setEndTime(addMinutesTo12h(sorted[sorted.length - 1].time, CALENDAR_SLOT_MINUTES));
       } else {
         setStartTime(time);
         setEndTime(addMinutesTo12h(time, 60));

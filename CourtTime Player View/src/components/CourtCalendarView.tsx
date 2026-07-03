@@ -1594,7 +1594,8 @@ export function CourtCalendarView() {
       const rect = grid.getBoundingClientRect();
       const x = clientX - rect.left;
       const y = clientY - rect.top;
-      const headerH = headerRowRef.current?.offsetHeight ?? measuredHeaderHeight;
+      // On mobile the header row lives outside the grid table, so rows start at y=0.
+      const headerH = isMobile ? 0 : headerRowRef.current?.offsetHeight ?? measuredHeaderHeight;
 
       if (y < headerH) return null;
 

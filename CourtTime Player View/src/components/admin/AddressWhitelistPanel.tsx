@@ -180,7 +180,7 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
           Add New Member
         </CardTitle>
         <CardDescription>
-          Approved addresses and last names auto-approve new members. Optional email sends a setup invite link.
+          Approved addresses and last names auto-approve new members. Adding an email sends a setup invite link.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -213,7 +213,7 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
             />
             <Input
               type="email"
-              placeholder="Email (optional)"
+              placeholder="Email"
               value={newWhitelistEmail}
               onChange={(e) => setNewWhitelistEmail(e.target.value)}
               onKeyDown={(e) => {

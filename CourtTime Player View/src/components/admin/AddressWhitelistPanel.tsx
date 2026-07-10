@@ -251,7 +251,7 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
               {whitelistUploading ? 'Importing...' : 'Import from Excel/CSV'}
             </Button>
             <span className="text-xs text-gray-500">
-              File should have &quot;Address&quot; and &quot;Last Name&quot; columns. Optional &quot;Email&quot; sends a setup invite.
+              File should have &quot;Address&quot; and &quot;Last Name&quot; columns. An &quot;Email&quot; column sends a setup invite.
             </span>
           </div>
         </div>

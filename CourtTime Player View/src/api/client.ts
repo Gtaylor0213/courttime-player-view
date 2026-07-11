@@ -781,6 +781,20 @@ export const bookingApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // Court waivers (per-court booking waivers the user must accept)
+  getPendingCourtWaivers: async (courtIds: string[]) => {
+    return apiRequest(
+      `/api/bookings/court-waivers/pending?courtIds=${encodeURIComponent(courtIds.join(','))}`
+    );
+  },
+
+  acceptCourtWaiver: async (courtId: string) => {
+    return apiRequest('/api/bookings/court-waivers/accept', {
+      method: 'POST',
+      body: JSON.stringify({ courtId }),
+    });
+  },
 };
 
 // Admin API
@@ -1053,6 +1067,28 @@ export const adminApi = {
 
   getTermsAcceptanceSummary: async (facilityId: string) => {
     return apiRequest(`/api/admin/terms/${facilityId}/acceptance`);
+  },
+
+  // Court Waivers
+  getCourtWaiver: async (courtId: string) => {
+    return apiRequest(`/api/admin/courts/${courtId}/waiver`);
+  },
+
+  publishCourtWaiver: async (courtId: string, contentHtml: string) => {
+    return apiRequest(`/api/admin/courts/${courtId}/waiver`, {
+      method: 'PUT',
+      body: JSON.stringify({ contentHtml }),
+    });
+  },
+
+  removeCourtWaiver: async (courtId: string) => {
+    return apiRequest(`/api/admin/courts/${courtId}/waiver`, {
+      method: 'DELETE',
+    });
+  },
+
+  getCourtWaiverAcceptanceSummary: async (courtId: string) => {
+    return apiRequest(`/api/admin/courts/${courtId}/waiver/acceptance`);
   },
 };
 

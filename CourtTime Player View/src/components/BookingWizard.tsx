@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Checkbox } from './ui/checkbox';
 import { Calendar, Clock, MapPin, AlertCircle, Info, Repeat } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
+import { CourtWaiverAcceptanceDialog, useCourtWaiverGate } from './CourtWaiverAcceptanceDialog';
 import { useNotifications } from '../contexts/NotificationContext';
 import {
   bookingWithDetailsToCalendarDetails,
@@ -117,6 +118,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [bookingType, setBookingType] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const courtWaiverGate = useCourtWaiverGate();
   const [ruleViolations, setRuleViolations] = useState<RuleViolation[]>([]);
   const [ruleWarnings, setRuleWarnings] = useState<RuleWarning[]>([]);
   const [isPrimeTime, setIsPrimeTime] = useState(false);
@@ -434,6 +436,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       }
     }
 
+    // Court-specific waivers must be accepted before booking
+    const waiversAccepted = await courtWaiverGate.ensureAccepted(
+      selectedCourts.map((c) => c.courtId)
+    );
+    if (!waiversAccepted) return;
+
     setIsSubmitting(true);
 
     try {
@@ -644,6 +652,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   };
 
   return (
+    <>
+    <CourtWaiverAcceptanceDialog {...courtWaiverGate.dialogProps} />
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90dvh] sm:max-h-[calc(100dvh-5rem)] overflow-y-auto sm:top-4 sm:translate-y-0">
         <DialogHeader>
@@ -981,5 +991,6 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

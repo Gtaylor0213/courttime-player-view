@@ -8,6 +8,7 @@ import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Calendar, Clock, MapPin, User, Zap, AlertCircle, Info } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
+import { CourtWaiverAcceptanceDialog, useCourtWaiverGate } from './CourtWaiverAcceptanceDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, courtConfigApi } from '../api/client';
 import {
@@ -211,6 +212,7 @@ export function QuickReservePopup({
   const [duration, setDuration] = useState('1');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const courtWaiverGate = useCourtWaiverGate();
   const [existingBookings, setExistingBookings] = useState<any>({});
   const [availabilityByCourtId, setAvailabilityByCourtId] = useState<Record<string, CourtAvailabilityData>>({});
   const [bookingErrors, setBookingErrors] = useState<Array<{ ruleCode: string; ruleName: string; message: string; severity: string }>>([]);
@@ -584,6 +586,12 @@ export function QuickReservePopup({
       }
     }
 
+    // Court-specific waivers must be accepted before booking
+    const waiversAccepted = await courtWaiverGate.ensureAccepted(
+      allSelectedCourts.map((c) => c.id)
+    );
+    if (!waiversAccepted) return;
+
     setIsSubmitting(true);
 
     try {
@@ -865,6 +873,8 @@ export function QuickReservePopup({
   }, [duration]);
 
   return (
+    <>
+    <CourtWaiverAcceptanceDialog {...courtWaiverGate.dialogProps} />
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
         <DialogHeader className="flex-shrink-0">
@@ -1199,5 +1209,6 @@ export function QuickReservePopup({
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

@@ -46,12 +46,16 @@ import { CourtTypeField } from './CourtTypeField';
 import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
 import { MAX_COURTS_AT_LIST_PRICE } from '../../services/subscriptionPricing';
 import {
+  clearCourtAddWaiverDraft,
   confirmCourtAddPaymentFromUrl,
   getCourtAddReturnUrl,
   handleCourtAddPaymentResponse,
+  publishStashedCourtAddWaiver,
+  stashCourtAddWaiverDraft,
 } from '../../utils/courtAddPayment';
 import { useCourtAddPromo } from './useCourtAddPromo';
 import { CourtAddPromoSection } from './CourtAddPromoSection';
+import { CourtWaiverSection } from './CourtWaiverSection';
 
 interface Court extends PaidCourtFormFields {
   id: string;
@@ -66,6 +70,8 @@ interface Court extends PaidCourtFormFields {
   enableGuestFee?: boolean;
   guestFeeCents?: number | null;
   guestFeeDollars?: string;
+  /** Waiver draft for a court being added; published after the court is created. */
+  waiverContent?: string;
 }
 
 
@@ -431,6 +437,10 @@ export function CourtManagement() {
 
       if (response.success) {
         if (isAddingNew || !editingCourt.id) {
+          // Stash the waiver draft in case checkout redirects away; the payment
+          // return handler publishes it against the created court.
+          stashCourtAddWaiverDraft(editingCourt.waiverContent || '');
+          let createdCourtId = (response as any)?.court?.id as string | undefined;
           const paymentResult = await handleCourtAddPaymentResponse(response, {
             onDevConfirm: async (sessionId) => {
               const confirmRes = await adminApi.createCourt(currentFacilityId, {
@@ -447,10 +457,16 @@ export function CourtManagement() {
               if (!confirmRes.success) {
                 throw new Error(confirmRes.error || 'Failed to confirm court payment');
               }
+              createdCourtId = (confirmRes as any)?.court?.id ?? createdCourtId;
             },
           });
           if (paymentResult === 'redirected') return;
           if (paymentResult === 'failed') return;
+          if (createdCourtId) {
+            await publishStashedCourtAddWaiver([createdCourtId]);
+          } else {
+            clearCourtAddWaiverDraft();
+          }
         }
         toast.success(isAddingNew ? 'Court created successfully' : 'Court updated successfully');
         setEditingCourt(null);
@@ -876,6 +892,16 @@ export function CourtManagement() {
                     stripeStatusLoading={stripeStatusLoading}
                   />
                 )}
+                {editingCourt && (
+                  <CourtWaiverSection
+                    courtId={null}
+                    idPrefix="new-court"
+                    draftContent={editingCourt.waiverContent || ''}
+                    onDraftChange={(waiverContent) =>
+                      setEditingCourt((prev) => (prev ? { ...prev, waiverContent } : prev))
+                    }
+                  />
+                )}
                 <CourtAddPromoSection
                   courtsToAdd={1}
                   baseAmountCents={courtAddPromo.baseAmountCents}
@@ -1218,6 +1244,9 @@ export function CourtManagement() {
                           stripeOnboarded={stripeOnboarded}
                           stripeStatusLoading={stripeStatusLoading}
                         />
+                      )}
+                      {editingCourt && (
+                        <CourtWaiverSection courtId={court.id} idPrefix={court.id} />
                       )}
                       <div className="flex gap-2 mt-6">
                         <Button onClick={handleSave} disabled={saving}>

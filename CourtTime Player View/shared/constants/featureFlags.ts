@@ -6,6 +6,7 @@ export const FEATURE_FLAGS = {
   PICKLEBALL: 'pickleball',
   WEEK_MONTH_VIEW: 'week_month_view',
   PLAYER_RECURRING_BOOKINGS: 'player_recurring_bookings',
+  COURT_WAIVERS: 'court_waivers',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -16,4 +17,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   pickleball: 'Pickleball (CourtTime-Pickle)',
   week_month_view: 'Week/Month Calendar Overview',
   player_recurring_bookings: 'Player Recurring Bookings',
+  court_waivers: 'Court Waivers (per-court booking waivers)',
 };

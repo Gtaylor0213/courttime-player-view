@@ -17,6 +17,7 @@ import type { FacilityRuleConfig } from './rulesEngine/types';
 import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
 import { buildTermsAcceptanceBookingBlocker } from './termsService';
+import { buildCourtWaiverBookingBlocker } from './courtWaiverService';
 import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
 
 /**
@@ -664,6 +665,20 @@ export async function validateBooking(bookingData: {
     };
   }
 
+  const waiverBlocker = await buildCourtWaiverBookingBlocker(
+    bookingData.userId,
+    bookingData.courtId
+  );
+  if (waiverBlocker) {
+    return {
+      allowed: false,
+      results: [waiverBlocker],
+      blockers: [waiverBlocker],
+      warnings: [],
+      isPrimeTime: false,
+    };
+  }
+
   const walkUpCourt = await query(
     `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
     [bookingData.courtId]
@@ -778,6 +793,18 @@ async function createBookingCore(bookingData: {
         success: false,
         error: termsBlocker.message,
         ruleViolations: [termsBlocker],
+      };
+    }
+
+    const waiverBlocker = await buildCourtWaiverBookingBlocker(
+      bookingData.userId,
+      bookingData.courtId
+    );
+    if (waiverBlocker) {
+      return {
+        success: false,
+        error: waiverBlocker.message,
+        ruleViolations: [waiverBlocker],
       };
     }
 
@@ -1296,6 +1323,18 @@ export async function createBookingWithOverride(
         success: false,
         error: termsBlocker.message,
         ruleViolations: [termsBlocker],
+      };
+    }
+
+    const waiverBlocker = await buildCourtWaiverBookingBlocker(
+      bookingData.userId,
+      bookingData.courtId
+    );
+    if (waiverBlocker) {
+      return {
+        success: false,
+        error: waiverBlocker.message,
+        ruleViolations: [waiverBlocker],
       };
     }
 

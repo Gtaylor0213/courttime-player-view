@@ -27,6 +27,14 @@ import {
   getTermsVersionHistory,
   publishTermsVersion
 } from '../../src/services/termsService';
+import {
+  getCurrentCourtWaiver,
+  getCourtWaiverAcceptanceSummary,
+  publishCourtWaiver,
+  removeCourtWaiver,
+} from '../../src/services/courtWaiverService';
+import { isFeatureEnabled } from '../../src/services/featureFlagService';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { replaceAllCourtOperatingConfigsForFacility } from '../../src/services/courtOperatingConfigSync';
 import {
   getFacilityRevenueReport,
@@ -2360,6 +2368,84 @@ router.get('/terms/:facilityId/acceptance', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error fetching Terms acceptance summary:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/courts/:courtId/waiver
+ * Current waiver for a court (null when the court has no waiver)
+ */
+router.get('/courts/:courtId/waiver', async (req, res) => {
+  try {
+    const { courtId } = req.params;
+    const currentVersion = await getCurrentCourtWaiver(courtId);
+    res.json({ success: true, data: { currentVersion } });
+  } catch (error: any) {
+    console.error('Error fetching court waiver:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/courts/:courtId/waiver
+ * Publish a new waiver version for a court; all members must re-accept
+ */
+router.put('/courts/:courtId/waiver', async (req, res) => {
+  try {
+    const { courtId } = req.params;
+    const { contentHtml } = req.body;
+
+    if (!contentHtml || typeof contentHtml !== 'string' || !contentHtml.trim()) {
+      return res.status(400).json({ success: false, error: 'contentHtml is required' });
+    }
+
+    const facilityId = await facilityIdForCourt(courtId);
+    if (!facilityId || !(await isFeatureEnabled(facilityId, FEATURE_FLAGS.COURT_WAIVERS))) {
+      return res.status(403).json({
+        success: false,
+        error: 'The Court Waivers feature is not enabled for this facility',
+      });
+    }
+
+    const version = await publishCourtWaiver(courtId, contentHtml, req.user?.userId);
+    res.json({
+      success: true,
+      data: { version },
+      message: 'Court waiver published successfully'
+    });
+  } catch (error: any) {
+    console.error('Error publishing court waiver:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/courts/:courtId/waiver
+ * Remove the court's waiver (bookings no longer require acceptance)
+ */
+router.delete('/courts/:courtId/waiver', async (req, res) => {
+  try {
+    const { courtId } = req.params;
+    await removeCourtWaiver(courtId);
+    res.json({ success: true, message: 'Court waiver removed' });
+  } catch (error: any) {
+    console.error('Error removing court waiver:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/courts/:courtId/waiver/acceptance
+ * Acceptance summary for the court's current waiver
+ */
+router.get('/courts/:courtId/waiver/acceptance', async (req, res) => {
+  try {
+    const { courtId } = req.params;
+    const summary = await getCourtWaiverAcceptanceSummary(courtId);
+    res.json({ success: true, data: summary });
+  } catch (error: any) {
+    console.error('Error fetching court waiver acceptance summary:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

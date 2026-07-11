@@ -13,6 +13,10 @@ import {
   checkInBooking,
   createRecurringBookingSeries
 } from '../../src/services/bookingService';
+import {
+  acceptCourtWaiverForUser,
+  getPendingCourtWaiversForUser,
+} from '../../src/services/courtWaiverService';
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
 import { isFeatureEnabled } from '../../src/services/featureFlagService';
@@ -78,6 +82,58 @@ router.get('/facility/:facilityId', async (req, res, next) => {
       bookings
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/bookings/court-waivers/pending?courtIds=a,b,c
+ * Court waivers the authenticated user must accept before booking these courts
+ */
+router.get('/court-waivers/pending', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const courtIds = String(req.query.courtIds || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (courtIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'courtIds parameter is required' });
+    }
+
+    const pending = await getPendingCourtWaiversForUser(userId, courtIds);
+    res.json({ success: true, data: { pending } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/court-waivers/accept
+ * Record the authenticated user's acceptance of a court's current waiver
+ */
+router.post('/court-waivers/accept', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const { courtId } = req.body;
+    if (!courtId || typeof courtId !== 'string') {
+      return res.status(400).json({ success: false, error: 'courtId is required' });
+    }
+
+    const accepted = await acceptCourtWaiverForUser(userId, courtId, req.ip || null);
+    res.json({ success: true, data: accepted });
+  } catch (error: any) {
+    if (error?.message === 'This court has no waiver to accept') {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     next(error);
   }
 });

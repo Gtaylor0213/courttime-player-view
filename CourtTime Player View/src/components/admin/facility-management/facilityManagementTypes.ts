@@ -156,6 +156,8 @@ export interface Court extends PaidCourtFormFields {
     splitNames: string[];
     splitType: 'Tennis' | 'Pickleball';
   };
+  /** Waiver draft for a court being added; published after the court is created. */
+  waiverContent?: string;
 }
 
 export const defaultOperatingHours = {

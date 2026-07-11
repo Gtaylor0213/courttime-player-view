@@ -14,6 +14,7 @@ import {
 } from '../../../../shared/utils/courtNaming';
 import type { Court } from './facilityManagementTypes';
 import { CourtAddPromoSection } from '../CourtAddPromoSection';
+import { CourtWaiverSection } from '../CourtWaiverSection';
 import type { useCourtAddPromo } from '../useCourtAddPromo';
 
 export function FacilityCourtFormBody({
@@ -246,6 +247,15 @@ export function FacilityCourtFormBody({
         stripeOnboarded={stripeOnboarded}
         stripeStatusLoading={stripeStatusLoading}
         paymentsTabHint="Member Payments in the sidebar"
+      />
+
+      <CourtWaiverSection
+        courtId={isAddingNew ? null : editingCourt.id || null}
+        idPrefix={idPrefix}
+        draftContent={editingCourt.waiverContent || ''}
+        onDraftChange={(waiverContent) =>
+          setEditingCourt((prev) => (prev ? { ...prev, waiverContent } : prev))
+        }
       />
 
       {isAddingNew && courtAddPromo && (

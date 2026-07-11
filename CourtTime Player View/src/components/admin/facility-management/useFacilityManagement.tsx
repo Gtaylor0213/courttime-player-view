@@ -39,9 +39,12 @@ import {
 } from '../../../../shared/utils/courtNaming';
 import { normalizeFacilityType } from '../../../../shared/constants/facilityTypes';
 import {
+  clearCourtAddWaiverDraft,
   confirmCourtAddPaymentFromUrl,
   getCourtAddReturnUrl,
   handleCourtAddPaymentResponse,
+  publishStashedCourtAddWaiver,
+  stashCourtAddWaiverDraft,
 } from '../../../utils/courtAddPayment';
 import { useCourtAddPromo } from '../useCourtAddPromo';
 import {
@@ -1321,6 +1324,10 @@ const handleSaveCourt = async () => {
 
     if (response.success) {
       if (isAddingNewCourt || !editingCourt.id) {
+        // Stash the waiver draft in case checkout redirects away; the payment
+        // return handler publishes it against the created court.
+        stashCourtAddWaiverDraft(editingCourt.waiverContent || '');
+        let createdCourtId = (response as any)?.court?.id as string | undefined;
         const paymentResult = await handleCourtAddPaymentResponse(response, {
           onDevConfirm: async (sessionId) => {
             const confirmRes = await adminApi.createCourt(currentFacilityId, {
@@ -1339,10 +1346,16 @@ const handleSaveCourt = async () => {
             if (!confirmRes.success) {
               throw new Error(confirmRes.error || 'Failed to confirm court payment');
             }
+            createdCourtId = (confirmRes as any)?.court?.id ?? createdCourtId;
           },
         });
         if (paymentResult === 'redirected') return;
         if (paymentResult === 'failed') return;
+        if (createdCourtId) {
+          await publishStashedCourtAddWaiver([createdCourtId]);
+        } else {
+          clearCourtAddWaiverDraft();
+        }
       }
       toast.success(isAddingNewCourt ? 'Court created successfully' : 'Court updated successfully');
       setEditingCourt(null);

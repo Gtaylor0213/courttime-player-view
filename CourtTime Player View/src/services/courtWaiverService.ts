@@ -134,14 +134,24 @@ export async function removeCourtWaiver(courtId: string): Promise<void> {
 }
 
 /**
- * Waivers the user still needs to accept among the given courts.
+ * Waivers the user must accept for this booking attempt among the given
+ * courts. Unlike the facility Terms & Conditions (accepted once per version),
+ * court waivers are accepted EVERY time the court is booked, so any court
+ * with an active waiver is pending regardless of past acceptances.
  * Only courts whose facility has the Court Waivers feature enabled count —
  * with the flag off, nothing is pending and bookings are never blocked.
  */
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * How long a recorded acceptance satisfies the booking blocker. The dialog
+ * records the acceptance seconds before the booking (or each instance of a
+ * recurring series) is created; the window just has to outlast that flow.
+ */
+const ACCEPTANCE_VALID_MINUTES = 15;
+
 export async function getPendingCourtWaiversForUser(
-  userId: string,
+  _userId: string,
   courtIds: string[]
 ): Promise<PendingCourtWaiver[]> {
   const uniqueCourtIds = [...new Set(courtIds.filter((id) => UUID_PATTERN.test(id || '')))];
@@ -164,21 +174,16 @@ export async function getPendingCourtWaiversForUser(
        ORDER BY version_number DESC
        LIMIT 1
      ) wv ON TRUE
-     LEFT JOIN member_court_waiver_acceptances mca
-       ON mca.user_id = $1
-      AND mca.court_id = c.id
-      AND mca.version_number = wv.version_number
-     WHERE c.id = ANY($2::uuid[])
+     WHERE c.id = ANY($1::uuid[])
        AND wv.is_active = true
-       AND mca.id IS NULL
        AND EXISTS (
          SELECT 1 FROM facility_features ff
          WHERE ff.facility_id = c.facility_id
-           AND ff.feature_key = $3
+           AND ff.feature_key = $2
            AND ff.is_enabled = true
        )
      ORDER BY c.name ASC`,
-    [userId, uniqueCourtIds, FEATURE_FLAGS.COURT_WAIVERS]
+    [uniqueCourtIds, FEATURE_FLAGS.COURT_WAIVERS]
   );
 
   return result.rows.map((row: any) => ({
@@ -193,8 +198,10 @@ export async function getPendingCourtWaiversForUser(
 }
 
 /**
- * Booking blocker when the court has a waiver the user has not accepted,
- * mirroring buildTermsAcceptanceBookingBlocker in termsService.
+ * Booking blocker when the court has a waiver the user has not JUST accepted.
+ * Court waivers are per-booking: only an acceptance of the current version
+ * recorded within the last ACCEPTANCE_VALID_MINUTES satisfies the blocker, so
+ * every new booking flow has to go through the acceptance dialog again.
  */
 export async function buildCourtWaiverBookingBlocker(
   userId: string,
@@ -206,13 +213,41 @@ export async function buildCourtWaiverBookingBlocker(
   severity: 'error';
   passed: false;
 } | null> {
-  const pending = await getPendingCourtWaiversForUser(userId, [courtId]);
-  if (pending.length === 0) return null;
+  if (!UUID_PATTERN.test(courtId || '')) return null;
+
+  const result = await query(
+    `SELECT c.name as "courtName"
+     FROM courts c
+     JOIN LATERAL (
+       SELECT version_number, is_active
+       FROM court_waiver_versions
+       WHERE court_id = c.id
+       ORDER BY version_number DESC
+       LIMIT 1
+     ) wv ON TRUE
+     WHERE c.id = $1
+       AND wv.is_active = true
+       AND EXISTS (
+         SELECT 1 FROM facility_features ff
+         WHERE ff.facility_id = c.facility_id
+           AND ff.feature_key = $2
+           AND ff.is_enabled = true
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM member_court_waiver_acceptances mca
+         WHERE mca.user_id = $3
+           AND mca.court_id = c.id
+           AND mca.version_number = wv.version_number
+           AND mca.accepted_at > CURRENT_TIMESTAMP - ($4 * INTERVAL '1 minute')
+       )`,
+    [courtId, FEATURE_FLAGS.COURT_WAIVERS, userId, ACCEPTANCE_VALID_MINUTES]
+  );
+  if (result.rows.length === 0) return null;
 
   return {
     ruleCode: 'COURT-WAIVER-NOT-ACCEPTED',
     ruleName: 'Court waiver acceptance required',
-    message: `You must accept the waiver for ${pending[0].courtName} before booking this court.`,
+    message: `You must accept the waiver for ${result.rows[0].courtName} before booking this court.`,
     severity: 'error',
     passed: false,
   };
@@ -220,6 +255,8 @@ export async function buildCourtWaiverBookingBlocker(
 
 /**
  * Record the user's acceptance of the court's current waiver version.
+ * Appends a new row every time — court waivers are accepted per booking, so
+ * the log keeps one acceptance event per booking flow.
  */
 export async function acceptCourtWaiverForUser(
   userId: string,
@@ -250,8 +287,6 @@ export async function acceptCourtWaiverForUser(
          version_number,
          ip_address
        ) VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id, court_id, version_number)
-       DO UPDATE SET ip_address = COALESCE(EXCLUDED.ip_address, member_court_waiver_acceptances.ip_address)
        RETURNING accepted_at as "acceptedAt"`,
       [userId, courtId, current.id, versionNumber, ipAddress || null]
     );
@@ -265,7 +300,9 @@ export async function acceptCourtWaiverForUser(
 
 /**
  * Acceptance summary for the court's current waiver among the facility's
- * active members, for the admin view.
+ * active members, for the admin view. Waivers are accepted per booking, so
+ * "accepted" means at least one acceptance of the current version (the most
+ * recent one is shown) and "notAccepted" means never accepted it.
  */
 export async function getCourtWaiverAcceptanceSummary(courtId: string): Promise<{
   currentVersion: CourtWaiverVersion | null;
@@ -282,7 +319,7 @@ export async function getCourtWaiverAcceptanceSummary(courtId: string): Promise<
       u.id as "userId",
       u.full_name as "fullName",
       u.email,
-      mca.accepted_at as "acceptedAt"
+      MAX(mca.accepted_at) as "acceptedAt"
      FROM facility_memberships fm
      JOIN users u ON u.id = fm.user_id
      JOIN member_court_waiver_acceptances mca
@@ -291,6 +328,7 @@ export async function getCourtWaiverAcceptanceSummary(courtId: string): Promise<
       AND mca.version_number = $3
      WHERE fm.facility_id = $1
        AND fm.status = 'active'
+     GROUP BY u.id, u.full_name, u.email
      ORDER BY u.full_name ASC`,
     [currentVersion.facilityId, courtId, currentVersion.versionNumber]
   );

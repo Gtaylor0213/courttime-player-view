@@ -116,7 +116,7 @@ export function CourtWaiverSection({
       const version = (res.data as any)?.data?.version ?? null;
       setCurrentVersion(version);
       setAcceptedCount(0);
-      toast.success('Waiver published. Members must accept it before booking this court.');
+      toast.success('Waiver published. Members must accept it each time they book this court.');
     } catch (error) {
       console.error('Failed to publish court waiver:', error);
       toast.error('Failed to publish waiver');
@@ -170,9 +170,8 @@ export function CourtWaiverSection({
         />
       </div>
       <p className="text-xs text-gray-500">
-        Attach a waiver to this court. Members must read and accept it before they can book —
-        useful for custom or paid courts with special conditions. Publishing a new version
-        requires everyone to accept again.
+        Attach a waiver to this court. Members must read and accept it every time they book
+        this court — useful for custom or paid courts with special conditions.
       </p>
 
       {loading ? (
@@ -187,7 +186,7 @@ export function CourtWaiverSection({
               Current version: {currentVersion.versionNumber} (published{' '}
               {new Date(currentVersion.publishedAt).toLocaleString()})
               {acceptedCount != null && notAcceptedCount != null && (
-                <> · {acceptedCount} accepted, {notAcceptedCount} pending</>
+                <> · {acceptedCount} members have accepted, {notAcceptedCount} have not</>
               )}
             </p>
           )}

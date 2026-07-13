@@ -1326,17 +1326,9 @@ export async function createBookingWithOverride(
       };
     }
 
-    const waiverBlocker = await buildCourtWaiverBookingBlocker(
-      bookingData.userId,
-      bookingData.courtId
-    );
-    if (waiverBlocker) {
-      return {
-        success: false,
-        error: waiverBlocker.message,
-        ruleViolations: [waiverBlocker],
-      };
-    }
+    // No court-waiver blocker here: waivers are accepted per booking by the
+    // member themselves, which an admin-created booking can never satisfy.
+    // An admin override is an explicit bypass of booking rules.
 
     const walkUpCourt = await query(
       `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,

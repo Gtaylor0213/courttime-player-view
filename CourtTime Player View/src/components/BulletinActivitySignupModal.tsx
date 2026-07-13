@@ -23,7 +23,7 @@ interface BulletinActivitySignupModalProps {
   onClose: () => void;
   onSignupChange?: () => void;
   /** Where Stripe returns after paid signup */
-  returnPath?: 'calendar' | 'bulletin-board';
+  returnPath?: 'calendar' | 'bulletin-board' | 'lessons';
 }
 
 export function BulletinActivitySignupModal({

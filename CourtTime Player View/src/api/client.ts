@@ -589,6 +589,8 @@ export const bulletinBoardApi = {
     drillShowParticipants?: boolean;
     requirePayment?: boolean;
     signupAmountCents?: number;
+    lessonType?: 'private_lesson' | 'group_clinic' | 'drill' | 'custom';
+    lessonTypeLabel?: string;
   }) => {
     return apiRequest('/api/bulletin-board', {
       method: 'POST',
@@ -658,6 +660,14 @@ export const bulletinBoardApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+};
+
+// Lessons tab (lessons_tab feature flag). Lessons are bulletin posts; signups,
+// payments, and cancellation go through bulletinBoardApi.
+export const lessonsApi = {
+  getLessons: async (facilityId: string, scope: 'upcoming' | 'past' = 'upcoming') => {
+    return apiRequest(`/api/lessons/${facilityId}?scope=${scope}`);
   },
 };
 

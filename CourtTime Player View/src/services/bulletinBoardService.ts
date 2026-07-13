@@ -1,4 +1,4 @@
-import { query } from '../database/connection';
+import { query, transaction } from '../database/connection';
 import { notificationService } from './notificationService';
 import { sendBulletinMinParticipantsNotMetEmail } from './emailService';
 import { refundBulletinSignupPaymentsForPost } from './stripeConnectService';
@@ -6,6 +6,12 @@ import { createBooking } from './bookingService';
 import { minutesToTime } from './rulesEngine/utils/timeUtils';
 
 const SIGNUP_CATEGORIES = ['event', 'drill', 'social', 'clinic', 'tournament'] as const;
+
+// Lessons tab (lessons_tab feature flag): lesson posts are regular bulletin
+// posts whose lesson_type records which Lessons-tab option created them.
+export const LESSON_TYPES = ['private_lesson', 'group_clinic', 'drill', 'custom'] as const;
+export type LessonType = (typeof LESSON_TYPES)[number];
+const LESSON_CATEGORIES = ['clinic', 'drill'] as const;
 
 function sameUserId(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false;
@@ -49,6 +55,8 @@ export interface BulletinPost {
   signupBlockedReason?: string | null;
   requirePayment?: boolean;
   signupAmountCents?: number | null;
+  lessonType?: LessonType | null;
+  lessonTypeLabel?: string | null;
   participants?: Array<{ userId: string; fullName: string; status: 'confirmed' | 'waitlist'; waitlistPosition: number | null }>;
 }
 
@@ -76,6 +84,8 @@ export interface CreateBulletinPost {
   cancelIfMinNotMet?: boolean;
   requirePayment?: boolean;
   signupAmountCents?: number;
+  lessonType?: LessonType;
+  lessonTypeLabel?: string;
 }
 
 interface DrillPostContext {
@@ -130,6 +140,8 @@ export async function getFacilityBulletinPosts(facilityId: string, requesterUser
         COALESCE(bp.drill_show_participants, false) as "drillShowParticipants",
         COALESCE(bp.require_payment, false) as "requirePayment",
         bp.signup_amount_cents as "signupAmountCents",
+        bp.lesson_type as "lessonType",
+        bp.lesson_type_label as "lessonTypeLabel",
         COUNT(*) FILTER (WHERE bds.status = 'confirmed')::int as "drillConfirmedCount",
         COUNT(*) FILTER (WHERE bds.status = 'waitlist')::int as "drillWaitlistCount"
        FROM bulletin_posts bp
@@ -274,6 +286,8 @@ export async function getBulletinPostById(
       COALESCE(bp.drill_show_participants, false) as "drillShowParticipants",
       COALESCE(bp.require_payment, false) as "requirePayment",
       bp.signup_amount_cents as "signupAmountCents",
+      bp.lesson_type as "lessonType",
+      bp.lesson_type_label as "lessonTypeLabel",
       COUNT(*) FILTER (WHERE bds.status = 'confirmed')::int as "drillConfirmedCount",
       COUNT(*) FILTER (WHERE bds.status = 'waitlist')::int as "drillWaitlistCount",
       f.name as "facilityName"
@@ -296,6 +310,74 @@ export async function getBulletinPostById(
     await enrichBulletinPostsWithSignupContext([post], post.facilityId, requesterUserId);
   }
   return post;
+}
+
+/**
+ * Lesson posts for the Lessons tab (lessons_tab feature flag). Same rows the
+ * bulletin board serves, filtered to scheduled clinic/drill/lesson posts.
+ * 'upcoming' mirrors bulletin board visibility (active posts only);
+ * 'past' is for the admin management view and includes cancelled/expired.
+ */
+export async function getFacilityLessonPosts(
+  facilityId: string,
+  requesterUserId: string | undefined,
+  scope: 'upcoming' | 'past'
+): Promise<BulletinPost[]> {
+  const scopeClause =
+    scope === 'upcoming'
+      ? `AND (bp.status = 'active' OR bp.status IS NULL)
+         AND bp.drill_start_at + make_interval(mins => COALESCE(bp.drill_duration_minutes, 60)) >= CURRENT_TIMESTAMP`
+      : `AND bp.drill_start_at + make_interval(mins => COALESCE(bp.drill_duration_minutes, 60)) < CURRENT_TIMESTAMP`;
+
+  const result = await query(
+    `SELECT
+      bp.id,
+      bp.facility_id as "facilityId",
+      bp.author_id as "authorId",
+      u.full_name as "authorName",
+      bp.title,
+      bp.content,
+      bp.category,
+      bp.is_pinned as "isPinned",
+      bp.is_admin_post as "isAdminPost",
+      bp.posted_date as "postedDate",
+      bp.expires_at as "expiresAt",
+      bp.status,
+      bp.created_at as "createdAt",
+      bp.drill_start_at as "drillStartAt",
+      bp.drill_duration_minutes as "drillDurationMinutes",
+      bp.drill_court_id as "drillCourtId",
+      c.name as "drillCourtName",
+      bp.drill_max_participants as "drillMaxParticipants",
+      bp.min_participants as "minParticipants",
+      COALESCE(bp.cancel_if_min_not_met, false) as "cancelIfMinNotMet",
+      bp.drill_gender_restriction as "drillGenderRestriction",
+      COALESCE(bp.drill_show_participants, false) as "drillShowParticipants",
+      COALESCE(bp.require_payment, false) as "requirePayment",
+      bp.signup_amount_cents as "signupAmountCents",
+      bp.lesson_type as "lessonType",
+      bp.lesson_type_label as "lessonTypeLabel",
+      COUNT(*) FILTER (WHERE bds.status = 'confirmed')::int as "drillConfirmedCount",
+      COUNT(*) FILTER (WHERE bds.status = 'waitlist')::int as "drillWaitlistCount"
+     FROM bulletin_posts bp
+     JOIN users u ON bp.author_id = u.id
+     LEFT JOIN courts c ON bp.drill_court_id = c.id
+     LEFT JOIN bulletin_drill_signups bds ON bp.id = bds.bulletin_post_id
+     WHERE bp.facility_id = $1
+       AND (bp.category = ANY($2::text[]) OR bp.lesson_type IS NOT NULL)
+       AND bp.drill_start_at IS NOT NULL
+       ${scopeClause}
+     GROUP BY bp.id, u.full_name, c.name
+     ORDER BY bp.drill_start_at ${scope === 'upcoming' ? 'ASC' : 'DESC'}
+     LIMIT 200`,
+    [facilityId, LESSON_CATEGORIES]
+  );
+
+  const posts: BulletinPost[] = result.rows;
+  if (requesterUserId && posts.length > 0) {
+    await enrichBulletinPostsWithSignupContext(posts, facilityId, requesterUserId);
+  }
+  return posts;
 }
 
 const DEFAULT_DRILL_DURATION_MINUTES = 60;
@@ -430,6 +512,25 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
     if (data.cancelIfMinNotMet && !data.minParticipants) {
       throw new Error('Minimum participants is required when auto-cancel is enabled');
     }
+    let lessonType: LessonType | null = null;
+    let lessonTypeLabel: string | null = null;
+    if (data.lessonType != null) {
+      if (!LESSON_TYPES.includes(data.lessonType)) {
+        throw new Error('Invalid lesson type');
+      }
+      if (!LESSON_CATEGORIES.includes(data.category as (typeof LESSON_CATEGORIES)[number])) {
+        throw new Error('Lesson posts must use the clinic or drill category');
+      }
+      lessonType = data.lessonType;
+      const trimmedLabel = data.lessonTypeLabel?.trim() || '';
+      if (lessonType === 'custom') {
+        if (!trimmedLabel) {
+          throw new Error('Custom lesson type requires a name');
+        }
+        lessonTypeLabel = trimmedLabel.slice(0, 60);
+      }
+    }
+
     const requirePayment = Boolean(data.requirePayment);
     const signupAmountCents =
       data.signupAmountCents != null ? Number(data.signupAmountCents) : undefined;
@@ -482,6 +583,8 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
           data.cancelIfMinNotMet ?? false,
           requirePayment,
           requirePayment ? signupAmountCents : null,
+          lessonType,
+          lessonTypeLabel,
         ];
 
         let expiresAtExpr = 'NULL';
@@ -513,9 +616,11 @@ export async function createBulletinPost(data: CreateBulletinPost): Promise<stri
             cancel_if_min_not_met,
             require_payment,
             signup_amount_cents,
+            lesson_type,
+            lesson_type_label,
             expires_at,
             status
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, ${expiresAtExpr}, 'active')
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ${expiresAtExpr}, 'active')
           RETURNING id`,
           params
         );

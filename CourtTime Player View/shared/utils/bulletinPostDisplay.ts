@@ -38,6 +38,8 @@ export interface BulletinPostView {
   signupBlockedReason?: string | null;
   requirePayment?: boolean;
   signupAmountCents?: number | null;
+  lessonType?: string | null;
+  lessonTypeLabel?: string | null;
   drillShowParticipants?: boolean;
   participants?: Array<{
     userId: string;
@@ -64,11 +66,12 @@ export function formatSignupFee(cents?: number | null): string {
 
 export function bulletinSignupReturnUrls(
   postId: string,
-  returnPath: 'bulletin-board' | 'calendar' = 'bulletin-board'
+  returnPath: 'bulletin-board' | 'calendar' | 'lessons' = 'bulletin-board'
 ) {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const base = origin || '';
-  const path = returnPath === 'calendar' ? '/calendar' : '/bulletin-board';
+  const path =
+    returnPath === 'calendar' ? '/calendar' : returnPath === 'lessons' ? '/lessons' : '/bulletin-board';
   return {
     successUrl: `${base}${path}?signupSuccess=1&postId=${encodeURIComponent(postId)}&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${base}${path}?postId=${encodeURIComponent(postId)}`,
@@ -106,9 +109,34 @@ export function mapPostFromApi(post: Record<string, unknown>): BulletinPostView 
         : post.signup_amount_cents != null
           ? Number(post.signup_amount_cents)
           : null,
+    lessonType: post.lessonType ? String(post.lessonType) : null,
+    lessonTypeLabel: post.lessonTypeLabel ? String(post.lessonTypeLabel) : null,
     drillShowParticipants: Boolean(post.drillShowParticipants),
     participants: (post.participants as BulletinPostView['participants']) || [],
   };
+}
+
+export const LESSON_TYPE_DISPLAY_LABELS: Record<string, string> = {
+  private_lesson: 'Private Lesson',
+  group_clinic: 'Group Clinic',
+  drill: 'Drill',
+};
+
+/** Label shown on the Lessons tab: lesson type when set, otherwise the post category. */
+export function getLessonPostTypeLabel(post: {
+  type?: string;
+  category?: string;
+  lessonType?: string | null;
+  lessonTypeLabel?: string | null;
+}): string {
+  if (post.lessonType === 'custom' && post.lessonTypeLabel?.trim()) {
+    return post.lessonTypeLabel.trim();
+  }
+  if (post.lessonType && LESSON_TYPE_DISPLAY_LABELS[post.lessonType]) {
+    return LESSON_TYPE_DISPLAY_LABELS[post.lessonType];
+  }
+  const category = bulletinPostType(post);
+  return category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Lesson';
 }
 
 export function isBulletinActivityBooking(booking: {

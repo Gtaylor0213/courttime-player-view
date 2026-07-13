@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus, ShoppingBag, ShoppingCart, DollarSign, BarChart2, CalendarDays } from 'lucide-react';
+import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus, ShoppingBag, ShoppingCart, DollarSign, BarChart2, CalendarDays, GraduationCap } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
@@ -41,6 +41,7 @@ export function UnifiedSidebar({
   const { selectedFacilityId, setSelectedFacilityId, sidebarOpen, setSidebarOpen, enabledFeatures } = useAppContext();
   const proShopEnabled = enabledFeatures.includes('pro_shop');
   const annualFeesEnabled = enabledFeatures.includes('annual_membership_fees');
+  const lessonsEnabled = enabledFeatures.includes('lessons_tab');
   const location = useLocation();
   const navigate = useNavigate();
   const [memberFacilities, setMemberFacilities] = React.useState<Club[]>([]);
@@ -377,6 +378,14 @@ export function UnifiedSidebar({
                   label="Bulletin Board"
                   isActive={currentPage === 'bulletin-board'}
                 />
+                {lessonsEnabled && (
+                  <SidebarButton
+                    onClick={() => handleNav('/admin/lessons')}
+                    icon={GraduationCap}
+                    label="Lessons"
+                    isActive={currentPage === 'lessons-admin'}
+                  />
+                )}
                 {proShopEnabled && (
                   <SidebarButton
                     onClick={() => handleNav('/admin/pro-shop')}
@@ -446,6 +455,14 @@ export function UnifiedSidebar({
                   icon={ShoppingCart}
                   label="Shop"
                   isActive={currentPage === 'shop'}
+                />
+              )}
+              {lessonsEnabled && (
+                <SidebarButton
+                  onClick={() => handleNav('/lessons')}
+                  icon={GraduationCap}
+                  label="Lessons"
+                  isActive={currentPage === 'lessons'}
                 />
               )}
               {!user?.adminFacilities?.includes(selectedFacilityId) && (

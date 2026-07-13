@@ -7,6 +7,7 @@ export const FEATURE_FLAGS = {
   WEEK_MONTH_VIEW: 'week_month_view',
   PLAYER_RECURRING_BOOKINGS: 'player_recurring_bookings',
   COURT_WAIVERS: 'court_waivers',
+  LESSONS_TAB: 'lessons_tab',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -18,4 +19,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   week_month_view: 'Week/Month Calendar Overview',
   player_recurring_bookings: 'Player Recurring Bookings',
   court_waivers: 'Court Waivers (per-court booking waivers)',
+  lessons_tab: 'Lessons Tab (dedicated lessons/clinics hub)',
 };

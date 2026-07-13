@@ -18,6 +18,7 @@ function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/admin/communication')) return 'communication';
   if (pathname.startsWith('/admin/member-payments')) return 'member-payments';
   if (pathname.startsWith('/admin/pro-shop')) return 'pro-shop-admin';
+  if (pathname.startsWith('/admin/lessons')) return 'lessons-admin';
   if (pathname.startsWith('/admin/annual-fees')) return 'annual-fees';
   if (pathname.startsWith('/admin/reports')) return 'reports';
   if (pathname.startsWith('/admin')) return 'admin-dashboard';
@@ -27,6 +28,7 @@ function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/quick-reservation')) return 'quick-reservation';
   if (pathname.startsWith('/club/')) return 'club-info';
   if (pathname.startsWith('/bulletin-board')) return 'bulletin-board';
+  if (pathname.startsWith('/lessons')) return 'lessons';
   if (pathname.startsWith('/hitting-partner')) return 'hitting-partner';
   if (pathname.startsWith('/messages')) return 'messages';
   if (pathname.startsWith('/payments')) return 'payments';

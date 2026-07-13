@@ -35,6 +35,7 @@ import memberRoutes from './routes/members';
 import playerProfileRoutes from './routes/playerProfile';
 import hittingPartnerRoutes from './routes/hittingPartner';
 import bulletinBoardRoutes from './routes/bulletinBoard';
+import lessonsRoutes from './routes/lessons';
 import bookingRoutes from './routes/bookings';
 import adminRoutes from './routes/admin';
 import addressWhitelistRoutes from './routes/addressWhitelist';
@@ -214,6 +215,7 @@ app.use('/api/facility-locations', requireAuth, facilityLocationsRoutes);
 // Player-action routes — blocked when account has a payment lockout
 app.use('/api/hitting-partner', requireAuth, requireNotPaymentLocked, hittingPartnerRoutes);
 app.use('/api/bulletin-board', requireAuth, requireNotPaymentLocked, bulletinBoardRoutes);
+app.use('/api/lessons', requireAuth, requireNotPaymentLocked, lessonsRoutes);
 app.use('/api/bookings', requireAuth, requireNotPaymentLocked, bookingRoutes);
 app.use('/api/address-whitelist', requireAuth, requireNotPaymentLocked, addressWhitelistRoutes);
 app.use('/api/messages', requireAuth, requireNotPaymentLocked, messagesRoutes);

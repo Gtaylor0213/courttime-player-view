@@ -434,6 +434,7 @@ export function WeekMonthCalendarView({
         isOpen={!!selectedReservation}
         onClose={() => setSelectedReservation(null)}
         reservation={selectedReservation as any}
+        allowStaffCloseOut
         onUpdate={() => {
           refreshBookings();
         }}

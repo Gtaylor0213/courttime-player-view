@@ -73,6 +73,8 @@ interface ReservationManagementModalProps {
   onClose: () => void;
   reservation: ReservationDetails | null;
   onUpdate?: () => void;
+  /** Staff-only: show Close out / settlement UI (calendar). Off on player My Reservations. */
+  allowStaffCloseOut?: boolean;
 }
 
 function formatCents(cents: number) {
@@ -83,7 +85,8 @@ export function ReservationManagementModal({
   isOpen,
   onClose,
   reservation,
-  onUpdate
+  onUpdate,
+  allowStaffCloseOut = false,
 }: ReservationManagementModalProps) {
   const { user } = useAuth();
   const { enabledFeatures } = useAppContext();
@@ -268,6 +271,12 @@ export function ReservationManagementModal({
 
   const isOwnReservation = user?.id === reservation.userId;
   const isFacilityAdmin = !!user?.adminFacilities?.includes(reservation.facilityId);
+  // Close-out is staff-only and calendar-facing — never from player My Reservations
+  const canStaffCloseOut =
+    allowStaffCloseOut &&
+    isFacilityAdmin &&
+    isPostPlayBooking &&
+    (settlementStatus === 'unsettled' || settlementStatus === 'settling');
 
   const formatDate = (dateStr: string) => {
     const date = new Date(`${dateStr}T00:00:00`);
@@ -739,7 +748,7 @@ export function ReservationManagementModal({
               )}
 
               {/* Staff close-out panel */}
-              {isFacilityAdmin && isPostPlayBooking && showCloseOut && (
+              {canStaffCloseOut && showCloseOut && (
                 <div className="border border-amber-200 bg-amber-50/50 rounded-md p-3 space-y-3">
                   <div className="flex items-center gap-2">
                     <DollarSign className="h-4 w-4 text-amber-700" />
@@ -1000,9 +1009,7 @@ export function ReservationManagementModal({
                     </Button>
                   </>
                 )}
-                {isFacilityAdmin &&
-                  isPostPlayBooking &&
-                  (settlementStatus === 'unsettled' || settlementStatus === 'settling') && (
+                {canStaffCloseOut && (
                     <Button
                       onClick={loadSettlementPreview}
                       className="flex-1 sm:flex-none sm:min-w-[120px]"

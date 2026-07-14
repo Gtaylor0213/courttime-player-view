@@ -2967,6 +2967,7 @@ export function CourtCalendarView() {
         isOpen={reservationDetailsModal.isOpen}
         onClose={closeReservationDetailsModal}
         reservation={reservationDetailsModal.reservation}
+        allowStaffCloseOut
         onUpdate={() => {
           void fetchBookings();
         }}

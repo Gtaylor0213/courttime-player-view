@@ -681,6 +681,12 @@ export const bookingApi = {
     return apiRequest(`/api/bookings/facility/${facilityId}/range?startDate=${startDate}&endDate=${endDate}`);
   },
 
+  lookupFacilityMembers: async (facilityId: string, q: string) => {
+    return apiRequest(
+      `/api/bookings/facility/${facilityId}/members?q=${encodeURIComponent(q)}`
+    );
+  },
+
   getByCourt: async (courtId: string, date: string) => {
     return apiRequest(`/api/bookings/court/${courtId}?date=${date}`);
   },
@@ -803,6 +809,62 @@ export const bookingApi = {
     return apiRequest('/api/bookings/court-waivers/accept', {
       method: 'POST',
       body: JSON.stringify({ courtId }),
+    });
+  },
+
+  getParticipants: async (bookingId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}/participants`);
+  },
+
+  addParticipant: async (bookingId: string, userId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}/participants`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  },
+
+  removeParticipant: async (bookingId: string, userId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}/participants/${userId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getSettlement: async (bookingId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}/settlement`);
+  },
+
+  closeOutSettlement: async (bookingId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}/settlement/close-out`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
+  resolveSettlementCharge: async (
+    bookingId: string,
+    userId: string,
+    resolution: 'cash' | 'waived' | 'retry'
+  ) => {
+    return apiRequest(`/api/bookings/${bookingId}/settlement/charges/${userId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ resolution }),
+    });
+  },
+
+  updateUnsettled: async (
+    bookingId: string,
+    data: {
+      courtId: string;
+      bookingDate: string;
+      startTime: string;
+      endTime: string;
+      durationMinutes: number;
+      notes?: string;
+    }
+  ) => {
+    return apiRequest(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   },
 };

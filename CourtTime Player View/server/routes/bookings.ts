@@ -17,6 +17,16 @@ import {
   acceptCourtWaiverForUser,
   getPendingCourtWaiversForUser,
 } from '../../src/services/courtWaiverService';
+import {
+  listBookingParticipants,
+  addBookingParticipant,
+  removeBookingParticipant,
+  previewSettlement,
+  closeOutBooking,
+  resolveSettlementCharge,
+  listSettlementCharges,
+  updateUnsettledBooking,
+} from '../../src/services/bookingSettlementService';
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
 import { isFeatureEnabled } from '../../src/services/featureFlagService';
@@ -54,6 +64,58 @@ router.get('/facility/:facilityId/range', async (req, res, next) => {
     );
 
     res.json({ success: true, bookings });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/bookings/facility/:facilityId/members?q=
+ * Lightweight member lookup for reservation roster (any facility member)
+ */
+router.get('/facility/:facilityId/members', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { facilityId } = req.params;
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (q.length < 2) {
+      return res.json({ success: true, members: [] });
+    }
+
+    const membership = await dbQuery(
+      `SELECT 1 FROM facility_memberships
+       WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+       LIMIT 1`,
+      [userId, facilityId]
+    );
+    const admin = await dbQuery(
+      `SELECT 1 FROM facility_admins
+       WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+       LIMIT 1`,
+      [userId, facilityId]
+    );
+    if (membership.rows.length === 0 && admin.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Not a member of this facility' });
+    }
+
+    const result = await dbQuery(
+      `SELECT u.id AS "userId", u.full_name AS "fullName", u.email
+       FROM facility_memberships fm
+       JOIN users u ON u.id = fm.user_id
+       WHERE fm.facility_id = $1
+         AND fm.status = 'active'
+         AND (
+           u.full_name ILIKE $2
+           OR u.email ILIKE $2
+         )
+       ORDER BY u.full_name ASC
+       LIMIT 12`,
+      [facilityId, `%${q}%`]
+    );
+    res.json({ success: true, members: result.rows });
   } catch (error) {
     next(error);
   }
@@ -869,6 +931,177 @@ router.get('/upcoming/:userId', async (req, res, next) => {
       success: true,
       bookings: bookingsWithInfo
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/bookings/:bookingId/participants
+ */
+router.get('/:bookingId/participants', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const booking = await getBookingById(req.params.bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+    const participants = await listBookingParticipants(req.params.bookingId);
+    res.json({ success: true, participants, settlementStatus: booking.settlementStatus });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/:bookingId/participants
+ * Body: { userId }
+ */
+router.post('/:bookingId/participants', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const memberUserId = req.body?.userId;
+    if (!memberUserId) {
+      return res.status(400).json({ success: false, error: 'userId is required' });
+    }
+    const participants = await addBookingParticipant({
+      bookingId: req.params.bookingId,
+      userId: memberUserId,
+      actorUserId,
+    });
+    res.json({ success: true, participants });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Failed to add participant' });
+  }
+});
+
+/**
+ * DELETE /api/bookings/:bookingId/participants/:userId
+ */
+router.delete('/:bookingId/participants/:userId', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const participants = await removeBookingParticipant({
+      bookingId: req.params.bookingId,
+      userId: req.params.userId,
+      actorUserId,
+    });
+    res.json({ success: true, participants });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Failed to remove participant' });
+  }
+});
+
+/**
+ * GET /api/bookings/:bookingId/settlement
+ * Staff preview of close-out split + existing charge rows
+ */
+router.get('/:bookingId/settlement', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const preview = await previewSettlement(req.params.bookingId, actorUserId);
+    const charges = await listSettlementCharges(req.params.bookingId);
+    res.json({ success: true, preview, charges });
+  } catch (error: any) {
+    const status = error.message?.includes('admin') ? 403 : 400;
+    res.status(status).json({ success: false, error: error.message || 'Failed to load settlement' });
+  }
+});
+
+/**
+ * POST /api/bookings/:bookingId/settlement/close-out
+ * Staff close-out: charge all members on the roster
+ */
+router.post('/:bookingId/settlement/close-out', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const result = await closeOutBooking({
+      bookingId: req.params.bookingId,
+      actorUserId,
+    });
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    const status = error.message?.includes('admin') ? 403 : 400;
+    res.status(status).json({ success: false, error: error.message || 'Close-out failed' });
+  }
+});
+
+/**
+ * POST /api/bookings/:bookingId/settlement/charges/:userId/resolve
+ * Body: { resolution: 'cash' | 'waived' | 'retry' }
+ */
+router.post('/:bookingId/settlement/charges/:userId/resolve', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const resolution = req.body?.resolution;
+    if (!['cash', 'waived', 'retry'].includes(resolution)) {
+      return res.status(400).json({
+        success: false,
+        error: 'resolution must be cash, waived, or retry',
+      });
+    }
+    const result = await resolveSettlementCharge({
+      bookingId: req.params.bookingId,
+      userId: req.params.userId,
+      actorUserId,
+      resolution,
+    });
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    const status = error.message?.includes('admin') ? 403 : 400;
+    res.status(status).json({ success: false, error: error.message || 'Resolve failed' });
+  }
+});
+
+/**
+ * PATCH /api/bookings/:bookingId
+ * In-place update for unsettled post-play bookings (court/time move without re-payment)
+ */
+router.patch('/:bookingId', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { courtId, bookingDate, startTime, endTime, durationMinutes, notes } = req.body || {};
+    if (!courtId || !bookingDate || !startTime || !endTime || !durationMinutes) {
+      return res.status(400).json({
+        success: false,
+        error: 'courtId, bookingDate, startTime, endTime, and durationMinutes are required',
+      });
+    }
+    const result = await updateUnsettledBooking({
+      bookingId: req.params.bookingId,
+      actorUserId,
+      courtId,
+      bookingDate,
+      startTime,
+      endTime,
+      durationMinutes: Number(durationMinutes),
+      notes,
+    });
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
   } catch (error) {
     next(error);
   }

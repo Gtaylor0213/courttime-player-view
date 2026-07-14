@@ -18,7 +18,10 @@ import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
 import { buildTermsAcceptanceBookingBlocker } from './termsService';
 import { buildCourtWaiverBookingBlocker } from './courtWaiverService';
-import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
+import {
+  seedBookingOwnerParticipant,
+  shouldUsePostPlaySettlement,
+} from './bookingSettlementService';
 
 /**
  * Serialize booking creates per user + facility so concurrent multi-court POSTs
@@ -334,6 +337,12 @@ export interface Booking {
   endTime: string;
   durationMinutes: number;
   status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
+  settlementStatus?:
+    | 'not_applicable'
+    | 'unsettled'
+    | 'settling'
+    | 'settled'
+    | 'cancelled_unpaid';
   bookingType?: string;
   notes?: string;
   createdAt: string;
@@ -364,6 +373,7 @@ export async function getBookingsByFacilityAndDate(
         b.end_time as "endTime",
         b.duration_minutes as "durationMinutes",
         b.status,
+        b.settlement_status as "settlementStatus",
         b.booking_type as "bookingType",
         b.notes,
         b.bulletin_post_id as "bulletinPostId",
@@ -407,6 +417,7 @@ export async function getBookingsByFacilityAndDateRange(
         b.end_time as "endTime",
         b.duration_minutes as "durationMinutes",
         b.status,
+        b.settlement_status as "settlementStatus",
         b.booking_type as "bookingType",
         b.notes,
         b.bulletin_post_id as "bulletinPostId",
@@ -453,6 +464,7 @@ export async function getBookingsByCourtAndDate(
         b.end_time as "endTime",
         b.duration_minutes as "durationMinutes",
         b.status,
+        b.settlement_status as "settlementStatus",
         b.booking_type as "bookingType",
         b.notes,
         b.created_at as "createdAt",
@@ -497,6 +509,7 @@ export async function getBookingsByUser(
           b.end_time as "endTime",
           b.duration_minutes as "durationMinutes",
           b.status,
+          b.settlement_status as "settlementStatus",
           b.booking_type as "bookingType",
           b.notes,
           b.created_at as "createdAt",
@@ -521,6 +534,7 @@ export async function getBookingsByUser(
           b.end_time as "endTime",
           b.duration_minutes as "durationMinutes",
           b.status,
+          b.settlement_status as "settlementStatus",
           b.booking_type as "bookingType",
           b.notes,
           b.created_at as "createdAt",
@@ -852,13 +866,29 @@ async function createBookingCore(bookingData: {
       warnings = evaluation.warnings;
     }
 
+    let settlementStatus: 'not_applicable' | 'unsettled' = 'not_applicable';
+
     if (!bookingData.skipPaymentCheck) {
-      const courtRow = await loadCourtPaymentSettings(bookingData.courtId);
-      const needsPayment = courtBookingNeedsPayment(courtRow, {
-        bringGuest: bookingData.bringGuest,
-        addBallMachine: bookingData.addBallMachine,
-      });
-      if (needsPayment) {
+      const postPlay = await shouldUsePostPlaySettlement(
+        bookingData.facilityId,
+        bookingData.courtId,
+        {
+          bringGuest: bookingData.bringGuest,
+          addBallMachine: bookingData.addBallMachine,
+        }
+      );
+
+      if (postPlay.usePostPlay) {
+        const { syncConnectOnboardingStatus } = await import('./stripeConnectService');
+        const stripeStatus = await syncConnectOnboardingStatus(bookingData.facilityId);
+        if (!stripeStatus.onboarded && !stripeStatus.chargesEnabled) {
+          return {
+            success: false,
+            error: 'This court requires payment but the club has not finished Stripe setup yet',
+          };
+        }
+        settlementStatus = 'unsettled';
+      } else if (postPlay.needsPayment) {
         const { syncConnectOnboardingStatus, createCourtBookingCheckoutSession } = await import(
           './stripeConnectService'
         );
@@ -949,9 +979,9 @@ async function createBookingCore(bookingData: {
             series_id, court_id, user_id, facility_id, booking_date,
             start_time, end_time, duration_minutes, booking_type,
             activity_type, notes, bulletin_post_id, status, is_prime_time,
-            bring_guest, add_ball_machine
+            bring_guest, add_ball_machine, settlement_status
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, $14, $15)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, $14, $15, $16)
           RETURNING
             id,
             series_id as "seriesId",
@@ -963,6 +993,7 @@ async function createBookingCore(bookingData: {
             end_time as "endTime",
             duration_minutes as "durationMinutes",
             status,
+            settlement_status as "settlementStatus",
             booking_type as "bookingType",
             activity_type as "activityType",
             notes,
@@ -985,6 +1016,7 @@ async function createBookingCore(bookingData: {
             isPrimeTime,
             bookingData.bringGuest || false,
             bookingData.addBallMachine || false,
+            settlementStatus,
           ]
         );
         return ins.rows[0];
@@ -994,6 +1026,10 @@ async function createBookingCore(bookingData: {
         return { success: false, error: txErr.message };
       }
       throw txErr;
+    }
+
+    if (settlementStatus === 'unsettled' && newBooking?.id) {
+      await seedBookingOwnerParticipant(newBooking.id, bookingData.userId, bookingData.userId);
     }
 
     return {
@@ -1485,7 +1521,8 @@ export async function cancelBooking(
         TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
         b.start_time as "startTime",
         b.end_time as "endTime",
-        b.user_id as "userId"
+        b.user_id as "userId",
+        b.settlement_status as "settlementStatus"
       FROM bookings b
       WHERE b.id = $1 AND b.status != 'cancelled'`,
       [bookingId]
@@ -1542,12 +1579,18 @@ export async function cancelBooking(
     const bookingStart = new Date(bYear, bMonth - 1, bDay, bHour, bMin, 0);
     const minutesBeforeStart = Math.floor((bookingStart.getTime() - now.getTime()) / 60000);
 
-    // Update booking status
+    // Update booking status; unsettled post-play bookings never charged
+    const nextSettlement =
+      booking.settlementStatus === 'unsettled' || booking.settlementStatus === 'settling'
+        ? 'cancelled_unpaid'
+        : booking.settlementStatus;
     await query(
       `UPDATE bookings
-       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       SET status = 'cancelled',
+           settlement_status = COALESCE($2, settlement_status),
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
-      [bookingId]
+      [bookingId, nextSettlement ?? null]
     );
 
     // Record cancellation
@@ -1615,6 +1658,7 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
         b.end_time as "endTime",
         b.duration_minutes as "durationMinutes",
         b.status,
+        b.settlement_status as "settlementStatus",
         b.booking_type as "bookingType",
         b.notes,
         b.created_at as "createdAt",

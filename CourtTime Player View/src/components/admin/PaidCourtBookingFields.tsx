@@ -60,7 +60,8 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
         <div>
           <p className="text-sm font-medium">Paid court booking</p>
           <p className="text-xs text-gray-500">
-            Members pay per hour with card before the reservation is confirmed
+            Members pay per hour with card (at booking, or after staff close-out when Post-Play
+            Settlement is enabled for this facility)
           </p>
         </div>
         <Switch

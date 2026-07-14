@@ -147,6 +147,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const { enabledFeatures } = useAppContext();
   const isAdmin = user?.userType === 'admin';
   const canUseRecurring = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
+  const postPlaySettlement = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
 
   // Fetch all courts for this facility when wizard opens
   useEffect(() => {
@@ -890,7 +891,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           {/* Court fee */}
           {courtTotalAmountCents != null && selectedCourts.length === 1 && (
             <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
-              <span className="text-amber-800 font-medium">Court fee</span>
+              <span className="text-amber-800 font-medium">
+                {postPlaySettlement ? 'Court fee (charged after play)' : 'Court fee'}
+              </span>
               <span className="text-amber-900 font-semibold">
                 ${(courtTotalAmountCents / 100).toFixed(2)}
                 <span className="text-amber-600 font-normal ml-1">
@@ -985,7 +988,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               disabled={isSubmitting}
               className="flex-1"
             >
-              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : (hasPaidCourt || guestFeeTotalCents > 0 || ballMachineTotalCents > 0) ? `Pay $${(checkoutTotalCents / 100).toFixed(2)} and Book` : 'Book Court'}
+              {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : (hasPaidCourt || guestFeeTotalCents > 0 || ballMachineTotalCents > 0) ? (postPlaySettlement ? 'Book Court' : `Pay $${(checkoutTotalCents / 100).toFixed(2)} and Book`) : 'Book Court'}
             </Button>
           </div>
         </form>

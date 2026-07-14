@@ -879,13 +879,16 @@ async function createBookingCore(bookingData: {
       );
 
       if (postPlay.usePostPlay) {
-        const { syncConnectOnboardingStatus } = await import('./stripeConnectService');
-        const stripeStatus = await syncConnectOnboardingStatus(bookingData.facilityId);
-        if (!stripeStatus.onboarded && !stripeStatus.chargesEnabled) {
-          return {
-            success: false,
-            error: 'This court requires payment but the club has not finished Stripe setup yet',
-          };
+        // Stripe only required when there will actually be something to charge
+        if (postPlay.needsPayment) {
+          const { syncConnectOnboardingStatus } = await import('./stripeConnectService');
+          const stripeStatus = await syncConnectOnboardingStatus(bookingData.facilityId);
+          if (!stripeStatus.onboarded && !stripeStatus.chargesEnabled) {
+            return {
+              success: false,
+              error: 'This court requires payment but the club has not finished Stripe setup yet',
+            };
+          }
         }
         settlementStatus = 'unsettled';
       } else if (postPlay.needsPayment) {

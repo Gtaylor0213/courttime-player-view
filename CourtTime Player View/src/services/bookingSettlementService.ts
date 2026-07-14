@@ -777,7 +777,8 @@ export async function shouldUsePostPlaySettlement(
 ): Promise<{ usePostPlay: boolean; needsPayment: boolean }> {
   const courtRow = await loadCourtPaymentSettings(courtId);
   const needsPayment = courtBookingNeedsPayment(courtRow, options);
-  if (!needsPayment) return { usePostPlay: false, needsPayment: false };
   const enabled = await isFeatureEnabled(facilityId, FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
-  return { usePostPlay: enabled, needsPayment: true };
+  // When the flag is on, every booking is unsettled so staff can close out
+  // (including free courts — useful for testing and ops without paid rates).
+  return { usePostPlay: enabled, needsPayment };
 }

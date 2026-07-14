@@ -939,11 +939,15 @@ export async function createCourtBookingCheckoutSession(params: {
     throw new Error('This club has not finished Stripe Connect onboarding yet');
   }
 
-  const bookingAmountCents = hasBookingFee ? Number(court.booking_amount_cents) : 0;
-  const guestAmountCents = hasGuestFee ? Number(court.guest_fee_cents) : 0;
+  // booking_amount_cents / ball_machine_fee_cents are hourly rates; scale by duration.
   const durationMinutes = pb.durationMinutes > 0 ? pb.durationMinutes : 60;
+  const hours = durationMinutes / 60;
+  const bookingAmountCents = hasBookingFee
+    ? Math.round(Number(court.booking_amount_cents) * hours)
+    : 0;
+  const guestAmountCents = hasGuestFee ? Number(court.guest_fee_cents) : 0;
   const ballMachineAmountCents = hasBallMachineFee
-    ? Math.round(Number(court.ball_machine_fee_cents) * (durationMinutes / 60))
+    ? Math.round(Number(court.ball_machine_fee_cents) * hours)
     : 0;
   const totalAmountCents = bookingAmountCents + guestAmountCents + ballMachineAmountCents;
   const platformFeePercent = Number(court.platform_fee_percent ?? 0);
@@ -958,7 +962,7 @@ export async function createCourtBookingCheckoutSession(params: {
   });
 
   const pendingPayment = await query(
-    `SELECT id, stripe_checkout_session_id FROM connect_payments
+    `SELECT id, stripe_checkout_session_id, amount_cents FROM connect_payments
      WHERE member_id = $1 AND status = 'PENDING'
        AND pending_booking IS NOT NULL
        AND pending_booking->>'courtId' = $2
@@ -970,13 +974,16 @@ export async function createCourtBookingCheckoutSession(params: {
     [params.memberId, pb.courtId, pb.bookingDate, pb.startTime, pb.endTime]
   );
   if (pendingPayment.rows.length > 0) {
-    const sessionId = pendingPayment.rows[0].stripe_checkout_session_id;
-    if (sessionId) {
+    const existing = pendingPayment.rows[0];
+    const sessionId = existing.stripe_checkout_session_id;
+    // Reuse only when the priced amount still matches (admin rate or duration changes
+    // must create a fresh Checkout Session).
+    if (sessionId && Number(existing.amount_cents) === totalAmountCents) {
       const existingSession = await stripe.checkout.sessions.retrieve(sessionId, {
         stripeAccount: court.stripe_account_id,
       });
       if (existingSession.url && existingSession.status === 'open') {
-        return { url: existingSession.url, paymentId: pendingPayment.rows[0].id };
+        return { url: existingSession.url, paymentId: existing.id };
       }
     }
   }
@@ -993,6 +1000,10 @@ export async function createCourtBookingCheckoutSession(params: {
   const dateLabel = pb.bookingDate;
   const lineItems: import('stripe').Stripe.Checkout.SessionCreateParams.LineItem[] = [];
   if (bookingAmountCents > 0) {
+    const hoursLabel =
+      durationMinutes % 60 === 0
+        ? `${durationMinutes / 60} hr`
+        : `${durationMinutes} min`;
     lineItems.push({
       quantity: 1,
       price_data: {
@@ -1000,7 +1011,7 @@ export async function createCourtBookingCheckoutSession(params: {
         unit_amount: bookingAmountCents,
         product_data: {
           name: `${court.name} — court booking`,
-          description: `${court.facility_name} · ${dateLabel} ${pb.startTime}–${pb.endTime}`,
+          description: `${court.facility_name} · ${dateLabel} ${pb.startTime}–${pb.endTime} (${hoursLabel})`,
         },
       },
     });

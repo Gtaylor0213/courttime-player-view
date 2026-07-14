@@ -7,7 +7,7 @@ import {
   getBookingTypeBadgeColor,
   getBookingTypeLabel,
 } from '../constants/bookingTypes';
-import { ReservationDetailsModal } from './ReservationDetailsModal';
+import { ReservationManagementModal } from './ReservationManagementModal';
 
 // Week view time grid constants
 const SLOT_HEIGHT_PX = 28;        // pixels per 30-minute slot
@@ -133,6 +133,19 @@ export function WeekMonthCalendarView({
     }).finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facilityId, fetchKey]);
+
+  const refreshBookings = () => {
+    if (!facilityId || fetchDayStrs.length === 0) return;
+    Promise.all(
+      fetchDayStrs.map(ds =>
+        bookingApi.getByFacility(facilityId, ds)
+          .then((res: any) => (res?.success && Array.isArray(res.data?.bookings) ? res.data.bookings : []))
+          .catch(() => [])
+      )
+    ).then(results => {
+      setBookings((results as Booking[][]).flat());
+    });
+  };
 
   const bookingsByDate = useMemo(() => {
     const map: Record<string, Booking[]> = {};
@@ -417,10 +430,13 @@ export function WeekMonthCalendarView({
         </div>
       ) : viewMode === 'week' ? renderWeekView() : renderMonthView()}
 
-      <ReservationDetailsModal
+      <ReservationManagementModal
         isOpen={!!selectedReservation}
         onClose={() => setSelectedReservation(null)}
         reservation={selectedReservation as any}
+        onUpdate={() => {
+          refreshBookings();
+        }}
       />
     </div>
   );

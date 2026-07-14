@@ -10,7 +10,7 @@ import { BookingWizard } from './BookingWizard';
 import { QuickReservePopup } from './QuickReservePopup';
 import { WeekMonthCalendarView } from './WeekMonthCalendarView';
 import { NotificationBell } from './NotificationBell';
-import { ReservationDetailsModal } from './ReservationDetailsModal';
+import { ReservationManagementModal } from './ReservationManagementModal';
 import { BulletinActivitySignupModal } from './BulletinActivitySignupModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -1997,23 +1997,6 @@ export function CourtCalendarView() {
     });
   };
 
-  const handleCancelReservation = async (reservationId: string) => {
-    try {
-      const response = await bookingApi.cancel(reservationId, user?.id || '');
-      if (response.success) {
-        // Refresh bookings after cancellation
-        await fetchBookings();
-        // Close the modal
-        closeReservationDetailsModal();
-      } else {
-        alert(response.error || 'Failed to cancel reservation');
-      }
-    } catch (error) {
-      console.error('Error canceling reservation:', error);
-      alert('Failed to cancel reservation. Please try again.');
-    }
-  };
-
 
 
   const handleCourtHorizontalScroll = useCallback(() => {
@@ -2979,12 +2962,14 @@ export function CourtCalendarView() {
         selectedFacilityId={selectedFacility}
       />
 
-      {/* Reservation Details Modal */}
-      <ReservationDetailsModal
+      {/* Reservation Details Modal (includes post-play roster + staff Close out) */}
+      <ReservationManagementModal
         isOpen={reservationDetailsModal.isOpen}
         onClose={closeReservationDetailsModal}
         reservation={reservationDetailsModal.reservation}
-        onCancelReservation={handleCancelReservation}
+        onUpdate={() => {
+          void fetchBookings();
+        }}
       />
 
       <BulletinActivitySignupModal

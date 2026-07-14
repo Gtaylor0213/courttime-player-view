@@ -611,27 +611,36 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     }
   }
 
-  const slotsFromRuleEngine = extractPeakHoursSlotsFromRuleConfigs(facility.rules || []);
-  const basePeakSlots = mergePeakHoursSlots(peakHoursSlots, slotsFromRuleEngine);
-  const slotsFromSimplified = peakHoursSlotsFromSimplifiedBookingRules(facility.simplifiedBookingRules);
-  const combinedPeakHoursSlots = mergePeakHoursSlots(slotsFromSimplified, basePeakSlots);
+  // Peak detection/enforcement only when the facility has Peak Hours enabled.
+  // Stale slot rows, CRT windows, or court prime_time_* must not surface as peak when off.
+  const peakHoursEnabled = isFacilityPeakHoursEnabled(facility);
+  let combinedPeakHoursSlots: PeakHoursSlot[] = [];
+  let activePeakHoursSlot: PeakHoursSlot | null = null;
+  let bookingIsPrimeTime = false;
 
-  const activePeakHoursSlot = findApplicablePeakHoursSlot(
-    combinedPeakHoursSlots,
-    request.courtId,
-    request.bookingDate,
-    request.startTime,
-    request.endTime
-  );
-  // Fall back to legacy court operating config peak-hours when no slot policy is configured.
-  const dayOfWeek = getDayOfWeek(request.bookingDate);
-  const dayConfig = court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
-  const isLegacyPrime = Boolean(
-    dayConfig?.primeTimeStart &&
-    dayConfig?.primeTimeEnd &&
-    timeRangesOverlap(request.startTime, request.endTime, dayConfig.primeTimeStart, dayConfig.primeTimeEnd)
-  );
-  const bookingIsPrimeTime = Boolean(activePeakHoursSlot || isLegacyPrime);
+  if (peakHoursEnabled) {
+    const slotsFromRuleEngine = extractPeakHoursSlotsFromRuleConfigs(facility.rules || []);
+    const basePeakSlots = mergePeakHoursSlots(peakHoursSlots, slotsFromRuleEngine);
+    const slotsFromSimplified = peakHoursSlotsFromSimplifiedBookingRules(facility.simplifiedBookingRules);
+    combinedPeakHoursSlots = mergePeakHoursSlots(slotsFromSimplified, basePeakSlots);
+
+    activePeakHoursSlot = findApplicablePeakHoursSlot(
+      combinedPeakHoursSlots,
+      request.courtId,
+      request.bookingDate,
+      request.startTime,
+      request.endTime
+    );
+    // Fall back to legacy court operating config peak-hours when no slot policy is configured.
+    const dayOfWeek = getDayOfWeek(request.bookingDate);
+    const dayConfig = court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
+    const isLegacyPrime = Boolean(
+      dayConfig?.primeTimeStart &&
+      dayConfig?.primeTimeEnd &&
+      timeRangesOverlap(request.startTime, request.endTime, dayConfig.primeTimeStart, dayConfig.primeTimeEnd)
+    );
+    bookingIsPrimeTime = Boolean(activePeakHoursSlot || isLegacyPrime);
+  }
 
   // Use facility-local time for currentDateTime so comparisons with
   // combineDateAndTime (which uses local time components) are correct
@@ -863,6 +872,31 @@ function mergePeakHoursSlots(primary: PeakHoursSlot[], fallback: PeakHoursSlot[]
   return Array.from(merged.values());
 }
 
+/**
+ * Explicit hasPeakHours / has_peak_hours wins. Only infer from leftover slot arrays
+ * when the flag was never saved (legacy payloads).
+ */
+function resolveHasPeakHoursFlag(raw: Record<string, unknown> | null | undefined): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  if ('hasPeakHours' in raw) return !!raw.hasPeakHours;
+  if ('has_peak_hours' in raw) return !!raw.has_peak_hours;
+  return (
+    (Array.isArray(raw.peakHoursSlots) && raw.peakHoursSlots.length > 0) ||
+    (Array.isArray(raw.peak_hours_slots) && raw.peak_hours_slots.length > 0)
+  );
+}
+
+/** True only when the facility Peak Hours policy toggle is on. */
+export function isFacilityPeakHoursEnabled(facility: {
+  simplifiedBookingRules?: SimplifiedBookingRules;
+  bookingRulesRaw?: Record<string, unknown> | null;
+}): boolean {
+  if (facility.simplifiedBookingRules) {
+    return !!facility.simplifiedBookingRules.hasPeakHours;
+  }
+  return resolveHasPeakHoursFlag(facility.bookingRulesRaw ?? undefined);
+}
+
 function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
 
@@ -959,10 +993,7 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
           limit: toNumber(existingPerDayHousehold.limit, 0),
         },
       },
-      hasPeakHours:
-        !!(raw.hasPeakHours || raw.has_peak_hours) ||
-        (Array.isArray(raw.peakHoursSlots) && raw.peakHoursSlots.length > 0) ||
-        (Array.isArray(raw.peak_hours_slots) && raw.peak_hours_slots.length > 0),
+      hasPeakHours: resolveHasPeakHoursFlag(raw),
       peakHoursSlots: Array.isArray(raw.peakHoursSlots)
         ? raw.peakHoursSlots
         : Array.isArray(raw.peak_hours_slots)
@@ -1043,10 +1074,7 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
         limit: toNumber(raw.courtsPerDayHousehold !== undefined ? raw.courtsPerDayHousehold : existingPerDayHousehold.limit, 0)
       }
     },
-    hasPeakHours:
-      !!(raw.hasPeakHours || raw.has_peak_hours) ||
-      (Array.isArray(raw.peakHoursSlots) && raw.peakHoursSlots.length > 0) ||
-      (Array.isArray(raw.peak_hours_slots) && raw.peak_hours_slots.length > 0),
+    hasPeakHours: resolveHasPeakHoursFlag(raw),
     peakHoursSlots: Array.isArray(raw.peakHoursSlots)
       ? raw.peakHoursSlots
       : Array.isArray(raw.peak_hours_slots)
@@ -1073,17 +1101,7 @@ export function getPeakHoursSlotsForEnforcement(facility: {
   const raw = facility.bookingRulesRaw;
 
   /** Align with `normalizeSimplifiedBookingRules`: when normalize failed, infer from raw slots/flags. */
-  let peakOn = false;
-  if (norm) {
-    peakOn = !!norm.hasPeakHours;
-  } else if (raw && typeof raw === 'object') {
-    peakOn = !!(
-      raw.hasPeakHours ||
-      raw.has_peak_hours ||
-      (Array.isArray(raw.peakHoursSlots) && raw.peakHoursSlots.length > 0) ||
-      (Array.isArray(raw.peak_hours_slots) && raw.peak_hours_slots.length > 0)
-    );
-  }
+  const peakOn = norm ? !!norm.hasPeakHours : resolveHasPeakHoursFlag(raw);
 
   if (!peakOn) return null;
 

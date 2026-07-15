@@ -746,7 +746,9 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
       <Card>
         <CardHeader>
           <CardTitle>Recent payments</CardTitle>
-          <CardDescription>All member payments to this club.</CardDescription>
+          <CardDescription>
+            Member card charges across checkout, court close-out, annual fees, and pro shop.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {payments.length === 0 ? (
@@ -785,7 +787,7 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
                       <PaymentStatusBadge status={p.status} />
                     </TableCell>
                     <TableCell className="text-right">
-                      {p.status === 'PAID' && (
+                      {p.refundable && (
                         <Button
                           variant="outline"
                           size="sm"

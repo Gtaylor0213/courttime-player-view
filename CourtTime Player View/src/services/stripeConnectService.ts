@@ -16,6 +16,7 @@ import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPayme
 
 export type PaymentCategory = 'BALL_MACHINE' | 'CLINIC' | 'DRILL' | 'DUES' | 'OTHER';
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+export type ClubPaymentSource = 'connect' | 'settlement' | 'annual_fee' | 'pro_shop';
 
 export interface PaymentItem {
   id: string;
@@ -48,6 +49,8 @@ export interface ConnectPayment {
   itemCategory?: PaymentCategory;
   memberName?: string;
   memberEmail?: string;
+  source?: ClubPaymentSource;
+  refundable?: boolean;
 }
 
 /**
@@ -77,6 +80,18 @@ function rowToPaymentItem(row: any): PaymentItem {
 }
 
 function rowToConnectPayment(row: any): ConnectPayment {
+  const rawStatus = String(row.status ?? '').toUpperCase();
+  const status: PaymentStatus =
+    rawStatus === 'CHARGED' || rawStatus === 'PAID'
+      ? 'PAID'
+      : rawStatus === 'REFUNDED'
+        ? 'REFUNDED'
+        : rawStatus === 'FAILED'
+          ? 'FAILED'
+          : rawStatus === 'PENDING'
+            ? 'PENDING'
+            : (rawStatus as PaymentStatus);
+
   return {
     id: row.id,
     clubId: row.club_id,
@@ -84,8 +99,8 @@ function rowToConnectPayment(row: any): ConnectPayment {
     paymentItemId: row.payment_item_id ?? null,
     bulletinPostId: row.bulletin_post_id ?? null,
     amountCents: Number(row.amount_cents),
-    platformFeeCents: Number(row.platform_fee_cents),
-    status: row.status,
+    platformFeeCents: Number(row.platform_fee_cents ?? 0),
+    status,
     stripePaymentIntentId: row.stripe_payment_intent_id,
     stripeCheckoutSessionId: row.stripe_checkout_session_id,
     paidAt: row.paid_at,
@@ -94,6 +109,12 @@ function rowToConnectPayment(row: any): ConnectPayment {
     itemCategory: row.item_category,
     memberName: row.member_name,
     memberEmail: row.member_email,
+    source: row.source ?? 'connect',
+    refundable:
+      row.refundable === true ||
+      (row.refundable !== false &&
+        status === 'PAID' &&
+        !!row.stripe_payment_intent_id),
   };
 }
 
@@ -1101,8 +1122,7 @@ export interface BulletinSignupRefundSummary {
   failed: number;
 }
 
-async function executeConnectPaymentRefund(params: {
-  connectPaymentId: string;
+async function executeStripeConnectRefund(params: {
   stripePaymentIntentId: string;
   stripeAccountId: string;
 }): Promise<string> {
@@ -1116,11 +1136,24 @@ async function executeConnectPaymentRefund(params: {
     { stripeAccount: params.stripeAccountId }
   );
 
+  return refund.id;
+}
+
+async function executeConnectPaymentRefund(params: {
+  connectPaymentId: string;
+  stripePaymentIntentId: string;
+  stripeAccountId: string;
+}): Promise<string> {
+  const stripeRefundId = await executeStripeConnectRefund({
+    stripePaymentIntentId: params.stripePaymentIntentId,
+    stripeAccountId: params.stripeAccountId,
+  });
+
   await query(`UPDATE connect_payments SET status = 'REFUNDED' WHERE id = $1`, [
     params.connectPaymentId,
   ]);
 
-  return refund.id;
+  return stripeRefundId;
 }
 
 /**
@@ -1166,6 +1199,162 @@ export async function refundConnectPayment(
   });
 
   return { connectPaymentId, status: 'REFUNDED', stripeRefundId };
+}
+
+async function refundSettlementCharge(
+  chargeId: string,
+  adminUserId: string
+): Promise<RefundConnectPaymentResult> {
+  const result = await query(
+    `SELECT bsc.id,
+            bsc.status,
+            bsc.stripe_payment_intent_id AS "stripePaymentIntentId",
+            b.facility_id AS "clubId",
+            f.stripe_account_id AS "stripeAccountId"
+       FROM booking_settlement_charges bsc
+       JOIN bookings b ON b.id = bsc.booking_id
+       JOIN facilities f ON f.id = b.facility_id
+      WHERE bsc.id = $1`,
+    [chargeId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error('Payment not found');
+  }
+
+  const row = result.rows[0];
+  const admin = await isClubAdmin(adminUserId, row.clubId);
+  if (!admin) {
+    throw new Error('Not authorized to refund this payment');
+  }
+  if (row.status === 'refunded') {
+    throw new Error('Payment has already been refunded');
+  }
+  if (row.status !== 'charged' || !row.stripePaymentIntentId || !row.stripeAccountId) {
+    throw new Error('Only paid card charges can be refunded');
+  }
+
+  const stripeRefundId = await executeStripeConnectRefund({
+    stripePaymentIntentId: row.stripePaymentIntentId,
+    stripeAccountId: row.stripeAccountId,
+  });
+
+  await query(
+    `UPDATE booking_settlement_charges
+        SET status = 'refunded', updated_at = NOW()
+      WHERE id = $1`,
+    [chargeId]
+  );
+
+  return { connectPaymentId: `settlement:${chargeId}`, status: 'REFUNDED', stripeRefundId };
+}
+
+async function refundAnnualFeeCharge(
+  recordId: string,
+  adminUserId: string
+): Promise<RefundConnectPaymentResult> {
+  const result = await query(
+    `SELECT afbr.id,
+            afbr.status,
+            afbr.stripe_payment_intent_id AS "stripePaymentIntentId",
+            afbr.facility_id AS "clubId",
+            f.stripe_account_id AS "stripeAccountId"
+       FROM annual_fee_billing_records afbr
+       JOIN facilities f ON f.id = afbr.facility_id
+      WHERE afbr.id = $1`,
+    [recordId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error('Payment not found');
+  }
+
+  const row = result.rows[0];
+  const admin = await isClubAdmin(adminUserId, row.clubId);
+  if (!admin) {
+    throw new Error('Not authorized to refund this payment');
+  }
+  if (row.status === 'refunded') {
+    throw new Error('Payment has already been refunded');
+  }
+  if (row.status !== 'charged' || !row.stripePaymentIntentId || !row.stripeAccountId) {
+    throw new Error('Only paid card charges can be refunded');
+  }
+
+  const stripeRefundId = await executeStripeConnectRefund({
+    stripePaymentIntentId: row.stripePaymentIntentId,
+    stripeAccountId: row.stripeAccountId,
+  });
+
+  await query(`UPDATE annual_fee_billing_records SET status = 'refunded' WHERE id = $1`, [
+    recordId,
+  ]);
+
+  return { connectPaymentId: `annual:${recordId}`, status: 'REFUNDED', stripeRefundId };
+}
+
+async function refundProShopOrder(
+  orderId: string,
+  adminUserId: string
+): Promise<RefundConnectPaymentResult> {
+  const result = await query(
+    `SELECT o.id,
+            o.status,
+            o.stripe_payment_intent_id AS "stripePaymentIntentId",
+            o.facility_id AS "clubId",
+            f.stripe_account_id AS "stripeAccountId"
+       FROM pro_shop_orders o
+       JOIN facilities f ON f.id = o.facility_id
+      WHERE o.id = $1`,
+    [orderId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error('Payment not found');
+  }
+
+  const row = result.rows[0];
+  const admin = await isClubAdmin(adminUserId, row.clubId);
+  if (!admin) {
+    throw new Error('Not authorized to refund this payment');
+  }
+  if (row.status === 'refunded') {
+    throw new Error('Payment has already been refunded');
+  }
+  if (row.status !== 'paid' || !row.stripePaymentIntentId || !row.stripeAccountId) {
+    throw new Error('Only paid card charges can be refunded');
+  }
+
+  const stripeRefundId = await executeStripeConnectRefund({
+    stripePaymentIntentId: row.stripePaymentIntentId,
+    stripeAccountId: row.stripeAccountId,
+  });
+
+  await query(
+    `UPDATE pro_shop_orders SET status = 'refunded', updated_at = NOW() WHERE id = $1`,
+    [orderId]
+  );
+
+  return { connectPaymentId: `proshop:${orderId}`, status: 'REFUNDED', stripeRefundId };
+}
+
+/**
+ * Admin-initiated full refund for any paid Connect charge recorded in the app.
+ */
+export async function refundClubPayment(
+  paymentRef: string,
+  adminUserId: string
+): Promise<RefundConnectPaymentResult> {
+  if (paymentRef.startsWith('settlement:')) {
+    return refundSettlementCharge(paymentRef.slice('settlement:'.length), adminUserId);
+  }
+  if (paymentRef.startsWith('annual:')) {
+    return refundAnnualFeeCharge(paymentRef.slice('annual:'.length), adminUserId);
+  }
+  if (paymentRef.startsWith('proshop:')) {
+    return refundProShopOrder(paymentRef.slice('proshop:'.length), adminUserId);
+  }
+  return refundConnectPayment(paymentRef, adminUserId);
 }
 
 /**
@@ -1234,21 +1423,190 @@ export async function refundBulletinSignupPaymentsForPost(
 // ---------------------------------------------------------------------------
 
 export async function getClubPaymentHistory(clubId: string): Promise<ConnectPayment[]> {
-  const result = await query(
-    `SELECT cp.*,
-            COALESCE(pi.name, bp.title || ' signup') AS item_name,
+  await reconcileStuckFacilityConnectPayments(clubId).catch(err =>
+    console.error('[Payments] Connect payment reconcile failed:', err)
+  );
+
+  const facilityResult = await query(
+    `SELECT platform_fee_percent FROM facilities WHERE id = $1`,
+    [clubId]
+  );
+  const platformFeePercent = Number(facilityResult.rows[0]?.platform_fee_percent ?? 0);
+
+  const connectResult = await query(
+    `SELECT cp.id,
+            cp.club_id,
+            cp.member_id,
+            cp.payment_item_id,
+            cp.bulletin_post_id,
+            cp.amount_cents,
+            cp.platform_fee_cents,
+            cp.status,
+            cp.stripe_payment_intent_id,
+            cp.stripe_checkout_session_id,
+            cp.paid_at,
+            cp.created_at,
+            COALESCE(
+              pi.name,
+              CASE WHEN cp.bulletin_post_id IS NOT NULL THEN bp.title || ' signup' END,
+              CASE
+                WHEN cp.booking_id IS NOT NULL OR cp.pending_booking IS NOT NULL THEN 'Court booking'
+              END,
+              CASE
+                WHEN cp.payment_item_id IS NULL
+                 AND cp.bulletin_post_id IS NULL
+                 AND cp.booking_id IS NULL
+                 AND cp.pending_booking IS NULL THEN 'Account balance'
+              END,
+              'Payment'
+            ) AS item_name,
             COALESCE(pi.category, 'OTHER') AS item_category,
             u.full_name AS member_name,
-            u.email AS member_email
+            u.email AS member_email,
+            'connect' AS source,
+            CASE
+              WHEN cp.status = 'PAID' AND cp.stripe_payment_intent_id IS NOT NULL THEN true
+              ELSE false
+            END AS refundable
        FROM connect_payments cp
        LEFT JOIN payment_items pi ON pi.id = cp.payment_item_id
        LEFT JOIN bulletin_posts bp ON bp.id = cp.bulletin_post_id
-       JOIN users u ON u.id = cp.member_id
-      WHERE cp.club_id = $1
-      ORDER BY cp.created_at DESC`,
+       LEFT JOIN users u ON u.id = cp.member_id
+      WHERE cp.club_id = $1`,
     [clubId]
   );
-  return result.rows.map(rowToConnectPayment);
+
+  const settlementResult = await query(
+    `SELECT ('settlement:' || bsc.id::text) AS id,
+            b.facility_id AS club_id,
+            bsc.user_id AS member_id,
+            NULL::varchar AS payment_item_id,
+            NULL::uuid AS bulletin_post_id,
+            bsc.amount_cents,
+            GREATEST(0, ROUND(bsc.amount_cents * $2::numeric / 100.0))::int AS platform_fee_cents,
+            CASE
+              WHEN bsc.status = 'refunded' THEN 'REFUNDED'
+              WHEN bsc.status = 'charged' THEN 'PAID'
+              WHEN bsc.status = 'cash' THEN 'PAID'
+              ELSE upper(bsc.status)
+            END AS status,
+            bsc.stripe_payment_intent_id,
+            NULL::varchar AS stripe_checkout_session_id,
+            COALESCE(bsc.resolved_at, bsc.created_at) AS paid_at,
+            COALESCE(bsc.resolved_at, bsc.created_at) AS created_at,
+            'Court close-out' AS item_name,
+            'OTHER' AS item_category,
+            u.full_name AS member_name,
+            u.email AS member_email,
+            'settlement' AS source,
+            CASE
+              WHEN bsc.status = 'charged' AND bsc.stripe_payment_intent_id IS NOT NULL THEN true
+              ELSE false
+            END AS refundable
+       FROM booking_settlement_charges bsc
+       JOIN bookings b ON b.id = bsc.booking_id
+       LEFT JOIN users u ON u.id = bsc.user_id
+      WHERE b.facility_id = $1
+        AND bsc.status IN ('charged', 'cash', 'refunded')
+        AND bsc.amount_cents > 0`,
+    [clubId, platformFeePercent]
+  ).catch(err => {
+    console.error('[Payments] Settlement charge history query failed:', err);
+    return { rows: [] as any[] };
+  });
+
+  const annualResult = await query(
+    `SELECT ('annual:' || afbr.id::text) AS id,
+            afbr.facility_id AS club_id,
+            afbr.user_id AS member_id,
+            NULL::varchar AS payment_item_id,
+            NULL::uuid AS bulletin_post_id,
+            afbr.amount_cents,
+            GREATEST(0, ROUND(afbr.amount_cents * $2::numeric / 100.0))::int AS platform_fee_cents,
+            CASE
+              WHEN afbr.status = 'refunded' THEN 'REFUNDED'
+              WHEN afbr.status = 'charged' THEN 'PAID'
+              ELSE upper(afbr.status)
+            END AS status,
+            afbr.stripe_payment_intent_id,
+            NULL::varchar AS stripe_checkout_session_id,
+            afbr.processed_at AS paid_at,
+            afbr.processed_at AS created_at,
+            CONCAT(COALESCE(afbr.tier_name, 'Annual fee'), ' (', afbr.billing_year, ')') AS item_name,
+            'DUES' AS item_category,
+            u.full_name AS member_name,
+            u.email AS member_email,
+            'annual_fee' AS source,
+            CASE
+              WHEN afbr.status = 'charged' AND afbr.stripe_payment_intent_id IS NOT NULL THEN true
+              ELSE false
+            END AS refundable
+       FROM annual_fee_billing_records afbr
+       LEFT JOIN users u ON u.id = afbr.user_id
+      WHERE afbr.facility_id = $1
+        AND afbr.status IN ('charged', 'refunded')`,
+    [clubId, platformFeePercent]
+  ).catch(err => {
+    console.error('[Payments] Annual fee history query failed:', err);
+    return { rows: [] as any[] };
+  });
+
+  const proShopResult = await query(
+    `SELECT ('proshop:' || o.id::text) AS id,
+            o.facility_id AS club_id,
+            o.user_id AS member_id,
+            NULL::varchar AS payment_item_id,
+            NULL::uuid AS bulletin_post_id,
+            o.total_cents AS amount_cents,
+            GREATEST(0, ROUND(o.total_cents * $2::numeric / 100.0))::int AS platform_fee_cents,
+            CASE
+              WHEN o.status = 'refunded' THEN 'REFUNDED'
+              WHEN o.status = 'paid' THEN 'PAID'
+              ELSE upper(o.status)
+            END AS status,
+            o.stripe_payment_intent_id,
+            o.stripe_checkout_session_id,
+            o.created_at AS paid_at,
+            o.created_at,
+            COALESCE(
+              (SELECT string_agg(COALESCE(p.name, 'Item') || ' x' || oi.quantity::text, ', ')
+                 FROM pro_shop_order_items oi
+                 LEFT JOIN pro_shop_products p ON p.id = oi.product_id
+                WHERE oi.order_id = o.id),
+              'Pro shop order'
+            ) AS item_name,
+            'OTHER' AS item_category,
+            COALESCE(u.full_name, o.guest_name) AS member_name,
+            COALESCE(u.email, o.guest_email) AS member_email,
+            'pro_shop' AS source,
+            CASE
+              WHEN o.status = 'paid' AND o.stripe_payment_intent_id IS NOT NULL THEN true
+              ELSE false
+            END AS refundable
+       FROM pro_shop_orders o
+       LEFT JOIN users u ON u.id = o.user_id
+      WHERE o.facility_id = $1
+        AND o.status IN ('paid', 'refunded')
+        AND o.total_cents > 0`,
+    [clubId, platformFeePercent]
+  ).catch(err => {
+    console.error('[Payments] Pro shop history query failed:', err);
+    return { rows: [] as any[] };
+  });
+
+  const all = [
+    ...connectResult.rows,
+    ...settlementResult.rows,
+    ...annualResult.rows,
+    ...proShopResult.rows,
+  ].map(rowToConnectPayment);
+
+  all.sort(
+    (a, b) =>
+      new Date(b.paidAt || b.createdAt).getTime() - new Date(a.paidAt || a.createdAt).getTime()
+  );
+
+  return all;
 }
 
 export async function getMemberPaymentHistory(memberId: string): Promise<ConnectPayment[]> {

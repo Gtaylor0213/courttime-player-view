@@ -1700,6 +1700,7 @@ export const paymentsApi = {
 
 export type PaymentCategory = 'BALL_MACHINE' | 'CLINIC' | 'DRILL' | 'DUES' | 'OTHER';
 export type ConnectPaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+export type ClubPaymentSource = 'connect' | 'settlement' | 'annual_fee' | 'pro_shop';
 
 export interface PaymentItem {
   id: string;
@@ -1731,6 +1732,8 @@ export interface ConnectPayment {
   itemCategory?: PaymentCategory;
   memberName?: string;
   memberEmail?: string;
+  source?: ClubPaymentSource;
+  refundable?: boolean;
 }
 
 export const stripeConnectApi = {

@@ -20,7 +20,7 @@ import {
   getPaymentItem,
   isClubAdmin,
   isClubMember,
-  refundConnectPayment,
+  refundClubPayment,
   syncSetupSessionForMember,
 } from '../../src/services/stripeConnectService';
 
@@ -227,7 +227,7 @@ router.post('/:connectPaymentId/refund', requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: 'connectPaymentId is required' });
     }
 
-    const result = await refundConnectPayment(connectPaymentId, req.user!.userId);
+    const result = await refundClubPayment(connectPaymentId, req.user!.userId);
     return res.json({ success: true, data: result });
   } catch (err: any) {
     const message = err.message || 'Failed to refund payment';

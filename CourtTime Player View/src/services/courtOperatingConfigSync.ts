@@ -129,6 +129,90 @@ export async function seedCourtsWithoutOperatingConfig(
   }
 }
 
+const SUNDAY_FIRST_DAY_NAMES = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+
+function pgTimeToHHMM(value: unknown, fallback: string): string {
+  const formatted = formatPgTime(value);
+  return formatted ? formatted.slice(0, 5) : fallback;
+}
+
+/**
+ * Recompute facility operating_hours as the weekly envelope of its courts' schedules
+ * (open if any court is open; earliest open to latest close). Keeps the player-facing
+ * hours summary and the calendar day bounds consistent after per-court schedule edits.
+ */
+export async function syncFacilityOperatingHoursFromCourtsWithClient(
+  client: PoolClient,
+  facilityId: string
+): Promise<void> {
+  const facilityRow = await client.query(
+    `SELECT operating_hours FROM facilities WHERE id = $1`,
+    [facilityId]
+  );
+  if (facilityRow.rows.length === 0) return;
+
+  // Pin courts that still follow facility defaults to the current hours first so
+  // editing one court's schedule doesn't implicitly move every unconfigured court.
+  await seedCourtsWithoutOperatingConfig(client, facilityId, facilityRow.rows[0].operating_hours);
+
+  const agg = await client.query(
+    `SELECT coc.day_of_week AS "dayOfWeek",
+            BOOL_OR(coc.is_open) AS "anyOpen",
+            MIN(coc.open_time) FILTER (WHERE coc.is_open) AS "openTime",
+            MAX(coc.close_time) FILTER (WHERE coc.is_open) AS "closeTime"
+     FROM court_operating_config coc
+     JOIN courts c ON c.id = coc.court_id
+     WHERE c.facility_id = $1
+     GROUP BY coc.day_of_week`,
+    [facilityId]
+  );
+  if (agg.rows.length === 0) return;
+
+  const byDay = new Map<number, any>();
+  agg.rows.forEach((row) => byDay.set(Number(row.dayOfWeek), row));
+
+  const operatingHours: Record<string, { open: string; close: string; closed: boolean }> = {};
+  SUNDAY_FIRST_DAY_NAMES.forEach((dayName, dow) => {
+    const row = byDay.get(dow);
+    if (!row || !row.anyOpen) {
+      operatingHours[dayName] = { open: '08:00', close: '20:00', closed: true };
+    } else {
+      operatingHours[dayName] = {
+        open: pgTimeToHHMM(row.openTime, '08:00'),
+        close: pgTimeToHHMM(row.closeTime, '20:00'),
+        closed: false,
+      };
+    }
+  });
+
+  await client.query(
+    `UPDATE facilities SET operating_hours = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+    [facilityId, JSON.stringify(operatingHours)]
+  );
+}
+
+export async function syncFacilityOperatingHoursFromCourts(facilityId: string): Promise<void> {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    await syncFacilityOperatingHoursFromCourtsWithClient(client, facilityId);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function replaceAllCourtOperatingConfigsForFacility(
   facilityId: string,
   rawOperatingHours: unknown

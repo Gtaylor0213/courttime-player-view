@@ -11,6 +11,10 @@ import {
   isTruthyClosed,
 } from '../../shared/utils/operatingHours';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+import {
+  syncFacilityOperatingHoursFromCourts,
+  syncFacilityOperatingHoursFromCourtsWithClient,
+} from '../../src/services/courtOperatingConfigSync';
 import { normalizeLocalDatetimeForStorage } from '../../src/utils/dateUtils';
 import { ensureFacilityAdmin, facilityIdForCourt, facilityIdForBlackout } from '../middleware/facilityAdmin';
 
@@ -314,6 +318,9 @@ router.put('/:courtId/schedule', async (req, res, next) => {
         );
       }
 
+      // Keep the facility-level hours summary in step with per-court schedules.
+      await syncFacilityOperatingHoursFromCourtsWithClient(client, scheduleFacilityId);
+
       await client.query('COMMIT');
 
       // Fetch updated schedule
@@ -392,6 +399,9 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
         maxDuration || 120
       ]
     );
+
+    // Keep the facility-level hours summary in step with per-court schedules.
+    await syncFacilityOperatingHoursFromCourts(dayFacilityId);
 
     res.json({
       success: true,

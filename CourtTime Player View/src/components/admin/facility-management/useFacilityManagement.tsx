@@ -666,6 +666,9 @@ const performSave = async (options?: { closeEditor?: boolean; toastMessage?: str
         weekendPolicyApplyToAdmins: false,
       },
     };
+    const hoursChanged =
+      !originalData ||
+      JSON.stringify(originalData.operatingHours) !== JSON.stringify(facilityData.operatingHours);
     const response = await adminApi.updateFacility(currentFacilityId, payload);
 
     if (response.success) {
@@ -683,6 +686,11 @@ const performSave = async (options?: { closeEditor?: boolean; toastMessage?: str
         ...payload,
         facilityImage: closeEditor ? null : prev.facilityImage,
       }));
+      if (hoursChanged) {
+        // The server pushed the new hours to every court's schedule; refetch
+        // so the per-court hour summaries don't show the old times.
+        void loadCourts();
+      }
     } else {
       toast.error(response.error || 'Failed to update facility');
     }
@@ -1112,6 +1120,22 @@ const refreshCourtHoursSummary = async (courtId: string) => {
   }
 };
 
+// Per-court schedule saves recompute facility hours on the server; pull the
+// result back so the Details tab summary and calendar bounds match.
+const refreshFacilityOperatingHours = async () => {
+  if (!currentFacilityId) return;
+  try {
+    const response = await facilitiesApi.getById(currentFacilityId);
+    const hours = response.data?.facility?.operatingHours;
+    if (response.success && hours && typeof hours === 'object') {
+      setFacilityData((prev) => ({ ...prev, operatingHours: hours }));
+      setOriginalData((prev) => (prev ? { ...prev, operatingHours: hours } : prev));
+    }
+  } catch {
+    /* keep existing hours */
+  }
+};
+
 // Court management functions
 const loadCourts = async () => {
   if (!currentFacilityId) return;
@@ -1446,6 +1470,7 @@ const saveCourtSchedule = async () => {
     if (response.success) {
       toast.success('Court schedule saved');
       await refreshCourtHoursSummary(configuringCourtId);
+      await refreshFacilityOperatingHours();
     } else {
       toast.error(response.error || 'Failed to save schedule');
     }

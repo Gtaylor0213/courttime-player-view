@@ -1,5 +1,7 @@
 import { query, transaction } from '../database/connection';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
+import { facilityOperatingHoursScheduleFingerprint } from '../../shared/utils/operatingHours';
+import { replaceAllCourtOperatingConfigsForFacility } from './courtOperatingConfigSync';
 import { getAmountForCourts } from './subscriptionPricing';
 import * as bcrypt from 'bcrypt';
 
@@ -565,6 +567,17 @@ export async function updateFacility(facilityId: string, data: Record<string, an
 
   if (sets.length === 0) throw new Error('No valid fields to update');
 
+  let priorOperatingHoursFingerprint: string | undefined;
+  if (data.operating_hours !== undefined) {
+    const prior = await query(
+      `SELECT operating_hours FROM facilities WHERE id = $1`,
+      [facilityId]
+    );
+    priorOperatingHoursFingerprint = facilityOperatingHoursScheduleFingerprint(
+      prior.rows[0]?.operating_hours
+    );
+  }
+
   sets.push('updated_at = NOW()');
   params.push(facilityId);
 
@@ -572,7 +585,18 @@ export async function updateFacility(facilityId: string, data: Record<string, an
     `UPDATE facilities SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
     params
   );
-  return result.rows[0] || null;
+  const updated = result.rows[0] || null;
+
+  // Mirror the admin facility route: changed weekly hours must reach every
+  // court's schedule or the calendar keeps showing the old times.
+  if (updated && data.operating_hours !== undefined) {
+    const nextFingerprint = facilityOperatingHoursScheduleFingerprint(data.operating_hours);
+    if (nextFingerprint !== priorOperatingHoursFingerprint) {
+      await replaceAllCourtOperatingConfigsForFacility(facilityId, data.operating_hours);
+    }
+  }
+
+  return updated;
 }
 
 // ── Facility Delete ────────────────────────────────────────

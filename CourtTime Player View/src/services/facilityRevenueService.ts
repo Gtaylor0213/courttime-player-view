@@ -1,4 +1,5 @@
 import { query } from '../database/connection';
+import { reconcileStuckFacilityConnectPayments } from './stripeConnectService';
 
 export type FacilityRevenuePaymentType =
   | 'COURT_BOOKING'
@@ -40,8 +41,8 @@ export interface FacilityRevenueTotals {
 
 /**
  * Unified revenue ledger — same sources as Admin Reports (reportingService):
- * connect_payments, annual_fee_billing_records, pro_shop_orders, and
- * platform subscriptions from facility_revenue_log.
+ * connect_payments, post-play settlement charges, annual_fee_billing_records,
+ * pro_shop_orders, and platform subscriptions from facility_revenue_log.
  */
 const REVENUE_EVENTS_CTE = `
   WITH revenue_events AS (
@@ -57,6 +58,19 @@ const REVENUE_EVENTS_CTE = `
     FROM connect_payments cp
     WHERE cp.club_id = $1
       AND cp.status = 'PAID'
+
+    UNION ALL
+
+    SELECT
+      b.facility_id,
+      bsc.amount_cents,
+      'COURT_BOOKING' AS payment_type,
+      COALESCE(bsc.resolved_at, bsc.updated_at) AS paid_at
+    FROM booking_settlement_charges bsc
+    JOIN bookings b ON b.id = bsc.booking_id
+    WHERE b.facility_id = $1
+      AND bsc.status IN ('charged', 'cash')
+      AND bsc.amount_cents > 0
 
     UNION ALL
 
@@ -114,6 +128,10 @@ export async function getFacilityRevenueThisMonth(facilityId: string): Promise<{
   revenueCents: number;
   breakdown: FacilityRevenueBreakdown;
 }> {
+  await reconcileStuckFacilityConnectPayments(facilityId).catch(err =>
+    console.error('[Revenue] Connect payment reconcile failed:', err)
+  );
+
   let rows: Array<{ payment_type: string; total_cents: number }> = [];
   try {
     const result = await query(
@@ -165,6 +183,10 @@ export async function getFacilityRevenueReport(
     lastMonthCents: 0,
     thisYearCents: 0,
   };
+
+  await reconcileStuckFacilityConnectPayments(facilityId).catch(err =>
+    console.error('[Revenue] Connect payment reconcile failed:', err)
+  );
 
   let totals = { ...emptyTotals };
   let monthly: FacilityRevenueMonthRow[] = [];
@@ -229,6 +251,24 @@ export async function getFacilityRevenueReport(
          FROM connect_payments cp
          LEFT JOIN users u ON cp.member_id = u.id
          WHERE cp.club_id = $1 AND cp.status = 'PAID'
+
+         UNION ALL
+
+         SELECT
+           bsc.id::text,
+           bsc.amount_cents,
+           'COURT_BOOKING',
+           bsc.id::text,
+           'booking_settlement_charge',
+           COALESCE(bsc.resolved_at, bsc.updated_at),
+           u.full_name,
+           u.email
+         FROM booking_settlement_charges bsc
+         JOIN bookings b ON b.id = bsc.booking_id
+         LEFT JOIN users u ON u.id = bsc.user_id
+         WHERE b.facility_id = $1
+           AND bsc.status IN ('charged', 'cash')
+           AND bsc.amount_cents > 0
 
          UNION ALL
 

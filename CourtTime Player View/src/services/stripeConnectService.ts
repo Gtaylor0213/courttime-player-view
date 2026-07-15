@@ -1521,6 +1521,41 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
 }
 
 /**
+ * Mark PENDING connect_payments as PAID when Stripe already captured the charge
+ * (e.g. webhook missed or client never called /payment/confirm).
+ */
+export async function reconcileStuckFacilityConnectPayments(facilityId: string): Promise<void> {
+  const stripe = getStripe();
+  if (!stripe) return;
+
+  const pending = await query(
+    `SELECT cp.id, cp.stripe_checkout_session_id, f.stripe_account_id
+       FROM connect_payments cp
+       JOIN facilities f ON f.id = cp.club_id
+      WHERE cp.club_id = $1
+        AND cp.status = 'PENDING'
+        AND cp.stripe_checkout_session_id IS NOT NULL
+        AND cp.created_at > NOW() - INTERVAL '90 days'
+      ORDER BY cp.created_at DESC
+      LIMIT 25`,
+    [facilityId]
+  );
+
+  for (const row of pending.rows) {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(row.stripe_checkout_session_id, {
+        stripeAccount: row.stripe_account_id,
+      });
+      if (session.payment_status === 'paid') {
+        await markCheckoutSessionPaid(session);
+      }
+    } catch (err) {
+      console.error('[Revenue] Stuck connect payment reconcile failed:', row.id, err);
+    }
+  }
+}
+
+/**
  * After Stripe redirects back to the app, confirm the session and create the signup.
  * Works even when the Connect webhook has not reached the server (common in local dev).
  */

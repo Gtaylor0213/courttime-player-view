@@ -1,4 +1,5 @@
 import { query } from '../database/connection';
+import { reconcileStuckFacilityConnectPayments } from './stripeConnectService';
 
 export type TransactionType =
   | 'court_booking'
@@ -50,6 +51,9 @@ export async function getTransactionReport(
   endDate: string,
   typeFilter?: string
 ): Promise<TransactionReport> {
+  await reconcileStuckFacilityConnectPayments(facilityId).catch(err =>
+    console.error('[Reports] Connect payment reconcile failed:', err)
+  );
 
   // Source 1: connect_payments (court bookings, bulletin signups, payment items)
   // Querying this table directly is more reliable than facility_revenue_log,
@@ -78,7 +82,7 @@ export async function getTransactionReport(
          cp.amount_cents,
          lower(cp.status)                      AS status
        FROM connect_payments cp
-       JOIN users u ON u.id = cp.member_id
+       LEFT JOIN users u ON u.id = cp.member_id
        LEFT JOIN payment_items pi ON pi.id = cp.payment_item_id
        WHERE cp.club_id = $1
          AND cp.status = 'PAID'
@@ -146,6 +150,33 @@ export async function getTransactionReport(
     console.error('[Reports] Pro shop query failed:', err);
   }
 
+  // Source 4: post-play settlement charges (charged card or cash at close-out)
+  let settlementRows = { rows: [] as any[] };
+  try {
+    settlementRows = await query(
+      `SELECT
+         bsc.id::text                            AS id,
+         COALESCE(bsc.resolved_at, bsc.updated_at) AS date,
+         u.full_name                             AS member_name,
+         u.email                                 AS member_email,
+         'court_booking'                         AS type,
+         'Court Booking'                         AS description,
+         bsc.amount_cents,
+         bsc.status
+       FROM booking_settlement_charges bsc
+       JOIN bookings b ON b.id = bsc.booking_id
+       LEFT JOIN users u ON u.id = bsc.user_id
+       WHERE b.facility_id = $1
+         AND bsc.status IN ('charged', 'cash')
+         AND bsc.amount_cents > 0
+         AND COALESCE(bsc.resolved_at, bsc.updated_at) >= $2::timestamptz
+         AND COALESCE(bsc.resolved_at, bsc.updated_at) <  $3::timestamptz + INTERVAL '1 day'`,
+      [facilityId, startDate, endDate]
+    );
+  } catch (err) {
+    console.error('[Reports] Settlement charges query failed:', err);
+  }
+
   // Merge all rows
   let all: Transaction[] = [
     ...connectRows.rows.map((r: any) => ({
@@ -174,6 +205,16 @@ export async function getTransactionReport(
       member_name: r.member_name,
       member_email: r.member_email,
       type: 'pro_shop' as TransactionType,
+      description: r.description,
+      amount_cents: Number(r.amount_cents),
+      status: r.status,
+    })),
+    ...settlementRows.rows.map((r: any) => ({
+      id: r.id,
+      date: r.date,
+      member_name: r.member_name,
+      member_email: r.member_email,
+      type: 'court_booking' as TransactionType,
       description: r.description,
       amount_cents: Number(r.amount_cents),
       status: r.status,

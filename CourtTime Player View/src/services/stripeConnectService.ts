@@ -1089,10 +1089,83 @@ export async function createCourtBookingCheckoutSession(params: {
 // Refunds
 // ---------------------------------------------------------------------------
 
+export interface RefundConnectPaymentResult {
+  connectPaymentId: string;
+  status: 'REFUNDED';
+  stripeRefundId: string;
+}
+
 export interface BulletinSignupRefundSummary {
   refunded: number;
   skipped: number;
   failed: number;
+}
+
+async function executeConnectPaymentRefund(params: {
+  connectPaymentId: string;
+  stripePaymentIntentId: string;
+  stripeAccountId: string;
+}): Promise<string> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error('Stripe is not configured');
+  }
+
+  const refund = await stripe.refunds.create(
+    { payment_intent: params.stripePaymentIntentId },
+    { stripeAccount: params.stripeAccountId }
+  );
+
+  await query(`UPDATE connect_payments SET status = 'REFUNDED' WHERE id = $1`, [
+    params.connectPaymentId,
+  ]);
+
+  return refund.id;
+}
+
+/**
+ * Admin-initiated full refund for a paid Connect charge.
+ * Uses direct-charge refunds on the facility's connected account.
+ */
+export async function refundConnectPayment(
+  connectPaymentId: string,
+  adminUserId: string
+): Promise<RefundConnectPaymentResult> {
+  const result = await query(
+    `SELECT cp.id,
+            cp.club_id,
+            cp.status,
+            cp.stripe_payment_intent_id as "stripePaymentIntentId",
+            f.stripe_account_id as "stripeAccountId"
+       FROM connect_payments cp
+       JOIN facilities f ON f.id = cp.club_id
+      WHERE cp.id = $1`,
+    [connectPaymentId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error('Payment not found');
+  }
+
+  const row = result.rows[0];
+  const admin = await isClubAdmin(adminUserId, row.club_id);
+  if (!admin) {
+    throw new Error('Not authorized to refund this payment');
+  }
+  if (row.status === 'REFUNDED') {
+    throw new Error('Payment has already been refunded');
+  }
+  if (row.status !== 'PAID' || !row.stripePaymentIntentId || !row.stripeAccountId) {
+    throw new Error('Only paid card charges can be refunded');
+  }
+
+  const stripeRefundId = await executeConnectPaymentRefund({
+    connectPaymentId,
+    stripePaymentIntentId: row.stripePaymentIntentId,
+    stripeAccountId: row.stripeAccountId,
+  });
+
+  return { connectPaymentId, status: 'REFUNDED', stripeRefundId };
 }
 
 /**
@@ -1141,11 +1214,11 @@ export async function refundBulletinSignupPaymentsForPost(
     }
 
     try {
-      await stripe.refunds.create(
-        { payment_intent: row.stripePaymentIntentId },
-        { stripeAccount: row.stripeAccountId }
-      );
-      await query(`UPDATE connect_payments SET status = 'REFUNDED' WHERE id = $1`, [row.id]);
+      await executeConnectPaymentRefund({
+        connectPaymentId: row.id,
+        stripePaymentIntentId: row.stripePaymentIntentId,
+        stripeAccountId: row.stripeAccountId,
+      });
       refunded += 1;
     } catch (err) {
       failed += 1;

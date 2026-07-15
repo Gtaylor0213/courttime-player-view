@@ -20,6 +20,7 @@ import {
   getPaymentItem,
   isClubAdmin,
   isClubMember,
+  refundConnectPayment,
   syncSetupSessionForMember,
 } from '../../src/services/stripeConnectService';
 
@@ -212,6 +213,40 @@ router.get('/my-history', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[CONNECT-PAYMENTS] my-history failed:', err);
     return res.status(500).json({ success: false, error: err.message || 'Failed to load history' });
+  }
+});
+
+/**
+ * POST /api/payments/:connectPaymentId/refund
+ * Club admin refunds a paid member charge on their connected account.
+ */
+router.post('/:connectPaymentId/refund', requireAuth, async (req, res) => {
+  try {
+    const connectPaymentId = String(req.params.connectPaymentId || '');
+    if (!connectPaymentId) {
+      return res.status(400).json({ success: false, error: 'connectPaymentId is required' });
+    }
+
+    const result = await refundConnectPayment(connectPaymentId, req.user!.userId);
+    return res.json({ success: true, data: result });
+  } catch (err: any) {
+    const message = err.message || 'Failed to refund payment';
+    console.error('[CONNECT-PAYMENTS] refund failed:', err);
+
+    if (message === 'Payment not found') {
+      return res.status(404).json({ success: false, error: message });
+    }
+    if (message === 'Not authorized to refund this payment') {
+      return res.status(403).json({ success: false, error: message });
+    }
+    if (
+      message === 'Payment has already been refunded' ||
+      message === 'Only paid card charges can be refunded'
+    ) {
+      return res.status(400).json({ success: false, error: message });
+    }
+
+    return res.status(400).json({ success: false, error: message });
   }
 });
 

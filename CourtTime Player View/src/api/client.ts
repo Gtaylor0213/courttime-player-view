@@ -1831,6 +1831,12 @@ export const connectPaymentsApi = {
   clubHistory: async (clubId: string) => {
     return apiRequest(`/api/payments/history?clubId=${encodeURIComponent(clubId)}`);
   },
+  // Admin — refund a paid Connect charge.
+  refund: async (connectPaymentId: string) => {
+    return apiRequest(`/api/payments/${encodeURIComponent(connectPaymentId)}/refund`, {
+      method: 'POST',
+    });
+  },
   // Member — their own payments (optionally filtered by club).
   myHistory: async (clubId?: string) => {
     const qs = clubId ? `?clubId=${encodeURIComponent(clubId)}` : '';

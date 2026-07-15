@@ -16,6 +16,14 @@ import {
 } from '../ui/select';
 import { Alert, AlertDescription } from '../ui/alert';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
+import {
   Table,
   TableBody,
   TableCell,
@@ -23,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { CheckCircle2, AlertCircle, ExternalLink, Plus, Pencil, X, Save, Lock, LockOpen, User } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ExternalLink, Plus, Pencil, X, Save, Lock, LockOpen, User, Undo2 } from 'lucide-react';
 import {
   paymentItemsApi,
   stripeConnectApi,
@@ -98,6 +106,8 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
   const [lockoutDescription, setLockoutDescription] = useState('');
   const [lockingMember, setLockingMember] = useState(false);
   const [clearingLockout, setClearingLockout] = useState<string | null>(null);
+  const [refundTarget, setRefundTarget] = useState<ConnectPayment | null>(null);
+  const [refunding, setRefunding] = useState(false);
 
   const loadMembers = useCallback(async () => {
     if (!clubId) return;
@@ -145,6 +155,27 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  const handleRefund = async () => {
+    if (!refundTarget) return;
+    setRefunding(true);
+    try {
+      const res = await connectPaymentsApi.refund(refundTarget.id);
+      if (res.success) {
+        toast.success(
+          `Refunded ${dollars(refundTarget.amountCents)} to ${refundTarget.memberName || 'member'}`
+        );
+        setRefundTarget(null);
+        await refresh();
+      } else {
+        toast.error((res as any).error || 'Refund failed');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Refund failed');
+    } finally {
+      setRefunding(false);
+    }
+  };
 
   // If Stripe just redirected back to ?connect=done, refresh + show a toast.
   useEffect(() => {
@@ -732,6 +763,7 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
                   <TableHead>Amount</TableHead>
                   <TableHead>Platform fee</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -752,6 +784,18 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
                     <TableCell>
                       <PaymentStatusBadge status={p.status} />
                     </TableCell>
+                    <TableCell className="text-right">
+                      {p.status === 'PAID' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setRefundTarget(p)}
+                        >
+                          <Undo2 className="h-4 w-4 mr-1" />
+                          Refund
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -759,6 +803,43 @@ export function PaymentsTab({ clubId }: PaymentsTabProps) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(refundTarget)} onOpenChange={open => !open && setRefundTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Refund payment</DialogTitle>
+            <DialogDescription>
+              This will refund the full amount to the member&apos;s card. The refund is processed
+              through your connected Stripe account and may take 5–10 business days to appear on
+              the member&apos;s statement.
+            </DialogDescription>
+          </DialogHeader>
+          {refundTarget && (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Member</span>
+                <span className="font-medium">{refundTarget.memberName || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Item</span>
+                <span>{refundTarget.itemName || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Amount</span>
+                <span className="font-medium">{dollars(refundTarget.amountCents)}</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRefundTarget(null)} disabled={refunding}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleRefund} disabled={refunding}>
+              {refunding ? 'Refunding…' : 'Confirm refund'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

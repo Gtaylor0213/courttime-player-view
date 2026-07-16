@@ -32,6 +32,14 @@ const API_BASE_URL = import.meta.env.DEV
 
 export type ApiResponse<T = any> = SharedApiResponse<T>;
 
+export interface RecurringSeriesConflict {
+  courtId: string;
+  courtName: string;
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface TermsAttachment {
   id: string;
   fileName: string;
@@ -763,6 +771,7 @@ export const bookingApi = {
     facilityId: string;
     bookingType?: string;
     notes?: string;
+    skipConflicts?: boolean;
     instances: Array<{
       courtId: string;
       bookingDate: string;
@@ -770,11 +779,34 @@ export const bookingApi = {
       endTime: string;
       durationMinutes: number;
     }>;
-  }) => {
-    return apiRequest('/api/bookings/recurring-series', {
+  }): Promise<
+    ApiResponse & {
+      seriesId?: string;
+      bookings?: Array<{ id: string }>;
+      skippedConflicts?: RecurringSeriesConflict[];
+      // Never set for series bookings; declared so series results union cleanly
+      // with bookingApi.create results in the booking flows.
+      requiresPayment?: boolean;
+      checkoutUrl?: string;
+      booking?: { id?: string };
+    }
+  > => {
+    const res = await apiRequest('/api/bookings/recurring-series', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    if (!res.success) return res;
+    // Flatten the payload so seriesId/bookings/skippedConflicts sit beside `success`.
+    const inner = unwrapApiPayload<{
+      success?: boolean;
+      seriesId?: string;
+      bookings?: Array<{ id: string }>;
+      skippedConflicts?: RecurringSeriesConflict[];
+      warnings?: ApiResponse['warnings'];
+      error?: string;
+    }>(res.data);
+    if (!inner || typeof inner !== 'object') return res;
+    return { ...res, ...inner, success: res.success && inner.success !== false };
   },
 
   cancel: async (bookingId: string, userId: string) => {

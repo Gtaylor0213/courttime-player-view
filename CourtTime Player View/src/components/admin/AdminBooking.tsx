@@ -13,6 +13,7 @@ import { bookingApi, membersApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
 import { sortFacilitiesByName } from '../../../shared/utils/facilitySort';
 import { parseLocalDate } from '../../utils/dateUtils';
+import { confirmSkipRecurringConflicts } from '../../utils/recurringConflicts';
 
 interface Member {
   userId: string;
@@ -682,13 +683,24 @@ export function AdminBooking() {
 
       const isRecurringSeries = advancedBooking;
       const results = isRecurringSeries
-        ? [await bookingApi.createRecurringSeries({
-            userId: bookingUserId,
-            facilityId: selectedFacility,
-            bookingType,
-            notes: finalNotes || undefined,
-            instances: bookingRequests
-          })]
+        ? await (async () => {
+            const seriesPayload = {
+              userId: bookingUserId,
+              facilityId: selectedFacility,
+              bookingType,
+              notes: finalNotes || undefined,
+              instances: bookingRequests
+            };
+            let res = await bookingApi.createRecurringSeries(seriesPayload);
+            if (!res.success && res.conflicts?.length) {
+              if (!confirmSkipRecurringConflicts(res.conflicts)) {
+                toast.info('No reservations were created.');
+                return null;
+              }
+              res = await bookingApi.createRecurringSeries({ ...seriesPayload, skipConflicts: true });
+            }
+            return [res];
+          })()
         : await (async () => {
             const out: Awaited<ReturnType<typeof bookingApi.create>>[] = [];
             const prior: Array<{
@@ -721,19 +733,36 @@ export function AdminBooking() {
             return out;
           })();
 
+      if (results === null) return; // Admin cancelled after seeing the conflict list
+
       const paymentResult = results.find((r) => r.requiresPayment && r.checkoutUrl);
       if (paymentResult?.checkoutUrl) return;
 
       const failedBookings = results.filter(r => !r.success);
       const successfulBookings = results.filter(
-        (r) => r.success && !r.requiresPayment && (r as { booking?: unknown }).booking
+        (r) =>
+          r.success &&
+          !r.requiresPayment &&
+          ((r as { booking?: unknown }).booking ||
+            ((r as { bookings?: unknown[] }).bookings?.length ?? 0) > 0)
+      );
+      const createdCount = successfulBookings
+        .map((r) =>
+          (r as { bookings?: unknown[] }).bookings?.length ??
+          ((r as { booking?: unknown }).booking ? 1 : 0)
+        )
+        .reduce((a: number, b: number) => a + b, 0);
+      const skippedConflicts = successfulBookings.flatMap(
+        (r) => (r as { skippedConflicts?: unknown[] }).skippedConflicts ?? []
       );
 
       if (successfulBookings.length > 0) {
         if (failedBookings.length > 0) {
-          toast.success(`${successfulBookings.length} bookings created. ${failedBookings.length} failed (conflicts).`);
+          toast.success(`${createdCount} bookings created. ${failedBookings.length} failed (conflicts).`);
+        } else if (skippedConflicts.length > 0) {
+          toast.success(`${createdCount} reservation(s) created. ${skippedConflicts.length} conflicting date(s) skipped.`);
         } else {
-          toast.success(`${successfulBookings.length} reservation(s) created successfully!`);
+          toast.success(`${createdCount} reservation(s) created successfully!`);
         }
 
         // Reset form
@@ -749,7 +778,10 @@ export function AdminBooking() {
         setRecurringEndDate('');
         setAdditionalCourtIds([]);
       } else {
-        toast.error('Failed to create reservations. There may be conflicts with existing reservations.');
+        toast.error(
+          failedBookings[0]?.error ||
+            'Failed to create reservations. There may be conflicts with existing reservations.'
+        );
       }
     } catch (error) {
       console.error('Booking error:', error);

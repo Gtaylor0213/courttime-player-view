@@ -737,20 +737,62 @@ export default function BookCourtScreen() {
         }))
       );
 
-      const recurringRes = await api.post('/api/bookings/recurring-series', {
+      const seriesPayload = {
         userId: user.id,
         facilityId,
         bookingType,
         notes: bookingNotes.trim() || undefined,
         instances,
-      });
+      };
+      let recurringRes = await api.post('/api/bookings/recurring-series', seriesPayload);
+
+      if (!recurringRes.success && recurringRes.conflicts?.length) {
+        const conflictLines = recurringRes.conflicts
+          .map((c) => {
+            const day = new Date(`${c.bookingDate}T12:00:00`).toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            });
+            return `• ${c.courtName} on ${day} at ${formatTimeForToast(c.startTime)}`;
+          })
+          .join('\n');
+        const proceed = await new Promise<boolean>((resolve) => {
+          showAlert(
+            'Booking Conflicts',
+            `The following date(s) conflict with existing reservations:\n\n${conflictLines}\n\nBook all of the other dates (the conflicting date(s) will be skipped), or cancel and start over?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Book Remaining', onPress: () => resolve(true) },
+            ]
+          );
+        });
+        if (!proceed) {
+          setBooking(false);
+          return;
+        }
+        recurringRes = await api.post('/api/bookings/recurring-series', {
+          ...seriesPayload,
+          skipConflicts: true,
+        });
+      }
 
       if (recurringRes.success) {
+        const seriesData = (recurringRes.data ?? {}) as {
+          bookings?: unknown[];
+          skippedConflicts?: unknown[];
+        };
+        const createdCount = seriesData.bookings?.length ?? instances.length;
+        const skippedCount = seriesData.skippedConflicts?.length ?? 0;
         setModalKind(null);
         hapticSuccess();
         showAlert(
           'Booked!',
-          `Created ${instances.length} recurring booking${instances.length === 1 ? '' : 's'} (${recurringDates.length} date${recurringDates.length === 1 ? '' : 's'}${allCourtIds.length > 1 ? ` x ${allCourtIds.length} courts` : ''}).`
+          `Created ${createdCount} recurring booking${createdCount === 1 ? '' : 's'}` +
+            (skippedCount > 0
+              ? ` (${skippedCount} conflicting date${skippedCount === 1 ? '' : 's'} skipped).`
+              : ` (${recurringDates.length} date${recurringDates.length === 1 ? '' : 's'}${allCourtIds.length > 1 ? ` x ${allCourtIds.length} courts` : ''}).`)
         );
         fetchTimeSlots();
       } else if (recurringRes.ruleViolations && recurringRes.ruleViolations.length > 0) {

@@ -541,7 +541,7 @@ router.post('/payment/confirm', async (req, res, next) => {
  */
 router.post('/recurring-series', async (req, res, next) => {
   try {
-    const { userId, facilityId, bookingType, notes, instances } = req.body;
+    const { userId, facilityId, bookingType, notes, instances, skipConflicts } = req.body;
     const callerUserId = req.user?.userId;
     if (!callerUserId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -581,11 +581,13 @@ router.post('/recurring-series', async (req, res, next) => {
       facilityId,
       bookingType,
       notes,
+      skipConflicts: skipConflicts === true,
       instances
     });
 
     if (!result.success) {
-      return res.status(400).json(result);
+      // 409 lets the client offer "book the rest anyway" for conflicts.
+      return res.status(result.conflicts?.length ? 409 : 400).json(result);
     }
 
     res.status(201).json(result);

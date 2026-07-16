@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
+import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 
@@ -495,13 +496,23 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
       const isRecurringSeries = advancedBooking;
       const results = isRecurringSeries
-        ? [await bookingApi.createRecurringSeries({
-            userId: user.id,
-            facilityId,
-            bookingType: bookingType || undefined,
-            notes: notes || undefined,
-            instances: bookingRequests.map(({ courtName, ...req }) => req)
-          })]
+        ? await (async () => {
+            const seriesPayload = {
+              userId: user.id,
+              facilityId,
+              bookingType: bookingType || undefined,
+              notes: notes || undefined,
+              instances: bookingRequests.map(({ courtName, ...req }) => req)
+            };
+            let res = await bookingApi.createRecurringSeries(seriesPayload);
+            if (!res.success && res.conflicts?.length) {
+              if (!confirmSkipRecurringConflicts(res.conflicts)) {
+                return null;
+              }
+              res = await bookingApi.createRecurringSeries({ ...seriesPayload, skipConflicts: true });
+            }
+            return [res];
+          })()
         : await (async () => {
             const out: Awaited<ReturnType<typeof bookingApi.create>>[] = [];
             const prior: Array<{
@@ -547,15 +558,27 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             return out;
           })();
 
+      if (results === null) return; // User cancelled after seeing the conflict list
+
       const paymentResult = results.find((r) => r.requiresPayment && r.checkoutUrl);
       if (paymentResult?.checkoutUrl) {
         return;
       }
 
       const successfulBookings = results.filter(
-        (r) => r.success && !r.requiresPayment && (r as { booking?: unknown }).booking
+        (r) =>
+          r.success &&
+          !r.requiresPayment &&
+          ((r as { booking?: unknown }).booking ||
+            ((r as { bookings?: unknown[] }).bookings?.length ?? 0) > 0)
       );
       const failedBookings = results.filter((r) => !r.success);
+      const createdCount = successfulBookings
+        .map((r) =>
+          (r as { bookings?: unknown[] }).bookings?.length ??
+          ((r as { booking?: unknown }).booking ? 1 : 0)
+        )
+        .reduce((a: number, b: number) => a + b, 0);
       const totalRequests = bookingRequests.length;
 
       if (successfulBookings.length > 0) {
@@ -563,7 +586,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           ? `${selectedCourts.length} courts`
           : court;
         const msg = totalRequests > 1
-          ? `${successfulBookings.length} of ${totalRequests} bookings created for ${courtLabel} at ${facility}.`
+          ? `${createdCount} of ${totalRequests} bookings created for ${courtLabel} at ${facility}.`
           : `Your ${court} booking at ${facility} has been confirmed.`;
 
         const reservationMeta = { facility, court, date, time: `${startTime} - ${endTime}` };
@@ -576,7 +599,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         });
 
         const calendarDetails =
-          successfulBookings.length === 1
+          createdCount === 1
             ? bookingWithDetailsToCalendarDetails({
                 courtName: court,
                 facilityName: facility,
@@ -588,9 +611,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               })
             : null;
 
-        const createdBookingId = (
-          successfulBookings[0] as { booking?: { id?: string } }
-        )?.booking?.id;
+        const firstSuccess = successfulBookings[0] as {
+          booking?: { id?: string };
+          bookings?: Array<{ id?: string }>;
+        };
+        const createdBookingId = firstSuccess?.booking?.id ?? firstSuccess?.bookings?.[0]?.id;
 
         offerAddBookingToCalendar(msg, calendarDetails, {
           alertTitle: 'Court Reservation Confirmed',

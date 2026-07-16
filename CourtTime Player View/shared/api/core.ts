@@ -127,6 +127,13 @@ export interface ApiResponse<T = unknown, TCategory extends string = string> {
   errorCategory?: TCategory;
   message?: string;
   ruleViolations?: Array<{ ruleCode: string; ruleName: string; message: string; severity: string }>;
+  conflicts?: Array<{
+    courtId: string;
+    courtName: string;
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+  }>;
   warnings?: Array<{ ruleCode: string; ruleName: string; message: string }>;
   isPrimeTime?: boolean;
 }
@@ -184,6 +191,7 @@ export function buildApiRequest<TCategory extends string = string>(config: Reque
           errorMessage,
           ...(statusCategory ? { errorCategory: statusCategory } : {}),
           ...(data.ruleViolations && { ruleViolations: data.ruleViolations }),
+          ...(data.conflicts && { conflicts: data.conflicts }),
           ...(data.warnings && { warnings: data.warnings }),
           ...(data.isPrimeTime !== undefined && { isPrimeTime: data.isPrimeTime }),
           ...(data.lockout && { lockout: data.lockout }),

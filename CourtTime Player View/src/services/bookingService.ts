@@ -640,6 +640,8 @@ export interface RecurringSeriesRequest {
   facilityId: string;
   bookingType?: string;
   notes?: string;
+  /** Book the non-conflicting instances and skip the ones that conflict. */
+  skipConflicts?: boolean;
   instances: Array<{
     courtId: string;
     bookingDate: string;
@@ -647,6 +649,14 @@ export interface RecurringSeriesRequest {
     endTime: string;
     durationMinutes: number;
   }>;
+}
+
+export interface RecurringSeriesConflict {
+  courtId: string;
+  courtName: string;
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
 }
 
 /**
@@ -1161,9 +1171,33 @@ export async function reconcilePaidCourtBookingsWithoutReservation(
   return recovered;
 }
 
+function formatTime12h(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+function describeSeriesConflict(c: RecurringSeriesConflict): string {
+  const day = new Date(`${c.bookingDate}T12:00:00`).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  return `${c.courtName} on ${day} at ${formatTime12h(c.startTime)}`;
+}
+
+export type RecurringSeriesResult = BookingResult & {
+  seriesId?: string;
+  bookings?: Booking[];
+  conflicts?: RecurringSeriesConflict[];
+  skippedConflicts?: RecurringSeriesConflict[];
+};
+
 export async function createRecurringBookingSeries(
   payload: RecurringSeriesRequest
-): Promise<BookingResult & { seriesId?: string; bookings?: Booking[] }> {
+): Promise<RecurringSeriesResult> {
   return enqueueBookingCreation(payload.userId, payload.facilityId, () =>
     createRecurringBookingSeriesCore(payload)
   );
@@ -1171,7 +1205,7 @@ export async function createRecurringBookingSeries(
 
 async function createRecurringBookingSeriesCore(
   payload: RecurringSeriesRequest
-): Promise<BookingResult & { seriesId?: string; bookings?: Booking[] }> {
+): Promise<RecurringSeriesResult> {
   try {
     const blockers: RuleResult[] = [];
     const warnings: RuleResult[] = [];
@@ -1229,21 +1263,30 @@ async function createRecurringBookingSeriesCore(
 
     // Conflict check and inserts share one transaction so concurrent bookings
     // cannot steal a slot between validation and insert.
-    const created = await transaction(async (client) => {
-      const seriesResult = await client.query(
-        `INSERT INTO booking_series (facility_id, created_by, notes)
-         VALUES ($1, $2, $3)
-         RETURNING id`,
-        [payload.facilityId, payload.userId, payload.notes || null]
+    const created = await transaction<{
+      seriesId?: string;
+      rows?: Booking[];
+      conflicts?: RecurringSeriesConflict[];
+      skippedConflicts?: RecurringSeriesConflict[];
+      allConflicted?: boolean;
+    }>(async (client) => {
+      // Lock the court rows (sorted for a stable order) to serialize concurrent
+      // booking attempts across the whole series.
+      const courtIds = [...new Set(payload.instances.map((i) => i.courtId))].sort();
+      const courtRows = await client.query(
+        `SELECT id, name FROM courts WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`,
+        [courtIds]
+      );
+      const courtNames = new Map<string, string>(
+        courtRows.rows.map((r: { id: string; name: string }) => [r.id, r.name])
       );
 
-      const seriesId = seriesResult.rows[0].id as string;
-      const rows: Booking[] = [];
+      // First pass: find every instance that conflicts with an existing booking
+      // or a parent/split court, so the caller can see the full list at once.
+      const conflictInstances: RecurringSeriesConflict[] = [];
+      const bookableInstances: typeof payload.instances = [];
 
       for (const instance of payload.instances) {
-        // Lock the court row to serialize concurrent booking attempts
-        await client.query(`SELECT id FROM courts WHERE id = $1 FOR UPDATE`, [instance.courtId]);
-
         const conflicts = await client.query(
           `SELECT id FROM bookings
            WHERE court_id = $1 AND booking_date = $2 AND status != 'cancelled'
@@ -1254,24 +1297,48 @@ async function createRecurringBookingSeriesCore(
              )`,
           [instance.courtId, instance.bookingDate, instance.startTime, instance.endTime]
         );
-        if (conflicts.rows.length > 0) {
-          throw Object.assign(
-            new Error('One or more recurring instances conflict with existing bookings.'),
-            { code: 'BOOKING_CONFLICT' }
+
+        let hasConflict = conflicts.rows.length > 0;
+        if (!hasConflict) {
+          const splitAvailability = await client.query(
+            `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
+            [instance.courtId, instance.bookingDate, instance.startTime, instance.endTime]
           );
+          hasConflict = !splitAvailability.rows[0]?.available;
         }
 
-        const splitAvailability = await client.query(
-          `SELECT check_split_court_availability($1, $2::date, $3::time, $4::time) as available`,
-          [instance.courtId, instance.bookingDate, instance.startTime, instance.endTime]
-        );
-        if (!splitAvailability.rows[0]?.available) {
-          throw Object.assign(
-            new Error('One or more recurring instances conflict with a parent or split court.'),
-            { code: 'BOOKING_CONFLICT' }
-          );
+        if (hasConflict) {
+          conflictInstances.push({
+            courtId: instance.courtId,
+            courtName: courtNames.get(instance.courtId) || 'Court',
+            bookingDate: instance.bookingDate,
+            startTime: instance.startTime,
+            endTime: instance.endTime
+          });
+        } else {
+          bookableInstances.push(instance);
         }
+      }
 
+      if (conflictInstances.length > 0 && !payload.skipConflicts) {
+        // Nothing has been inserted yet, so returning here books nothing.
+        return { conflicts: conflictInstances };
+      }
+      if (bookableInstances.length === 0) {
+        return { conflicts: conflictInstances, allConflicted: true };
+      }
+
+      const seriesResult = await client.query(
+        `INSERT INTO booking_series (facility_id, created_by, notes)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [payload.facilityId, payload.userId, payload.notes || null]
+      );
+
+      const seriesId = seriesResult.rows[0].id as string;
+      const rows: Booking[] = [];
+
+      for (const instance of bookableInstances) {
         const insert = await client.query(
           `INSERT INTO bookings (
              series_id, court_id, user_id, facility_id, booking_date,
@@ -1310,13 +1377,26 @@ async function createRecurringBookingSeriesCore(
         rows.push(insert.rows[0]);
       }
 
-      return { seriesId, rows };
+      return { seriesId, rows, skippedConflicts: conflictInstances };
     });
+
+    if (created.conflicts && !created.seriesId) {
+      const details = created.conflicts.map(describeSeriesConflict).join('; ');
+      return {
+        success: false,
+        error: created.allConflicted
+          ? `Every requested date conflicts with an existing reservation: ${details}. No reservations were created.`
+          : `There is a conflict with an existing reservation: ${details}. No reservations were created.`,
+        conflicts: created.conflicts,
+        warnings
+      };
+    }
 
     return {
       success: true,
       seriesId: created.seriesId,
       bookings: created.rows,
+      skippedConflicts: created.skippedConflicts?.length ? created.skippedConflicts : undefined,
       warnings
     };
   } catch (error) {

@@ -19,6 +19,7 @@ import {
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
+import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import {
@@ -634,13 +635,23 @@ export function QuickReservePopup({
 
       const isRecurringSeries = advancedBooking;
       const results = isRecurringSeries
-        ? [await bookingApi.createRecurringSeries({
-            userId: user.id,
-            facilityId: selectedFacility,
-            bookingType: bookingType || undefined,
-            notes: notes || undefined,
-            instances: bookingRequests
-          })]
+        ? await (async () => {
+            const seriesPayload = {
+              userId: user.id,
+              facilityId: selectedFacility,
+              bookingType: bookingType || undefined,
+              notes: notes || undefined,
+              instances: bookingRequests
+            };
+            let res = await bookingApi.createRecurringSeries(seriesPayload);
+            if (!res.success && res.conflicts?.length) {
+              if (!confirmSkipRecurringConflicts(res.conflicts)) {
+                return null;
+              }
+              res = await bookingApi.createRecurringSeries({ ...seriesPayload, skipConflicts: true });
+            }
+            return [res];
+          })()
         : await (async () => {
             const out: Awaited<ReturnType<typeof bookingApi.create>>[] = [];
             const prior: Array<{
@@ -681,6 +692,8 @@ export function QuickReservePopup({
             return out;
           })();
 
+      if (results === null) return; // User cancelled after seeing the conflict list
+
       const paymentResult = results.find((r) => r.requiresPayment && r.checkoutUrl);
       if (paymentResult?.checkoutUrl) {
         return;
@@ -688,8 +701,18 @@ export function QuickReservePopup({
 
       const failedBookings = results.filter(r => !r.success);
       const successfulBookings = results.filter(
-        (r) => r.success && !r.requiresPayment && (r as { booking?: unknown }).booking
+        (r) =>
+          r.success &&
+          !r.requiresPayment &&
+          ((r as { booking?: unknown }).booking ||
+            ((r as { bookings?: unknown[] }).bookings?.length ?? 0) > 0)
       );
+      const createdCount = successfulBookings
+        .map((r) =>
+          (r as { bookings?: unknown[] }).bookings?.length ??
+          ((r as { booking?: unknown }).booking ? 1 : 0)
+        )
+        .reduce((a: number, b: number) => a + b, 0);
 
       if (successfulBookings.length > 0) {
         // Call the parent callback to refresh bookings
@@ -704,12 +727,12 @@ export function QuickReservePopup({
         onReserve(reservation);
 
         const msg =
-          successfulBookings.length > 1
-            ? `${successfulBookings.length} court reservations were created at ${currentFacility?.name || 'your club'}.`
+          createdCount > 1
+            ? `${createdCount} court reservations were created at ${currentFacility?.name || 'your club'}.`
             : `Your ${selectedCourt} booking at ${currentFacility?.name || 'your club'} is confirmed for ${selectedDate} at ${selectedTime}.`;
 
         const calendarDetails =
-          successfulBookings.length === 1
+          createdCount === 1
             ? bookingWithDetailsToCalendarDetails({
                 courtName: selectedCourt,
                 facilityName: currentFacility?.name,
@@ -721,9 +744,11 @@ export function QuickReservePopup({
               })
             : null;
 
-        const createdBookingId = (
-          successfulBookings[0] as { booking?: { id?: string } }
-        )?.booking?.id;
+        const firstSuccess = successfulBookings[0] as {
+          booking?: { id?: string };
+          bookings?: Array<{ id?: string }>;
+        };
+        const createdBookingId = firstSuccess?.booking?.id ?? firstSuccess?.bookings?.[0]?.id;
 
         offerAddBookingToCalendar(msg, calendarDetails, { bookingId: createdBookingId });
 

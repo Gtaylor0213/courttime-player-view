@@ -45,7 +45,7 @@ import { CourtScheduleEditor } from './CourtScheduleEditor';
 import { SetFeesForAllPanel } from './SetFeesForAllPanel';
 import { CourtTypeField } from './CourtTypeField';
 import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
-import { MAX_COURTS_AT_LIST_PRICE } from '../../services/subscriptionPricing';
+import { MAX_COURTS_AT_LIST_PRICE, MIN_COURTS_COVERED } from '../../services/subscriptionPricing';
 import {
   clearCourtAddWaiverDraft,
   confirmCourtAddPaymentFromUrl,
@@ -287,6 +287,7 @@ export function CourtManagement() {
   // --- Court Limit ---
   const activeCourts = courts.filter(c => c.status !== 'closed');
   const atSubscriptionCap = activeCourts.length >= MAX_COURTS_AT_LIST_PRICE;
+  const belowMinCourtsCovered = activeCourts.length < MIN_COURTS_COVERED;
   const courtsToAddForPromo = bulkAddMode ? bulkAddForm.count : 1;
   const courtAddPromo = useCourtAddPromo(activeCourts.length, courtsToAddForPromo);
 
@@ -792,6 +793,17 @@ export function CourtManagement() {
               </Button>
             </div>
           </div>
+
+          {/* Minimum-plan free courts info */}
+          {belowMinCourtsCovered && (
+            <Alert className="mb-6 border-green-200 bg-green-50">
+              <AlertCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                Your subscription covers up to {MIN_COURTS_COVERED} courts — you can add
+                courts for free until you reach {MIN_COURTS_COVERED}.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Subscription cap info */}
           {atSubscriptionCap && (

@@ -47,8 +47,8 @@ export function CourtAddPromoSection({
       <div>
         <p className="text-sm font-medium text-gray-900">Platform court fee</p>
         <p className="text-xs text-gray-600 mt-1">
-          Adding {courtsToAdd} court{courtsToAdd !== 1 ? 's' : ''} requires a one-time fee of {perCourtLabel} per court
-          (until your plan reaches the annual maximum).
+          Your first 4 courts are covered by your subscription. Courts beyond that require a
+          one-time fee of {perCourtLabel} per court (until your plan reaches the annual maximum).
         </p>
       </div>
 

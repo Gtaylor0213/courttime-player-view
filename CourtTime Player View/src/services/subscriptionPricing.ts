@@ -6,6 +6,9 @@ export const MAX_SUBSCRIPTION_CENTS = 55000;  // $550 maximum
 /** Max courts at list price before annual fee caps ($550). */
 export const MAX_COURTS_AT_LIST_PRICE = 11;
 
+/** Courts already covered by the $200 minimum subscription — adding up to this many is free. */
+export const MIN_COURTS_COVERED = MIN_SUBSCRIPTION_CENTS / PER_COURT_CENTS; // 4
+
 /**
  * Annual subscription amount in cents: $50/court, min $200, max $550.
  */
@@ -30,7 +33,8 @@ export function isAtSubscriptionCap(activeCourtCount: number, amountCents: numbe
 
 /**
  * One-time platform fee in cents when adding courts post-registration.
- * $50 per court until the subscription cap is reached; $0 once at cap.
+ * The $200 minimum already covers the first 4 courts, so only courts 5-11
+ * are charged $50 each; $0 once at the subscription cap.
  */
 export function courtAddPaymentCents(
   courtsToAdd: number,
@@ -39,7 +43,8 @@ export function courtAddPaymentCents(
 ): number {
   if (courtsToAdd <= 0) return 0;
   if (isAtSubscriptionCap(activeCourtCount, amountCents)) return 0;
-  const courtsUntilCap = MAX_COURTS_AT_LIST_PRICE - activeCourtCount;
-  const chargeableCourts = Math.min(courtsToAdd, Math.max(0, courtsUntilCap));
+  const firstChargeable = Math.max(activeCourtCount, MIN_COURTS_COVERED);
+  const lastChargeable = Math.min(activeCourtCount + courtsToAdd, MAX_COURTS_AT_LIST_PRICE);
+  const chargeableCourts = Math.max(0, lastChargeable - firstChargeable);
   return chargeableCourts * PER_COURT_CENTS;
 }

@@ -357,6 +357,7 @@ export async function getUserById(userId: string): Promise<User | null> {
         u.phone,
         u.gender,
         u.user_type as "userType",
+        u.is_super_admin as "isSuperAdmin",
         u.created_at as "createdAt",
         u.updated_at as "updatedAt",
         pp.skill_level as "skillLevel",
@@ -424,11 +425,20 @@ export async function getUserWithMemberships(userId: string): Promise<(User & { 
       [userId]
     );
 
-    const adminFacilities = adminResult.rows.map(row => row.facilityId);
+    let adminFacilities = adminResult.rows.map(row => row.facilityId);
+    let effectiveMemberFacilities = memberFacilities;
+
+    // Platform super admins implicitly administer (and belong to) every facility.
+    if ((user as any).isSuperAdmin) {
+      const allFacilities = await query(`SELECT id FROM facilities`);
+      const allIds = allFacilities.rows.map(row => row.id);
+      adminFacilities = allIds;
+      effectiveMemberFacilities = [...new Set([...memberFacilities, ...allIds])];
+    }
 
     return {
       ...user,
-      memberFacilities,
+      memberFacilities: effectiveMemberFacilities,
       adminFacilities,
       suspendedFacilities,
       viewOnlyFacilities

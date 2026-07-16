@@ -386,6 +386,13 @@ export async function setMemberAsAdmin(
  */
 export async function isFacilityAdmin(facilityId: string, userId: string): Promise<boolean> {
   try {
+    // Platform super admins administer every facility.
+    const superAdmin = await query(
+      `SELECT 1 FROM users WHERE id = $1 AND is_super_admin = true`,
+      [userId]
+    );
+    if (superAdmin.rows.length > 0) return true;
+
     const result = await query(
       `SELECT is_facility_admin as "isFacilityAdmin"
        FROM facility_memberships

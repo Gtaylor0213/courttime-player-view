@@ -13,15 +13,33 @@ import { query } from '../../src/database/connection';
 import { isFacilityAdmin } from '../../src/services/memberService';
 
 /**
+ * True when the user is a platform super admin (users.is_super_admin). A super
+ * admin implicitly administers every facility, so this short-circuits all of
+ * the per-facility admin checks below.
+ */
+export async function isPlatformSuperAdmin(
+  userId: string | undefined | null
+): Promise<boolean> {
+  if (!userId) return false;
+  const row = await query(
+    `SELECT 1 FROM users WHERE id = $1 AND is_super_admin = true`,
+    [userId]
+  );
+  return row.rows.length > 0;
+}
+
+/**
  * True when the user is an active admin of the facility, via either the
  * facility_admins table or the facility_memberships.is_facility_admin flag
- * (isFacilityAdmin covers the latter and the facility owner).
+ * (isFacilityAdmin covers the latter and the facility owner). Platform super
+ * admins are treated as admins of every facility.
  */
 export async function isFacilityAdminUser(
   facilityId: string | undefined | null,
   userId: string | undefined | null
 ): Promise<boolean> {
   if (!userId || !facilityId) return false;
+  if (await isPlatformSuperAdmin(userId)) return true;
   const row = await query(
     `SELECT 1 FROM facility_admins
       WHERE facility_id = $1 AND user_id = $2 AND status = 'active'`,

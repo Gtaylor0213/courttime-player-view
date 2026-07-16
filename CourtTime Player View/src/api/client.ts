@@ -996,6 +996,10 @@ export const adminApi = {
     hasLights?: boolean;
     isWalkUp?: boolean;
     status?: string;
+    requirePayment?: boolean;
+    bookingAmountCents?: number | null;
+    guestFeeCents?: number | null;
+    ballMachineFeeCents?: number | null;
   }) => {
     return apiRequest('/api/admin/courts/bulk-update', {
       method: 'PATCH',

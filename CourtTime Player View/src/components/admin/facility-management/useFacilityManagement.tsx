@@ -2047,6 +2047,7 @@ const renderTabFooterSaveBar = () =>
     expandedPeakHourSlots,
     courts,
     courtsLoading,
+    loadCourts,
     editingCourt,
     setEditingCourt,
     isAddingNewCourt,

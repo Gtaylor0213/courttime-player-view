@@ -255,6 +255,10 @@ export async function updateCourtsBulk(
     hasLights?: boolean;
     isWalkUp?: boolean;
     status?: string;
+    requirePayment?: boolean;
+    bookingAmountCents?: number | null;
+    guestFeeCents?: number | null;
+    ballMachineFeeCents?: number | null;
   }
 ): Promise<number> {
   if (courtIds.length === 0) return 0;
@@ -287,6 +291,22 @@ export async function updateCourtsBulk(
     const statusMap: Record<string, string> = { active: 'available', inactive: 'closed' };
     setClauses.push(`status = $${paramIndex++}`);
     params.push(statusMap[updates.status] || updates.status);
+  }
+  if (updates.requirePayment !== undefined) {
+    setClauses.push(`require_payment = $${paramIndex++}`);
+    params.push(updates.requirePayment);
+  }
+  if (updates.bookingAmountCents !== undefined) {
+    setClauses.push(`booking_amount_cents = $${paramIndex++}`);
+    params.push(updates.bookingAmountCents);
+  }
+  if (updates.guestFeeCents !== undefined) {
+    setClauses.push(`guest_fee_cents = $${paramIndex++}`);
+    params.push(updates.guestFeeCents);
+  }
+  if (updates.ballMachineFeeCents !== undefined) {
+    setClauses.push(`ball_machine_fee_cents = $${paramIndex++}`);
+    params.push(updates.ballMachineFeeCents);
   }
 
   if (setClauses.length === 0) return 0;

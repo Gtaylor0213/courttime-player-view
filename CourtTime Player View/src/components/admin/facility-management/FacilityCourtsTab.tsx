@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
@@ -7,6 +7,7 @@ import { Textarea } from '../../ui/textarea';
 import {
   Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users,
   Upload, Shield, AlertTriangle, Zap, Home, FileText, Calendar, ChevronDown, ChevronRight, Info,
+  DollarSign,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { TabsContent } from '../../ui/tabs';
@@ -16,6 +17,7 @@ import { toast } from 'sonner';
 import { RULE_METADATA, CATEGORIES } from '../../facility-registration/rule-defaults';
 import { getFacilityTypeSelectOptions } from '../../../../shared/constants/facilityTypes';
 import { CourtScheduleEditor } from '../CourtScheduleEditor';
+import { SetFeesForAllPanel } from '../SetFeesForAllPanel';
 import { FacilityCourtFormBody } from './FacilityCourtFormBody';
 import { US_STATES } from './usStates';
 import type { UseFacilityManagementReturn } from './useFacilityManagement';
@@ -41,7 +43,7 @@ export function FacilityCourtsTab(props: Props) {
     handleBookingRulesChange, handleWeekendPolicyChange, addPeakHourSlot, removePeakHourSlot,
     updatePeakHourSlotTime, updatePeakHourSlotRule, togglePeakHourSlotExpanded,
     setPeakHourSlotCourtMode, togglePeakHourSlotCourt, togglePeakHourSlotDay,
-    expandedPeakHourSlots, courts, courtsLoading, editingCourt, setEditingCourt,
+    expandedPeakHourSlots, courts, courtsLoading, loadCourts, editingCourt, setEditingCourt,
     isAddingNewCourt,     courtSaving, stripeOnboarded, stripeStatusLoading,
     courtAddPromo,
     configuringCourtId, setConfiguringCourtId, courtSchedule, courtScheduleLoading, courtScheduleSaving,
@@ -54,6 +56,9 @@ export function FacilityCourtsTab(props: Props) {
     renderRuleCategoryCard, getCourtStatusColor, formatCourtStatus, performSave,
   } = props;
 
+  const [feesAllMode, setFeesAllMode] = useState(false);
+  const activeCourts = courts.filter((c) => c.status !== 'closed');
+
   return (
 <TabsContent value="courts" className="space-y-6">
   <Card className="border-green-100 bg-green-50/40">
@@ -63,12 +68,33 @@ export function FacilityCourtsTab(props: Props) {
       Fees and schedules saved here can be updated anytime from Court Management.
     </CardContent>
   </Card>
-  <div className="flex justify-end">
-    <Button onClick={handleAddNewCourt} disabled={editingCourt !== null || isAddingNewCourt}>
+  <div className="flex justify-end gap-2">
+    {courts.length > 0 && (
+      <Button
+        variant="outline"
+        onClick={() => setFeesAllMode(true)}
+        disabled={editingCourt !== null || isAddingNewCourt || feesAllMode}
+      >
+        <DollarSign className="h-4 w-4 mr-2" />
+        Set Fees for All
+      </Button>
+    )}
+    <Button onClick={handleAddNewCourt} disabled={editingCourt !== null || isAddingNewCourt || feesAllMode}>
       <Plus className="h-4 w-4 mr-2" />
       Add New Court
     </Button>
   </div>
+
+  {/* Facility-Wide Fees Form */}
+  {feesAllMode && (
+    <SetFeesForAllPanel
+      courts={activeCourts}
+      stripeOnboarded={stripeOnboarded}
+      stripeStatusLoading={stripeStatusLoading}
+      onClose={() => setFeesAllMode(false)}
+      onApplied={loadCourts}
+    />
+  )}
 
   {/* Add Court Form — editing an existing court opens inline below that row */}
   {editingCourt && isAddingNewCourt && (

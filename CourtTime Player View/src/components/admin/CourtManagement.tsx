@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Edit, Trash2, Save, X, Clock, Layers, CheckSquare, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Clock, Layers, CheckSquare, AlertCircle, DollarSign } from 'lucide-react';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
@@ -42,6 +42,7 @@ import {
   type PaidCourtFormFields,
 } from './PaidCourtBookingFields';
 import { CourtScheduleEditor } from './CourtScheduleEditor';
+import { SetFeesForAllPanel } from './SetFeesForAllPanel';
 import { CourtTypeField } from './CourtTypeField';
 import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
 import { MAX_COURTS_AT_LIST_PRICE } from '../../services/subscriptionPricing';
@@ -124,6 +125,9 @@ export function CourtManagement() {
     hasLights: '',
   });
   const [bulkEditing, setBulkEditing] = useState(false);
+
+  // Facility-wide fees state
+  const [feesAllMode, setFeesAllMode] = useState(false);
 
   // Court schedule config state
   const [configuringCourtId, setConfiguringCourtId] = useState<string | null>(null);
@@ -655,6 +659,16 @@ export function CourtManagement() {
     setBulkEditForm({ courtType: '', surfaceType: '', status: '', isIndoor: '', hasLights: '' });
   };
 
+  // --- Facility-Wide Fees ---
+
+  const handleFeesAllToggle = () => {
+    setFeesAllMode(true);
+    setEditingCourt(null);
+    setIsAddingNew(false);
+    setBulkAddMode(false);
+    if (currentFacilityId) void loadStripeStatus(currentFacilityId);
+  };
+
   // --- Court Schedule Config ---
 
   const loadCourtSchedule = async (courtId: string) => {
@@ -736,7 +750,7 @@ export function CourtManagement() {
     );
   }
 
-  const isFormOpen = editingCourt !== null || bulkAddMode;
+  const isFormOpen = editingCourt !== null || bulkAddMode || feesAllMode;
 
   return (
       <div className="p-4 md:p-8">
@@ -762,6 +776,12 @@ export function CourtManagement() {
                   {selectedCourts.size === courts.length ? 'Deselect All' : 'Select All'}
                 </Button>
               )}
+              {courts.length > 0 && (
+                <Button variant="outline" onClick={handleFeesAllToggle} disabled={isFormOpen}>
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Set Fees for All
+                </Button>
+              )}
               <Button variant="outline" onClick={handleBulkAddToggle} disabled={isFormOpen}>
                 <Layers className="h-4 w-4 mr-2" />
                 Bulk Add
@@ -782,6 +802,17 @@ export function CourtManagement() {
                 Additional courts can be added at no extra platform charge.
               </AlertDescription>
             </Alert>
+          )}
+
+          {/* Facility-Wide Fees Form */}
+          {feesAllMode && (
+            <SetFeesForAllPanel
+              courts={activeCourts}
+              stripeOnboarded={stripeOnboarded}
+              stripeStatusLoading={stripeStatusLoading}
+              onClose={() => setFeesAllMode(false)}
+              onApplied={loadCourts}
+            />
           )}
 
           {/* Add New Court Form (only shown when adding, not when editing existing) */}

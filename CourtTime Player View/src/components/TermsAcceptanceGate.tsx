@@ -17,6 +17,11 @@ export function TermsAcceptanceGate() {
     () => (current?.contentHtml ? DOMPurify.sanitize(current.contentHtml) : ''),
     [current?.contentHtml]
   );
+  // Plain-text content relies on literal newlines for spacing; HTML content manages its own.
+  const isPlainText = useMemo(
+    () => !/<\/?[a-z][^>]*>/i.test(current?.contentHtml || ''),
+    [current?.contentHtml]
+  );
 
   // Reset + detect "no scroll needed" in one layout pass. A separate useEffect(false) after this
   // would undo short-content acceptance (React runs all useLayoutEffect before useEffect).
@@ -71,7 +76,10 @@ export function TermsAcceptanceGate() {
               className="max-h-[55vh] overflow-y-auto rounded-md border bg-white p-4"
               onScroll={handleScrollTerms}
             >
-              <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+              <div
+                className={isPlainText ? 'whitespace-pre-wrap' : undefined}
+                dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+              />
             </div>
 
             {!scrolledToBottom && (

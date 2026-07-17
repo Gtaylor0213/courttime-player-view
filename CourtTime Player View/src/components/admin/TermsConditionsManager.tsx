@@ -33,6 +33,8 @@ export function TermsConditionsManager() {
   const [notAccepted, setNotAccepted] = useState<AcceptanceMember[]>([]);
 
   const sanitizedPreview = useMemo(() => DOMPurify.sanitize(contentHtml || ''), [contentHtml]);
+  // Plain-text content relies on literal newlines for spacing; HTML content manages its own.
+  const isPlainText = useMemo(() => !/<\/?[a-z][^>]*>/i.test(contentHtml || ''), [contentHtml]);
 
   const loadData = async () => {
     if (!selectedFacilityId) return;
@@ -143,7 +145,10 @@ export function TermsConditionsManager() {
             <Label>Preview</Label>
             <div className="rounded-md border bg-white p-4 max-h-[320px] overflow-y-auto">
               {contentHtml.trim() ? (
-                <div dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
+                <div
+                  className={isPlainText ? 'whitespace-pre-wrap' : undefined}
+                  dangerouslySetInnerHTML={{ __html: sanitizedPreview }}
+                />
               ) : (
                 <p className="text-sm text-gray-500">No content yet.</p>
               )}

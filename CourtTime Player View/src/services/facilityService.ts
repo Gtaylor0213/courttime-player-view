@@ -432,13 +432,8 @@ export async function createFacilityWithAdmin(
 
     const facility = facilityResult.rows[0];
 
-    // 2. Mark user as super admin
-    await client.query(
-      `UPDATE users SET is_super_admin = true WHERE id = $1`,
-      [superAdminUserId]
-    );
-
-    // 3. Add user as facility admin (super admin)
+    // 2. Add user as facility admin (facility-level super admin only —
+    // users.is_super_admin is the platform-wide flag and must not be set here)
     const adminResult = await client.query(
       `INSERT INTO facility_admins (user_id, facility_id, is_super_admin, status)
        VALUES ($1, $2, true, 'active')
@@ -446,7 +441,7 @@ export async function createFacilityWithAdmin(
       [superAdminUserId, facilityId]
     );
 
-    // 4. Create facility membership for super admin
+    // 3. Create facility membership for super admin
     await client.query(
       `INSERT INTO facility_memberships (user_id, facility_id, membership_type, is_facility_admin, status, start_date)
        VALUES ($1, $2, 'admin', true, 'active', CURRENT_DATE)
@@ -948,7 +943,7 @@ export async function registerFacility(
       // Create user
       userResult = await client.query(
         `INSERT INTO users (email, password_hash, full_name, first_name, last_name, phone, street_address, city, state, zip_code, user_type, is_super_admin)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'admin', true)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'admin', false)
          RETURNING id, email, full_name as "fullName", first_name as "firstName", last_name as "lastName", user_type as "userType", is_super_admin as "isSuperAdmin", created_at as "createdAt"`,
         [data.adminEmail.toLowerCase(), passwordHash, data.adminFullName, firstName, lastName, data.adminPhone || null, data.adminStreetAddress || null, data.adminCity || null, data.adminState || null, data.adminZipCode || null]
       );
@@ -962,9 +957,10 @@ export async function registerFacility(
         [superAdminUserId]
       );
     } else if (existingUserId) {
-      // Mark existing user as super admin
+      // Mark existing user as an admin (facility-level; the platform-wide
+      // users.is_super_admin flag is only granted via scripts/make-super-admin.js)
       await client.query(
-        `UPDATE users SET user_type = 'admin', is_super_admin = true WHERE id = $1`,
+        `UPDATE users SET user_type = 'admin' WHERE id = $1`,
         [existingUserId]
       );
 

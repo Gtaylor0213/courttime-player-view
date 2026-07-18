@@ -238,6 +238,7 @@ export async function loginUser(email: string, password: string): Promise<LoginR
         u.zip_code as "zipCode",
         u.phone,
         u.user_type as "userType",
+        u.is_super_admin as "isSuperAdmin",
         u.created_at as "createdAt",
         u.updated_at as "updatedAt",
         pp.profile_image_url as "profileImageUrl",
@@ -310,6 +311,17 @@ export async function loginUser(email: string, password: string): Promise<LoginR
       adminFacilities = [...new Set([...adminFacilities, ...newlyAccepted])];
       // Also add to memberFacilities if not already there
       for (const fid of newlyAccepted) {
+        if (!memberFacilities.includes(fid)) memberFacilities.push(fid);
+      }
+    }
+
+    // Platform super admins implicitly administer (and belong to) every
+    // facility — mirror getUserWithMemberships so the login payload matches /me.
+    if (user.isSuperAdmin) {
+      const allFacilities = await query(`SELECT id FROM facilities`);
+      const allIds = allFacilities.rows.map(row => row.id);
+      adminFacilities = allIds;
+      for (const fid of allIds) {
         if (!memberFacilities.includes(fid)) memberFacilities.push(fid);
       }
     }

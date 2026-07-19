@@ -730,6 +730,8 @@ export const bookingApi = {
       endTime: string;
       durationMinutes?: number;
     }>;
+    /** When editing, exclude the original booking from conflict checks */
+    excludeBookingId?: string;
   }) => {
     const res = await apiRequest('/api/bookings', {
       method: 'POST',

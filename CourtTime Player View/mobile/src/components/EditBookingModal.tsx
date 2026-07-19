@@ -2,12 +2,10 @@
  * EditBookingModal
  * Lets a player change date, court, start, or end time on an existing booking.
  *
- * Backend has no PATCH endpoint, so we follow the web app's pattern:
- *   1. validate the new slot is free (skip the original booking from conflicts)
- *   2. cancel the old booking
- *   3. create a new booking with the updated details
- * If the create fails after the cancel, we surface the error — the slot is now
- * free so the player can retry from the booking screen.
+ * Flow:
+ *   1. create the updated booking while excluding the original from conflicts
+ *   2. cancel the old booking once the new one succeeds
+ * If payment is required for the new slot, keep the original booking and surface an error.
  */
 
 import { useEffect, useState } from 'react';
@@ -27,7 +25,6 @@ import { offerAddBookingToCalendar, bookingWithDetailsToCalendarDetails } from '
 import { hapticSuccess, hapticError } from '../utils/haptics';
 import { api, paymentApi } from '../api/client';
 import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
-import { openStripeCheckout } from '../utils/payments';
 import { MiniCalendar } from './MiniCalendar';
 import { TimePicker } from './TimePicker';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
@@ -181,15 +178,6 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
     const endTimeFull = `${endTime}:00`;
     const durationMinutes = toMinutes(endTime) - toMinutes(startTime);
 
-    // Cancel the old booking first so it doesn't conflict with the new one
-    const cancelRes = await api.delete(`/api/bookings/${booking.id}?userId=${booking.userId}`);
-    if (!cancelRes.success) {
-      hapticError();
-      setSaving(false);
-      showAlert('Error', cancelRes.error || 'Could not update booking.');
-      return;
-    }
-
     const createRes = await paymentApi.bookings.create({
       courtId,
       facilityId: booking.facilityId,
@@ -200,61 +188,49 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
       durationMinutes,
       bookingType: booking.bookingType,
       notes: booking.notes,
+      excludeBookingId: booking.id,
       ...courtBookingCheckoutUrls(),
     });
 
-    setSaving(false);
-
     if (createRes.requiresPayment && createRes.checkoutUrl) {
-      onClose();
-      const opened = await openStripeCheckout(createRes.checkoutUrl);
-      if (opened) {
-        showAlert(
-          'Complete payment',
-          'Your previous booking was cancelled. Finish card payment to confirm the new reservation.'
-        );
+      setSaving(false);
+      showAlert(
+        'Payment required',
+        'Changing this reservation requires payment. Keep your current booking, or cancel and rebook from the Book tab.'
+      );
+      return;
+    }
+
+    if (!createRes.success) {
+      hapticError();
+      setSaving(false);
+      if (createRes.ruleViolations && createRes.ruleViolations.length > 0) {
+        setViolations(createRes.ruleViolations as RuleViolation[]);
       } else {
-        showAlert(
-          'Payment required',
-          'Could not open Stripe checkout. Your previous booking was cancelled — please book again from the Book tab.'
-        );
-        onSaved();
+        showAlert('Error', createRes.error || 'Could not update booking.');
       }
       return;
     }
 
-    if (createRes.success) {
-      hapticSuccess();
-      onSaved();
-      onClose();
-      const court = courts.find((c) => c.id === courtId);
-      offerAddBookingToCalendar(
-        'Your booking was updated.',
-        bookingWithDetailsToCalendarDetails({
-          ...booking,
-          courtName: court?.name || booking.courtName,
-          bookingDate: date,
-          startTime: startTimeFull,
-          endTime: endTimeFull,
-        }),
-        { alertTitle: 'Updated' }
-      );
-    } else {
-      hapticError();
-      if (createRes.ruleViolations && createRes.ruleViolations.length > 0) {
-        setViolations(createRes.ruleViolations as RuleViolation[]);
-      } else {
-        // Old booking is gone but new one failed. Tell the user clearly so
-        // they can retry from the booking screen.
-        showAlert(
-          'Update Failed',
-          (createRes.error || 'Could not create the new booking.') +
-            ' Your original booking has been cancelled — please re-book from the Book tab.'
-        );
-        onSaved();
-        onClose();
-      }
-    }
+    // New booking confirmed — release the original so the court is not double-held
+    await api.delete(`/api/bookings/${booking.id}?userId=${booking.userId}`);
+
+    setSaving(false);
+    hapticSuccess();
+    onSaved();
+    onClose();
+    const court = courts.find((c) => c.id === courtId);
+    offerAddBookingToCalendar(
+      'Your booking was updated.',
+      bookingWithDetailsToCalendarDetails({
+        ...booking,
+        courtName: court?.name || booking.courtName,
+        bookingDate: date,
+        startTime: startTimeFull,
+        endTime: endTimeFull,
+      }),
+      { alertTitle: 'Updated' }
+    );
   }
 
   return (

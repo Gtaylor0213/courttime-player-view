@@ -352,6 +352,7 @@ router.post('/', async (req, res, next) => {
       provisionalSameRequestBookings,
       successUrl,
       cancelUrl,
+      excludeBookingId,
     } = req.body;
 
     // Validation
@@ -402,6 +403,7 @@ router.post('/', async (req, res, next) => {
         : undefined,
       successUrl: typeof successUrl === 'string' ? successUrl : undefined,
       cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
+      excludeBookingId: typeof excludeBookingId === 'string' ? excludeBookingId : undefined,
     });
 
     if (!result.success) {

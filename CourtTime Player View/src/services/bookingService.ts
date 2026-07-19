@@ -109,6 +109,7 @@ async function assertHardBookingRuleCaps(bookingData: {
   facilityId: string;
   bookingDate: string;
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
+  excludeBookingId?: string;
 }): Promise<BookingResult | null> {
   const facRow = await query(
     `SELECT booking_rules AS "bookingRules" FROM facilities WHERE id = $1`,
@@ -162,12 +163,15 @@ async function assertHardBookingRuleCaps(bookingData: {
     (p) => p.bookingDate >= weekStart && p.bookingDate <= weekEnd
   );
 
+  const excludeId = bookingData.excludeBookingId || null;
+
   const userWeekRes = await query(
     `SELECT COUNT(*)::int AS c FROM bookings
      WHERE user_id = $1 AND facility_id = $2
        AND booking_date >= $3::date AND booking_date <= $4::date
-       AND status != 'cancelled'`,
-    [bookingData.userId, bookingData.facilityId, weekStart, weekEnd]
+       AND status != 'cancelled'
+       AND ($5::uuid IS NULL OR id != $5)`,
+    [bookingData.userId, bookingData.facilityId, weekStart, weekEnd, excludeId]
   );
   const userWeekCount = Number(userWeekRes.rows[0]?.c ?? 0) + provInWeek;
 
@@ -180,8 +184,9 @@ async function assertHardBookingRuleCaps(bookingData: {
 
   const userDayRes = await query(
     `SELECT COUNT(*)::int AS c FROM bookings
-     WHERE user_id = $1 AND facility_id = $2 AND booking_date = $3::date AND status != 'cancelled'`,
-    [bookingData.userId, bookingData.facilityId, day]
+     WHERE user_id = $1 AND facility_id = $2 AND booking_date = $3::date AND status != 'cancelled'
+       AND ($4::uuid IS NULL OR id != $4)`,
+    [bookingData.userId, bookingData.facilityId, day, excludeId]
   );
   const userDayCount = Number(userDayRes.rows[0]?.c ?? 0) + provisionalForDay;
 
@@ -238,8 +243,9 @@ async function assertHardBookingRuleCaps(bookingData: {
       `SELECT COUNT(*)::int AS c FROM bookings b
        INNER JOIN household_members hm ON b.user_id = hm.user_id
        WHERE hm.household_id = $1 AND b.facility_id = $2
-         AND b.booking_date = $3::date AND b.status != 'cancelled'`,
-      [householdId, bookingData.facilityId, day]
+         AND b.booking_date = $3::date AND b.status != 'cancelled'
+         AND ($4::uuid IS NULL OR b.id != $4)`,
+      [householdId, bookingData.facilityId, day, excludeId]
     );
     const householdDayCount = Number(hhDayRes.rows[0]?.c ?? 0) + provisionalForDay;
 
@@ -265,8 +271,9 @@ async function assertHardBookingRuleCaps(bookingData: {
        INNER JOIN household_members hm ON b.user_id = hm.user_id
        WHERE hm.household_id = $1 AND b.facility_id = $2
          AND b.booking_date >= $3::date AND b.booking_date <= $4::date
-         AND b.status != 'cancelled'`,
-      [householdId, bookingData.facilityId, weekStart, weekEnd]
+         AND b.status != 'cancelled'
+         AND ($5::uuid IS NULL OR b.id != $5)`,
+      [householdId, bookingData.facilityId, weekStart, weekEnd, excludeId]
     );
     const householdWeekCount = Number(hhWeekRes.rows[0]?.c ?? 0) + provInWeek;
 
@@ -674,6 +681,8 @@ export async function validateBooking(bookingData: {
   activityType?: string;
   /** Earlier instances in the same multi-create/recurring request (not in DB yet) */
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
+  /** Booking being replaced (edit); excluded from conflict/quota checks */
+  excludeBookingId?: string;
 }): Promise<EvaluationResult> {
   const termsBlocker = await buildTermsAcceptanceBookingBlocker(
     bookingData.userId,
@@ -728,7 +737,8 @@ export async function validateBooking(bookingData: {
     userId: bookingData.userId,
     facilityId: bookingData.facilityId,
     bookingDate: bookingData.bookingDate,
-    provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings
+    provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings,
+    excludeBookingId: bookingData.excludeBookingId,
   });
   if (hardCap?.ruleViolations?.length) {
     const blockers = hardCap.ruleViolations;
@@ -751,7 +761,8 @@ export async function validateBooking(bookingData: {
     durationMinutes: bookingData.durationMinutes,
     bookingType: bookingData.bookingType,
     activityType: bookingData.activityType,
-    provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings
+    provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings,
+    excludeBookingId: bookingData.excludeBookingId,
   };
 
   return rulesEngine.validate(request);
@@ -780,6 +791,8 @@ export async function createBooking(bookingData: {
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
   successUrl?: string;
   cancelUrl?: string;
+  /** Booking being replaced (edit); excluded from conflict/quota checks */
+  excludeBookingId?: string;
 }): Promise<BookingResult> {
   return enqueueBookingCreation(bookingData.userId, bookingData.facilityId, () =>
     createBookingCore(bookingData)
@@ -806,8 +819,25 @@ async function createBookingCore(bookingData: {
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
   successUrl?: string;
   cancelUrl?: string;
+  excludeBookingId?: string;
 }): Promise<BookingResult> {
   try {
+    // Only honor excludeBookingId when it is an active booking owned by this user
+    // at this facility (prevents using another member's id to bypass conflicts).
+    if (bookingData.excludeBookingId) {
+      const owned = await query(
+        `SELECT id FROM bookings
+         WHERE id = $1
+           AND user_id = $2
+           AND facility_id = $3
+           AND status != 'cancelled'`,
+        [bookingData.excludeBookingId, bookingData.userId, bookingData.facilityId]
+      );
+      if (owned.rows.length === 0) {
+        bookingData.excludeBookingId = undefined;
+      }
+    }
+
     const termsBlocker = await buildTermsAcceptanceBookingBlocker(
       bookingData.userId,
       bookingData.facilityId
@@ -859,7 +889,8 @@ async function createBookingCore(bookingData: {
         durationMinutes: bookingData.durationMinutes,
         bookingType: bookingData.bookingType,
         activityType: bookingData.activityType,
-        provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings
+        provisionalSameRequestBookings: bookingData.provisionalSameRequestBookings,
+        excludeBookingId: bookingData.excludeBookingId,
       });
 
       if (!evaluation.allowed) {
@@ -965,12 +996,19 @@ async function createBookingCore(bookingData: {
            WHERE court_id = $1
              AND booking_date = $2
              AND status != 'cancelled'
+             AND ($5::uuid IS NULL OR id != $5)
              AND (
                (start_time <= $3 AND end_time > $3)
                OR (start_time < $4 AND end_time >= $4)
                OR (start_time >= $3 AND end_time <= $4)
              )`,
-          [bookingData.courtId, bookingData.bookingDate, bookingData.startTime, bookingData.endTime]
+          [
+            bookingData.courtId,
+            bookingData.bookingDate,
+            bookingData.startTime,
+            bookingData.endTime,
+            bookingData.excludeBookingId || null,
+          ]
         );
         if (conflicts.rows.length > 0) {
           throw Object.assign(new Error('Time slot is already booked'), { code: 'BOOKING_CONFLICT' });
@@ -981,10 +1019,51 @@ async function createBookingCore(bookingData: {
           [bookingData.courtId, bookingData.bookingDate, bookingData.startTime, bookingData.endTime]
         );
         if (!splitAvailability.rows[0]?.available) {
-          throw Object.assign(
-            new Error('A related parent or split court is already booked at this time'),
-            { code: 'BOOKING_CONFLICT' }
-          );
+          // When editing, the function may see the booking being replaced — verify excluding it
+          if (bookingData.excludeBookingId) {
+            const related = await client.query(
+              `SELECT b.id FROM bookings b
+               WHERE b.id != $5
+                 AND b.status != 'cancelled'
+                 AND b.booking_date = $2
+                 AND (
+                   b.court_id = $1
+                   OR b.court_id IN (
+                     SELECT id FROM courts WHERE parent_court_id = $1 OR id = (
+                       SELECT parent_court_id FROM courts WHERE id = $1
+                     )
+                   )
+                   OR b.court_id IN (
+                     SELECT id FROM courts WHERE parent_court_id = (
+                       SELECT parent_court_id FROM courts WHERE id = $1
+                     ) AND parent_court_id IS NOT NULL
+                   )
+                 )
+                 AND (
+                   (start_time <= $3 AND end_time > $3)
+                   OR (start_time < $4 AND end_time >= $4)
+                   OR (start_time >= $3 AND end_time <= $4)
+                 )`,
+              [
+                bookingData.courtId,
+                bookingData.bookingDate,
+                bookingData.startTime,
+                bookingData.endTime,
+                bookingData.excludeBookingId,
+              ]
+            );
+            if (related.rows.length > 0) {
+              throw Object.assign(
+                new Error('A related parent or split court is already booked at this time'),
+                { code: 'BOOKING_CONFLICT' }
+              );
+            }
+          } else {
+            throw Object.assign(
+              new Error('A related parent or split court is already booked at this time'),
+              { code: 'BOOKING_CONFLICT' }
+            );
+          }
         }
 
         const ins = await client.query(

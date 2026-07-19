@@ -602,12 +602,19 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
 
   let mergedUserBookings = userBookings;
   let mergedHouseholdBookings = householdBookings;
+  let mergedCourtBookings = courtBookings;
+  const excludeId = request.excludeBookingId;
+  if (excludeId) {
+    mergedUserBookings = mergedUserBookings.filter((b) => b.id !== excludeId);
+    mergedHouseholdBookings = mergedHouseholdBookings.filter((b) => b.id !== excludeId);
+    mergedCourtBookings = mergedCourtBookings.filter((b) => b.id !== excludeId);
+  }
   const prov = request.provisionalSameRequestBookings;
   if (prov?.length) {
     const extra = provisionalRowsForUser(request, prov);
-    mergedUserBookings = [...userBookings, ...extra];
+    mergedUserBookings = [...mergedUserBookings, ...extra];
     if (household) {
-      mergedHouseholdBookings = [...householdBookings, ...extra];
+      mergedHouseholdBookings = [...mergedHouseholdBookings, ...extra];
     }
   }
 
@@ -657,7 +664,7 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
     existingBookings: {
       user: mergedUserBookings,
       household: mergedHouseholdBookings,
-      court: courtBookings
+      court: mergedCourtBookings
     },
     strikes,
     recentCancellations,

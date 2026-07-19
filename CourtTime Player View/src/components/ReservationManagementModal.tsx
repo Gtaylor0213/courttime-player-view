@@ -502,7 +502,8 @@ export function ReservationManagementModal({
         return;
       }
 
-      // Prepaid / non-settlement: create new then cancel old
+      // Prepaid / non-settlement: create new then cancel old.
+      // excludeBookingId prevents the old slot from conflicting with the reshaped time.
       const response = await bookingApi.create({
         courtId: editCourt,
         userId: user?.id || '',
@@ -511,11 +512,19 @@ export function ReservationManagementModal({
         startTime: editStartTime,
         endTime: endTime,
         durationMinutes: durationMinutes,
-        notes: reservation.notes || ''
+        notes: reservation.notes || '',
+        excludeBookingId: reservation.id,
       });
 
       if (!response.success) {
         toast.error(response.error || 'Failed to update reservation');
+        return;
+      }
+
+      if (response.requiresPayment && response.checkoutUrl) {
+        toast.error(
+          'This change requires payment. Cancel and rebook, or contact the facility to update the time.'
+        );
         return;
       }
 

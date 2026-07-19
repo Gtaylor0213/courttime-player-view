@@ -29,6 +29,11 @@ export interface BookingRequest {
   notes?: string;
   /** Count toward daily/weekly/household caps when validating a batch create */
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
+  /**
+   * When replacing an existing booking (edit flow), exclude it from conflict
+   * and quota checks so the slot can be reshaped without self-collision.
+   */
+  excludeBookingId?: string;
 }
 
 export interface CancellationRequest {

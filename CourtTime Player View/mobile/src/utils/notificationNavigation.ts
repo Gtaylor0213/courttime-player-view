@@ -16,6 +16,21 @@ const BOOKING_PUSH_TYPES = new Set([
   'reservation_reminder',
 ]);
 
+const PROFILE_PUSH_TYPES = new Set([
+  'strike_issued',
+  'strike_revoked',
+  'account_lockout',
+  'account_locked_out',
+]);
+
+const COMMUNITY_PUSH_TYPES = new Set([
+  'announcement',
+  'drill_signup_confirmed',
+  'drill_waitlist',
+  'drill_waitlist_promoted',
+  'weather',
+]);
+
 type NotificationData = Record<string, unknown> | undefined;
 type StoredHandledNotificationResponse = {
   key: string;
@@ -66,6 +81,28 @@ export function getNotificationHref(raw: NotificationData): Href {
     }
 
     return '/(tabs)/messages';
+  }
+
+  if (PROFILE_PUSH_TYPES.has(type)) {
+    return '/(tabs)/profile';
+  }
+
+  if (type === 'membership_request') {
+    return {
+      pathname: '/(tabs)/admin',
+      params: {
+        ...(facilityId ? { facilityId } : {}),
+        status: 'pending',
+      },
+    };
+  }
+
+  if (type === 'payment') {
+    return '/(tabs)/profile';
+  }
+
+  if (COMMUNITY_PUSH_TYPES.has(type)) {
+    return '/(tabs)/community';
   }
 
   return '/(tabs)/community';

@@ -97,6 +97,31 @@ describe('notification navigation', () => {
     expect(getNotificationHref({ type: 'unexpected' })).toBe('/(tabs)/community');
   });
 
+  it('routes strike and lockout notifications to Profile', () => {
+    expect(getNotificationHref({ type: 'strike_issued' })).toBe('/(tabs)/profile');
+    expect(getNotificationHref({ type: 'account_lockout' })).toBe('/(tabs)/profile');
+  });
+
+  it('routes membership request notifications to Admin with pending status', () => {
+    expect(
+      getNotificationHref({
+        type: 'membership_request',
+        facilityId: 'facility-123',
+      })
+    ).toEqual({
+      pathname: '/(tabs)/admin',
+      params: {
+        facilityId: 'facility-123',
+        status: 'pending',
+      },
+    });
+  });
+
+  it('routes drill and announcement notifications to Community', () => {
+    expect(getNotificationHref({ type: 'drill_waitlist_promoted' })).toBe('/(tabs)/community');
+    expect(getNotificationHref({ type: 'announcement' })).toBe('/(tabs)/community');
+  });
+
   it('builds a stable response key from the notification request and action', () => {
     expect(getNotificationResponseKey(makeResponse('notif-7', {}, 'open-booking'))).toBe(
       'open-booking:notif-7'

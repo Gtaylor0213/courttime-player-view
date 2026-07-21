@@ -40,7 +40,10 @@ export async function notifyFacilityAdminsOfMembershipRequest(
         'New Membership Request',
         `${userName} (${userEmail}) has requested to join ${facilityName}.`,
         'membership_request',
-        { actionUrl: `/admin/members?facilityId=${encodeURIComponent(facilityId)}&status=pending` }
+        {
+          actionUrl: `/admin/members?facilityId=${encodeURIComponent(facilityId)}&status=pending`,
+          pushData: { facilityId },
+        }
       );
     } catch (e) {
       console.error('Failed to create membership request in-app notification:', e);

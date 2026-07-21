@@ -1,17 +1,31 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Bell, Calendar, MapPin, Clock, AlertCircle, Check, X, CheckCheck } from 'lucide-react';
 import { useNotifications, Notification } from '../contexts/NotificationContext';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
+import { resolveNotificationPath } from '../utils/notificationNavigation';
 
 interface NotificationDropdownProps {
   children: React.ReactNode;
 }
 
 export function NotificationDropdown({ children }: NotificationDropdownProps) {
+  const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.read) {
+      void markAsRead(notification.id);
+    }
+
+    const path = resolveNotificationPath(notification);
+    if (path) {
+      navigate(path);
+    }
+  };
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
@@ -106,7 +120,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
               <DropdownMenuItem
                 key={notification.id}
                 className={`p-0 focus:bg-transparent`}
-                onClick={() => !notification.read && markAsRead(notification.id)}
+                onClick={() => handleNotificationClick(notification)}
               >
                 <div className={`w-full cursor-pointer p-3 transition-colors hover:bg-accent/60 ${getPriorityColor(notification.priority, notification.read)}`}>
                   <div className="flex items-start gap-3">

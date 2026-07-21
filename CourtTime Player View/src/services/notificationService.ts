@@ -42,6 +42,28 @@ function buildBookingPushData(
   };
 }
 
+function buildBookingActionUrl(pushContext?: BookingPushContext): string {
+  if (!pushContext?.facilityId) {
+    return '/my-reservations';
+  }
+
+  const params = new URLSearchParams({ facilityId: pushContext.facilityId });
+  return `/my-reservations?${params.toString()}`;
+}
+
+function buildMessageActionUrl(pushContext?: MessagePushContext): string {
+  const params = new URLSearchParams();
+  if (pushContext?.facilityId) {
+    params.set('facilityId', pushContext.facilityId);
+  }
+  if (pushContext?.senderId) {
+    params.set('recipientId', pushContext.senderId);
+  }
+
+  const qs = params.toString();
+  return qs ? `/messages?${qs}` : '/messages';
+}
+
 function buildMessagePushData(pushContext?: MessagePushContext): Record<string, string> | undefined {
   if (!pushContext) return undefined;
 
@@ -57,6 +79,36 @@ function getMessagePreview(messageText: string): string {
   const normalized = messageText.trim().replace(/\s+/g, ' ');
   if (normalized.length <= 140) return normalized;
   return `${normalized.slice(0, 137)}...`;
+}
+
+/** Default in-app destination when a notification row has no stored action_url. */
+function defaultActionUrlForType(dbType: string): string | undefined {
+  switch (dbType) {
+    case 'booking_confirmed':
+    case 'booking_cancelled':
+    case 'booking_reminder':
+    case 'court_change':
+      return '/my-reservations';
+    case 'message':
+      return '/messages';
+    case 'payment':
+      return '/payments';
+    case 'announcement':
+    case 'drill_signup_confirmed':
+    case 'drill_waitlist':
+    case 'drill_waitlist_promoted':
+      return '/bulletin-board';
+    case 'weather':
+      return '/calendar';
+    case 'strike_issued':
+    case 'strike_revoked':
+    case 'account_lockout':
+      return '/profile';
+    case 'membership_request':
+      return '/admin/members?status=pending';
+    default:
+      return undefined;
+  }
 }
 
 export const notificationService = {
@@ -89,7 +141,7 @@ export const notificationService = {
         message: row.message,
         timestamp: new Date(row.created_at),
         read: row.is_read,
-        actionUrl: row.action_url,
+        actionUrl: row.action_url || defaultActionUrlForType(row.type),
         priority: this.inferPriority(row.type)
       }));
     } catch (error) {
@@ -353,6 +405,7 @@ export const notificationService = {
       message,
       'booking_confirmed',
       {
+        actionUrl: buildBookingActionUrl(pushContext),
         priority: 'high',
         pushData: buildBookingPushData(pushContext, { includeCourtId: true }),
       }
@@ -376,6 +429,7 @@ export const notificationService = {
       message,
       'booking_cancelled',
       {
+        actionUrl: buildBookingActionUrl(pushContext),
         priority: 'medium',
         pushData: buildBookingPushData(pushContext),
       }
@@ -399,6 +453,7 @@ export const notificationService = {
       message,
       'booking_reminder',
       {
+        actionUrl: buildBookingActionUrl(pushContext),
         priority: 'high',
         pushData: buildBookingPushData(pushContext, { includeCourtId: true }),
       }
@@ -422,6 +477,7 @@ export const notificationService = {
       message,
       'court_change',
       {
+        actionUrl: buildBookingActionUrl(pushContext),
         priority: 'medium',
         pushData: buildBookingPushData(pushContext, { includeCourtId: true }),
       }
@@ -443,7 +499,7 @@ export const notificationService = {
       message,
       'message',
       {
-        actionUrl: '/messages',
+        actionUrl: buildMessageActionUrl(pushContext),
         priority: 'medium',
         pushData: buildMessagePushData(pushContext),
       }
@@ -463,7 +519,7 @@ export const notificationService = {
       title,
       message,
       'payment',
-      { priority: 'low' }
+      { actionUrl: '/payments', priority: 'low' }
     );
   },
 
@@ -479,7 +535,7 @@ export const notificationService = {
           title,
           message,
           'announcement',
-          { priority: 'low' }
+          { actionUrl: '/bulletin-board', priority: 'low' }
         )
       )
     );
@@ -498,7 +554,7 @@ export const notificationService = {
           title,
           message,
           'weather',
-          { priority: 'medium' }
+          { actionUrl: '/calendar', priority: 'medium' }
         )
       )
     );

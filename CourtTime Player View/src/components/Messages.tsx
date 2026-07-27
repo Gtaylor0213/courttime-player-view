@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Search, MessageCircle, Users, X, Plus, UserPlus, ChevronLeft, Trash2 } from 'lucide-react';
 import { cn } from './ui/utils';
 import { useAuth } from '../contexts/AuthContext';
-import { messagesApi, membersApi } from '../api/client';
+import { messagesApi } from '../api/client';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -56,7 +56,6 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
   const [newConversationUser, setNewConversationUser] = useState<{
     id: string;
     name: string;
-    email: string;
   } | null>(null);
 
   // New Chat Dialog
@@ -64,6 +63,9 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
   const [facilityMembers, setFacilityMembers] = useState<any[]>([]);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [memberLoadError, setMemberLoadError] = useState<string | null>(null);
+  // Guards against a slower earlier search overwriting a newer one.
+  const memberRequestId = useRef(0);
 
   // Track if we've processed the initial selectedRecipientId
   const [processedRecipientId, setProcessedRecipientId] = useState<string | null>(null);
@@ -112,20 +114,21 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
 
   const loadRecipientDetails = async (recipientId: string) => {
     try {
-      const response = await membersApi.getMemberDetails(facilityId, recipientId);
+      const response = await messagesApi.getDirectoryMember(facilityId, recipientId);
+      const member = response.data?.data?.member || response.data?.member;
 
-      if (response.success && response.data?.member) {
-        const member = response.data.member;
+      if (response.success && member) {
         // Create a new conversation UI state
         // API returns userId and fullName (not user_id and name)
         setNewConversationUser({
           id: member.userId,
-          name: member.fullName,
-          email: member.email
+          name: member.fullName
         });
         setSelectedConversation(null); // Clear any existing selection
         setMessages([]); // Clear messages
         toast.success(`Starting new conversation with ${member.fullName}`);
+      } else {
+        toast.error(response.error || 'Could not load user details');
       }
     } catch (error) {
       console.error('Error loading recipient details:', error);
@@ -136,29 +139,41 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
   const loadFacilityMembers = async () => {
     if (!facilityId) return;
 
+    const requestId = ++memberRequestId.current;
+    const isCurrent = () => requestId === memberRequestId.current;
+
     try {
       setLoadingMembers(true);
-      const response = await membersApi.getFacilityMembers(facilityId, memberSearchQuery);
+      setMemberLoadError(null);
+      const response = await messagesApi.getDirectory(
+        facilityId,
+        memberSearchQuery.trim() || undefined
+      );
+      if (!isCurrent()) return;
 
-      if (response.success && response.data?.members) {
-        // Filter out the current user from the list
-        const filteredMembers = response.data.members.filter(
-          (member: any) => member.userId !== user?.id
-        );
-        setFacilityMembers(filteredMembers);
+      const members = response.data?.data?.members || response.data?.members;
+      if (response.success && members) {
+        setFacilityMembers(members);
+      } else {
+        setFacilityMembers([]);
+        setMemberLoadError(response.error || 'Failed to load facility members');
       }
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Error loading facility members:', error);
-      toast.error('Failed to load facility members');
+      setFacilityMembers([]);
+      setMemberLoadError('Failed to load facility members');
     } finally {
-      setLoadingMembers(false);
+      if (isCurrent()) setLoadingMembers(false);
     }
   };
 
   const handleNewChatClick = () => {
     setShowNewChatDialog(true);
     setMemberSearchQuery('');
-    loadFacilityMembers();
+    setFacilityMembers([]);
+    setMemberLoadError(null);
+    setLoadingMembers(true);
   };
 
   const handleSelectMember = (member: any) => {
@@ -176,8 +191,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
       // Start new conversation
       setNewConversationUser({
         id: member.userId,
-        name: member.fullName,
-        email: member.email
+        name: member.fullName
       });
       setSelectedConversation(null);
       setMessages([]);
@@ -187,14 +201,14 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
     setShowNewChatDialog(false);
   };
 
-  // Load members when search query changes (with debounce)
+  // Load members when the dialog opens, then debounce while the user types
   useEffect(() => {
-    if (showNewChatDialog) {
-      const timer = setTimeout(() => {
-        loadFacilityMembers();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
+    if (!showNewChatDialog) return;
+
+    const timer = setTimeout(() => {
+      loadFacilityMembers();
+    }, memberSearchQuery ? 300 : 0);
+    return () => clearTimeout(timer);
   }, [memberSearchQuery, showNewChatDialog]);
 
   const scrollToBottom = () => {
@@ -619,6 +633,19 @@ export function Messages({ facilityId, facilityName, selectedRecipientId }: Mess
               {loadingMembers ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                </div>
+              ) : memberLoadError ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Users className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm">{memberLoadError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={loadFacilityMembers}
+                  >
+                    Try again
+                  </Button>
                 </div>
               ) : facilityMembers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">

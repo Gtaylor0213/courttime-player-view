@@ -37,7 +37,7 @@ export const ErrorBoundary = createRouteErrorBoundary('Messages');
 
 interface ConversationItem {
   id: string;
-  otherUser: { id: string; name: string; email: string; profileImageUrl?: string };
+  otherUser: { id: string; name: string; email?: string; profileImageUrl?: string };
   lastMessage: { text: string; senderId: string; sentAt: string } | null;
   unreadCount: number;
 }
@@ -54,10 +54,9 @@ interface MessageItem {
 interface MemberItem {
   userId: string;
   fullName: string;
-  email: string;
   profileImageUrl?: string;
   skillLevel?: string;
-  status?: 'active' | 'pending' | 'expired' | 'suspended';
+  isFacilityAdmin?: boolean;
 }
 
 function asRouteParam(value: string | string[] | undefined): string | undefined {
@@ -73,12 +72,14 @@ export default function MessagesScreen() {
   const params = useLocalSearchParams<{
     facilityId?: string | string[];
     conversationId?: string | string[];
+    recipientId?: string | string[];
   }>();
   const { user, facilityId, facilities, setFacilityId } = useAuth();
   const { syncUnreadState } = useMessageUnread();
   const { bannerState, lastCachedAt, fetchWithCache, retryConnectivity } = useOfflineApi();
   const routeFacilityId = asRouteParam(params.facilityId);
   const routeConversationId = asRouteParam(params.conversationId);
+  const routeRecipientId = asRouteParam(params.recipientId);
 
   // Conversation list state
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -101,11 +102,15 @@ export default function MessagesScreen() {
   const [memberSearch, setMemberSearch] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [memberLoadError, setMemberLoadError] = useState<string | null>(null);
+  // Guards against a slower earlier search overwriting a newer one.
+  const memberRequestId = useRef(0);
 
   const clearDeepLinkParams = useCallback(() => {
     router.setParams({
       facilityId: undefined,
       conversationId: undefined,
+      recipientId: undefined,
+      recipientName: undefined,
     });
   }, [router]);
 
@@ -282,53 +287,55 @@ export default function MessagesScreen() {
   }, [performDeleteMessage]);
 
   // ── Start a new conversation ──
-  async function fetchMembers() {
+  // The directory lists only members the caller is allowed to message, so this
+  // works for players and admins alike.
+  const fetchMembers = useCallback(async (search: string) => {
     if (!facilityId) return;
+
+    const requestId = ++memberRequestId.current;
     setLoadingMembers(true);
     setMemberLoadError(null);
-    const res = await api.get(`/api/members/${facilityId}`);
-    if (res.success && res.data) {
-      const memberList = Array.isArray(res.data) ? res.data : res.data.members || [];
-      // Only active members can receive messages (server enforces this too).
-      const normalized = memberList.map((member: any) => ({
-        ...member,
-        profileImageUrl: member.profileImageUrl || member.profile_image_url,
-      }));
-      setMembers(normalized.filter((m: MemberItem) => m.userId !== user?.id && (!m.status || m.status === 'active')));
+
+    const trimmed = search.trim();
+    const res = await api.get(
+      `/api/messages/directory/${facilityId}${trimmed ? `?search=${encodeURIComponent(trimmed)}` : ''}`
+    );
+    if (requestId !== memberRequestId.current) return;
+
+    if (res.success) {
+      setMembers(res.data?.data?.members || res.data?.members || []);
     } else {
       setMembers([]);
       setMemberLoadError(userFacingApiMessage(res));
     }
     setLoadingMembers(false);
-  }
+  }, [facilityId]);
+
+  // Load the directory when the modal opens, then debounce while the user types
+  useEffect(() => {
+    if (!showNewMessage) return;
+
+    const timer = setTimeout(() => {
+      void fetchMembers(memberSearch);
+    }, memberSearch ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [showNewMessage, memberSearch, fetchMembers]);
 
   function openNewMessage() {
-    fetchMembers();
     setMemberSearch('');
+    setMembers([]);
     setMemberLoadError(null);
+    setLoadingMembers(true);
     setShowNewMessage(true);
   }
 
-  async function startConversation(member: MemberItem) {
-    if (!user || !facilityId) return;
-
-    setShowNewMessage(false);
-
-    // Check if conversation already exists
-    const existing = conversations.find(c => c.otherUser.id === member.userId);
-    if (existing) {
-      openConversation(existing);
-      return;
-    }
-
-    // Create a placeholder conversation and open it
-    // The real conversation will be created when the first message is sent
+  // A draft thread has no id yet — the conversation row is created on first send.
+  const openDraftConversation = useCallback((member: MemberItem) => {
     setActiveConversation({
-      id: '', // Will be set after first message
+      id: '',
       otherUser: {
         id: member.userId,
         name: member.fullName,
-        email: member.email,
         profileImageUrl: member.profileImageUrl,
       },
       lastMessage: null,
@@ -336,7 +343,63 @@ export default function MessagesScreen() {
     });
     setThreadLoadError(null);
     setMessages([]);
+  }, []);
+
+  function startConversation(member: MemberItem) {
+    if (!user || !facilityId) return;
+
+    setShowNewMessage(false);
+
+    const existing = conversations.find(c => c.otherUser.id === member.userId);
+    if (existing) {
+      openConversation(existing);
+      return;
+    }
+
+    openDraftConversation(member);
   }
+
+  // Opened from elsewhere in the app (e.g. "Message" on a hitting partner post),
+  // where we only know who to message, not whether a thread exists yet.
+  const openRecipientThread = useCallback(async (recipientId: string) => {
+    if (!facilityId) return;
+
+    const res = await api.get(`/api/messages/directory/${facilityId}/${recipientId}`);
+    const member = res.data?.data?.member || res.data?.member;
+    if (!res.success || !member) {
+      showApiErrorAlert(res, 'Could not open conversation');
+      return;
+    }
+
+    openDraftConversation(member);
+  }, [facilityId, openDraftConversation]);
+
+  useEffect(() => {
+    if (!routeRecipientId || !facilityId || loading) return;
+    if (routeFacilityId && routeFacilityId !== facilityId) return;
+
+    const existing = conversations.find(convo => convo.otherUser.id === routeRecipientId);
+    if (existing) {
+      if (activeConversation?.id !== existing.id) {
+        openConversation(existing);
+      }
+    } else if (activeConversation?.otherUser.id !== routeRecipientId) {
+      void openRecipientThread(routeRecipientId);
+    }
+
+    clearDeepLinkParams();
+  }, [
+    routeRecipientId,
+    routeFacilityId,
+    facilityId,
+    loading,
+    conversations,
+    activeConversation?.id,
+    activeConversation?.otherUser.id,
+    openConversation,
+    openRecipientThread,
+    clearDeepLinkParams,
+  ]);
 
   // Handle sending the first message in a new conversation
   async function handleSendNewConversation() {
@@ -379,10 +442,6 @@ export default function MessagesScreen() {
     if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
-
-  const filteredMembers = members.filter(m =>
-    m.fullName.toLowerCase().includes(memberSearch.toLowerCase())
-  );
 
   const renderMessageItem = useCallback(({ item }: { item: MessageItem }) => {
     const isMe = item.senderId === user?.id;
@@ -630,8 +689,9 @@ export default function MessagesScreen() {
             </View>
           ) : (
             <FlatList
-              data={filteredMembers}
+              data={members}
               keyExtractor={(item) => item.userId}
+              keyboardShouldPersistTaps="handled"
               ListEmptyComponent={
                 <EmptyState
                   icon={memberLoadError ? 'alert-circle-outline' : 'people-outline'}
@@ -642,7 +702,7 @@ export default function MessagesScreen() {
                       : 'Try a different search or check back when more players join your facility.'
                   }
                   actionLabel={memberLoadError ? 'Try again' : undefined}
-                  onAction={memberLoadError ? () => void fetchMembers() : undefined}
+                  onAction={memberLoadError ? () => void fetchMembers(memberSearch) : undefined}
                 />
               }
               renderItem={({ item }) => (

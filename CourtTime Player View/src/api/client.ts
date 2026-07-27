@@ -1484,6 +1484,17 @@ export const messagesApi = {
     return apiRequest(`/api/messages/conversations/${facilityId}/${userId}`);
   },
 
+  // Search facility members the signed-in user can message
+  getDirectory: async (facilityId: string, search?: string) => {
+    const searchParam = search ? `?search=${encodeURIComponent(search)}` : '';
+    return apiRequest(`/api/messages/directory/${facilityId}${searchParam}`);
+  },
+
+  // Look up a single messageable member (used for ?recipientId= deep links)
+  getDirectoryMember: async (facilityId: string, userId: string) => {
+    return apiRequest(`/api/messages/directory/${facilityId}/${userId}`);
+  },
+
   // Get all messages in a conversation
   getMessages: async (conversationId: string) => {
     return apiRequest(`/api/messages/${conversationId}`);

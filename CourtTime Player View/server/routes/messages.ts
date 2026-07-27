@@ -9,6 +9,136 @@ import { notificationService } from '../../src/services/notificationService';
 
 const router = express.Router();
 
+/** Cap on directory rows so large facilities don't ship their whole roster. */
+const DIRECTORY_LIMIT = 50;
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Browsing a facility's directory requires belonging to that facility, either as
+ * an active member or as an active admin.
+ */
+async function hasFacilityAccess(facilityId: string, userId: string): Promise<boolean> {
+  const result = await query(
+    `SELECT 1 FROM facility_memberships
+      WHERE facility_id = $1 AND user_id = $2 AND status = 'active'
+     UNION ALL
+     SELECT 1 FROM facility_admins
+      WHERE facility_id = $1 AND user_id = $2 AND status = 'active'
+     LIMIT 1`,
+    [facilityId, userId]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Only active members are listed, because POST /api/messages requires an active
+ * membership for both participants — anyone else would fail on send. Email is
+ * searchable below but deliberately not returned: the picker never shows it.
+ */
+const DIRECTORY_QUERY = `
+  SELECT DISTINCT
+    u.id as "userId",
+    u.full_name as "fullName",
+    pp.profile_image_url as "profileImageUrl",
+    pp.skill_level as "skillLevel",
+    (fa.user_id IS NOT NULL) as "isFacilityAdmin"
+  FROM facility_memberships fm
+  JOIN users u ON u.id = fm.user_id
+  LEFT JOIN player_profiles pp ON pp.user_id = u.id
+  LEFT JOIN facility_admins fa
+    ON fa.user_id = fm.user_id
+    AND fa.facility_id = fm.facility_id
+    AND fa.status = 'active'
+  WHERE fm.facility_id = $1
+    AND fm.status = 'active'`;
+
+/**
+ * GET /api/messages/directory/:facilityId?search=
+ * Members the caller is allowed to start a conversation with.
+ */
+router.get('/directory/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (!(await hasFacilityAccess(facilityId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Not a member of this facility' });
+    }
+
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const params: any[] = [facilityId, callerId];
+    let sql = `${DIRECTORY_QUERY} AND u.id <> $2`;
+
+    if (search) {
+      params.push(`%${search}%`);
+      sql += ` AND (u.full_name ILIKE $3 OR u.email ILIKE $3)`;
+    }
+
+    sql += ` ORDER BY "fullName" ASC LIMIT ${DIRECTORY_LIMIT}`;
+
+    const result = await query(sql, params);
+
+    res.json({
+      success: true,
+      data: {
+        members: result.rows
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching message directory:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/messages/directory/:facilityId/:userId
+ * One messageable member, for deep links that arrive with only a recipient id.
+ */
+router.get('/directory/:facilityId/:userId', async (req, res) => {
+  try {
+    const { facilityId, userId } = req.params;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    if (!(await hasFacilityAccess(facilityId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Not a member of this facility' });
+    }
+
+    const result = UUID_PATTERN.test(userId)
+      ? await query(`${DIRECTORY_QUERY} AND u.id = $2 LIMIT 1`, [facilityId, userId])
+      : { rows: [] };
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'That member is not an active member of this facility'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        member: result.rows[0]
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching directory member:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 /**
  * GET /api/messages/conversations/:facilityId/:userId
  * Get all conversations for a user within a facility

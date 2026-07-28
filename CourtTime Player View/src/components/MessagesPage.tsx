@@ -9,6 +9,7 @@ import { facilitiesApi } from '../api/client';
 export function MessagesPage() {
   const [searchParams] = useSearchParams();
   const selectedRecipientId = searchParams.get('recipientId') || undefined;
+  const selectedConversationId = searchParams.get('conversationId') || undefined;
   const { user } = useAuth();
   const { selectedFacilityId } = useAppContext();
   const [facilityName, setFacilityName] = useState<string | undefined>();
@@ -44,6 +45,7 @@ export function MessagesPage() {
             facilityId={selectedFacilityId}
             facilityName={facilityName}
             selectedRecipientId={selectedRecipientId}
+            selectedConversationId={selectedConversationId}
           />
         )}
       </div>

@@ -26,6 +26,8 @@ export interface MessagePushContext {
   facilityId: string;
   messageId?: string;
   senderId?: string;
+  /** Group conversations deep-link by conversationId — there's no single "other" party. */
+  isGroup?: boolean;
 }
 
 function buildBookingPushData(
@@ -56,7 +58,11 @@ function buildMessageActionUrl(pushContext?: MessagePushContext): string {
   if (pushContext?.facilityId) {
     params.set('facilityId', pushContext.facilityId);
   }
-  if (pushContext?.senderId) {
+  if (pushContext?.isGroup) {
+    if (pushContext?.conversationId) {
+      params.set('conversationId', pushContext.conversationId);
+    }
+  } else if (pushContext?.senderId) {
     params.set('recipientId', pushContext.senderId);
   }
 

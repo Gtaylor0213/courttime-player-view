@@ -6,11 +6,15 @@
 import express from 'express';
 import { query } from '../../src/database/connection';
 import { notificationService } from '../../src/services/notificationService';
+import { isFacilityAdminUser } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 
 /** Cap on directory rows so large facilities don't ship their whole roster. */
 const DIRECTORY_LIMIT = 50;
+
+/** Cap on group conversation size, including the creator. */
+const GROUP_MEMBER_LIMIT = 30;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -29,6 +33,54 @@ async function hasFacilityAccess(facilityId: string, userId: string): Promise<bo
     [facilityId, userId]
   );
   return result.rows.length > 0;
+}
+
+/**
+ * True when the conversation is one the caller may read/write: for a DM,
+ * caller is one of the two hard-coded participants; for a group, caller has a
+ * conversation_participants row.
+ */
+async function isConversationParticipant(conversationId: string, userId: string): Promise<boolean> {
+  const result = await query(
+    `SELECT 1 FROM conversations c
+      WHERE c.id = $1
+        AND (
+          (c.is_group = false AND (c.participant1_id = $2 OR c.participant2_id = $2))
+          OR (c.is_group = true AND EXISTS (
+            SELECT 1 FROM conversation_participants cp
+             WHERE cp.conversation_id = c.id AND cp.user_id = $2
+          ))
+        )`,
+    [conversationId, userId]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * True when the caller may manage a group's name/membership: the creator, or
+ * any active admin of the group's facility (moderation override).
+ */
+async function isGroupManager(conversationId: string, userId: string): Promise<boolean> {
+  const result = await query(
+    `SELECT created_by, facility_id FROM conversations WHERE id = $1 AND is_group = true`,
+    [conversationId]
+  );
+  const conversation = result.rows[0];
+  if (!conversation) return false;
+  if (conversation.created_by === userId) return true;
+  return isFacilityAdminUser(conversation.facility_id, userId);
+}
+
+/** Trims and validates a group name; returns the trimmed name or an error string. */
+function validateGroupName(rawName: unknown): { name: string } | { error: string } {
+  if (typeof rawName !== 'string' || !rawName.trim()) {
+    return { error: 'Group name is required' };
+  }
+  const name = rawName.trim();
+  if (name.length > 100) {
+    return { error: 'Group name must be 100 characters or fewer' };
+  }
+  return { name };
 }
 
 /**
@@ -140,6 +192,321 @@ router.get('/directory/:facilityId/:userId', async (req, res) => {
 });
 
 /**
+ * POST /api/messages/groups
+ * Create a group conversation. Any active facility member (player or admin) may
+ * create one; the creator is automatically a member and is the only one who can
+ * rename/delete it later, aside from facility admins acting as moderators.
+ */
+router.post('/groups', async (req, res) => {
+  try {
+    const { facilityId, name, memberIds } = req.body;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    if (!facilityId) {
+      return res.status(400).json({ success: false, error: 'facilityId is required' });
+    }
+    if (!(await hasFacilityAccess(facilityId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Not a member of this facility' });
+    }
+
+    const nameResult = validateGroupName(name);
+    if ('error' in nameResult) {
+      return res.status(400).json({ success: false, error: nameResult.error });
+    }
+
+    const requestedIds: string[] = Array.isArray(memberIds) ? memberIds : [];
+    const memberIdSet = new Set(requestedIds.filter((id) => typeof id === 'string' && id !== callerId));
+
+    if (memberIdSet.size === 0) {
+      return res.status(400).json({ success: false, error: 'A group needs at least one other member' });
+    }
+    if (memberIdSet.size + 1 > GROUP_MEMBER_LIMIT) {
+      return res.status(400).json({
+        success: false,
+        error: `Groups are limited to ${GROUP_MEMBER_LIMIT} members`
+      });
+    }
+
+    const memberIdList = Array.from(memberIdSet);
+    const membershipCheck = await query(
+      `SELECT user_id FROM facility_memberships
+        WHERE facility_id = $1 AND user_id = ANY($2::uuid[]) AND status = 'active'`,
+      [facilityId, memberIdList]
+    );
+    if (membershipCheck.rows.length !== memberIdList.length) {
+      return res.status(403).json({
+        success: false,
+        error: 'All members must be active members of the facility'
+      });
+    }
+
+    const conversationResult = await query(
+      `INSERT INTO conversations (is_group, name, created_by, facility_id)
+       VALUES (true, $1, $2, $3)
+       RETURNING id`,
+      [nameResult.name, callerId, facilityId]
+    );
+    const conversationId = conversationResult.rows[0].id;
+
+    const participantRows = [callerId, ...memberIdList];
+    const values = participantRows
+      .map((_, i) => `($1, $${i + 2}, $${participantRows.length + 2})`)
+      .join(', ');
+    await query(
+      `INSERT INTO conversation_participants (conversation_id, user_id, added_by)
+       VALUES ${values}`,
+      [conversationId, ...participantRows, callerId]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        conversationId,
+        name: nameResult.name
+      }
+    });
+  } catch (error: any) {
+    console.error('Error creating group conversation:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/messages/groups/:conversationId/members
+ * List a group's members, for the group-info UI. Any current participant may view.
+ */
+router.get('/groups/:conversationId/members', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    if (!(await isConversationParticipant(conversationId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Cannot access this conversation' });
+    }
+
+    const conversation = await query(
+      `SELECT created_by as "createdBy", facility_id as "facilityId" FROM conversations
+        WHERE id = $1 AND is_group = true`,
+      [conversationId]
+    );
+    if (conversation.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+    const { createdBy, facilityId } = conversation.rows[0];
+
+    const result = await query(
+      `SELECT
+         u.id as "userId",
+         u.full_name as "fullName",
+         (fa.user_id IS NOT NULL) as "isFacilityAdmin"
+       FROM conversation_participants cp
+       JOIN users u ON u.id = cp.user_id
+       LEFT JOIN facility_admins fa
+         ON fa.user_id = cp.user_id AND fa.facility_id = $2 AND fa.status = 'active'
+       WHERE cp.conversation_id = $1
+       ORDER BY u.full_name ASC`,
+      [conversationId, facilityId]
+    );
+
+    const members = result.rows.map((row) => ({
+      ...row,
+      isCreator: row.userId === createdBy
+    }));
+
+    res.json({ success: true, data: { members, createdBy } });
+  } catch (error: any) {
+    console.error('Error fetching group members:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/messages/groups/:conversationId/members
+ * Add members to a group. Only the creator or a facility admin may do this.
+ */
+router.post('/groups/:conversationId/members', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userIds } = req.body;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    if (!(await isGroupManager(conversationId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Only the group creator or a facility admin can add members' });
+    }
+
+    const conversation = await query(
+      `SELECT facility_id as "facilityId" FROM conversations WHERE id = $1 AND is_group = true`,
+      [conversationId]
+    );
+    if (conversation.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+    const { facilityId } = conversation.rows[0];
+
+    const requestedIds: string[] = Array.isArray(userIds) ? userIds : [];
+    const existingParticipants = await query(
+      `SELECT user_id FROM conversation_participants WHERE conversation_id = $1`,
+      [conversationId]
+    );
+    const existingIds = new Set(existingParticipants.rows.map((r: any) => r.user_id));
+    const newIds = Array.from(new Set(requestedIds.filter((id) => typeof id === 'string' && !existingIds.has(id))));
+
+    if (newIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'No new members to add' });
+    }
+    if (existingIds.size + newIds.length > GROUP_MEMBER_LIMIT) {
+      return res.status(400).json({
+        success: false,
+        error: `Groups are limited to ${GROUP_MEMBER_LIMIT} members`
+      });
+    }
+
+    const membershipCheck = await query(
+      `SELECT user_id FROM facility_memberships
+        WHERE facility_id = $1 AND user_id = ANY($2::uuid[]) AND status = 'active'`,
+      [facilityId, newIds]
+    );
+    if (membershipCheck.rows.length !== newIds.length) {
+      return res.status(403).json({
+        success: false,
+        error: 'All members must be active members of the facility'
+      });
+    }
+
+    const values = newIds.map((_, i) => `($1, $${i + 2}, $${newIds.length + 2})`).join(', ');
+    await query(
+      `INSERT INTO conversation_participants (conversation_id, user_id, added_by)
+       VALUES ${values}`,
+      [conversationId, ...newIds, callerId]
+    );
+
+    res.json({ success: true, data: { addedIds: newIds } });
+  } catch (error: any) {
+    console.error('Error adding group members:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/messages/groups/:conversationId/members/:userId
+ * Remove a member, or leave the group yourself. The creator cannot be removed
+ * this way — the group must be deleted instead.
+ */
+router.delete('/groups/:conversationId/members/:userId', async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const conversation = await query(
+      `SELECT created_by as "createdBy" FROM conversations WHERE id = $1 AND is_group = true`,
+      [conversationId]
+    );
+    if (conversation.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+    const { createdBy } = conversation.rows[0];
+
+    if (userId === createdBy) {
+      return res.status(400).json({
+        success: false,
+        error: 'The group creator cannot be removed. Delete the group instead.'
+      });
+    }
+
+    const isSelfLeave = userId === callerId;
+    if (!isSelfLeave && !(await isGroupManager(conversationId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Only the group creator or a facility admin can remove members' });
+    }
+
+    const result = await query(
+      `DELETE FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2 RETURNING id`,
+      [conversationId, userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'That user is not a member of this group' });
+    }
+
+    res.json({ success: true, data: { removedId: userId } });
+  } catch (error: any) {
+    console.error('Error removing group member:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/messages/groups/:conversationId
+ * Rename a group. Only the creator or a facility admin may do this.
+ */
+router.patch('/groups/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { name } = req.body;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    if (!(await isGroupManager(conversationId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Only the group creator or a facility admin can rename this group' });
+    }
+
+    const nameResult = validateGroupName(name);
+    if ('error' in nameResult) {
+      return res.status(400).json({ success: false, error: nameResult.error });
+    }
+
+    await query(
+      `UPDATE conversations SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [nameResult.name, conversationId]
+    );
+
+    res.json({ success: true, data: { name: nameResult.name } });
+  } catch (error: any) {
+    console.error('Error renaming group:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/messages/groups/:conversationId
+ * Delete a group entirely (messages and participants cascade). Only the
+ * creator or a facility admin may do this.
+ */
+router.delete('/groups/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const callerId = req.user?.userId;
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    if (!(await isGroupManager(conversationId, callerId))) {
+      return res.status(403).json({ success: false, error: 'Only the group creator or a facility admin can delete this group' });
+    }
+
+    const result = await query(
+      `DELETE FROM conversations WHERE id = $1 AND is_group = true RETURNING id`,
+      [conversationId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+
+    res.json({ success: true, data: { deletedId: conversationId } });
+  } catch (error: any) {
+    console.error('Error deleting group:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/messages/conversations/:facilityId/:userId
  * Get all conversations for a user within a facility
  */
@@ -202,12 +569,14 @@ router.get('/conversations/:facilityId/:userId', async (req, res) => {
       JOIN users u1 ON c.participant1_id = u1.id
       JOIN users u2 ON c.participant2_id = u2.id
       WHERE c.facility_id = $2
+        AND c.is_group = false
         AND (c.participant1_id = $1 OR c.participant2_id = $1)
       ORDER BY "lastMessageSentAt" DESC NULLS LAST
     `, [userId, facilityId]);
 
-    const conversations = result.rows.map(row => ({
+    const dmConversations = result.rows.map(row => ({
       id: row.id,
+      isGroup: false,
       otherUser: {
         id: row.otherUserId,
         name: row.otherUserName,
@@ -220,6 +589,68 @@ router.get('/conversations/:facilityId/:userId', async (req, res) => {
       } : null,
       unreadCount: parseInt(row.unreadCount || 0)
     }));
+
+    const groupResult = await query(`
+      SELECT
+        c.id,
+        c.name as "groupName",
+        c.created_by as "createdBy",
+        (
+          SELECT COUNT(*) FROM conversation_participants cp2 WHERE cp2.conversation_id = c.id
+        ) as "memberCount",
+        (
+          SELECT m.message_text
+          FROM messages m
+          WHERE m.conversation_id = c.id
+          ORDER BY m.created_at DESC
+          LIMIT 1
+        ) as "lastMessageText",
+        (
+          SELECT m.sender_id
+          FROM messages m
+          WHERE m.conversation_id = c.id
+          ORDER BY m.created_at DESC
+          LIMIT 1
+        ) as "lastMessageSenderId",
+        (
+          SELECT m.created_at
+          FROM messages m
+          WHERE m.conversation_id = c.id
+          ORDER BY m.created_at DESC
+          LIMIT 1
+        ) as "lastMessageSentAt",
+        (
+          SELECT COUNT(*)
+          FROM messages m
+          WHERE m.conversation_id = c.id
+            AND m.sender_id != $1
+            AND m.is_read = false
+        ) as "unreadCount"
+      FROM conversations c
+      JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = $1
+      WHERE c.facility_id = $2 AND c.is_group = true
+      ORDER BY "lastMessageSentAt" DESC NULLS LAST
+    `, [userId, facilityId]);
+
+    const groupConversations = groupResult.rows.map(row => ({
+      id: row.id,
+      isGroup: true,
+      groupName: row.groupName,
+      createdBy: row.createdBy,
+      memberCount: parseInt(row.memberCount || 0),
+      lastMessage: row.lastMessageText ? {
+        text: row.lastMessageText,
+        senderId: row.lastMessageSenderId,
+        sentAt: row.lastMessageSentAt
+      } : null,
+      unreadCount: parseInt(row.unreadCount || 0)
+    }));
+
+    const conversations = [...dmConversations, ...groupConversations].sort((a, b) => {
+      const aTime = a.lastMessage ? new Date(a.lastMessage.sentAt).getTime() : 0;
+      const bTime = b.lastMessage ? new Date(b.lastMessage.sentAt).getTime() : 0;
+      return bTime - aTime;
+    });
 
     res.json({
       success: true,
@@ -260,7 +691,13 @@ router.delete('/message/:messageId', async (req, res) => {
       WHERE m.id = $1
         AND m.sender_id = $2
         AND m.conversation_id = c.id
-        AND (c.participant1_id = $2 OR c.participant2_id = $2)
+        AND (
+          (c.is_group = false AND (c.participant1_id = $2 OR c.participant2_id = $2))
+          OR (c.is_group = true AND EXISTS (
+            SELECT 1 FROM conversation_participants cp
+             WHERE cp.conversation_id = c.id AND cp.user_id = $2
+          ))
+        )
       RETURNING m.id, m.conversation_id as "conversationId"
     `,
       [messageId, userId]
@@ -302,12 +739,7 @@ router.get('/:conversationId', async (req, res) => {
     }
 
     // Only participants of the conversation may read its messages.
-    const participantCheck = await query(
-      `SELECT 1 FROM conversations
-        WHERE id = $1 AND (participant1_id = $2 OR participant2_id = $2)`,
-      [conversationId, callerId]
-    );
-    if (participantCheck.rows.length === 0) {
+    if (!(await isConversationParticipant(conversationId, callerId))) {
       return res.status(403).json({ success: false, error: 'Cannot access this conversation' });
     }
 
@@ -345,11 +777,86 @@ router.get('/:conversationId', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { recipientId, facilityId, messageText } = req.body;
+    const { recipientId, facilityId, messageText, conversationId: existingConversationId } = req.body;
     // The sender is always the authenticated caller, never a client-supplied id.
     const senderId = req.user?.userId;
     if (!senderId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    // Sending into an existing conversation by id — used for group conversations
+    // (which have no single "recipient"), and works for any conversation type.
+    if (existingConversationId) {
+      if (!messageText) {
+        return res.status(400).json({ success: false, error: 'messageText is required' });
+      }
+      if (!(await isConversationParticipant(existingConversationId, senderId))) {
+        return res.status(403).json({ success: false, error: 'Cannot access this conversation' });
+      }
+
+      const messageResult = await query(`
+        INSERT INTO messages (conversation_id, sender_id, message_text)
+        VALUES ($1, $2, $3)
+        RETURNING
+          id,
+          conversation_id as "conversationId",
+          sender_id as "senderId",
+          message_text as "messageText",
+          is_read as "isRead",
+          created_at as "createdAt"
+      `, [existingConversationId, senderId, messageText]);
+
+      void (async () => {
+        try {
+          const conversation = await query(
+            `SELECT is_group as "isGroup", facility_id as "facilityId", name FROM conversations WHERE id = $1`,
+            [existingConversationId]
+          );
+          const { isGroup, facilityId: convFacilityId, name: groupName } = conversation.rows[0] || {};
+
+          const recipients = isGroup
+            ? (await query(
+                `SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2`,
+                [existingConversationId, senderId]
+              )).rows.map((r: any) => r.user_id)
+            : (await query(
+                `SELECT CASE WHEN participant1_id = $2 THEN participant2_id ELSE participant1_id END as "otherUserId"
+                   FROM conversations WHERE id = $1`,
+                [existingConversationId, senderId]
+              )).rows.map((r: any) => r.otherUserId);
+
+          const senderResult = await query(`SELECT full_name FROM users WHERE id = $1`, [senderId]);
+          const senderName = senderResult.rows[0]?.full_name || 'A facility member';
+          const displayName = isGroup && groupName ? `${senderName} (${groupName})` : senderName;
+
+          await Promise.all(
+            recipients.map((recipientUserId: string) =>
+              notificationService.notifyMessageReceived(
+                recipientUserId,
+                displayName,
+                messageResult.rows[0].messageText,
+                {
+                  conversationId: existingConversationId,
+                  facilityId: convFacilityId,
+                  messageId: messageResult.rows[0].id,
+                  senderId,
+                  isGroup: !!isGroup,
+                }
+              )
+            )
+          );
+        } catch (notificationError) {
+          console.error('Error creating group message notification:', notificationError);
+        }
+      })();
+
+      return res.json({
+        success: true,
+        data: {
+          message: messageResult.rows[0],
+          conversationId: existingConversationId
+        }
+      });
     }
 
     if (!recipientId || !facilityId || !messageText) {
@@ -479,12 +986,7 @@ router.patch('/:conversationId/read', async (req, res) => {
     }
 
     // Only a participant may mark a conversation's messages read.
-    const participantCheck = await query(
-      `SELECT 1 FROM conversations
-        WHERE id = $1 AND (participant1_id = $2 OR participant2_id = $2)`,
-      [conversationId, userId]
-    );
-    if (participantCheck.rows.length === 0) {
+    if (!(await isConversationParticipant(conversationId, userId))) {
       return res.status(403).json({ success: false, error: 'Cannot access this conversation' });
     }
 

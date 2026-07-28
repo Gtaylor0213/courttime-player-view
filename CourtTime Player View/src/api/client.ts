@@ -1508,6 +1508,14 @@ export const messagesApi = {
     });
   },
 
+  // Send a message into an existing conversation (used for group conversations)
+  sendToConversation: async (conversationId: string, messageText: string) => {
+    return apiRequest('/api/messages', {
+      method: 'POST',
+      body: JSON.stringify({ conversationId, messageText }),
+    });
+  },
+
   // Mark all messages in a conversation as read
   markAsRead: async (conversationId: string, userId: string) => {
     return apiRequest(`/api/messages/${conversationId}/read`, {
@@ -1521,6 +1529,49 @@ export const messagesApi = {
     return apiRequest(`/api/messages/message/${messageId}`, {
       method: 'DELETE',
       body: JSON.stringify({ userId }),
+    });
+  },
+
+  // Create a group conversation (max 30 members, including the creator)
+  createGroup: async (facilityId: string, name: string, memberIds: string[]) => {
+    return apiRequest('/api/messages/groups', {
+      method: 'POST',
+      body: JSON.stringify({ facilityId, name, memberIds }),
+    });
+  },
+
+  // List a group's members
+  getGroupMembers: async (conversationId: string) => {
+    return apiRequest(`/api/messages/groups/${conversationId}/members`);
+  },
+
+  // Add members to a group (creator or facility admin only)
+  addGroupMembers: async (conversationId: string, userIds: string[]) => {
+    return apiRequest(`/api/messages/groups/${conversationId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userIds }),
+    });
+  },
+
+  // Remove a member from a group, or leave it yourself
+  removeGroupMember: async (conversationId: string, userId: string) => {
+    return apiRequest(`/api/messages/groups/${conversationId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Rename a group (creator or facility admin only)
+  renameGroup: async (conversationId: string, name: string) => {
+    return apiRequest(`/api/messages/groups/${conversationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  // Delete a group entirely (creator or facility admin only)
+  deleteGroup: async (conversationId: string) => {
+    return apiRequest(`/api/messages/groups/${conversationId}`, {
+      method: 'DELETE',
     });
   },
 };

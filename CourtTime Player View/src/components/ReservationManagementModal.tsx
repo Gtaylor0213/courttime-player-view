@@ -3,11 +3,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Calendar, CalendarPlus, MapPin, User, FileText, AlertCircle, Edit2, X, Users, DollarSign } from 'lucide-react';
+import { Calendar, CalendarPlus, MapPin, User, FileText, AlertCircle, Edit2, X, Users, DollarSign, KeyRound } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { bookingApi, facilitiesApi } from '../api/client';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 import { toast } from 'sonner';
 import {
   bookingWithDetailsToCalendarDetails,
@@ -34,6 +35,9 @@ interface ReservationDetails {
     | 'cancelled_unpaid';
   bookingType?: string;
   notes?: string;
+  addBallMachine?: boolean;
+  /** Non-null when a St. Marlow pass covered the machine (no hourly fee). */
+  ballMachinePassId?: string | null;
   createdAt: string;
   updatedAt: string;
   courtName?: string;
@@ -110,6 +114,8 @@ export function ReservationManagementModal({
   const [charges, setCharges] = useState<ChargeRow[]>([]);
   const [isClosingOut, setIsClosingOut] = useState(false);
   const [isLoadingSettlement, setIsLoadingSettlement] = useState(false);
+  const [splitPayment, setSplitPayment] = useState<any | null>(null);
+  const [isStartingSplitCheckout, setIsStartingSplitCheckout] = useState(false);
 
   // Edit form state
   const [editDate, setEditDate] = useState('');
@@ -119,6 +125,7 @@ export function ReservationManagementModal({
   const [courts, setCourts] = useState<any[]>([]);
   const [isCheckingConflict, setIsCheckingConflict] = useState(false);
   const [hasConflict, setHasConflict] = useState(false);
+  const [showBallMachineCode, setShowBallMachineCode] = useState(false);
 
   const postPlayEnabled = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const isPostPlayBooking =
@@ -151,10 +158,13 @@ export function ReservationManagementModal({
             (partRes as any)?.data?.settlementStatus;
           if (statusFromParts) setSettlementStatus(statusFromParts);
         }
+        const split = await bookingApi.getSplitPayment(reservation.id).catch(() => null);
+        if (!cancelled) setSplitPayment(split?.success ? (split as any).data || split : null);
       } catch {
         if (!cancelled) {
           setSettlementStatus(reservation.settlementStatus || 'not_applicable');
           setParticipants([]);
+          setSplitPayment(null);
         }
       }
     })();
@@ -330,6 +340,21 @@ export function ReservationManagementModal({
       toast.error('Failed to cancel reservation. Please try again.');
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const handlePaySplitShare = async () => {
+    if (!reservation) return;
+    setIsStartingSplitCheckout(true);
+    try {
+      const origin = window.location.origin;
+      const result: any = await bookingApi.checkoutSplitPayment(reservation.id, `${origin}/calendar?splitPaymentSuccess=1`, `${origin}/calendar?splitPaymentCancelled=1`);
+      const url = result.checkoutUrl || result.data?.checkoutUrl;
+      if (!result.success || !url) throw new Error(result.error || 'Could not start checkout');
+      window.location.assign(url);
+    } catch (error: any) {
+      toast.error(error.message || 'Could not start payment');
+      setIsStartingSplitCheckout(false);
     }
   };
 
@@ -513,6 +538,9 @@ export function ReservationManagementModal({
         endTime: endTime,
         durationMinutes: durationMinutes,
         notes: reservation.notes || '',
+        // Carry the add-on across the re-create, otherwise editing a reservation
+        // silently drops the ball machine. Pass coverage is re-resolved server-side.
+        addBallMachine: reservation.addBallMachine || undefined,
         excludeBookingId: reservation.id,
       });
 
@@ -586,7 +614,15 @@ export function ReservationManagementModal({
 
   return (
     <>
-      <Dialog open={isOpen && !showCancelConfirm} onOpenChange={onClose}>
+      <BallMachineAccessDialog
+        isOpen={showBallMachineCode}
+        onClose={() => setShowBallMachineCode(false)}
+        facilityId={reservation.facilityId}
+        bookingSummary={[reservation.courtName, reservation.bookingDate, reservation.startTime]
+          .filter(Boolean)
+          .join(' · ')}
+      />
+      <Dialog open={isOpen && !showCancelConfirm && !showBallMachineCode} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -608,6 +644,16 @@ export function ReservationManagementModal({
                   {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
                 </Badge>
               </div>
+
+              {splitPayment && (() => {
+                const mine = splitPayment.shares?.find((share: any) => share.userId === user?.id);
+                const paid = splitPayment.shares?.filter((share: any) => share.status === 'paid').length || 0;
+                return <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
+                  <p className="font-medium text-blue-900">Split payment: {paid} of {splitPayment.shares?.length || 0} shares paid</p>
+                  {mine && <p className="mt-1 text-blue-800">Your share: {formatCents(Number(mine.amountCents))} — {mine.status}</p>}
+                  {mine?.status === 'pending' && <Button className="mt-2" size="sm" onClick={handlePaySplitShare} disabled={isStartingSplitCheckout}>{isStartingSplitCheckout ? 'Opening checkout…' : 'Pay my share'}</Button>}
+                </div>;
+              })()}
 
               {/* Court & Facility */}
               <div className="flex items-start gap-2">
@@ -972,6 +1018,16 @@ export function ReservationManagementModal({
                 >
                   Close
                 </Button>
+                {reservation.addBallMachine && isOwnReservation && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowBallMachineCode(true)}
+                    className="flex-1 sm:flex-none sm:min-w-[150px]"
+                  >
+                    <KeyRound className="h-4 w-4 mr-1" />
+                    Ball machine code
+                  </Button>
+                )}
                 {canAddToCalendar && (
                   <>
                     <Button

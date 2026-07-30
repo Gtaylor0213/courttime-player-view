@@ -732,6 +732,8 @@ export const bookingApi = {
     }>;
     /** When editing, exclude the original booking from conflict checks */
     excludeBookingId?: string;
+    /** Active facility members sharing an equal pre-payment split. */
+    splitParticipantIds?: string[];
   }) => {
     const res = await apiRequest('/api/bookings', {
       method: 'POST',
@@ -739,6 +741,13 @@ export const bookingApi = {
     });
     return normalizeBookingCreateResponse(res);
   },
+
+  getSplitPayment: async (bookingId: string) => apiRequest(`/api/bookings/${bookingId}/split-payment`),
+
+  checkoutSplitPayment: async (bookingId: string, successUrl: string, cancelUrl: string) =>
+    apiRequest(`/api/bookings/${bookingId}/split-payment/checkout`, {
+      method: 'POST', body: JSON.stringify({ successUrl, cancelUrl }),
+    }),
 
   confirmPayment: async (sessionId: string) => {
     const res = await apiRequest('/api/bookings/payment/confirm', {
@@ -2239,4 +2248,62 @@ export const annualFeesApi = {
 
   getBillingRunRecords: (facilityId: string, runId: string) =>
     apiRequest(`/api/annual-fees/billing/runs/${runId}/${facilityId}`),
+};
+
+// St. Marlow Ball Machine (st_marlow_ball_machine feature flag). Members buy
+// time-based passes here; the per-hour rate is charged through bookingApi.create.
+export const ballMachineApi = {
+  getStatus: (facilityId: string) =>
+    apiRequest(`/api/ball-machine/status/${facilityId}`),
+
+  getAccessCode: (facilityId: string) =>
+    apiRequest(`/api/ball-machine/access-code/${facilityId}`),
+
+  purchasePass: (facilityId: string, durationMonths: number, urls?: { successUrl?: string; cancelUrl?: string }) =>
+    apiRequest(`/api/ball-machine/purchase/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify({ durationMonths, ...urls }),
+    }),
+
+  confirmPurchase: (sessionId: string) =>
+    apiRequest('/api/ball-machine/purchase/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
+
+  // Admin
+  getAdminConfig: (facilityId: string) =>
+    apiRequest(`/api/ball-machine/admin/config/${facilityId}`),
+
+  updateConfig: (
+    facilityId: string,
+    data: { accessCode?: string | null; machineCount?: number; instructions?: string | null }
+  ) =>
+    apiRequest(`/api/ball-machine/admin/config/${facilityId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  updateProducts: (
+    facilityId: string,
+    products: { durationMonths: number; priceCents: number; isActive: boolean }[]
+  ) =>
+    apiRequest(`/api/ball-machine/admin/products/${facilityId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ products }),
+    }),
+
+  getPassHolders: (facilityId: string) =>
+    apiRequest(`/api/ball-machine/admin/passes/${facilityId}`),
+
+  grantPass: (facilityId: string, userId: string, durationMonths: number) =>
+    apiRequest(`/api/ball-machine/admin/passes/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify({ userId, durationMonths }),
+    }),
+
+  revokePass: (facilityId: string, passId: string) =>
+    apiRequest(`/api/ball-machine/admin/passes/${facilityId}/${passId}`, {
+      method: 'DELETE',
+    }),
 };

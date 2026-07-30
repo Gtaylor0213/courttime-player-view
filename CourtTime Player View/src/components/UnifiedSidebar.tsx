@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus, ShoppingBag, ShoppingCart, DollarSign, BarChart2, CalendarDays, GraduationCap } from 'lucide-react';
+import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus, ShoppingBag, ShoppingCart, DollarSign, BarChart2, CalendarDays, GraduationCap, Target } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
@@ -42,6 +42,7 @@ export function UnifiedSidebar({
   const proShopEnabled = enabledFeatures.includes('pro_shop');
   const annualFeesEnabled = enabledFeatures.includes('annual_membership_fees');
   const lessonsEnabled = enabledFeatures.includes('lessons_tab');
+  const ballMachineEnabled = enabledFeatures.includes('st_marlow_ball_machine');
   const location = useLocation();
   const navigate = useNavigate();
   const [memberFacilities, setMemberFacilities] = React.useState<Club[]>([]);
@@ -402,6 +403,14 @@ export function UnifiedSidebar({
                     isActive={currentPage === 'annual-fees'}
                   />
                 )}
+                {ballMachineEnabled && (
+                  <SidebarButton
+                    onClick={() => handleNav('/admin/ball-machine')}
+                    icon={Target}
+                    label="Ball Machine"
+                    isActive={currentPage === 'ball-machine-admin'}
+                  />
+                )}
                 {(proShopEnabled || annualFeesEnabled) && (
                   <SidebarButton
                     onClick={() => handleNav('/admin/reports')}
@@ -463,6 +472,14 @@ export function UnifiedSidebar({
                   icon={GraduationCap}
                   label="Lessons"
                   isActive={currentPage === 'lessons'}
+                />
+              )}
+              {ballMachineEnabled && (
+                <SidebarButton
+                  onClick={() => handleNav('/ball-machine')}
+                  icon={Target}
+                  label="Ball Machine"
+                  isActive={currentPage === 'ball-machine'}
                 />
               )}
               {!user?.adminFacilities?.includes(selectedFacilityId) && (

@@ -43,6 +43,8 @@ import ProShopAdmin from './components/admin/ProShopAdmin';
 import ProShop from './components/ProShop';
 import LessonsAdmin from './components/admin/LessonsAdmin';
 import Lessons from './components/Lessons';
+import BallMachine from './components/BallMachine';
+import BallMachineAdmin from './components/admin/BallMachineAdmin';
 import AnnualFeesAdmin from './components/admin/AnnualFeesAdmin';
 import AdminReports from './components/admin/AdminReports';
 
@@ -111,6 +113,8 @@ export default function App() {
               <Route path="/shop" element={<ProShop />} />
               <Route path="/lessons" element={<Lessons />} />
               <Route path="/admin/lessons" element={<LessonsAdmin />} />
+              <Route path="/ball-machine" element={<BallMachine />} />
+              <Route path="/admin/ball-machine" element={<BallMachineAdmin />} />
               <Route path="/admin/email-blast" element={<Navigate to="/admin/communication" replace />} />
             </Route>
 

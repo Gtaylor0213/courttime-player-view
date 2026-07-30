@@ -216,6 +216,7 @@ export function QuickReservePopup({
   const [selectedFacility, setSelectedFacility] = useState(selectedFacilityId);
   const [facilityFeatures, setFacilityFeatures] = useState<string[]>([]);
   const canUseRecurring = isAdmin || facilityFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
+  const canSplitPayment = facilityFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [selectedCourt, setSelectedCourt] = useState('');
   const [selectedCourtId, setSelectedCourtId] = useState('');
@@ -241,6 +242,10 @@ export function QuickReservePopup({
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
+  const [splitPayment, setSplitPayment] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberResults, setMemberResults] = useState<Array<{ userId: string; fullName: string; email: string }>>([]);
+  const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
 
   // Set once the user picks a start or end time; their choice then wins over autofill
   const [userChoseTime, setUserChoseTime] = useState(false);
@@ -264,7 +269,20 @@ export function QuickReservePopup({
     setBookingWarnings([]);
     setIsPrimeTime(false);
     setAdditionalCourtIds([]);
+    setSplitPayment(false);
+    setMemberSearch('');
+    setMemberResults([]);
+    setSplitMembers([]);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!splitPayment || !selectedFacility || memberSearch.trim().length < 2) { setMemberResults([]); return; }
+    let cancelled = false;
+    bookingApi.lookupFacilityMembers(selectedFacility, memberSearch).then((res: any) => {
+      if (!cancelled && res.success) setMemberResults((res.members || res.data?.members || []).filter((m: any) => m.userId !== user?.id));
+    }).catch(() => !cancelled && setMemberResults([]));
+    return () => { cancelled = true; };
+  }, [splitPayment, selectedFacility, memberSearch, user?.id]);
 
   // Reset court selection when facility changes
   useEffect(() => {
@@ -649,6 +667,7 @@ export function QuickReservePopup({
           durationMinutes: Math.round(durationMinutes),
           bookingType: bookingType || undefined,
           notes: notes || undefined
+          ,splitParticipantIds: splitPayment ? splitMembers.map(m => m.userId) : undefined
         }))
       );
 
@@ -1114,6 +1133,27 @@ export function QuickReservePopup({
                     : `No ${selectedCourtType} courts are free from ${selectedTime} to ${selectedEndTime}. Try another time.`}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Advanced Booking Checkbox - admins always; players when enabled for the facility */}
+          {canSplitPayment && !advancedBooking && allSelectedCourts.length === 1 && (
+            <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox id="split-payment" checked={splitPayment} onCheckedChange={(checked) => setSplitPayment(checked === true)} />
+                <Label htmlFor="split-payment" className="cursor-pointer text-sm font-medium">Split this court fee with members</Label>
+              </div>
+              {splitPayment && <>
+                <p className="text-xs text-blue-800">Each selected member, including you, pays an equal share. The court is held for 15 minutes while everyone pays.</p>
+                <Input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Search a member by name or email" />
+                {memberResults.map((member) => (
+                  <button type="button" key={member.userId} className="block w-full text-left text-sm text-blue-800 hover:underline" onClick={() => {
+                    if (!splitMembers.some(m => m.userId === member.userId)) setSplitMembers(prev => [...prev, member]);
+                    setMemberSearch(''); setMemberResults([]);
+                  }}>{member.fullName} <span className="text-xs">({member.email})</span></button>
+                ))}
+                {splitMembers.length > 0 && <div className="flex flex-wrap gap-1 text-xs">{splitMembers.map(member => <button type="button" key={member.userId} onClick={() => setSplitMembers(prev => prev.filter(m => m.userId !== member.userId))} className="rounded bg-white px-2 py-1 text-blue-800">{member.fullName} ×</button>)}</div>}
+              </>}
             </div>
           )}
 

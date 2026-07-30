@@ -229,6 +229,8 @@ function computeSettlementAmounts(params: {
   durationMinutes: number;
   bringGuest: boolean;
   addBallMachine: boolean;
+  /** A St. Marlow pass already paid for the machine — the hourly fee must not apply. */
+  ballMachineCoveredByPass: boolean;
 }): {
   courtFeeCents: number;
   guestFeeCents: number;
@@ -244,7 +246,7 @@ function computeSettlementAmounts(params: {
   const guestFeeCents =
     params.bringGuest && params.guestFeeCents ? Number(params.guestFeeCents) : 0;
   const ballMachineFeeCents =
-    params.addBallMachine && params.ballMachineFeeCents
+    params.addBallMachine && params.ballMachineFeeCents && !params.ballMachineCoveredByPass
       ? Math.round(Number(params.ballMachineFeeCents) * hours)
       : 0;
 
@@ -293,6 +295,7 @@ export async function previewSettlement(
        b.settlement_status AS "settlementStatus",
        COALESCE(b.bring_guest, false) AS "bringGuest",
        COALESCE(b.add_ball_machine, false) AS "addBallMachine",
+       b.ball_machine_pass_id AS "ballMachinePassId",
        b.status
      FROM bookings b
      WHERE b.id = $1`,
@@ -320,6 +323,7 @@ export async function previewSettlement(
     durationMinutes: Number(booking.durationMinutes) || 60,
     bringGuest: booking.bringGuest === true,
     addBallMachine: booking.addBallMachine === true,
+    ballMachineCoveredByPass: Boolean(booking.ballMachinePassId),
   });
 
   return {

@@ -11,7 +11,7 @@
  */
 
 import Stripe from 'stripe';
-import { query } from '../database/connection';
+import { query, transaction } from '../database/connection';
 import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
 
 export type PaymentCategory = 'BALL_MACHINE' | 'CLINIC' | 'DRILL' | 'DUES' | 'OTHER';
@@ -932,6 +932,190 @@ export async function createBulletinSignupCheckoutSession(params: {
 }
 
 /**
+ * Checkout for a St. Marlow Ball Machine pass (st_marlow_ball_machine feature flag).
+ *
+ * Deliberately a one-time charge rather than a recurring payment_item: `is_recurring`
+ * creates a real Stripe subscription on the connected account, and the Connect webhook
+ * handles no invoice/subscription events, so renewals would never reach the database.
+ * The pass row carries its own expiry instead.
+ */
+export async function createBallMachinePassCheckoutSession(params: {
+  facilityId: string;
+  memberId: string;
+  durationMonths: number;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<CheckoutResult> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error('Stripe is not configured on this server');
+  }
+
+  const { getActivePassProduct, addMonths } = await import('./ballMachineService');
+
+  const product = await getActivePassProduct(params.facilityId, params.durationMonths);
+  if (!product) {
+    throw new Error('That ball machine pass is not currently offered by this club');
+  }
+  if (product.priceCents <= 0) {
+    throw new Error('This pass has no price set. Ask the club to set one.');
+  }
+
+  const clubResult = await query(
+    `SELECT id, name, stripe_account_id, stripe_onboarded, platform_fee_percent
+       FROM facilities WHERE id = $1`,
+    [params.facilityId]
+  );
+  const club = clubResult.rows[0];
+  if (!club) {
+    throw new Error('Club not found');
+  }
+  if (!club.stripe_account_id || !club.stripe_onboarded) {
+    throw new Error('This club has not finished Stripe Connect onboarding yet');
+  }
+
+  const amountCents = Number(product.priceCents);
+  const platformFeePercent = Number(club.platform_fee_percent ?? 0);
+  const platformFeeCents = Math.max(0, Math.round((amountCents * platformFeePercent) / 100));
+
+  // Reuse an open session for the same duration rather than stacking pending passes.
+  const pendingPass = await query(
+    `SELECT p.id, p.stripe_checkout_session_id, p.connect_payment_id
+       FROM ball_machine_passes p
+      WHERE p.facility_id = $1
+        AND p.user_id = $2
+        AND p.duration_months = $3
+        AND p.status = 'pending'
+      ORDER BY p.created_at DESC
+      LIMIT 1`,
+    [params.facilityId, params.memberId, params.durationMonths]
+  );
+  const existingPass = pendingPass.rows[0];
+  if (existingPass?.stripe_checkout_session_id && existingPass.connect_payment_id) {
+    try {
+      const existingSession = await stripe.checkout.sessions.retrieve(
+        existingPass.stripe_checkout_session_id,
+        { stripeAccount: club.stripe_account_id }
+      );
+      if (existingSession.url && existingSession.status === 'open') {
+        return { url: existingSession.url, paymentId: existingPass.connect_payment_id };
+      }
+    } catch {
+      // Session expired or belongs elsewhere — fall through and create a fresh one.
+    }
+  }
+
+  const insertPayment = await query(
+    `INSERT INTO connect_payments
+       (club_id, member_id, payment_item_id, amount_cents, platform_fee_cents, status)
+     VALUES ($1, $2, NULL, $3, $4, 'PENDING')
+     RETURNING id`,
+    [params.facilityId, params.memberId, amountCents, platformFeeCents]
+  );
+  const paymentId: string = insertPayment.rows[0].id;
+
+  // The pass starts when it is paid for, not when checkout opens; starts_at is
+  // rewritten at activation. These values only stand in for an abandoned checkout.
+  const provisionalStart = new Date();
+  const insertPass = await query(
+    `INSERT INTO ball_machine_passes
+       (facility_id, user_id, duration_months, price_cents_at_purchase,
+        starts_at, expires_at, status, connect_payment_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
+     RETURNING id`,
+    [
+      params.facilityId,
+      params.memberId,
+      params.durationMonths,
+      amountCents,
+      provisionalStart.toISOString(),
+      addMonths(provisionalStart, params.durationMonths).toISOString(),
+      paymentId,
+    ]
+  );
+  const passId: string = insertPass.rows[0].id;
+
+  const monthLabel = params.durationMonths === 1 ? '1 month' : `${params.durationMonths} months`;
+  const customerOpts = await connectCheckoutCustomerOptions(params.memberId, params.facilityId);
+
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: 'payment',
+      payment_method_types: ['card'],
+      ...customerOpts,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: amountCents,
+            product_data: {
+              name: `Ball machine pass — ${monthLabel}`,
+              description: `Unlimited ball machine use at ${club.name} for ${monthLabel}`,
+            },
+          },
+        },
+      ],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      metadata: {
+        connectPaymentId: paymentId,
+        clubId: params.facilityId,
+        memberId: params.memberId,
+        ballMachinePassId: passId,
+        ballMachinePassPayment: 'true',
+      },
+      payment_intent_data: {
+        application_fee_amount: platformFeeCents,
+        metadata: {
+          connectPaymentId: paymentId,
+          clubId: params.facilityId,
+          ballMachinePassId: passId,
+        },
+      },
+    },
+    { stripeAccount: club.stripe_account_id }
+  );
+
+  await query(
+    `UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`,
+    [session.id, paymentId]
+  );
+  await query(
+    `UPDATE ball_machine_passes SET stripe_checkout_session_id = $1 WHERE id = $2`,
+    [session.id, passId]
+  );
+
+  if (!session.url) {
+    throw new Error('Stripe did not return a Checkout URL');
+  }
+  return { url: session.url, paymentId };
+}
+
+/**
+ * Flips a pending pass to active once its payment lands. Idempotent — both the webhook
+ * and the browser redirect call into this, and whichever arrives second is a no-op.
+ * The clock starts now, not when checkout opened.
+ */
+async function activateBallMachinePass(params: {
+  passId: string;
+  paymentIntentId: string | null;
+}): Promise<void> {
+  // The status = 'pending' guard is what makes this idempotent: a second caller
+  // updates nothing rather than extending an already-running pass.
+  await query(
+    `UPDATE ball_machine_passes
+        SET status = 'active',
+            starts_at = NOW(),
+            expires_at = NOW() + (duration_months * INTERVAL '1 month'),
+            stripe_payment_intent_id = COALESCE($2, stripe_payment_intent_id)
+      WHERE id = $1
+        AND status = 'pending'`,
+    [params.passId, params.paymentIntentId]
+  );
+}
+
+/**
  * One-off Checkout for a paid court booking (no payment_items catalog row).
  */
 export async function createCourtBookingCheckoutSession(params: {
@@ -1106,6 +1290,42 @@ export async function createCourtBookingCheckoutSession(params: {
   return { url: session.url, paymentId };
 }
 
+/** Checkout for one member's fixed share of a held split reservation. */
+export async function createSplitCourtPaymentCheckoutSession(params: {
+  bookingId: string; shareId: string; facilityId: string; memberId: string; amountCents: number;
+  successUrl: string; cancelUrl: string;
+}): Promise<{ url: string }> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error('Stripe is not configured on this server');
+  const clubResult = await query(
+    `SELECT name, stripe_account_id, stripe_onboarded, platform_fee_percent FROM facilities WHERE id = $1`,
+    [params.facilityId]
+  );
+  const club = clubResult.rows[0];
+  if (!club?.stripe_account_id || !club.stripe_onboarded) throw new Error('This club has not finished Stripe Connect onboarding yet');
+  const fee = Math.max(0, Math.round(params.amountCents * Number(club.platform_fee_percent || 0) / 100));
+  const payment = await query(
+    `INSERT INTO connect_payments (club_id, member_id, payment_item_id, amount_cents, platform_fee_cents, status, booking_id)
+     VALUES ($1, $2, NULL, $3, $4, 'PENDING', $5) RETURNING id`,
+    [params.facilityId, params.memberId, params.amountCents, fee, params.bookingId]
+  );
+  const paymentId = payment.rows[0].id;
+  const customerOpts = await connectCheckoutCustomerOptions(params.memberId, params.facilityId);
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment', payment_method_types: ['card'], ...customerOpts,
+    line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: params.amountCents, product_data: { name: 'Split court reservation payment', description: `Your share at ${club.name}` } } }],
+    success_url: params.successUrl, cancel_url: params.cancelUrl,
+    metadata: { connectPaymentId: paymentId, splitCourtPayment: 'true', bookingId: params.bookingId, shareId: params.shareId },
+    payment_intent_data: { application_fee_amount: fee, metadata: { connectPaymentId: paymentId, splitCourtPayment: 'true', shareId: params.shareId } },
+  }, { stripeAccount: club.stripe_account_id });
+  await transaction(async (client) => {
+    await client.query(`UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`, [session.id, paymentId]);
+    await client.query(`UPDATE booking_payment_shares SET connect_payment_id = $1, stripe_checkout_session_id = $2, updated_at = NOW() WHERE id = $3 AND status = 'pending'`, [paymentId, session.id, params.shareId]);
+  });
+  if (!session.url) throw new Error('Stripe did not return a Checkout URL');
+  return { url: session.url };
+}
+
 // ---------------------------------------------------------------------------
 // Refunds
 // ---------------------------------------------------------------------------
@@ -1152,6 +1372,20 @@ async function executeConnectPaymentRefund(params: {
   await query(`UPDATE connect_payments SET status = 'REFUNDED' WHERE id = $1`, [
     params.connectPaymentId,
   ]);
+
+  // A refunded ball machine pass stops granting access immediately. Bookings that
+  // already used it keep their ball_machine_pass_id, so nothing is retroactively billed.
+  // Non-critical: the refund itself has already gone through.
+  try {
+    await query(
+      `UPDATE ball_machine_passes
+          SET status = 'refunded'
+        WHERE connect_payment_id = $1 AND status IN ('pending', 'active')`,
+      [params.connectPaymentId]
+    );
+  } catch (err) {
+    console.error('Ball machine pass refund sync failed (non-critical):', err);
+  }
 
   return stripeRefundId;
 }
@@ -1453,6 +1687,10 @@ export async function getClubPaymentHistory(clubId: string): Promise<ConnectPaym
                 WHEN cp.booking_id IS NOT NULL OR cp.pending_booking IS NOT NULL THEN 'Court booking'
               END,
               CASE
+                WHEN bmp.id IS NOT NULL
+                  THEN 'Ball machine pass (' || bmp.duration_months || ' mo)'
+              END,
+              CASE
                 WHEN cp.payment_item_id IS NULL
                  AND cp.bulletin_post_id IS NULL
                  AND cp.booking_id IS NULL
@@ -1460,7 +1698,11 @@ export async function getClubPaymentHistory(clubId: string): Promise<ConnectPaym
               END,
               'Payment'
             ) AS item_name,
-            COALESCE(pi.category, 'OTHER') AS item_category,
+            COALESCE(
+              pi.category,
+              CASE WHEN bmp.id IS NOT NULL THEN 'BALL_MACHINE' END,
+              'OTHER'
+            ) AS item_category,
             u.full_name AS member_name,
             u.email AS member_email,
             'connect' AS source,
@@ -1471,6 +1713,7 @@ export async function getClubPaymentHistory(clubId: string): Promise<ConnectPaym
        FROM connect_payments cp
        LEFT JOIN payment_items pi ON pi.id = cp.payment_item_id
        LEFT JOIN bulletin_posts bp ON bp.id = cp.bulletin_post_id
+       LEFT JOIN ball_machine_passes bmp ON bmp.connect_payment_id = cp.id
        LEFT JOIN users u ON u.id = cp.member_id
       WHERE cp.club_id = $1`,
     [clubId]
@@ -1854,6 +2097,9 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
     typeof session.payment_intent === 'string' ? session.payment_intent : null;
   const bulletinPostId = session.metadata?.bulletinPostId || null;
   const isSignupPayment = session.metadata?.signupPayment === 'true' || Boolean(bulletinPostId);
+  const ballMachinePassId = session.metadata?.ballMachinePassId || null;
+  const isBallMachinePassPayment =
+    session.metadata?.ballMachinePassPayment === 'true' || Boolean(ballMachinePassId);
 
   let paidRow: {
     id: string;
@@ -1893,12 +2139,26 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
   const isCourtBookingPayment =
     session.metadata?.courtBookingPayment === 'true' ||
     Boolean(paidRow?.pending_booking && !paidRow?.bulletin_post_id);
+  const isSplitCourtPayment = session.metadata?.splitCourtPayment === 'true';
+
+  if (paidRow && isSplitCourtPayment) {
+    const { finalizeSplitPayment } = await import('./splitCourtPaymentService');
+    await finalizeSplitPayment(paidRow.id);
+  }
 
   if (paidRow && isCourtBookingPayment && paidRow.pending_booking) {
     try {
       await finalizeCourtBookingPaymentRow(paidRow);
     } catch (err) {
       console.error('Court booking finalize after checkout paid (will retry via reconcile):', err);
+    }
+  }
+
+  if (isBallMachinePassPayment && ballMachinePassId) {
+    try {
+      await activateBallMachinePass({ passId: ballMachinePassId, paymentIntentId });
+    } catch (err) {
+      console.error('Ball machine pass activation after checkout paid failed:', err);
     }
   }
 
@@ -1938,9 +2198,11 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
   if (paidRow && paidRow.club_id) {
     const paymentType = isSignupPayment
       ? 'BULLETIN_SIGNUP'
-      : isCourtBookingPayment
+      : isCourtBookingPayment || isSplitCourtPayment
         ? 'COURT_BOOKING'
-        : 'PAYMENT_ITEM';
+        : isBallMachinePassPayment
+          ? 'BALL_MACHINE_PASS'
+          : 'PAYMENT_ITEM';
     await query(
       `INSERT INTO facility_revenue_log
          (facility_id, amount_cents, payment_type, source_id, source_type, member_id)
@@ -2105,6 +2367,56 @@ export async function confirmBulletinSignupCheckout(params: {
     status: signupResult.rows[0].status,
     waitlistPosition: signupResult.rows[0].waitlist_position,
   };
+}
+
+/**
+ * Redirect-path counterpart to the webhook for ball machine passes. Verifies the session
+ * belongs to the caller and is paid, then activates. Safe to call repeatedly.
+ */
+export async function confirmBallMachinePassCheckout(params: {
+  sessionId: string;
+  memberId: string;
+}): Promise<{ passId: string; facilityId: string; expiresAt: string }> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error('Stripe is not configured on this server');
+  }
+
+  const passResult = await query(
+    `SELECT p.id, p.user_id, p.facility_id, p.status, f.stripe_account_id
+       FROM ball_machine_passes p
+       JOIN facilities f ON f.id = p.facility_id
+      WHERE p.stripe_checkout_session_id = $1`,
+    [params.sessionId]
+  );
+  const pass = passResult.rows[0];
+  if (!pass) {
+    throw new Error('Pass purchase not found');
+  }
+  if (!sameMemberId(pass.user_id, params.memberId)) {
+    throw new Error('This purchase does not belong to your account');
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(params.sessionId, {
+    stripeAccount: pass.stripe_account_id,
+  });
+  if (session.payment_status !== 'paid') {
+    throw new Error('Payment has not completed yet');
+  }
+
+  await markCheckoutSessionPaid(session);
+
+  const refreshed = await query(
+    `SELECT id, facility_id AS "facilityId", expires_at AS "expiresAt", status
+       FROM ball_machine_passes WHERE id = $1`,
+    [pass.id]
+  );
+  const row = refreshed.rows[0];
+  if (!row || row.status !== 'active') {
+    throw new Error('Pass could not be activated. Please contact the club.');
+  }
+
+  return { passId: row.id, facilityId: row.facilityId, expiresAt: row.expiresAt };
 }
 
 export async function confirmCourtBookingCheckout(params: {

@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { BookingWizard } from './BookingWizard';
+import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 import { QuickReservePopup } from './QuickReservePopup';
 import { WeekMonthCalendarView } from './WeekMonthCalendarView';
 import { NotificationBell } from './NotificationBell';
@@ -205,6 +206,10 @@ export function CourtCalendarView() {
 
   // Quick reserve popup state
   const [showQuickReserve, setShowQuickReserve] = useState(false);
+  const [ballMachineCodeBooking, setBallMachineCodeBooking] = useState<{
+    facilityId: string;
+    summary: string;
+  } | null>(null);
 
   // Reservation details modal state
   const [reservationDetailsModal, setReservationDetailsModal] = useState({
@@ -762,6 +767,23 @@ export function CourtCalendarView() {
         alertTitle: options?.alertTitle || 'Payment received',
         bookingId,
       });
+
+      // Paid path: the member just came back from Stripe, so this is the first chance
+      // to hand them the keypad code. (Inline bookings show it from BookingWizard.)
+      try {
+        const detail = await bookingApi.getById(bookingId);
+        const booking = (detail as any)?.booking || (detail as any)?.data?.booking;
+        if (booking?.addBallMachine) {
+          setBallMachineCodeBooking({
+            facilityId: booking.facilityId,
+            summary: [booking.courtName, booking.bookingDate, booking.startTime]
+              .filter(Boolean)
+              .join(' · '),
+          });
+        }
+      } catch {
+        // Non-critical — the code stays reachable from the reservation itself.
+      }
     };
 
     const applyRecoveredBookings = async (
@@ -2938,6 +2960,14 @@ export function CourtCalendarView() {
         </>
         )}
       </div>
+
+      {/* Ball machine keypad code, after returning from a paid checkout */}
+      <BallMachineAccessDialog
+        isOpen={ballMachineCodeBooking !== null}
+        onClose={() => setBallMachineCodeBooking(null)}
+        facilityId={ballMachineCodeBooking?.facilityId || ''}
+        bookingSummary={ballMachineCodeBooking?.summary}
+      />
 
       {/* Booking Wizard */}
       <BookingWizard

@@ -16,7 +16,7 @@ import {
 } from '../utils/bookingCalendar';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
-import { bookingApi, courtConfigApi, facilitiesApi } from '../api/client';
+import { ballMachineApi, bookingApi, courtConfigApi, facilitiesApi } from '../api/client';
 import {
   buildExistingBookingsMapByCourtName,
   type CourtAvailabilityData,
@@ -28,6 +28,7 @@ import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 
 interface RuleViolation {
   ruleCode: string;
@@ -141,6 +142,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [guestCount, setGuestCount] = useState(0);
   const [guestNames, setGuestNames] = useState<string[]>([]);
   const [addBallMachine, setAddBallMachine] = useState(false);
+  const [showBallMachineCode, setShowBallMachineCode] = useState(false);
   const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast, addNotification } = useNotifications();
@@ -149,6 +151,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const isAdmin = user?.userType === 'admin';
   const canUseRecurring = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const postPlaySettlement = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
+  const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
+  const [hasBallMachinePass, setHasBallMachinePass] = useState(false);
 
   // Fetch all courts for this facility when wizard opens
   useEffect(() => {
@@ -160,6 +164,26 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       });
     }
   }, [isOpen, facilityId]);
+
+  // A live St. Marlow pass means the ball machine costs nothing on this booking.
+  useEffect(() => {
+    if (!isOpen || !facilityId || !ballMachineEnabled) {
+      setHasBallMachinePass(false);
+      return;
+    }
+    let cancelled = false;
+    ballMachineApi
+      .getStatus(facilityId)
+      .then((res: any) => {
+        if (!cancelled) setHasBallMachinePass(Boolean(res?.success && res.data?.activePass));
+      })
+      .catch(() => {
+        if (!cancelled) setHasBallMachinePass(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, facilityId, ballMachineEnabled]);
 
   // Per-court availability (same API as mobile book flow)
   useEffect(() => {
@@ -292,9 +316,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   }, [primaryCourtHourlyRateCents, durationMins]);
 
   const ballMachineTotalCents = useMemo(() => {
+    // A pass makes the machine free for this booking; the server re-decides authoritatively.
+    if (hasBallMachinePass) return 0;
     if (!addBallMachine || !primaryCourtBallMachineFeeCents || durationMins <= 0) return 0;
     return Math.round(primaryCourtBallMachineFeeCents * (durationMins / 60));
-  }, [addBallMachine, primaryCourtBallMachineFeeCents, durationMins]);
+  }, [addBallMachine, primaryCourtBallMachineFeeCents, durationMins, hasBallMachinePass]);
+
+  // With St. Marlow on, the machine can be claimed even where no hourly rate is set
+  // (a pass holder pays nothing). Without it, the hourly rate is the only way in.
+  const showBallMachineOption = ballMachineEnabled || Boolean(primaryCourtBallMachineFeeCents);
 
   const guestFeeTotalCents = useMemo(() => {
     if (guestCount <= 0 || !primaryCourtGuestFeeCents) return 0;
@@ -468,7 +498,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       const requiresSingleBooking =
         paidCourtInSelection ||
         (guestCount > 0 && Boolean(primaryCourtGuestFeeCents)) ||
-        (addBallMachine && Boolean(primaryCourtBallMachineFeeCents));
+        // A pass makes the machine free, so it doesn't force a single-reservation checkout.
+        (addBallMachine && Boolean(primaryCourtBallMachineFeeCents) && !hasBallMachinePass);
       if (requiresSingleBooking && (advancedBooking || selectedCourts.length > 1 || datesToBook.length > 1)) {
         showToast(
           'error',
@@ -622,6 +653,13 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           bookingId: createdBookingId,
         });
 
+        // Booked inline (free court, or a pass covered the machine) — the member never
+        // left for Stripe, so show the keypad code here. The paid path shows it on
+        // return from checkout in CourtCalendarView instead.
+        if (addBallMachine) {
+          setShowBallMachineCode(true);
+        }
+
         if (onBookingCreated) {
           await onBookingCreated();
         }
@@ -680,6 +718,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   return (
     <>
     <CourtWaiverAcceptanceDialog {...courtWaiverGate.dialogProps} />
+    <BallMachineAccessDialog
+      isOpen={showBallMachineCode}
+      onClose={() => setShowBallMachineCode(false)}
+      facilityId={facilityId}
+      bookingSummary={`${court} · ${date} · ${startTime} – ${endTime}`}
+    />
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90dvh] sm:max-h-[calc(100dvh-5rem)] overflow-y-auto sm:top-4 sm:translate-y-0">
         <DialogHeader>
@@ -978,15 +1022,22 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           )}
 
           {/* Ball machine */}
-          {primaryCourtBallMachineFeeCents && selectedCourts.length === 1 && !advancedBooking && (
+          {showBallMachineOption && selectedCourts.length === 1 && !advancedBooking && (
             <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
               <div>
                 <Label htmlFor="addBallMachine" className="text-sm font-medium cursor-pointer">
                   Add ball machine
                 </Label>
                 <p className="text-xs text-gray-500">
-                  ${(primaryCourtBallMachineFeeCents / 100).toFixed(2)}/hr
-                  {addBallMachine && durationLabel ? ` × ${durationLabel} = $${(ballMachineTotalCents / 100).toFixed(2)}` : ''}
+                  {hasBallMachinePass
+                    ? 'Included with your pass'
+                    : primaryCourtBallMachineFeeCents
+                      ? `$${(primaryCourtBallMachineFeeCents / 100).toFixed(2)}/hr${
+                          addBallMachine && durationLabel
+                            ? ` × ${durationLabel} = $${(ballMachineTotalCents / 100).toFixed(2)}`
+                            : ''
+                        }`
+                    : 'No charge'}
                 </p>
               </div>
               <Checkbox

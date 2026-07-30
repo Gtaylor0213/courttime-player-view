@@ -11,6 +11,7 @@ import path from 'path';
 import fs from 'fs';
 import { testConnection, closePool, getClient } from '../src/database/connection';
 import { processBulletinMinParticipantCancellations } from '../src/services/bulletinBoardService';
+import { expireSplitCourtReservations } from '../src/services/splitCourtPaymentService';
 
 /** Load `.env`, then fill gaps from `.env.development`, then override with `.env.local`. */
 function loadProjectEnv() {
@@ -41,6 +42,7 @@ import adminRoutes from './routes/admin';
 import addressWhitelistRoutes from './routes/addressWhitelist';
 import messagesRoutes from './routes/messages';
 import playerLevelGroupRoutes from './routes/playerLevelGroups';
+import ballMachineRoutes from './routes/ballMachine';
 import notificationRoutes from './routes/notifications';
 import userPreferencesRoutes from './routes/userPreferences';
 import supportRoutes from './routes/support';
@@ -221,6 +223,7 @@ app.use('/api/bookings', requireAuth, requireNotPaymentLocked, bookingRoutes);
 app.use('/api/address-whitelist', requireAuth, requireNotPaymentLocked, addressWhitelistRoutes);
 app.use('/api/messages', requireAuth, requireNotPaymentLocked, messagesRoutes);
 app.use('/api/player-level-groups', requireAuth, requireNotPaymentLocked, playerLevelGroupRoutes);
+app.use('/api/ball-machine', requireAuth, requireNotPaymentLocked, ballMachineRoutes);
 app.use('/api/strikes', requireAuth, requireNotPaymentLocked, strikesRoutes);
 app.use('/api/court-config', requireAuth, requireNotPaymentLocked, courtConfigRoutes);
 app.use('/api/rules', requireAuth, requireNotPaymentLocked, rulesRoutes);
@@ -349,6 +352,9 @@ async function startServer() {
     };
     await runBulletinCancellationSweep();
     const bulletinCancellationInterval = setInterval(runBulletinCancellationSweep, 60 * 1000);
+    const splitPaymentExpiryInterval = setInterval(() => {
+      expireSplitCourtReservations().catch((error) => console.error('Split payment expiry sweep failed:', error));
+    }, 60 * 1000);
 
     // Handle server errors
     server.on('error', (error: any) => {
@@ -373,6 +379,7 @@ async function startServer() {
       server.close(async () => {
         console.log('🔌 HTTP server closed');
         clearInterval(bulletinCancellationInterval);
+        clearInterval(splitPaymentExpiryInterval);
 
         try {
           await closePool();
@@ -402,4 +409,3 @@ async function startServer() {
 }
 
 startServer();
-

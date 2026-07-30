@@ -31,6 +31,7 @@ import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
 import { isFeatureEnabled } from '../../src/services/featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { createSplitCourtReservation, checkoutSplitPayment, getSplitPaymentSummary } from '../../src/services/splitCourtPaymentService';
 import { query as dbQuery, getPool } from '../../src/database/connection';
 import {
   bookingWithDetailsToCalendarDetails,
@@ -353,6 +354,7 @@ router.post('/', async (req, res, next) => {
       successUrl,
       cancelUrl,
       excludeBookingId,
+      splitParticipantIds,
     } = req.body;
 
     // Validation
@@ -386,7 +388,12 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    const result = await createBooking({
+    const result = Array.isArray(splitParticipantIds) && splitParticipantIds.length > 0
+      ? await createSplitCourtReservation({
+          courtId, userId: effectiveUserId, facilityId, bookingDate, startTime, endTime, durationMinutes,
+          bookingType, notes, participantIds: splitParticipantIds.filter((id: unknown) => typeof id === 'string'),
+        })
+      : await createBooking({
       courtId,
       userId: effectiveUserId,
       facilityId,
@@ -420,8 +427,9 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    // Create notification for booking confirmation
-    try {
+    // A split reservation is only a held slot until every member pays.
+    if (result.booking?.status !== 'pending') {
+      try {
       // Get booking details for notification
       const facilityQuery = await pool.query('SELECT name FROM facilities WHERE id = $1', [facilityId]);
       const courtQuery = await pool.query('SELECT name FROM courts WHERE id = $1', [courtId]);
@@ -466,14 +474,41 @@ router.post('/', async (req, res, next) => {
           effectiveUserId
         ).catch(err => console.error('Error sending booking confirmation email:', err));
       }
-    } catch (notificationError) {
+      } catch (notificationError) {
       console.error('Error creating booking notification:', notificationError);
       // Don't fail the booking if notification fails
+      }
     }
 
     res.status(201).json(result);
   } catch (error) {
     next(error);
+  }
+});
+
+/** Get payment progress for a split reservation (owner and participants only). */
+router.get('/:bookingId/split-payment', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Authentication required' });
+    res.json({ success: true, data: await getSplitPaymentSummary(req.params.bookingId, userId) });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Could not load split payment' });
+  }
+});
+
+/** Start (or resume) Checkout for the caller's own split share. */
+router.post('/:bookingId/split-payment/checkout', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Authentication required' });
+    const successUrl = typeof req.body?.successUrl === 'string' ? req.body.successUrl : '';
+    const cancelUrl = typeof req.body?.cancelUrl === 'string' ? req.body.cancelUrl : '';
+    if (!successUrl || !cancelUrl) return res.status(400).json({ success: false, error: 'successUrl and cancelUrl are required' });
+    const result = await checkoutSplitPayment({ bookingId: req.params.bookingId, userId, successUrl, cancelUrl });
+    res.json({ success: true, checkoutUrl: result.url });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Could not start payment' });
   }
 });
 

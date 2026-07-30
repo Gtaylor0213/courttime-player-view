@@ -1576,6 +1576,103 @@ export const messagesApi = {
   },
 };
 
+// Player Level Groups API (admin skill tiers; player_level_groups feature flag)
+export interface LevelGroupMember {
+  userId: string;
+  fullName: string;
+  skillLevel: string | null;
+  isFacilityAdmin: boolean;
+}
+
+export interface LevelGroup {
+  id: string;
+  name: string;
+  sortPosition: number;
+  isVisibleToPlayers: boolean;
+  members: LevelGroupMember[];
+}
+
+export interface LevelGroupBoard {
+  groups: LevelGroup[];
+  unassigned: LevelGroupMember[];
+}
+
+export interface MyLevelGroup {
+  group: { id: string; name: string; rank: number; totalGroups: number } | null;
+  members: { userId: string; fullName: string; skillLevel: string | null }[];
+}
+
+export const playerLevelGroupsApi = {
+  /** Full admin board: tiers with members, plus the unassigned pool. */
+  getBoard: async (facilityId: string) => {
+    const res = await apiRequest(`/api/player-level-groups/${facilityId}`);
+    return { ...res, board: unwrapApiPayload<LevelGroupBoard>(res.data) };
+  },
+
+  /** Player-facing: the caller's own tier, when the admin has made it visible. */
+  getMine: async (facilityId: string) => {
+    const res = await apiRequest(`/api/player-level-groups/${facilityId}/me`);
+    return { ...res, mine: unwrapApiPayload<MyLevelGroup>(res.data) };
+  },
+
+  createGroup: async (facilityId: string, name: string) => {
+    return apiRequest(`/api/player-level-groups/${facilityId}/groups`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  /** Rewrite the tier order, top (strongest) tier first. */
+  reorderGroups: async (facilityId: string, groupIds: string[]) => {
+    return apiRequest(`/api/player-level-groups/${facilityId}/groups/order`, {
+      method: 'PUT',
+      body: JSON.stringify({ groupIds }),
+    });
+  },
+
+  updateGroup: async (
+    facilityId: string,
+    groupId: string,
+    updates: { name?: string; isVisibleToPlayers?: boolean }
+  ) => {
+    return apiRequest(`/api/player-level-groups/${facilityId}/groups/${groupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  deleteGroup: async (facilityId: string, groupId: string) => {
+    return apiRequest(`/api/player-level-groups/${facilityId}/groups/${groupId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Move players into a tier (or out to the unassigned pool with groupId null).
+   * `position` is the index they land at; omit to append.
+   */
+  assign: async (
+    facilityId: string,
+    userIds: string[],
+    groupId: string | null,
+    position?: number
+  ) => {
+    return apiRequest(`/api/player-level-groups/${facilityId}/assignments`, {
+      method: 'PUT',
+      body: JSON.stringify({ userIds, groupId, position }),
+    });
+  },
+
+  /** Start a group chat with the tier's current members. */
+  createConversation: async (facilityId: string, groupId: string) => {
+    const res = await apiRequest(
+      `/api/player-level-groups/${facilityId}/groups/${groupId}/conversation`,
+      { method: 'POST' }
+    );
+    return { ...res, conversationId: unwrapApiPayload<{ conversationId: string }>(res.data)?.conversationId };
+  },
+};
+
 // Notifications API
 export const notificationsApi = {
   // Get all notifications for a user

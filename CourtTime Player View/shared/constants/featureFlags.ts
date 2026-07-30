@@ -9,6 +9,7 @@ export const FEATURE_FLAGS = {
   COURT_WAIVERS: 'court_waivers',
   LESSONS_TAB: 'lessons_tab',
   POST_PLAY_SETTLEMENT: 'post_play_settlement',
+  PLAYER_LEVEL_GROUPS: 'player_level_groups',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -22,4 +23,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   court_waivers: 'Court Waivers (per-court booking waivers)',
   lessons_tab: 'Lessons Tab (dedicated lessons/clinics hub)',
   post_play_settlement: 'Post-Play Settlement (charge after staff close-out)',
+  player_level_groups: 'Player Level Groups (admin skill tiers in Messages)',
 };

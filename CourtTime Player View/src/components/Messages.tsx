@@ -16,11 +16,16 @@ import { toast } from 'sonner';
 /** Groups are capped at 30 members, including the creator. */
 const GROUP_MEMBER_LIMIT = 30;
 
+/** Vertical space the surrounding page chrome takes up, when nothing overrides it. */
+const DEFAULT_HEIGHT_OFFSET_PX = 160;
+
 interface MessagesProps {
   facilityId: string;
   facilityName?: string;
   selectedRecipientId?: string;
   selectedConversationId?: string;
+  /** Page chrome above the panel, when the host page adds more than the default. */
+  heightOffsetPx?: number;
 }
 
 interface Conversation {
@@ -57,8 +62,9 @@ interface Message {
   isRead: boolean;
 }
 
-export function Messages({ facilityId, facilityName, selectedRecipientId, selectedConversationId }: MessagesProps) {
+export function Messages({ facilityId, facilityName, selectedRecipientId, selectedConversationId, heightOffsetPx }: MessagesProps) {
   const { user } = useAuth();
+  const panelHeight = `calc(100dvh - ${heightOffsetPx ?? DEFAULT_HEIGHT_OFFSET_PX}px)`;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -618,14 +624,14 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center rounded-lg border bg-card" style={{ height: 'calc(100dvh - 160px)' }}>
+      <div className="flex items-center justify-center rounded-lg border bg-card" style={{ height: panelHeight }}>
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="flex overflow-hidden rounded-lg border bg-card" style={{ height: 'calc(100dvh - 160px)' }}>
+    <div className="flex overflow-hidden rounded-lg border bg-card" style={{ height: panelHeight }}>
       {/* Conversations List */}
       <div className={cn(
         'w-full md:w-80 border-r flex flex-col h-full',

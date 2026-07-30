@@ -7,14 +7,17 @@ import express from 'express';
 import { query } from '../../src/database/connection';
 import { notificationService } from '../../src/services/notificationService';
 import { isFacilityAdminUser } from '../middleware/facilityAdmin';
+import {
+  GROUP_MEMBER_LIMIT,
+  GroupConversationError,
+  createGroupConversation,
+  validateGroupName,
+} from '../../src/services/groupConversationService';
 
 const router = express.Router();
 
 /** Cap on directory rows so large facilities don't ship their whole roster. */
 const DIRECTORY_LIMIT = 50;
-
-/** Cap on group conversation size, including the creator. */
-const GROUP_MEMBER_LIMIT = 30;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -69,18 +72,6 @@ async function isGroupManager(conversationId: string, userId: string): Promise<b
   if (!conversation) return false;
   if (conversation.created_by === userId) return true;
   return isFacilityAdminUser(conversation.facility_id, userId);
-}
-
-/** Trims and validates a group name; returns the trimmed name or an error string. */
-function validateGroupName(rawName: unknown): { name: string } | { error: string } {
-  if (typeof rawName !== 'string' || !rawName.trim()) {
-    return { error: 'Group name is required' };
-  }
-  const name = rawName.trim();
-  if (name.length > 100) {
-    return { error: 'Group name must be 100 characters or fewer' };
-  }
-  return { name };
 }
 
 /**
@@ -211,63 +202,21 @@ router.post('/groups', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not a member of this facility' });
     }
 
-    const nameResult = validateGroupName(name);
-    if ('error' in nameResult) {
-      return res.status(400).json({ success: false, error: nameResult.error });
-    }
-
-    const requestedIds: string[] = Array.isArray(memberIds) ? memberIds : [];
-    const memberIdSet = new Set(requestedIds.filter((id) => typeof id === 'string' && id !== callerId));
-
-    if (memberIdSet.size === 0) {
-      return res.status(400).json({ success: false, error: 'A group needs at least one other member' });
-    }
-    if (memberIdSet.size + 1 > GROUP_MEMBER_LIMIT) {
-      return res.status(400).json({
-        success: false,
-        error: `Groups are limited to ${GROUP_MEMBER_LIMIT} members`
-      });
-    }
-
-    const memberIdList = Array.from(memberIdSet);
-    const membershipCheck = await query(
-      `SELECT user_id FROM facility_memberships
-        WHERE facility_id = $1 AND user_id = ANY($2::uuid[]) AND status = 'active'`,
-      [facilityId, memberIdList]
-    );
-    if (membershipCheck.rows.length !== memberIdList.length) {
-      return res.status(403).json({
-        success: false,
-        error: 'All members must be active members of the facility'
-      });
-    }
-
-    const conversationResult = await query(
-      `INSERT INTO conversations (is_group, name, created_by, facility_id)
-       VALUES (true, $1, $2, $3)
-       RETURNING id`,
-      [nameResult.name, callerId, facilityId]
-    );
-    const conversationId = conversationResult.rows[0].id;
-
-    const participantRows = [callerId, ...memberIdList];
-    const values = participantRows
-      .map((_, i) => `($1, $${i + 2}, $${participantRows.length + 2})`)
-      .join(', ');
-    await query(
-      `INSERT INTO conversation_participants (conversation_id, user_id, added_by)
-       VALUES ${values}`,
-      [conversationId, ...participantRows, callerId]
-    );
+    const created = await createGroupConversation({
+      facilityId,
+      name,
+      creatorId: callerId,
+      memberIds,
+    });
 
     res.json({
       success: true,
-      data: {
-        conversationId,
-        name: nameResult.name
-      }
+      data: created
     });
   } catch (error: any) {
+    if (error instanceof GroupConversationError) {
+      return res.status(error.status).json({ success: false, error: error.message });
+    }
     console.error('Error creating group conversation:', error);
     res.status(500).json({ success: false, error: error.message });
   }
@@ -458,18 +407,18 @@ router.patch('/groups/:conversationId', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Only the group creator or a facility admin can rename this group' });
     }
 
-    const nameResult = validateGroupName(name);
-    if ('error' in nameResult) {
-      return res.status(400).json({ success: false, error: nameResult.error });
-    }
+    const trimmedName = validateGroupName(name);
 
     await query(
       `UPDATE conversations SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-      [nameResult.name, conversationId]
+      [trimmedName, conversationId]
     );
 
-    res.json({ success: true, data: { name: nameResult.name } });
+    res.json({ success: true, data: { name: trimmedName } });
   } catch (error: any) {
+    if (error instanceof GroupConversationError) {
+      return res.status(error.status).json({ success: false, error: error.message });
+    }
     console.error('Error renaming group:', error);
     res.status(500).json({ success: false, error: error.message });
   }

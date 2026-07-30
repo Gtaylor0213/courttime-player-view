@@ -127,6 +127,10 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
+  const [splitPayment, setSplitPayment] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberResults, setMemberResults] = useState<Array<{ userId: string; fullName: string; email: string }>>([]);
+  const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
   const [facilityCourts, setFacilityCourts] = useState<
     Array<{
       id: string;
@@ -152,6 +156,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const canUseRecurring = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const postPlaySettlement = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
+  const splitCourtPaymentsEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const [hasBallMachinePass, setHasBallMachinePass] = useState(false);
 
   // Fetch all courts for this facility when wizard opens
@@ -164,6 +169,16 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       });
     }
   }, [isOpen, facilityId]);
+
+  useEffect(() => {
+    if (!isOpen || !splitPayment || memberSearch.trim().length < 2) { setMemberResults([]); return; }
+    let cancelled = false;
+    bookingApi.lookupFacilityMembers(facilityId, memberSearch).then((res: any) => {
+      const members = res.members || res.data?.members || [];
+      if (!cancelled) setMemberResults(members.filter((member: any) => member.userId !== user?.id));
+    }).catch(() => { if (!cancelled) setMemberResults([]); });
+    return () => { cancelled = true; };
+  }, [isOpen, splitPayment, memberSearch, facilityId, user?.id]);
 
   // A live St. Marlow pass means the ball machine costs nothing on this booking.
   useEffect(() => {
@@ -561,6 +576,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                 guestNames: guestCount > 0 && guestNames.some(n => n.trim()) ? guestNames.slice(0, guestCount) : undefined,
                 bringGuest: guestCount > 0 || undefined,
                 addBallMachine: addBallMachine || undefined,
+                splitParticipantIds: splitPayment ? splitMembers.map((member) => member.userId) : undefined,
                 provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
               });
               if (res.requiresPayment && res.checkoutUrl) {
@@ -969,6 +985,26 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                   (${(primaryCourtHourlyRateCents! / 100).toFixed(2)}/hr × {durationLabel})
                 </span>
               </span>
+            </div>
+          )}
+
+          {splitCourtPaymentsEnabled && courtTotalAmountCents != null && selectedCourts.length === 1 && !advancedBooking && !postPlaySettlement && (
+            <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox id="wizard-split-payment" checked={splitPayment} onCheckedChange={(checked) => setSplitPayment(checked === true)} />
+                <Label htmlFor="wizard-split-payment" className="cursor-pointer text-sm font-medium">Split this court fee with members</Label>
+              </div>
+              {splitPayment && <>
+                <p className="text-xs text-blue-800">Add members below. Everyone, including you, pays an equal share; the court is held for 15 minutes while payments are completed.</p>
+                <Input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Search member name or email" />
+                {memberResults.map((member) => (
+                  <button type="button" key={member.userId} className="block w-full text-left text-sm text-blue-800 hover:underline" onClick={() => {
+                    if (!splitMembers.some((current) => current.userId === member.userId)) setSplitMembers((current) => [...current, member]);
+                    setMemberSearch(''); setMemberResults([]);
+                  }}>{member.fullName} <span className="text-xs">({member.email})</span></button>
+                ))}
+                {splitMembers.length > 0 && <div className="flex flex-wrap gap-1">{splitMembers.map((member) => <button type="button" key={member.userId} onClick={() => setSplitMembers((current) => current.filter((entry) => entry.userId !== member.userId))} className="rounded bg-white px-2 py-1 text-xs text-blue-800">{member.fullName} ×</button>)}</div>}
+              </>}
             </div>
           )}
 

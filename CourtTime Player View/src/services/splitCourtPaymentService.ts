@@ -4,6 +4,7 @@ import { isFeatureEnabled } from './featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
 import { createSplitCourtPaymentCheckoutSession } from './stripeConnectService';
+import { notificationService } from './notificationService';
 
 const HOLD_MINUTES = 15;
 
@@ -53,6 +54,26 @@ export async function createSplitCourtReservation(params: {
       );
     }
   });
+  // The participant's reservation is already visible in My Reservations; make
+  // that discoverable immediately instead of expecting the organizer to relay it.
+  const details = await query(
+    `SELECT c.name AS "courtName", f.name AS "facilityName"
+       FROM courts c JOIN facilities f ON f.id = c.facility_id WHERE c.id = $1`,
+    [params.courtId]
+  );
+  const courtName = details.rows[0]?.courtName || 'court reservation';
+  const facilityName = details.rows[0]?.facilityName || 'your club';
+  await Promise.all(
+    ids.filter((userId) => userId !== params.userId).map((userId) =>
+      notificationService.createNotification(
+        userId,
+        'Split payment requested',
+        `You were added to a ${courtName} reservation at ${facilityName}. Open My Reservations and select it to pay your share before the 15-minute hold expires.`,
+        'split_payment_requested',
+        { actionUrl: '/reservations', priority: 'high' }
+      ).catch((error) => console.error('Split payment invitation notification failed:', error))
+    )
+  );
   return { success: true, booking: { ...result.booking, status: 'pending' }, paymentDeadlineAt: deadline.toISOString(), shares: [...shares].map(([userId, amountCents]) => ({ userId, amountCents })) };
 }
 

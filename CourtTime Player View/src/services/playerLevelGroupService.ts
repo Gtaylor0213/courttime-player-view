@@ -156,7 +156,10 @@ export async function createGroup(
        VALUES (
          $1,
          $2,
-         COALESCE((SELECT MAX(sort_position) + 1 FROM player_level_groups WHERE facility_id = $1), 0),
+         -- $1 is cast here because it is also the INSERT value for facility_id;
+         -- without the cast Postgres deduces varchar there and text here and
+         -- rejects the statement ("inconsistent types deduced for parameter $1").
+         COALESCE((SELECT MAX(sort_position) + 1 FROM player_level_groups WHERE facility_id = $1::varchar), 0),
          $3
        )
        RETURNING id, name, sort_position as "sortPosition", is_visible_to_players as "isVisibleToPlayers"`,

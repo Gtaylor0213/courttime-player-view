@@ -978,9 +978,11 @@ export async function createBallMachinePassCheckoutSession(params: {
   const platformFeePercent = Number(club.platform_fee_percent ?? 0);
   const platformFeeCents = Math.max(0, Math.round((amountCents * platformFeePercent) / 100));
 
-  // Reuse an open session for the same duration rather than stacking pending passes.
+  // Reuse an open session for the same duration rather than stacking pending passes —
+  // but ONLY when the price still matches. A Checkout Session's amount is fixed at
+  // creation, so reusing one after an admin repriced the pass charges the old amount.
   const pendingPass = await query(
-    `SELECT p.id, p.stripe_checkout_session_id, p.connect_payment_id
+    `SELECT p.id, p.stripe_checkout_session_id, p.connect_payment_id, p.price_cents_at_purchase
        FROM ball_machine_passes p
       WHERE p.facility_id = $1
         AND p.user_id = $2
@@ -991,7 +993,10 @@ export async function createBallMachinePassCheckoutSession(params: {
     [params.facilityId, params.memberId, params.durationMonths]
   );
   const existingPass = pendingPass.rows[0];
-  if (existingPass?.stripe_checkout_session_id && existingPass.connect_payment_id) {
+  const priceUnchanged =
+    existingPass && Number(existingPass.price_cents_at_purchase) === amountCents;
+
+  if (priceUnchanged && existingPass.stripe_checkout_session_id && existingPass.connect_payment_id) {
     try {
       const existingSession = await stripe.checkout.sessions.retrieve(
         existingPass.stripe_checkout_session_id,
@@ -1002,6 +1007,31 @@ export async function createBallMachinePassCheckoutSession(params: {
       }
     } catch {
       // Session expired or belongs elsewhere — fall through and create a fresh one.
+    }
+  }
+
+  // Retire any stale pending attempt so a repriced pass can't be paid at the old
+  // amount by someone who still has the previous Checkout tab open. Expiring the
+  // session on Stripe is what actually closes that window; the local rows just
+  // stop the stale attempt from being reused.
+  if (existingPass && !priceUnchanged) {
+    if (existingPass.stripe_checkout_session_id) {
+      try {
+        await stripe.checkout.sessions.expire(existingPass.stripe_checkout_session_id, {
+          stripeAccount: club.stripe_account_id,
+        });
+      } catch {
+        // Already expired, completed, or unknown to this account — nothing to close.
+      }
+    }
+    await query(`UPDATE ball_machine_passes SET status = 'cancelled' WHERE id = $1`, [
+      existingPass.id,
+    ]);
+    if (existingPass.connect_payment_id) {
+      await query(
+        `UPDATE connect_payments SET status = 'FAILED' WHERE id = $1 AND status = 'PENDING'`,
+        [existingPass.connect_payment_id]
+      );
     }
   }
 

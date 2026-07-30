@@ -178,6 +178,27 @@ router.get('/access-code/:facilityId', async (req, res) => {
   }
 });
 
+/**
+ * MUST stay above POST /purchase/:facilityId — Express matches in registration
+ * order, so the parameterised route would otherwise swallow this one and treat
+ * "confirm" as a facility id (403, and the member is told their paid pass failed).
+ */
+router.post('/purchase/confirm', async (req, res) => {
+  try {
+    const sessionId = String(req.body?.sessionId || '');
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+    const result = await confirmBallMachinePassCheckout({
+      sessionId,
+      memberId: req.user!.userId,
+    });
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/purchase/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
@@ -204,22 +225,6 @@ router.post('/purchase/:facilityId', async (req, res) => {
     });
 
     res.json({ success: true, data: { url } });
-  } catch (error: any) {
-    res.status(400).json({ success: false, error: error.message });
-  }
-});
-
-router.post('/purchase/confirm', async (req, res) => {
-  try {
-    const sessionId = String(req.body?.sessionId || '');
-    if (!sessionId) {
-      return res.status(400).json({ success: false, error: 'sessionId is required' });
-    }
-    const result = await confirmBallMachinePassCheckout({
-      sessionId,
-      memberId: req.user!.userId,
-    });
-    res.json({ success: true, data: result });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
   }
@@ -350,11 +355,11 @@ router.delete('/admin/passes/:facilityId/:passId', async (req, res) => {
     if (!(await checkFlag(facilityId, res))) return;
     if (!(await requireAdmin(facilityId, req.user?.userId, res))) return;
 
-    const revoked = await revokePass(passId, facilityId);
+    const { revoked, count } = await revokePass(passId, facilityId);
     if (!revoked) {
       return res.status(404).json({ success: false, error: 'No active pass found to revoke' });
     }
-    res.json({ success: true });
+    res.json({ success: true, data: { count } });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
   }

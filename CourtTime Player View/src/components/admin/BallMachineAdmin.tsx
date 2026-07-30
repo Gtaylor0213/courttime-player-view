@@ -259,7 +259,12 @@ export function BallMachineAdmin() {
     try {
       const res: any = await ballMachineApi.revokePass(selectedFacilityId, passId);
       if (res.success) {
-        toast.success('Pass revoked');
+        const count = res.data?.count ?? 1;
+        toast.success(
+          count > 1
+            ? `Access ended — ${count} overlapping passes cancelled`
+            : 'Pass revoked'
+        );
         await load();
       } else {
         toast.error(res.error || 'Could not revoke the pass');

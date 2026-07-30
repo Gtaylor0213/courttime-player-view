@@ -263,7 +263,13 @@ export function addMonths(from: Date, months: number): Date {
   return out;
 }
 
-/** Admin comps a pass — no charge, immediately active. */
+/**
+ * Admin comps a pass — no charge, immediately active.
+ *
+ * Extends the member's existing live pass rather than adding a second row. Stacked
+ * passes make revoking incoherent: an admin cancels the row they can see and the
+ * member still has access through another one.
+ */
 export async function grantPass(params: {
   facilityId: string;
   userId: string;
@@ -272,6 +278,19 @@ export async function grantPass(params: {
 }): Promise<BallMachinePass> {
   if (!Number.isInteger(params.durationMonths) || params.durationMonths < 1) {
     throw new Error('Pass duration must be a positive whole number of months');
+  }
+
+  const existing = await getActivePass(params.facilityId, params.userId);
+  if (existing) {
+    const extended = await query(
+      `UPDATE ball_machine_passes
+          SET expires_at = expires_at + ($2 * INTERVAL '1 month'),
+              duration_months = duration_months + $2
+        WHERE id = $1
+        RETURNING ${PASS_COLUMNS}`,
+      [existing.id, params.durationMonths]
+    );
+    return extended.rows[0];
   }
 
   const startsAt = new Date();
@@ -296,18 +315,37 @@ export async function grantPass(params: {
 }
 
 /**
- * Ends a pass early. Bookings already made keep their ball_machine_pass_id, so a
- * revoked pass never retroactively bills someone for a session they already played.
+ * Ends a member's ball machine access early.
+ *
+ * Cancels every live pass that member holds at the club, not just the row the admin
+ * clicked — historically a member could end up with overlapping passes, and cancelling
+ * one of them left them still covered, which reads as "cancel didn't work".
+ *
+ * Bookings already made keep their ball_machine_pass_id, so revoking never
+ * retroactively bills someone for a session they already played.
  */
-export async function revokePass(passId: string, facilityId: string): Promise<boolean> {
+export async function revokePass(
+  passId: string,
+  facilityId: string
+): Promise<{ revoked: boolean; count: number }> {
+  const target = await query(
+    `SELECT user_id FROM ball_machine_passes
+      WHERE id = $1 AND facility_id = $2 AND status = 'active'`,
+    [passId, facilityId]
+  );
+  if (target.rows.length === 0) return { revoked: false, count: 0 };
+
   const result = await query(
     `UPDATE ball_machine_passes
         SET status = 'cancelled'
-      WHERE id = $1 AND facility_id = $2 AND status = 'active'
+      WHERE facility_id = $1
+        AND user_id = $2
+        AND status = 'active'
+        AND expires_at > NOW()
       RETURNING id`,
-    [passId, facilityId]
+    [facilityId, target.rows[0].user_id]
   );
-  return result.rows.length > 0;
+  return { revoked: true, count: result.rows.length };
 }
 
 // ---------------------------------------------------------------------------

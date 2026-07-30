@@ -84,7 +84,8 @@ export function BallMachineAdmin() {
       }
       setUnavailable(false);
 
-      const { config, products: saved } = res.data;
+      const config = res.data.config ?? {};
+      const saved: any[] = Array.isArray(res.data.products) ? res.data.products : [];
       setAccessCode(config.accessCode ?? '');
       setMachineCount(String(config.machineCount ?? 1));
       setInstructions(config.instructions ?? '');
@@ -102,7 +103,9 @@ export function BallMachineAdmin() {
       );
 
       const holdersRes: any = await ballMachineApi.getPassHolders(selectedFacilityId);
-      setHolders(holdersRes.success ? holdersRes.data ?? [] : []);
+      setHolders(
+        holdersRes.success && Array.isArray(holdersRes.data) ? holdersRes.data : []
+      );
 
       const courtsRes: any = await facilitiesApi.getCourts(selectedFacilityId);
       const courts = courtsRes?.data?.courts ?? [];

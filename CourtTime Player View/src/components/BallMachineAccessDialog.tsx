@@ -53,10 +53,12 @@ export function BallMachineAccessDialog({
       .getAccessCode(facilityId)
       .then((res: any) => {
         if (cancelled) return;
-        if (res.success && res.data) {
+        if (res.success && res.data?.accessCode) {
           setData(res.data);
         } else {
-          setError(res.error || 'Could not load the ball machine code.');
+          setError(
+            res.error || 'The club has not set an access code yet. Please ask the front desk.'
+          );
         }
       })
       .catch(() => {

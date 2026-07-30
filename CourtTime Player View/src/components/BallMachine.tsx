@@ -77,7 +77,13 @@ export function BallMachine() {
       setLoading(true);
       const res: any = await ballMachineApi.getStatus(selectedFacilityId);
       if (res.success && res.data) {
-        setStatus(res.data);
+        // Normalize the collections: a partial payload must not white-screen the tab.
+        setStatus({
+          ...res.data,
+          machineCount: Number(res.data.machineCount) || 1,
+          products: Array.isArray(res.data.products) ? res.data.products : [],
+          passes: Array.isArray(res.data.passes) ? res.data.passes : [],
+        });
         setUnavailable(false);
 
         // Only pass holders can read the code; a 403 here is expected and silent.

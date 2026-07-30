@@ -2252,34 +2252,43 @@ export const annualFeesApi = {
 
 // St. Marlow Ball Machine (st_marlow_ball_machine feature flag). Members buy
 // time-based passes here; the per-hour rate is charged through bookingApi.create.
+//
+// Every /api/ball-machine route replies `{ success, data }`, and buildApiRequest
+// hands back the whole body as `.data` — so without this the payload would sit at
+// `res.data.data`. Unwrap once here so callers can read `res.data.<field>`.
+async function ballMachineRequest<T = any>(endpoint: string, options?: RequestInit) {
+  const res = await apiRequest<any>(endpoint, options);
+  return { ...res, data: unwrapApiPayload<T>(res.data) };
+}
+
 export const ballMachineApi = {
   getStatus: (facilityId: string) =>
-    apiRequest(`/api/ball-machine/status/${facilityId}`),
+    ballMachineRequest(`/api/ball-machine/status/${facilityId}`),
 
   getAccessCode: (facilityId: string) =>
-    apiRequest(`/api/ball-machine/access-code/${facilityId}`),
+    ballMachineRequest(`/api/ball-machine/access-code/${facilityId}`),
 
   purchasePass: (facilityId: string, durationMonths: number, urls?: { successUrl?: string; cancelUrl?: string }) =>
-    apiRequest(`/api/ball-machine/purchase/${facilityId}`, {
+    ballMachineRequest(`/api/ball-machine/purchase/${facilityId}`, {
       method: 'POST',
       body: JSON.stringify({ durationMonths, ...urls }),
     }),
 
   confirmPurchase: (sessionId: string) =>
-    apiRequest('/api/ball-machine/purchase/confirm', {
+    ballMachineRequest('/api/ball-machine/purchase/confirm', {
       method: 'POST',
       body: JSON.stringify({ sessionId }),
     }),
 
   // Admin
   getAdminConfig: (facilityId: string) =>
-    apiRequest(`/api/ball-machine/admin/config/${facilityId}`),
+    ballMachineRequest(`/api/ball-machine/admin/config/${facilityId}`),
 
   updateConfig: (
     facilityId: string,
     data: { accessCode?: string | null; machineCount?: number; instructions?: string | null }
   ) =>
-    apiRequest(`/api/ball-machine/admin/config/${facilityId}`, {
+    ballMachineRequest(`/api/ball-machine/admin/config/${facilityId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
@@ -2288,22 +2297,22 @@ export const ballMachineApi = {
     facilityId: string,
     products: { durationMonths: number; priceCents: number; isActive: boolean }[]
   ) =>
-    apiRequest(`/api/ball-machine/admin/products/${facilityId}`, {
+    ballMachineRequest(`/api/ball-machine/admin/products/${facilityId}`, {
       method: 'PUT',
       body: JSON.stringify({ products }),
     }),
 
   getPassHolders: (facilityId: string) =>
-    apiRequest(`/api/ball-machine/admin/passes/${facilityId}`),
+    ballMachineRequest(`/api/ball-machine/admin/passes/${facilityId}`),
 
   grantPass: (facilityId: string, userId: string, durationMonths: number) =>
-    apiRequest(`/api/ball-machine/admin/passes/${facilityId}`, {
+    ballMachineRequest(`/api/ball-machine/admin/passes/${facilityId}`, {
       method: 'POST',
       body: JSON.stringify({ userId, durationMonths }),
     }),
 
   revokePass: (facilityId: string, passId: string) =>
-    apiRequest(`/api/ball-machine/admin/passes/${facilityId}/${passId}`, {
+    ballMachineRequest(`/api/ball-machine/admin/passes/${facilityId}/${passId}`, {
       method: 'DELETE',
     }),
 };

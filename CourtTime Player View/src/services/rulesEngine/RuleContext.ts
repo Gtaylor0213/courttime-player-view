@@ -496,13 +496,13 @@ export function parseStoredFacilityBookingRules(bookingRulesCell: unknown): {
 }
 
 const ALLOWED_RULE_CODES = [
-  'ACC-001',
   'ACC-002',
   'ACC-005',
   'CRT-005',
   'ACC-010',
   'CRT-001',
   'CRT-002',
+  'HH-002',
   'HH-003'
 ] as const;
 

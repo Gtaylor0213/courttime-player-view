@@ -163,10 +163,10 @@ export function FacilityRulesTab(props: Props) {
       onUserLimitChange={(field, value) => {
         handleBookingRulesChange(field, value as never);
       }}
-      maxActiveReservationsEnabled={facilityData.bookingRules.maxActiveReservationsEnabled}
-      maxActiveReservationsValue={facilityData.bookingRules.maxActiveReservations}
-      onMaxActiveReservationsEnabledChange={(v) => handleBookingRulesChange('maxActiveReservationsEnabled', v)}
-      onMaxActiveReservationsValueChange={(value) => handleBookingRulesChange('maxActiveReservations', value)}
+      maxActiveReservationsEnabled={facilityData.bookingRules.householdMaxActiveEnabled}
+      maxActiveReservationsValue={facilityData.bookingRules.householdMaxActive}
+      onMaxActiveReservationsEnabledChange={(v) => handleBookingRulesChange('householdMaxActiveEnabled', v)}
+      onMaxActiveReservationsValueChange={(value) => handleBookingRulesChange('householdMaxActive', value)}
       disabled={!isEditing}
       maxAccountsMax="50"
       footer={

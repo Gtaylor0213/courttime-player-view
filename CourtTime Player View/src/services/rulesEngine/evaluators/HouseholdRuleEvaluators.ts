@@ -83,7 +83,7 @@ const HH002: RuleEvaluator = {
     }
 
     const maxActive = context.household.maxActiveReservations || config.max_active_household || 999;
-    const currentActive = countHouseholdActiveBookings(context.existingBookings.household);
+    const currentActive = countHouseholdActiveBookings(context.existingBookings.household, context.currentDateTime);
 
     if (currentActive >= maxActive) {
       return {

@@ -38,7 +38,7 @@ type Props = {
   maxAccountsMin?: string;
   maxAccountsMax?: string;
   footer?: React.ReactNode;
-  /** ACC-001: total upcoming reservations a member may hold at once, independent of any day/week window. */
+  /** HH-002: total upcoming reservations a household (all accounts at one address) may hold at once, independent of any day/week window. */
   maxActiveReservationsEnabled?: boolean;
   maxActiveReservationsValue?: string | number;
   onMaxActiveReservationsEnabledChange?: (enabled: boolean) => void;
@@ -106,7 +106,10 @@ export function MaxAccountsAndUserLimitsSection({
           </div>
           {onMaxActiveReservationsEnabledChange && onMaxActiveReservationsValueChange && (
             <div className="space-y-2">
-              <Label>Max Active Reservations</Label>
+              <Label>Max Active Reservations (Household)</Label>
+              <p className="text-xs text-gray-500">
+                Total upcoming reservations allowed across all accounts at the same address.
+              </p>
               <BookingRuleToggleInput
                 checked={!!maxActiveReservationsEnabled}
                 onCheckedChange={onMaxActiveReservationsEnabledChange}

@@ -88,10 +88,14 @@ export function isHouseholdFull(household: HouseholdGroup): boolean {
  * Count active bookings across all household members
  */
 export function countHouseholdActiveBookings(
-  householdBookings: BookingWithDetails[]
+  householdBookings: BookingWithDetails[],
+  referenceDate: Date = new Date()
 ): number {
+  const today = formatDate(referenceDate);
   return householdBookings.filter(
-    booking => booking.status === 'confirmed' || booking.status === 'pending'
+    booking =>
+      (booking.status === 'confirmed' || booking.status === 'pending') &&
+      booking.bookingDate >= today
   ).length;
 }
 

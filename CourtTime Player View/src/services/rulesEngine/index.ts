@@ -46,13 +46,13 @@ import { householdEvaluators } from './evaluators/HouseholdRuleEvaluators';
 export class RulesEngine {
   private evaluators: Map<string, RuleEvaluator>;
   private readonly allowedRuleCodes = new Set([
-    'ACC-001',
     'ACC-002',
     'ACC-005',
     'CRT-005',
     'ACC-010',
     'CRT-001',
     'CRT-002',
+    'HH-002',
     'HH-003'
   ]);
 

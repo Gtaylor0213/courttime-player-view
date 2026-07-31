@@ -25,6 +25,7 @@ import {
   BookingCancellation
 } from './types';
 import { coerceDayOfWeekList, getDayOfWeek, timeRangesOverlap } from './utils/timeUtils';
+import { normalizeAddress } from './utils/householdUtils';
 
 function coerceRuleConfigRecord(config: unknown): Record<string, unknown> {
   if (config == null) return {};
@@ -598,7 +599,10 @@ export async function buildRuleContext(request: BookingRequest): Promise<RuleCon
   // Fetch household bookings if household exists
   let householdBookings: BookingWithDetails[] = [];
   if (household) {
-    householdBookings = await fetchHouseholdBookings(household.id);
+    householdBookings = await fetchHouseholdBookings(
+      household.members.map((m) => m.userId),
+      request.facilityId
+    );
   }
 
   let mergedUserBookings = userBookings;
@@ -1395,7 +1399,7 @@ async function fetchUserHousehold(
   userId: string,
   facilityId: string
 ): Promise<HouseholdGroup | null> {
-  // Find household through household_members
+  // Prefer an admin-managed household_groups membership if one exists.
   const householdResult = await query(
     `SELECT
       hg.id,
@@ -1415,29 +1419,94 @@ async function fetchUserHousehold(
     [userId, facilityId]
   );
 
-  if (householdResult.rows.length === 0) {
+  if (householdResult.rows.length > 0) {
+    const household = householdResult.rows[0];
+
+    // Fetch all members
+    const membersResult = await query(
+      `SELECT
+        id,
+        household_id as "householdId",
+        user_id as "userId",
+        is_primary as "isPrimary",
+        verification_status as "verificationStatus",
+        added_at as "addedAt"
+      FROM household_members
+      WHERE household_id = $1`,
+      [household.id]
+    );
+
+    return {
+      ...household,
+      members: membersResult.rows as HouseholdMember[]
+    };
+  }
+
+  // No admin-managed household record — group by matching street address instead, so
+  // household-scoped rules work without requiring any manual household setup.
+  return fetchAddressMatchedHousehold(userId, facilityId);
+}
+
+/**
+ * Groups the user with any other active member at the same facility who shares a
+ * normalized street address + zip code. Synthesizes a HouseholdGroup-shaped object;
+ * it isn't backed by a household_groups row.
+ */
+async function fetchAddressMatchedHousehold(
+  userId: string,
+  facilityId: string
+): Promise<HouseholdGroup | null> {
+  const meResult = await query(
+    `SELECT street_address as "streetAddress", city, state, zip_code as "zipCode"
+     FROM users WHERE id = $1`,
+    [userId]
+  );
+  const me = meResult.rows[0];
+  if (!me?.streetAddress || !String(me.streetAddress).trim()) {
     return null;
   }
 
-  const household = householdResult.rows[0];
+  const addressKey = (streetAddress: string, zipCode: unknown): string =>
+    `${normalizeAddress(streetAddress)}|${String(zipCode ?? '').trim().toLowerCase()}`;
+  const myKey = addressKey(me.streetAddress, me.zipCode);
 
-  // Fetch all members
-  const membersResult = await query(
-    `SELECT
-      id,
-      household_id as "householdId",
-      user_id as "userId",
-      is_primary as "isPrimary",
-      verification_status as "verificationStatus",
-      added_at as "addedAt"
-    FROM household_members
-    WHERE household_id = $1`,
-    [household.id]
+  const candidatesResult = await query(
+    `SELECT u.id as "userId", u.street_address as "streetAddress", u.zip_code as "zipCode"
+     FROM users u
+     JOIN facility_memberships fm ON fm.user_id = u.id
+     WHERE fm.facility_id = $1
+       AND fm.status = 'active'
+       AND u.street_address IS NOT NULL
+       AND u.street_address != ''`,
+    [facilityId]
   );
 
+  const memberIds = candidatesResult.rows
+    .filter((row: { streetAddress: string; zipCode: unknown }) => addressKey(row.streetAddress, row.zipCode) === myKey)
+    .map((row: { userId: string }) => row.userId);
+  if (!memberIds.includes(userId)) {
+    memberIds.push(userId);
+  }
+
+  const householdId = `address:${facilityId}:${myKey}`;
   return {
-    ...household,
-    members: membersResult.rows as HouseholdMember[]
+    id: householdId,
+    facilityId,
+    streetAddress: me.streetAddress,
+    city: me.city,
+    state: me.state,
+    zipCode: me.zipCode,
+    maxMembers: memberIds.length,
+    maxActiveReservations: 0,
+    primeTimeMaxPerWeek: 0,
+    members: memberIds.map((uid) => ({
+      id: `${householdId}:${uid}`,
+      householdId,
+      userId: uid,
+      isPrimary: uid === userId,
+      verificationStatus: 'verified' as const,
+      addedAt: new Date()
+    }))
   };
 }
 
@@ -1482,9 +1551,18 @@ async function fetchUserBookings(
 }
 
 /**
- * Fetch bookings for a household
+ * Fetch bookings for every member of a household (by user id), scoped to one facility.
+ * Works for both admin-managed and address-matched households, since both resolve to
+ * a plain list of member user ids.
  */
-async function fetchHouseholdBookings(householdId: string): Promise<BookingWithDetails[]> {
+async function fetchHouseholdBookings(
+  memberUserIds: string[],
+  facilityId: string
+): Promise<BookingWithDetails[]> {
+  if (memberUserIds.length === 0) {
+    return [];
+  }
+
   const result = await query(
     `SELECT
       b.id,
@@ -1509,12 +1587,12 @@ async function fetchHouseholdBookings(householdId: string): Promise<BookingWithD
     FROM bookings b
     JOIN courts c ON b.court_id = c.id
     JOIN users u ON b.user_id = u.id
-    JOIN household_members hm ON b.user_id = hm.user_id
-    WHERE hm.household_id = $1
+    WHERE b.user_id = ANY($1::uuid[])
+      AND b.facility_id = $2
       AND b.booking_date >= CURRENT_DATE - INTERVAL '800 days'
       AND b.status != 'cancelled'
     ORDER BY b.booking_date, b.start_time`,
-    [householdId]
+    [memberUserIds, facilityId]
   );
 
   return result.rows;

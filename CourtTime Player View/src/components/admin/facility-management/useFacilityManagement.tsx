@@ -1804,7 +1804,6 @@ const RULE_STATE_MAP: Record<string, {
   invertEnabled?: boolean; // true = "unlimited" toggle (enabled in UI = disabled rule)
   configMap: Record<string, { field: string; fromDb?: (v: any) => any; toDb?: (v: any) => any }>;
 }> = {
-  'ACC-001': { enabledField: 'maxActiveReservationsEnabled', configMap: { max_active_reservations: { field: 'maxActiveReservations' } } },
   'ACC-002': { enabledField: 'maxBookingsPerWeekUnlimited', invertEnabled: true, configMap: { max_per_week: { field: 'maxBookingsPerWeek' } } },
   'ACC-003': { enabledField: 'maxHoursPerWeekEnabled', configMap: { max_minutes_per_week: { field: 'maxHoursPerWeek', fromDb: (v: number) => v / 60, toDb: (v: number) => v * 60 } } },
   'ACC-004': { enabledField: 'noOverlappingReservations', configMap: {} },

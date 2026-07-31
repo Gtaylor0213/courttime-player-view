@@ -13,6 +13,7 @@ const router = express.Router();
 const getDbPool = () => getPool();
 const HIDDEN_RULE_CODES = ['ACC-006', 'ACC-008', 'CRT-012'] as const;
 const ALLOWED_RULE_CODES = [
+  'ACC-001', // Max active reservations
   'ACC-002', // Courts per week (individual)
   'ACC-005', // Days in advance
   'CRT-005', // Max reservation duration

@@ -38,6 +38,11 @@ type Props = {
   maxAccountsMin?: string;
   maxAccountsMax?: string;
   footer?: React.ReactNode;
+  /** ACC-001: total upcoming reservations a member may hold at once, independent of any day/week window. */
+  maxActiveReservationsEnabled?: boolean;
+  maxActiveReservationsValue?: string | number;
+  onMaxActiveReservationsEnabledChange?: (enabled: boolean) => void;
+  onMaxActiveReservationsValueChange?: (value: string) => void;
 };
 
 function InstructionCard({ text }: { text: string }) {
@@ -62,6 +67,10 @@ export function MaxAccountsAndUserLimitsSection({
   maxAccountsMin = '1',
   maxAccountsMax,
   footer,
+  maxActiveReservationsEnabled,
+  maxActiveReservationsValue,
+  onMaxActiveReservationsEnabledChange,
+  onMaxActiveReservationsValueChange,
 }: Props) {
   return (
     <Card>
@@ -95,6 +104,19 @@ export function MaxAccountsAndUserLimitsSection({
               Configure how many courts can be booked by individuals and households across daily and weekly limits.
             </p>
           </div>
+          {onMaxActiveReservationsEnabledChange && onMaxActiveReservationsValueChange && (
+            <div className="space-y-2">
+              <Label>Max Active Reservations</Label>
+              <BookingRuleToggleInput
+                checked={!!maxActiveReservationsEnabled}
+                onCheckedChange={onMaxActiveReservationsEnabledChange}
+                value={maxActiveReservationsValue ?? ''}
+                onChange={onMaxActiveReservationsValueChange}
+                disabled={disabled}
+                min="1"
+              />
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Courts Per Week (Individual)</Label>

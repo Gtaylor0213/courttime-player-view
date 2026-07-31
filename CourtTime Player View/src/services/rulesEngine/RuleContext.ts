@@ -496,6 +496,7 @@ export function parseStoredFacilityBookingRules(bookingRulesCell: unknown): {
 }
 
 const ALLOWED_RULE_CODES = [
+  'ACC-001',
   'ACC-002',
   'ACC-005',
   'CRT-005',

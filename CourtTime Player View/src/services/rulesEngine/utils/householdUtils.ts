@@ -3,7 +3,7 @@
  */
 
 import { HouseholdGroup, BookingWithDetails } from '../types';
-import { getTimeWindow, formatDate } from './timeUtils';
+import { getTimeWindow, formatDate, combineDateAndTime } from './timeUtils';
 import type { WindowType } from '../types';
 
 /**
@@ -91,11 +91,10 @@ export function countHouseholdActiveBookings(
   householdBookings: BookingWithDetails[],
   referenceDate: Date = new Date()
 ): number {
-  const today = formatDate(referenceDate);
   return householdBookings.filter(
     booking =>
       (booking.status === 'confirmed' || booking.status === 'pending') &&
-      booking.bookingDate >= today
+      combineDateAndTime(booking.bookingDate, booking.endTime) > referenceDate
   ).length;
 }
 

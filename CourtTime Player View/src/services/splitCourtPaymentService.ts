@@ -123,12 +123,25 @@ export async function createSplitCourtReservation(params: {
 
 export async function getSplitPaymentSummary(bookingId: string, viewerId: string): Promise<any> {
   const result = await query(
-    `SELECT b.id, b.user_id AS "ownerId", b.status, b.payment_deadline_at AS "paymentDeadlineAt", s.user_id AS "userId", s.amount_cents AS "amountCents", s.status, s.paid_at AS "paidAt", u.full_name AS "fullName"
+    // Authorization is "is the viewer the owner or ANY participant" — but once authorized,
+    // every share row for the booking must come back, not just the viewer's own. The old
+    // WHERE (b.user_id = $2 OR s.user_id = $2) applied that OR per-JOINED-ROW, so a
+    // non-owner viewer silently only ever got their own single row back (shares.length
+    // effectively meaningless for them). Also aliases b.status/s.status distinctly —
+    // both were previously unaliased "status" columns, so s.status silently clobbered
+    // b.status in every row object.
+    `SELECT b.id, b.user_id AS "ownerId", b.status AS "bookingStatus", b.payment_deadline_at AS "paymentDeadlineAt",
+            s.user_id AS "userId", s.amount_cents AS "amountCents", s.status AS "status", s.paid_at AS "paidAt", u.full_name AS "fullName"
      FROM bookings b JOIN booking_payment_shares s ON s.booking_id = b.id JOIN users u ON u.id = s.user_id
-     WHERE b.id = $1 AND (b.user_id = $2 OR s.user_id = $2) ORDER BY u.full_name`, [bookingId, viewerId]);
+     WHERE b.id = $1
+       AND (b.user_id = $2 OR EXISTS (
+         SELECT 1 FROM booking_payment_shares viewer_share
+          WHERE viewer_share.booking_id = b.id AND viewer_share.user_id = $2
+       ))
+     ORDER BY u.full_name`, [bookingId, viewerId]);
   if (!result.rows.length) throw new Error('Split reservation not found');
   const first = result.rows[0];
-  return { bookingId, ownerId: first.ownerId, status: first.status, paymentDeadlineAt: first.paymentDeadlineAt, shares: result.rows };
+  return { bookingId, ownerId: first.ownerId, status: first.bookingStatus, paymentDeadlineAt: first.paymentDeadlineAt, shares: result.rows };
 }
 
 export async function checkoutSplitPayment(params: { bookingId: string; userId: string; successUrl: string; cancelUrl: string }): Promise<{ url: string }> {

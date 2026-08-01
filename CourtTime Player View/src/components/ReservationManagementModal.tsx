@@ -159,8 +159,10 @@ export function ReservationManagementModal({
             (partRes as any)?.data?.settlementStatus;
           if (statusFromParts) setSettlementStatus(statusFromParts);
         }
+        // bookingApi.getSplitPayment already unwraps the `{success, data}` envelope,
+        // so the summary (with its `shares` array) is exactly `split.data`.
         const split = await bookingApi.getSplitPayment(reservation.id).catch(() => null);
-        if (!cancelled) setSplitPayment(split?.success ? (split as any).data || split : null);
+        if (!cancelled) setSplitPayment(split?.success ? (split as any).data ?? null : null);
       } catch {
         if (!cancelled) {
           setSettlementStatus(reservation.settlementStatus || 'not_applicable');
@@ -350,7 +352,7 @@ export function ReservationManagementModal({
     try {
       const origin = window.location.origin;
       const result: any = await bookingApi.checkoutSplitPayment(reservation.id, `${origin}/calendar?splitPaymentSuccess=1`, `${origin}/calendar?splitPaymentCancelled=1`);
-      const url = result.checkoutUrl || result.data?.checkoutUrl;
+      const url = result.data?.checkoutUrl;
       if (!result.success || !url) throw new Error(result.error || 'Could not start checkout');
       window.location.assign(url);
     } catch (error: any) {
@@ -669,6 +671,12 @@ export function ReservationManagementModal({
                 return <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
                   <p className="font-medium text-blue-900">Split payment: {paid} of {splitPayment.shares?.length || 0} shares paid</p>
                   {mine && <p className="mt-1 text-blue-800">Your share: {formatCents(Number(mine.amountCents))} — {mine.status}</p>}
+                  {mine?.status === 'pending' && splitPayment.paymentDeadlineAt && (
+                    <p className="mt-1 text-xs text-blue-700">
+                      Pay by {new Date(splitPayment.paymentDeadlineAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} or
+                      the court is released and everyone who paid is refunded.
+                    </p>
+                  )}
                   {mine?.status === 'pending' && (
                     <div className="mt-2 flex gap-2">
                       <Button size="sm" onClick={handlePaySplitShare} disabled={isStartingSplitCheckout || isDecliningSplit}>

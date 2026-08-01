@@ -742,12 +742,22 @@ export const bookingApi = {
     return normalizeBookingCreateResponse(res);
   },
 
-  getSplitPayment: async (bookingId: string) => apiRequest(`/api/bookings/${bookingId}/split-payment`),
+  // The split-payment routes reply `{ success, data }` / `{ success, checkoutUrl }`, and
+  // buildApiRequest hands back the whole body as `.data` — so without this the payload
+  // would sit at `res.data.data` and a component reading `res.data.shares` gets undefined
+  // (that is exactly what rendered "Split payment: 0 of 0 shares paid" with no Pay button).
+  // Unwrap once here so callers can read `res.data.<field>` directly.
+  getSplitPayment: async (bookingId: string) => {
+    const res = await apiRequest<any>(`/api/bookings/${bookingId}/split-payment`);
+    return { ...res, data: unwrapApiPayload<any>(res.data) };
+  },
 
-  checkoutSplitPayment: async (bookingId: string, successUrl: string, cancelUrl: string) =>
-    apiRequest(`/api/bookings/${bookingId}/split-payment/checkout`, {
+  checkoutSplitPayment: async (bookingId: string, successUrl: string, cancelUrl: string) => {
+    const res = await apiRequest<any>(`/api/bookings/${bookingId}/split-payment/checkout`, {
       method: 'POST', body: JSON.stringify({ successUrl, cancelUrl }),
-    }),
+    });
+    return { ...res, data: unwrapApiPayload<any>(res.data) };
+  },
 
   declineSplitPayment: async (bookingId: string, reason?: string) =>
     apiRequest(`/api/bookings/${bookingId}/split-payment/decline`, {
@@ -1373,8 +1383,12 @@ export const rulesApi = {
     });
   },
 
-  getSplitCourtPaymentsEnabled: async (facilityId: string) =>
-    apiRequest(`/api/rules/facility/${facilityId}/split-court-payments`),
+  // Replies `{ success, enabled }`; buildApiRequest nests the whole body under `.data`,
+  // so unwrap once and let callers read `res.data.enabled`.
+  getSplitCourtPaymentsEnabled: async (facilityId: string) => {
+    const res = await apiRequest<any>(`/api/rules/facility/${facilityId}/split-court-payments`);
+    return { ...res, data: unwrapApiPayload<any>(res.data) };
+  },
 
   setSplitCourtPaymentsEnabled: async (facilityId: string, enabled: boolean) =>
     apiRequest(`/api/rules/facility/${facilityId}/split-court-payments`, {

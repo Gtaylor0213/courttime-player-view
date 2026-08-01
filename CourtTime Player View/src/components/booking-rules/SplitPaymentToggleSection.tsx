@@ -22,7 +22,7 @@ export function SplitPaymentToggleSection({ facilityId }: { facilityId: string }
     let cancelled = false;
     setLoading(true);
     rulesApi.getSplitCourtPaymentsEnabled(facilityId)
-      .then((res: any) => { if (!cancelled) setEnabled(!!res.enabled); })
+      .then((res: any) => { if (!cancelled) setEnabled(!!res.data?.enabled); })
       .catch(() => { if (!cancelled) setEnabled(false); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

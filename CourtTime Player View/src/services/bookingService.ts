@@ -18,6 +18,7 @@ import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
 import { buildTermsAcceptanceBookingBlocker } from './termsService';
 import { buildCourtWaiverBookingBlocker } from './courtWaiverService';
+import { isFacilityAdmin as isFacilityAdminUser } from './memberService';
 import {
   seedBookingOwnerParticipant,
   shouldUsePostPlaySettlement,
@@ -1796,13 +1797,13 @@ export async function cancelBooking(
 
     const booking = bookingResult.rows[0];
     const isOwner = booking.userId === userId;
-    const adminResult = isOwner ? { rows: [] } : await query(
-      `SELECT 1 FROM facility_admins
-       WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
-       LIMIT 1`,
-      [userId, booking.facilityId]
-    );
-    const isFacilityAdmin = adminResult.rows.length > 0;
+    // Checks the facility_admins table (invited admins) as well as the
+    // facility_memberships.is_facility_admin flag and platform super-admin
+    // status — matching ensureFacilityAdmin's broader definition. A check
+    // against facility_admins alone previously rejected admins whose access
+    // only lives on their membership row (e.g. the facility's original
+    // owner-admin in some records), which silently blocked cancellation.
+    const isFacilityAdmin = isOwner ? false : await isFacilityAdminUser(booking.facilityId, userId);
 
     if (!isOwner && !isFacilityAdmin) {
       return {

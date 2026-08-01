@@ -20,6 +20,11 @@ interface SplitPaymentPickerProps {
   onMembersChange: (members: SplitPaymentMember[]) => void;
   /** Unique per mount point (BookingWizard vs QuickReservePopup) so <Label htmlFor> never collides. */
   idPrefix?: string;
+  /**
+   * Drops the "split this fee" checkbox and intro copy, leaving just the member picker.
+   * Used when editing an existing split's roster, where splitting is already decided.
+   */
+  pickerOnly?: boolean;
 }
 
 /**
@@ -35,6 +40,7 @@ export function SplitPaymentPicker({
   members,
   onMembersChange,
   idPrefix = 'split-payment',
+  pickerOnly = false,
 }: SplitPaymentPickerProps) {
   const [memberSearch, setMemberSearch] = useState('');
   const [memberResults, setMemberResults] = useState<Array<{ userId: string; fullName: string; email: string }>>([]);
@@ -57,22 +63,26 @@ export function SplitPaymentPicker({
 
   return (
     <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id={`${idPrefix}-checkbox`}
-          checked={enabled}
-          onCheckedChange={(checked) => onEnabledChange(checked === true)}
-        />
-        <Label htmlFor={`${idPrefix}-checkbox`} className="cursor-pointer text-sm font-medium">
-          Split this court fee with members
-        </Label>
-      </div>
+      {!pickerOnly && (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={`${idPrefix}-checkbox`}
+            checked={enabled}
+            onCheckedChange={(checked) => onEnabledChange(checked === true)}
+          />
+          <Label htmlFor={`${idPrefix}-checkbox`} className="cursor-pointer text-sm font-medium">
+            Split this court fee with members
+          </Label>
+        </div>
+      )}
       {enabled && (
         <>
-          <p className="text-xs text-blue-800">
-            Add up to {MAX_PARTICIPANTS - 1} other members below. Your share is charged now; each of them gets
-            2 hours to pay their own share before the hold is released and cancelled.
-          </p>
+          {!pickerOnly && (
+            <p className="text-xs text-blue-800">
+              Add up to {MAX_PARTICIPANTS - 1} other members below. Your share is charged now; each of them gets
+              2 hours to pay their own share before the hold is released and cancelled.
+            </p>
+          )}
           {atCap ? (
             <p className="text-xs font-medium text-blue-900">Maximum {MAX_PARTICIPANTS} people per split reservation</p>
           ) : (

@@ -11,6 +11,7 @@ const loadCourtPaymentSettingsMock = vi.fn();
 const courtBookingNeedsPaymentMock = vi.fn();
 const createSplitCourtPaymentCheckoutSessionMock = vi.fn();
 const refundSplitPaymentSharesMock = vi.fn();
+const refundSplitShareDifferenceMock = vi.fn();
 const createNotificationMock = vi.fn();
 
 vi.mock('../../database/connection', () => ({
@@ -30,12 +31,18 @@ vi.mock('../courtPaymentSettings', () => ({
 vi.mock('../stripeConnectService', () => ({
   createSplitCourtPaymentCheckoutSession: (...args: unknown[]) => createSplitCourtPaymentCheckoutSessionMock(...args),
   refundSplitPaymentShares: (...args: unknown[]) => refundSplitPaymentSharesMock(...args),
+  refundSplitShareDifference: (...args: unknown[]) => refundSplitShareDifferenceMock(...args),
 }));
 vi.mock('../notificationService', () => ({
   notificationService: { createNotification: (...args: unknown[]) => createNotificationMock(...args) },
 }));
 
-import { createSplitCourtReservation, declineSplitPayment, expireSplitCourtReservations } from '../splitCourtPaymentService';
+import {
+  createSplitCourtReservation,
+  declineSplitPayment,
+  expireSplitCourtReservations,
+  updateSplitPaymentParticipants,
+} from '../splitCourtPaymentService';
 
 describe('createSplitCourtReservation', () => {
   beforeEach(() => {
@@ -194,5 +201,145 @@ describe('expireSplitCourtReservations', () => {
 
     expect(count).toBe(0);
     expect(refundSplitPaymentSharesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateSplitPaymentParticipants', () => {
+  const OWNER = 'owner-1';
+  const BOOKING = 'booking-1';
+
+  /**
+   * Queues the reads updateSplitPaymentParticipants performs, in order:
+   * booking → memberships → existing shares → (notification details).
+   */
+  function primeReads(existingShares: any[], participantIds: string[]) {
+    const ids = [OWNER, ...participantIds];
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [{
+          id: BOOKING, ownerId: OWNER, status: 'pending', facilityId: 'facility-1', courtId: 'court-1',
+          durationMinutes: 60, paymentMode: 'split', deadline: new Date(Date.now() + 60 * 60_000),
+        }],
+      })
+      .mockResolvedValueOnce({ rows: ids.map((id) => ({ user_id: id })) })
+      .mockResolvedValueOnce({ rows: existingShares })
+      .mockResolvedValueOnce({ rows: [{ courtName: 'Court 1', facilityName: 'Test Club' }] })
+      .mockResolvedValue({ rows: [] });
+  }
+
+  beforeEach(() => {
+    queryMock.mockReset();
+    txClientQueryMock.mockReset().mockResolvedValue({ rows: [] });
+    transactionMock.mockClear();
+    loadCourtPaymentSettingsMock.mockReset().mockResolvedValue({ booking_amount_cents: 1200 });
+    refundSplitShareDifferenceMock.mockReset().mockResolvedValue(true);
+    createNotificationMock.mockReset().mockResolvedValue('notif-id');
+  });
+
+  it('swapping one member for another moves no money', async () => {
+    primeReads(
+      [
+        { id: 'share-owner', userId: OWNER, amountCents: 600, status: 'paid' },
+        { id: 'share-bob', userId: 'bob', amountCents: 600, status: 'pending' },
+      ],
+      ['carol']
+    );
+
+    const result = await updateSplitPaymentParticipants({
+      bookingId: BOOKING, actorUserId: OWNER, participantIds: ['carol'],
+    });
+
+    // Headcount unchanged ⇒ owner's paid $6 still matches, so no refund at all.
+    expect(refundSplitShareDifferenceMock).not.toHaveBeenCalled();
+    expect(result.shares).toEqual([
+      { userId: OWNER, amountCents: 600, status: 'paid' },
+      { userId: 'carol', amountCents: 600, status: 'pending' },
+    ]);
+  });
+
+  it('adding a member partially refunds whoever already overpaid', async () => {
+    primeReads(
+      [
+        { id: 'share-owner', userId: OWNER, amountCents: 600, status: 'paid' },
+        { id: 'share-bob', userId: 'bob', amountCents: 600, status: 'pending' },
+      ],
+      ['bob', 'carol']
+    );
+
+    const result = await updateSplitPaymentParticipants({
+      bookingId: BOOKING, actorUserId: OWNER, participantIds: ['bob', 'carol'],
+    });
+
+    // $12 over 3 people = $4 each; owner paid $6, so exactly $2 goes back.
+    expect(refundSplitShareDifferenceMock).toHaveBeenCalledTimes(1);
+    expect(refundSplitShareDifferenceMock).toHaveBeenCalledWith({ shareId: 'share-owner', refundAmountCents: 200 });
+    expect(result.shares.find((s) => s.userId === OWNER)).toEqual({ userId: OWNER, amountCents: 400, status: 'paid' });
+  });
+
+  it('removing a member refunds them in full and resets anyone whose share went up', async () => {
+    primeReads(
+      [
+        { id: 'share-owner', userId: OWNER, amountCents: 400, status: 'paid' },
+        { id: 'share-bob', userId: 'bob', amountCents: 400, status: 'paid' },
+        { id: 'share-carol', userId: 'carol', amountCents: 400, status: 'pending' },
+      ],
+      ['bob']
+    );
+
+    const result = await updateSplitPaymentParticipants({
+      bookingId: BOOKING, actorUserId: OWNER, participantIds: ['bob'],
+    });
+
+    // Carol removed (unpaid, nothing to refund). $12 over 2 = $6 each, so the owner
+    // and Bob each paid $4 but now owe $6 — both fully refunded and reset to pending.
+    const refunded = refundSplitShareDifferenceMock.mock.calls.map((call) => call[0]);
+    expect(refunded).toEqual([
+      { shareId: 'share-owner', refundAmountCents: 400 },
+      { shareId: 'share-bob', refundAmountCents: 400 },
+    ]);
+    expect(result.shares).toEqual([
+      { userId: OWNER, amountCents: 600, status: 'pending' },
+      { userId: 'bob', amountCents: 600, status: 'pending' },
+    ]);
+  });
+
+  it('refuses edits from anyone but the organizer', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id: BOOKING, ownerId: OWNER, status: 'pending', facilityId: 'facility-1', courtId: 'court-1',
+        durationMinutes: 60, paymentMode: 'split', deadline: new Date(Date.now() + 60 * 60_000),
+      }],
+    });
+
+    await expect(
+      updateSplitPaymentParticipants({ bookingId: BOOKING, actorUserId: 'bob', participantIds: ['carol'] })
+    ).rejects.toThrow(/only the member who booked/i);
+    expect(refundSplitShareDifferenceMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses edits once the payment window has closed', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id: BOOKING, ownerId: OWNER, status: 'pending', facilityId: 'facility-1', courtId: 'court-1',
+        durationMinutes: 60, paymentMode: 'split', deadline: new Date(Date.now() - 60_000),
+      }],
+    });
+
+    await expect(
+      updateSplitPaymentParticipants({ bookingId: BOOKING, actorUserId: OWNER, participantIds: ['carol'] })
+    ).rejects.toThrow(/payment window .* closed/i);
+  });
+
+  it('still enforces the 4-person cap', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id: BOOKING, ownerId: OWNER, status: 'pending', facilityId: 'facility-1', courtId: 'court-1',
+        durationMinutes: 60, paymentMode: 'split', deadline: new Date(Date.now() + 60 * 60_000),
+      }],
+    });
+
+    await expect(
+      updateSplitPaymentParticipants({ bookingId: BOOKING, actorUserId: OWNER, participantIds: ['a', 'b', 'c', 'd'] })
+    ).rejects.toThrow(/at most 4 people/);
   });
 });

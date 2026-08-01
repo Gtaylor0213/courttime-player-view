@@ -764,6 +764,13 @@ export const bookingApi = {
       method: 'POST', body: JSON.stringify({ reason }),
     }),
 
+  updateSplitPaymentParticipants: async (bookingId: string, participantIds: string[]) => {
+    const res = await apiRequest<any>(`/api/bookings/${bookingId}/split-payment/participants`, {
+      method: 'PUT', body: JSON.stringify({ participantIds }),
+    });
+    return { ...res, data: unwrapApiPayload<any>(res.data) };
+  },
+
   confirmPayment: async (sessionId: string) => {
     const res = await apiRequest('/api/bookings/payment/confirm', {
       method: 'POST',

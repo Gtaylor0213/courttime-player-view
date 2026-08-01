@@ -9,6 +9,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { bookingApi, facilitiesApi } from '../api/client';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
+import { SplitPaymentPicker } from './SplitPaymentPicker';
 import { toast } from 'sonner';
 import {
   bookingWithDetailsToCalendarDetails,
@@ -117,6 +118,9 @@ export function ReservationManagementModal({
   const [splitPayment, setSplitPayment] = useState<any | null>(null);
   const [isStartingSplitCheckout, setIsStartingSplitCheckout] = useState(false);
   const [isDecliningSplit, setIsDecliningSplit] = useState(false);
+  const [isEditingSplitRoster, setIsEditingSplitRoster] = useState(false);
+  const [isSavingSplitRoster, setIsSavingSplitRoster] = useState(false);
+  const [splitRosterMembers, setSplitRosterMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
 
   // Edit form state
   const [editDate, setEditDate] = useState('');
@@ -375,6 +379,27 @@ export function ReservationManagementModal({
       toast.error(error.message || 'Could not decline');
     } finally {
       setIsDecliningSplit(false);
+    }
+  };
+
+  const handleSaveSplitRoster = async () => {
+    if (!reservation) return;
+    setIsSavingSplitRoster(true);
+    try {
+      const result: any = await bookingApi.updateSplitPaymentParticipants(
+        reservation.id,
+        splitRosterMembers.map((member) => member.userId)
+      );
+      if (!result.success) throw new Error(result.error || 'Could not update who is splitting this reservation');
+      const refreshed: any = await bookingApi.getSplitPayment(reservation.id).catch(() => null);
+      setSplitPayment(refreshed?.success ? refreshed.data ?? null : null);
+      setIsEditingSplitRoster(false);
+      toast.success('Updated who is splitting this reservation');
+      onUpdate?.();
+    } catch (error: any) {
+      toast.error(error.message || 'Could not update who is splitting this reservation');
+    } finally {
+      setIsSavingSplitRoster(false);
     }
   };
 
@@ -666,11 +691,21 @@ export function ReservationManagementModal({
               </div>
 
               {splitPayment && (() => {
-                const mine = splitPayment.shares?.find((share: any) => share.userId === user?.id);
-                const paid = splitPayment.shares?.filter((share: any) => share.status === 'paid').length || 0;
+                const shares = splitPayment.shares || [];
+                const mine = shares.find((share: any) => share.userId === user?.id);
+                const paid = shares.filter((share: any) => share.status === 'paid').length || 0;
+                const isOrganizer = splitPayment.ownerId === user?.id;
+                const stillOpen = splitPayment.status === 'pending';
                 return <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
-                  <p className="font-medium text-blue-900">Split payment: {paid} of {splitPayment.shares?.length || 0} shares paid</p>
-                  {mine && <p className="mt-1 text-blue-800">Your share: {formatCents(Number(mine.amountCents))} — {mine.status}</p>}
+                  <p className="font-medium text-blue-900">Split payment: {paid} of {shares.length} shares paid</p>
+                  <ul className="mt-1 space-y-0.5 text-blue-800">
+                    {shares.map((share: any) => (
+                      <li key={share.userId} className="flex justify-between gap-2">
+                        <span>{share.userId === user?.id ? 'You' : share.fullName}</span>
+                        <span>{formatCents(Number(share.amountCents))} — {share.status}</span>
+                      </li>
+                    ))}
+                  </ul>
                   {mine?.status === 'pending' && splitPayment.paymentDeadlineAt && (
                     <p className="mt-1 text-xs text-blue-700">
                       Pay by {new Date(splitPayment.paymentDeadlineAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} or
@@ -691,6 +726,54 @@ export function ReservationManagementModal({
                       >
                         {isDecliningSplit ? 'Declining…' : 'Decline'}
                       </Button>
+                    </div>
+                  )}
+                  {isOrganizer && stillOpen && !isEditingSplitRoster && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2"
+                      onClick={() => {
+                        setSplitRosterMembers(
+                          shares
+                            .filter((share: any) => share.userId !== user?.id)
+                            .map((share: any) => ({ userId: share.userId, fullName: share.fullName }))
+                        );
+                        setIsEditingSplitRoster(true);
+                      }}
+                    >
+                      Change who's splitting
+                    </Button>
+                  )}
+                  {isOrganizer && stillOpen && isEditingSplitRoster && (
+                    <div className="mt-2 space-y-2">
+                      <SplitPaymentPicker
+                        facilityId={reservation.facilityId}
+                        currentUserId={user?.id}
+                        enabled
+                        onEnabledChange={() => {}}
+                        members={splitRosterMembers}
+                        onMembersChange={setSplitRosterMembers}
+                        idPrefix="edit-split-roster"
+                        pickerOnly
+                      />
+                      <p className="text-xs text-blue-700">
+                        Shares are recalculated evenly. Anyone who already paid is refunded the difference
+                        automatically, and anyone removed is refunded in full.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveSplitRoster} disabled={isSavingSplitRoster}>
+                          {isSavingSplitRoster ? 'Saving…' : 'Save changes'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setIsEditingSplitRoster(false)}
+                          disabled={isSavingSplitRoster}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>;

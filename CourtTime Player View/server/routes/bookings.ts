@@ -31,7 +31,7 @@ import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
 import { isFeatureEnabled } from '../../src/services/featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
-import { createSplitCourtReservation, checkoutSplitPayment, getSplitPaymentSummary, declineSplitPayment } from '../../src/services/splitCourtPaymentService';
+import { createSplitCourtReservation, checkoutSplitPayment, getSplitPaymentSummary, declineSplitPayment, updateSplitPaymentParticipants } from '../../src/services/splitCourtPaymentService';
 import { query as dbQuery, getPool } from '../../src/database/connection';
 import {
   bookingWithDetailsToCalendarDetails,
@@ -511,6 +511,25 @@ router.post('/:bookingId/split-payment/checkout', async (req, res, next) => {
     res.json({ success: true, checkoutUrl: result.url });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message || 'Could not start payment' });
+  }
+});
+
+/** Organizer changes who is splitting the fee while the hold is still open. */
+router.put('/:bookingId/split-payment/participants', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Authentication required' });
+    const participantIds = Array.isArray(req.body?.participantIds)
+      ? req.body.participantIds.filter((id: unknown) => typeof id === 'string')
+      : [];
+    const result = await updateSplitPaymentParticipants({
+      bookingId: req.params.bookingId,
+      actorUserId: userId,
+      participantIds,
+    });
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Could not update who is splitting this reservation' });
   }
 });
 

@@ -1782,9 +1782,10 @@ export async function cancelBooking(
         b.end_time as "endTime",
         b.user_id as "userId",
         b.settlement_status as "settlementStatus",
-        b.payment_mode as "paymentMode"
+        b.payment_mode as "paymentMode",
+        b.status
       FROM bookings b
-      WHERE b.id = $1 AND b.status != 'cancelled'`,
+      WHERE b.id = $1`,
       [bookingId]
     );
 
@@ -1792,6 +1793,16 @@ export async function cancelBooking(
       return {
         success: false,
         error: 'Booking not found'
+      };
+    }
+
+    // Distinguish "already gone" from "never existed" — an expired split hold gets
+    // auto-cancelled in the background, so a stale open page would otherwise report
+    // the misleading "Booking not found" when the member hits Cancel.
+    if (bookingResult.rows[0].status === 'cancelled') {
+      return {
+        success: false,
+        error: 'This reservation has already been cancelled'
       };
     }
 
@@ -1805,7 +1816,18 @@ export async function cancelBooking(
     // owner-admin in some records), which silently blocked cancellation.
     const isFacilityAdmin = isOwner ? false : await isFacilityAdminUser(booking.facilityId, userId);
 
-    if (!isOwner && !isFacilityAdmin) {
+    // Anyone splitting a still-unpaid reservation can back out of it. The hold is
+    // all-or-nothing, so one participant pulling out unwinds the whole thing and
+    // refunds everyone — identical to declining, just reached from the Cancel button.
+    const isSplitParticipant =
+      !isOwner && !isFacilityAdmin && booking.paymentMode === 'split'
+        ? (await query(
+            `SELECT 1 FROM booking_payment_shares WHERE booking_id = $1 AND user_id = $2 LIMIT 1`,
+            [bookingId, userId]
+          )).rows.length > 0
+        : false;
+
+    if (!isOwner && !isFacilityAdmin && !isSplitParticipant) {
       return {
         success: false,
         error: 'Booking not found or unauthorized'

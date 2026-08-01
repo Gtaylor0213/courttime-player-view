@@ -1375,6 +1375,8 @@ export interface BulletinSignupRefundSummary {
 async function executeStripeConnectRefund(params: {
   stripePaymentIntentId: string;
   stripeAccountId: string;
+  /** Partial refund in cents; omit to refund the full charge. */
+  amountCents?: number;
 }): Promise<string> {
   const stripe = getStripe();
   if (!stripe) {
@@ -1382,7 +1384,10 @@ async function executeStripeConnectRefund(params: {
   }
 
   const refund = await stripe.refunds.create(
-    { payment_intent: params.stripePaymentIntentId },
+    {
+      payment_intent: params.stripePaymentIntentId,
+      ...(params.amountCents != null ? { amount: params.amountCents } : {}),
+    },
     { stripeAccount: params.stripeAccountId }
   );
 
@@ -1747,6 +1752,47 @@ export async function refundSplitPaymentShares(
   }
 
   return { refunded, skipped, failed };
+}
+
+/**
+ * Refunds part of one already-paid split share, used when a roster change lowers
+ * that member's amount (e.g. a 3rd person joins, so everyone owes less). The share
+ * stays 'paid' — only the overpaid difference goes back.
+ */
+export async function refundSplitShareDifference(params: {
+  shareId: string;
+  refundAmountCents: number;
+}): Promise<boolean> {
+  if (params.refundAmountCents <= 0) return false;
+  const stripe = getStripe();
+  if (!stripe) {
+    console.warn('[split-payment-refund] Stripe not configured — skipping partial refund for share', params.shareId);
+    return false;
+  }
+
+  const result = await query(
+    `SELECT cp.id as "connectPaymentId",
+            cp.status as "connectPaymentStatus",
+            cp.stripe_payment_intent_id as "stripePaymentIntentId",
+            f.stripe_account_id as "stripeAccountId"
+       FROM booking_payment_shares s
+       JOIN bookings b ON b.id = s.booking_id
+       JOIN facilities f ON f.id = b.facility_id
+       LEFT JOIN connect_payments cp ON cp.id = s.connect_payment_id
+      WHERE s.id = $1`,
+    [params.shareId]
+  );
+  const row = result.rows[0];
+  if (!row?.connectPaymentId || row.connectPaymentStatus !== 'PAID' || !row.stripePaymentIntentId || !row.stripeAccountId) {
+    return false;
+  }
+
+  await executeStripeConnectRefund({
+    stripePaymentIntentId: row.stripePaymentIntentId,
+    stripeAccountId: row.stripeAccountId,
+    amountCents: params.refundAmountCents,
+  });
+  return true;
 }
 
 // ---------------------------------------------------------------------------

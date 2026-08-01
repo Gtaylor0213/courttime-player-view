@@ -3,7 +3,7 @@ import { createBooking } from './bookingService';
 import { isFeatureEnabled } from './featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
-import { createSplitCourtPaymentCheckoutSession, refundSplitPaymentShares } from './stripeConnectService';
+import { createSplitCourtPaymentCheckoutSession, refundSplitPaymentShares, refundSplitShareDifference } from './stripeConnectService';
 import { notificationService } from './notificationService';
 
 const HOLD_MINUTES = 120;
@@ -180,6 +180,186 @@ export async function declineSplitPayment(bookingId: string, userId: string, rea
 
   const { refunded } = await refundSplitPaymentShares(bookingId);
   await notifySplitBookingCancelled(bookingId, 'declined', refunded > 0, userId);
+}
+
+/**
+ * Organizer edits who is splitting the fee, while the hold is still open.
+ *
+ * The fee is fixed, so changing headcount changes everyone's even share. Each
+ * already-paid member is auto-settled against their new amount:
+ *   - unchanged (a straight swap)      → left alone, no money moves
+ *   - lower (someone was added)        → partial refund of just the difference
+ *   - higher (someone was removed)     → full refund, share reset to pending to re-pay
+ * Removed members are always refunded in full. This keeps shares equal without
+ * ever charging a card twice for the same amount.
+ */
+export async function updateSplitPaymentParticipants(params: {
+  bookingId: string;
+  actorUserId: string;
+  participantIds: string[];
+}): Promise<{ shares: Array<{ userId: string; amountCents: number; status: string }> }> {
+  const bookingRes = await query(
+    `SELECT b.id, b.user_id AS "ownerId", b.status, b.facility_id AS "facilityId", b.court_id AS "courtId",
+            b.duration_minutes AS "durationMinutes", b.payment_mode AS "paymentMode", b.payment_deadline_at AS "deadline"
+       FROM bookings b WHERE b.id = $1`,
+    [params.bookingId]
+  );
+  const booking = bookingRes.rows[0];
+  if (!booking || booking.paymentMode !== 'split') throw new Error('Split reservation not found');
+  if (booking.ownerId !== params.actorUserId) throw new Error('Only the member who booked the court can change who is splitting it');
+  if (booking.status !== 'pending') throw new Error('This reservation is no longer awaiting payment');
+  if (booking.deadline && new Date(booking.deadline) <= new Date()) throw new Error('The payment window for this reservation has closed');
+
+  const ids = [...new Set([booking.ownerId, ...params.participantIds])];
+  if (ids.length < 2) throw new Error('Choose at least one other member to split this reservation');
+  if (ids.length > MAX_PARTICIPANTS) throw new Error(`A split reservation can include at most ${MAX_PARTICIPANTS} people (you plus ${MAX_PARTICIPANTS - 1} others)`);
+
+  const memberships = await query(
+    `SELECT user_id FROM facility_memberships WHERE facility_id = $1 AND status = 'active' AND user_id = ANY($2::uuid[])`,
+    [booking.facilityId, ids]
+  );
+  if (memberships.rows.length !== ids.length) throw new Error('Every participant must be an active facility member');
+
+  const court = await loadCourtPaymentSettings(booking.courtId);
+  if (!court) throw new Error('This court is no longer available');
+  const total = Math.round(Number(court.booking_amount_cents) * (Number(booking.durationMinutes) / 60));
+  if (total <= 0) throw new Error('This reservation has no fee to split');
+
+  const existing = await query(
+    `SELECT id, user_id AS "userId", amount_cents AS "amountCents", status
+       FROM booking_payment_shares WHERE booking_id = $1`,
+    [params.bookingId]
+  );
+  const currentById = new Map<string, any>(existing.rows.map((row: any) => [row.userId, row]));
+  const newShares = splitEvenly(total, ids, booking.ownerId);
+
+  const removed = existing.rows.filter((row: any) => !ids.includes(row.userId));
+  const partialRefunds: Array<{ shareId: string; refundAmountCents: number }> = [];
+  const resetToPending: string[] = [];
+
+  for (const userId of ids) {
+    const current = currentById.get(userId);
+    if (!current || current.status !== 'paid') continue;
+    const paid = Number(current.amountCents);
+    const owed = newShares.get(userId)!;
+    if (owed < paid) partialRefunds.push({ shareId: current.id, refundAmountCents: paid - owed });
+    else if (owed > paid) resetToPending.push(current.id);
+  }
+
+  // Refund fully first: removed members, and members whose share went up (they re-pay the new amount).
+  for (const row of removed) {
+    if (row.status === 'paid') {
+      await refundSplitShareDifference({ shareId: row.id, refundAmountCents: Number(row.amountCents) })
+        .catch((error) => console.error(`[split-payment-roster] Refund failed for removed share ${row.id}:`, error));
+    }
+  }
+  for (const shareId of resetToPending) {
+    const row = existing.rows.find((r: any) => r.id === shareId);
+    await refundSplitShareDifference({ shareId, refundAmountCents: Number(row.amountCents) })
+      .catch((error) => console.error(`[split-payment-roster] Refund failed for share ${shareId}:`, error));
+  }
+  for (const refund of partialRefunds) {
+    await refundSplitShareDifference(refund)
+      .catch((error) => console.error(`[split-payment-roster] Partial refund failed for share ${refund.shareId}:`, error));
+  }
+
+  await transaction(async (client) => {
+    if (removed.length) {
+      await client.query(
+        `UPDATE booking_payment_shares SET status = CASE WHEN status = 'paid' THEN 'refunded' ELSE 'cancelled' END, updated_at = NOW()
+          WHERE id = ANY($1::uuid[])`,
+        [removed.map((row: any) => row.id)]
+      );
+      await client.query(
+        `DELETE FROM booking_participants WHERE booking_id = $1 AND user_id = ANY($2::uuid[])`,
+        [params.bookingId, removed.map((row: any) => row.userId)]
+      );
+    }
+    for (const userId of ids) {
+      const current = currentById.get(userId);
+      const amount = newShares.get(userId)!;
+      if (!current) {
+        await client.query(
+          `INSERT INTO booking_participants (booking_id, user_id, added_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+          [params.bookingId, userId, booking.ownerId]
+        );
+        await client.query(
+          `INSERT INTO booking_payment_shares (booking_id, user_id, amount_cents, expires_at) VALUES ($1, $2, $3, $4)`,
+          [params.bookingId, userId, amount, booking.deadline]
+        );
+        continue;
+      }
+      const mustRePay = resetToPending.includes(current.id);
+      await client.query(
+        `UPDATE booking_payment_shares
+            SET amount_cents = $2,
+                status = CASE WHEN $3::boolean THEN 'pending' ELSE status END,
+                connect_payment_id = CASE WHEN $3::boolean THEN NULL ELSE connect_payment_id END,
+                stripe_checkout_session_id = CASE WHEN $3::boolean THEN NULL ELSE stripe_checkout_session_id END,
+                paid_at = CASE WHEN $3::boolean THEN NULL ELSE paid_at END,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [current.id, amount, mustRePay]
+      );
+    }
+  });
+
+  const { courtName, facilityName } = await loadBookingNoticeDetails(booking.courtId);
+  const added = ids.filter((userId) => !currentById.has(userId));
+  await Promise.all([
+    ...added.map((userId) =>
+      notificationService.createNotification(
+        userId,
+        'Split payment requested',
+        `You were added to a ${courtName} reservation at ${facilityName}. Open My Reservations and select it to pay your share before the hold expires.`,
+        'split_payment_requested',
+        { actionUrl: '/reservations', priority: 'high' }
+      ).catch((error) => console.error('Split payment invitation notification failed:', error))
+    ),
+    ...removed.map((row: any) =>
+      notificationService.createNotification(
+        row.userId,
+        'Removed from split reservation',
+        `You were removed from the ${courtName} reservation at ${facilityName}.${row.status === 'paid' ? ' Your payment has been refunded.' : ''}`,
+        'split_payment_cancelled',
+        { actionUrl: '/reservations', priority: 'high' }
+      ).catch((error) => console.error('Split payment removal notification failed:', error))
+    ),
+    ...resetToPending.map((shareId) => {
+      const row = existing.rows.find((r: any) => r.id === shareId);
+      return notificationService.createNotification(
+        row.userId,
+        'Your split share changed',
+        `The ${courtName} reservation at ${facilityName} now splits fewer ways, so your share went up. Your earlier payment was refunded — open My Reservations to pay the new amount before the hold expires.`,
+        'split_payment_requested',
+        { actionUrl: '/reservations', priority: 'high' }
+      ).catch((error) => console.error('Split payment re-pay notification failed:', error));
+    }),
+  ]);
+
+  // A roster change can leave every remaining share already paid (e.g. removing the
+  // only unpaid member), which should confirm the booking just like a final payment.
+  await confirmSplitBookingIfFullyPaid(params.bookingId);
+
+  return {
+    shares: ids.map((userId) => ({
+      userId,
+      amountCents: newShares.get(userId)!,
+      status: resetToPending.includes(currentById.get(userId)?.id)
+        ? 'pending'
+        : currentById.get(userId)?.status ?? 'pending',
+    })),
+  };
+}
+
+/** Flips a split booking to confirmed once no share is left unpaid. */
+async function confirmSplitBookingIfFullyPaid(bookingId: string): Promise<void> {
+  await query(
+    `UPDATE bookings SET status = 'confirmed', updated_at = NOW()
+      WHERE id = $1 AND status = 'pending' AND payment_mode = 'split'
+        AND NOT EXISTS (SELECT 1 FROM booking_payment_shares WHERE booking_id = $1 AND status != 'paid')`,
+    [bookingId]
+  );
 }
 
 export async function finalizeSplitPayment(connectPaymentId: string): Promise<void> {

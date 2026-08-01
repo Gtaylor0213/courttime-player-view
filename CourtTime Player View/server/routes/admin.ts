@@ -1425,7 +1425,11 @@ router.get('/bookings/:facilityId', async (req, res) => {
         c.name as "courtName",
         c.court_number as "courtNumber",
         u.full_name as "userName",
-        u.email as "userEmail"
+        u.email as "userEmail",
+        b.payment_mode as "paymentMode",
+        b.payment_deadline_at as "paymentDeadlineAt",
+        (SELECT COUNT(*) FROM booking_payment_shares s WHERE s.booking_id = b.id) as "splitShareCount",
+        (SELECT COUNT(*) FROM booking_payment_shares s WHERE s.booking_id = b.id AND s.status = 'paid') as "splitSharesPaid"
       FROM bookings b
       LEFT JOIN booking_series bs ON b.series_id = bs.id
       JOIN courts c ON b.court_id = c.id
@@ -1501,6 +1505,29 @@ router.patch('/bookings/:bookingId/status', async (req, res) => {
           success: false,
           error: 'This reservation has already ended and cannot be cancelled'
         });
+      }
+
+      // Split-payment holds need refund handling the raw UPDATE below doesn't do —
+      // route them through cancelBooking, which refunds any already-paid shares.
+      const modeRow = await query(
+        `SELECT payment_mode as "paymentMode" FROM bookings WHERE id = $1`,
+        [bookingId]
+      );
+      if (modeRow.rows[0]?.paymentMode === 'split') {
+        const { cancelBooking } = await import('../../src/services/bookingService');
+        const adminUserId = req.user?.userId;
+        const cancelResult = await cancelBooking(bookingId, adminUserId || '', 'Cancelled by facility admin');
+        if (!cancelResult.success) {
+          return res.status(400).json({ success: false, error: cancelResult.error });
+        }
+        const updated = await query(
+          `SELECT id, court_id as "courtId", user_id as "userId", facility_id as "facilityId",
+                  booking_date as "bookingDate", start_time as "startTime", end_time as "endTime",
+                  status, updated_at as "updatedAt"
+             FROM bookings WHERE id = $1`,
+          [bookingId]
+        );
+        return res.json({ success: true, data: { booking: updated.rows[0] } });
       }
     }
 

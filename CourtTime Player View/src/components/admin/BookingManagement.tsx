@@ -34,6 +34,9 @@ interface Booking {
   status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
   bookingType: string;
   notes?: string;
+  paymentMode?: 'single_payer' | 'split';
+  splitShareCount?: number;
+  splitSharesPaid?: number;
 }
 
 interface BookingSeriesGroup {
@@ -167,8 +170,11 @@ export function BookingManagement() {
     }
   };
 
-  const handleCancelBooking = async (id: string) => {
-    if (!confirm('Are you sure you want to cancel this reservation?')) return;
+  const handleCancelBooking = async (id: string, isSplitPayment?: boolean) => {
+    const confirmMessage = isSplitPayment
+      ? 'This will cancel the reservation and refund anyone who already paid their share. Continue?'
+      : 'Are you sure you want to cancel this reservation?';
+    if (!confirm(confirmMessage)) return;
 
     try {
       const response = await adminApi.updateBookingStatus(id, 'cancelled');
@@ -681,6 +687,11 @@ export function BookingManagement() {
                                 <Badge className={`${getStatusColor(group.status)} text-xs`}>
                                   {formatStatus(group.status)}
                                 </Badge>
+                                {head.paymentMode === 'split' && (
+                                  <div className="mt-1 text-xs text-gray-500">
+                                    Split: {head.splitSharesPaid ?? 0}/{head.splitShareCount ?? 0} paid
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-2">
                                 {!isSeries ? (
@@ -699,7 +710,7 @@ export function BookingManagement() {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => handleCancelBooking(head.id)}
+                                        onClick={() => handleCancelBooking(head.id, head.paymentMode === 'split')}
                                         className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                                       >
                                         <X className="h-4 w-4" />

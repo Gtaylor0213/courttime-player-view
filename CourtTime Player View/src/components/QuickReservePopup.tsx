@@ -8,6 +8,7 @@ import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Calendar, Clock, MapPin, User, Zap, AlertCircle, Info } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
+import { SplitPaymentPicker } from './SplitPaymentPicker';
 import { CourtWaiverAcceptanceDialog, useCourtWaiverGate } from './CourtWaiverAcceptanceDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, courtConfigApi } from '../api/client';
@@ -243,8 +244,6 @@ export function QuickReservePopup({
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [splitPayment, setSplitPayment] = useState(false);
-  const [memberSearch, setMemberSearch] = useState('');
-  const [memberResults, setMemberResults] = useState<Array<{ userId: string; fullName: string; email: string }>>([]);
   const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
 
   // Set once the user picks a start or end time; their choice then wins over autofill
@@ -270,19 +269,8 @@ export function QuickReservePopup({
     setIsPrimeTime(false);
     setAdditionalCourtIds([]);
     setSplitPayment(false);
-    setMemberSearch('');
-    setMemberResults([]);
     setSplitMembers([]);
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!splitPayment || !selectedFacility || memberSearch.trim().length < 2) { setMemberResults([]); return; }
-    let cancelled = false;
-    bookingApi.lookupFacilityMembers(selectedFacility, memberSearch).then((res: any) => {
-      if (!cancelled && res.success) setMemberResults((res.members || res.data?.members || []).filter((m: any) => m.userId !== user?.id));
-    }).catch(() => !cancelled && setMemberResults([]));
-    return () => { cancelled = true; };
-  }, [splitPayment, selectedFacility, memberSearch, user?.id]);
 
   // Reset court selection when facility changes
   useEffect(() => {
@@ -1138,23 +1126,15 @@ export function QuickReservePopup({
 
           {/* Advanced Booking Checkbox - admins always; players when enabled for the facility */}
           {canSplitPayment && !advancedBooking && allSelectedCourts.length === 1 && (
-            <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
-              <div className="flex items-center gap-2">
-                <Checkbox id="split-payment" checked={splitPayment} onCheckedChange={(checked) => setSplitPayment(checked === true)} />
-                <Label htmlFor="split-payment" className="cursor-pointer text-sm font-medium">Split this court fee with members</Label>
-              </div>
-              {splitPayment && <>
-                <p className="text-xs text-blue-800">Each selected member, including you, pays an equal share. The court is held for 15 minutes while everyone pays.</p>
-                <Input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Search a member by name or email" />
-                {memberResults.map((member) => (
-                  <button type="button" key={member.userId} className="block w-full text-left text-sm text-blue-800 hover:underline" onClick={() => {
-                    if (!splitMembers.some(m => m.userId === member.userId)) setSplitMembers(prev => [...prev, member]);
-                    setMemberSearch(''); setMemberResults([]);
-                  }}>{member.fullName} <span className="text-xs">({member.email})</span></button>
-                ))}
-                {splitMembers.length > 0 && <div className="flex flex-wrap gap-1 text-xs">{splitMembers.map(member => <button type="button" key={member.userId} onClick={() => setSplitMembers(prev => prev.filter(m => m.userId !== member.userId))} className="rounded bg-white px-2 py-1 text-blue-800">{member.fullName} ×</button>)}</div>}
-              </>}
-            </div>
+            <SplitPaymentPicker
+              facilityId={selectedFacility}
+              currentUserId={user?.id}
+              enabled={splitPayment}
+              onEnabledChange={setSplitPayment}
+              members={splitMembers}
+              onMembersChange={setSplitMembers}
+              idPrefix="quick-split-payment"
+            />
           )}
 
           {/* Advanced Booking Checkbox - admins always; players when enabled for the facility */}

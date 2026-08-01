@@ -59,23 +59,43 @@ router.post(
           break;
         case 'payment_intent.payment_failed': {
           const intent = event.data.object as Stripe.PaymentIntent;
-          await query(
+          const updated = await query(
             `UPDATE connect_payments
                SET status = 'FAILED'
-             WHERE stripe_payment_intent_id = $1 AND status = 'PENDING'`,
+             WHERE stripe_payment_intent_id = $1 AND status = 'PENDING'
+             RETURNING id`,
             [intent.id]
           );
+          // Keep a split reservation's per-member payment progress in sync — otherwise
+          // "X of Y shares paid" silently drifts from what actually happened in Stripe.
+          if (updated.rows[0]) {
+            await query(
+              `UPDATE booking_payment_shares SET status = 'failed', updated_at = NOW()
+               WHERE connect_payment_id = $1 AND status = 'pending'`,
+              [updated.rows[0].id]
+            );
+          }
           break;
         }
         case 'charge.refunded': {
           const charge = event.data.object as Stripe.Charge;
           if (charge.payment_intent) {
-            await query(
+            const updated = await query(
               `UPDATE connect_payments
                  SET status = 'REFUNDED'
-               WHERE stripe_payment_intent_id = $1`,
+               WHERE stripe_payment_intent_id = $1
+               RETURNING id`,
               [charge.payment_intent]
             );
+            // Syncs refunds issued outside our own refund flow (e.g. from the Stripe
+            // dashboard) back onto the share so the UI doesn't keep showing it as paid.
+            if (updated.rows[0]) {
+              await query(
+                `UPDATE booking_payment_shares SET status = 'refunded', updated_at = NOW()
+                 WHERE connect_payment_id = $1 AND status = 'paid'`,
+                [updated.rows[0].id]
+              );
+            }
           }
           break;
         }

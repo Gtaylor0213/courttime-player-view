@@ -356,6 +356,8 @@ export interface Booking {
   addBallMachine?: boolean;
   /** Non-null when a St. Marlow pass covered the machine, so no hourly fee applies. */
   ballMachinePassId?: string | null;
+  paymentMode?: 'single_payer' | 'split';
+  paymentDeadlineAt?: string | null;
   createdAt: string;
   updatedAt: string;
   // Joined data
@@ -822,6 +824,10 @@ export async function createBooking(bookingData: {
   cancelUrl?: string;
   /** Booking being replaced (edit); excluded from conflict/quota checks */
   excludeBookingId?: string;
+  /** Split-payment callers insert directly as 'pending' so the slot is never briefly 'confirmed' and unpaid. Default 'confirmed'. */
+  initialStatus?: 'confirmed' | 'pending';
+  paymentMode?: 'single_payer' | 'split';
+  paymentDeadlineAt?: Date | null;
 }): Promise<BookingResult> {
   return enqueueBookingCreation(bookingData.userId, bookingData.facilityId, () =>
     createBookingCore(bookingData)
@@ -851,6 +857,9 @@ async function createBookingCore(bookingData: {
   successUrl?: string;
   cancelUrl?: string;
   excludeBookingId?: string;
+  initialStatus?: 'confirmed' | 'pending';
+  paymentMode?: 'single_payer' | 'split';
+  paymentDeadlineAt?: Date | null;
 }): Promise<BookingResult> {
   try {
     // Only honor excludeBookingId when it is an active booking owned by this user
@@ -1149,9 +1158,10 @@ async function createBookingCore(bookingData: {
             series_id, court_id, user_id, facility_id, booking_date,
             start_time, end_time, duration_minutes, booking_type,
             activity_type, notes, bulletin_post_id, status, is_prime_time,
-            bring_guest, add_ball_machine, settlement_status, ball_machine_pass_id
+            bring_guest, add_ball_machine, settlement_status, ball_machine_pass_id,
+            payment_mode, payment_deadline_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, $14, $15, $16, $17)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
           RETURNING
             id,
             series_id as "seriesId",
@@ -1170,6 +1180,8 @@ async function createBookingCore(bookingData: {
             is_prime_time as "isPrimeTime",
             add_ball_machine as "addBallMachine",
             ball_machine_pass_id as "ballMachinePassId",
+            payment_mode as "paymentMode",
+            payment_deadline_at as "paymentDeadlineAt",
             created_at as "createdAt",
             updated_at as "updatedAt"`,
           [
@@ -1185,11 +1197,14 @@ async function createBookingCore(bookingData: {
             bookingData.activityType || null,
             bookingData.notes || null,
             bookingData.bulletinPostId || null,
+            bookingData.initialStatus || 'confirmed',
             isPrimeTime,
             bookingData.bringGuest || false,
             bookingData.addBallMachine || false,
             settlementStatus,
             ballMachinePassId,
+            bookingData.paymentMode || 'single_payer',
+            bookingData.paymentDeadlineAt || null,
           ]
         );
         return ins.rows[0];
@@ -1765,7 +1780,8 @@ export async function cancelBooking(
         b.start_time as "startTime",
         b.end_time as "endTime",
         b.user_id as "userId",
-        b.settlement_status as "settlementStatus"
+        b.settlement_status as "settlementStatus",
+        b.payment_mode as "paymentMode"
       FROM bookings b
       WHERE b.id = $1 AND b.status != 'cancelled'`,
       [bookingId]
@@ -1792,6 +1808,28 @@ export async function cancelBooking(
       return {
         success: false,
         error: 'Booking not found or unauthorized'
+      };
+    }
+
+    // A held split-payment reservation isn't a "member bailed on a confirmed booking" —
+    // it's an unresolved hold. Skip late-cancel/strike evaluation entirely and instead
+    // unwind it: cancel, refund anyone who already paid their share, notify everyone.
+    if (booking.paymentMode === 'split') {
+      await query(
+        `UPDATE bookings SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [bookingId]
+      );
+      await query(
+        `UPDATE booking_payment_shares SET status = 'cancelled', updated_at = NOW() WHERE booking_id = $1 AND status = 'pending'`,
+        [bookingId]
+      );
+      const { refundSplitPaymentShares } = await import('./stripeConnectService');
+      const { notifySplitBookingCancelled } = await import('./splitCourtPaymentService');
+      const { failed } = await refundSplitPaymentShares(bookingId);
+      await notifySplitBookingCancelled(bookingId, 'cancelled', true);
+      return {
+        success: true,
+        message: failed > 0 ? 'Cancelled; some refunds need manual follow-up' : undefined,
       };
     }
 

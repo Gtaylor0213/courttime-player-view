@@ -1682,6 +1682,73 @@ export async function refundBulletinSignupPaymentsForPost(
   return { refunded, skipped, failed };
 }
 
+/**
+ * Refund every paid share of a split court reservation (decline, expiry, or cancellation).
+ * Uses Connect direct-charge refunds on the facility's connected account. Idempotent —
+ * shares not in 'paid' status are skipped, so it's safe to call after a partial failure.
+ */
+export async function refundSplitPaymentShares(
+  bookingId: string
+): Promise<BulletinSignupRefundSummary> {
+  const stripe = getStripe();
+  if (!stripe) {
+    console.warn(
+      '[split-payment-refund] Stripe is not configured — skipping share refunds for booking',
+      bookingId
+    );
+    return { refunded: 0, skipped: 0, failed: 0 };
+  }
+
+  const result = await query(
+    `SELECT
+       s.id as "shareId",
+       cp.id as "connectPaymentId",
+       cp.status as "connectPaymentStatus",
+       cp.stripe_payment_intent_id as "stripePaymentIntentId",
+       f.stripe_account_id as "stripeAccountId"
+     FROM booking_payment_shares s
+     JOIN bookings b ON b.id = s.booking_id
+     JOIN facilities f ON f.id = b.facility_id
+     LEFT JOIN connect_payments cp ON cp.id = s.connect_payment_id
+     WHERE s.booking_id = $1 AND s.status = 'paid'`,
+    [bookingId]
+  );
+
+  let refunded = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const row of result.rows) {
+    if (
+      !row.connectPaymentId ||
+      row.connectPaymentStatus !== 'PAID' ||
+      !row.stripePaymentIntentId ||
+      !row.stripeAccountId
+    ) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      await executeConnectPaymentRefund({
+        connectPaymentId: row.connectPaymentId,
+        stripePaymentIntentId: row.stripePaymentIntentId,
+        stripeAccountId: row.stripeAccountId,
+      });
+      await query(
+        `UPDATE booking_payment_shares SET status = 'refunded', updated_at = NOW() WHERE id = $1`,
+        [row.shareId]
+      );
+      refunded += 1;
+    } catch (err) {
+      failed += 1;
+      console.error(`[split-payment-refund] Failed to refund share ${row.shareId} (booking ${bookingId}):`, err);
+    }
+  }
+
+  return { refunded, skipped, failed };
+}
+
 // ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------

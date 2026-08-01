@@ -6,6 +6,8 @@
 import express from 'express';
 import { getPool } from '../../src/database/connection';
 import { ensureFacilityAdmin } from '../middleware/facilityAdmin';
+import { isFeatureEnabled, setFeatureFlag } from '../../src/services/featureFlagService';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 
 const router = express.Router();
 
@@ -629,6 +631,38 @@ router.post('/facility/:facilityId/disable-all', async (req, res, next) => {
       success: true,
       message: 'All rules removed for facility'
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/rules/facility/:facilityId/split-court-payments
+ * Facility-admin-scoped read of the split-payment feature flag only — never a
+ * generic "read any flag" endpoint, so admins can't reach internal-only flags.
+ */
+router.get('/facility/:facilityId/split-court-payments', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+    const enabled = await isFeatureEnabled(facilityId, FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
+    res.json({ success: true, enabled });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/rules/facility/:facilityId/split-court-payments
+ * Facility-admin self-serve toggle for split court payments.
+ */
+router.put('/facility/:facilityId/split-court-payments', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+    const enabled = req.body?.enabled === true;
+    await setFeatureFlag(facilityId, FEATURE_FLAGS.SPLIT_COURT_PAYMENTS, enabled, req.user?.userId);
+    res.json({ success: true, enabled });
   } catch (error) {
     next(error);
   }

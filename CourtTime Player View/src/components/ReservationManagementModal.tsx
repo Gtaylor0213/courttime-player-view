@@ -116,6 +116,7 @@ export function ReservationManagementModal({
   const [isLoadingSettlement, setIsLoadingSettlement] = useState(false);
   const [splitPayment, setSplitPayment] = useState<any | null>(null);
   const [isStartingSplitCheckout, setIsStartingSplitCheckout] = useState(false);
+  const [isDecliningSplit, setIsDecliningSplit] = useState(false);
 
   // Edit form state
   const [editDate, setEditDate] = useState('');
@@ -355,6 +356,23 @@ export function ReservationManagementModal({
     } catch (error: any) {
       toast.error(error.message || 'Could not start payment');
       setIsStartingSplitCheckout(false);
+    }
+  };
+
+  const handleDeclineSplitShare = async () => {
+    if (!reservation) return;
+    if (!confirm('Declining will cancel this reservation for everyone and refund anyone who already paid. Continue?')) return;
+    setIsDecliningSplit(true);
+    try {
+      const result: any = await bookingApi.declineSplitPayment(reservation.id);
+      if (!result.success) throw new Error(result.error || 'Could not decline');
+      toast.success('You declined — the reservation has been cancelled.');
+      onUpdate?.();
+      onClose();
+    } catch (error: any) {
+      toast.error(error.message || 'Could not decline');
+    } finally {
+      setIsDecliningSplit(false);
     }
   };
 
@@ -651,7 +669,22 @@ export function ReservationManagementModal({
                 return <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
                   <p className="font-medium text-blue-900">Split payment: {paid} of {splitPayment.shares?.length || 0} shares paid</p>
                   {mine && <p className="mt-1 text-blue-800">Your share: {formatCents(Number(mine.amountCents))} — {mine.status}</p>}
-                  {mine?.status === 'pending' && <Button className="mt-2" size="sm" onClick={handlePaySplitShare} disabled={isStartingSplitCheckout}>{isStartingSplitCheckout ? 'Opening checkout…' : 'Pay my share'}</Button>}
+                  {mine?.status === 'pending' && (
+                    <div className="mt-2 flex gap-2">
+                      <Button size="sm" onClick={handlePaySplitShare} disabled={isStartingSplitCheckout || isDecliningSplit}>
+                        {isStartingSplitCheckout ? 'Opening checkout…' : 'Pay my share'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={handleDeclineSplitShare}
+                        disabled={isStartingSplitCheckout || isDecliningSplit}
+                      >
+                        {isDecliningSplit ? 'Declining…' : 'Decline'}
+                      </Button>
+                    </div>
+                  )}
                 </div>;
               })()}
 

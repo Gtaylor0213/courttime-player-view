@@ -749,6 +749,11 @@ export const bookingApi = {
       method: 'POST', body: JSON.stringify({ successUrl, cancelUrl }),
     }),
 
+  declineSplitPayment: async (bookingId: string, reason?: string) =>
+    apiRequest(`/api/bookings/${bookingId}/split-payment/decline`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+
   confirmPayment: async (sessionId: string) => {
     const res = await apiRequest('/api/bookings/payment/confirm', {
       method: 'POST',
@@ -1367,6 +1372,15 @@ export const rulesApi = {
       method: 'POST',
     });
   },
+
+  getSplitCourtPaymentsEnabled: async (facilityId: string) =>
+    apiRequest(`/api/rules/facility/${facilityId}/split-court-payments`),
+
+  setSplitCourtPaymentsEnabled: async (facilityId: string, enabled: boolean) =>
+    apiRequest(`/api/rules/facility/${facilityId}/split-court-payments`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
 };
 
 // Strikes API

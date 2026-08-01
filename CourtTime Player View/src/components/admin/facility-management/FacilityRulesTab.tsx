@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { TabsContent } from '../../ui/tabs';
 import { Badge } from '../../ui/badge';
 import { MaxAccountsAndUserLimitsSection } from '../../booking-rules/MaxAccountsAndUserLimitsSection';
+import { SplitPaymentToggleSection } from '../../booking-rules/SplitPaymentToggleSection';
 import {
   BookingRuleSwitch,
   BookingRuleToggleInput,
@@ -33,6 +34,7 @@ type Props = UseFacilityManagementReturn;
 
 export function FacilityRulesTab(props: Props) {
   const {
+    currentFacilityId,
     isEditing, setIsEditing, saving, facilityData, setFacilityData,
     handleSave, handleCancel, getHoursDisplay, handleOperatingHoursChange,
     handlePrimaryContactChange, addSecondaryContact, updateSecondaryContact,
@@ -176,6 +178,8 @@ export function FacilityRulesTab(props: Props) {
         </>
       }
     />
+
+    <SplitPaymentToggleSection facilityId={currentFacilityId} />
 
     <Card>
       <CardHeader className="pb-2">

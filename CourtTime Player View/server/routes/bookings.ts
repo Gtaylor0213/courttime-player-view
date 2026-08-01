@@ -31,7 +31,7 @@ import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
 import { isFeatureEnabled } from '../../src/services/featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
-import { createSplitCourtReservation, checkoutSplitPayment, getSplitPaymentSummary } from '../../src/services/splitCourtPaymentService';
+import { createSplitCourtReservation, checkoutSplitPayment, getSplitPaymentSummary, declineSplitPayment } from '../../src/services/splitCourtPaymentService';
 import { query as dbQuery, getPool } from '../../src/database/connection';
 import {
   bookingWithDetailsToCalendarDetails,
@@ -392,6 +392,8 @@ router.post('/', async (req, res, next) => {
       ? await createSplitCourtReservation({
           courtId, userId: effectiveUserId, facilityId, bookingDate, startTime, endTime, durationMinutes,
           bookingType, notes, participantIds: splitParticipantIds.filter((id: unknown) => typeof id === 'string'),
+          successUrl: typeof successUrl === 'string' ? successUrl : undefined,
+          cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
         })
       : await createBooking({
       courtId,
@@ -509,6 +511,19 @@ router.post('/:bookingId/split-payment/checkout', async (req, res, next) => {
     res.json({ success: true, checkoutUrl: result.url });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message || 'Could not start payment' });
+  }
+});
+
+/** A participant declines their share — cancels the whole hold and refunds anyone already paid. */
+router.post('/:bookingId/split-payment/decline', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Authentication required' });
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : undefined;
+    await declineSplitPayment(req.params.bookingId, userId, reason);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Could not decline this payment share' });
   }
 });
 

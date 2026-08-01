@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Checkbox } from './ui/checkbox';
 import { Calendar, Clock, MapPin, AlertCircle, Info, Repeat } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
+import { SplitPaymentPicker } from './SplitPaymentPicker';
 import { CourtWaiverAcceptanceDialog, useCourtWaiverGate } from './CourtWaiverAcceptanceDialog';
 import { useNotifications } from '../contexts/NotificationContext';
 import {
@@ -128,8 +129,6 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [splitPayment, setSplitPayment] = useState(false);
-  const [memberSearch, setMemberSearch] = useState('');
-  const [memberResults, setMemberResults] = useState<Array<{ userId: string; fullName: string; email: string }>>([]);
   const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
   const [facilityCourts, setFacilityCourts] = useState<
     Array<{
@@ -169,16 +168,6 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       });
     }
   }, [isOpen, facilityId]);
-
-  useEffect(() => {
-    if (!isOpen || !splitPayment || memberSearch.trim().length < 2) { setMemberResults([]); return; }
-    let cancelled = false;
-    bookingApi.lookupFacilityMembers(facilityId, memberSearch).then((res: any) => {
-      const members = res.members || res.data?.members || [];
-      if (!cancelled) setMemberResults(members.filter((member: any) => member.userId !== user?.id));
-    }).catch(() => { if (!cancelled) setMemberResults([]); });
-    return () => { cancelled = true; };
-  }, [isOpen, splitPayment, memberSearch, facilityId, user?.id]);
 
   // A live St. Marlow pass means the ball machine costs nothing on this booking.
   useEffect(() => {
@@ -989,23 +978,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           )}
 
           {splitCourtPaymentsEnabled && courtTotalAmountCents != null && selectedCourts.length === 1 && !advancedBooking && !postPlaySettlement && (
-            <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
-              <div className="flex items-center gap-2">
-                <Checkbox id="wizard-split-payment" checked={splitPayment} onCheckedChange={(checked) => setSplitPayment(checked === true)} />
-                <Label htmlFor="wizard-split-payment" className="cursor-pointer text-sm font-medium">Split this court fee with members</Label>
-              </div>
-              {splitPayment && <>
-                <p className="text-xs text-blue-800">Add members below. Everyone, including you, pays an equal share; the court is held for 15 minutes while payments are completed.</p>
-                <Input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Search member name or email" />
-                {memberResults.map((member) => (
-                  <button type="button" key={member.userId} className="block w-full text-left text-sm text-blue-800 hover:underline" onClick={() => {
-                    if (!splitMembers.some((current) => current.userId === member.userId)) setSplitMembers((current) => [...current, member]);
-                    setMemberSearch(''); setMemberResults([]);
-                  }}>{member.fullName} <span className="text-xs">({member.email})</span></button>
-                ))}
-                {splitMembers.length > 0 && <div className="flex flex-wrap gap-1">{splitMembers.map((member) => <button type="button" key={member.userId} onClick={() => setSplitMembers((current) => current.filter((entry) => entry.userId !== member.userId))} className="rounded bg-white px-2 py-1 text-xs text-blue-800">{member.fullName} ×</button>)}</div>}
-              </>}
-            </div>
+            <SplitPaymentPicker
+              facilityId={facilityId}
+              currentUserId={user?.id}
+              enabled={splitPayment}
+              onEnabledChange={setSplitPayment}
+              members={splitMembers}
+              onMembersChange={setSplitMembers}
+              idPrefix="wizard-split-payment"
+            />
           )}
 
           {/* Guest fee */}

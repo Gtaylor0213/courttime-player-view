@@ -24,7 +24,8 @@ import {
   getTodayYmdInTimeZone,
   diffCalendarDaysYmd,
   addCalendarDaysYmd,
-  coerceDayOfWeekList
+  coerceDayOfWeekList,
+  combineDateAndTime
 } from '../utils/timeUtils';
 import { resolveWeeklyIndividualFromBookingRules } from '../RuleContext';
 import { countPrimeTimeBookings } from '../utils/primeTimeUtils';
@@ -55,10 +56,10 @@ const ACC001: RuleEvaluator = {
 
     const countStates = config.count_states || ['confirmed', 'pending'];
 
-    // Count active reservations (future dates only)
-    const today = formatDate(new Date());
+    // Count active reservations (not yet ended)
+    const now = new Date();
     const activeCount = context.existingBookings.user.filter(b =>
-      countStates.includes(b.status) && b.bookingDate >= today
+      countStates.includes(b.status) && combineDateAndTime(b.bookingDate, b.endTime) > now
     ).length;
 
     if (activeCount >= maxActive) {

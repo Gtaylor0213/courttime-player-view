@@ -545,7 +545,8 @@ export async function getBookingsByUser(
           SELECT 1 FROM booking_participants bp
            WHERE bp.booking_id = b.id AND bp.user_id = $1
         ))
-          AND b.booking_date >= CURRENT_DATE
+          AND (b.booking_date > CURRENT_DATE
+               OR (b.booking_date = CURRENT_DATE AND b.end_time > CURRENT_TIME))
           AND b.status != 'cancelled'
         ORDER BY b.booking_date, b.start_time`
       : `SELECT
@@ -575,7 +576,8 @@ export async function getBookingsByUser(
           SELECT 1 FROM booking_participants bp
            WHERE bp.booking_id = b.id AND bp.user_id = $1
         ))
-          AND b.booking_date < CURRENT_DATE
+          AND (b.booking_date < CURRENT_DATE
+               OR (b.booking_date = CURRENT_DATE AND b.end_time <= CURRENT_TIME))
           AND b.status != 'cancelled'
         ORDER BY b.booking_date DESC, b.start_time DESC`;
 

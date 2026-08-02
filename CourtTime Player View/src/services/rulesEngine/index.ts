@@ -238,6 +238,23 @@ export class RulesEngine {
       // Get applicable rules for this facility/court/tier
       const rules = this.getApplicableRules(context);
 
+      // Days-in-advance (ACC-005) is checked first and, if violated, short-circuits every other
+      // rule below — those other rules may evaluate differently once the date is back in range,
+      // so only the days-in-advance error should surface.
+      const advanceRule = rules.find(r => r.ruleCode === 'ACC-005');
+      if (advanceRule) {
+        const advanceResult = await this.evaluateRule(advanceRule, context);
+        if (advanceResult && !advanceResult.passed) {
+          return {
+            allowed: false,
+            results: [advanceResult],
+            blockers: [advanceResult],
+            warnings: [],
+            isPrimeTime: context.isPrimeTime
+          };
+        }
+      }
+
       const results: RuleResult[] = [];
 
       // Group rules by category
@@ -621,13 +638,22 @@ export class RulesEngine {
         const daysAhead = diffCalendarDaysYmd(facilityTodayYmd, context.request.bookingDate);
         if (daysAhead > maxDaysAhead) {
           const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead);
-          blockers.push({
+          // Short-circuit here: other rules may evaluate differently once the date is back in
+          // range, so only the days-in-advance error should surface.
+          const advanceBlocker: RuleResult = {
             ruleCode: 'SIMPLE-ADVANCE',
             ruleName: 'Days in Advance',
             passed: false,
             severity: 'error',
             message: `You can book up to ${maxDaysAhead} days in advance. Latest bookable date: ${lastBookableYmd}.`
-          });
+          };
+          return {
+            allowed: false,
+            results: [advanceBlocker],
+            blockers: [advanceBlocker],
+            warnings: [],
+            isPrimeTime: context.isPrimeTime
+          };
         }
       }
     }

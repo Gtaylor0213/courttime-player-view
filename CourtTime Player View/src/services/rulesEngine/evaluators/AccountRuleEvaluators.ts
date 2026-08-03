@@ -261,8 +261,8 @@ const ACC005: RuleEvaluator = {
     const bookingYmd = context.request.bookingDate;
     const daysAhead = diffCalendarDaysYmd(facilityTodayYmd, bookingYmd);
 
-    if (daysAhead > maxDaysAhead) {
-      const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead);
+    if (daysAhead >= maxDaysAhead) {
+      const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead - 1);
 
       return {
         ruleCode: 'ACC-005',

@@ -636,8 +636,8 @@ export class RulesEngine {
       const maxDaysAhead = Number(config.daysInAdvance.limit);
       if (Number.isFinite(maxDaysAhead) && maxDaysAhead > 0) {
         const daysAhead = diffCalendarDaysYmd(facilityTodayYmd, context.request.bookingDate);
-        if (daysAhead > maxDaysAhead) {
-          const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead);
+        if (daysAhead >= maxDaysAhead) {
+          const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead - 1);
           // Short-circuit here: other rules may evaluate differently once the date is back in
           // range, so only the days-in-advance error should surface.
           const advanceBlocker: RuleResult = {

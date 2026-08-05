@@ -138,9 +138,9 @@ async function sendBulkInvitesThrottled(rows: Array<{ id: string; email: string 
   let sent = 0;
   let failed = 0;
 
-  for (const row of rows) {
+  for (let i = 0; i < rows.length; i++) {
     try {
-      const ok = await issueSetupInviteForWhitelistRow(row.id);
+      const ok = await issueSetupInviteForWhitelistRow(rows[i].id, { skipIfAccepted: true });
       if (ok) {
         sent += 1;
       } else {
@@ -150,7 +150,9 @@ async function sendBulkInvitesThrottled(rows: Array<{ id: string; email: string 
       failed += 1;
       console.error('Failed to issue setup invite for whitelist row:', err);
     }
-    await delay(BULK_INVITE_SEND_DELAY_MS);
+    if (i < rows.length - 1) {
+      await delay(BULK_INVITE_SEND_DELAY_MS);
+    }
   }
 
   console.log(`Bulk whitelist import: sent ${sent} setup invite(s), ${failed} failed`);
@@ -374,9 +376,22 @@ export async function bulkAddWhitelistedAddresses(
     let skippedDuplicates = 0;
     let resent = 0;
     const rowsNeedingInvite: Array<{ id: string; email: string }> = [];
+    // Emails already handled from this file. Without this, an email listed twice
+    // in one spreadsheet would queue two invites for the same row, and the second
+    // token would invalidate the first - so the earlier email's link would be dead.
+    const seenEmails = new Set<string>();
 
     for (const item of validItems) {
       const normalizedEmail = normalizeWhitelistEmail(item.email);
+
+      if (normalizedEmail) {
+        if (seenEmails.has(normalizedEmail)) {
+          skippedDuplicates += 1;
+          continue;
+        }
+        seenEmails.add(normalizedEmail);
+      }
+
       try {
         const result = await query(
           `INSERT INTO address_whitelist (facility_id, address, last_name, accounts_limit, email)

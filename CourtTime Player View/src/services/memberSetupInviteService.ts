@@ -128,8 +128,15 @@ export async function sendMemberSetupInviteEmail(
 /**
  * Generate a setup token on a whitelist row and send the invite email.
  * Returns whether the email was actually sent, so bulk callers can track failures.
+ *
+ * Issuing a new token invalidates any previously sent link for the row and clears
+ * setup_invite_accepted_at. Pass `skipIfAccepted` for bulk resends so a member who
+ * joined after the batch was queued isn't reset back to "not joined" and re-emailed.
  */
-export async function issueSetupInviteForWhitelistRow(whitelistId: string): Promise<boolean> {
+export async function issueSetupInviteForWhitelistRow(
+  whitelistId: string,
+  options: { skipIfAccepted?: boolean } = {}
+): Promise<boolean> {
   const rowResult = await query(
     `SELECT
        aw.id,
@@ -151,16 +158,21 @@ export async function issueSetupInviteForWhitelistRow(whitelistId: string): Prom
   const token = generateSetupToken();
   const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
-  await query(
+  const updateResult = await query(
     `UPDATE address_whitelist
      SET setup_token = $1,
          setup_token_expires_at = $2,
          setup_invite_sent_at = CURRENT_TIMESTAMP,
          setup_invite_accepted_at = NULL,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = $3`,
+     WHERE id = $3
+       ${options.skipIfAccepted ? 'AND setup_invite_accepted_at IS NULL' : ''}
+     RETURNING id`,
     [token, expiresAt, whitelistId]
   );
+
+  // Row was accepted between being queued and being sent - leave it joined.
+  if (updateResult.rows.length === 0) return false;
 
   const sent = await sendMemberSetupInviteEmail(email, row.facilityName, token);
   if (!sent) {

@@ -295,3 +295,37 @@ export function toWhitelistImportEntries(rows: ParsedWhitelistRow[]): WhitelistI
     accountsLimit: row.accountsLimit,
   }));
 }
+
+/** A whitelist row as returned by the API, for export. */
+export interface WhitelistExportSource {
+  address: string;
+  lastName: string;
+  email: string | null;
+  accountsLimit: number;
+  setupInviteSentAt: string | null;
+  setupInviteAcceptedAt: string | null;
+}
+
+/**
+ * Build the rows written to an exported whitelist spreadsheet.
+ *
+ * Column headers here must stay re-importable by `parseRows2D`, since the admin
+ * workflow is: export the "not joined" list, then re-upload that same file to
+ * resend their invites.
+ */
+export function buildWhitelistExportRows(
+  entries: WhitelistExportSource[]
+): Array<Record<string, string | number>> {
+  const formatDate = (value: string | null) =>
+    value ? new Date(value).toLocaleDateString() : '';
+
+  return entries.map((item) => ({
+    Address: item.address,
+    'Last Name': item.lastName,
+    Email: item.email || '',
+    'Accounts Limit': item.accountsLimit,
+    Status: !item.email ? 'No email' : item.setupInviteAcceptedAt ? 'Joined' : 'Invite pending',
+    'Invite Sent': formatDate(item.setupInviteSentAt),
+    'Joined Date': formatDate(item.setupInviteAcceptedAt),
+  }));
+}

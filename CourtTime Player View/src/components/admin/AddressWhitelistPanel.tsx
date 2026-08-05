@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
 import { Home, Plus, Upload, Download, X } from 'lucide-react';
 import { addressWhitelistApi } from '../../api/client';
 import {
+  buildWhitelistExportRows,
   parseWhitelistCsv,
   parseWhitelistWorkbook,
   toWhitelistImportEntries,
@@ -181,17 +182,7 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
       return;
     }
 
-    const rows = filteredAddresses.map((item) => ({
-      Address: item.address,
-      'Last Name': item.lastName,
-      Email: item.email || '',
-      'Accounts Limit': item.accountsLimit,
-      Status: !item.email ? 'No email' : item.setupInviteAcceptedAt ? 'Joined' : 'Invite pending',
-      'Invite Sent': item.setupInviteSentAt ? new Date(item.setupInviteSentAt).toLocaleDateString() : '',
-      'Joined Date': item.setupInviteAcceptedAt ? new Date(item.setupInviteAcceptedAt).toLocaleDateString() : '',
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const worksheet = XLSX.utils.json_to_sheet(buildWhitelistExportRows(filteredAddresses));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Whitelist');
 

@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Home, Plus, Upload, X } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
+import { Home, Plus, Upload, Download, X } from 'lucide-react';
 import { addressWhitelistApi } from '../../api/client';
 import {
   parseWhitelistCsv,
@@ -22,6 +24,8 @@ interface WhitelistEntry {
   setupInviteAcceptedAt: string | null;
 }
 
+type StatusFilter = 'all' | 'joined' | 'pending';
+
 interface AddressWhitelistPanelProps {
   facilityId: string | null;
 }
@@ -32,7 +36,26 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
   const [newLastName, setNewLastName] = useState('');
   const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [whitelistUploading, setWhitelistUploading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const whitelistFileRef = useRef<HTMLInputElement>(null);
+
+  const joinedCount = useMemo(
+    () => whitelistAddresses.filter((item) => item.email && item.setupInviteAcceptedAt).length,
+    [whitelistAddresses]
+  );
+  const pendingCount = useMemo(
+    () => whitelistAddresses.filter((item) => item.email && !item.setupInviteAcceptedAt).length,
+    [whitelistAddresses]
+  );
+  const filteredAddresses = useMemo(() => {
+    if (statusFilter === 'joined') {
+      return whitelistAddresses.filter((item) => item.email && item.setupInviteAcceptedAt);
+    }
+    if (statusFilter === 'pending') {
+      return whitelistAddresses.filter((item) => item.email && !item.setupInviteAcceptedAt);
+    }
+    return whitelistAddresses;
+  }, [whitelistAddresses, statusFilter]);
 
   const loadWhitelistAddresses = async () => {
     if (!facilityId) return;
@@ -126,11 +149,15 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
       if (response.success) {
         const added = response.data?.added ?? 0;
         const skipped = response.data?.skipped ?? 0;
+        const resent = response.data?.resent ?? 0;
         const invitesQueued = response.data?.invitesQueued ?? 0;
         let msg =
           skipped > 0
             ? `Imported ${added} of ${addresses.length} rows (${skipped} duplicate${skipped === 1 ? '' : 's'} skipped)`
             : `Imported ${added} address${added === 1 ? '' : 'es'}`;
+        if (resent > 0) {
+          msg += `, ${resent} invite${resent === 1 ? '' : 's'} resent`;
+        }
         if (invitesQueued > 0) {
           msg += ` — ${invitesQueued} setup invite${invitesQueued === 1 ? '' : 's'} sending in the background`;
         }
@@ -146,6 +173,30 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
       setWhitelistUploading(false);
       if (whitelistFileRef.current) whitelistFileRef.current.value = '';
     }
+  };
+
+  const handleExport = () => {
+    if (filteredAddresses.length === 0) {
+      toast.error('No entries to export');
+      return;
+    }
+
+    const rows = filteredAddresses.map((item) => ({
+      Address: item.address,
+      'Last Name': item.lastName,
+      Email: item.email || '',
+      'Accounts Limit': item.accountsLimit,
+      Status: !item.email ? 'No email' : item.setupInviteAcceptedAt ? 'Joined' : 'Invite pending',
+      'Invite Sent': item.setupInviteSentAt ? new Date(item.setupInviteSentAt).toLocaleDateString() : '',
+      'Joined Date': item.setupInviteAcceptedAt ? new Date(item.setupInviteAcceptedAt).toLocaleDateString() : '',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Whitelist');
+
+    const filterLabel = statusFilter === 'joined' ? 'joined' : statusFilter === 'pending' ? 'not-joined' : 'all';
+    XLSX.writeFile(workbook, `whitelist-${filterLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const handleRemoveAddress = async (addressId: string) => {
@@ -256,19 +307,39 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
             </Button>
             <span className="text-xs text-gray-500">
               File should have &quot;Address&quot; and &quot;Last Name&quot; columns. An &quot;Email&quot; column sends a setup invite.
+              Re-importing an existing email resends the invite if they haven&apos;t joined yet.
             </span>
           </div>
         </div>
 
         <div>
-          <Label className="text-sm font-medium">Whitelisted Entries ({whitelistAddresses.length})</Label>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <Label className="text-sm font-medium">Whitelisted Entries ({whitelistAddresses.length})</Label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                <TabsList>
+                  <TabsTrigger value="all">All ({whitelistAddresses.length})</TabsTrigger>
+                  <TabsTrigger value="joined">Joined ({joinedCount})</TabsTrigger>
+                  <TabsTrigger value="pending">Not Joined ({pendingCount})</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Button variant="outline" size="sm" onClick={handleExport}>
+                <Download className="h-4 w-4 mr-1" />
+                Export
+              </Button>
+            </div>
+          </div>
           <div className="mt-2 space-y-2 max-h-[28rem] overflow-y-auto">
             {whitelistAddresses.length === 0 ? (
               <p className="text-center py-4 text-gray-500 text-sm">
                 No entries in whitelist. Add addresses to enable auto-approval.
               </p>
+            ) : filteredAddresses.length === 0 ? (
+              <p className="text-center py-4 text-gray-500 text-sm">
+                No entries match this filter.
+              </p>
             ) : (
-              whitelistAddresses.map((item) => (
+              filteredAddresses.map((item) => (
                 <div
                   key={item.id}
                   className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"

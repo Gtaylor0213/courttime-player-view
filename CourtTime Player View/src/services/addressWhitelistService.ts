@@ -358,6 +358,7 @@ export async function bulkAddWhitelistedAddresses(
   success: boolean;
   added: number;
   skipped: number;
+  resent: number;
   invitesQueued: number;
   error?: string;
 }> {
@@ -366,11 +367,12 @@ export async function bulkAddWhitelistedAddresses(
     const skippedEmpty = addresses.length - validItems.length;
 
     if (validItems.length === 0) {
-      return { success: true, added: 0, skipped: skippedEmpty, invitesQueued: 0 };
+      return { success: true, added: 0, skipped: skippedEmpty, resent: 0, invitesQueued: 0 };
     }
 
     let added = 0;
     let skippedDuplicates = 0;
+    let resent = 0;
     const rowsNeedingInvite: Array<{ id: string; email: string }> = [];
 
     for (const item of validItems) {
@@ -391,6 +393,23 @@ export async function bulkAddWhitelistedAddresses(
         );
 
         if (result.rows.length === 0) {
+          // Row already exists. If it has an email and hasn't joined yet, treat
+          // re-uploading it as an explicit request to resend the setup invite
+          // (this is how an admin re-sends invites: export "not joined", then
+          // re-import that same file). Rows that already joined are left alone.
+          if (normalizedEmail) {
+            const existing = await query(
+              `SELECT id, setup_invite_accepted_at as "acceptedAt"
+               FROM address_whitelist
+               WHERE facility_id = $1 AND LOWER(TRIM(email)) = LOWER(TRIM($2))`,
+              [facilityId, normalizedEmail]
+            );
+            if (existing.rows.length > 0 && !existing.rows[0].acceptedAt) {
+              rowsNeedingInvite.push({ id: existing.rows[0].id, email: normalizedEmail });
+              resent += 1;
+              continue;
+            }
+          }
           skippedDuplicates += 1;
           continue;
         }
@@ -419,6 +438,7 @@ export async function bulkAddWhitelistedAddresses(
       success: true,
       added,
       skipped: skippedEmpty + skippedDuplicates,
+      resent,
       invitesQueued: rowsNeedingInvite.length,
     };
   } catch (error) {
@@ -427,6 +447,7 @@ export async function bulkAddWhitelistedAddresses(
       success: false,
       added: 0,
       skipped: addresses.length,
+      resent: 0,
       invitesQueued: 0,
       error: 'Failed to import addresses',
     };

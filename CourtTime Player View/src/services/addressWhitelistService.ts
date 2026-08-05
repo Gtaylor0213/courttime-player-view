@@ -119,6 +119,43 @@ async function sendInviteIfEmailPresent(whitelistId: string, email: string | nul
   );
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Stay comfortably under Resend's default rate limit when a bulk import emails
+// invites to many rows back to back (e.g. a 400-row facility whitelist upload).
+const BULK_INVITE_SEND_DELAY_MS = 500;
+
+/**
+ * Send setup invites for a batch of whitelist rows one at a time, with a delay
+ * between each, instead of firing them all at once. Deliberately not awaited by
+ * the bulk-import request handler: at 500ms/invite, a few hundred rows would run
+ * well past typical platform HTTP timeouts (e.g. Render's 100s), so this runs in
+ * the background after the import response has already been sent.
+ */
+async function sendBulkInvitesThrottled(rows: Array<{ id: string; email: string }>): Promise<void> {
+  let sent = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    try {
+      const ok = await issueSetupInviteForWhitelistRow(row.id);
+      if (ok) {
+        sent += 1;
+      } else {
+        failed += 1;
+      }
+    } catch (err) {
+      failed += 1;
+      console.error('Failed to issue setup invite for whitelist row:', err);
+    }
+    await delay(BULK_INVITE_SEND_DELAY_MS);
+  }
+
+  console.log(`Bulk whitelist import: sent ${sent} setup invite(s), ${failed} failed`);
+}
+
 /**
  * Get all whitelisted addresses for a facility
  */
@@ -317,17 +354,24 @@ export async function isAddressWhitelisted(
 export async function bulkAddWhitelistedAddresses(
   facilityId: string,
   addresses: Array<{ address: string; lastName?: string; accountsLimit?: number; email?: string }>
-): Promise<{ success: boolean; added: number; skipped: number; error?: string }> {
+): Promise<{
+  success: boolean;
+  added: number;
+  skipped: number;
+  invitesQueued: number;
+  error?: string;
+}> {
   try {
     const validItems = addresses.filter((item) => item.address?.trim());
     const skippedEmpty = addresses.length - validItems.length;
 
     if (validItems.length === 0) {
-      return { success: true, added: 0, skipped: skippedEmpty };
+      return { success: true, added: 0, skipped: skippedEmpty, invitesQueued: 0 };
     }
 
     let added = 0;
     let skippedDuplicates = 0;
+    const rowsNeedingInvite: Array<{ id: string; email: string }> = [];
 
     for (const item of validItems) {
       const normalizedEmail = normalizeWhitelistEmail(item.email);
@@ -354,7 +398,7 @@ export async function bulkAddWhitelistedAddresses(
         added += 1;
         const row = result.rows[0];
         if (row.email) {
-          await sendInviteIfEmailPresent(row.id, row.email);
+          rowsNeedingInvite.push({ id: row.id, email: row.email });
         }
       } catch (error: any) {
         if (error.code === '23505') {
@@ -365,14 +409,27 @@ export async function bulkAddWhitelistedAddresses(
       }
     }
 
+    if (rowsNeedingInvite.length > 0) {
+      sendBulkInvitesThrottled(rowsNeedingInvite).catch((err) =>
+        console.error('Bulk whitelist invite send failed:', err)
+      );
+    }
+
     return {
       success: true,
       added,
       skipped: skippedEmpty + skippedDuplicates,
+      invitesQueued: rowsNeedingInvite.length,
     };
   } catch (error) {
     console.error('Error bulk importing addresses:', error);
-    return { success: false, added: 0, skipped: addresses.length, error: 'Failed to import addresses' };
+    return {
+      success: false,
+      added: 0,
+      skipped: addresses.length,
+      invitesQueued: 0,
+      error: 'Failed to import addresses',
+    };
   }
 }
 

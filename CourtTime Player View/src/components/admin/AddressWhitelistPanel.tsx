@@ -126,10 +126,14 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
       if (response.success) {
         const added = response.data?.added ?? 0;
         const skipped = response.data?.skipped ?? 0;
-        const msg =
+        const invitesQueued = response.data?.invitesQueued ?? 0;
+        let msg =
           skipped > 0
             ? `Imported ${added} of ${addresses.length} rows (${skipped} duplicate${skipped === 1 ? '' : 's'} skipped)`
             : `Imported ${added} address${added === 1 ? '' : 'es'}`;
+        if (invitesQueued > 0) {
+          msg += ` — ${invitesQueued} setup invite${invitesQueued === 1 ? '' : 's'} sending in the background`;
+        }
         toast.success(msg);
         loadWhitelistAddresses();
       } else {

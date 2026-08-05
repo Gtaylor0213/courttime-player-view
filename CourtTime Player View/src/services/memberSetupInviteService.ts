@@ -58,8 +58,16 @@ export interface SetupInviteInvalid {
 
 export type SetupInviteValidation = SetupInviteDetails | SetupInviteInvalid;
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const MAX_RATE_LIMIT_RETRIES = 3;
+
 /**
- * Send member setup invite email via Resend
+ * Send member setup invite email via Resend.
+ * Retries on 429 (rate limited), honoring Resend's Retry-After header when present,
+ * since bulk whitelist imports can send hundreds of these back to back.
  */
 export async function sendMemberSetupInviteEmail(
   email: string,
@@ -78,38 +86,50 @@ export async function sendMemberSetupInviteEmail(
   const loginLink = `${appUrl}/login?setupToken=${encodedToken}`;
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'CourtTime <onboarding@resend.dev>';
 
-  try {
-    const response = await fetch(RESEND_API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [email],
-        subject: `Set up your ${facilityName} CourtTime account`,
-        html: buildMemberSetupInviteHtml(email, facilityName, setupLink, loginLink),
-      }),
-    });
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+    try {
+      const response = await fetch(RESEND_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: fromEmail,
+          to: [email],
+          subject: `Set up your ${facilityName} CourtTime account`,
+          html: buildMemberSetupInviteHtml(email, facilityName, setupLink, loginLink),
+        }),
+      });
 
-    if (!response.ok) {
+      if (response.ok) return true;
+
+      if (response.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
+        const retryAfterHeader = Number(response.headers.get('Retry-After'));
+        const backoffMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+          ? retryAfterHeader * 1000
+          : 500 * 2 ** attempt;
+        await delay(backoffMs);
+        continue;
+      }
+
       const errorData = await response.json();
       console.error('Resend API error (member setup invite):', errorData);
       return false;
+    } catch (error) {
+      console.error('Failed to send member setup invite email:', error);
+      return false;
     }
-
-    return true;
-  } catch (error) {
-    console.error('Failed to send member setup invite email:', error);
-    return false;
   }
+
+  return false;
 }
 
 /**
  * Generate a setup token on a whitelist row and send the invite email.
+ * Returns whether the email was actually sent, so bulk callers can track failures.
  */
-export async function issueSetupInviteForWhitelistRow(whitelistId: string): Promise<void> {
+export async function issueSetupInviteForWhitelistRow(whitelistId: string): Promise<boolean> {
   const rowResult = await query(
     `SELECT
        aw.id,
@@ -122,11 +142,11 @@ export async function issueSetupInviteForWhitelistRow(whitelistId: string): Prom
     [whitelistId]
   );
 
-  if (rowResult.rows.length === 0) return;
+  if (rowResult.rows.length === 0) return false;
 
   const row = rowResult.rows[0];
   const email = normalizeWhitelistEmail(row.email);
-  if (!email) return;
+  if (!email) return false;
 
   const token = generateSetupToken();
   const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
@@ -146,6 +166,7 @@ export async function issueSetupInviteForWhitelistRow(whitelistId: string): Prom
   if (!sent) {
     console.warn(`Member setup invite email not sent for whitelist row ${whitelistId}`);
   }
+  return sent;
 }
 
 /**

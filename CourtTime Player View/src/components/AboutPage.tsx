@@ -11,6 +11,7 @@ import {
   CalendarCheck,
   CheckCircle,
   Clock,
+  ExternalLink,
   Lock,
   Mail,
   Shield,
@@ -22,6 +23,11 @@ import {
 export function AboutPage() {
   const navigate = useNavigate();
   const supportEmail = 'reidbissell@courttimeapp.com';
+  const socialLinks = [
+    { label: 'YouTube', href: 'https://www.youtube.com/@CourtTimeApp' },
+    { label: 'Facebook', href: 'https://www.facebook.com/profile.php?id=61592403848126' },
+    { label: 'Instagram', href: 'https://www.instagram.com/courttimetennisapp/' },
+  ];
   const demoRequestHref = `mailto:${supportEmail}?subject=${encodeURIComponent('CourtTime Demo Request')}&body=${encodeURIComponent(
     'Hi CourtTime team,\n\nI would like to schedule a demo for my facility.\n\nFacility name:\nNumber of courts:\nPreferred contact:\nPreferred demo time:\n\nThanks,',
   )}`;
@@ -69,6 +75,22 @@ export function AboutPage() {
             <span className="rounded-full bg-white/15 border border-white/30 px-3 py-1 text-sm">HOA communities</span>
             <span className="rounded-full bg-white/15 border border-white/30 px-3 py-1 text-sm">Parks and rec</span>
             <span className="rounded-full bg-white/15 border border-white/30 px-3 py-1 text-sm">Private facilities</span>
+          </div>
+          <div className="mb-8 flex flex-wrap items-center justify-center gap-3" aria-label="CourtTime social media">
+            <span className="w-full text-sm font-medium text-gray-200">Follow CourtTime</span>
+            {socialLinks.map((socialLink) => (
+              <a
+                key={socialLink.label}
+                href={socialLink.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-black/20 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                aria-label={`Follow CourtTime on ${socialLink.label} (opens in a new tab)`}
+              >
+                {socialLink.label}
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            ))}
           </div>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button

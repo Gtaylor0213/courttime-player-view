@@ -6,8 +6,14 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
+
+const socialLinks = [
+  { label: 'YouTube', href: 'https://www.youtube.com/@CourtTimeApp' },
+  { label: 'Facebook', href: 'https://www.facebook.com/profile.php?id=61592403848126' },
+  { label: 'Instagram', href: 'https://www.instagram.com/courttimetennisapp/' },
+];
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -206,6 +212,25 @@ export function LoginPage() {
               </div>
             </CardContent>
           </Card>
+
+          <nav className="mt-6 text-center" aria-label="CourtTime social media">
+            <p className="mb-2 text-sm text-muted-foreground">Follow CourtTime</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              {socialLinks.map((socialLink) => (
+                <a
+                  key={socialLink.label}
+                  href={socialLink.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary/80 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:rounded-sm"
+                  aria-label={`Follow CourtTime on ${socialLink.label} (opens in a new tab)`}
+                >
+                  {socialLink.label}
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                </a>
+              ))}
+            </div>
+          </nav>
         </div>
       </div>
     </div>

@@ -87,7 +87,7 @@ export async function resolveAudience(filters: BroadcastFilters): Promise<Broadc
  * participant pair only (not facility_id), so this lookup ignores facility
  * entirely and every broadcast to a given player reuses the same thread.
  */
-async function findOrCreateTeamConversation(playerId: string): Promise<string> {
+export async function findOrCreateTeamConversation(playerId: string): Promise<string> {
   const existing = await query(
     `SELECT id FROM conversations
      WHERE (participant1_id = $1 AND participant2_id = $2)

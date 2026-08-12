@@ -529,9 +529,14 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
         ? await messagesApi.sendToConversation(currentConv.id, newMessage)
         : await messagesApi.sendMessage(user.id, recipientId as string, facilityId, newMessage);
 
-      if (response.success && response.data?.data?.message) {
+      if (!response.success) {
+        toast.error(response.error || 'Failed to send message');
+        return;
+      }
+
+      if (response.data?.data?.message) {
         setMessages(prev => [...prev, response.data.data.message]);
-      } else if (response.success && response.data?.message) {
+      } else if (response.data?.message) {
         setMessages(prev => [...prev, response.data.message]);
       }
 

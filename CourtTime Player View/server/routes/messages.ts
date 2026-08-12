@@ -13,6 +13,10 @@ import {
   createGroupConversation,
   validateGroupName,
 } from '../../src/services/groupConversationService';
+import {
+  COURTTIME_TEAM_USER_ID,
+  findOrCreateTeamConversation,
+} from '../../src/services/developerMessagingService';
 
 const router = express.Router();
 
@@ -821,44 +825,58 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Check if both users are members of the facility
-    const membershipCheck = await query(`
-      SELECT user_id
-      FROM facility_memberships
-      WHERE facility_id = $1
-        AND user_id IN ($2, $3)
-        AND status = 'active'
-    `, [facilityId, senderId, recipientId]);
+    // CourtTime Team (the developer-console broadcast sender) isn't a member
+    // of any facility, so a player replying to it can't pass the normal
+    // facility co-membership check below. That thread also isn't tagged to a
+    // facility (facility_id is NULL, see developerMessagingService.ts), so it
+    // has its own facility-agnostic find-or-create rather than the
+    // facility-scoped lookup used for everyone else.
+    const isTeamConversation = senderId === COURTTIME_TEAM_USER_ID || recipientId === COURTTIME_TEAM_USER_ID;
 
-    if (membershipCheck.rows.length !== 2) {
-      return res.status(403).json({
-        success: false,
-        error: 'Both users must be active members of the facility'
-      });
-    }
+    let conversationId: string;
 
-    // Find or create conversation
-    let conversationId;
-    const existingConv = await query(`
-      SELECT id
-      FROM conversations
-      WHERE facility_id = $1
-        AND (
-          (participant1_id = $2 AND participant2_id = $3) OR
-          (participant1_id = $3 AND participant2_id = $2)
-        )
-    `, [facilityId, senderId, recipientId]);
-
-    if (existingConv.rows.length > 0) {
-      conversationId = existingConv.rows[0].id;
+    if (isTeamConversation) {
+      const otherUserId = senderId === COURTTIME_TEAM_USER_ID ? recipientId : senderId;
+      conversationId = await findOrCreateTeamConversation(otherUserId);
     } else {
-      // Create new conversation
-      const newConv = await query(`
-        INSERT INTO conversations (participant1_id, participant2_id, facility_id)
-        VALUES ($1, $2, $3)
-        RETURNING id
-      `, [senderId, recipientId, facilityId]);
-      conversationId = newConv.rows[0].id;
+      // Check if both users are members of the facility
+      const membershipCheck = await query(`
+        SELECT user_id
+        FROM facility_memberships
+        WHERE facility_id = $1
+          AND user_id IN ($2, $3)
+          AND status = 'active'
+      `, [facilityId, senderId, recipientId]);
+
+      if (membershipCheck.rows.length !== 2) {
+        return res.status(403).json({
+          success: false,
+          error: 'Both users must be active members of the facility'
+        });
+      }
+
+      // Find or create conversation
+      const existingConv = await query(`
+        SELECT id
+        FROM conversations
+        WHERE facility_id = $1
+          AND (
+            (participant1_id = $2 AND participant2_id = $3) OR
+            (participant1_id = $3 AND participant2_id = $2)
+          )
+      `, [facilityId, senderId, recipientId]);
+
+      if (existingConv.rows.length > 0) {
+        conversationId = existingConv.rows[0].id;
+      } else {
+        // Create new conversation
+        const newConv = await query(`
+          INSERT INTO conversations (participant1_id, participant2_id, facility_id)
+          VALUES ($1, $2, $3)
+          RETURNING id
+        `, [senderId, recipientId, facilityId]);
+        conversationId = newConv.rows[0].id;
+      }
     }
 
     // Insert message

@@ -8,7 +8,7 @@ import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Buildin
 import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
-import { facilitiesApi } from '../api/client';
+import { facilitiesApi, messagesApi } from '../api/client';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from './ui/select';
@@ -47,6 +47,7 @@ export function UnifiedSidebar({
   const navigate = useNavigate();
   const [memberFacilities, setMemberFacilities] = React.useState<Club[]>([]);
   const [loadingFacilities, setLoadingFacilities] = React.useState(true);
+  const [hasUnreadMessages, setHasUnreadMessages] = React.useState(false);
 
   // Use the actual user's type from AuthContext, or fall back to the prop
   const actualUserType = user?.userType || userType;
@@ -88,6 +89,65 @@ export function UnifiedSidebar({
 
     fetchMemberFacilities();
   }, [user?.memberFacilities, user?.adminFacilities]);
+
+  // Track unread messages for the Messages nav indicator
+  React.useEffect(() => {
+    if (!user?.id || !selectedFacilityId) {
+      setHasUnreadMessages(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const refreshUnreadMessages = async () => {
+      try {
+        const response = await messagesApi.getConversations(selectedFacilityId, user.id);
+        const conversations = response.success
+          ? (response.data?.data?.conversations || response.data?.conversations || [])
+          : [];
+        if (!cancelled) {
+          setHasUnreadMessages(conversations.some((conv: any) => conv.unreadCount > 0));
+        }
+      } catch (error) {
+        console.error('Error fetching unread messages:', error);
+      }
+    };
+
+    refreshUnreadMessages();
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (!interval) {
+        interval = setInterval(refreshUnreadMessages, 30000);
+      }
+    };
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        refreshUnreadMessages();
+        startPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.id, selectedFacilityId]);
 
   // Get user initials
   const getUserInitials = () => {
@@ -188,12 +248,14 @@ export function UnifiedSidebar({
     onClick,
     icon: Icon,
     label,
-    isActive = false
+    isActive = false,
+    showDot = false
   }: {
     onClick: () => void;
     icon: any;
     label: string;
     isActive?: boolean;
+    showDot?: boolean;
   }) => {
     const button = (
       <button
@@ -202,7 +264,12 @@ export function UnifiedSidebar({
           isActive ? 'bg-green-50 text-green-700 border-l-4 border-green-600' : ''
         } ${isCollapsed ? 'justify-center' : ''}`}
       >
-        <Icon className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'}`} />
+        <span className={`relative inline-flex ${isCollapsed ? '' : 'mr-3'}`}>
+          <Icon className="h-4 w-4" />
+          {showDot && (
+            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-600" />
+          )}
+        </span>
         {!isCollapsed && label}
       </button>
     );
@@ -451,6 +518,7 @@ export function UnifiedSidebar({
                 icon={MessageCircle}
                 label="Messages"
                 isActive={currentPage === 'messages'}
+                showDot={hasUnreadMessages}
               />
               <SidebarButton
                 onClick={() => handleNav('/payments')}

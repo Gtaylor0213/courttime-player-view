@@ -494,6 +494,8 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
       await messagesApi.markAsRead(conversationId, user.id);
       // Reload conversations to update unread count
       loadConversations();
+      // Let the sidebar's unread indicator refresh immediately instead of waiting for its poll
+      window.dispatchEvent(new Event('messages:unread-changed'));
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }

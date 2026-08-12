@@ -141,11 +141,13 @@ export function UnifiedSidebar({
 
     startPolling();
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('messages:unread-changed', refreshUnreadMessages);
 
     return () => {
       cancelled = true;
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('messages:unread-changed', refreshUnreadMessages);
     };
   }, [user?.id, selectedFacilityId]);
 

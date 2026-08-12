@@ -29,6 +29,14 @@ import {
 import { getFacilityFeatureFlags, setFeatureFlag } from '../../src/services/featureFlagService';
 import { requestPasswordReset } from '../../src/services/passwordResetService';
 import { query } from '../../src/database/connection';
+import {
+  resolveAudience,
+  sendBroadcastThrottled,
+  listTeamConversations,
+  getTeamConversationMessages,
+  replyToTeamConversation,
+  BroadcastFilters,
+} from '../../src/services/developerMessagingService';
 
 const router = express.Router();
 
@@ -91,7 +99,8 @@ router.get('/users/search', async (req, res) => {
     if (q.length < 2) {
       return res.json({ success: true, data: [] });
     }
-    const users = await searchUsers(q);
+    const userType = req.query.type as string | undefined;
+    const users = await searchUsers(q, userType);
     res.json({ success: true, data: users });
   } catch (error: any) {
     console.error('[Support] User search error:', error);
@@ -471,6 +480,79 @@ router.get('/facilities/:id/violations', async (req, res) => {
   } catch (error: any) {
     console.error('[Support] Violations error:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Developer Messaging ────────────────────────────────────
+
+router.post('/messages/preview', async (req, res) => {
+  try {
+    const filters = req.body as BroadcastFilters;
+    const recipients = await resolveAudience(filters);
+    res.json({
+      success: true,
+      data: { count: recipients.length, sample: recipients.slice(0, 25) },
+    });
+  } catch (error: any) {
+    console.error('[Support] Message preview error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/messages/send', async (req, res) => {
+  try {
+    const { messageText, ...filters } = req.body as BroadcastFilters & { messageText: string };
+    if (!messageText || !messageText.trim()) {
+      return res.status(400).json({ success: false, error: 'Message text is required' });
+    }
+
+    const recipients = await resolveAudience(filters);
+    if (recipients.length === 0) {
+      return res.status(400).json({ success: false, error: 'No recipients match the selected filters' });
+    }
+
+    res.json({ success: true, data: { queued: recipients.length } });
+
+    sendBroadcastThrottled(recipients, messageText).catch((err) => {
+      console.error('[Support] Broadcast send error:', err);
+    });
+  } catch (error: any) {
+    console.error('[Support] Message send error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/messages/conversations', async (_req, res) => {
+  try {
+    const conversations = await listTeamConversations();
+    res.json({ success: true, data: conversations });
+  } catch (error: any) {
+    console.error('[Support] List conversations error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/messages/conversations/:conversationId', async (req, res) => {
+  try {
+    const messages = await getTeamConversationMessages(req.params.conversationId);
+    res.json({ success: true, data: messages });
+  } catch (error: any) {
+    console.error('[Support] Get conversation error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/messages/conversations/:conversationId/reply', async (req, res) => {
+  try {
+    const { messageText } = req.body;
+    if (!messageText || !messageText.trim()) {
+      return res.status(400).json({ success: false, error: 'Message text is required' });
+    }
+    await replyToTeamConversation(req.params.conversationId, messageText.trim());
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[Support] Reply error:', error);
+    res.status(400).json({ success: false, error: error.message });
   }
 });
 

@@ -255,7 +255,14 @@ export interface UserSearchResult {
   facilityCount: number;
 }
 
-export async function searchUsers(searchTerm: string): Promise<UserSearchResult[]> {
+export async function searchUsers(searchTerm: string, userType?: string): Promise<UserSearchResult[]> {
+  const params: any[] = [`%${searchTerm}%`];
+  let userTypeClause = '';
+  if (userType) {
+    params.push(userType);
+    userTypeClause = ` AND u.user_type = $${params.length}`;
+  }
+
   const result = await query(`
     SELECT
       u.id, u.email, u.full_name as "fullName", u.user_type as "userType",
@@ -267,10 +274,10 @@ export async function searchUsers(searchTerm: string): Promise<UserSearchResult[
       FROM facility_memberships
       GROUP BY user_id
     ) m ON u.id = m.user_id
-    WHERE u.full_name ILIKE $1 OR u.email ILIKE $1
+    WHERE (u.full_name ILIKE $1 OR u.email ILIKE $1)${userTypeClause}
     ORDER BY u.full_name
     LIMIT 50
-  `, [`%${searchTerm}%`]);
+  `, params);
 
   return result.rows;
 }

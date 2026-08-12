@@ -10,6 +10,7 @@ import { SupportBookingManagement } from './SupportBookingManagement';
 import { SupportCourtManagement } from './SupportCourtManagement';
 import { SupportSubscriptionManagement } from './SupportSubscriptionManagement';
 import { SupportPromoCodes } from './SupportPromoCodes';
+import { DeveloperMessaging } from './DeveloperMessaging';
 
 export type SupportView =
   | 'dashboard'
@@ -19,7 +20,8 @@ export type SupportView =
   | 'bookings'
   | 'courts'
   | 'subscriptions'
-  | 'promos';
+  | 'promos'
+  | 'messages';
 
 export function SupportConsole() {
   const [authenticated, setAuthenticated] = useState(isSupportAuthenticated());
@@ -91,6 +93,8 @@ export function SupportConsole() {
         );
       case 'promos':
         return <SupportPromoCodes />;
+      case 'messages':
+        return <DeveloperMessaging />;
       default:
         return <SupportDashboard onNavigate={navigateTo} />;
     }

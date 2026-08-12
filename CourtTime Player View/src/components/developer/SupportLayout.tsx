@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   LayoutDashboard, Users, Building2, UserCheck, CalendarDays, Columns3, LogOut, Menu, X,
-  CreditCard, Tag, Search, Command,
+  CreditCard, Tag, Search, Command, MessageSquare,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -20,6 +20,7 @@ const navItems: { view: SupportView; label: string; icon: React.ElementType; sec
   { view: 'dashboard', label: 'Command Center', icon: LayoutDashboard, section: 'overview' },
   { view: 'users', label: 'Accounts', icon: Users, section: 'customers' },
   { view: 'members', label: 'Members', icon: UserCheck, section: 'customers' },
+  { view: 'messages', label: 'Messages', icon: MessageSquare, section: 'customers' },
   { view: 'subscriptions', label: 'Subscriptions', icon: CreditCard, section: 'billing' },
   { view: 'promos', label: 'Promo Codes', icon: Tag, section: 'billing' },
   { view: 'facilities', label: 'Facilities', icon: Building2, section: 'operations' },

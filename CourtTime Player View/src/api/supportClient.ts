@@ -71,6 +71,14 @@ export async function searchUsers(q: string) {
   }
 }
 
+export async function searchPlayers(q: string) {
+  try {
+    return await supportFetch(`/users/search?q=${encodeURIComponent(q)}&type=player`);
+  } catch {
+    return { success: false, error: 'Failed to search players' };
+  }
+}
+
 export async function getUserProfile(userId: string) {
   try {
     return await supportFetch(`/users/${userId}`);
@@ -365,5 +373,65 @@ export async function updatePromoCode(id: string, data: Record<string, any>) {
     });
   } catch {
     return { success: false, error: 'Failed to update promo code' };
+  }
+}
+
+// ── Developer Messaging ───────────────────────────────────
+
+export interface BroadcastFilters {
+  audience: 'all' | 'facility' | 'specific';
+  facilityId?: string;
+  userIds?: string[];
+  neverMessagedOnly?: boolean;
+  joinedFrom?: string;
+  joinedTo?: string;
+}
+
+export async function previewDeveloperMessages(filters: BroadcastFilters) {
+  try {
+    return await supportFetch('/messages/preview', {
+      method: 'POST',
+      body: JSON.stringify(filters),
+    });
+  } catch {
+    return { success: false, error: 'Failed to preview recipients' };
+  }
+}
+
+export async function sendDeveloperMessages(filters: BroadcastFilters, messageText: string) {
+  try {
+    return await supportFetch('/messages/send', {
+      method: 'POST',
+      body: JSON.stringify({ ...filters, messageText }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to send messages' };
+  }
+}
+
+export async function getTeamConversations() {
+  try {
+    return await supportFetch('/messages/conversations');
+  } catch {
+    return { success: false, error: 'Failed to load conversations' };
+  }
+}
+
+export async function getTeamConversationMessages(conversationId: string) {
+  try {
+    return await supportFetch(`/messages/conversations/${conversationId}`);
+  } catch {
+    return { success: false, error: 'Failed to load conversation' };
+  }
+}
+
+export async function replyToTeamConversation(conversationId: string, messageText: string) {
+  try {
+    return await supportFetch(`/messages/conversations/${conversationId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ messageText }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to send reply' };
   }
 }

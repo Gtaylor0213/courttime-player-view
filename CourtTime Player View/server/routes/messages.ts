@@ -517,7 +517,7 @@ router.get('/conversations/:facilityId/:userId', async (req, res) => {
       FROM conversations c
       JOIN users u1 ON c.participant1_id = u1.id
       JOIN users u2 ON c.participant2_id = u2.id
-      WHERE c.facility_id = $2
+      WHERE (c.facility_id = $2 OR c.facility_id IS NULL)
         AND c.is_group = false
         AND (c.participant1_id = $1 OR c.participant2_id = $1)
       ORDER BY "lastMessageSentAt" DESC NULLS LAST
@@ -577,7 +577,7 @@ router.get('/conversations/:facilityId/:userId', async (req, res) => {
         ) as "unreadCount"
       FROM conversations c
       JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = $1
-      WHERE c.facility_id = $2 AND c.is_group = true
+      WHERE (c.facility_id = $2 OR c.facility_id IS NULL) AND c.is_group = true
       ORDER BY "lastMessageSentAt" DESC NULLS LAST
     `, [userId, facilityId]);
 

@@ -79,6 +79,14 @@ export async function searchPlayers(q: string) {
   }
 }
 
+export async function searchAdmins(q: string) {
+  try {
+    return await supportFetch(`/users/search?q=${encodeURIComponent(q)}&type=admin`);
+  } catch {
+    return { success: false, error: 'Failed to search admins' };
+  }
+}
+
 export async function getUserProfile(userId: string) {
   try {
     return await supportFetch(`/users/${userId}`);
@@ -379,6 +387,7 @@ export async function updatePromoCode(id: string, data: Record<string, any>) {
 // ── Developer Messaging ───────────────────────────────────
 
 export interface BroadcastFilters {
+  recipientType?: 'player' | 'admin';
   audience: 'all' | 'facility' | 'specific';
   facilityId?: string;
   userIds?: string[];

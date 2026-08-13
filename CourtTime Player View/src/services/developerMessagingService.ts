@@ -5,8 +5,10 @@ import { query } from '../database/connection';
 export const COURTTIME_TEAM_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 export type BroadcastAudience = 'all' | 'facility' | 'specific';
+export type BroadcastRecipientType = 'player' | 'admin';
 
 export interface BroadcastFilters {
+  recipientType?: BroadcastRecipientType;
   audience: BroadcastAudience;
   facilityId?: string;
   userIds?: string[];
@@ -31,18 +33,38 @@ function delay(ms: number): Promise<void> {
  * client can never widen its own audience beyond what it previewed.
  */
 export async function resolveAudience(filters: BroadcastFilters): Promise<BroadcastRecipient[]> {
-  const conditions: string[] = [`u.user_type = 'player'`];
-  const params: any[] = [];
+  const recipientType: BroadcastRecipientType = filters.recipientType === 'admin' ? 'admin' : 'player';
+  // CourtTime Team is itself user_type = 'admin' (it has to be, for the FK on
+  // messages.sender_id) but it's the broadcast sender, not a valid recipient.
+  const params: any[] = [recipientType, COURTTIME_TEAM_USER_ID];
+  const conditions: string[] = [`u.user_type = $1`, `u.id != $2`];
 
   if (filters.audience === 'facility') {
     if (!filters.facilityId) {
       throw new Error('facilityId is required for the facility audience');
     }
     params.push(filters.facilityId);
-    conditions.push(`EXISTS (
-      SELECT 1 FROM facility_memberships fm
-      WHERE fm.user_id = u.id AND fm.facility_id = $${params.length} AND fm.status = 'active'
-    )`);
+    if (recipientType === 'admin') {
+      // "Admin of this facility" means an active row in facility_admins or an
+      // active membership flagged is_facility_admin (the two mechanisms
+      // isFacilityAdminUser also checks, server/middleware/facilityAdmin.ts).
+      conditions.push(`(
+        EXISTS (
+          SELECT 1 FROM facility_admins fa
+          WHERE fa.user_id = u.id AND fa.facility_id = $${params.length} AND fa.status = 'active'
+        )
+        OR EXISTS (
+          SELECT 1 FROM facility_memberships fm
+          WHERE fm.user_id = u.id AND fm.facility_id = $${params.length}
+            AND fm.status = 'active' AND fm.is_facility_admin = true
+        )
+      )`);
+    } else {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM facility_memberships fm
+        WHERE fm.user_id = u.id AND fm.facility_id = $${params.length} AND fm.status = 'active'
+      )`);
+    }
   } else if (filters.audience === 'specific') {
     if (!filters.userIds || filters.userIds.length === 0) {
       return [];

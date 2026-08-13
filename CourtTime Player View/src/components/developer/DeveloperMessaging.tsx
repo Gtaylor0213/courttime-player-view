@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import {
   getFacilities,
   searchPlayers,
+  searchAdmins,
   previewDeveloperMessages,
   sendDeveloperMessages,
   getTeamConversations,
@@ -65,6 +66,7 @@ function formatMessageTime(timestamp: string) {
 }
 
 type Audience = 'all' | 'facility' | 'specific';
+type RecipientType = 'player' | 'admin';
 
 export function DeveloperMessaging() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -107,6 +109,7 @@ function ComposeTab() {
   const [playerQuery, setPlayerQuery] = useState('');
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
   const [selectedPlayers, setSelectedPlayers] = useState<PlayerResult[]>([]);
+  const [recipientType, setRecipientType] = useState<RecipientType>('player');
   const [neverMessagedOnly, setNeverMessagedOnly] = useState(false);
   const [useJoinedRange, setUseJoinedRange] = useState(false);
   const [joinedFrom, setJoinedFrom] = useState('');
@@ -130,20 +133,32 @@ function ComposeTab() {
       return;
     }
     const handle = setTimeout(async () => {
-      const res = await searchPlayers(playerQuery.trim());
+      const res = recipientType === 'admin' ? await searchAdmins(playerQuery.trim()) : await searchPlayers(playerQuery.trim());
       if (res.success) setPlayerResults(res.data || []);
     }, 300);
     return () => clearTimeout(handle);
-  }, [playerQuery]);
+  }, [playerQuery, recipientType]);
+
+  // Switching recipient type invalidates any facility/specific-people picks
+  // made under the other type (e.g. a facility chosen for "admins at a
+  // facility" doesn't necessarily still make sense as a player filter).
+  const handleRecipientTypeChange = (type: RecipientType) => {
+    setRecipientType(type);
+    setFacilityId('');
+    setSelectedPlayers([]);
+    setPlayerQuery('');
+    setPlayerResults([]);
+  };
 
   const filters: BroadcastFilters = useMemo(() => ({
+    recipientType,
     audience,
     facilityId: audience === 'facility' ? facilityId : undefined,
     userIds: audience === 'specific' ? selectedPlayers.map((p) => p.id) : undefined,
     neverMessagedOnly,
     joinedFrom: useJoinedRange && joinedFrom ? joinedFrom : undefined,
     joinedTo: useJoinedRange && joinedTo ? joinedTo : undefined,
-  }), [audience, facilityId, selectedPlayers, neverMessagedOnly, useJoinedRange, joinedFrom, joinedTo]);
+  }), [recipientType, audience, facilityId, selectedPlayers, neverMessagedOnly, useJoinedRange, joinedFrom, joinedTo]);
 
   const audienceReady =
     audience === 'all' || (audience === 'facility' && !!facilityId) || (audience === 'specific' && selectedPlayers.length > 0);
@@ -194,8 +209,9 @@ function ComposeTab() {
       return;
     }
 
+    const recipientLabel = recipientType === 'admin' ? 'admin' : 'player';
     const confirmed = window.confirm(
-      `Send this message to ${previewCount} player${previewCount !== 1 ? 's' : ''}?`
+      `Send this message to ${previewCount} ${recipientLabel}${previewCount !== 1 ? 's' : ''}?`
     );
     if (!confirmed) return;
 
@@ -203,7 +219,7 @@ function ComposeTab() {
     try {
       const res = await sendDeveloperMessages(filters, messageText.trim());
       if (res.success) {
-        toast.success(`Message queued for ${res.data.queued} player${res.data.queued !== 1 ? 's' : ''}`);
+        toast.success(`Message queued for ${res.data.queued} ${recipientLabel}${res.data.queued !== 1 ? 's' : ''}`);
         setMessageText('');
       } else {
         toast.error(res.error || 'Failed to send messages');
@@ -220,6 +236,20 @@ function ComposeTab() {
           <CardTitle className="text-lg">Compose Message</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          {/* Recipient type */}
+          <div className="space-y-2">
+            <Label>Message</Label>
+            <Select value={recipientType} onValueChange={(v) => handleRecipientTypeChange(v as RecipientType)}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Select recipient type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="player">Players</SelectItem>
+                <SelectItem value="admin">Facility Admins</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Audience */}
           <div className="space-y-2">
             <Label>Recipients</Label>
@@ -228,9 +258,9 @@ function ComposeTab() {
                 <SelectValue placeholder="Select audience" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Players</SelectItem>
-                <SelectItem value="facility">Players at a Facility</SelectItem>
-                <SelectItem value="specific">Specific Players</SelectItem>
+                <SelectItem value="all">{recipientType === 'admin' ? 'All Admins' : 'All Players'}</SelectItem>
+                <SelectItem value="facility">{recipientType === 'admin' ? 'Admins of a Facility' : 'Players at a Facility'}</SelectItem>
+                <SelectItem value="specific">{recipientType === 'admin' ? 'Specific Admins' : 'Specific Players'}</SelectItem>
               </SelectContent>
             </Select>
 
@@ -250,7 +280,7 @@ function ComposeTab() {
             {audience === 'specific' && (
               <div className="space-y-2">
                 <Input
-                  placeholder="Search players by name or email..."
+                  placeholder={recipientType === 'admin' ? 'Search admins by name or email...' : 'Search players by name or email...'}
                   value={playerQuery}
                   onChange={(e) => setPlayerQuery(e.target.value)}
                   className="w-80"
@@ -295,7 +325,7 @@ function ComposeTab() {
                 onCheckedChange={(checked) => setNeverMessagedOnly(checked === true)}
               />
               <Label htmlFor="never-messaged" className="font-normal">
-                Only players who've never gotten a message from us
+                Only {recipientType === 'admin' ? 'admins' : 'players'} who've never gotten a message from us
               </Label>
             </div>
 
@@ -306,7 +336,7 @@ function ComposeTab() {
                 onCheckedChange={(checked) => setUseJoinedRange(checked === true)}
               />
               <Label htmlFor="joined-range" className="font-normal">
-                Only players who joined within a date range
+                Only {recipientType === 'admin' ? 'admins' : 'players'} who joined within a date range
               </Label>
             </div>
             {useJoinedRange && (
@@ -341,7 +371,7 @@ function ComposeTab() {
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
             />
-            <p className="text-xs text-gray-500">Sent as "CourtTime Team" through each player's Messages inbox.</p>
+            <p className="text-xs text-gray-500">Sent as "CourtTime Team" through each recipient's Messages inbox.</p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
@@ -351,7 +381,9 @@ function ComposeTab() {
               className="gap-2 bg-green-600 hover:bg-green-700"
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {sending ? 'Sending...' : `Send to ${previewCount ?? 0} Player${previewCount === 1 ? '' : 's'}`}
+              {sending
+                ? 'Sending...'
+                : `Send to ${previewCount ?? 0} ${recipientType === 'admin' ? 'Admin' : 'Player'}${previewCount === 1 ? '' : 's'}`}
             </Button>
           </div>
         </CardContent>

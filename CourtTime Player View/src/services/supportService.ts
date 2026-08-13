@@ -261,6 +261,13 @@ export async function searchUsers(searchTerm: string, userType?: string): Promis
   if (userType) {
     params.push(userType);
     userTypeClause = ` AND u.user_type = $${params.length}`;
+    // Searching admins specifically is only ever done from the developer
+    // broadcast-messaging picker (see developerMessagingService.ts), where
+    // the seeded CourtTime Team sender account should never show up as a
+    // selectable recipient of its own messages.
+    if (userType === 'admin') {
+      userTypeClause += ` AND u.id != '00000000-0000-0000-0000-000000000001'`;
+    }
   }
 
   const result = await query(`

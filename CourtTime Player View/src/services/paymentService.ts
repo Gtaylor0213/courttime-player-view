@@ -109,7 +109,7 @@ export async function validatePromoCode(
   const baseAmount =
     opts.baseAmountCents != null
       ? opts.baseAmountCents
-      : opts.courtCount
+      : opts.courtCount != null
         ? getAmountForCourts(opts.courtCount)
         : MAX_SUBSCRIPTION_CENTS;
   let finalAmountCents = baseAmount;
@@ -135,7 +135,12 @@ export async function validatePromoCode(
   } else {
     const renewalPrice = formatAnnualPricePerYear(baseAmount);
     if (trialMonths) {
-      message = `Promo code applied — ${trialMonths} month${trialMonths > 1 ? 's' : ''} free trial! Card required for annual renewal (${renewalPrice}).`;
+      const renewalDate = new Date();
+      renewalDate.setDate(renewalDate.getDate() + trialMonths * 30);
+      const renewalDateStr = renewalDate.toLocaleDateString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric',
+      });
+      message = `Promo code applied — ${trialMonths} month${trialMonths > 1 ? 's' : ''} free trial! Card required for annual renewal (${renewalPrice}) on ${renewalDateStr}.`;
     } else if (finalAmountCents === 0) {
       message = `Promo code applied — first year free! Card required for annual renewal (${renewalPrice}).`;
     } else {

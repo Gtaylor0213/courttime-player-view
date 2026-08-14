@@ -211,6 +211,12 @@ export function RulesStep({
                 break;
             }
           }}
+          maxActiveReservationsEnabled={!!rules['HH-002']?.enabled}
+          maxActiveReservationsValue={rules['HH-002']?.config?.max_active_household ?? ''}
+          onMaxActiveReservationsEnabledChange={(enabled) => onRuleEntryChange('HH-002', { enabled })}
+          onMaxActiveReservationsValueChange={(value) =>
+            onRuleConfigFieldChange('HH-002', 'max_active_household', parseInt(value, 10) || '')
+          }
         />
       )}
 

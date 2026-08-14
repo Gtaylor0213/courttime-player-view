@@ -407,6 +407,21 @@ router.post('/register', optionalAuth, async (req, res, next) => {
           error: paymentVerification.error || 'Payment could not be verified. Please contact support.',
         });
       }
+
+      // Courts may have been edited in the browser after the Stripe checkout session was
+      // created — court count must match what was actually charged/promised, not just the
+      // resubmitted amount (which is always $0 for full-discount trial promo codes).
+      if (paymentVerification.courtCount != null && paymentVerification.courtCount !== courts.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'Your court count changed after payment was started. Please redo the payment step.',
+        });
+      }
+
+      registrationData.stripeSubscriptionId = paymentVerification.stripeSubscriptionId;
+      registrationData.stripeCustomerId = paymentVerification.stripeCustomerId;
+      registrationData.currentPeriodStart = paymentVerification.currentPeriodStart;
+      registrationData.currentPeriodEnd = paymentVerification.currentPeriodEnd;
     }
 
     // Register facility

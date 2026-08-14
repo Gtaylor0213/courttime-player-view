@@ -339,7 +339,10 @@ export async function createCheckoutSession(params: {
       sessionId: session.id,
       sessionUrl: session.url || undefined,
       amountCents: params.amountCents,
-      waived: params.amountCents <= 0,
+      // A real Stripe Checkout session was created and must be completed via sessionUrl —
+      // $0 due today (trial/full-discount promo) is not the same as no payment flow at all.
+      // Only the no-Stripe-configured dev-mode branch above is truly "waived".
+      waived: false,
     };
   } catch (error: any) {
     console.error('Stripe checkout session error:', error);
@@ -441,6 +444,11 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
   verified: boolean;
   paymentStatus?: string;
   amountPaid?: number;
+  courtCount?: number;
+  stripeSubscriptionId?: string;
+  stripeCustomerId?: string;
+  currentPeriodStart?: Date;
+  currentPeriodEnd?: Date;
   error?: string;
 }> {
   // Dev mode sessions
@@ -454,14 +462,32 @@ export async function verifyCheckoutSession(sessionId: string): Promise<{
   }
 
   try {
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription'],
+    });
+
+    const courtCountMeta = session.metadata?.courtCount;
+    const courtCount = courtCountMeta ? parseInt(courtCountMeta, 10) : undefined;
 
     // Subscription mode — checkout complete when subscription is created
     if (session.mode === 'subscription' && session.status === 'complete') {
+      const subscription =
+        session.subscription && typeof session.subscription === 'object'
+          ? (session.subscription as Stripe.Subscription)
+          : null;
+      const periodItem = subscription?.items?.data?.[0];
+      const periodStartSec = subscription?.current_period_start ?? periodItem?.current_period_start;
+      const periodEndSec = subscription?.current_period_end ?? periodItem?.current_period_end;
+
       return {
         verified: true,
         paymentStatus: session.payment_status === 'paid' ? 'paid' : 'subscription_active',
         amountPaid: session.amount_total || 0,
+        courtCount: courtCount != null && !Number.isNaN(courtCount) ? courtCount : undefined,
+        stripeSubscriptionId: subscription?.id,
+        stripeCustomerId: typeof session.customer === 'string' ? session.customer : session.customer?.id,
+        currentPeriodStart: periodStartSec ? new Date(periodStartSec * 1000) : undefined,
+        currentPeriodEnd: periodEndSec ? new Date(periodEndSec * 1000) : undefined,
       };
     }
 
@@ -512,33 +538,44 @@ export async function recordPayment(
     promoCode?: string;
     courtCount: number;
     paymentMethodType: string; // 'card', 'promo_code', 'custom'
+    stripeSubscriptionId?: string;
+    stripeCustomerId?: string;
+    currentPeriodStart?: Date;
+    currentPeriodEnd?: Date;
   }
 ): Promise<void> {
   const planType = 'standard';
 
-  // Calculate billing period (1 year from now)
+  // Prefer the real Stripe billing period (respects trial length) over a hardcoded 1-year guess
   const now = new Date();
   const oneYearLater = new Date(now);
   oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+  const periodStart = params.currentPeriodStart || now;
+  const periodEnd = params.currentPeriodEnd || oneYearLater;
 
   // Insert subscription
   const subResult = await client.query(
     `INSERT INTO facility_subscriptions (
-       facility_id, stripe_checkout_session_id, plan_type, status,
-       amount_cents, promo_code_used, court_count,
-       billing_period_start, billing_period_end
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       facility_id, stripe_checkout_session_id, stripe_subscription_id, stripe_customer_id,
+       plan_type, status, amount_cents, promo_code_used, court_count,
+       billing_period_start, billing_period_end,
+       current_period_start, current_period_end
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING id`,
     [
       facilityId,
       params.stripeSessionId || null,
+      params.stripeSubscriptionId || null,
+      params.stripeCustomerId || null,
       planType,
       params.status,
       params.amountCents,
       params.promoCode || null,
       params.courtCount,
-      now,
-      oneYearLater,
+      periodStart,
+      periodEnd,
+      params.currentPeriodStart || null,
+      params.currentPeriodEnd || null,
     ]
   );
 

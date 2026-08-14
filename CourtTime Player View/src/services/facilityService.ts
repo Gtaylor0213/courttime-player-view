@@ -904,6 +904,11 @@ export interface FacilityRegistrationData {
   paymentAmountCents?: number;
   paymentWaived?: boolean;
   customPricing?: boolean;
+  // Populated server-side from the verified Stripe checkout session — authoritative, not client-supplied
+  stripeSubscriptionId?: string;
+  stripeCustomerId?: string;
+  currentPeriodStart?: Date;
+  currentPeriodEnd?: Date;
 }
 
 /**
@@ -1383,6 +1388,10 @@ export async function registerFacility(
       promoCode: data.promoCode,
       courtCount: data.courts.length,
       paymentMethodType: data.paymentWaived ? 'promo_code' : 'card',
+      stripeSubscriptionId: data.stripeSubscriptionId,
+      stripeCustomerId: data.stripeCustomerId,
+      currentPeriodStart: data.currentPeriodStart,
+      currentPeriodEnd: data.currentPeriodEnd,
     });
 
     // Get user data with memberFacilities

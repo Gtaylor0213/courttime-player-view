@@ -93,11 +93,23 @@ export function CourtsStep() {
         </Alert>
       )}
 
+      {paymentComplete && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Payment is complete for {formData.courts.length} court{formData.courts.length !== 1 ? 's' : ''}. Courts
+            are locked to keep your subscription in sync with what was charged — contact support if you need to
+            change your court count.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <Button
           type="button"
           variant={courtFormMode === 'individual' ? 'default' : 'outline'}
           onClick={() => setCourtFormMode('individual')}
+          disabled={paymentComplete}
           className="flex-1"
         >
           Add Individual Court
@@ -106,6 +118,7 @@ export function CourtsStep() {
           type="button"
           variant={courtFormMode === 'bulk' ? 'default' : 'outline'}
           onClick={() => setCourtFormMode('bulk')}
+          disabled={paymentComplete}
           className="flex-1"
         >
           Bulk Create Courts
@@ -117,6 +130,7 @@ export function CourtsStep() {
           type="button"
           onClick={addCourt}
           variant="outline"
+          disabled={paymentComplete}
           className="w-full"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -194,7 +208,7 @@ export function CourtsStep() {
                 <Label>Has Lights</Label>
               </div>
             </div>
-            <Button type="button" onClick={addBulkCourts} className="w-full">
+            <Button type="button" onClick={addBulkCourts} disabled={paymentComplete} className="w-full">
               Create {bulkCourtData.count} Court{parseInt(bulkCourtData.count) !== 1 ? 's' : ''}
             </Button>
           </CardContent>
@@ -213,6 +227,7 @@ export function CourtsStep() {
                   variant="ghost"
                   size="sm"
                   onClick={() => removeCourt(court.id)}
+                  disabled={paymentComplete}
                 >
                   <Trash2 className="h-4 w-4 text-red-600" />
                 </Button>

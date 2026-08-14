@@ -61,14 +61,22 @@ interface BookingWizardProps {
 // last selected cell's start plus this interval.
 const CALENDAR_SLOT_MINUTES = 30;
 
-// Generate all 15-min time slots from 6 AM to 9 PM in 12h format
-const ALL_TIME_SLOTS: string[] = [];
-for (let hour = 6; hour <= 21; hour++) {
-  for (let minute = 0; minute < 60; minute += 15) {
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-    ALL_TIME_SLOTS.push(`${displayHour}:${minute.toString().padStart(2, '0')} ${period}`);
-  }
+// Used only until a facility/court's real operating hours load.
+const DEFAULT_OPEN_MINUTES = 6 * 60;
+const DEFAULT_CLOSE_MINUTES = 21 * 60;
+
+type CourtDayOperatingBounds = { isOpen: boolean; openMin: number; closeMin: number };
+
+function parseApiTimeToMinutes(value: unknown): number | null {
+  if (value == null) return null;
+  const s = typeof value === 'string' ? value : String(value);
+  const timePart = s.includes('T') ? s.split('T')[1] || '' : s;
+  const m = timePart.trim().match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+  return h * 60 + min;
 }
 
 function convertTo24Hour(time12h: string): string {
@@ -79,9 +87,22 @@ function convertTo24Hour(time12h: string): string {
   return `${hours.toString().padStart(2, '0')}:${(minutes || 0).toString().padStart(2, '0')}:00`;
 }
 
+// Minutes-since-midnight for a "h:mm AM/PM" string — used for ordering/duration,
+// independent of any particular slot list.
 function timeSlotIndex(time12h: string): number {
-  const idx = ALL_TIME_SLOTS.indexOf(time12h);
-  return idx >= 0 ? idx : 0;
+  const [t, period] = time12h.split(' ');
+  let [hours, minutes] = t.split(':').map(Number);
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + (minutes || 0);
+}
+
+function formatMinutesAs12h(totalMinutes: number): string {
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
 }
 
 function sortSlotsByTime<T extends { time: string }>(slots: T[]): T[] {
@@ -157,6 +178,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
   const splitCourtPaymentsEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const [hasBallMachinePass, setHasBallMachinePass] = useState(false);
+  /** Effective open/close window per court for the selected day (facility hours merged with any court override). */
+  const [courtDayOperating, setCourtDayOperating] = useState<Record<string, CourtDayOperatingBounds>>({});
 
   // Fetch all courts for this facility when wizard opens
   useEffect(() => {
@@ -168,6 +191,35 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       });
     }
   }, [isOpen, facilityId]);
+
+  // Facility/court operating hours for the selected day — same endpoint the calendar
+  // grid uses to gate which slots are selectable, so the Start/End Time pickers here
+  // always match what the calendar shows.
+  useEffect(() => {
+    if (!isOpen || !facilityId || !date) {
+      setCourtDayOperating({});
+      return;
+    }
+    let cancelled = false;
+    courtConfigApi.getFacilityDayOperating(facilityId, date).then((res: any) => {
+      if (cancelled) return;
+      if (res?.success && Array.isArray(res.data?.courtConfigs)) {
+        const next: Record<string, CourtDayOperatingBounds> = {};
+        res.data.courtConfigs.forEach((row: any) => {
+          const openMin = parseApiTimeToMinutes(row.openTime);
+          const closeMin = parseApiTimeToMinutes(row.closeTime);
+          if (openMin === null || closeMin === null) return;
+          next[row.courtId] = { isOpen: row.isOpen !== false, openMin, closeMin };
+        });
+        setCourtDayOperating(next);
+      } else {
+        setCourtDayOperating({});
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, facilityId, date]);
 
   // A live St. Marlow pass means the ball machine costs nothing on this booking.
   useEffect(() => {
@@ -245,6 +297,35 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return Array.from(merged.entries()).map(([id, name]) => ({ court: name, courtId: id }));
   }, [dragSelectedCourts, additionalCourtIds, facilityCourts]);
 
+  // Open/close window every selected court is open for on this day — the intersection,
+  // since one Start/End Time applies to all selected courts at once. Falls back to a
+  // wide default while operating-hours data is still loading.
+  const { slotStartMinutes, slotEndMinutes } = useMemo(() => {
+    const bounds = selectedCourts
+      .map((c) => courtDayOperating[c.courtId])
+      .filter((b): b is CourtDayOperatingBounds => !!b && b.isOpen);
+    if (bounds.length === 0) {
+      return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES };
+    }
+    const openMin = Math.max(...bounds.map((b) => b.openMin));
+    const closeMin = Math.min(...bounds.map((b) => b.closeMin));
+    if (openMin >= closeMin) {
+      return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES };
+    }
+    return { slotStartMinutes: openMin, slotEndMinutes: closeMin };
+  }, [selectedCourts, courtDayOperating]);
+
+  // All selectable 15-min time slots for the selected court(s)/day.
+  const timeSlotOptions = useMemo(() => {
+    const start = Math.ceil(slotStartMinutes / 15) * 15;
+    const end = Math.floor(slotEndMinutes / 15) * 15;
+    const slots: string[] = [];
+    for (let m = start; m <= end; m += 15) {
+      slots.push(formatMinutesAs12h(m));
+    }
+    return slots;
+  }, [slotStartMinutes, slotEndMinutes]);
+
   const hasPaidCourt = useMemo(() => {
     return selectedCourts.some((c) => {
       const meta = facilityCourts.find((fc) => fc.id === c.courtId);
@@ -293,8 +374,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   // End time options: only times after the selected start time
   const endTimeOptions = useMemo(() => {
     const startIdx = timeSlotIndex(startTime);
-    return ALL_TIME_SLOTS.slice(startIdx + 1);
-  }, [startTime]);
+    return timeSlotOptions.filter((slot) => timeSlotIndex(slot) > startIdx);
+  }, [startTime, timeSlotOptions]);
 
   // Computed duration label
   const durationMins = useMemo(() => durationMinutesBetween(startTime, endTime), [startTime, endTime]);
@@ -804,7 +885,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ALL_TIME_SLOTS.map((slot) => (
+                  {timeSlotOptions.map((slot) => (
                     <SelectItem key={slot} value={slot}>{slot}</SelectItem>
                   ))}
                 </SelectContent>

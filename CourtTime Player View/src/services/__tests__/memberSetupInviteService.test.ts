@@ -46,15 +46,46 @@ describe('memberSetupInviteService', () => {
   });
 
   describe('buildMemberSetupInviteHtml', () => {
-    it('includes create-account and existing-account links', () => {
-      const html = buildMemberSetupInviteHtml(
+    it('renders the default template when no facility customization exists', async () => {
+      queryMock.mockResolvedValueOnce({ rows: [] }); // getTemplateForFacility: no custom template
+
+      const { subject, html } = await buildMemberSetupInviteHtml(
+        'fac-1',
         'player@club.com',
         'Sunset Tennis',
         'https://app.courttime.test/register?setupToken=abc',
         'https://app.courttime.test/login?setupToken=abc'
       );
+
+      expect(subject).toContain('Sunset Tennis');
       expect(html).toContain('Sunset Tennis');
       expect(html).toContain('player@club.com');
+      expect(html).toContain('Create your account');
+      expect(html).toContain('Log in with an existing account');
+      expect(html).toContain('https://app.courttime.test/register?setupToken=abc');
+      expect(html).toContain('https://app.courttime.test/login?setupToken=abc');
+    });
+
+    it('renders a facility custom plain-text message, preserving line breaks, with the CTA buttons still appended', async () => {
+      queryMock.mockResolvedValueOnce({
+        rows: [{
+          subject: 'Join {{facilityName}} on CourtTime!',
+          bodyHtml: 'Custom welcome for {{email}}.\n\nSee you on the court!',
+          isEnabled: true,
+        }],
+      });
+
+      const { subject, html } = await buildMemberSetupInviteHtml(
+        'fac-1',
+        'player@club.com',
+        'Sunset Tennis',
+        'https://app.courttime.test/register?setupToken=abc',
+        'https://app.courttime.test/login?setupToken=abc'
+      );
+
+      expect(subject).toBe('Join Sunset Tennis on CourtTime!');
+      expect(html).toContain('Custom welcome for player@club.com.<br><br>See you on the court!');
+      // CTA buttons are structural and always appended, regardless of the custom message.
       expect(html).toContain('Create your account');
       expect(html).toContain('Log in with an existing account');
       expect(html).toContain('https://app.courttime.test/register?setupToken=abc');

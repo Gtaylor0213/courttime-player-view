@@ -1,8 +1,11 @@
 import crypto from 'crypto';
 import { query } from '../database/connection';
+import { getTemplateForFacility } from './emailService';
+import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout } from './emailTemplateDefaults';
 
 const TOKEN_EXPIRY_DAYS = 14;
 const RESEND_API_URL = 'https://api.resend.com/emails';
+const MEMBER_SETUP_INVITE_TEMPLATE_TYPE = 'member_setup_invite';
 
 export function generateSetupToken(): string {
   return crypto.randomBytes(32).toString('hex');
@@ -13,33 +16,50 @@ export function normalizeWhitelistEmail(email: string | null | undefined): strin
   return trimmed || null;
 }
 
-export function buildMemberSetupInviteHtml(
-  email: string,
-  facilityName: string,
-  setupLink: string,
-  loginLink: string
-): string {
+/**
+ * The "Create your account" / "Log in with an existing account" buttons are
+ * always appended below the admin's message — they're structural (they carry
+ * the real setup/login links) and not part of the editable template text, so
+ * a facility customizing their invite message can't accidentally break them.
+ */
+export function buildSetupInviteCtaHtml(setupLink: string, loginLink: string): string {
   return [
-    '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">',
-    '<h2 style="color: #2563eb;">Welcome to CourtTime</h2>',
-    '<p>Hi there,</p>',
-    `<p><strong>${facilityName}</strong> is moving court booking to CourtTime. Your email is already on the approved list.</p>`,
-    '<motionless>',
     '<div style="text-align: center; margin: 30px 0;">',
     `<a href="${setupLink}" style="background-color: #2563eb; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Create your account</a>`,
     '</div>',
     '<div style="text-align: center; margin: 20px 0;">',
     `<a href="${loginLink}" style="background-color: #ffffff; color: #2563eb; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; border: 1px solid #2563eb;">Log in with an existing account</a>`,
     '</div>',
-    `<p style="color: #666; font-size: 14px;">Please use <strong>${email}</strong>. These links expire in ${TOKEN_EXPIRY_DAYS} days.</p>`,
-    `<p style="color: #666; font-size: 14px;">Already use CourtTime for another facility? Log in with your existing account and we'll add ${facilityName} for you.</p>`,
-    `<p style="color: #666; font-size: 14px;">If you didn't expect this email, you can safely ignore it.</p>`,
-    '<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />',
-    '<p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>',
-    '</div>',
-  ]
-    .join('')
-    .replace(/<\/?motionless>/g, '');
+  ].join('');
+}
+
+/**
+ * Render the member setup invite email, using a facility's custom message
+ * (edited via the Email Templates admin page) if one exists, else the default.
+ * The message is plain text — admins type it and it sends with the exact
+ * spacing they typed, same as the Terms & Conditions editor.
+ */
+export async function buildMemberSetupInviteHtml(
+  facilityId: string,
+  email: string,
+  facilityName: string,
+  setupLink: string,
+  loginLink: string
+): Promise<{ subject: string; html: string }> {
+  const defaults = EMAIL_TEMPLATE_TYPES[MEMBER_SETUP_INVITE_TEMPLATE_TYPE];
+  const custom = await getTemplateForFacility(facilityId, MEMBER_SETUP_INVITE_TEMPLATE_TYPE);
+
+  const variables = {
+    facilityName,
+    email,
+    expiryDays: String(TOKEN_EXPIRY_DAYS),
+  };
+
+  const subject = renderTemplate(custom?.subject || defaults.defaultSubject, variables);
+  const messageHtml = renderPlainTextBody(custom?.bodyHtml || defaults.defaultBody, variables);
+  const bodyContent = messageHtml + buildSetupInviteCtaHtml(setupLink, loginLink);
+
+  return { subject, html: wrapInEmailLayout(bodyContent, facilityName) };
 }
 
 export interface SetupInviteDetails {
@@ -71,6 +91,7 @@ const MAX_RATE_LIMIT_RETRIES = 3;
  */
 export async function sendMemberSetupInviteEmail(
   email: string,
+  facilityId: string,
   facilityName: string,
   token: string
 ): Promise<boolean> {
@@ -86,6 +107,8 @@ export async function sendMemberSetupInviteEmail(
   const loginLink = `${appUrl}/login?setupToken=${encodedToken}`;
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'CourtTime <onboarding@resend.dev>';
 
+  const { subject, html } = await buildMemberSetupInviteHtml(facilityId, email, facilityName, setupLink, loginLink);
+
   for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
     try {
       const response = await fetch(RESEND_API_URL, {
@@ -97,8 +120,8 @@ export async function sendMemberSetupInviteEmail(
         body: JSON.stringify({
           from: fromEmail,
           to: [email],
-          subject: `Set up your ${facilityName} CourtTime account`,
-          html: buildMemberSetupInviteHtml(email, facilityName, setupLink, loginLink),
+          subject,
+          html,
         }),
       });
 
@@ -174,7 +197,7 @@ export async function issueSetupInviteForWhitelistRow(
   // Row was accepted between being queued and being sent - leave it joined.
   if (updateResult.rows.length === 0) return false;
 
-  const sent = await sendMemberSetupInviteEmail(email, row.facilityName, token);
+  const sent = await sendMemberSetupInviteEmail(email, row.facilityId, row.facilityName, token);
   if (!sent) {
     console.warn(`Member setup invite email not sent for whitelist row ${whitelistId}`);
   }

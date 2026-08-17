@@ -8,7 +8,8 @@ import { query } from '../../src/database/connection';
 import { validateBooking } from '../../src/services/bookingService';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
-import { EMAIL_TEMPLATE_TYPES, renderTemplate, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
+import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
+import { buildSetupInviteCtaHtml } from '../../src/services/memberSetupInviteService';
 import {
   createSplitCourt,
   deleteCourt,
@@ -2163,6 +2164,7 @@ router.get('/email-templates/:facilityId', async (req, res) => {
         label: config.label,
         description: config.description,
         availableVariables: config.availableVariables,
+        bodyFormat: config.bodyFormat || 'html',
       };
     });
 
@@ -2242,7 +2244,22 @@ router.post('/email-templates/:facilityId/:templateType/preview', async (req, re
 
     const sampleVars = getSampleVariables(templateType);
     const renderedSubject = renderTemplate(subject || config.defaultSubject, sampleVars);
-    const renderedBody = renderTemplate(bodyHtml || config.defaultBody, sampleVars);
+
+    let renderedBody: string;
+    if (config.bodyFormat === 'plainText') {
+      renderedBody = renderPlainTextBody(bodyHtml || config.defaultBody, sampleVars);
+      // The setup invite's Create Account / Log In buttons are structural, not part of
+      // the editable text — append sample ones so the preview matches the real send.
+      if (templateType === 'member_setup_invite') {
+        renderedBody += buildSetupInviteCtaHtml(
+          'https://app.courttime.com/register?setupToken=sample',
+          'https://app.courttime.com/login?setupToken=sample'
+        );
+      }
+    } else {
+      renderedBody = renderTemplate(bodyHtml || config.defaultBody, sampleVars);
+    }
+
     const renderedHtml = wrapInEmailLayout(renderedBody, sampleVars.facilityName || 'Your Facility');
 
     res.json({ success: true, renderedSubject, renderedHtml });

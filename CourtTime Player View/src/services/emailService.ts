@@ -133,7 +133,7 @@ async function sendEmail(
  * Load a custom template from the database for a facility
  * Returns null if no custom template exists
  */
-async function getTemplateForFacility(
+export async function getTemplateForFacility(
   facilityId: string,
   templateType: string
 ): Promise<{ subject: string; bodyHtml: string; isEnabled: boolean } | null> {

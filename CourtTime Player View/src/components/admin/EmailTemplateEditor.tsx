@@ -25,6 +25,7 @@ interface EmailTemplate {
   label: string;
   description: string;
   availableVariables: TemplateVariable[];
+  bodyFormat: 'html' | 'plainText';
 }
 
 export function EmailTemplateEditor() {
@@ -250,17 +251,21 @@ export function EmailTemplateEditor() {
 
               {/* Body Editor */}
               <div className="space-y-2">
-                <Label htmlFor="template-body">Email Body (HTML)</Label>
+                <Label htmlFor="template-body">
+                  {template.bodyFormat === 'plainText' ? 'Message' : 'Email Body (HTML)'}
+                </Label>
                 <textarea
                   ref={bodyRef}
                   id="template-body"
-                  className="flex min-h-[250px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className={`flex min-h-[250px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${template.bodyFormat === 'plainText' ? '' : 'font-mono'}`}
                   value={editBody}
                   onChange={e => setEditBody(e.target.value)}
-                  placeholder="Email HTML body..."
+                  placeholder={template.bodyFormat === 'plainText' ? 'Write your message...' : 'Email HTML body...'}
                 />
                 <p className="text-xs text-gray-500">
-                  Use HTML for formatting. Variables like {'{{playerName}}'} will be replaced with actual values.
+                  {template.bodyFormat === 'plainText'
+                    ? 'Type normally — line breaks and spacing will appear exactly as you write them. The account setup buttons are added automatically below your message.'
+                    : <>Use HTML for formatting. Variables like {'{{playerName}}'} will be replaced with actual values.</>}
                 </p>
               </div>
 

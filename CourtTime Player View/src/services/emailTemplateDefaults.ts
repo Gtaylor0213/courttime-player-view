@@ -16,6 +16,13 @@ export interface TemplateTypeConfig {
   availableVariables: TemplateVariable[];
   defaultSubject: string;
   defaultBody: string;
+  /**
+   * 'plainText' (default 'html' when omitted) means defaultBody/custom body is
+   * typed prose, not HTML — the editor shows a plain textarea and the sender
+   * preserves line breaks as-typed (via renderPlainTextBody) instead of
+   * expecting the admin to hand-write markup.
+   */
+  bodyFormat?: 'html' | 'plainText';
 }
 
 export const EMAIL_TEMPLATE_TYPES: Record<string, TemplateTypeConfig> = {
@@ -133,6 +140,27 @@ export const EMAIL_TEMPLATE_TYPES: Record<string, TemplateTypeConfig> = {
 <p style="color: #666; font-size: 14px;">{{revokeReason}}</p>`,
   },
 
+  member_setup_invite: {
+    label: 'Member Setup Invite',
+    description: 'Sent when a new member is added to the address whitelist, inviting them to create their CourtTime account. Write your message below — the Create Account / Log In buttons are always added underneath it automatically.',
+    bodyFormat: 'plainText',
+    availableVariables: [
+      { key: '{{facilityName}}', description: 'Facility name', sampleValue: 'Sunrise Valley HOA' },
+      { key: '{{email}}', description: 'Invitee email address', sampleValue: 'jane@example.com' },
+      { key: '{{expiryDays}}', description: 'Days until the buttons below expire', sampleValue: '14' },
+    ],
+    defaultSubject: 'Set up your {{facilityName}} CourtTime account',
+    defaultBody: `Hi there,
+
+{{facilityName}} is moving court booking to CourtTime. Your email is already on the approved list.
+
+Please use {{email}}. The buttons below expire in {{expiryDays}} days.
+
+Already use CourtTime for another facility? Log in with your existing account and we'll add {{facilityName}} for you.
+
+If you didn't expect this email, you can safely ignore it.`,
+  },
+
   account_lockout: {
     label: 'Account Lockout',
     description: 'Sent when an account is locked out due to accumulated strikes',
@@ -163,6 +191,15 @@ export function renderTemplate(template: string, variables: Record<string, strin
     rendered = rendered.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value || '');
   }
   return rendered;
+}
+
+/**
+ * Render a plain-text template (admin-typed prose, not HTML) into email-safe
+ * HTML: substitute {{placeholders}} first, then turn literal line breaks into
+ * <br> so the message appears with the exact spacing the admin typed.
+ */
+export function renderPlainTextBody(template: string, variables: Record<string, string>): string {
+  return renderTemplate(template, variables).replace(/\n/g, '<br>');
 }
 
 /**

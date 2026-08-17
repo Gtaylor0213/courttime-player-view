@@ -12,6 +12,7 @@ export const FEATURE_FLAGS = {
   PLAYER_LEVEL_GROUPS: 'player_level_groups',
   BALL_MACHINE: 'st_marlow_ball_machine',
   SPLIT_COURT_PAYMENTS: 'split_court_payments',
+  MEMBER_NUMBER: 'member_number',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -28,4 +29,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   player_level_groups: 'Player Level Groups (admin skill tiers in Messages)',
   st_marlow_ball_machine: 'St. Marlow Ball Machine (passes + access code)',
   split_court_payments: 'Split Court Payments (each reservation member pays their share)',
+  member_number: 'Member Number Required (prompt new/existing members for their club member #)',
 };

@@ -29,6 +29,7 @@ export interface MemberWithProfile {
   city?: string;
   state?: string;
   zipCode?: string;
+  memberNumber?: string | null;
   createdAt: string;
 }
 
@@ -43,6 +44,7 @@ export interface MemberUpdateData {
   lockoutDescription?: string | null;
   endDate?: string;
   suspendedUntil?: string | null;
+  memberNumber?: string | null;
 }
 
 /**
@@ -84,6 +86,7 @@ export async function getFacilityMembers(facilityId: string, searchTerm?: string
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
         fm.created_at as "createdAt",
+        fm.member_number as "memberNumber",
         pp.skill_level as "skillLevel"
        FROM facility_memberships fm
        JOIN users u ON fm.user_id = u.id
@@ -142,6 +145,7 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
         TO_CHAR(fm.end_date, 'YYYY-MM-DD') as "endDate",
         TO_CHAR(fm.suspended_until, 'YYYY-MM-DD"T"HH24:MI:SS') as "suspendedUntil",
         fm.created_at as "createdAt",
+        fm.member_number as "memberNumber",
         pp.skill_level as "skillLevel"
        FROM facility_memberships fm
        JOIN users u ON fm.user_id = u.id
@@ -277,6 +281,11 @@ export async function updateMemberMembership(
     if (updates.suspendedUntil !== undefined) {
       fields.push(`suspended_until = $${paramIndex++}`);
       values.push(updates.suspendedUntil);
+    }
+
+    if (updates.memberNumber !== undefined) {
+      fields.push(`member_number = $${paramIndex++}`);
+      values.push(updates.memberNumber);
     }
 
     if (fields.length === 0) {

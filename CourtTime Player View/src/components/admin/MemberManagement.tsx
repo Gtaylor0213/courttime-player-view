@@ -44,6 +44,7 @@ interface Member {
   city?: string;
   state?: string;
   zipCode?: string;
+  memberNumber?: string | null;
   createdAt: string;
 }
 
@@ -70,6 +71,9 @@ export function MemberManagement() {
 
   // Member detail dialog
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [editingMemberNumber, setEditingMemberNumber] = useState(false);
+  const [memberNumberDraft, setMemberNumberDraft] = useState('');
+  const [savingMemberNumber, setSavingMemberNumber] = useState(false);
 
   // Suspension dialog
   const [suspendDialogUserId, setSuspendDialogUserId] = useState<string | null>(null);
@@ -319,6 +323,32 @@ export function MemberManagement() {
     }
   };
 
+  const handleSaveMemberNumber = async () => {
+    if (!currentFacilityId || !selectedMember) return;
+
+    const trimmed = memberNumberDraft.trim();
+    setSavingMemberNumber(true);
+    try {
+      const response = await membersApi.updateMember(currentFacilityId, selectedMember.userId, {
+        memberNumber: trimmed || null,
+      });
+
+      if (response.success) {
+        toast.success('Member number updated');
+        setSelectedMember({ ...selectedMember, memberNumber: trimmed || null });
+        setEditingMemberNumber(false);
+        loadMembers();
+      } else {
+        toast.error(response.error || 'Failed to update member number');
+      }
+    } catch (error) {
+      console.error('Error updating member number:', error);
+      toast.error('Failed to update member number');
+    } finally {
+      setSavingMemberNumber(false);
+    }
+  };
+
   const openLockPaymentDialog = (member: Member) => {
     if (!stripeConnected) {
       toast.error('Complete Stripe Connect setup under Member Payments first');
@@ -515,7 +545,7 @@ export function MemberManagement() {
                       <div
                         key={member.userId}
                         className="flex items-center justify-between px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => setSelectedMember(member)}
+                        onClick={() => { setSelectedMember(member); setEditingMemberNumber(false); setMemberNumberDraft(member.memberNumber || ''); }}
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <Avatar className="h-8 w-8 flex-shrink-0 hidden md:flex">
@@ -1006,6 +1036,44 @@ export function MemberManagement() {
                         <div className="font-medium">{selectedMember.skillLevel}</div>
                       </div>
                     )}
+                    <div className="col-span-2">
+                      <span className="text-gray-500">Member Number</span>
+                      {editingMemberNumber ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Input
+                            value={memberNumberDraft}
+                            onChange={(e) => setMemberNumberDraft(e.target.value)}
+                            placeholder="Enter member number"
+                            className="h-8 text-sm"
+                            autoFocus
+                          />
+                          <Button size="sm" onClick={handleSaveMemberNumber} disabled={savingMemberNumber}>
+                            {savingMemberNumber ? 'Saving...' : 'Save'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { setEditingMemberNumber(false); setMemberNumberDraft(selectedMember.memberNumber || ''); }}
+                            disabled={savingMemberNumber}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium">{selectedMember.memberNumber || '—'}</div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2"
+                            onClick={() => { setMemberNumberDraft(selectedMember.memberNumber || ''); setEditingMemberNumber(true); }}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            {selectedMember.memberNumber ? 'Edit' : 'Add'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                     {selectedMember.suspendedUntil && selectedMember.status === 'suspended' && (
                       <div>
                         <span className="text-gray-500">Suspended Until</span>

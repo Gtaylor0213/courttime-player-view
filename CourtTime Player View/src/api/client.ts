@@ -378,6 +378,7 @@ export const membersApi = {
     isViewOnly?: boolean;
     endDate?: string;
     suspendedUntil?: string | null;
+    memberNumber?: string | null;
   }) => {
     return apiRequest(`/api/members/${facilityId}/${userId}`, {
       method: 'PATCH',
@@ -443,6 +444,13 @@ export const membersApi = {
 
   getLockoutInfo: async (facilityId: string) => {
     return apiRequest(`/api/members/${facilityId}/me/lockout-info`);
+  },
+
+  saveMyMemberNumber: async (facilityId: string, memberNumber: string) => {
+    return apiRequest(`/api/members/${facilityId}/me/member-number`, {
+      method: 'POST',
+      body: JSON.stringify({ memberNumber }),
+    });
   },
 
   getLockoutCheckoutUrl: async (

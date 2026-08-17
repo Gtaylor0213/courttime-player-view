@@ -9,6 +9,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { BookingWizard } from './BookingWizard';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 import { QuickReservePopup } from './QuickReservePopup';
+import { MemberNumberDialog } from './MemberNumberDialog';
 import { WeekMonthCalendarView } from './WeekMonthCalendarView';
 import { NotificationBell } from './NotificationBell';
 import { ReservationManagementModal } from './ReservationManagementModal';
@@ -27,6 +28,7 @@ import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } fr
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { formatCourtCalendarSubtitle } from '../../shared/utils/courtNaming';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import {
   fetchBookingCalendarDetails,
   offerAddBookingToCalendar,
@@ -132,11 +134,16 @@ export function CourtCalendarView() {
   const [searchParams] = useSearchParams();
   const { selectedFacilityId = 'sunrise-valley', enabledFeatures } = useAppContext();
   const { unreadCount } = useNotifications();
-  const { user, loading: authLoading, refreshTermsStatus } = useAuth();
+  const { user, loading: authLoading, refreshTermsStatus, updateProfile } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const selectedFacility = selectedFacilityId;
   const [selectedView, setSelectedView] = useState('week');
   const weekMonthViewEnabled = enabledFeatures.includes('week_month_view');
+  const needsMemberNumber =
+    user?.userType === 'player' &&
+    !!selectedFacility &&
+    enabledFeatures.includes(FEATURE_FLAGS.MEMBER_NUMBER) &&
+    !user?.memberNumbers?.[selectedFacility];
   const [calendarViewMode, setCalendarViewMode] = useState<'court' | 'week' | 'month'>('court');
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [currentTime, setCurrentTime] = useState(getFacilityDate());
@@ -2982,6 +2989,20 @@ export function CourtCalendarView() {
         selectedSlots={bookingWizard.selectedSlots}
         onBookingCreated={fetchBookings}
       />
+
+      {/* Member Number Required */}
+      {needsMemberNumber && (
+        <MemberNumberDialog
+          open={needsMemberNumber}
+          facilityId={selectedFacility}
+          facilityName={memberFacilities.find((f) => f.id === selectedFacility)?.name}
+          onSaved={(memberNumber) => {
+            updateProfile({
+              memberNumbers: { ...(user?.memberNumbers || {}), [selectedFacility]: memberNumber },
+            });
+          }}
+        />
+      )}
 
       {/* Quick Reserve Popup */}
       <QuickReservePopup

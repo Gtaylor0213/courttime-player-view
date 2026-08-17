@@ -118,6 +118,7 @@ export interface AuthUserShape {
   userType: "player" | "admin";
   memberFacilities: Id[];
   adminFacilities: Id[];
+  memberNumbers?: Record<string, string>;
 }
 
 export interface AuthResponseShape {

@@ -99,7 +99,7 @@ router.patch('/:facilityId/:userId', async (req, res, next) => {
     if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     // Validate updates
-    const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'isSubAdmin', 'isViewOnly', 'isPaymentLocked', 'endDate', 'suspendedUntil'];
+    const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'isSubAdmin', 'isViewOnly', 'isPaymentLocked', 'endDate', 'suspendedUntil', 'memberNumber'];
     const invalidFields = Object.keys(updates).filter(key => !validFields.includes(key));
 
     if (invalidFields.length > 0) {
@@ -521,6 +521,32 @@ router.post('/:facilityId/me/lockout-confirm', async (req, res, next) => {
     ) {
       return res.status(400).json({ success: false, error: error.message });
     }
+    next(error);
+  }
+});
+
+/**
+ * POST /api/members/:facilityId/me/member-number
+ * Member: save their own club member number for this facility.
+ */
+router.post('/:facilityId/me/member-number', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+    const userId = (req as any).user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Not authenticated' });
+
+    const memberNumber = typeof req.body?.memberNumber === 'string' ? req.body.memberNumber.trim() : '';
+    if (!memberNumber) {
+      return res.status(400).json({ success: false, error: 'memberNumber is required' });
+    }
+
+    const success = await updateMemberMembership(facilityId, userId, { memberNumber });
+    if (!success) {
+      return res.status(404).json({ success: false, error: 'Membership not found' });
+    }
+
+    res.json({ success: true, memberNumber });
+  } catch (error) {
     next(error);
   }
 });

@@ -57,6 +57,8 @@ export interface UserWithTier {
   zipCode?: string;
   tier?: MembershipTier;
   isFacilityAdmin?: boolean;
+  /** Exempts the member from booking rules (like isFacilityAdmin) without granting any other admin access. */
+  isSubAdmin?: boolean;
   membershipStatus?: 'active' | 'pending' | 'expired' | 'suspended';
   suspendedUntil?: Date | null;
 }

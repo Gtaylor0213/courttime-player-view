@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, X, Settings, AlertTriangle, Clock, MapPin, Phone, User, MoreVertical, Eye, EyeOff, Lock, LockOpen } from 'lucide-react';
+import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, X, Settings, AlertTriangle, Clock, MapPin, Phone, User, MoreVertical, Eye, EyeOff, Lock, LockOpen, Zap, ZapOff } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
@@ -29,6 +29,7 @@ interface Member {
   membershipType: string;
   status: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin: boolean;
+  isSubAdmin: boolean;
   isViewOnly: boolean;
   isPaymentLocked: boolean;
   paymentLockedAt?: string;
@@ -282,6 +283,24 @@ export function MemberManagement() {
     }
   };
 
+  const handleToggleSubAdmin = async (userId: string, currentIsSubAdmin: boolean) => {
+    if (!currentFacilityId) return;
+
+    try {
+      const response = await membersApi.setSubAdmin(currentFacilityId, userId, !currentIsSubAdmin);
+
+      if (response.success) {
+        toast.success(currentIsSubAdmin ? 'Sub Admin removed' : 'Member set to Sub Admin (booking rules exempt)');
+        loadMembers();
+      } else {
+        toast.error(response.error || 'Failed to update sub-admin status');
+      }
+    } catch (error) {
+      console.error('Error updating sub-admin status:', error);
+      toast.error('Failed to update sub-admin status');
+    }
+  };
+
   const handleToggleViewOnly = async (userId: string, currentIsViewOnly: boolean) => {
     if (!currentFacilityId) return;
 
@@ -513,6 +532,11 @@ export function MemberManagement() {
                                 }`}>
                                   {member.isFacilityAdmin ? 'Admin' : 'Regular'}
                                 </Badge>
+                                {member.isSubAdmin && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 flex-shrink-0 text-purple-600 border-purple-400">
+                                    Sub Admin
+                                  </Badge>
+                                )}
                                 {member.isViewOnly && (
                                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 flex-shrink-0 text-blue-600 border-blue-400">
                                     View Only
@@ -592,6 +616,15 @@ export function MemberManagement() {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => handleToggleSubAdmin(member.userId, member.isSubAdmin)}
+                            className={`${member.isSubAdmin ? 'text-purple-600 hover:text-purple-700' : 'text-gray-500 hover:text-gray-700'} h-7 w-7 p-0`}
+                            title={member.isSubAdmin ? 'Remove Sub Admin (re-apply booking rules)' : 'Make Sub Admin (exempt from booking rules)'}
+                          >
+                            {member.isSubAdmin ? <ZapOff className="h-3.5 w-3.5" /> : <Zap className="h-3.5 w-3.5" />}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => handleToggleViewOnly(member.userId, member.isViewOnly)}
                             className={`${member.isViewOnly ? 'text-blue-600 hover:text-blue-700' : 'text-gray-500 hover:text-gray-700'} h-7 w-7 p-0`}
                             title={member.isViewOnly ? 'Remove view-only' : 'Set view-only'}
@@ -660,6 +693,10 @@ export function MemberManagement() {
                               <DropdownMenuItem onClick={() => handleToggleAdmin(member.userId, member.isFacilityAdmin)}>
                                 {member.isFacilityAdmin ? <ShieldOff className="h-4 w-4 mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
                                 {member.isFacilityAdmin ? 'Remove Admin' : 'Make Admin'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleSubAdmin(member.userId, member.isSubAdmin)} className={member.isSubAdmin ? 'text-purple-600' : ''}>
+                                {member.isSubAdmin ? <ZapOff className="h-4 w-4 mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
+                                {member.isSubAdmin ? 'Remove Sub Admin' : 'Make Sub Admin'}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleToggleViewOnly(member.userId, member.isViewOnly)} className={member.isViewOnly ? 'text-blue-600' : ''}>
                                 {member.isViewOnly ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
@@ -891,6 +928,11 @@ export function MemberManagement() {
                       }`}>
                         {selectedMember.isFacilityAdmin ? 'Admin' : 'Regular'}
                       </Badge>
+                      {selectedMember.isSubAdmin && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-purple-600 border-purple-400">
+                          Sub Admin
+                        </Badge>
+                      )}
                       {selectedMember.isViewOnly && (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-blue-600 border-blue-400">
                           View Only
@@ -1020,6 +1062,15 @@ export function MemberManagement() {
                   >
                     {selectedMember.isFacilityAdmin ? <ShieldOff className="h-4 w-4 mr-1" /> : <Shield className="h-4 w-4 mr-1" />}
                     {selectedMember.isFacilityAdmin ? 'Remove Admin' : 'Make Admin'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { handleToggleSubAdmin(selectedMember.userId, selectedMember.isSubAdmin); setSelectedMember(null); }}
+                    className={selectedMember.isSubAdmin ? 'text-purple-600 hover:text-purple-700' : ''}
+                  >
+                    {selectedMember.isSubAdmin ? <ZapOff className="h-4 w-4 mr-1" /> : <Zap className="h-4 w-4 mr-1" />}
+                    {selectedMember.isSubAdmin ? 'Remove Sub Admin' : 'Make Sub Admin'}
                   </Button>
                   <Button
                     size="sm"

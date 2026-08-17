@@ -216,8 +216,8 @@ export class RulesEngine {
 
       // === End pre-rule hard blocks ===
 
-      // Facility admins always bypass player reservation rules.
-      if (context.user.isFacilityAdmin) {
+      // Facility admins and sub-admins always bypass player reservation rules.
+      if (context.user.isFacilityAdmin || context.user.isSubAdmin) {
         return {
           allowed: true,
           results: [],
@@ -448,7 +448,7 @@ export class RulesEngine {
       norm?.peakHoursApplyToAdmins !== false &&
       raw?.peakHoursApplyToAdmins !== false &&
       raw?.peak_hours_apply_to_admins !== false;
-    if (context.user.isFacilityAdmin && !peakAppliesToAdmins) {
+    if ((context.user.isFacilityAdmin || context.user.isSubAdmin) && !peakAppliesToAdmins) {
       return [];
     }
 

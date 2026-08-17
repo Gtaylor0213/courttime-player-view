@@ -14,6 +14,7 @@ export interface MemberWithProfile {
   membershipType: string;
   status: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin: boolean;
+  isSubAdmin: boolean;
   isViewOnly: boolean;
   isPaymentLocked: boolean;
   paymentLockedAt?: string;
@@ -35,6 +36,7 @@ export interface MemberUpdateData {
   membershipType?: string;
   status?: 'active' | 'pending' | 'expired' | 'suspended';
   isFacilityAdmin?: boolean;
+  isSubAdmin?: boolean;
   isViewOnly?: boolean;
   isPaymentLocked?: boolean;
   lockoutAmountCents?: number | null;
@@ -72,6 +74,7 @@ export async function getFacilityMembers(facilityId: string, searchTerm?: string
         fm.membership_type as "membershipType",
         fm.status,
         CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin",
+        COALESCE(fm.is_sub_admin, false) as "isSubAdmin",
         COALESCE(fm.is_view_only, false) as "isViewOnly",
         COALESCE(fm.is_payment_locked, false) as "isPaymentLocked",
         fm.payment_locked_at as "paymentLockedAt",
@@ -129,6 +132,7 @@ export async function getMemberDetails(facilityId: string, userId: string): Prom
         fm.membership_type as "membershipType",
         fm.status,
         CASE WHEN fa.id IS NOT NULL THEN true ELSE false END as "isFacilityAdmin",
+        COALESCE(fm.is_sub_admin, false) as "isSubAdmin",
         COALESCE(fm.is_view_only, false) as "isViewOnly",
         COALESCE(fm.is_payment_locked, false) as "isPaymentLocked",
         fm.payment_locked_at as "paymentLockedAt",
@@ -229,6 +233,11 @@ export async function updateMemberMembership(
     if (updates.isFacilityAdmin !== undefined) {
       fields.push(`is_facility_admin = $${paramIndex++}`);
       values.push(updates.isFacilityAdmin);
+    }
+
+    if (updates.isSubAdmin !== undefined) {
+      fields.push(`is_sub_admin = $${paramIndex++}`);
+      values.push(updates.isSubAdmin);
     }
 
     if (updates.isViewOnly !== undefined) {

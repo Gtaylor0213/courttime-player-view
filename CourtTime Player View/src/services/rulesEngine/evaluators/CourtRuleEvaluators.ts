@@ -139,7 +139,7 @@ const CRT003: RuleEvaluator = {
         tierName,
         allowedTiers,
         allowAdminOverride,
-        context.user.isFacilityAdmin || false
+        context.user.isFacilityAdmin || context.user.isSubAdmin || false
       );
 
       if (!isEligible) {

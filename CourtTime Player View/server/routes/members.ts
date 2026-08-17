@@ -99,7 +99,7 @@ router.patch('/:facilityId/:userId', async (req, res, next) => {
     if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
     // Validate updates
-    const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'isViewOnly', 'isPaymentLocked', 'endDate', 'suspendedUntil'];
+    const validFields = ['membershipType', 'status', 'isFacilityAdmin', 'isSubAdmin', 'isViewOnly', 'isPaymentLocked', 'endDate', 'suspendedUntil'];
     const invalidFields = Object.keys(updates).filter(key => !validFields.includes(key));
 
     if (invalidFields.length > 0) {
@@ -229,6 +229,45 @@ router.put('/:facilityId/:userId/admin', async (req, res, next) => {
         success: true,
         member,
         message: `Member ${isAdmin ? 'granted' : 'removed'} admin privileges`
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'Member not found'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/members/:facilityId/:userId/sub-admin
+ * Set or clear sub-admin status for a member (exempts them from booking rules
+ * without granting any other admin access)
+ */
+router.put('/:facilityId/:userId/sub-admin', async (req, res, next) => {
+  try {
+    const { facilityId, userId } = req.params;
+    const { isSubAdmin } = req.body;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
+    if (typeof isSubAdmin !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'isSubAdmin must be a boolean value'
+      });
+    }
+
+    const success = await updateMemberMembership(facilityId, userId, { isSubAdmin });
+
+    if (success) {
+      const member = await getMemberDetails(facilityId, userId);
+      res.json({
+        success: true,
+        member,
+        message: `Member ${isSubAdmin ? 'granted' : 'removed from'} sub-admin (booking rules exempt)`
       });
     } else {
       res.status(404).json({

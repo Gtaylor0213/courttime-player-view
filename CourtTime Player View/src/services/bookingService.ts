@@ -79,6 +79,18 @@ async function isFacilityAdminUser(userId: string, facilityId: string): Promise<
   return !!result.rows[0]?.isFacilityAdmin;
 }
 
+/** Sub-admins are exempt from booking rules (like facility admins) but have no other admin access. */
+async function isSubAdminUser(userId: string, facilityId: string): Promise<boolean> {
+  const result = await query(
+    `SELECT COALESCE(is_sub_admin, false) AS "isSubAdmin"
+     FROM facility_memberships
+     WHERE user_id = $1 AND facility_id = $2
+     LIMIT 1`,
+    [userId, facilityId]
+  );
+  return !!result.rows[0]?.isSubAdmin;
+}
+
 /** Provisional slices not yet persisted (avoids double-count with DB after sequential creates). */
 async function countProvisionalsNotInDb(
   userId: string,
@@ -120,6 +132,9 @@ async function assertHardBookingRuleCaps(bookingData: {
     facRow.rows[0]?.bookingRules
   );
   if (await isFacilityAdminUser(bookingData.userId, bookingData.facilityId)) {
+    return null;
+  }
+  if (await isSubAdminUser(bookingData.userId, bookingData.facilityId)) {
     return null;
   }
 

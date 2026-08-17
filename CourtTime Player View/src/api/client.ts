@@ -374,6 +374,7 @@ export const membersApi = {
     membershipType?: string;
     status?: 'active' | 'pending' | 'expired' | 'suspended';
     isFacilityAdmin?: boolean;
+    isSubAdmin?: boolean;
     isViewOnly?: boolean;
     endDate?: string;
     suspendedUntil?: string | null;
@@ -405,6 +406,13 @@ export const membersApi = {
     return apiRequest(`/api/members/${facilityId}/${userId}/admin`, {
       method: 'PUT',
       body: JSON.stringify({ isAdmin }),
+    });
+  },
+
+  setSubAdmin: async (facilityId: string, userId: string, isSubAdmin: boolean) => {
+    return apiRequest(`/api/members/${facilityId}/${userId}/sub-admin`, {
+      method: 'PUT',
+      body: JSON.stringify({ isSubAdmin }),
     });
   },
 

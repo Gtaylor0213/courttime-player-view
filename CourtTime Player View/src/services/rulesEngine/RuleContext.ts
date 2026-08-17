@@ -1144,6 +1144,7 @@ async function fetchUserWithTier(userId: string, facilityId: string): Promise<Us
         SELECT 1 FROM facility_admins fa
         WHERE fa.user_id = u.id AND fa.facility_id = $2 AND fa.status = 'active'
       ) as "isFacilityAdmin",
+      COALESCE(fm.is_sub_admin, false) as "isSubAdmin",
       fm.status as "membershipStatus",
       fm.suspended_until as "suspendedUntil",
       mt.id as "tierId",
@@ -1219,6 +1220,7 @@ async function fetchUserWithTier(userId: string, facilityId: string): Promise<Us
     zipCode: row.zipCode,
     tier,
     isFacilityAdmin: row.isFacilityAdmin || false,
+    isSubAdmin: row.isSubAdmin || false,
     membershipStatus,
     suspendedUntil
   };

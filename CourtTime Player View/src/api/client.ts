@@ -941,6 +941,7 @@ export const bookingApi = {
       endTime: string;
       durationMinutes: number;
       notes?: string;
+      bookingType?: string;
     }
   ) => {
     return apiRequest(`/api/bookings/${bookingId}`, {

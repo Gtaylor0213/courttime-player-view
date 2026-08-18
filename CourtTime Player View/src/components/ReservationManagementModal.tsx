@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { bookingApi, facilitiesApi } from '../api/client';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 import { SplitPaymentPicker } from './SplitPaymentPicker';
 import { toast } from 'sonner';
@@ -127,12 +128,17 @@ export function ReservationManagementModal({
   const [editStartTime, setEditStartTime] = useState('');
   const [editDuration, setEditDuration] = useState('');
   const [editCourt, setEditCourt] = useState('');
+  const [editBookingType, setEditBookingType] = useState('');
   const [courts, setCourts] = useState<any[]>([]);
   const [isCheckingConflict, setIsCheckingConflict] = useState(false);
   const [hasConflict, setHasConflict] = useState(false);
   const [showBallMachineCode, setShowBallMachineCode] = useState(false);
 
   const postPlayEnabled = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
+  const deerLakeReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const reservationTypeKeys = deerLakeReservationTypes
+    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : RESERVATION_LABEL_TYPE_KEYS;
   const isPostPlayBooking =
     settlementStatus === 'unsettled' ||
     settlementStatus === 'settling' ||
@@ -186,6 +192,7 @@ export function ReservationManagementModal({
       setEditStartTime(reservation.startTime);
       setEditDuration((reservation.durationMinutes / 60).toString());
       setEditCourt(reservation.courtId);
+      setEditBookingType(reservation.bookingType || '');
       loadCourts();
     }
   }, [reservation, isEditing]);
@@ -532,6 +539,11 @@ export function ReservationManagementModal({
       return;
     }
 
+    if (deerLakeReservationTypes && !editBookingType) {
+      toast.error('Please select a reservation type');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const durationMinutes = Math.round(parseFloat(editDuration) * 60);
@@ -549,6 +561,7 @@ export function ReservationManagementModal({
           endTime,
           durationMinutes,
           notes: reservation.notes || '',
+          bookingType: editBookingType || undefined,
         });
         if (!response.success) {
           toast.error(response.error || 'Failed to update reservation');
@@ -583,9 +596,10 @@ export function ReservationManagementModal({
         endTime: endTime,
         durationMinutes: durationMinutes,
         notes: reservation.notes || '',
-        // Carry the add-on across the re-create, otherwise editing a reservation
-        // silently drops the ball machine. Pass coverage is re-resolved server-side.
+        // Carry the add-on and type across the re-create, otherwise editing a
+        // reservation silently drops them. Pass coverage is re-resolved server-side.
         addBallMachine: reservation.addBallMachine || undefined,
+        bookingType: editBookingType || undefined,
         excludeBookingId: reservation.id,
       });
 
@@ -1102,6 +1116,23 @@ export function ReservationManagementModal({
                     <SelectItem value="2">2 hours</SelectItem>
                     <SelectItem value="2.5">2 hours 30 minutes</SelectItem>
                     <SelectItem value="3">3 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Type Selection */}
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  {deerLakeReservationTypes ? 'Type' : 'Type (Optional)'}
+                </label>
+                <Select value={editBookingType} onValueChange={setEditBookingType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select booking type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {reservationTypeKeys.map((key) => (
+                      <SelectItem key={key} value={key}>{BOOKING_TYPES[key].label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

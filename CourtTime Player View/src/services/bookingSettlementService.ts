@@ -637,6 +637,7 @@ export async function updateUnsettledBooking(params: {
   endTime: string;
   durationMinutes: number;
   notes?: string;
+  bookingType?: string;
 }): Promise<{ success: boolean; booking?: any; error?: string }> {
   try {
     const meta = await assertCanManageRoster(params.bookingId, params.actorUserId);
@@ -729,6 +730,7 @@ export async function updateUnsettledBooking(params: {
              end_time = $5,
              duration_minutes = $6,
              notes = COALESCE($7, notes),
+             booking_type = COALESCE($8, booking_type),
              updated_at = NOW()
          WHERE id = $1 AND settlement_status = 'unsettled' AND status != 'cancelled'
          RETURNING
@@ -755,6 +757,7 @@ export async function updateUnsettledBooking(params: {
           params.endTime,
           params.durationMinutes,
           params.notes ?? null,
+          params.bookingType ?? null,
         ]
       );
       return ins.rows[0];

@@ -1154,7 +1154,7 @@ router.patch('/:bookingId', async (req, res, next) => {
     if (!actorUserId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
     }
-    const { courtId, bookingDate, startTime, endTime, durationMinutes, notes } = req.body || {};
+    const { courtId, bookingDate, startTime, endTime, durationMinutes, notes, bookingType } = req.body || {};
     if (!courtId || !bookingDate || !startTime || !endTime || !durationMinutes) {
       return res.status(400).json({
         success: false,
@@ -1170,6 +1170,7 @@ router.patch('/:bookingId', async (req, res, next) => {
       endTime,
       durationMinutes: Number(durationMinutes),
       notes,
+      bookingType,
     });
     if (!result.success) {
       return res.status(400).json(result);

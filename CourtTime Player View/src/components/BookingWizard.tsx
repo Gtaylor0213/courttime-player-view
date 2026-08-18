@@ -137,7 +137,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       const sorted = sortSlotsByTime(selectedSlots);
       return addMinutesTo12h(sorted[sorted.length - 1].time, CALENDAR_SLOT_MINUTES);
     }
-    return addMinutesTo12h(time, 60);
+    return addMinutesTo12h(time, 120);
   });
   const [bookingType, setBookingType] = useState<string>('');
   const [notes, setNotes] = useState('');
@@ -358,7 +358,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         setEndTime(addMinutesTo12h(sorted[sorted.length - 1].time, CALENDAR_SLOT_MINUTES));
       } else {
         setStartTime(time);
-        setEndTime(addMinutesTo12h(time, 60));
+        setEndTime(addMinutesTo12h(time, 120));
       }
       setBookingType('');
       setNotes('');
@@ -887,7 +887,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               <Select value={startTime} onValueChange={(val) => {
                 setStartTime(val);
                 if (timeSlotIndex(val) >= timeSlotIndex(endTime)) {
-                  setEndTime(addMinutesTo12h(val, 60));
+                  setEndTime(addMinutesTo12h(val, 120));
                 }
               }}>
                 <SelectTrigger>

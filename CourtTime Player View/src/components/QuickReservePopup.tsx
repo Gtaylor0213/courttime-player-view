@@ -228,7 +228,7 @@ export function QuickReservePopup({
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [selectedEndTime, setSelectedEndTime] = useState('');
-  const [duration, setDuration] = useState('1');
+  const [duration, setDuration] = useState('2');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const courtWaiverGate = useCourtWaiverGate();
@@ -260,7 +260,7 @@ export function QuickReservePopup({
     setUserChoseTime(false);
     setSelectedDate(todayYmd());
     setSelectedTime(nextQuarterHourSlot());
-    setDuration('1');
+    setDuration('2');
 
     // Reset notes, booking type, advanced booking, and errors when modal opens
     setNotes('');

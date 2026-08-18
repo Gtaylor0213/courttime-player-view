@@ -44,7 +44,7 @@ export function AdminBooking() {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [selectedEndTime, setSelectedEndTime] = useState('');
-  const [duration, setDuration] = useState('1');
+  const [duration, setDuration] = useState('2');
 
   // Member selection
   const [members, setMembers] = useState<Member[]>([]);

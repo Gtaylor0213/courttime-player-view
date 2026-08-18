@@ -218,7 +218,8 @@ export function QuickReservePopup({
   const [facilityFeatures, setFacilityFeatures] = useState<string[]>([]);
   const canUseRecurring = isAdmin || facilityFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const canSplitPayment = facilityFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
-  const reservationTypeKeys = facilityFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES)
+  const deerLakeReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const reservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
     : RESERVATION_LABEL_TYPE_KEYS;
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
@@ -616,6 +617,11 @@ export function QuickReservePopup({
         alert('End date must be on or after the start date');
         return;
       }
+    }
+
+    if (deerLakeReservationTypes && !bookingType) {
+      alert('Please select a reservation type');
+      return;
     }
 
     // Court-specific waivers must be accepted before booking
@@ -1067,7 +1073,7 @@ export function QuickReservePopup({
             <Label className="min-w-[80px]">Type</Label>
             <Select value={bookingType} onValueChange={setBookingType}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select type (optional)..." />
+                <SelectValue placeholder={deerLakeReservationTypes ? 'Select type...' : 'Select type (optional)...'} />
               </SelectTrigger>
               <SelectContent>
                 {reservationTypeKeys.map((key) => (

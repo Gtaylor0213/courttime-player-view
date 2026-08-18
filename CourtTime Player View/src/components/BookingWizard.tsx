@@ -177,7 +177,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const postPlaySettlement = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
   const splitCourtPaymentsEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
-  const reservationTypeKeys = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES)
+  const deerLakeReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const reservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
     : RESERVATION_LABEL_TYPE_KEYS;
   const [hasBallMachinePass, setHasBallMachinePass] = useState(false);
@@ -556,6 +557,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       }
     }
 
+    if (deerLakeReservationTypes && !bookingType) {
+      showToast('error', 'Error', 'Please select a reservation type.');
+      return;
+    }
+
     // Court-specific waivers must be accepted before booking
     const waiversAccepted = await courtWaiverGate.ensureAccepted(
       selectedCourts.map((c) => c.courtId)
@@ -911,7 +917,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
           {/* Booking Type Dropdown */}
           <div className="space-y-2">
-            <Label>Type (Optional)</Label>
+            <Label>{deerLakeReservationTypes ? 'Type' : 'Type (Optional)'}</Label>
             <Select value={bookingType} onValueChange={setBookingType}>
               <SelectTrigger>
                 <SelectValue placeholder="Select booking type..." />

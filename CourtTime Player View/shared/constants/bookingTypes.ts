@@ -131,8 +131,8 @@ export const BOOKING_TYPES = {
   },
   maintenance: {
     label: 'Maintenance',
-    color: 'bg-gray-100 text-gray-800 border-gray-300',
-    bgColor: 'bg-gray-100'
+    color: 'bg-red-900 text-red-50 border-red-950',
+    bgColor: 'bg-red-900'
   },
 } as const;
 

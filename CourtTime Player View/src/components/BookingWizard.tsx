@@ -1000,8 +1000,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             </div>
           )}
 
-          {/* Additional Courts */}
-          {availableAdditionalCourts.length > 0 && (
+          {/* Additional Courts (admin only) */}
+          {isAdmin && availableAdditionalCourts.length > 0 && (
             <div className="space-y-2 pt-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" />

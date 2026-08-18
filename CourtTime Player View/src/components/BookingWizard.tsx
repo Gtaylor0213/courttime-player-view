@@ -23,7 +23,7 @@ import {
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
 import { toast } from 'sonner';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
@@ -177,6 +177,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const postPlaySettlement = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
   const splitCourtPaymentsEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
+  const reservationTypeKeys = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES)
+    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : RESERVATION_LABEL_TYPE_KEYS;
   const [hasBallMachinePass, setHasBallMachinePass] = useState(false);
   /** Effective open/close window per court for the selected day (facility hours merged with any court override). */
   const [courtDayOperating, setCourtDayOperating] = useState<Record<string, CourtDayOperatingBounds>>({});
@@ -914,7 +917,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                 <SelectValue placeholder="Select booking type..." />
               </SelectTrigger>
               <SelectContent>
-                {RESERVATION_LABEL_TYPE_KEYS.map((key) => (
+                {reservationTypeKeys.map((key) => (
                   <SelectItem key={key} value={key}>{BOOKING_TYPES[key].label}</SelectItem>
                 ))}
               </SelectContent>

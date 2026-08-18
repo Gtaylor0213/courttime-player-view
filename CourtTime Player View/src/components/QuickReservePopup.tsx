@@ -17,7 +17,7 @@ import {
   parseHHMMToMinutes,
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
@@ -218,6 +218,9 @@ export function QuickReservePopup({
   const [facilityFeatures, setFacilityFeatures] = useState<string[]>([]);
   const canUseRecurring = isAdmin || facilityFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const canSplitPayment = facilityFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
+  const reservationTypeKeys = facilityFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES)
+    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : RESERVATION_LABEL_TYPE_KEYS;
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [selectedCourt, setSelectedCourt] = useState('');
   const [selectedCourtId, setSelectedCourtId] = useState('');
@@ -1067,7 +1070,7 @@ export function QuickReservePopup({
                 <SelectValue placeholder="Select type (optional)..." />
               </SelectTrigger>
               <SelectContent>
-                {RESERVATION_LABEL_TYPE_KEYS.map((key) => (
+                {reservationTypeKeys.map((key) => (
                   <SelectItem key={key} value={key}>{BOOKING_TYPES[key].label}</SelectItem>
                 ))}
               </SelectContent>

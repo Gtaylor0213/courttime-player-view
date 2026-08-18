@@ -13,6 +13,7 @@ export const FEATURE_FLAGS = {
   BALL_MACHINE: 'st_marlow_ball_machine',
   SPLIT_COURT_PAYMENTS: 'split_court_payments',
   MEMBER_NUMBER: 'member_number',
+  DEER_LAKE_RESERVATION_TYPES: 'deer_lake_reservation_types',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -30,4 +31,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   st_marlow_ball_machine: 'St. Marlow Ball Machine (passes + access code)',
   split_court_payments: 'Split Court Payments (each reservation member pays their share)',
   member_number: 'Member Number Required (prompt new/existing members for their club member #)',
+  deer_lake_reservation_types: 'Deer Lake Reservation Types (swap in Deer Lake\'s custom reservation type list)',
 };

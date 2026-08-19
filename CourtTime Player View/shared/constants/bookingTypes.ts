@@ -91,8 +91,8 @@ export const BOOKING_TYPES = {
   },
   junior_tennis_lesson: {
     label: 'Junior Tennis Lesson',
-    color: 'bg-lime-300 text-lime-900 border-lime-500',
-    bgColor: 'bg-lime-300'
+    color: 'bg-sky-300 text-sky-900 border-sky-500',
+    bgColor: 'bg-sky-300'
   },
   after_school_tennis_lesson: {
     label: 'After School Tennis Lesson',
@@ -111,8 +111,8 @@ export const BOOKING_TYPES = {
   },
   usta_pickleball: {
     label: 'USTA Pickleball',
-    color: 'bg-sky-300 text-sky-900 border-sky-500',
-    bgColor: 'bg-sky-300'
+    color: 'bg-lime-300 text-lime-900 border-lime-500',
+    bgColor: 'bg-lime-300'
   },
   flex_pickleball: {
     label: 'Flex Pickleball',

@@ -566,6 +566,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       return;
     }
 
+    if (guestCount > 0 && guestNames.slice(0, guestCount).some((n) => !n.trim())) {
+      showToast('error', 'Error', 'Please enter a name for each guest.');
+      return;
+    }
+
     // Court-specific waivers must be accepted before booking
     const waiversAccepted = await courtWaiverGate.ensureAccepted(
       selectedCourts.map((c) => c.courtId)
@@ -656,7 +661,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                 ...req,
                 ...checkoutReturnUrls,
                 guestCount: guestCount > 0 ? guestCount : undefined,
-                guestNames: guestCount > 0 && guestNames.some(n => n.trim()) ? guestNames.slice(0, guestCount) : undefined,
+                guestNames: guestCount > 0 ? guestNames.slice(0, guestCount).map(n => n.trim()) : undefined,
                 bringGuest: guestCount > 0 || undefined,
                 addBallMachine: addBallMachine || undefined,
                 splitParticipantIds: splitPayment ? splitMembers.map((member) => member.userId) : undefined,
@@ -1123,6 +1128,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                   {Array.from({ length: guestCount }, (_, i) => (
                     <Input
                       key={i}
+                      required
                       placeholder={`Guest ${i + 1} name`}
                       value={guestNames[i] || ''}
                       onChange={(e) => {

@@ -351,6 +351,7 @@ router.post('/', async (req, res, next) => {
       notes,
       bringGuest,
       addBallMachine,
+      guestNames,
       provisionalSameRequestBookings,
       successUrl,
       cancelUrl,
@@ -409,6 +410,9 @@ router.post('/', async (req, res, next) => {
       notes,
       bringGuest: bringGuest === true,
       addBallMachine: addBallMachine === true,
+      guestNames: Array.isArray(guestNames)
+        ? guestNames.filter((n: unknown) => typeof n === 'string' && n.trim())
+        : undefined,
       provisionalSameRequestBookings: Array.isArray(provisionalSameRequestBookings)
         ? provisionalSameRequestBookings
         : undefined,

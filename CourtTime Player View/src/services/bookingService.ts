@@ -852,6 +852,7 @@ export async function createBooking(bookingData: {
   skipRulesValidation?: boolean;  // For admin override
   skipPaymentCheck?: boolean; // After Stripe payment or admin override
   bringGuest?: boolean;
+  guestNames?: string[];
   addBallMachine?: boolean;
   /** Pre-resolved pass coverage; set when finalizing a booking after Stripe checkout. */
   ballMachinePassId?: string | null;
@@ -888,6 +889,7 @@ async function createBookingCore(bookingData: {
   skipRulesValidation?: boolean;
   skipPaymentCheck?: boolean;
   bringGuest?: boolean;
+  guestNames?: string[];
   addBallMachine?: boolean;
   /** Pre-resolved pass coverage; set when finalizing a booking after Stripe checkout. */
   ballMachinePassId?: string | null;
@@ -1228,9 +1230,9 @@ async function createBookingCore(bookingData: {
             start_time, end_time, duration_minutes, booking_type,
             activity_type, notes, bulletin_post_id, status, is_prime_time,
             bring_guest, add_ball_machine, settlement_status, ball_machine_pass_id,
-            payment_mode, payment_deadline_at, front_desk_amount_due_cents
+            payment_mode, payment_deadline_at, front_desk_amount_due_cents, guest_names
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
           RETURNING
             id,
             series_id as "seriesId",
@@ -1252,6 +1254,7 @@ async function createBookingCore(bookingData: {
             payment_mode as "paymentMode",
             payment_deadline_at as "paymentDeadlineAt",
             front_desk_amount_due_cents as "frontDeskAmountDueCents",
+            guest_names as "guestNames",
             created_at as "createdAt",
             updated_at as "updatedAt"`,
           [
@@ -1276,6 +1279,7 @@ async function createBookingCore(bookingData: {
             paymentMode,
             bookingData.paymentDeadlineAt || null,
             frontDeskAmountDueCents,
+            bookingData.bringGuest && bookingData.guestNames?.length ? bookingData.guestNames : null,
           ]
         );
         return ins.rows[0];

@@ -37,6 +37,7 @@ interface Booking {
   paymentMode?: 'single_payer' | 'split';
   splitShareCount?: number;
   splitSharesPaid?: number;
+  guestNames?: string[] | null;
 }
 
 interface BookingSeriesGroup {
@@ -677,6 +678,11 @@ export function BookingManagement() {
                                 <div className="text-xs text-gray-500 truncate max-w-[150px]" title={group.userEmail}>
                                   {group.userEmail}
                                 </div>
+                                {head.guestNames && head.guestNames.length > 0 && (
+                                  <div className="text-xs text-gray-500 truncate max-w-[150px]" title={head.guestNames.join(', ')}>
+                                    Guests: {head.guestNames.join(', ')}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-2">
                                 <span className="font-medium">{head.courtName}</span>

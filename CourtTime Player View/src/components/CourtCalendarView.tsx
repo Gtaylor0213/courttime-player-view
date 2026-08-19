@@ -2316,9 +2316,11 @@ export function CourtCalendarView() {
           : (isMobile ? 0 : measuredHeaderHeight) + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
         const left = timeColOffset + overlay.courtIndex * effectiveCourtWidth + (isBlocked ? 0 : 4);
         const width = effectiveCourtWidth - (isBlocked ? 0 : 8);
-        const height = hasExactRange
+        const rawHeight = hasExactRange
           ? (((bookingEndMinutes - bookingStartMinutes) / 30) * effectiveSubSlotHeight) - (isBlocked ? 0 : 4)
           : overlay.slotCount * effectiveSubSlotHeight - (isBlocked ? 0 : 4);
+        // Guarantee a legible minimum so very short (e.g. 30-min) bookings don't render illegibly small.
+        const height = Math.max(rawHeight, effectiveSubSlotHeight * 0.85);
         const colorClass = isBlocked
           ? 'bg-gray-200 text-gray-500 border-0'
           : booking.bookingType
@@ -2328,6 +2330,39 @@ export function CourtCalendarView() {
         const tooltipText = isBlocked
           ? `Blocked${booking.player ? ` — ${booking.player}` : ''}`
           : [booking.player, booking.duration, booking.startTime && booking.endTime ? `${booking.startTime.slice(0,5)}–${booking.endTime.slice(0,5)}` : ''].filter(Boolean).join(' · ');
+
+        // Vertical-space budget: name gets priority, then the full service/type line, then the
+        // duration+category row, then notes — each only rendered if the remaining height allows it.
+        // A row is only granted a 2nd line when the text is actually estimated to need it, so short
+        // names/types don't waste budget that lower-priority rows could otherwise use.
+        const typeLabel = !isBlocked && booking.bookingType ? getBookingTypeLabel(booking.bookingType) : null;
+        const contentWidth = Math.max(width - 12, 0);
+        const nameCharsPerLine = Math.max(1, Math.floor(contentWidth / 6.4));
+        const typeCharsPerLine = Math.max(1, Math.floor(contentWidth / 5.6));
+        const nameNeedsSecondLine = (booking.player?.length || 0) > nameCharsPerLine;
+        const typeNeedsSecondLine = typeLabel ? typeLabel.length > typeCharsPerLine : false;
+
+        const NAME_LINE_HEIGHT = 14;
+        const TYPE_LINE_HEIGHT = 13;
+        const DURATION_ROW_HEIGHT = 15;
+        const NOTES_ROW_HEIGHT = 15;
+        const CONTENT_PADDING = 4; // px-1.5 py-0.5 vertical padding
+
+        let remaining = Math.max(height - CONTENT_PADDING, 0);
+        const nameLines = nameNeedsSecondLine && remaining >= NAME_LINE_HEIGHT * 2 ? 2 : 1;
+        remaining -= NAME_LINE_HEIGHT * nameLines;
+
+        const showTypeFull = !!typeLabel && remaining >= TYPE_LINE_HEIGHT;
+        const typeLines = showTypeFull && typeNeedsSecondLine && remaining >= TYPE_LINE_HEIGHT * 2 ? 2 : 1;
+        if (showTypeFull) remaining -= TYPE_LINE_HEIGHT * typeLines;
+
+        const showDurationRow = remaining >= DURATION_ROW_HEIGHT;
+        if (showDurationRow) remaining -= DURATION_ROW_HEIGHT;
+        // Fall back to a compact category badge only when the full type line above didn't fit.
+        const showCategoryBadge = showDurationRow && !isBlocked && !showTypeFull && !!booking.bookingType && width >= 70;
+
+        const showNotes = !isBlocked && !!booking.notes && remaining >= NOTES_ROW_HEIGHT;
+        const isCompact = !showDurationRow;
 
         return (
           <div
@@ -2347,19 +2382,26 @@ export function CourtCalendarView() {
             }}
             onClick={() => !isBlocked && handleBookingClick(overlay.courtId, allTimeSlots[overlay.startSlotIndex])}
           >
-            <div className={`${isBlocked ? 'px-1.5 py-1' : 'px-2 py-1'} h-full flex flex-col overflow-hidden`}>
-              <div className="text-xs font-semibold leading-tight truncate">{booking.player}</div>
-              {height > 28 && (
-                <div className="text-[10px] opacity-75 mt-0.5">
-                  {booking.duration}
-                  {booking.bookingType && (
-                    <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-medium bg-white/50">
-                      {getBookingTypeLabel(booking.bookingType)}
+            <div className={`px-1.5 py-0.5 h-full flex flex-col overflow-hidden ${isCompact ? 'justify-center' : ''}`}>
+              <div className={`text-[11px] font-semibold leading-tight break-words ${nameLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}>
+                {booking.player}
+              </div>
+              {showTypeFull && (
+                <div className={`text-[10px] leading-tight opacity-80 mt-0.5 break-words ${typeLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}>
+                  {typeLabel}
+                </div>
+              )}
+              {showDurationRow && (
+                <div className="flex items-center gap-1 min-w-0 mt-0.5">
+                  <span className="text-[9px] opacity-75 shrink-0 truncate">{booking.duration}</span>
+                  {showCategoryBadge && (
+                    <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-white/50 truncate min-w-0">
+                      {typeLabel}
                     </span>
                   )}
                 </div>
               )}
-              {booking.notes && height > effectiveSubSlotHeight * 3 && (
+              {showNotes && (
                 <div className="text-[9px] mt-1 truncate italic opacity-70">
                   {booking.notes.length > 30 ? `${booking.notes.substring(0, 30)}...` : booking.notes}
                 </div>

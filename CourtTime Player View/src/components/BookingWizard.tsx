@@ -382,6 +382,16 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return timeSlotOptions.filter((slot) => timeSlotIndex(slot) > startIdx);
   }, [startTime, timeSlotOptions]);
 
+  // The initial +120min guess (or a manually picked end time) can fall outside the
+  // court's actual close time — especially near open/close — since operating hours
+  // load asynchronously and aren't known when endTime is first set. Snap back into
+  // the bookable window so the Select always shows a valid, visible value.
+  useEffect(() => {
+    if (!isOpen || endTimeOptions.length === 0) return;
+    if (endTimeOptions.includes(endTime)) return;
+    setEndTime(endTimeOptions[endTimeOptions.length - 1]);
+  }, [isOpen, endTime, endTimeOptions]);
+
   // Computed duration label
   const durationMins = useMemo(() => durationMinutesBetween(startTime, endTime), [startTime, endTime]);
   const durationLabel = useMemo(() => {

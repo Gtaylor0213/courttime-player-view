@@ -61,78 +61,78 @@ export const BOOKING_TYPES = {
   },
   general_tennis: {
     label: 'General Tennis',
-    color: 'bg-green-100 text-green-800 border-green-300',
-    bgColor: 'bg-green-100'
+    color: 'bg-green-200 text-green-900 border-green-400',
+    bgColor: 'bg-green-200'
   },
   alta_tennis: {
     label: 'ALTA Tennis',
-    color: 'bg-purple-100 text-purple-800 border-purple-300',
-    bgColor: 'bg-purple-100'
+    color: 'bg-purple-200 text-purple-900 border-purple-400',
+    bgColor: 'bg-purple-200'
   },
   usta_tennis: {
     label: 'USTA Tennis',
-    color: 'bg-blue-100 text-blue-800 border-blue-300',
-    bgColor: 'bg-blue-100'
+    color: 'bg-blue-200 text-blue-900 border-blue-400',
+    bgColor: 'bg-blue-200'
   },
   flex_tennis: {
     label: 'Flex Tennis',
-    color: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-    bgColor: 'bg-indigo-100'
+    color: 'bg-indigo-200 text-indigo-900 border-indigo-400',
+    bgColor: 'bg-indigo-200'
   },
   team_tennis_lesson: {
     label: 'Team Tennis Lesson',
-    color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-    bgColor: 'bg-yellow-100'
+    color: 'bg-yellow-200 text-yellow-900 border-yellow-400',
+    bgColor: 'bg-yellow-200'
   },
   private_tennis_lesson: {
     label: 'Private Tennis Lesson',
-    color: 'bg-amber-100 text-amber-800 border-amber-300',
-    bgColor: 'bg-amber-100'
+    color: 'bg-amber-200 text-amber-900 border-amber-400',
+    bgColor: 'bg-amber-200'
   },
   junior_tennis_lesson: {
     label: 'Junior Tennis Lesson',
-    color: 'bg-lime-100 text-lime-800 border-lime-300',
-    bgColor: 'bg-lime-100'
+    color: 'bg-lime-200 text-lime-900 border-lime-400',
+    bgColor: 'bg-lime-200'
   },
   after_school_tennis_lesson: {
     label: 'After School Tennis Lesson',
-    color: 'bg-orange-100 text-orange-800 border-orange-300',
-    bgColor: 'bg-orange-100'
+    color: 'bg-orange-200 text-orange-900 border-orange-400',
+    bgColor: 'bg-orange-200'
   },
   general_pickleball: {
     label: 'General Pickleball',
-    color: 'bg-teal-100 text-teal-800 border-teal-300',
-    bgColor: 'bg-teal-100'
+    color: 'bg-teal-200 text-teal-900 border-teal-400',
+    bgColor: 'bg-teal-200'
   },
   alta_pickleball: {
     label: 'ALTA Pickleball',
-    color: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300',
-    bgColor: 'bg-fuchsia-100'
+    color: 'bg-fuchsia-200 text-fuchsia-900 border-fuchsia-400',
+    bgColor: 'bg-fuchsia-200'
   },
   usta_pickleball: {
     label: 'USTA Pickleball',
-    color: 'bg-sky-100 text-sky-800 border-sky-300',
-    bgColor: 'bg-sky-100'
+    color: 'bg-sky-200 text-sky-900 border-sky-400',
+    bgColor: 'bg-sky-200'
   },
   flex_pickleball: {
     label: 'Flex Pickleball',
-    color: 'bg-violet-100 text-violet-800 border-violet-300',
-    bgColor: 'bg-violet-100'
+    color: 'bg-violet-200 text-violet-900 border-violet-400',
+    bgColor: 'bg-violet-200'
   },
   team_pickleball_lesson: {
     label: 'Team Pickleball Lesson',
-    color: 'bg-rose-100 text-rose-800 border-rose-300',
-    bgColor: 'bg-rose-100'
+    color: 'bg-rose-200 text-rose-900 border-rose-400',
+    bgColor: 'bg-rose-200'
   },
   private_pickleball_lesson: {
     label: 'Private Pickleball Lesson',
-    color: 'bg-pink-100 text-pink-800 border-pink-300',
-    bgColor: 'bg-pink-100'
+    color: 'bg-pink-200 text-pink-900 border-pink-400',
+    bgColor: 'bg-pink-200'
   },
   maintenance: {
     label: 'Maintenance',
-    color: 'bg-red-900 text-red-50 border-red-950',
-    bgColor: 'bg-red-900'
+    color: 'bg-red-800 text-red-50 border-red-900',
+    bgColor: 'bg-red-800'
   },
 } as const;
 

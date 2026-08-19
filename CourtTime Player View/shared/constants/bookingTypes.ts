@@ -81,8 +81,8 @@ export const BOOKING_TYPES = {
   },
   team_tennis_lesson: {
     label: 'Team Tennis Lesson',
-    color: 'bg-yellow-300 text-yellow-900 border-yellow-500',
-    bgColor: 'bg-yellow-300'
+    color: 'bg-pink-300 text-pink-900 border-pink-500',
+    bgColor: 'bg-pink-300'
   },
   private_tennis_lesson: {
     label: 'Private Tennis Lesson',
@@ -126,8 +126,8 @@ export const BOOKING_TYPES = {
   },
   private_pickleball_lesson: {
     label: 'Private Pickleball Lesson',
-    color: 'bg-pink-300 text-pink-900 border-pink-500',
-    bgColor: 'bg-pink-300'
+    color: 'bg-yellow-300 text-yellow-900 border-yellow-500',
+    bgColor: 'bg-yellow-300'
   },
   maintenance: {
     label: 'Maintenance',

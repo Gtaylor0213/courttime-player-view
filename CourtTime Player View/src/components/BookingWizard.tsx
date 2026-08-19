@@ -175,6 +175,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const isAdmin = user?.userType === 'admin';
   const canUseRecurring = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const postPlaySettlement = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
+  const universityClubGuestFee = enabledFeatures.includes(FEATURE_FLAGS.UNIVERSITY_CLUB_GUEST_FEE);
   const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
   const splitCourtPaymentsEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const deerLakeReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
@@ -533,9 +534,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return dates;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    submitBooking(false);
+  };
 
+  const submitBooking = async (payAtFrontDesk: boolean) => {
     if (!user?.id) {
       showToast('error', 'Error', 'You must be logged in to book a court.');
       return;
@@ -656,7 +660,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                 bringGuest: guestCount > 0 || undefined,
                 addBallMachine: addBallMachine || undefined,
                 splitParticipantIds: splitPayment ? splitMembers.map((member) => member.userId) : undefined,
-                provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined
+                provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined,
+                payAtFrontDesk: payAtFrontDesk || undefined
               });
               if (res.requiresPayment && res.checkoutUrl) {
                 sessionStorage.setItem(
@@ -711,9 +716,13 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         const courtLabel = selectedCourts.length > 1
           ? `${selectedCourts.length} courts`
           : court;
+        const frontDeskDueCents = (successfulBookings[0] as { booking?: { frontDeskAmountDueCents?: number | null } })
+          ?.booking?.frontDeskAmountDueCents;
         const msg = totalRequests > 1
           ? `${createdCount} of ${totalRequests} bookings created for ${courtLabel} at ${facility}.`
-          : `Your ${court} booking at ${facility} has been confirmed.`;
+          : frontDeskDueCents
+            ? `Your ${court} booking at ${facility} is confirmed. Pay $${(frontDeskDueCents / 100).toFixed(2)} at the front desk.`
+            : `Your ${court} booking at ${facility} has been confirmed.`;
 
         const reservationMeta = { facility, court, date, time: `${startTime} - ${endTime}` };
         addNotification({
@@ -1174,6 +1183,17 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               {isSubmitting ? 'Booking...' : selectedCourts.length > 1 ? `Book ${selectedCourts.length} Courts` : (hasPaidCourt || guestFeeTotalCents > 0 || ballMachineTotalCents > 0) ? (postPlaySettlement ? 'Book Court' : `Pay $${(checkoutTotalCents / 100).toFixed(2)} and Book`) : 'Book Court'}
             </Button>
           </div>
+          {universityClubGuestFee && guestFeeTotalCents > 0 && selectedCourts.length === 1 && !advancedBooking && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              className="w-full"
+              onClick={() => submitBooking(true)}
+            >
+              {isSubmitting ? 'Booking...' : 'Book Now, Pay at Front Desk'}
+            </Button>
+          )}
         </form>
       </DialogContent>
     </Dialog>

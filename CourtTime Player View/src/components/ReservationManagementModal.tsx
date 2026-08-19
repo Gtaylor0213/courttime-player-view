@@ -40,6 +40,10 @@ interface ReservationDetails {
   addBallMachine?: boolean;
   /** Non-null when a St. Marlow pass covered the machine (no hourly fee). */
   ballMachinePassId?: string | null;
+  paymentMode?: 'single_payer' | 'split' | 'front_desk';
+  /** University Club Guest Fee: total deferred to the front desk, and when staff collected it. */
+  frontDeskAmountDueCents?: number | null;
+  frontDeskCollectedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   courtName?: string;
@@ -101,6 +105,12 @@ export function ReservationManagementModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [settlementStatus, setSettlementStatus] = useState<string | undefined>();
+  const [frontDeskFee, setFrontDeskFee] = useState<{
+    paymentMode?: string;
+    amountDueCents: number | null;
+    collectedAt: string | null;
+  }>({ amountDueCents: null, collectedAt: null });
+  const [isMarkingFrontDeskCollected, setIsMarkingFrontDeskCollected] = useState(false);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberResults, setMemberResults] = useState<Array<{ userId: string; fullName: string; email: string }>>([]);
@@ -157,6 +167,13 @@ export function ReservationManagementModal({
         } else if (!cancelled) {
           setSettlementStatus(reservation.settlementStatus || 'not_applicable');
         }
+        if (!cancelled) {
+          setFrontDeskFee({
+            paymentMode: booking?.paymentMode ?? reservation.paymentMode,
+            amountDueCents: booking?.frontDeskAmountDueCents ?? reservation.frontDeskAmountDueCents ?? null,
+            collectedAt: booking?.frontDeskCollectedAt ?? reservation.frontDeskCollectedAt ?? null,
+          });
+        }
         const partRes = await bookingApi.getParticipants(reservation.id);
         const list =
           (partRes as any)?.participants ||
@@ -178,6 +195,11 @@ export function ReservationManagementModal({
           setSettlementStatus(reservation.settlementStatus || 'not_applicable');
           setParticipants([]);
           setSplitPayment(null);
+          setFrontDeskFee({
+            paymentMode: reservation.paymentMode,
+            amountDueCents: reservation.frontDeskAmountDueCents ?? null,
+            collectedAt: reservation.frontDeskCollectedAt ?? null,
+          });
         }
       }
     })();
@@ -502,6 +524,26 @@ export function ReservationManagementModal({
       toast.error('Close-out failed');
     } finally {
       setIsClosingOut(false);
+    }
+  };
+
+  const handleMarkFrontDeskCollected = async () => {
+    setIsMarkingFrontDeskCollected(true);
+    try {
+      const res = await bookingApi.collectFrontDeskFee(reservation.id);
+      if (!res.success) {
+        toast.error(res.error || 'Could not mark fee collected');
+        return;
+      }
+      const collectedAt =
+        (res as any)?.frontDeskCollectedAt || (res as any)?.data?.frontDeskCollectedAt;
+      setFrontDeskFee((prev) => ({ ...prev, collectedAt: collectedAt || new Date().toISOString() }));
+      toast.success('Guest fee marked as collected');
+      onUpdate?.();
+    } catch {
+      toast.error('Could not mark fee collected');
+    } finally {
+      setIsMarkingFrontDeskCollected(false);
     }
   };
 
@@ -859,6 +901,35 @@ export function ReservationManagementModal({
                     {settlementStatus === 'settled' && 'Settled'}
                     {settlementStatus === 'cancelled_unpaid' && 'Cancelled (unpaid)'}
                   </Badge>
+                </div>
+              )}
+
+              {/* University Club Guest Fee: fee deferred to the front desk */}
+              {frontDeskFee.paymentMode === 'front_desk' && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">Payment</span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {frontDeskFee.collectedAt
+                        ? 'Collected'
+                        : `Due at front desk${
+                            frontDeskFee.amountDueCents
+                              ? `: ${formatCents(frontDeskFee.amountDueCents)}`
+                              : ''
+                          }`}
+                    </Badge>
+                    {!frontDeskFee.collectedAt && isFacilityAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={isMarkingFrontDeskCollected}
+                        onClick={handleMarkFrontDeskCollected}
+                      >
+                        {isMarkingFrontDeskCollected ? 'Marking…' : 'Mark as Collected'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
 

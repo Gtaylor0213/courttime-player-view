@@ -750,6 +750,8 @@ export const bookingApi = {
     excludeBookingId?: string;
     /** Active facility members sharing an equal pre-payment split. */
     splitParticipantIds?: string[];
+    /** University Club Guest Fee: skip Stripe and defer the whole total to the front desk. */
+    payAtFrontDesk?: boolean;
   }) => {
     const res = await apiRequest('/api/bookings', {
       method: 'POST',
@@ -929,6 +931,13 @@ export const bookingApi = {
     return apiRequest(`/api/bookings/${bookingId}/settlement/charges/${userId}/resolve`, {
       method: 'POST',
       body: JSON.stringify({ resolution }),
+    });
+  },
+
+  collectFrontDeskFee: async (bookingId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}/front-desk-fee/collect`, {
+      method: 'POST',
+      body: JSON.stringify({}),
     });
   },
 

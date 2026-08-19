@@ -23,6 +23,9 @@ import {
   seedBookingOwnerParticipant,
   shouldUsePostPlaySettlement,
 } from './bookingSettlementService';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { isFeatureEnabled } from './featureFlagService';
+import { loadCourtPaymentSettings, computeBookingFeeTotalCents } from './courtPaymentSettings';
 
 /**
  * Serialize booking creates per user + facility so concurrent multi-court POSTs
@@ -403,6 +406,9 @@ export async function getBookingsByFacilityAndDate(
         b.duration_minutes as "durationMinutes",
         b.status,
         b.settlement_status as "settlementStatus",
+        b.payment_mode as "paymentMode",
+        b.front_desk_amount_due_cents as "frontDeskAmountDueCents",
+        b.front_desk_collected_at as "frontDeskCollectedAt",
         b.booking_type as "bookingType",
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",
@@ -449,6 +455,9 @@ export async function getBookingsByFacilityAndDateRange(
         b.duration_minutes as "durationMinutes",
         b.status,
         b.settlement_status as "settlementStatus",
+        b.payment_mode as "paymentMode",
+        b.front_desk_amount_due_cents as "frontDeskAmountDueCents",
+        b.front_desk_collected_at as "frontDeskCollectedAt",
         b.booking_type as "bookingType",
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",
@@ -498,6 +507,9 @@ export async function getBookingsByCourtAndDate(
         b.duration_minutes as "durationMinutes",
         b.status,
         b.settlement_status as "settlementStatus",
+        b.payment_mode as "paymentMode",
+        b.front_desk_amount_due_cents as "frontDeskAmountDueCents",
+        b.front_desk_collected_at as "frontDeskCollectedAt",
         b.booking_type as "bookingType",
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",
@@ -545,6 +557,9 @@ export async function getBookingsByUser(
           b.duration_minutes as "durationMinutes",
           b.status,
           b.settlement_status as "settlementStatus",
+          b.payment_mode as "paymentMode",
+          b.front_desk_amount_due_cents as "frontDeskAmountDueCents",
+          b.front_desk_collected_at as "frontDeskCollectedAt",
           b.booking_type as "bookingType",
           b.notes,
           COALESCE(b.add_ball_machine, false) as "addBallMachine",
@@ -576,6 +591,9 @@ export async function getBookingsByUser(
           b.duration_minutes as "durationMinutes",
           b.status,
           b.settlement_status as "settlementStatus",
+          b.payment_mode as "paymentMode",
+          b.front_desk_amount_due_cents as "frontDeskAmountDueCents",
+          b.front_desk_collected_at as "frontDeskCollectedAt",
           b.booking_type as "bookingType",
           b.notes,
           COALESCE(b.add_ball_machine, false) as "addBallMachine",
@@ -846,6 +864,8 @@ export async function createBooking(bookingData: {
   initialStatus?: 'confirmed' | 'pending';
   paymentMode?: 'single_payer' | 'split';
   paymentDeadlineAt?: Date | null;
+  /** University Club Guest Fee: skip Stripe and defer the whole total to the front desk. Re-verified server-side. */
+  payAtFrontDesk?: boolean;
 }): Promise<BookingResult> {
   return enqueueBookingCreation(bookingData.userId, bookingData.facilityId, () =>
     createBookingCore(bookingData)
@@ -878,6 +898,7 @@ async function createBookingCore(bookingData: {
   initialStatus?: 'confirmed' | 'pending';
   paymentMode?: 'single_payer' | 'split';
   paymentDeadlineAt?: Date | null;
+  payAtFrontDesk?: boolean;
 }): Promise<BookingResult> {
   try {
     // Only honor excludeBookingId when it is an active booking owned by this user
@@ -983,7 +1004,36 @@ async function createBookingCore(bookingData: {
       ballMachinePassId = coverage.passId;
     }
 
+    let paymentMode: 'single_payer' | 'split' | 'front_desk' = bookingData.paymentMode || 'single_payer';
+    let frontDeskAmountDueCents: number | null = null;
+
     if (!bookingData.skipPaymentCheck) {
+      let usedFrontDesk = false;
+
+      // University Club Guest Fee: member chose to skip Stripe and pay the whole
+      // total at the front desk instead. Only honored when a guest fee actually
+      // applies and the facility has opted in — never trust the client alone.
+      if (bookingData.payAtFrontDesk) {
+        const courtRow = await loadCourtPaymentSettings(bookingData.courtId);
+        const hasGuestFee = Boolean(bookingData.bringGuest && courtRow?.guest_fee_cents);
+        const frontDeskEnabled =
+          hasGuestFee &&
+          (await isFeatureEnabled(bookingData.facilityId, FEATURE_FLAGS.UNIVERSITY_CLUB_GUEST_FEE));
+
+        if (frontDeskEnabled) {
+          usedFrontDesk = true;
+          paymentMode = 'front_desk';
+          frontDeskAmountDueCents = computeBookingFeeTotalCents(courtRow, {
+            durationMinutes: bookingData.durationMinutes,
+            bringGuest: true,
+            addBallMachine: bookingData.addBallMachine && !ballMachinePassId,
+          });
+        }
+      }
+
+      if (usedFrontDesk) {
+        // Falls through to the normal insert path below, same as a free booking.
+      } else {
       const postPlay = await shouldUsePostPlaySettlement(
         bookingData.facilityId,
         bookingData.courtId,
@@ -1054,6 +1104,7 @@ async function createBookingCore(bookingData: {
           warnings: warnings || [],
           isPrimeTime: isPrimeTime || false,
         };
+      }
       }
     }
 
@@ -1177,9 +1228,9 @@ async function createBookingCore(bookingData: {
             start_time, end_time, duration_minutes, booking_type,
             activity_type, notes, bulletin_post_id, status, is_prime_time,
             bring_guest, add_ball_machine, settlement_status, ball_machine_pass_id,
-            payment_mode, payment_deadline_at
+            payment_mode, payment_deadline_at, front_desk_amount_due_cents
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
           RETURNING
             id,
             series_id as "seriesId",
@@ -1200,6 +1251,7 @@ async function createBookingCore(bookingData: {
             ball_machine_pass_id as "ballMachinePassId",
             payment_mode as "paymentMode",
             payment_deadline_at as "paymentDeadlineAt",
+            front_desk_amount_due_cents as "frontDeskAmountDueCents",
             created_at as "createdAt",
             updated_at as "updatedAt"`,
           [
@@ -1221,8 +1273,9 @@ async function createBookingCore(bookingData: {
             bookingData.addBallMachine || false,
             settlementStatus,
             ballMachinePassId,
-            bookingData.paymentMode || 'single_payer',
+            paymentMode,
             bookingData.paymentDeadlineAt || null,
+            frontDeskAmountDueCents,
           ]
         );
         return ins.rows[0];
@@ -1980,6 +2033,9 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
         b.duration_minutes as "durationMinutes",
         b.status,
         b.settlement_status as "settlementStatus",
+        b.payment_mode as "paymentMode",
+        b.front_desk_amount_due_cents as "frontDeskAmountDueCents",
+        b.front_desk_collected_at as "frontDeskCollectedAt",
         b.booking_type as "bookingType",
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",

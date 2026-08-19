@@ -1429,6 +1429,8 @@ router.get('/bookings/:facilityId', async (req, res) => {
         u.email as "userEmail",
         b.payment_mode as "paymentMode",
         b.payment_deadline_at as "paymentDeadlineAt",
+        b.front_desk_amount_due_cents as "frontDeskAmountDueCents",
+        b.front_desk_collected_at as "frontDeskCollectedAt",
         (SELECT COUNT(*) FROM booking_payment_shares s WHERE s.booking_id = b.id) as "splitShareCount",
         (SELECT COUNT(*) FROM booking_payment_shares s WHERE s.booking_id = b.id AND s.status = 'paid') as "splitSharesPaid"
       FROM bookings b

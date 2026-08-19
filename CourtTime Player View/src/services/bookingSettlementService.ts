@@ -776,6 +776,41 @@ export async function updateUnsettledBooking(params: {
   }
 }
 
+/**
+ * University Club Guest Fee: mark a front-desk-deferred booking's fee as
+ * collected by staff. Independent of the post-play settlement lifecycle above.
+ */
+export async function markFrontDeskFeeCollected(params: {
+  bookingId: string;
+  actorUserId: string;
+}): Promise<{ frontDeskCollectedAt: string }> {
+  const bookingResult = await query(
+    `SELECT facility_id AS "facilityId", payment_mode AS "paymentMode",
+            front_desk_collected_at AS "frontDeskCollectedAt"
+     FROM bookings WHERE id = $1`,
+    [params.bookingId]
+  );
+  const booking = bookingResult.rows[0];
+  if (!booking) throw new Error('Booking not found');
+  if (booking.paymentMode !== 'front_desk') {
+    throw new Error('This booking does not have a front-desk fee due');
+  }
+  await assertFacilityAdmin(params.actorUserId, booking.facilityId);
+
+  if (booking.frontDeskCollectedAt) {
+    return { frontDeskCollectedAt: booking.frontDeskCollectedAt };
+  }
+
+  const updated = await query(
+    `UPDATE bookings
+     SET front_desk_collected_at = NOW(), front_desk_collected_by = $2, updated_at = NOW()
+     WHERE id = $1 AND payment_mode = 'front_desk' AND front_desk_collected_at IS NULL
+     RETURNING front_desk_collected_at AS "frontDeskCollectedAt"`,
+    [params.bookingId, params.actorUserId]
+  );
+  return updated.rows[0] ?? { frontDeskCollectedAt: new Date().toISOString() };
+}
+
 /** Whether create should use post-play unsettled path instead of Checkout. */
 export async function shouldUsePostPlaySettlement(
   facilityId: string,

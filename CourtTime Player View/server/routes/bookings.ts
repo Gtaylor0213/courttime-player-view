@@ -26,6 +26,7 @@ import {
   resolveSettlementCharge,
   listSettlementCharges,
   updateUnsettledBooking,
+  markFrontDeskFeeCollected,
 } from '../../src/services/bookingSettlementService';
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
@@ -355,6 +356,7 @@ router.post('/', async (req, res, next) => {
       cancelUrl,
       excludeBookingId,
       splitParticipantIds,
+      payAtFrontDesk,
     } = req.body;
 
     // Validation
@@ -413,6 +415,7 @@ router.post('/', async (req, res, next) => {
       successUrl: typeof successUrl === 'string' ? successUrl : undefined,
       cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
       excludeBookingId: typeof excludeBookingId === 'string' ? excludeBookingId : undefined,
+      payAtFrontDesk: payAtFrontDesk === true,
     });
 
     if (!result.success) {
@@ -1141,6 +1144,27 @@ router.post('/:bookingId/settlement/charges/:userId/resolve', async (req, res, n
   } catch (error: any) {
     const status = error.message?.includes('admin') ? 403 : 400;
     res.status(status).json({ success: false, error: error.message || 'Resolve failed' });
+  }
+});
+
+/**
+ * POST /api/bookings/:bookingId/front-desk-fee/collect
+ * University Club Guest Fee: staff marks the front-desk-deferred fee as collected.
+ */
+router.post('/:bookingId/front-desk-fee/collect', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const result = await markFrontDeskFeeCollected({
+      bookingId: req.params.bookingId,
+      actorUserId,
+    });
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    const status = error.message?.includes('admin') ? 403 : 400;
+    res.status(status).json({ success: false, error: error.message || 'Could not mark fee collected' });
   }
 });
 

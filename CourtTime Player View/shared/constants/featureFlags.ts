@@ -14,6 +14,7 @@ export const FEATURE_FLAGS = {
   SPLIT_COURT_PAYMENTS: 'split_court_payments',
   MEMBER_NUMBER: 'member_number',
   DEER_LAKE_RESERVATION_TYPES: 'deer_lake_reservation_types',
+  UNIVERSITY_CLUB_GUEST_FEE: 'university_club_guest_fee',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -32,4 +33,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   split_court_payments: 'Split Court Payments (each reservation member pays their share)',
   member_number: 'Member Number Required (prompt new/existing members for their club member #)',
   deer_lake_reservation_types: 'Deer Lake Reservation Types (swap in Deer Lake\'s custom reservation type list)',
+  university_club_guest_fee: 'University Club Guest Fee (offer "pay at front desk" alongside Stripe when a guest fee applies)',
 };

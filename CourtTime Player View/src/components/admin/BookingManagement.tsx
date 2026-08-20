@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
-import { adminApi, facilitiesApi } from '../../api/client';
+import { adminApi, bookingApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
 import { AdminBooking } from './AdminBooking';
 import { parseLocalDate } from '../../utils/dateUtils';
@@ -34,10 +34,16 @@ interface Booking {
   status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
   bookingType: string;
   notes?: string;
-  paymentMode?: 'single_payer' | 'split';
+  paymentMode?: 'single_payer' | 'split' | 'front_desk';
   splitShareCount?: number;
   splitSharesPaid?: number;
   guestNames?: string[] | null;
+  frontDeskAmountDueCents?: number | null;
+  frontDeskCollectedAt?: string | null;
+}
+
+function formatCents(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
 }
 
 interface BookingSeriesGroup {
@@ -84,6 +90,7 @@ export function BookingManagement() {
   const [seriesEditBookingType, setSeriesEditBookingType] = useState('');
   const [seriesEditNotes, setSeriesEditNotes] = useState('');
   const [seriesEditSubmitting, setSeriesEditSubmitting] = useState(false);
+  const [collectingFrontDeskFeeId, setCollectingFrontDeskFeeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentFacilityId) {
@@ -188,6 +195,24 @@ export function BookingManagement() {
     } catch (error: any) {
       console.error('Error cancelling booking:', error);
       toast.error('Failed to cancel reservation');
+    }
+  };
+
+  const handleMarkFrontDeskFeeCollected = async (id: string) => {
+    setCollectingFrontDeskFeeId(id);
+    try {
+      const response = await bookingApi.collectFrontDeskFee(id);
+      if (response.success) {
+        toast.success('Guest fee marked as collected');
+        await loadBookings();
+      } else {
+        toast.error(response.error || 'Failed to mark guest fee as collected');
+      }
+    } catch (error: any) {
+      console.error('Error marking guest fee collected:', error);
+      toast.error('Failed to mark guest fee as collected');
+    } finally {
+      setCollectingFrontDeskFeeId(null);
     }
   };
 
@@ -682,6 +707,35 @@ export function BookingManagement() {
                                   <div className="text-xs text-gray-500 truncate max-w-[150px]" title={head.guestNames.join(', ')}>
                                     Guests: {head.guestNames.join(', ')}
                                   </div>
+                                )}
+                                {head.guestNames && head.guestNames.length > 0 && (
+                                  head.paymentMode === 'front_desk' ? (
+                                    <div className="mt-1 flex items-center gap-1.5">
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-xs ${head.frontDeskCollectedAt ? 'text-green-700 border-green-300' : 'text-amber-700 border-amber-300'}`}
+                                      >
+                                        {head.frontDeskCollectedAt
+                                          ? 'Guest fee: Collected'
+                                          : `Guest fee due${head.frontDeskAmountDueCents ? `: ${formatCents(head.frontDeskAmountDueCents)}` : ''}`}
+                                      </Badge>
+                                      {!head.frontDeskCollectedAt && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs"
+                                          disabled={collectingFrontDeskFeeId === head.id}
+                                          onClick={() => handleMarkFrontDeskFeeCollected(head.id)}
+                                        >
+                                          {collectingFrontDeskFeeId === head.id ? 'Marking…' : 'Mark Collected'}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <Badge variant="outline" className="mt-1 text-xs text-green-700 border-green-300">
+                                      Guest fee: Paid
+                                    </Badge>
+                                  )
                                 )}
                               </td>
                               <td className="px-4 py-2">

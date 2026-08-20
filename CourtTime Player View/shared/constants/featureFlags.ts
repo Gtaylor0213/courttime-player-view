@@ -15,6 +15,7 @@ export const FEATURE_FLAGS = {
   MEMBER_NUMBER: 'member_number',
   DEER_LAKE_RESERVATION_TYPES: 'deer_lake_reservation_types',
   UNIVERSITY_CLUB_GUEST_FEE: 'university_club_guest_fee',
+  PLAYER_MULTIPLE_COURTS: 'player_multiple_courts',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -34,4 +35,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   member_number: 'Member Number Required (prompt new/existing members for their club member #)',
   deer_lake_reservation_types: 'Deer Lake Reservation Types (swap in Deer Lake\'s custom reservation type list)',
   university_club_guest_fee: 'University Club Guest Fee (offer "pay at front desk" alongside Stripe when a guest fee applies)',
+  player_multiple_courts: 'Player Multiple Courts (let members add additional courts to a booking, not just admins)',
 };

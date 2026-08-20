@@ -174,6 +174,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const { enabledFeatures } = useAppContext();
   const isAdmin = user?.userType === 'admin';
   const canUseRecurring = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
+  const canBookAdditionalCourts = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_MULTIPLE_COURTS);
   const postPlaySettlement = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const universityClubGuestFee = enabledFeatures.includes(FEATURE_FLAGS.UNIVERSITY_CLUB_GUEST_FEE);
   const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
@@ -1033,8 +1034,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             </div>
           )}
 
-          {/* Additional Courts (admin only) */}
-          {isAdmin && availableAdditionalCourts.length > 0 && (
+          {/* Additional Courts (admin, or members if enabled for this facility) */}
+          {canBookAdditionalCourts && availableAdditionalCourts.length > 0 && (
             <div className="space-y-2 pt-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" />

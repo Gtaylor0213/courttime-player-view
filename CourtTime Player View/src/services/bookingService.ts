@@ -18,7 +18,7 @@ import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
 import { buildTermsAcceptanceBookingBlocker } from './termsService';
 import { buildCourtWaiverBookingBlocker } from './courtWaiverService';
-import { isFacilityAdmin as isFacilityAdminUser } from './memberService';
+import { isFacilityAdmin as isFacilityAdminBroad } from './memberService';
 import {
   seedBookingOwnerParticipant,
   shouldUsePostPlaySettlement,
@@ -1895,7 +1895,7 @@ export async function cancelBooking(
     // against facility_admins alone previously rejected admins whose access
     // only lives on their membership row (e.g. the facility's original
     // owner-admin in some records), which silently blocked cancellation.
-    const isFacilityAdmin = isOwner ? false : await isFacilityAdminUser(booking.facilityId, userId);
+    const isFacilityAdmin = isOwner ? false : await isFacilityAdminBroad(booking.facilityId, userId);
 
     // Anyone splitting a still-unpaid reservation can back out of it. The hold is
     // all-or-nothing, so one participant pulling out unwinds the whole thing and

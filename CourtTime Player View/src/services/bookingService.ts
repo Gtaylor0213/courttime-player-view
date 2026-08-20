@@ -650,6 +650,7 @@ export type PendingCourtBookingPayload = {
   notes?: string;
   isPrimeTime?: boolean;
   bringGuest?: boolean;
+  guestNames?: string[];
   addBallMachine?: boolean;
   /** Set when a St. Marlow ball machine pass already covers the machine for this booking. */
   ballMachinePassId?: string | null;
@@ -698,6 +699,11 @@ export function parsePendingCourtBooking(raw: unknown): PendingCourtBookingPaylo
     notes: r.notes ? String(r.notes) : undefined,
     isPrimeTime: r.isPrimeTime === true || r.is_prime_time === true,
     bringGuest: r.bringGuest === true || r.bring_guest === true,
+    guestNames: Array.isArray(r.guestNames)
+      ? r.guestNames.map(String)
+      : Array.isArray(r.guest_names)
+        ? (r.guest_names as unknown[]).map(String)
+        : undefined,
     addBallMachine: r.addBallMachine === true || r.add_ball_machine === true,
     ballMachinePassId: r.ballMachinePassId
       ? String(r.ballMachinePassId)
@@ -1091,6 +1097,7 @@ async function createBookingCore(bookingData: {
             notes: bookingData.notes,
             isPrimeTime: isPrimeTime || false,
             bringGuest: bookingData.bringGuest || false,
+            guestNames: bookingData.guestNames,
             addBallMachine: bookingData.addBallMachine || false,
             ballMachinePassId,
           },

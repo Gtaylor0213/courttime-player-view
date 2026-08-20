@@ -114,7 +114,7 @@ function addMinutesTo12h(time12h: string, mins: number): string {
   let [hours, minutes] = t.split(':').map(Number);
   if (period === 'PM' && hours !== 12) hours += 12;
   if (period === 'AM' && hours === 12) hours = 0;
-  const totalMins = hours * 60 + minutes + mins;
+  const totalMins = ((hours * 60 + minutes + mins) % 1440 + 1440) % 1440;
   const newH = Math.floor(totalMins / 60);
   const newM = totalMins % 60;
   const newPeriod = newH >= 12 ? 'PM' : 'AM';
@@ -305,19 +305,19 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   // Open/close window every selected court is open for on this day — the intersection,
   // since one Start/End Time applies to all selected courts at once. Falls back to a
   // wide default while operating-hours data is still loading.
-  const { slotStartMinutes, slotEndMinutes } = useMemo(() => {
+  const { slotStartMinutes, slotEndMinutes, boundsLoaded } = useMemo(() => {
     const bounds = selectedCourts
       .map((c) => courtDayOperating[c.courtId])
       .filter((b): b is CourtDayOperatingBounds => !!b && b.isOpen);
     if (bounds.length === 0) {
-      return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES };
+      return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES, boundsLoaded: false };
     }
     const openMin = Math.max(...bounds.map((b) => b.openMin));
     const closeMin = Math.min(...bounds.map((b) => b.closeMin));
     if (openMin >= closeMin) {
-      return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES };
+      return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES, boundsLoaded: false };
     }
-    return { slotStartMinutes: openMin, slotEndMinutes: closeMin };
+    return { slotStartMinutes: openMin, slotEndMinutes: closeMin, boundsLoaded: true };
   }, [selectedCourts, courtDayOperating]);
 
   // All selectable 15-min time slots for the selected court(s)/day.
@@ -383,14 +383,17 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   }, [startTime, timeSlotOptions]);
 
   // The initial +120min guess (or a manually picked end time) can fall outside the
-  // court's actual close time — especially near open/close — since operating hours
-  // load asynchronously and aren't known when endTime is first set. Snap back into
-  // the bookable window so the Select always shows a valid, visible value.
+  // court's actual close time — especially near open/close. Snap back into the
+  // bookable window so the Select always shows a valid, visible value. Gated on
+  // boundsLoaded so this doesn't fire against the temporary 6am-9pm fallback while
+  // real operating hours are still loading — otherwise a drag-selected end time
+  // past 9pm gets clobbered to 9pm before the real (later) close time arrives, and
+  // then never gets corrected back since 9pm remains a "valid" option once it does.
   useEffect(() => {
-    if (!isOpen || endTimeOptions.length === 0) return;
+    if (!isOpen || !boundsLoaded || endTimeOptions.length === 0) return;
     if (endTimeOptions.includes(endTime)) return;
     setEndTime(endTimeOptions[endTimeOptions.length - 1]);
-  }, [isOpen, endTime, endTimeOptions]);
+  }, [isOpen, boundsLoaded, endTime, endTimeOptions]);
 
   // Computed duration label
   const durationMins = useMemo(() => durationMinutesBetween(startTime, endTime), [startTime, endTime]);

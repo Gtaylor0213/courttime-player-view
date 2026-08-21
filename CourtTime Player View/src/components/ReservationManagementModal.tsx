@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Textarea } from './ui/textarea';
 import { Calendar, CalendarPlus, MapPin, User, FileText, AlertCircle, Edit2, X, Users, DollarSign, KeyRound } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
@@ -139,6 +140,7 @@ export function ReservationManagementModal({
   const [editDuration, setEditDuration] = useState('');
   const [editCourt, setEditCourt] = useState('');
   const [editBookingType, setEditBookingType] = useState('');
+  const [editNotes, setEditNotes] = useState('');
   const [courts, setCourts] = useState<any[]>([]);
   const [isCheckingConflict, setIsCheckingConflict] = useState(false);
   const [hasConflict, setHasConflict] = useState(false);
@@ -215,6 +217,7 @@ export function ReservationManagementModal({
       setEditDuration((reservation.durationMinutes / 60).toString());
       setEditCourt(reservation.courtId);
       setEditBookingType(reservation.bookingType || '');
+      setEditNotes(reservation.notes || '');
       loadCourts();
     }
   }, [reservation, isEditing]);
@@ -602,7 +605,7 @@ export function ReservationManagementModal({
           startTime: editStartTime,
           endTime,
           durationMinutes,
-          notes: reservation.notes || '',
+          notes: editNotes,
           bookingType: editBookingType || undefined,
         });
         if (!response.success) {
@@ -637,7 +640,7 @@ export function ReservationManagementModal({
         startTime: editStartTime,
         endTime: endTime,
         durationMinutes: durationMinutes,
-        notes: reservation.notes || '',
+        notes: editNotes,
         // Carry the add-on and type across the re-create, otherwise editing a
         // reservation silently drops them. Pass coverage is re-resolved server-side.
         addBallMachine: reservation.addBallMachine || undefined,
@@ -1206,6 +1209,17 @@ export function ReservationManagementModal({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Notes (Optional)</label>
+                <Textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Add any special requests or notes..."
+                  rows={2}
+                />
               </div>
 
               {/* Conflict Warning */}

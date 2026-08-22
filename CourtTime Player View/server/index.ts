@@ -326,26 +326,31 @@ async function startServer() {
       let lockAcquired = false;
       try {
         lockClient = await getClient();
+        await lockClient.query('BEGIN');
         const lockResult = await lockClient.query(
-          'SELECT pg_try_advisory_lock(hashtext($1)) AS locked',
+          'SELECT pg_try_advisory_xact_lock(hashtext($1)) AS locked',
           ['courttime:bulletin-min-participant-cancellations']
         );
         lockAcquired = Boolean(lockResult.rows[0]?.locked);
-        if (!lockAcquired) return;
+        if (!lockAcquired) {
+          await lockClient.query('ROLLBACK');
+          return;
+        }
 
         const cancelledCount = await processBulletinMinParticipantCancellations();
         if (cancelledCount > 0) {
           console.log(`📧 Bulletin events cancelled for min participants: ${cancelledCount}`);
         }
+
+        await lockClient.query('COMMIT');
       } catch (error) {
         console.error('Bulletin min participant cancellation sweep failed:', error);
-      } finally {
         if (lockClient && lockAcquired) {
-          await lockClient.query(
-            'SELECT pg_advisory_unlock(hashtext($1))',
-            ['courttime:bulletin-min-participant-cancellations']
-          ).catch((error) => console.error('Failed to release bulletin sweep lock:', error));
+          await lockClient.query('ROLLBACK').catch((rollbackError) =>
+            console.error('Failed to roll back bulletin sweep lock:', rollbackError)
+          );
         }
+      } finally {
         lockClient?.release();
         bulletinCancellationSweepRunning = false;
       }

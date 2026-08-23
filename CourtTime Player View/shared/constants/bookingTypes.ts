@@ -134,6 +134,11 @@ export const BOOKING_TYPES = {
     color: 'bg-red-800 text-red-50 border-red-900',
     bgColor: 'bg-red-800'
   },
+  party: {
+    label: 'Party',
+    color: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300',
+    bgColor: 'bg-fuchsia-100'
+  },
 } as const;
 
 export type BookingTypeKey = keyof typeof BOOKING_TYPES;
@@ -165,6 +170,13 @@ export const DEER_LAKE_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
   'team_pickleball_lesson',
   'private_pickleball_lesson',
   'maintenance',
+] as const;
+
+// Standard reservation type list plus "Party" — used when the "BHR Reservation
+// Types" facility feature flag is enabled. Keeps the standard types intact.
+export const BHR_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
+  ...RESERVATION_LABEL_TYPE_KEYS,
+  'party',
 ] as const;
 
 export const getBookingTypeColor = (type: string | undefined): string => {

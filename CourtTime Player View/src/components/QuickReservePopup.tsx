@@ -17,7 +17,7 @@ import {
   parseHHMMToMinutes,
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
@@ -221,8 +221,11 @@ export function QuickReservePopup({
   const canUseRecurring = isAdmin || facilityFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const canSplitPayment = facilityFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const deerLakeReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const bhrReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
   const reservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : bhrReservationTypes
+    ? BHR_RESERVATION_TYPE_KEYS
     : RESERVATION_LABEL_TYPE_KEYS;
   const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [selectedCourt, setSelectedCourt] = useState('');

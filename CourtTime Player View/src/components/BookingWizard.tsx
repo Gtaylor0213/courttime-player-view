@@ -23,7 +23,7 @@ import {
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
 import { toast } from 'sonner';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
@@ -182,8 +182,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
   const splitCourtPaymentsEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const deerLakeReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const bhrReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
   const reservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : bhrReservationTypes
+    ? BHR_RESERVATION_TYPE_KEYS
     : RESERVATION_LABEL_TYPE_KEYS;
   const [hasBallMachinePass, setHasBallMachinePass] = useState(false);
   /** Effective open/close window per court for the selected day (facility hours merged with any court override). */

@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { bookingApi, facilitiesApi } from '../api/client';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 import { SplitPaymentPicker } from './SplitPaymentPicker';
 import { toast } from 'sonner';
@@ -148,8 +148,11 @@ export function ReservationManagementModal({
 
   const postPlayEnabled = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const deerLakeReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const bhrReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
   const reservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : bhrReservationTypes
+    ? BHR_RESERVATION_TYPE_KEYS
     : RESERVATION_LABEL_TYPE_KEYS;
   const isPostPlayBooking =
     settlementStatus === 'unsettled' ||

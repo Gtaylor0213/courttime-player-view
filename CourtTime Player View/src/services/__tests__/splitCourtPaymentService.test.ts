@@ -27,6 +27,13 @@ vi.mock('../featureFlagService', () => ({
 vi.mock('../courtPaymentSettings', () => ({
   loadCourtPaymentSettings: (...args: unknown[]) => loadCourtPaymentSettingsMock(...args),
   courtBookingNeedsPayment: (...args: unknown[]) => courtBookingNeedsPaymentMock(...args),
+  computeCourtFeeCents: (court: any, durationMinutes: number) => {
+    if (!court) return 0;
+    if (court.billing_mode === 'daily') return court.daily_rate_cents ? Number(court.daily_rate_cents) : 0;
+    if (!court.booking_amount_cents) return 0;
+    const hours = durationMinutes > 0 ? durationMinutes / 60 : 1;
+    return Math.round(Number(court.booking_amount_cents) * hours);
+  },
 }));
 vi.mock('../stripeConnectService', () => ({
   createSplitCourtPaymentCheckoutSession: (...args: unknown[]) => createSplitCourtPaymentCheckoutSessionMock(...args),
@@ -115,6 +122,34 @@ describe('createSplitCourtReservation', () => {
     expect(createNotificationMock).toHaveBeenCalledTimes(2);
     const notifiedUserIds = createNotificationMock.mock.calls.map((call) => call[0]);
     expect(notifiedUserIds.sort()).toEqual(['p1', 'p2']);
+  });
+
+  it('splits a daily-billed court by the flat day rate, ignoring duration', async () => {
+    loadCourtPaymentSettingsMock.mockReset().mockResolvedValue({
+      billing_mode: 'daily',
+      daily_rate_cents: 15000,
+      booking_amount_cents: null,
+    });
+
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ user_id: 'owner-1' }, { user_id: 'p1' }] }) // facility_memberships
+      .mockResolvedValueOnce({ rows: [{ courtName: 'Court 1', facilityName: 'Test Club' }] }); // loadBookingNoticeDetails
+
+    createBookingMock.mockResolvedValue({ success: true, booking: { id: 'booking-1', status: 'pending' } });
+    txClientQueryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'share-owner' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'share-p1' }] });
+
+    await createSplitCourtReservation({ ...baseParams, durationMinutes: 90, participantIds: ['p1'] });
+
+    // Flat $150 day rate split evenly two ways, regardless of the 90-minute duration.
+    const shareInsertCalls = txClientQueryMock.mock.calls.filter((call) =>
+      String(call[0]).includes('INSERT INTO booking_payment_shares')
+    );
+    const insertedAmounts = shareInsertCalls.map((call) => call[1][2]);
+    expect(insertedAmounts.sort((a: number, b: number) => a - b)).toEqual([7500, 7500]);
   });
 
   it('rejects when fewer than 2 total participants', async () => {

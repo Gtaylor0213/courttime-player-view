@@ -1,7 +1,7 @@
 import { query, transaction } from '../database/connection';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { isFeatureEnabled } from './featureFlagService';
-import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
+import { courtBookingNeedsPayment, loadCourtPaymentSettings, computeCourtFeeCents } from './courtPaymentSettings';
 import { getStripe } from './stripeConnectService';
 
 export type SettlementStatus =
@@ -224,6 +224,8 @@ function computeSettlementAmounts(params: {
   participantIds: string[];
   bookingAmountCents: number | null;
   requirePayment: boolean;
+  billingMode?: string | null;
+  dailyRateCents?: number | null;
   guestFeeCents: number | null;
   ballMachineFeeCents: number | null;
   durationMinutes: number;
@@ -239,10 +241,15 @@ function computeSettlementAmounts(params: {
   amountsByUser: Map<string, number>;
 } {
   const hours = params.durationMinutes > 0 ? params.durationMinutes / 60 : 1;
-  const courtFeeCents =
-    params.requirePayment && params.bookingAmountCents
-      ? Math.round(Number(params.bookingAmountCents) * hours)
-      : 0;
+  const courtFeeCents = computeCourtFeeCents(
+    {
+      require_payment: params.requirePayment,
+      booking_amount_cents: params.bookingAmountCents,
+      billing_mode: params.billingMode,
+      daily_rate_cents: params.dailyRateCents,
+    },
+    params.durationMinutes
+  );
   const guestFeeCents =
     params.bringGuest && params.guestFeeCents ? Number(params.guestFeeCents) : 0;
   const ballMachineFeeCents =
@@ -318,6 +325,8 @@ export async function previewSettlement(
     participantIds: participants.map((p) => p.userId),
     bookingAmountCents: court?.booking_amount_cents ?? null,
     requirePayment: Boolean(court?.require_payment),
+    billingMode: court?.billing_mode ?? 'hourly',
+    dailyRateCents: court?.daily_rate_cents ?? null,
     guestFeeCents: court?.guest_fee_cents ?? null,
     ballMachineFeeCents: court?.ball_machine_fee_cents ?? null,
     durationMinutes: Number(booking.durationMinutes) || 60,

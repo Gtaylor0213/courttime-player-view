@@ -159,6 +159,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       isWalkUp?: boolean;
       requirePayment?: boolean;
       bookingAmountCents?: number | null;
+      billingMode?: 'hourly' | 'daily';
+      dailyRateCents?: number | null;
       guestFeeCents?: number | null;
       ballMachineFeeCents?: number | null;
     }>
@@ -335,7 +337,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const hasPaidCourt = useMemo(() => {
     return selectedCourts.some((c) => {
       const meta = facilityCourts.find((fc) => fc.id === c.courtId);
-      return meta?.requirePayment && meta?.bookingAmountCents;
+      if (!meta?.requirePayment) return false;
+      return meta.billingMode === 'daily' ? Boolean(meta.dailyRateCents) : Boolean(meta.bookingAmountCents);
     });
   }, [selectedCourts, facilityCourts]);
 
@@ -407,17 +410,31 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return `${h} hr ${m} min`;
   }, [durationMins]);
 
-  // Per-hour rate for a single paid court; total scales with selected duration
-  const primaryCourtHourlyRateCents = useMemo(() => {
-    if (selectedCourts.length !== 1) return null;
+  const primaryCourtBillingMode = useMemo(() => {
+    if (selectedCourts.length !== 1) return 'hourly' as const;
     const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
-    return (meta?.requirePayment && meta?.bookingAmountCents) ? meta.bookingAmountCents : null;
+    return meta?.billingMode === 'daily' ? ('daily' as const) : ('hourly' as const);
   }, [selectedCourts, facilityCourts]);
 
+  // Per-hour rate for a single paid court; total scales with selected duration
+  const primaryCourtHourlyRateCents = useMemo(() => {
+    if (selectedCourts.length !== 1 || primaryCourtBillingMode !== 'hourly') return null;
+    const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
+    return (meta?.requirePayment && meta?.bookingAmountCents) ? meta.bookingAmountCents : null;
+  }, [selectedCourts, facilityCourts, primaryCourtBillingMode]);
+
+  // Flat rate for a single paid court on daily billing; does not scale with duration.
+  const primaryCourtDailyRateCents = useMemo(() => {
+    if (selectedCourts.length !== 1 || primaryCourtBillingMode !== 'daily') return null;
+    const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
+    return (meta?.requirePayment && meta?.dailyRateCents) ? meta.dailyRateCents : null;
+  }, [selectedCourts, facilityCourts, primaryCourtBillingMode]);
+
   const courtTotalAmountCents = useMemo(() => {
+    if (primaryCourtBillingMode === 'daily') return primaryCourtDailyRateCents;
     if (!primaryCourtHourlyRateCents || durationMins <= 0) return null;
     return Math.round(primaryCourtHourlyRateCents * (durationMins / 60));
-  }, [primaryCourtHourlyRateCents, durationMins]);
+  }, [primaryCourtBillingMode, primaryCourtDailyRateCents, primaryCourtHourlyRateCents, durationMins]);
 
   const ballMachineTotalCents = useMemo(() => {
     // A pass makes the machine free for this booking; the server re-decides authoritatively.
@@ -610,7 +627,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
       const paidCourtInSelection = selectedCourts.some((c) => {
         const meta = facilityCourts.find((fc) => fc.id === c.courtId);
-        return meta?.requirePayment && meta?.bookingAmountCents;
+        if (!meta?.requirePayment) return false;
+        return meta.billingMode === 'daily' ? Boolean(meta.dailyRateCents) : Boolean(meta.bookingAmountCents);
       });
       const requiresSingleBooking =
         paidCourtInSelection ||
@@ -1089,7 +1107,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               <span className="text-amber-900 font-semibold">
                 ${(courtTotalAmountCents / 100).toFixed(2)}
                 <span className="text-amber-600 font-normal ml-1">
-                  (${(primaryCourtHourlyRateCents! / 100).toFixed(2)}/hr × {durationLabel})
+                  {primaryCourtBillingMode === 'daily'
+                    ? '(flat day rate)'
+                    : `($${(primaryCourtHourlyRateCents! / 100).toFixed(2)}/hr × ${durationLabel})`}
                 </span>
               </span>
             </div>

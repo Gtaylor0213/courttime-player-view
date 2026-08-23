@@ -7,6 +7,9 @@ export type PaidCourtFormFields = {
   requirePayment?: boolean;
   bookingAmountCents?: number | null;
   bookingFeeDollars?: string;
+  billingMode?: 'hourly' | 'daily';
+  dailyRateCents?: number | null;
+  dailyRateDollars?: string;
   enableGuestFee?: boolean;
   guestFeeCents?: number | null;
   guestFeeDollars?: string;
@@ -33,13 +36,17 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
   stripeOnboarded,
   stripeStatusLoading,
   paymentsTabHint = 'Member Payments',
+  dailyBillingEnabled = false,
 }: {
   court: T;
   onChange: (patch: Partial<T>) => void;
   stripeOnboarded: boolean | null;
   stripeStatusLoading: boolean;
   paymentsTabHint?: string;
+  /** Only true when the court_daily_billing feature flag is enabled for this facility. */
+  dailyBillingEnabled?: boolean;
 }) {
+  const billingMode = court.billingMode === 'daily' ? 'daily' : 'hourly';
   return (
     <div className="mt-4 space-y-3 border rounded-md p-3 bg-white">
       {/* Stripe status */}
@@ -74,7 +81,44 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
           }
         />
       </div>
-      {court.requirePayment && (
+      {court.requirePayment && dailyBillingEnabled && (
+        <div className="flex items-center gap-4 text-sm">
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="billingMode"
+              checked={billingMode === 'hourly'}
+              onChange={() => onChange({ billingMode: 'hourly' } as Partial<T>)}
+            />
+            Hourly
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="billingMode"
+              checked={billingMode === 'daily'}
+              onChange={() => onChange({ billingMode: 'daily' } as Partial<T>)}
+            />
+            Daily (flat rate)
+          </label>
+        </div>
+      )}
+      {court.requirePayment && billingMode === 'daily' && dailyBillingEnabled ? (
+        <div className="space-y-2">
+          <Label>Daily rate (USD) *</Label>
+          <Input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={court.dailyRateDollars || ''}
+            onChange={(e) => onChange({ dailyRateDollars: e.target.value } as Partial<T>)}
+            placeholder="e.g. 150.00 per day"
+          />
+          <p className="text-xs text-gray-500">
+            Members are charged this flat amount once per booking, regardless of duration.
+          </p>
+        </div>
+      ) : court.requirePayment ? (
         <div className="space-y-2">
           <Label>Hourly rate (USD) *</Label>
           <Input
@@ -86,7 +130,7 @@ export function PaidCourtBookingFields<T extends PaidCourtFormFields>({
             placeholder="e.g. 25.00 per hour"
           />
         </div>
-      )}
+      ) : null}
 
       {/* Guest fee */}
       <div className="flex items-center justify-between gap-4 pt-1 border-t">

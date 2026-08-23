@@ -2,7 +2,7 @@ import { query, transaction } from '../database/connection';
 import { createBooking } from './bookingService';
 import { isFeatureEnabled } from './featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
-import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
+import { courtBookingNeedsPayment, loadCourtPaymentSettings, computeCourtFeeCents } from './courtPaymentSettings';
 import { createSplitCourtPaymentCheckoutSession, refundSplitPaymentShares, refundSplitShareDifference } from './stripeConnectService';
 import { notificationService } from './notificationService';
 
@@ -50,7 +50,7 @@ export async function createSplitCourtReservation(params: {
   const court = await loadCourtPaymentSettings(params.courtId);
   if (!court || !courtBookingNeedsPayment(court, {})) throw new Error('This court does not require a payment');
   // Split v1 intentionally excludes add-ons: guests and machines have one clear owner, not an equal split.
-  const total = Math.round(Number(court.booking_amount_cents) * (params.durationMinutes / 60));
+  const total = computeCourtFeeCents(court, params.durationMinutes);
   if (total <= 0) throw new Error('This reservation has no fee to split');
 
   const deadline = new Date(Date.now() + HOLD_MINUTES * 60_000);
@@ -222,7 +222,7 @@ export async function updateSplitPaymentParticipants(params: {
 
   const court = await loadCourtPaymentSettings(booking.courtId);
   if (!court) throw new Error('This court is no longer available');
-  const total = Math.round(Number(court.booking_amount_cents) * (Number(booking.durationMinutes) / 60));
+  const total = computeCourtFeeCents(court, Number(booking.durationMinutes));
   if (total <= 0) throw new Error('This reservation has no fee to split');
 
   const existing = await query(

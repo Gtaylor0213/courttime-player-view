@@ -18,6 +18,8 @@ export interface CourtCreateData {
   isWalkUp?: boolean;
   requirePayment?: boolean;
   bookingAmountCents?: number | null;
+  billingMode?: 'hourly' | 'daily';
+  dailyRateCents?: number | null;
   guestFeeCents?: number | null;
   ballMachineFeeCents?: number | null;
   courtRules?: string;
@@ -40,6 +42,8 @@ export interface Court {
   isWalkUp: boolean;
   requirePayment: boolean;
   bookingAmountCents: number | null;
+  billingMode: 'hourly' | 'daily';
+  dailyRateCents: number | null;
   guestFeeCents: number | null;
   ballMachineFeeCents: number | null;
   status: string;
@@ -58,15 +62,18 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
     `INSERT INTO courts (
       facility_id, name, court_number, surface_type, court_type,
       is_indoor, has_lights, is_walk_up, require_payment, booking_amount_cents,
+      billing_mode, daily_rate_cents,
       guest_fee_cents, ball_machine_fee_cents, court_rules, parent_court_id, split_configuration,
       is_split_court, status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'available')
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'available')
     RETURNING
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
+      billing_mode as "billingMode",
+      daily_rate_cents as "dailyRateCents",
       guest_fee_cents as "guestFeeCents",
       ball_machine_fee_cents as "ballMachineFeeCents",
       status,
@@ -84,6 +91,8 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
       courtData.isWalkUp || false,
       courtData.requirePayment || false,
       courtData.requirePayment && courtData.bookingAmountCents ? courtData.bookingAmountCents : null,
+      courtData.billingMode || 'hourly',
+      courtData.requirePayment && courtData.billingMode === 'daily' ? courtData.dailyRateCents ?? null : null,
       courtData.guestFeeCents ?? null,
       courtData.ballMachineFeeCents ?? null,
       courtData.courtRules || null,
@@ -140,6 +149,8 @@ export async function createCourtsBulk(
         is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
+        billing_mode as "billingMode",
+        daily_rate_cents as "dailyRateCents",
         status,
         court_rules as "courtRules", parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
@@ -199,6 +210,8 @@ export async function createSplitCourt(
           is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
           COALESCE(require_payment, false) as "requirePayment",
           booking_amount_cents as "bookingAmountCents",
+          billing_mode as "billingMode",
+          daily_rate_cents as "dailyRateCents",
           status,
           court_rules as "courtRules", parent_court_id as "parentCourtId",
           split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
@@ -227,6 +240,8 @@ export async function createSplitCourt(
         is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
+        billing_mode as "billingMode",
+        daily_rate_cents as "dailyRateCents",
         status,
         court_rules as "courtRules", parent_court_id as "parentCourtId",
         split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
@@ -257,6 +272,8 @@ export async function updateCourtsBulk(
     status?: string;
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
+    billingMode?: 'hourly' | 'daily';
+    dailyRateCents?: number | null;
     guestFeeCents?: number | null;
     ballMachineFeeCents?: number | null;
   }
@@ -300,6 +317,14 @@ export async function updateCourtsBulk(
     setClauses.push(`booking_amount_cents = $${paramIndex++}`);
     params.push(updates.bookingAmountCents);
   }
+  if (updates.billingMode !== undefined) {
+    setClauses.push(`billing_mode = $${paramIndex++}`);
+    params.push(updates.billingMode);
+  }
+  if (updates.dailyRateCents !== undefined) {
+    setClauses.push(`daily_rate_cents = $${paramIndex++}`);
+    params.push(updates.dailyRateCents);
+  }
   if (updates.guestFeeCents !== undefined) {
     setClauses.push(`guest_fee_cents = $${paramIndex++}`);
     params.push(updates.guestFeeCents);
@@ -332,6 +357,8 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
+      billing_mode as "billingMode",
+      daily_rate_cents as "dailyRateCents",
       status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
@@ -355,6 +382,8 @@ export async function getCourtById(courtId: string): Promise<Court | null> {
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
+      billing_mode as "billingMode",
+      daily_rate_cents as "dailyRateCents",
       status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
@@ -378,6 +407,8 @@ export async function getSplitCourts(parentCourtId: string): Promise<Court[]> {
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
+      billing_mode as "billingMode",
+      daily_rate_cents as "dailyRateCents",
       status,
       court_rules as "courtRules", parent_court_id as "parentCourtId",
       split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
@@ -432,11 +463,21 @@ export async function updateCourt(
     if (!updates.requirePayment) {
       fields.push(`booking_amount_cents = $${paramCount++}`);
       values.push(null);
+      fields.push(`daily_rate_cents = $${paramCount++}`);
+      values.push(null);
     }
   }
   if (updates.bookingAmountCents !== undefined) {
     fields.push(`booking_amount_cents = $${paramCount++}`);
     values.push(updates.bookingAmountCents);
+  }
+  if (updates.billingMode !== undefined) {
+    fields.push(`billing_mode = $${paramCount++}`);
+    values.push(updates.billingMode);
+  }
+  if (updates.dailyRateCents !== undefined) {
+    fields.push(`daily_rate_cents = $${paramCount++}`);
+    values.push(updates.dailyRateCents);
   }
   if (updates.courtRules !== undefined) {
     fields.push(`court_rules = $${paramCount++}`);
@@ -459,6 +500,8 @@ export async function updateCourt(
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
+      billing_mode as "billingMode",
+      daily_rate_cents as "dailyRateCents",
       status,
        court_rules as "courtRules", parent_court_id as "parentCourtId",
        split_configuration as "splitConfiguration", is_split_court as "isSplitCourt",
@@ -476,10 +519,14 @@ export async function assertPaidCourtConfig(
   facilityId: string,
   requirePayment: boolean,
   bookingAmountCents?: number | null,
-  options?: { requireStripe?: boolean }
+  options?: { requireStripe?: boolean; billingMode?: 'hourly' | 'daily'; dailyRateCents?: number | null }
 ): Promise<void> {
   if (!requirePayment) return;
-  if (!bookingAmountCents || bookingAmountCents <= 0) {
+  if (options?.billingMode === 'daily') {
+    if (!options.dailyRateCents || options.dailyRateCents <= 0) {
+      throw new Error('Daily rate is required when daily court billing is enabled');
+    }
+  } else if (!bookingAmountCents || bookingAmountCents <= 0) {
     throw new Error('Booking fee is required when paid court booking is enabled');
   }
   if (options?.requireStripe === false) return;

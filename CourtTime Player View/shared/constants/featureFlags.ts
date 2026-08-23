@@ -16,6 +16,7 @@ export const FEATURE_FLAGS = {
   DEER_LAKE_RESERVATION_TYPES: 'deer_lake_reservation_types',
   UNIVERSITY_CLUB_GUEST_FEE: 'university_club_guest_fee',
   PLAYER_MULTIPLE_COURTS: 'player_multiple_courts',
+  COURT_DAILY_BILLING: 'court_daily_billing',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -36,4 +37,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   deer_lake_reservation_types: 'Deer Lake Reservation Types (swap in Deer Lake\'s custom reservation type list)',
   university_club_guest_fee: 'University Club Guest Fee (offer "pay at front desk" alongside Stripe when a guest fee applies)',
   player_multiple_courts: 'Player Multiple Courts (let members add additional courts to a booking, not just admins)',
+  court_daily_billing: 'Court Daily Billing (let admins charge a flat day rate instead of hourly for a court)',
 };

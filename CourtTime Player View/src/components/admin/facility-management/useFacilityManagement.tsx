@@ -26,6 +26,7 @@ import {
   parseBookingFeeDollars,
 } from '../PaidCourtBookingFields';
 import { validateStoredCourtType } from '../../../../shared/constants/courtTypes';
+import { FEATURE_FLAGS } from '../../../../shared/constants/featureFlags';
 import {
   courtScheduleRowsToOperatingHoursMap,
   extractCourtScheduleFromApiResponse,
@@ -87,7 +88,8 @@ const normalizePeakHoursRestrictions = (rules: any = {}): BookingRules['peakHour
 
 export function useFacilityManagement(activeTab: string) {
   const { user } = useAuth();
-  const { selectedFacilityId: currentFacilityId } = useAppContext();
+  const { selectedFacilityId: currentFacilityId, enabledFeatures } = useAppContext();
+  const dailyBillingEnabled = enabledFeatures?.includes(FEATURE_FLAGS.COURT_DAILY_BILLING) ?? false;
 
 const [isEditing, setIsEditing] = useState(false);
 const [loading, setLoading] = useState(true);
@@ -1159,6 +1161,14 @@ const loadCourts = async () => {
           bookingFeeDollars: formatCentsToDollars(
             c.bookingAmountCents ?? c.booking_amount_cents
           ),
+          billingMode: c.billingMode === 'daily' || c.billing_mode === 'daily' ? 'daily' : 'hourly',
+          dailyRateCents:
+            c.dailyRateCents != null
+              ? Number(c.dailyRateCents)
+              : c.daily_rate_cents != null
+                ? Number(c.daily_rate_cents)
+                : null,
+          dailyRateDollars: formatCentsToDollars(c.dailyRateCents ?? c.daily_rate_cents),
           guestFeeCents:
             c.guestFeeCents != null
               ? Number(c.guestFeeCents)
@@ -1207,6 +1217,9 @@ const handleAddNewCourt = () => {
     isWalkUp: false,
     requirePayment: false,
     bookingFeeDollars: '',
+    billingMode: 'hourly',
+    dailyRateCents: null,
+    dailyRateDollars: '',
     enableGuestFee: false,
     guestFeeCents: null,
     guestFeeDollars: '',
@@ -1227,6 +1240,9 @@ const handleEditCourt = (court: Court) => {
     requirePayment: court.requirePayment === true,
     bookingFeeDollars:
       court.bookingFeeDollars || formatCentsToDollars(court.bookingAmountCents),
+    billingMode: court.billingMode === 'daily' ? 'daily' : 'hourly',
+    dailyRateDollars:
+      court.dailyRateDollars || formatCentsToDollars(court.dailyRateCents),
     enableGuestFee: Boolean(court.guestFeeCents),
     guestFeeDollars:
       court.guestFeeDollars || formatCentsToDollars(court.guestFeeCents),
@@ -1258,10 +1274,19 @@ const handleSaveCourt = async () => {
       : undefined;
   const wasPaid = existingCourt?.requirePayment === true;
   const turningOnPaidBooking = wantsPayment && !wasPaid;
+  const billingMode: 'hourly' | 'daily' =
+    dailyBillingEnabled && editingCourt.billingMode === 'daily' ? 'daily' : 'hourly';
   const bookingAmountCents =
     parseBookingFeeDollars(editingCourt.bookingFeeDollars) ??
     (wantsPayment ? existingCourt?.bookingAmountCents ?? null : null);
-  if (wantsPayment && !bookingAmountCents) {
+  const dailyRateCents =
+    parseBookingFeeDollars(editingCourt.dailyRateDollars) ??
+    (wantsPayment ? existingCourt?.dailyRateCents ?? null : null);
+  if (wantsPayment && billingMode === 'daily' && !dailyRateCents) {
+    toast.error('Enter a daily rate when daily court billing is enabled');
+    return;
+  }
+  if (wantsPayment && billingMode === 'hourly' && !bookingAmountCents) {
     toast.error('Enter a booking fee when paid court booking is enabled');
     return;
   }
@@ -1307,6 +1332,9 @@ const handleSaveCourt = async () => {
       requirePayment: wantsPayment,
       bookingAmountCents: wantsPayment ? bookingAmountCents ?? null : null,
       bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
+      billingMode: wantsPayment ? billingMode : 'hourly' as const,
+      dailyRateCents: wantsPayment && billingMode === 'daily' ? dailyRateCents ?? null : null,
+      dailyRateDollars: wantsPayment && billingMode === 'daily' ? editingCourt.dailyRateDollars : '',
       guestFeeCents: hasGuestFee ? guestFeeCents : null,
       guestFeeDollars: hasGuestFee ? editingCourt.guestFeeDollars : '',
       ballMachineFeeCents: hasBallMachineFee ? ballMachineFeeCents : null,

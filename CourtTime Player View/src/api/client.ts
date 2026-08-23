@@ -1009,6 +1009,9 @@ export const adminApi = {
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
     bookingFeeDollars?: string;
+    billingMode?: 'hourly' | 'daily';
+    dailyRateCents?: number | null;
+    dailyRateDollars?: string;
     guestFeeCents?: number | null;
     guestFeeDollars?: string;
     ballMachineFeeCents?: number | null;
@@ -1057,6 +1060,8 @@ export const adminApi = {
     status?: string;
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
+    billingMode?: 'hourly' | 'daily';
+    dailyRateCents?: number | null;
     guestFeeCents?: number | null;
     ballMachineFeeCents?: number | null;
   }) => {
@@ -1077,6 +1082,9 @@ export const adminApi = {
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
     bookingFeeDollars?: string;
+    billingMode?: 'hourly' | 'daily';
+    dailyRateCents?: number | null;
+    dailyRateDollars?: string;
     guestFeeCents?: number | null;
     guestFeeDollars?: string;
     ballMachineFeeCents?: number | null;

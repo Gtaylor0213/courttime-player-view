@@ -880,6 +880,9 @@ router.patch('/courts/:courtId', async (req, res) => {
       bookingAmountCents,
       booking_amount_cents,
       bookingFeeDollars,
+      billingMode: rawBillingMode,
+      dailyRateCents,
+      dailyRateDollars,
       guestFeeCents: rawGuestFeeCents,
       guestFeeDollars,
       ballMachineFeeCents: rawBallMachineFeeCents,
@@ -894,7 +897,7 @@ router.patch('/courts/:courtId', async (req, res) => {
     const status = rawStatus ? (statusMap[rawStatus] || rawStatus) : rawStatus;
 
     const courtFacility = await query(
-      `SELECT facility_id, require_payment, booking_amount_cents
+      `SELECT facility_id, require_payment, booking_amount_cents, billing_mode, daily_rate_cents
        FROM courts WHERE id = $1`,
       [courtId]
     );
@@ -915,14 +918,36 @@ router.patch('/courts/:courtId', async (req, res) => {
     else if (bookingFeeDollars != null && bookingFeeDollars !== '') {
       amountCents = Math.round(parseFloat(String(bookingFeeDollars)) * 100);
     }
+
+    let dailyAmountCents: number | null | undefined;
+    if (dailyRateCents != null) dailyAmountCents = parseInt(String(dailyRateCents), 10);
+    else if (dailyRateDollars != null && dailyRateDollars !== '') {
+      dailyAmountCents = Math.round(parseFloat(String(dailyRateDollars)) * 100);
+    }
+    let billingMode: 'hourly' | 'daily' | undefined;
+    if (rawBillingMode === 'hourly' || rawBillingMode === 'daily') {
+      billingMode = rawBillingMode;
+      if (billingMode === 'daily' && !(await isFeatureEnabled(facilityIdForCourt, FEATURE_FLAGS.COURT_DAILY_BILLING))) {
+        return res.status(403).json({ success: false, error: 'Daily court billing is not enabled for this facility' });
+      }
+    }
+
     if (wantsPayment !== undefined && wantsPayment) {
+      const effectiveBillingMode = billingMode ?? existingCourt.billing_mode ?? 'hourly';
       const effectiveAmountCents =
         amountCents ??
         (existingCourt.booking_amount_cents != null
           ? parseInt(String(existingCourt.booking_amount_cents), 10)
           : null);
+      const effectiveDailyRateCents =
+        dailyAmountCents ??
+        (existingCourt.daily_rate_cents != null
+          ? parseInt(String(existingCourt.daily_rate_cents), 10)
+          : null);
       await assertPaidCourtConfig(facilityIdForCourt, true, effectiveAmountCents, {
         requireStripe: !wasPaid,
+        billingMode: effectiveBillingMode,
+        dailyRateCents: effectiveDailyRateCents,
       });
     }
 
@@ -975,6 +1000,8 @@ router.patch('/courts/:courtId', async (req, res) => {
           WHEN $8 = false THEN NULL
           ELSE booking_amount_cents
         END,
+        billing_mode = CASE WHEN $8 = false THEN 'hourly' ELSE COALESCE($19, billing_mode) END,
+        daily_rate_cents = CASE WHEN $8 = false THEN NULL ELSE COALESCE($20, daily_rate_cents) END,
         guest_fee_cents = CASE
           WHEN $14::boolean THEN $15::integer
           ELSE guest_fee_cents
@@ -1000,6 +1027,8 @@ router.patch('/courts/:courtId', async (req, res) => {
         is_walk_up as "isWalkUp",
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
+        billing_mode as "billingMode",
+        daily_rate_cents as "dailyRateCents",
         guest_fee_cents as "guestFeeCents",
         ball_machine_fee_cents as "ballMachineFeeCents",
         status,
@@ -1027,6 +1056,8 @@ router.patch('/courts/:courtId', async (req, res) => {
       updateSplitFields,
       ballMachineFeeValue !== undefined,
       ballMachineFeeValue ?? null,
+      billingMode ?? null,
+      dailyAmountCents ?? null,
     ]);
 
     if (result.rows.length === 0) {
@@ -1134,6 +1165,9 @@ router.post('/courts/:facilityId', async (req, res) => {
       bookingAmountCents,
       booking_amount_cents,
       bookingFeeDollars,
+      billingMode: rawBillingModeCreate,
+      dailyRateCents: dailyRateCentsCreate,
+      dailyRateDollars: dailyRateDollarsCreate,
       guestFeeCents: rawGuestFeeCentsCreate,
       guestFeeDollars: guestFeeDollarsCreate,
       ballMachineFeeCents: rawBallMachineFeeCentsCreate,
@@ -1169,7 +1203,22 @@ router.post('/courts/:facilityId', async (req, res) => {
     else if (bookingFeeDollars != null && bookingFeeDollars !== '') {
       amountCents = Math.round(parseFloat(String(bookingFeeDollars)) * 100);
     }
-    await assertPaidCourtConfig(facilityId, wantsPayment, amountCents);
+
+    const billingModeCreate: 'hourly' | 'daily' =
+      rawBillingModeCreate === 'daily' ? 'daily' : 'hourly';
+    if (billingModeCreate === 'daily' && !(await isFeatureEnabled(facilityId, FEATURE_FLAGS.COURT_DAILY_BILLING))) {
+      return res.status(403).json({ success: false, error: 'Daily court billing is not enabled for this facility' });
+    }
+    let dailyAmountCentsCreate: number | null = null;
+    if (dailyRateCentsCreate != null) dailyAmountCentsCreate = parseInt(String(dailyRateCentsCreate), 10);
+    else if (dailyRateDollarsCreate != null && dailyRateDollarsCreate !== '') {
+      dailyAmountCentsCreate = Math.round(parseFloat(String(dailyRateDollarsCreate)) * 100);
+    }
+
+    await assertPaidCourtConfig(facilityId, wantsPayment, amountCents, {
+      billingMode: billingModeCreate,
+      dailyRateCents: dailyAmountCentsCreate,
+    });
 
     let guestFeeCreate: number | null = null;
     if (rawGuestFeeCentsCreate != null && rawGuestFeeCentsCreate !== '') {
@@ -1212,6 +1261,8 @@ router.post('/courts/:facilityId', async (req, res) => {
           isWalkUp: isWalkUp || false,
           requirePayment: wantsPayment,
           bookingAmountCents: wantsPayment ? amountCents : null,
+          billingMode: wantsPayment ? billingModeCreate : 'hourly',
+          dailyRateCents: wantsPayment && billingModeCreate === 'daily' ? dailyAmountCentsCreate : null,
           guestFeeCents: guestFeeCreate,
           ballMachineFeeCents: ballMachineFeeCreate,
         },

@@ -36,6 +36,8 @@ export type SingleCourtAddPayload = {
     isWalkUp?: boolean;
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
+    billingMode?: 'hourly' | 'daily';
+    dailyRateCents?: number | null;
     guestFeeCents?: number | null;
     ballMachineFeeCents?: number | null;
   };
@@ -276,6 +278,8 @@ async function executeCourtAddPayload(
     isWalkUp: court.isWalkUp || false,
     requirePayment: court.requirePayment || false,
     bookingAmountCents: court.requirePayment ? court.bookingAmountCents ?? null : null,
+    billingMode: court.requirePayment ? court.billingMode ?? 'hourly' : 'hourly',
+    dailyRateCents: court.requirePayment && court.billingMode === 'daily' ? court.dailyRateCents ?? null : null,
     guestFeeCents: court.guestFeeCents ?? null,
     ballMachineFeeCents: court.ballMachineFeeCents ?? null,
   });

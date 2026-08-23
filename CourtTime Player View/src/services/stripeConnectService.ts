@@ -12,7 +12,7 @@
 
 import Stripe from 'stripe';
 import { query, transaction } from '../database/connection';
-import { courtBookingNeedsPayment, loadCourtPaymentSettings } from './courtPaymentSettings';
+import { courtBookingNeedsPayment, loadCourtPaymentSettings, computeCourtFeeCents } from './courtPaymentSettings';
 
 export type PaymentCategory = 'BALL_MACHINE' | 'CLINIC' | 'DRILL' | 'DUES' | 'OTHER';
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
@@ -1164,7 +1164,6 @@ export async function createCourtBookingCheckoutSession(params: {
   if (!court) {
     throw new Error('Court not found');
   }
-  const hasBookingFee = court.require_payment && court.booking_amount_cents;
   const hasGuestFee = pb.bringGuest && court.guest_fee_cents;
   const hasBallMachineFee = pb.addBallMachine && court.ball_machine_fee_cents;
   if (!courtBookingNeedsPayment(court, { bringGuest: pb.bringGuest, addBallMachine: pb.addBallMachine })) {
@@ -1174,12 +1173,11 @@ export async function createCourtBookingCheckoutSession(params: {
     throw new Error('This club has not finished Stripe Connect onboarding yet');
   }
 
-  // booking_amount_cents / ball_machine_fee_cents are hourly rates; scale by duration.
+  // booking_amount_cents / ball_machine_fee_cents are hourly rates and scale by duration;
+  // daily_rate_cents (billing_mode 'daily') is a flat rate regardless of duration.
   const durationMinutes = pb.durationMinutes > 0 ? pb.durationMinutes : 60;
   const hours = durationMinutes / 60;
-  const bookingAmountCents = hasBookingFee
-    ? Math.round(Number(court.booking_amount_cents) * hours)
-    : 0;
+  const bookingAmountCents = computeCourtFeeCents(court, durationMinutes);
   const guestAmountCents = hasGuestFee ? Number(court.guest_fee_cents) : 0;
   const ballMachineAmountCents = hasBallMachineFee
     ? Math.round(Number(court.ball_machine_fee_cents) * hours)
@@ -1236,9 +1234,11 @@ export async function createCourtBookingCheckoutSession(params: {
   const lineItems: import('stripe').Stripe.Checkout.SessionCreateParams.LineItem[] = [];
   if (bookingAmountCents > 0) {
     const hoursLabel =
-      durationMinutes % 60 === 0
-        ? `${durationMinutes / 60} hr`
-        : `${durationMinutes} min`;
+      court.billing_mode === 'daily'
+        ? 'day rate'
+        : durationMinutes % 60 === 0
+          ? `${durationMinutes / 60} hr`
+          : `${durationMinutes} min`;
     lineItems.push({
       quantity: 1,
       price_data: {

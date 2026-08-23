@@ -332,6 +332,14 @@ export function CourtCalendarView() {
                           : court.booking_amount_cents != null
                             ? Number(court.booking_amount_cents)
                             : null,
+                      billingMode:
+                        (court.billingMode ?? court.billing_mode) === 'daily' ? 'daily' : 'hourly',
+                      dailyRateCents:
+                        court.dailyRateCents != null
+                          ? Number(court.dailyRateCents)
+                          : court.daily_rate_cents != null
+                            ? Number(court.daily_rate_cents)
+                            : null,
                       guestFeeCents:
                         court.guestFeeCents != null
                           ? Number(court.guestFeeCents)
@@ -356,6 +364,8 @@ export function CourtCalendarView() {
                   isWalkUp: court.isWalkUp,
                   requirePayment: court.requirePayment,
                   bookingAmountCents: court.bookingAmountCents,
+                  billingMode: court.billingMode,
+                  dailyRateCents: court.dailyRateCents,
                   guestFeeCents: court.guestFeeCents,
                   ballMachineFeeCents: court.ballMachineFeeCents,
                 }))

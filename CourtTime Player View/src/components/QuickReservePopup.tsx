@@ -52,6 +52,8 @@ interface QuickReservePopupProps {
       isWalkUp?: boolean;
       requirePayment?: boolean;
       bookingAmountCents?: number | null;
+      billingMode?: 'hourly' | 'daily';
+      dailyRateCents?: number | null;
       guestFeeCents?: number | null;
       ballMachineFeeCents?: number | null;
     }>;
@@ -596,7 +598,10 @@ export function QuickReservePopup({
 
     const includesPaidCourt = allSelectedCourts.some((court) => {
       const fullCourt = availableCourts.find((c) => c.id === court.id);
-      return Boolean(fullCourt?.requirePayment && fullCourt?.bookingAmountCents);
+      if (!fullCourt?.requirePayment) return false;
+      return fullCourt.billingMode === 'daily'
+        ? Boolean(fullCourt.dailyRateCents)
+        : Boolean(fullCourt.bookingAmountCents);
     });
     if (includesPaidCourt && (allSelectedCourts.length > 1 || advancedBooking)) {
       alert('Paid court reservations must be booked one court and one time at a time.');

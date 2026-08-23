@@ -7,6 +7,8 @@ import { Switch } from '../../ui/switch';
 import { Save, X } from 'lucide-react';
 import { PaidCourtBookingFields } from '../PaidCourtBookingFields';
 import { CourtTypeField } from '../CourtTypeField';
+import { useAppContext } from '../../../contexts/AppContext';
+import { FEATURE_FLAGS } from '../../../../shared/constants/featureFlags';
 import {
   courtFieldsAfterNameChange,
   courtFieldsAfterNumberInputChange,
@@ -40,6 +42,8 @@ export function FacilityCourtFormBody({
   isAddingNew?: boolean;
   courtAddPromo?: ReturnType<typeof useCourtAddPromo>;
 }) {
+  const { enabledFeatures } = useAppContext();
+  const dailyBillingEnabled = enabledFeatures?.includes(FEATURE_FLAGS.COURT_DAILY_BILLING) ?? false;
   const id = (suffix: string) => `${idPrefix}-${suffix}`;
   return (
     <>
@@ -247,6 +251,7 @@ export function FacilityCourtFormBody({
         stripeOnboarded={stripeOnboarded}
         stripeStatusLoading={stripeStatusLoading}
         paymentsTabHint="Member Payments in the sidebar"
+        dailyBillingEnabled={dailyBillingEnabled}
       />
 
       <CourtWaiverSection

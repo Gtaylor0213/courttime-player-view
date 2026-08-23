@@ -57,6 +57,7 @@ import {
 import { useCourtAddPromo } from './useCourtAddPromo';
 import { CourtAddPromoSection } from './CourtAddPromoSection';
 import { CourtWaiverSection } from './CourtWaiverSection';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 
 interface Court extends PaidCourtFormFields {
   id: string;
@@ -95,7 +96,8 @@ interface BulkEditForm {
 
 export function CourtManagement() {
   const { user } = useAuth();
-  const { selectedFacilityId: currentFacilityId } = useAppContext();
+  const { selectedFacilityId: currentFacilityId, enabledFeatures } = useAppContext();
+  const dailyBillingEnabled = enabledFeatures?.includes(FEATURE_FLAGS.COURT_DAILY_BILLING) ?? false;
   const navigate = useNavigate();
   const [courts, setCourts] = useState<Court[]>([]);
   const [editingCourt, setEditingCourt] = useState<Court | null>(null);
@@ -250,6 +252,14 @@ export function CourtManagement() {
           bookingFeeDollars: formatCentsToDollars(
             c.bookingAmountCents ?? c.booking_amount_cents
           ),
+          billingMode: c.billingMode === 'daily' || c.billing_mode === 'daily' ? 'daily' : 'hourly',
+          dailyRateCents:
+            c.dailyRateCents != null
+              ? Number(c.dailyRateCents)
+              : c.daily_rate_cents != null
+                ? Number(c.daily_rate_cents)
+                : null,
+          dailyRateDollars: formatCentsToDollars(c.dailyRateCents ?? c.daily_rate_cents),
           guestFeeCents:
             c.guestFeeCents != null
               ? Number(c.guestFeeCents)
@@ -307,6 +317,9 @@ export function CourtManagement() {
       isWalkUp: false,
       requirePayment: false,
       bookingFeeDollars: '',
+      billingMode: 'hourly',
+      dailyRateCents: null,
+      dailyRateDollars: '',
       enableGuestFee: false,
       guestFeeCents: null,
       guestFeeDollars: '',
@@ -327,6 +340,9 @@ export function CourtManagement() {
       requirePayment: court.requirePayment === true,
       bookingFeeDollars:
         court.bookingFeeDollars || formatCentsToDollars(court.bookingAmountCents),
+      billingMode: court.billingMode === 'daily' ? 'daily' : 'hourly',
+      dailyRateDollars:
+        court.dailyRateDollars || formatCentsToDollars(court.dailyRateCents),
       enableGuestFee: Boolean(court.guestFeeCents),
       guestFeeDollars:
         court.guestFeeDollars || formatCentsToDollars(court.guestFeeCents),
@@ -356,10 +372,19 @@ export function CourtManagement() {
       !isAddingNew && editingCourt.id ? courts.find((c) => c.id === editingCourt.id) : undefined;
     const wasPaid = existingCourt?.requirePayment === true;
     const turningOnPaidBooking = wantsPayment && !wasPaid;
+    const billingMode: 'hourly' | 'daily' =
+      dailyBillingEnabled && editingCourt.billingMode === 'daily' ? 'daily' : 'hourly';
     const bookingAmountCents =
       parseBookingFeeDollars(editingCourt.bookingFeeDollars) ??
       (wantsPayment ? existingCourt?.bookingAmountCents ?? null : null);
-    if (wantsPayment && !bookingAmountCents) {
+    const dailyRateCents =
+      parseBookingFeeDollars(editingCourt.dailyRateDollars) ??
+      (wantsPayment ? existingCourt?.dailyRateCents ?? null : null);
+    if (wantsPayment && billingMode === 'daily' && !dailyRateCents) {
+      toast.error('Enter a daily rate when daily court billing is enabled');
+      return;
+    }
+    if (wantsPayment && billingMode === 'hourly' && !bookingAmountCents) {
       toast.error('Enter an hourly rate when paid court booking is enabled');
       return;
     }
@@ -405,6 +430,9 @@ export function CourtManagement() {
         requirePayment: wantsPayment,
         bookingAmountCents: wantsPayment ? bookingAmountCents ?? null : null,
         bookingFeeDollars: wantsPayment ? editingCourt.bookingFeeDollars : '',
+        billingMode: wantsPayment ? billingMode : 'hourly' as const,
+        dailyRateCents: wantsPayment && billingMode === 'daily' ? dailyRateCents ?? null : null,
+        dailyRateDollars: wantsPayment && billingMode === 'daily' ? editingCourt.dailyRateDollars : '',
         guestFeeCents: hasGuestFee ? guestFeeCents : null,
         guestFeeDollars: hasGuestFee ? editingCourt.guestFeeDollars : '',
         ballMachineFeeCents: hasBallMachineFee ? ballMachineFeeCents : null,
@@ -933,6 +961,7 @@ export function CourtManagement() {
                     onChange={(patch) => setEditingCourt((prev) => (prev ? { ...prev, ...patch } : prev))}
                     stripeOnboarded={stripeOnboarded}
                     stripeStatusLoading={stripeStatusLoading}
+                    dailyBillingEnabled={dailyBillingEnabled}
                   />
                 )}
                 {editingCourt && (
@@ -1108,7 +1137,12 @@ export function CourtManagement() {
                               <span className="text-xs text-gray-600 font-normal">{hoursSummary}</span>
                             ) : null}
                             {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
-                            {court.requirePayment && court.bookingAmountCents && (
+                            {court.requirePayment && court.billingMode === 'daily' && court.dailyRateCents && (
+                              <Badge className="bg-amber-100 text-amber-900 border-amber-200">
+                                Paid · ${(court.dailyRateCents / 100).toFixed(2)}/day
+                              </Badge>
+                            )}
+                            {court.requirePayment && court.billingMode !== 'daily' && court.bookingAmountCents && (
                               <Badge className="bg-amber-100 text-amber-900 border-amber-200">
                                 Paid · ${(court.bookingAmountCents / 100).toFixed(2)}/hr
                               </Badge>
@@ -1286,6 +1320,7 @@ export function CourtManagement() {
                           onChange={(patch) => setEditingCourt((prev) => (prev ? { ...prev, ...patch } : prev))}
                           stripeOnboarded={stripeOnboarded}
                           stripeStatusLoading={stripeStatusLoading}
+                          dailyBillingEnabled={dailyBillingEnabled}
                         />
                       )}
                       {editingCourt && (

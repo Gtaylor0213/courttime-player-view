@@ -987,7 +987,6 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
             <Label htmlFor="notes">Notes (Optional)</Label>
             <Textarea
               id="notes"
-              placeholder="Add any special requests or notes..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}

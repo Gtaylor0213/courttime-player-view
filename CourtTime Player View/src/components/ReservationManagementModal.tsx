@@ -1270,7 +1270,6 @@ export function ReservationManagementModal({
                 <Textarea
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
-                  placeholder="Add any special requests or notes..."
                   rows={2}
                 />
               </div>

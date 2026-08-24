@@ -2330,7 +2330,7 @@ export function CourtCalendarView() {
         // Guarantee a legible minimum so very short (e.g. 30-min) bookings don't render illegibly small.
         const height = Math.max(rawHeight, effectiveSubSlotHeight * 0.85);
         const colorClass = isBlocked
-          ? 'bg-gray-200 text-gray-500 border-0'
+          ? 'bg-gray-200 text-gray-500 border-gray-300'
           : booking.bookingType
             ? getBookingTypeBadgeColor(booking.bookingType)
             : 'bg-blue-50 text-blue-900 border-blue-200';
@@ -2376,7 +2376,7 @@ export function CourtCalendarView() {
           <div
             key={`booking-${booking.bookingId || idx}`}
             title={tooltipText}
-            className={`absolute ${isBlocked ? '' : 'rounded-lg border cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${isMobile && !calendarTouchLocked ? 'calendar-booking-pan-x' : ''} ${colorClass}`}
+            className={`absolute rounded-lg border ${isBlocked ? '' : 'cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${isMobile && !calendarTouchLocked ? 'calendar-booking-pan-x' : ''} ${colorClass}`}
             style={{
               top,
               left,

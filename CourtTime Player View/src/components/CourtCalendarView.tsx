@@ -2320,13 +2320,13 @@ export function CourtCalendarView() {
           && bookingEndMinutes !== null
           && bookingEndMinutes > bookingStartMinutes;
         const top = hasExactRange
-          ? (isMobile ? 0 : measuredHeaderHeight) + ((bookingStartMinutes - dayStartMinutesForOverlay) / 30) * effectiveSubSlotHeight + (isBlocked ? 0 : 2)
-          : (isMobile ? 0 : measuredHeaderHeight) + overlay.startSlotIndex * effectiveSubSlotHeight + (isBlocked ? 0 : 2);
-        const left = timeColOffset + overlay.courtIndex * effectiveCourtWidth + (isBlocked ? 0 : 4);
-        const width = effectiveCourtWidth - (isBlocked ? 0 : 8);
+          ? (isMobile ? 0 : measuredHeaderHeight) + ((bookingStartMinutes - dayStartMinutesForOverlay) / 30) * effectiveSubSlotHeight + 2
+          : (isMobile ? 0 : measuredHeaderHeight) + overlay.startSlotIndex * effectiveSubSlotHeight + 2;
+        const left = timeColOffset + overlay.courtIndex * effectiveCourtWidth + 4;
+        const width = effectiveCourtWidth - 8;
         const rawHeight = hasExactRange
-          ? (((bookingEndMinutes - bookingStartMinutes) / 30) * effectiveSubSlotHeight) - (isBlocked ? 0 : 4)
-          : overlay.slotCount * effectiveSubSlotHeight - (isBlocked ? 0 : 4);
+          ? (((bookingEndMinutes - bookingStartMinutes) / 30) * effectiveSubSlotHeight) - 4
+          : overlay.slotCount * effectiveSubSlotHeight - 4;
         // Guarantee a legible minimum so very short (e.g. 30-min) bookings don't render illegibly small.
         const height = Math.max(rawHeight, effectiveSubSlotHeight * 0.85);
         const colorClass = isBlocked

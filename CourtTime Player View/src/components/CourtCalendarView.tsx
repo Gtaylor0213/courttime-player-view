@@ -29,6 +29,8 @@ import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { formatCourtCalendarSubtitle } from '../../shared/utils/courtNaming';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { courtTypeLabel } from '../../shared/constants/courtTypes';
+import { useCourtTypeFilter } from './useCourtTypeFilter';
 import {
   fetchBookingCalendarDetails,
   offerAddBookingToCalendar,
@@ -145,7 +147,6 @@ export function CourtCalendarView() {
     enabledFeatures.includes(FEATURE_FLAGS.MEMBER_NUMBER) &&
     !user?.memberNumbers?.[selectedFacility];
   const [calendarViewMode, setCalendarViewMode] = useState<'court' | 'week' | 'month'>('court');
-  const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [currentTime, setCurrentTime] = useState(getFacilityDate());
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
@@ -1136,14 +1137,13 @@ export function CourtCalendarView() {
     () => sortCourtsForDisplay([...(currentFacility?.courts || [])]),
     [currentFacility?.courts]
   );
-  const filteredCourts = React.useMemo(() => {
-    // If no court type is selected, show all courts
-    if (selectedCourtType === null) {
-      return allCourts;
-    }
-    // Otherwise filter by selected type
-    return allCourts.filter(court => court.type === selectedCourtType);
-  }, [allCourts, selectedCourtType]);
+  const {
+    courtTypes,
+    selectedCourtType,
+    setSelectedCourtType,
+    hasMultipleCourtTypes,
+    filteredCourts,
+  } = useCourtTypeFilter(allCourts);
 
   // Apply court display limit based on user preference or device defaults
   const courts = React.useMemo(() => {
@@ -1272,9 +1272,7 @@ export function CourtCalendarView() {
     ),
     [primeTimeConfigs]
   );
-  const selectedCourtTypeLabel = selectedCourtType
-    ? `${selectedCourtType.charAt(0).toUpperCase()}${selectedCourtType.slice(1)}`
-    : 'All courts';
+  const selectedCourtTypeLabel = selectedCourtType ? courtTypeLabel(selectedCourtType) : 'All courts';
   const displayedCourtsLabel = displayedCourtsCount !== null
     ? `${Math.min(displayedCourtsCount, filteredCourts.length)} shown`
     : `${filteredCourts.length} courts`;
@@ -2682,27 +2680,24 @@ export function CourtCalendarView() {
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Court Type</p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => { setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis'); setUserSetZoom(false); }}
-                      >
-                        Tennis
-                      </Button>
-                      <Button
-                        variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => { setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball'); setUserSetZoom(false); }}
-                      >
-                        Pickleball
-                      </Button>
+                  {hasMultipleCourtTypes && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Court Type</p>
+                      <div className="flex gap-2">
+                        {courtTypes.map(type => (
+                          <Button
+                            key={type}
+                            variant={selectedCourtType === type ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => { setSelectedCourtType(selectedCourtType === type ? null : type); setUserSetZoom(false); }}
+                          >
+                            {courtTypeLabel(type)}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="space-y-2">
                     <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Visible Courts</p>
@@ -2730,25 +2725,23 @@ export function CourtCalendarView() {
               <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
                 <div className="flex flex-wrap items-center gap-2 md:gap-3">
                   <h3 className="text-base md:text-lg font-medium w-full md:w-auto">{currentFacility?.name}</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-600 hidden md:inline">Court Type:</span>
-                    <div className="flex gap-1">
-                      <Button
-                        variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => { setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis'); setUserSetZoom(false); }}
-                      >
-                        Tennis
-                      </Button>
-                      <Button
-                        variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => { setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball'); setUserSetZoom(false); }}
-                      >
-                        Pickleball
-                      </Button>
+                  {hasMultipleCourtTypes && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-600 hidden md:inline">Court Type:</span>
+                      <div className="flex gap-1">
+                        {courtTypes.map(type => (
+                          <Button
+                            key={type}
+                            variant={selectedCourtType === type ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => { setSelectedCourtType(selectedCourtType === type ? null : type); setUserSetZoom(false); }}
+                          >
+                            {courtTypeLabel(type)}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Court Display Count */}
                   <div className="flex items-center gap-2">
@@ -2912,14 +2905,19 @@ export function CourtCalendarView() {
             className="bg-white rounded-lg shadow-lg border border-gray-200 p-4 md:p-8 text-center text-gray-500 h-full"
           >
             <p>No {selectedCourtType} courts available at this facility.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? 'pickleball' : 'tennis')}
-            >
-              Show {selectedCourtType === 'tennis' ? 'Pickleball' : 'Tennis'} Courts
-            </Button>
+            {(() => {
+              const otherType = courtTypes.find(t => t !== selectedCourtType);
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setSelectedCourtType(otherType ?? null)}
+                >
+                  {otherType ? `Show ${courtTypeLabel(otherType)} Courts` : 'Show All Courts'}
+                </Button>
+              );
+            })()}
           </div>
         ) : isMobile ? (
           <div

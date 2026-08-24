@@ -1,5 +1,5 @@
 /** Preset court types shown in admin dropdowns (stored value = label). */
-export const STANDARD_COURT_TYPE_VALUES = ['Tennis', 'Pickleball', 'Dual Purpose'] as const;
+export const STANDARD_COURT_TYPE_VALUES = ['Tennis', 'Pickleball', 'Dual Purpose', 'Padel'] as const;
 
 export type StandardCourtType = (typeof STANDARD_COURT_TYPE_VALUES)[number];
 
@@ -14,6 +14,21 @@ const DUAL_ALIASES = new Set(['dual', 'dual use', 'dual purpose']);
 /** True when the court is typed as Tennis (not Pickleball, Dual Purpose, or custom). */
 export function isTennisCourtType(value: string | null | undefined): boolean {
   return String(value ?? '').trim().toLowerCase() === 'tennis';
+}
+
+/** True when the court is typed as Padel (not Tennis, Pickleball, Dual Purpose, or custom). */
+export function isPadelCourtType(value: string | null | undefined): boolean {
+  return String(value ?? '').trim().toLowerCase() === 'padel';
+}
+
+/** Display label for a lowercased court type key (e.g. from the calendar filter). */
+export function courtTypeLabel(type: string | null | undefined): string {
+  const key = String(type ?? '').trim().toLowerCase();
+  if (key === 'tennis') return 'Tennis';
+  if (key === 'pickleball') return 'Pickleball';
+  if (key === 'padel') return 'Padel';
+  if (!key) return 'Court';
+  return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 export function isStandardCourtType(value: string | null | undefined): boolean {

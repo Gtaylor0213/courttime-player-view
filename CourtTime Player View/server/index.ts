@@ -12,6 +12,7 @@ import fs from 'fs';
 import { testConnection, closePool, getClient } from '../src/database/connection';
 import { processBulletinMinParticipantCancellations } from '../src/services/bulletinBoardService';
 import { expireSplitCourtReservations } from '../src/services/splitCourtPaymentService';
+import { sweepPadelDropIns } from '../src/services/padelSocialService';
 
 /** Load `.env`, then fill gaps from `.env.development`, then override with `.env.local`. */
 function loadProjectEnv() {
@@ -37,6 +38,7 @@ import playerProfileRoutes from './routes/playerProfile';
 import hittingPartnerRoutes from './routes/hittingPartner';
 import bulletinBoardRoutes from './routes/bulletinBoard';
 import lessonsRoutes from './routes/lessons';
+import padelRoutes from './routes/padel';
 import bookingRoutes from './routes/bookings';
 import adminRoutes from './routes/admin';
 import addressWhitelistRoutes from './routes/addressWhitelist';
@@ -219,6 +221,7 @@ app.use('/api/facility-locations', requireAuth, facilityLocationsRoutes);
 app.use('/api/hitting-partner', requireAuth, requireNotPaymentLocked, hittingPartnerRoutes);
 app.use('/api/bulletin-board', requireAuth, requireNotPaymentLocked, bulletinBoardRoutes);
 app.use('/api/lessons', requireAuth, requireNotPaymentLocked, lessonsRoutes);
+app.use('/api/padel', requireAuth, requireNotPaymentLocked, padelRoutes);
 app.use('/api/bookings', requireAuth, requireNotPaymentLocked, bookingRoutes);
 app.use('/api/address-whitelist', requireAuth, requireNotPaymentLocked, addressWhitelistRoutes);
 app.use('/api/messages', requireAuth, requireNotPaymentLocked, messagesRoutes);
@@ -359,6 +362,9 @@ async function startServer() {
     const bulletinCancellationInterval = setInterval(runBulletinCancellationSweep, 60 * 1000);
     const splitPaymentExpiryInterval = setInterval(() => {
       expireSplitCourtReservations().catch((error) => console.error('Split payment expiry sweep failed:', error));
+    }, 60 * 1000);
+    const padelDropInSweepInterval = setInterval(() => {
+      sweepPadelDropIns().catch((error) => console.error('Padel drop-in sweep failed:', error));
     }, 60 * 1000);
 
     // Handle server errors

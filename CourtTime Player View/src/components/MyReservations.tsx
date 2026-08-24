@@ -21,6 +21,8 @@ interface Reservation {
   status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
   bookingType?: string;
   notes?: string;
+  maxPlayers?: number | null;
+  openToMembers?: boolean;
   createdAt: string;
   updatedAt: string;
   courtName?: string;

@@ -1356,6 +1356,42 @@ export async function createSplitCourtPaymentCheckoutSession(params: {
   return { url: session.url };
 }
 
+/** Checkout for one player's drop-in fee to join a Padel Social Play session. */
+export async function createPadelDropInCheckoutSession(params: {
+  sessionId: string; padelSocialPlayerId: string; facilityId: string; memberId: string; amountCents: number;
+  sessionLabel: string; successUrl: string; cancelUrl: string;
+}): Promise<{ url: string }> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error('Stripe is not configured on this server');
+  const clubResult = await query(
+    `SELECT name, stripe_account_id, stripe_onboarded, platform_fee_percent FROM facilities WHERE id = $1`,
+    [params.facilityId]
+  );
+  const club = clubResult.rows[0];
+  if (!club?.stripe_account_id || !club.stripe_onboarded) throw new Error('This club has not finished Stripe Connect onboarding yet');
+  const fee = Math.max(0, Math.round(params.amountCents * Number(club.platform_fee_percent || 0) / 100));
+  const payment = await query(
+    `INSERT INTO connect_payments (club_id, member_id, payment_item_id, amount_cents, platform_fee_cents, status)
+     VALUES ($1, $2, NULL, $3, $4, 'PENDING') RETURNING id`,
+    [params.facilityId, params.memberId, params.amountCents, fee]
+  );
+  const paymentId = payment.rows[0].id;
+  const customerOpts = await connectCheckoutCustomerOptions(params.memberId, params.facilityId);
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment', payment_method_types: ['card'], ...customerOpts,
+    line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: params.amountCents, product_data: { name: 'Padel Social Play', description: `${params.sessionLabel} at ${club.name}` } } }],
+    success_url: params.successUrl, cancel_url: params.cancelUrl,
+    metadata: { connectPaymentId: paymentId, padelDropInPayment: 'true', sessionId: params.sessionId, padelSocialPlayerId: params.padelSocialPlayerId },
+    payment_intent_data: { application_fee_amount: fee, metadata: { connectPaymentId: paymentId, padelDropInPayment: 'true', padelSocialPlayerId: params.padelSocialPlayerId } },
+  }, { stripeAccount: club.stripe_account_id });
+  await transaction(async (client) => {
+    await client.query(`UPDATE connect_payments SET stripe_checkout_session_id = $1 WHERE id = $2`, [session.id, paymentId]);
+    await client.query(`UPDATE padel_social_players SET connect_payment_id = $1 WHERE id = $2 AND payment_status = 'pending'`, [paymentId, params.padelSocialPlayerId]);
+  });
+  if (!session.url) throw new Error('Stripe did not return a Checkout URL');
+  return { url: session.url };
+}
+
 // ---------------------------------------------------------------------------
 // Refunds
 // ---------------------------------------------------------------------------
@@ -1394,7 +1430,14 @@ async function executeStripeConnectRefund(params: {
   return refund.id;
 }
 
-async function executeConnectPaymentRefund(params: {
+/**
+ * Low-level refund mechanics with no authorization check of its own -- callers
+ * are responsible for deciding who may trigger it. `refundConnectPayment` below
+ * wraps this for the admin-initiated case; self-service/system-initiated refund
+ * paths (e.g. a padel drop-in player backing out of a session they paid to join)
+ * call this directly after doing their own appropriate authorization check.
+ */
+export async function executeConnectPaymentRefund(params: {
   connectPaymentId: string;
   stripePaymentIntentId: string;
   stripeAccountId: string;
@@ -2283,10 +2326,16 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
     session.metadata?.courtBookingPayment === 'true' ||
     Boolean(paidRow?.pending_booking && !paidRow?.bulletin_post_id);
   const isSplitCourtPayment = session.metadata?.splitCourtPayment === 'true';
+  const isPadelDropInPayment = session.metadata?.padelDropInPayment === 'true';
 
   if (paidRow && isSplitCourtPayment) {
     const { finalizeSplitPayment } = await import('./splitCourtPaymentService');
     await finalizeSplitPayment(paidRow.id);
+  }
+
+  if (paidRow && isPadelDropInPayment) {
+    const { finalizePadelDropInPayment } = await import('./padelSocialService');
+    await finalizePadelDropInPayment(paidRow.id);
   }
 
   if (paidRow && isCourtBookingPayment && paidRow.pending_booking) {
@@ -2345,7 +2394,9 @@ export async function markCheckoutSessionPaid(session: Stripe.Checkout.Session):
         ? 'COURT_BOOKING'
         : isBallMachinePassPayment
           ? 'BALL_MACHINE_PASS'
-          : 'PAYMENT_ITEM';
+          : isPadelDropInPayment
+            ? 'PADEL_DROP_IN'
+            : 'PAYMENT_ITEM';
     await query(
       `INSERT INTO facility_revenue_log
          (facility_id, amount_cents, payment_type, source_id, source_type, member_id)

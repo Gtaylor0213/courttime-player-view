@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { sortFacilitiesByName } from '../../../shared/utils/facilitySort';
 import { parseLocalDate } from '../../utils/dateUtils';
 import { confirmSkipRecurringConflicts } from '../../utils/recurringConflicts';
+import { useCourtTypeFilter } from '../useCourtTypeFilter';
+import { courtTypeLabel, isPadelCourtType } from '../../../shared/constants/courtTypes';
 
 interface Member {
   userId: string;
@@ -36,7 +38,6 @@ export function AdminBooking() {
   // Facility and court selection
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [selectedFacility, setSelectedFacility] = useState('');
-  const [selectedCourtType, setSelectedCourtType] = useState<'tennis' | 'pickleball' | null>(null);
   const [selectedCourt, setSelectedCourt] = useState('');
   const [selectedCourtId, setSelectedCourtId] = useState('');
 
@@ -189,29 +190,13 @@ export function AdminBooking() {
     return s === 'available' || s === 'active';
   });
 
-  // Determine if facility has both types of courts
-  const hasTennisCourts = allCourts.some(court => court.type === 'tennis');
-  const hasPickleballCourts = allCourts.some(court => court.type === 'pickleball');
-  const hasMultipleCourtTypes = hasTennisCourts && hasPickleballCourts;
-
-  // Auto-select court type when there's only one type available
-  useEffect(() => {
-    if (!hasMultipleCourtTypes && selectedCourtType === null) {
-      if (hasTennisCourts && !hasPickleballCourts) {
-        setSelectedCourtType('tennis');
-      } else if (hasPickleballCourts && !hasTennisCourts) {
-        setSelectedCourtType('pickleball');
-      }
-    }
-  }, [hasMultipleCourtTypes, hasTennisCourts, hasPickleballCourts, selectedCourtType]);
-
-  // Filter courts by selected type
-  const availableCourts = React.useMemo(() => {
-    if (selectedCourtType === null) {
-      return allCourts;
-    }
-    return allCourts.filter(court => court.type === selectedCourtType);
-  }, [allCourts, selectedCourtType]);
+  const {
+    courtTypes,
+    selectedCourtType,
+    setSelectedCourtType,
+    hasMultipleCourtTypes,
+    filteredCourts: availableCourts,
+  } = useCourtTypeFilter(allCourts);
 
   // Fetch bookings when facility or date changes
   useEffect(() => {
@@ -362,6 +347,15 @@ export function AdminBooking() {
       setSelectedCourtId('');
     }
   }, [selectedCourtType, availableCourts, existingBookings, selectedDate, duration]);
+
+  // Default padel bookings to a 90-minute block (vs. the standard 2-hour default),
+  // only when the duration hasn't already been changed from that default.
+  useEffect(() => {
+    const court = availableCourts.find(c => c.id === selectedCourtId);
+    if (court && isPadelCourtType(court.type) && duration === '2') {
+      setDuration('1.5');
+    }
+  }, [selectedCourtId, availableCourts]);
 
   // Calculate which courts are available at the selected time and duration
   const courtsWithAvailability = React.useMemo(() => {
@@ -677,7 +671,8 @@ export function AdminBooking() {
           endTime: endTime24,
           durationMinutes: Math.round(durationMinutes),
           bookingType,
-          notes: finalNotes || undefined
+          notes: finalNotes || undefined,
+          maxPlayers: isPadelCourtType(availableCourts.find(ac => ac.id === c.id)?.type) ? 4 : undefined
         }))
       );
 
@@ -907,26 +902,17 @@ export function AdminBooking() {
                   <div className="flex items-center gap-3">
                     <Label className="min-w-[100px]">Court Type</Label>
                     <div className="flex gap-2">
-                      {hasTennisCourts && (
+                      {courtTypes.map(type => (
                         <Button
+                          key={type}
                           type="button"
-                          variant={selectedCourtType === 'tennis' ? 'default' : 'outline'}
+                          variant={selectedCourtType === type ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => setSelectedCourtType(selectedCourtType === 'tennis' ? null : 'tennis')}
+                          onClick={() => setSelectedCourtType(selectedCourtType === type ? null : type)}
                         >
-                          Tennis
+                          {courtTypeLabel(type)}
                         </Button>
-                      )}
-                      {hasPickleballCourts && (
-                        <Button
-                          type="button"
-                          variant={selectedCourtType === 'pickleball' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setSelectedCourtType(selectedCourtType === 'pickleball' ? null : 'pickleball')}
-                        >
-                          Pickleball
-                        </Button>
-                      )}
+                      ))}
                     </div>
                   </div>
                 )}

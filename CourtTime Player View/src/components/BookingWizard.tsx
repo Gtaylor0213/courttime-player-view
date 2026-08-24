@@ -29,6 +29,7 @@ import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { isPadelCourtType } from '../../shared/constants/courtTypes';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 
 interface RuleViolation {
@@ -156,6 +157,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       id: string;
       name: string;
       status: string;
+      courtType?: string;
       isWalkUp?: boolean;
       requirePayment?: boolean;
       bookingAmountCents?: number | null;
@@ -659,7 +661,8 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           endTime: endTime24,
           durationMinutes: durationMins,
           bookingType: bookingType || undefined,
-          notes: notes || undefined
+          notes: notes || undefined,
+          maxPlayers: isPadelCourtType(facilityCourts.find(fc => fc.id === c.courtId)?.courtType) ? 4 : undefined
         }))
       );
 

@@ -11,7 +11,9 @@ import {
   createBookingWithOverride,
   markNoShow,
   checkInBooking,
-  createRecurringBookingSeries
+  createRecurringBookingSeries,
+  setBookingOpenToMembers,
+  claimOpenSpot
 } from '../../src/services/bookingService';
 import {
   acceptCourtWaiverForUser,
@@ -308,6 +310,60 @@ router.get('/:bookingId/calendar.ics', async (req, res, next) => {
 });
 
 /**
+ * GET /api/bookings/open?facilityId=
+ * Browse bookings the host has advertised as open to other club members
+ * ("need 1 more for Tuesday 6pm"), with spots still remaining. Requires
+ * active membership (or admin) at the facility -- not public/cross-club.
+ * Registered before /:bookingId so "open" isn't swallowed as a booking id.
+ */
+router.get('/open', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const facilityId = typeof req.query.facilityId === 'string' ? req.query.facilityId : '';
+    if (!facilityId) {
+      return res.status(400).json({ success: false, error: 'facilityId is required' });
+    }
+
+    const membership = await dbQuery(
+      `SELECT 1 FROM facility_memberships WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+       UNION
+       SELECT 1 FROM facility_admins WHERE user_id = $1 AND facility_id = $2 AND status = 'active'
+       LIMIT 1`,
+      [userId, facilityId]
+    );
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Not a member of this facility' });
+    }
+
+    const result = await dbQuery(
+      `SELECT
+        b.id, b.court_id as "courtId", c.name as "courtName",
+        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
+        b.start_time as "startTime", b.end_time as "endTime",
+        b.max_players as "maxPlayers", b.booking_type as "bookingType",
+        b.user_id as "hostUserId", u.full_name as "hostName",
+        1 + COALESCE((SELECT COUNT(*) FROM booking_participants bp WHERE bp.booking_id = b.id), 0) as "claimedCount"
+       FROM bookings b
+       JOIN courts c ON b.court_id = c.id
+       JOIN users u ON b.user_id = u.id
+       WHERE b.facility_id = $1
+         AND b.open_to_members = true
+         AND b.status = 'confirmed'
+         AND b.booking_date >= CURRENT_DATE
+       ORDER BY b.booking_date ASC, b.start_time ASC`,
+      [facilityId]
+    );
+
+    res.json({ success: true, bookings: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/bookings/:bookingId
  * Get a specific booking by ID
  */
@@ -358,6 +414,7 @@ router.post('/', async (req, res, next) => {
       excludeBookingId,
       splitParticipantIds,
       payAtFrontDesk,
+      maxPlayers,
     } = req.body;
 
     // Validation
@@ -413,6 +470,7 @@ router.post('/', async (req, res, next) => {
       guestNames: Array.isArray(guestNames)
         ? guestNames.filter((n: unknown) => typeof n === 'string' && n.trim())
         : undefined,
+      maxPlayers: typeof maxPlayers === 'number' && maxPlayers > 0 ? maxPlayers : undefined,
       provisionalSameRequestBookings: Array.isArray(provisionalSameRequestBookings)
         ? provisionalSameRequestBookings
         : undefined,
@@ -1200,6 +1258,55 @@ router.patch('/:bookingId', async (req, res, next) => {
       notes,
       bookingType,
     });
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/:bookingId/open-spot
+ * Host toggles whether their booking is advertised as open to other members.
+ */
+router.post('/:bookingId/open-spot', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { open, maxPlayers } = req.body || {};
+    if (typeof open !== 'boolean') {
+      return res.status(400).json({ success: false, error: 'open (boolean) is required' });
+    }
+    const result = await setBookingOpenToMembers(
+      req.params.bookingId,
+      userId,
+      open,
+      maxPlayers != null ? Number(maxPlayers) : undefined
+    );
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/:bookingId/claim-spot
+ * A club member claims an open spot on someone else's booking.
+ */
+router.post('/:bookingId/claim-spot', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const result = await claimOpenSpot(req.params.bookingId, userId);
     if (!result.success) {
       return res.status(400).json(result);
     }

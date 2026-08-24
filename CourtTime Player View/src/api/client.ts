@@ -695,6 +695,74 @@ export const lessonsApi = {
   },
 };
 
+export const padelApi = {
+  listSessions: async (facilityId: string) => {
+    return apiRequest(`/api/padel/sessions/${facilityId}`);
+  },
+  createSession: async (data: {
+    facilityId: string;
+    format: 'americano' | 'mexicano';
+    sessionDate: string;
+    startTime: string;
+    durationMinutes: number;
+    playerCount: number;
+    roundsCount: number;
+  }) => {
+    return apiRequest('/api/padel/sessions', { method: 'POST', body: JSON.stringify(data) });
+  },
+  joinSession: async (sessionId: string) => {
+    return apiRequest(`/api/padel/sessions/${sessionId}/join`, { method: 'POST' });
+  },
+  leaveSession: async (sessionId: string) => {
+    return apiRequest(`/api/padel/sessions/${sessionId}/leave`, { method: 'POST' });
+  },
+  startSession: async (sessionId: string) => {
+    return apiRequest(`/api/padel/sessions/${sessionId}/start`, { method: 'POST' });
+  },
+  getSessionDetail: async (sessionId: string) => {
+    return apiRequest(`/api/padel/sessions/${sessionId}/detail`);
+  },
+  getStandings: async (sessionId: string) => {
+    return apiRequest(`/api/padel/sessions/${sessionId}/standings`);
+  },
+  generateNextRound: async (sessionId: string) => {
+    return apiRequest(`/api/padel/sessions/${sessionId}/rounds/next`, { method: 'POST' });
+  },
+  recordMatchScore: async (matchId: string, team1Score: number, team2Score: number) => {
+    return apiRequest(`/api/padel/matches/${matchId}/score`, {
+      method: 'POST',
+      body: JSON.stringify({ team1Score, team2Score }),
+    });
+  },
+  cancelSession: async (sessionId: string) => {
+    return apiRequest(`/api/padel/sessions/${sessionId}/cancel`, { method: 'POST' });
+  },
+  getPricing: async (facilityId: string) => {
+    return apiRequest(`/api/padel/pricing/${facilityId}`);
+  },
+  setPricing: async (facilityId: string, dropInRateCents: number | null) => {
+    return apiRequest(`/api/padel/pricing/${facilityId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ dropInRateCents }),
+    });
+  },
+};
+
+export const openSpotApi = {
+  listOpen: async (facilityId: string) => {
+    return apiRequest(`/api/bookings/open?facilityId=${facilityId}`);
+  },
+  setOpenToMembers: async (bookingId: string, open: boolean, maxPlayers?: number) => {
+    return apiRequest(`/api/bookings/${bookingId}/open-spot`, {
+      method: 'POST',
+      body: JSON.stringify({ open, maxPlayers }),
+    });
+  },
+  claimSpot: async (bookingId: string) => {
+    return apiRequest(`/api/bookings/${bookingId}/claim-spot`, { method: 'POST' });
+  },
+};
+
 // Booking API
 export const bookingApi = {
   getByFacility: async (facilityId: string, date: string) => {
@@ -752,6 +820,8 @@ export const bookingApi = {
     splitParticipantIds?: string[];
     /** University Club Guest Fee: skip Stripe and defer the whole total to the front desk. */
     payAtFrontDesk?: boolean;
+    /** General capacity for this booking (e.g. 4 for a padel court). */
+    maxPlayers?: number;
   }) => {
     const res = await apiRequest('/api/bookings', {
       method: 'POST',

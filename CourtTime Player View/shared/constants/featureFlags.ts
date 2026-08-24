@@ -18,6 +18,7 @@ export const FEATURE_FLAGS = {
   PLAYER_MULTIPLE_COURTS: 'player_multiple_courts',
   COURT_DAILY_BILLING: 'court_daily_billing',
   BHR_RESERVATION_TYPES: 'bhr_reservation_types',
+  PADEL: 'padel',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -40,4 +41,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   player_multiple_courts: 'Player Multiple Courts (let members add additional courts to a booking, not just admins)',
   court_daily_billing: 'Court Daily Billing (let admins charge a flat day rate instead of hourly for a court)',
   bhr_reservation_types: 'BHR Reservation Types (adds a "Party" reservation type alongside the standard types)',
+  padel: 'Padel (padel courts, Americano/Mexicano social play, open matches)',
 };

@@ -94,7 +94,11 @@ function defaultActionUrlForType(dbType: string): string | undefined {
     case 'booking_cancelled':
     case 'booking_reminder':
     case 'court_change':
+    case 'booking_open_spot_claimed':
       return '/my-reservations';
+    case 'padel_session_full':
+    case 'padel_round_ready':
+      return '/padel';
     case 'message':
       return '/messages';
     case 'payment':

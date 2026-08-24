@@ -7,7 +7,7 @@ import { Textarea } from './ui/textarea';
 import { Calendar, CalendarPlus, MapPin, User, FileText, AlertCircle, Edit2, X, Users, DollarSign, KeyRound } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
-import { bookingApi, facilitiesApi } from '../api/client';
+import { bookingApi, facilitiesApi, openSpotApi } from '../api/client';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../constants/bookingTypes';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
@@ -41,6 +41,10 @@ interface ReservationDetails {
   addBallMachine?: boolean;
   /** Non-null when a St. Marlow pass covered the machine (no hourly fee). */
   ballMachinePassId?: string | null;
+  /** General capacity for this booking (e.g. 4 for a padel court). Null = no cap tracked. */
+  maxPlayers?: number | null;
+  /** Host is advertising open spots on this booking to other club members. */
+  openToMembers?: boolean;
   paymentMode?: 'single_payer' | 'split' | 'front_desk';
   /** University Club Guest Fee: total deferred to the front desk, and when staff collected it. */
   frontDeskAmountDueCents?: number | null;
@@ -112,6 +116,7 @@ export function ReservationManagementModal({
     collectedAt: string | null;
   }>({ amountDueCents: null, collectedAt: null });
   const [isMarkingFrontDeskCollected, setIsMarkingFrontDeskCollected] = useState(false);
+  const [isTogglingOpenToMembers, setIsTogglingOpenToMembers] = useState(false);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberResults, setMemberResults] = useState<Array<{ userId: string; fullName: string; email: string }>>([]);
@@ -382,6 +387,26 @@ export function ReservationManagementModal({
       toast.error('Failed to cancel reservation. Please try again.');
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const handleToggleOpenToMembers = async () => {
+    if (!reservation?.id) return;
+    const nextOpen = !reservation.openToMembers;
+    setIsTogglingOpenToMembers(true);
+    try {
+      const response = await openSpotApi.setOpenToMembers(reservation.id, nextOpen, reservation.maxPlayers ?? undefined);
+      if (response.success) {
+        toast.success(nextOpen ? 'Open to other members — they can now claim a spot' : 'No longer advertising this spot');
+        onUpdate?.();
+      } else {
+        toast.error(response.error || 'Could not update');
+      }
+    } catch (error) {
+      console.error('Error toggling open-to-members:', error);
+      toast.error('Could not update. Please try again.');
+    } finally {
+      setIsTogglingOpenToMembers(false);
     }
   };
 
@@ -894,6 +919,31 @@ export function ReservationManagementModal({
                       {reservation.notes}
                     </p>
                   </div>
+                </div>
+              )}
+
+              {/* Fill-a-spot: host can advertise open spots to other club members */}
+              {isOwnReservation && reservation.status === 'confirmed' && !!reservation.maxPlayers && (
+                <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-md border border-gray-200">
+                  <div className="flex items-start gap-2">
+                    <Users className="h-4 w-4 text-gray-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Looking for more players?</p>
+                      <p className="text-xs text-gray-500">
+                        {reservation.openToMembers
+                          ? 'Other club members can see and claim an open spot on this booking.'
+                          : 'Let other club members claim a spot on this booking.'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={reservation.openToMembers ? 'default' : 'outline'}
+                    onClick={handleToggleOpenToMembers}
+                    disabled={isTogglingOpenToMembers}
+                  >
+                    {reservation.openToMembers ? 'Open' : 'Post Spot'}
+                  </Button>
                 </div>
               )}
 

@@ -377,6 +377,12 @@ export interface Booking {
   ballMachinePassId?: string | null;
   paymentMode?: 'single_payer' | 'split';
   paymentDeadlineAt?: string | null;
+  /** General capacity for this booking (e.g. 4 for a padel court). */
+  maxPlayers?: number | null;
+  /** Host is advertising open spots on this booking to other club members. */
+  openToMembers?: boolean;
+  /** Non-null when this booking was created as part of a Padel Social Play session. */
+  padelSessionId?: string | null;
   createdAt: string;
   updatedAt: string;
   // Joined data
@@ -564,6 +570,8 @@ export async function getBookingsByUser(
           b.notes,
           COALESCE(b.add_ball_machine, false) as "addBallMachine",
           b.ball_machine_pass_id as "ballMachinePassId",
+          b.max_players as "maxPlayers",
+          COALESCE(b.open_to_members, false) as "openToMembers",
           b.created_at as "createdAt",
           b.updated_at as "updatedAt",
           c.name as "courtName",
@@ -598,6 +606,8 @@ export async function getBookingsByUser(
           b.notes,
           COALESCE(b.add_ball_machine, false) as "addBallMachine",
           b.ball_machine_pass_id as "ballMachinePassId",
+          b.max_players as "maxPlayers",
+          COALESCE(b.open_to_members, false) as "openToMembers",
           b.created_at as "createdAt",
           b.updated_at as "updatedAt",
           c.name as "courtName",
@@ -873,6 +883,10 @@ export async function createBooking(bookingData: {
   paymentDeadlineAt?: Date | null;
   /** University Club Guest Fee: skip Stripe and defer the whole total to the front desk. Re-verified server-side. */
   payAtFrontDesk?: boolean;
+  /** General capacity for this booking (e.g. 4 for a padel court). */
+  maxPlayers?: number;
+  /** Non-null when created as part of a Padel Social Play session. */
+  padelSessionId?: string;
 }): Promise<BookingResult> {
   return enqueueBookingCreation(bookingData.userId, bookingData.facilityId, () =>
     createBookingCore(bookingData)
@@ -907,6 +921,8 @@ async function createBookingCore(bookingData: {
   paymentMode?: 'single_payer' | 'split';
   paymentDeadlineAt?: Date | null;
   payAtFrontDesk?: boolean;
+  maxPlayers?: number;
+  padelSessionId?: string;
 }): Promise<BookingResult> {
   try {
     // Only honor excludeBookingId when it is an active booking owned by this user
@@ -1237,9 +1253,10 @@ async function createBookingCore(bookingData: {
             start_time, end_time, duration_minutes, booking_type,
             activity_type, notes, bulletin_post_id, status, is_prime_time,
             bring_guest, add_ball_machine, settlement_status, ball_machine_pass_id,
-            payment_mode, payment_deadline_at, front_desk_amount_due_cents, guest_names
+            payment_mode, payment_deadline_at, front_desk_amount_due_cents, guest_names,
+            max_players, padel_session_id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
           RETURNING
             id,
             series_id as "seriesId",
@@ -1262,6 +1279,8 @@ async function createBookingCore(bookingData: {
             payment_deadline_at as "paymentDeadlineAt",
             front_desk_amount_due_cents as "frontDeskAmountDueCents",
             guest_names as "guestNames",
+            max_players as "maxPlayers",
+            padel_session_id as "padelSessionId",
             created_at as "createdAt",
             updated_at as "updatedAt"`,
           [
@@ -1287,6 +1306,8 @@ async function createBookingCore(bookingData: {
             bookingData.paymentDeadlineAt || null,
             frontDeskAmountDueCents,
             bookingData.bringGuest && bookingData.guestNames?.length ? bookingData.guestNames : null,
+            bookingData.maxPlayers ?? null,
+            bookingData.padelSessionId ?? null,
           ]
         );
         return ins.rows[0];
@@ -2051,6 +2072,8 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",
         b.ball_machine_pass_id as "ballMachinePassId",
+        b.max_players as "maxPlayers",
+        COALESCE(b.open_to_members, false) as "openToMembers",
         b.created_at as "createdAt",
         b.updated_at as "updatedAt",
         c.name as "courtName",
@@ -2346,4 +2369,115 @@ export async function checkInBooking(
     console.error('Failed to check in booking:', error);
     return { success: false, error: 'Failed to check in' };
   }
+}
+
+/**
+ * Host-only: advertise (or withdraw) open spots on an existing booking to
+ * other club members ("need 1 more for Tuesday 6pm"). Generic fill-a-spot,
+ * not specific to Padel Social Play.
+ */
+export async function setBookingOpenToMembers(
+  bookingId: string,
+  userId: string,
+  open: boolean,
+  maxPlayers?: number
+): Promise<{ success: boolean; error?: string }> {
+  const result = await query(
+    `UPDATE bookings
+     SET open_to_members = $3,
+         max_players = COALESCE($4, max_players),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1 AND user_id = $2 AND status = 'confirmed'
+     RETURNING id`,
+    [bookingId, userId, open, maxPlayers ?? null]
+  );
+
+  if (result.rows.length === 0) {
+    return { success: false, error: 'Booking not found, not confirmed, or not owned by this member' };
+  }
+  return { success: true };
+}
+
+/**
+ * A club member claims an open spot on someone else's booking. Adds them to
+ * booking_participants (the existing "who's on this booking" ledger) and
+ * notifies the host, mirroring bulletinBoardService's drill-signup pattern.
+ */
+export async function claimOpenSpot(
+  bookingId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  const bookingResult = await query(
+    `SELECT b.id, b.user_id as "hostUserId", b.facility_id as "facilityId",
+            b.max_players as "maxPlayers", b.booking_date as "bookingDate",
+            b.start_time as "startTime", c.name as "courtName",
+            u.full_name as "hostName"
+     FROM bookings b
+     JOIN courts c ON b.court_id = c.id
+     JOIN users u ON b.user_id = u.id
+     WHERE b.id = $1 AND b.open_to_members = true AND b.status = 'confirmed'`,
+    [bookingId]
+  );
+
+  if (bookingResult.rows.length === 0) {
+    return { success: false, error: 'This booking is not open to new players' };
+  }
+  const booking = bookingResult.rows[0];
+
+  if (booking.hostUserId === userId) {
+    return { success: false, error: 'You are already the host of this booking' };
+  }
+
+  const membershipCheck = await query(
+    `SELECT 1 FROM facility_memberships WHERE user_id = $1 AND facility_id = $2 AND status = 'active' LIMIT 1`,
+    [userId, booking.facilityId]
+  );
+  if (membershipCheck.rows.length === 0) {
+    return { success: false, error: 'Only club members can claim an open spot' };
+  }
+
+  return transaction(async client => {
+    const countResult = await client.query(
+      `SELECT COUNT(*)::int as count FROM booking_participants WHERE booking_id = $1`,
+      [bookingId]
+    );
+    const claimedSoFar = countResult.rows[0].count as number;
+    const maxPlayers = booking.maxPlayers as number | null;
+    // +1 accounts for the host, who isn't a booking_participants row.
+    if (maxPlayers != null && claimedSoFar + 1 >= maxPlayers) {
+      return { success: false, error: 'This spot has already been filled' };
+    }
+
+    const insert = await client.query(
+      `INSERT INTO booking_participants (booking_id, user_id, added_by)
+       VALUES ($1, $2, $2)
+       ON CONFLICT (booking_id, user_id) DO NOTHING
+       RETURNING id`,
+      [bookingId, userId]
+    );
+    if (insert.rows.length === 0) {
+      return { success: false, error: 'You have already claimed a spot on this booking' };
+    }
+
+    // If the booking is now full, stop advertising it.
+    const newCount = claimedSoFar + 1;
+    if (maxPlayers != null && newCount + 1 >= maxPlayers) {
+      await client.query(`UPDATE bookings SET open_to_members = false WHERE id = $1`, [bookingId]);
+    }
+
+    return { success: true };
+  }).then(async result => {
+    if (result.success) {
+      const claimant = await query(`SELECT full_name FROM users WHERE id = $1`, [userId]);
+      const claimantName = claimant.rows[0]?.full_name || 'A member';
+      await notificationService.createNotification(
+        booking.hostUserId,
+        'Spot filled',
+        `${claimantName} joined your ${booking.courtName} booking on ${booking.bookingDate} at ${booking.startTime}`,
+        'booking_open_spot_claimed',
+        { actionUrl: '/my-reservations' }
+      );
+    }
+    return result;
+  });
 }

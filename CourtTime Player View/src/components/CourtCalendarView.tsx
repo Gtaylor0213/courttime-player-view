@@ -1360,8 +1360,7 @@ export function CourtCalendarView() {
     </Popover>
   );
 
-  const handleBookingClick = (courtId: string, time: string) => {
-    const booking = bookings[courtId as keyof typeof bookings]?.[time];
+  const handleBookingClick = (booking: any) => {
     if (booking?.type === 'reservation' && booking.fullDetails) {
       const details = booking.fullDetails;
       if (isBulletinActivityBooking(details) && details.bulletinPostId) {
@@ -2227,7 +2226,7 @@ export function CourtCalendarView() {
               if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
               if (court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) return;
               if (topBlocked || (topPast && !topBooking)) return;
-              if (topBooking) handleBookingClick(court.id, topTime);
+              if (topBooking) handleBookingClick(topBooking);
               else handleEmptySlotClick(court.id, topTime);
             }}
             onPointerDown={(e) =>
@@ -2388,7 +2387,7 @@ export function CourtCalendarView() {
                 ? 'none'
                 : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
             }}
-            onClick={() => !isBlocked && handleBookingClick(overlay.courtId, allTimeSlots[overlay.startSlotIndex])}
+            onClick={() => !isBlocked && handleBookingClick(booking)}
           >
             <div className={`px-1.5 py-0.5 h-full flex flex-col overflow-hidden ${isCompact ? 'justify-center' : ''}`}>
               <div className={`text-[11px] font-semibold leading-tight break-words ${nameLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}>

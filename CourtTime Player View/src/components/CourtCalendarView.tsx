@@ -2216,7 +2216,7 @@ export function CourtCalendarView() {
             className={`absolute top-0 left-0 right-0 bottom-0 select-none ${calendarTouchLocked || !isMobile ? 'touch-none' : 'calendar-slot-pan-x'}
               ${isWalkUpCourt ? 'bg-amber-100 cursor-not-allowed' : ''}
               ${!isWalkUpCourt && topOutsideCourt ? 'bg-neutral-900/75 cursor-not-allowed' : ''}
-              ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'bg-gray-200 cursor-not-allowed' : ''}
+              ${!isWalkUpCourt && !topOutsideCourt && topBlocked ? 'cursor-not-allowed' : ''}
               ${!isWalkUpCourt && !topOutsideCourt && topPast && !topBooking ? 'bg-gray-100 cursor-not-allowed' : ''}
               ${!isWalkUpCourt && !topOutsideCourt && !topPast && !topBooking && !topBlocked ? `cursor-pointer ${topPrime ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-green-50'}` : ''}
               ${topBooking && !topBlocked ? 'cursor-pointer' : ''}

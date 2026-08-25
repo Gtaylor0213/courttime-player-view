@@ -30,6 +30,8 @@ interface ReservationDetails {
   userName?: string;
   userEmail?: string;
   facilityName?: string;
+  /** Guest's actual name for a walk-in booking (userId is the admin who booked it, not the guest). */
+  walkInName?: string | null;
 }
 
 interface ReservationDetailsModalProps {
@@ -53,6 +55,9 @@ export function ReservationDetailsModal({
 
   const isOwnReservation = user?.id === reservation.userId;
   const isFacilityAdmin = !!user?.adminFacilities?.includes(reservation.facilityId);
+  // Walk-ins have no user account: user_id is the admin's own id (to satisfy the FK), so
+  // isOwnReservation stays true for permission checks, but the "You" badge would be misleading.
+  const showYouBadge = isOwnReservation && !reservation.walkInName;
 
   // Format date for display
   const formatDate = (dateStr: string) => {
@@ -188,8 +193,8 @@ export function ReservationDetailsModal({
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-600">Reserved By</p>
                 <p className="text-sm">
-                  {reservation.userName || 'Unknown'}
-                  {isOwnReservation && (
+                  {reservation.walkInName || reservation.userName || 'Unknown'}
+                  {showYouBadge && (
                     <Badge variant="outline" className="ml-2 text-xs">
                       You
                     </Badge>

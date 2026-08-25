@@ -540,7 +540,7 @@ export function CourtCalendarView() {
               BULLETIN_ACTIVITY_BOOKING_TYPES.has(String(booking.bookingType || '').toLowerCase()) &&
               booking.notes
                 ? String(booking.notes)
-                : booking.userName || 'Reserved';
+                : booking.walkInName || booking.userName || 'Reserved';
             transformedBookings[targetCourtId][slotTime] = {
               player: activityLabel,
               duration: `${booking.durationMinutes}min`,
@@ -553,6 +553,15 @@ export function CourtCalendarView() {
               slotCount: slotsToFill,
               bookingType: booking.bookingType,
               notes: booking.notes,
+              // Only surface this when staff booked on someone else's behalf, so an
+              // admin booking a court for themselves doesn't get a redundant label.
+              // (Walk-ins always share bookedByStaffId/userId since the guest has no
+              // account, so they're judged by walkInName instead.)
+              bookedByStaffName:
+                booking.bookedByStaffId &&
+                (booking.walkInName || booking.bookedByStaffId !== booking.userId)
+                  ? booking.bookedByStaffName
+                  : undefined,
               fullDetails: {
                 ...booking,
                 facilityName: facilityForBookings?.name
@@ -2336,7 +2345,12 @@ export function CourtCalendarView() {
 
         const tooltipText = isBlocked
           ? `Blocked${booking.player ? ` — ${booking.player}` : ''}`
-          : [booking.player, booking.duration, booking.startTime && booking.endTime ? `${booking.startTime.slice(0,5)}–${booking.endTime.slice(0,5)}` : ''].filter(Boolean).join(' · ');
+          : [
+              booking.player,
+              booking.duration,
+              booking.startTime && booking.endTime ? `${booking.startTime.slice(0,5)}–${booking.endTime.slice(0,5)}` : '',
+              booking.bookedByStaffName ? `Booked by ${booking.bookedByStaffName}` : '',
+            ].filter(Boolean).join(' · ');
 
         // Vertical-space budget: name gets priority, then the full service/type line, then the
         // duration+category row, then notes — each only rendered if the remaining height allows it.

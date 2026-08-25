@@ -822,6 +822,8 @@ export const bookingApi = {
     payAtFrontDesk?: boolean;
     /** General capacity for this booking (e.g. 4 for a padel court). */
     maxPlayers?: number;
+    /** Admin-only: guest's actual name for a walk-in booking. */
+    walkInName?: string;
   }) => {
     const res = await apiRequest('/api/bookings', {
       method: 'POST',
@@ -893,6 +895,8 @@ export const bookingApi = {
     bookingType?: string;
     notes?: string;
     skipConflicts?: boolean;
+    /** Admin-only: guest's actual name for a walk-in booking. */
+    walkInName?: string;
     instances: Array<{
       courtId: string;
       bookingDate: string;

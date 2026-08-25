@@ -415,6 +415,7 @@ router.post('/', async (req, res, next) => {
       splitParticipantIds,
       payAtFrontDesk,
       maxPlayers,
+      walkInName,
     } = req.body;
 
     // Validation
@@ -458,6 +459,13 @@ router.post('/', async (req, res, next) => {
       : await createBooking({
       courtId,
       userId: effectiveUserId,
+      // Derived from the authenticated session, never the client payload, so a
+      // booking always records the actual staff member who created it.
+      bookedByStaffId: isAdminCaller ? callerUserId : null,
+      // Only admins can book a walk-in guest on someone else's behalf.
+      walkInName: isAdminCaller && typeof walkInName === 'string' && walkInName.trim()
+        ? walkInName.trim()
+        : null,
       facilityId,
       bookingDate,
       startTime,
@@ -677,7 +685,7 @@ router.post('/payment/confirm', async (req, res, next) => {
  */
 router.post('/recurring-series', async (req, res, next) => {
   try {
-    const { userId, facilityId, bookingType, notes, instances, skipConflicts } = req.body;
+    const { userId, facilityId, bookingType, notes, instances, skipConflicts, walkInName } = req.body;
     const callerUserId = req.user?.userId;
     if (!callerUserId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -714,6 +722,10 @@ router.post('/recurring-series', async (req, res, next) => {
 
     const result = await createRecurringBookingSeries({
       userId: effectiveUserId,
+      bookedByStaffId: isAdminCaller ? callerUserId : null,
+      walkInName: isAdminCaller && typeof walkInName === 'string' && walkInName.trim()
+        ? walkInName.trim()
+        : null,
       facilityId,
       bookingType,
       notes,

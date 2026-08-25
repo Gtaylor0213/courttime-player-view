@@ -646,13 +646,10 @@ export function AdminBooking() {
       if (isBallMachine) bookingTypes.push('Ball Machine');
       const bookingType = bookingTypes.length > 0 ? bookingTypes.join(', ') : undefined;
 
-      // Build notes with walk-in info if applicable
-      let finalNotes = notes;
-      if (isWalkIn) {
-        finalNotes = `Walk-in: ${walkInName}${notes ? ` - ${notes}` : ''}`;
-      }
-
-      // Use selected member ID or admin user ID for walk-ins
+      // Walk-ins have no user account, so the booking is still owned by the admin's
+      // id (a real FK is required) but the guest's actual name travels separately
+      // in walkInName so "Reserved By" can show the guest, not the admin.
+      const finalNotes = notes;
       const bookingUserId = isWalkIn ? user?.id : selectedMemberId;
 
       if (!bookingUserId) {
@@ -672,7 +669,8 @@ export function AdminBooking() {
           durationMinutes: Math.round(durationMinutes),
           bookingType,
           notes: finalNotes || undefined,
-          maxPlayers: isPadelCourtType(availableCourts.find(ac => ac.id === c.id)?.type) ? 4 : undefined
+          maxPlayers: isPadelCourtType(availableCourts.find(ac => ac.id === c.id)?.type) ? 4 : undefined,
+          walkInName: isWalkIn ? walkInName : undefined
         }))
       );
 
@@ -684,6 +682,7 @@ export function AdminBooking() {
               facilityId: selectedFacility,
               bookingType,
               notes: finalNotes || undefined,
+              walkInName: isWalkIn ? walkInName : undefined,
               instances: bookingRequests
             };
             let res = await bookingApi.createRecurringSeries(seriesPayload);
@@ -854,7 +853,7 @@ export function AdminBooking() {
                         }}
                       />
                       <Label htmlFor="walk-in" className="text-sm cursor-pointer">
-                        Walk-in Guest
+                        Custom Name
                       </Label>
                     </div>
                   </div>

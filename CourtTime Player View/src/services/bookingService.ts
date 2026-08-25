@@ -385,10 +385,15 @@ export interface Booking {
   padelSessionId?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Non-null when an admin/staff member created this booking on someone else's behalf. */
+  bookedByStaffId?: string | null;
+  /** Guest's actual name for a walk-in booking (user_id is the booking admin, not the guest). */
+  walkInName?: string | null;
   // Joined data
   courtName?: string;
   userName?: string;
   userEmail?: string;
+  bookedByStaffName?: string | null;
 }
 
 /**
@@ -422,12 +427,16 @@ export async function getBookingsByFacilityAndDate(
         b.bulletin_post_id as "bulletinPostId",
         b.created_at as "createdAt",
         b.updated_at as "updatedAt",
+        b.booked_by_staff_id as "bookedByStaffId",
+        b.walk_in_name as "walkInName",
         c.name as "courtName",
         u.full_name as "userName",
-        u.email as "userEmail"
+        u.email as "userEmail",
+        staff.full_name as "bookedByStaffName"
       FROM bookings b
       JOIN courts c ON b.court_id = c.id
       JOIN users u ON b.user_id = u.id
+      LEFT JOIN users staff ON b.booked_by_staff_id = staff.id
       WHERE b.facility_id = $1
         AND b.booking_date = $2
         AND b.status != 'cancelled'
@@ -471,12 +480,16 @@ export async function getBookingsByFacilityAndDateRange(
         b.bulletin_post_id as "bulletinPostId",
         b.created_at as "createdAt",
         b.updated_at as "updatedAt",
+        b.booked_by_staff_id as "bookedByStaffId",
+        b.walk_in_name as "walkInName",
         c.name as "courtName",
         u.full_name as "userName",
-        u.email as "userEmail"
+        u.email as "userEmail",
+        staff.full_name as "bookedByStaffName"
       FROM bookings b
       JOIN courts c ON b.court_id = c.id
       JOIN users u ON b.user_id = u.id
+      LEFT JOIN users staff ON b.booked_by_staff_id = staff.id
       WHERE b.facility_id = $1
         AND b.booking_date >= $2
         AND b.booking_date <= $3
@@ -725,6 +738,8 @@ export function parsePendingCourtBooking(raw: unknown): PendingCourtBookingPaylo
 
 export interface RecurringSeriesRequest {
   userId: string;
+  bookedByStaffId?: string | null;
+  walkInName?: string | null;
   facilityId: string;
   bookingType?: string;
   notes?: string;
@@ -855,6 +870,10 @@ export async function validateBooking(bookingData: {
 export async function createBooking(bookingData: {
   courtId: string;
   userId: string;
+  /** Non-null when an admin/staff member is creating this booking on someone else's behalf. */
+  bookedByStaffId?: string | null;
+  /** Guest's actual name for a walk-in booking. */
+  walkInName?: string | null;
   facilityId: string;
   seriesId?: string;
   bookingDate: string;
@@ -896,6 +915,8 @@ export async function createBooking(bookingData: {
 async function createBookingCore(bookingData: {
   courtId: string;
   userId: string;
+  bookedByStaffId?: string | null;
+  walkInName?: string | null;
   facilityId: string;
   seriesId?: string;
   bookingDate: string;
@@ -1254,9 +1275,9 @@ async function createBookingCore(bookingData: {
             activity_type, notes, bulletin_post_id, status, is_prime_time,
             bring_guest, add_ball_machine, settlement_status, ball_machine_pass_id,
             payment_mode, payment_deadline_at, front_desk_amount_due_cents, guest_names,
-            max_players, padel_session_id
+            max_players, padel_session_id, booked_by_staff_id, walk_in_name
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
           RETURNING
             id,
             series_id as "seriesId",
@@ -1281,6 +1302,8 @@ async function createBookingCore(bookingData: {
             guest_names as "guestNames",
             max_players as "maxPlayers",
             padel_session_id as "padelSessionId",
+            booked_by_staff_id as "bookedByStaffId",
+            walk_in_name as "walkInName",
             created_at as "createdAt",
             updated_at as "updatedAt"`,
           [
@@ -1308,6 +1331,8 @@ async function createBookingCore(bookingData: {
             bookingData.bringGuest && bookingData.guestNames?.length ? bookingData.guestNames : null,
             bookingData.maxPlayers ?? null,
             bookingData.padelSessionId ?? null,
+            bookingData.bookedByStaffId || null,
+            bookingData.walkInName || null,
           ]
         );
         return ins.rows[0];
@@ -1621,9 +1646,9 @@ async function createRecurringBookingSeriesCore(
           `INSERT INTO bookings (
              series_id, court_id, user_id, facility_id, booking_date,
              start_time, end_time, duration_minutes, booking_type,
-             notes, status, is_prime_time
+             notes, status, is_prime_time, booked_by_staff_id, walk_in_name
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', false)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', false, $11, $12)
            RETURNING
              id,
              series_id as "seriesId",
@@ -1637,6 +1662,8 @@ async function createRecurringBookingSeriesCore(
              status,
              booking_type as "bookingType",
              notes,
+             booked_by_staff_id as "bookedByStaffId",
+             walk_in_name as "walkInName",
              created_at as "createdAt",
              updated_at as "updatedAt"`,
           [
@@ -1649,7 +1676,9 @@ async function createRecurringBookingSeriesCore(
             instance.endTime,
             instance.durationMinutes,
             payload.bookingType || null,
-            payload.notes || null
+            payload.notes || null,
+            payload.bookedByStaffId || null,
+            payload.walkInName || null
           ]
         );
         rows.push(insert.rows[0]);

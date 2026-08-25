@@ -27,6 +27,9 @@ interface Booking {
   courtNumber: number;
   userName: string;
   userEmail: string;
+  bookedByStaffName?: string | null;
+  /** Guest's actual name for a walk-in booking (userId is the admin who booked it, not the guest). */
+  walkInName?: string | null;
   bookingDate: string;
   startTime: string;
   endTime: string;
@@ -697,12 +700,19 @@ export function BookingManagement() {
                                 </div>
                               </td>
                               <td className="px-4 py-2">
-                                <div className="font-medium truncate max-w-[150px]" title={group.userName}>
-                                  {group.userName}
+                                <div className="font-medium truncate max-w-[150px]" title={head.walkInName || group.userName}>
+                                  {head.walkInName || group.userName}
                                 </div>
-                                <div className="text-xs text-gray-500 truncate max-w-[150px]" title={group.userEmail}>
-                                  {group.userEmail}
-                                </div>
+                                {!head.walkInName && (
+                                  <div className="text-xs text-gray-500 truncate max-w-[150px]" title={group.userEmail}>
+                                    {group.userEmail}
+                                  </div>
+                                )}
+                                {head.bookedByStaffName && (head.walkInName || head.bookedByStaffName !== group.userName) && (
+                                  <div className="text-xs text-gray-500 truncate max-w-[150px]" title={`Booked by ${head.bookedByStaffName}`}>
+                                    Booked by {head.bookedByStaffName}
+                                  </div>
+                                )}
                                 {head.guestNames && head.guestNames.length > 0 && (
                                   <div className="text-xs text-gray-500 truncate max-w-[150px]" title={head.guestNames.join(', ')}>
                                     Guests: {head.guestNames.join(', ')}

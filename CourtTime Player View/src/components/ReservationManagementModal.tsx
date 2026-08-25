@@ -55,6 +55,8 @@ interface ReservationDetails {
   userName?: string;
   userEmail?: string;
   facilityName?: string;
+  /** Guest's actual name for a walk-in booking (userId is the admin who booked it, not the guest). */
+  walkInName?: string | null;
 }
 
 interface ParticipantRow {
@@ -327,6 +329,9 @@ export function ReservationManagementModal({
   if (!reservation) return null;
 
   const isOwnReservation = user?.id === reservation.userId;
+  // Walk-ins have no user account: user_id is the admin's own id (to satisfy the FK), so
+  // isOwnReservation stays true for permission checks, but the "You" badge would be misleading.
+  const showYouBadge = isOwnReservation && !reservation.walkInName;
   const isFacilityAdmin = !!user?.adminFacilities?.includes(reservation.facilityId);
   // Close-out is staff-only and calendar-facing — never from player My Reservations
   const canStaffCloseOut =
@@ -899,8 +904,8 @@ export function ReservationManagementModal({
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-600">Reserved By</p>
                   <p className="text-sm">
-                    {reservation.userName || 'Unknown'}
-                    {isOwnReservation && (
+                    {reservation.walkInName || reservation.userName || 'Unknown'}
+                    {showYouBadge && (
                       <Badge variant="outline" className="ml-2 text-xs">
                         You
                       </Badge>

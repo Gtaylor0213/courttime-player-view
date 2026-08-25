@@ -1478,6 +1478,9 @@ router.get('/bookings/:facilityId', async (req, res) => {
         c.court_number as "courtNumber",
         u.full_name as "userName",
         u.email as "userEmail",
+        b.booked_by_staff_id as "bookedByStaffId",
+        staff.full_name as "bookedByStaffName",
+        b.walk_in_name as "walkInName",
         b.payment_mode as "paymentMode",
         b.payment_deadline_at as "paymentDeadlineAt",
         b.front_desk_amount_due_cents as "frontDeskAmountDueCents",
@@ -1489,6 +1492,7 @@ router.get('/bookings/:facilityId', async (req, res) => {
       LEFT JOIN booking_series bs ON b.series_id = bs.id
       JOIN courts c ON b.court_id = c.id
       JOIN users u ON b.user_id = u.id
+      LEFT JOIN users staff ON b.booked_by_staff_id = staff.id
       WHERE ${outerConditions.join(' AND ')}
         AND (
           (b.series_id IS NOT NULL AND b.series_id IN (SELECT "seriesId" FROM matched_series))

@@ -30,12 +30,31 @@ async function acceptPendingInvitations(userId: string, email: string): Promise<
     const accepted: string[] = [];
 
     for (const invitation of pendingResult.rows) {
-      await query(
-        `UPDATE facility_admins
-         SET user_id = $1, status = 'active', invitation_accepted_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
-        [userId, invitation.id]
+      // This user may already have a facility_admins row for this facility
+      // (e.g. a previously removed admin re-invited). facility_admins has a
+      // UNIQUE(user_id, facility_id) constraint, so updating the pending
+      // placeholder's user_id would collide with that existing row.
+      const existing = await query(
+        `SELECT id FROM facility_admins WHERE user_id = $1 AND facility_id = $2`,
+        [userId, invitation.facilityId]
       );
+
+      if (existing.rows.length > 0) {
+        await query(
+          `UPDATE facility_admins
+           SET status = 'active', invitation_accepted_at = CURRENT_TIMESTAMP
+           WHERE id = $1`,
+          [existing.rows[0].id]
+        );
+        await query(`DELETE FROM facility_admins WHERE id = $1`, [invitation.id]);
+      } else {
+        await query(
+          `UPDATE facility_admins
+           SET user_id = $1, status = 'active', invitation_accepted_at = CURRENT_TIMESTAMP
+           WHERE id = $2`,
+          [userId, invitation.id]
+        );
+      }
 
       await query(
         `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)

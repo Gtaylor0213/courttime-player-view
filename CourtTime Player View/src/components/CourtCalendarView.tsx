@@ -257,17 +257,9 @@ export function CourtCalendarView() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Update current time every 30 seconds for the time indicator line (Eastern Time)
-  useEffect(() => {
-    const updateTime = () => setCurrentTime(getFacilityDate());
-    updateTime(); // Initial update
-    const interval = setInterval(updateTime, 30000); // Update every 30 seconds
-    return () => clearInterval(interval);
-  }, []);
-
   // Helper function to check if date is today (must be defined before currentTimeLinePosition)
-  const isToday = useCallback((date: Date) => {
-    const today = getFacilityDate();
+  const isToday = useCallback((date: Date, tz: string = 'America/New_York') => {
+    const today = getFacilityDate(tz);
     return date.toDateString() === today.toDateString();
   }, []);
 
@@ -1095,9 +1087,48 @@ export function CourtCalendarView() {
     };
   }, [currentFacility, selectedDate]);
 
+  // Keep the on-screen clock/current-time indicator fresh, and detect a calendar-day
+  // rollover (e.g. an unattended kiosk display left open past midnight) so the view
+  // auto-advances to the new day instead of showing yesterday's date/bookings until a
+  // manual refresh. Checked on a timer — by recomputing the actual facility date each
+  // tick rather than trusting a naive increment, so it can't drift — and again whenever
+  // the tab regains focus/visibility, since a sleeping laptop can miss timer ticks entirely.
+  const lastKnownTodayStrRef = useRef<string | null>(null);
+  useEffect(() => {
+    const tick = () => {
+      const today = getFacilityDate(facilityTimezone);
+      const todayStr = today.toDateString();
+      setCurrentTime(today);
+
+      const previousTodayStr = lastKnownTodayStrRef.current;
+      if (previousTodayStr !== null && previousTodayStr !== todayStr) {
+        // Only auto-advance if the view was showing "today" — don't yank a staff
+        // member off a date they deliberately navigated to.
+        setSelectedDate(prev => (prev.toDateString() === previousTodayStr ? today : prev));
+      }
+      lastKnownTodayStrRef.current = todayStr;
+    };
+
+    tick(); // Initial check
+    const interval = setInterval(tick, 30000); // Recheck every 30 seconds
+
+    const handleVisibleOrFocused = () => {
+      if (document.visibilityState === 'hidden') return;
+      tick();
+    };
+    document.addEventListener('visibilitychange', handleVisibleOrFocused);
+    window.addEventListener('focus', handleVisibleOrFocused);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibleOrFocused);
+      window.removeEventListener('focus', handleVisibleOrFocused);
+    };
+  }, [facilityTimezone]);
+
   // Calculate the position of the current time indicator line
   const currentTimeLinePosition = useMemo(() => {
-    if (!isToday(selectedDate)) return null;
+    if (!isToday(selectedDate, facilityTimezone)) return null;
 
     const { hours, minutes } = getTimeComponents(facilityTimezone);
 
@@ -1113,7 +1144,7 @@ export function CourtCalendarView() {
     const today = getFacilityDate(facilityTimezone);
     const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
     if (selectedDateOnly < today) return true;
-    if (!isToday(selectedDate)) return false;
+    if (!isToday(selectedDate, facilityTimezone)) return false;
 
     const [time, period] = timeSlot.split(' ');
     let [hours, minutes] = time.split(':').map(Number);
@@ -2124,7 +2155,7 @@ export function CourtCalendarView() {
   useEffect(() => {
     if (!calendarScrollRef.current) return;
     const timer = setTimeout(() => {
-      if (isToday(selectedDate) && currentTimeLinePosition !== null) {
+      if (isToday(selectedDate, facilityTimezone) && currentTimeLinePosition !== null) {
         scrollToCurrentTime({ reliable: isMobile });
         if (isMobile) {
           setTimeout(() => scrollToCurrentTime({ reliable: true }), 140);
@@ -2134,7 +2165,7 @@ export function CourtCalendarView() {
       }
     }, isMobile ? 300 : 150);
     return () => clearTimeout(timer);
-  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger, isMobile]);
+  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger, isMobile, facilityTimezone]);
 
   const courtGridWidth = courts.length * effectiveCourtWidth;
   const calendarGridHeight = measuredHeaderHeight + visibleTimeSlots.length * effectiveSubSlotHeight;

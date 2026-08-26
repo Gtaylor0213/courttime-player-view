@@ -46,6 +46,7 @@ export function AdminBooking() {
   const [selectedTime, setSelectedTime] = useState('');
   const [selectedEndTime, setSelectedEndTime] = useState('');
   const [duration, setDuration] = useState('2');
+  const [userChoseTime, setUserChoseTime] = useState(false);
 
   // Member selection
   const [members, setMembers] = useState<Member[]>([]);
@@ -185,10 +186,10 @@ export function AdminBooking() {
   }, [selectedFacility]);
 
   const currentFacility = facilities.find(f => f.id === selectedFacility);
-  const allCourts = facilityCourts.filter((court: any) => {
+  const allCourts = React.useMemo(() => facilityCourts.filter((court: any) => {
     const s = (court.status || 'available').toLowerCase();
     return s === 'available' || s === 'active';
-  });
+  }), [facilityCourts]);
 
   const {
     courtTypes,
@@ -241,9 +242,40 @@ export function AdminBooking() {
     fetchBookings();
   }, [selectedFacility, selectedDate]);
 
+  // Generate time slots (15-minute intervals), filtering out fully booked times
+  const timeSlots = React.useMemo(() => {
+    const allSlots = [];
+    for (let hour = 6; hour <= 21; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        const displayMinute = minute.toString().padStart(2, '0');
+        allSlots.push(`${displayHour}:${displayMinute} ${period}`);
+      }
+    }
+
+    if (!selectedCourtType || availableCourts.length === 0) {
+      return allSlots;
+    }
+
+    return allSlots.filter(timeSlot => {
+      for (const court of availableCourts) {
+        const courtBookings = existingBookings[court.name] || new Set();
+        if (!courtBookings.has(timeSlot)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [selectedCourtType, availableCourts, existingBookings]);
+
   // Auto-select first available court and find soonest available time
   useEffect(() => {
     if (selectedCourtType && availableCourts.length > 0 && selectedDate) {
+      // A time the user picked is only replaced once it stops being offered at all
+      // (date moved on, court hours changed, or the slot slipped into the past).
+      if (userChoseTime && selectedTime && timeSlots.includes(selectedTime)) return;
+
       const generateTimeSlots = () => {
         const slots = [];
         for (let hour = 6; hour <= 21; hour++) {
@@ -342,11 +374,12 @@ export function AdminBooking() {
         setSelectedCourt(firstCourt.name);
         setSelectedTime(allTimeSlots[startTimeIndex] || allTimeSlots[0]);
       }
+      if (userChoseTime) setUserChoseTime(false);
     } else if (!selectedCourtType) {
       setSelectedCourt('');
       setSelectedCourtId('');
     }
-  }, [selectedCourtType, availableCourts, existingBookings, selectedDate, duration]);
+  }, [selectedCourtType, availableCourts, existingBookings, selectedDate, duration, selectedTime, timeSlots, userChoseTime]);
 
   // Default padel bookings to a 90-minute block (vs. the standard 2-hour default),
   // only when the duration hasn't already been changed from that default.
@@ -398,33 +431,6 @@ export function AdminBooking() {
       };
     });
   }, [selectedCourtType, selectedTime, duration, availableCourts, existingBookings]);
-
-  // Generate time slots (15-minute intervals), filtering out fully booked times
-  const timeSlots = React.useMemo(() => {
-    const allSlots = [];
-    for (let hour = 6; hour <= 21; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const displayMinute = minute.toString().padStart(2, '0');
-        allSlots.push(`${displayHour}:${displayMinute} ${period}`);
-      }
-    }
-
-    if (!selectedCourtType || availableCourts.length === 0) {
-      return allSlots;
-    }
-
-    return allSlots.filter(timeSlot => {
-      for (const court of availableCourts) {
-        const courtBookings = existingBookings[court.name] || new Set();
-        if (!courtBookings.has(timeSlot)) {
-          return true;
-        }
-      }
-      return false;
-    });
-  }, [selectedCourtType, availableCourts, existingBookings]);
 
   const toggleRecurringDay = (day: string) => {
     setRecurringDays(prev =>
@@ -942,7 +948,7 @@ export function AdminBooking() {
                     <Clock className="h-4 w-4" />
                     Start
                   </Label>
-                  <Select value={selectedTime} onValueChange={setSelectedTime}>
+                  <Select value={selectedTime} onValueChange={(val) => { setUserChoseTime(true); setSelectedTime(val); }}>
                     <SelectTrigger className="flex-1">
                       <SelectValue placeholder="Select start time" />
                     </SelectTrigger>

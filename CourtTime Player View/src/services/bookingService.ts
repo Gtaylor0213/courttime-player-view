@@ -745,6 +745,8 @@ export interface RecurringSeriesRequest {
   notes?: string;
   /** Book the non-conflicting instances and skip the ones that conflict. */
   skipConflicts?: boolean;
+  /** Facility admins/staff always bypass booking rules, even when booking for someone else. */
+  skipRulesValidation?: boolean;
   instances: Array<{
     courtId: string;
     bookingDate: string;
@@ -1514,6 +1516,16 @@ async function createRecurringBookingSeriesCore(
     const warnings: RuleResult[] = [];
     const priorInThisRequest: ProvisionalBookingSlice[] = [];
 
+    // Terms acceptance always applies, even for admin-created bookings that skip booking rules.
+    const termsBlocker = await buildTermsAcceptanceBookingBlocker(payload.userId, payload.facilityId);
+    if (termsBlocker) {
+      return {
+        success: false,
+        error: termsBlocker.message,
+        ruleViolations: [termsBlocker],
+      };
+    }
+
     for (const instance of payload.instances) {
       const walkUpCourt = await query(
         `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
@@ -1526,24 +1538,36 @@ async function createRecurringBookingSeriesCore(
         };
       }
 
-      const validation = await validateBooking({
-        courtId: instance.courtId,
-        userId: payload.userId,
-        facilityId: payload.facilityId,
-        bookingDate: instance.bookingDate,
-        startTime: instance.startTime,
-        endTime: instance.endTime,
-        durationMinutes: instance.durationMinutes,
-        bookingType: payload.bookingType,
-        provisionalSameRequestBookings:
-          priorInThisRequest.length > 0 ? [...priorInThisRequest] : undefined
-      });
-
-      if (!validation.allowed) {
-        blockers.push(...validation.blockers);
+      // Court waiver acceptance always applies, even for admin-created bookings that skip booking rules.
+      const waiverBlocker = await buildCourtWaiverBookingBlocker(payload.userId, instance.courtId);
+      if (waiverBlocker) {
+        return {
+          success: false,
+          error: waiverBlocker.message,
+          ruleViolations: [waiverBlocker],
+        };
       }
-      if (validation.warnings?.length) {
-        warnings.push(...validation.warnings);
+
+      if (!payload.skipRulesValidation) {
+        const validation = await validateBooking({
+          courtId: instance.courtId,
+          userId: payload.userId,
+          facilityId: payload.facilityId,
+          bookingDate: instance.bookingDate,
+          startTime: instance.startTime,
+          endTime: instance.endTime,
+          durationMinutes: instance.durationMinutes,
+          bookingType: payload.bookingType,
+          provisionalSameRequestBookings:
+            priorInThisRequest.length > 0 ? [...priorInThisRequest] : undefined
+        });
+
+        if (!validation.allowed) {
+          blockers.push(...validation.blockers);
+        }
+        if (validation.warnings?.length) {
+          warnings.push(...validation.warnings);
+        }
       }
 
       priorInThisRequest.push({

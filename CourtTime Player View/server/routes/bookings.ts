@@ -462,6 +462,10 @@ router.post('/', async (req, res, next) => {
       // Derived from the authenticated session, never the client payload, so a
       // booking always records the actual staff member who created it.
       bookedByStaffId: isAdminCaller ? callerUserId : null,
+      // Facility admins/staff always bypass booking rules, even when booking on
+      // behalf of another member — the rules engine's own bypass only looks at
+      // the target user's admin status, which misses "admin books for a member".
+      skipRulesValidation: isAdminCaller,
       // Only admins can book a walk-in guest on someone else's behalf.
       walkInName: isAdminCaller && typeof walkInName === 'string' && walkInName.trim()
         ? walkInName.trim()
@@ -730,6 +734,7 @@ router.post('/recurring-series', async (req, res, next) => {
       bookingType,
       notes,
       skipConflicts: skipConflicts === true,
+      skipRulesValidation: isAdminCaller,
       instances
     });
 

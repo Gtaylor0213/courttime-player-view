@@ -5,6 +5,8 @@ import { Info, Users } from 'lucide-react';
 import { BookingRuleSwitch } from './BookingRuleToggleInput';
 import { rulesApi } from '../../api/client';
 import { toast } from 'sonner';
+import { useAppContext } from '../../contexts/AppContext';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 
 /**
  * Facility-admin self-serve toggle for the split-payment feature. Deliberately
@@ -14,11 +16,14 @@ import { toast } from 'sonner';
  * boundary clean everywhere else.
  */
 export function SplitPaymentToggleSection({ facilityId }: { facilityId: string }) {
+  const { enabledFeatures } = useAppContext();
+  const featureEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!featureEnabled) return;
     let cancelled = false;
     setLoading(true);
     rulesApi.getSplitCourtPaymentsEnabled(facilityId)
@@ -26,7 +31,7 @@ export function SplitPaymentToggleSection({ facilityId }: { facilityId: string }
       .catch(() => { if (!cancelled) setEnabled(false); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [facilityId]);
+  }, [facilityId, featureEnabled]);
 
   const handleToggle = async (next: boolean) => {
     setSaving(true);
@@ -41,6 +46,8 @@ export function SplitPaymentToggleSection({ facilityId }: { facilityId: string }
       setSaving(false);
     }
   };
+
+  if (!featureEnabled) return null;
 
   return (
     <Card>

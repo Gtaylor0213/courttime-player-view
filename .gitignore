@@ -35,3 +35,4 @@ lerna-debug.log*
 
 # Design review repro artifacts (screenshots, Metro dumps)
 CourtTime Player View/design-review/repro/
+design-review/repro/

@@ -532,7 +532,8 @@ export function AdminBooking() {
     }
   };
 
-  // All selected courts (primary + additional)
+  // All selected courts (primary + additional), excluding any that have since
+  // become unavailable (e.g. reserved by someone else after being selected).
   const allSelectedCourts = React.useMemo(() => {
     const courts: Array<{ id: string; name: string }> = [];
     if (selectedCourtId) {
@@ -542,8 +543,9 @@ export function AdminBooking() {
       const c = availableCourts.find(court => court.id === id);
       if (c) courts.push({ id: c.id, name: c.name });
     }
-    return courts;
-  }, [selectedCourtId, selectedCourt, additionalCourtIds, availableCourts]);
+    const availabilityById = new Map(courtsWithAvailability.map(c => [c.id, c.isAvailable]));
+    return courts.filter(c => availabilityById.get(c.id) !== false);
+  }, [selectedCourtId, selectedCourt, additionalCourtIds, availableCourts, courtsWithAvailability]);
 
   const getDayOfWeek = (date: Date): string => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -662,6 +664,11 @@ export function AdminBooking() {
 
     if (!selectedCourt || !selectedCourtId) {
       toast.error('Please select a court');
+      return;
+    }
+
+    if (allSelectedCourts.length === 0) {
+      toast.error('The selected court(s) are no longer available. Please choose an available court.');
       return;
     }
 

@@ -257,9 +257,10 @@ export function AdminBooking() {
     };
   }, [selectedFacility, selectedDate]);
 
-  // Open/close window every available (type-filtered) court is open for on this day —
-  // the intersection, since one time-slot list is shown before a specific court is
-  // chosen. Falls back to a wide default while operating-hours data is still loading.
+  // Open/close window covering every available (type-filtered) court on this day —
+  // the union, since one time-slot list is shown before a specific court is chosen
+  // and each court is individually gated for availability once a time is picked.
+  // Falls back to a wide default while operating-hours data is still loading.
   const { slotStartMinutes, slotEndMinutes } = React.useMemo(() => {
     const bounds = availableCourts
       .map((c: any) => courtDayOperating[c.id])
@@ -267,8 +268,8 @@ export function AdminBooking() {
     if (bounds.length === 0) {
       return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES };
     }
-    const openMin = Math.max(...bounds.map((b) => b.openMin));
-    const closeMin = Math.min(...bounds.map((b) => b.closeMin));
+    const openMin = Math.min(...bounds.map((b) => b.openMin));
+    const closeMin = Math.max(...bounds.map((b) => b.closeMin));
     if (openMin >= closeMin) {
       return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES };
     }
@@ -492,15 +493,29 @@ export function AdminBooking() {
 
     const bookingSlots = generateBookingSlots(selectedTime, duration);
 
+    const parseTimeLabelToMinutes = (label: string): number => {
+      const [time, period] = label.split(' ');
+      const [hourStr, minuteStr] = time.split(':');
+      let hour = parseInt(hourStr);
+      const minute = parseInt(minuteStr);
+      if (period === 'PM' && hour !== 12) hour += 12;
+      if (period === 'AM' && hour === 12) hour = 0;
+      return hour * 60 + minute;
+    };
+    const startMinutes = parseTimeLabelToMinutes(selectedTime);
+    const endMinutes = startMinutes + parseFloat(duration) * 60;
+
     return availableCourts.map(court => {
       const courtBookings = existingBookings[court.name] || new Set();
-      const isAvailable = !bookingSlots.some(slot => courtBookings.has(slot));
+      const isBooked = bookingSlots.some(slot => courtBookings.has(slot));
+      const hours = courtDayOperating[court.id];
+      const isWithinHours = !hours || (hours.isOpen && startMinutes >= hours.openMin && endMinutes <= hours.closeMin);
       return {
         ...court,
-        isAvailable
+        isAvailable: !isBooked && isWithinHours
       };
     });
-  }, [selectedCourtType, selectedTime, duration, availableCourts, existingBookings]);
+  }, [selectedCourtType, selectedTime, duration, availableCourts, existingBookings, courtDayOperating]);
 
   const toggleRecurringDay = (day: string) => {
     setRecurringDays(prev =>

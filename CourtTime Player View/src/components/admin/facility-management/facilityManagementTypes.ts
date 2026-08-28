@@ -150,6 +150,7 @@ export interface Court extends PaidCourtFormFields {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp?: boolean;
+  isAdminOnly?: boolean;
   status: 'available' | 'maintenance' | 'closed';
   canSplit?: boolean;
   splitConfig?: {

@@ -148,6 +148,7 @@ export function FacilityCourtsTab(props: Props) {
                       <span className="text-xs text-gray-600 font-normal">{hoursSummary}</span>
                     ) : null}
                     {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
+                    {court.isAdminOnly && <Badge variant="secondary">Admin Only</Badge>}
                     {court.requirePayment && court.billingMode === 'daily' && court.dailyRateCents && (
                       <Badge className="bg-amber-100 text-amber-900 border-amber-200">
                         Paid · ${(court.dailyRateCents / 100).toFixed(2)}/day

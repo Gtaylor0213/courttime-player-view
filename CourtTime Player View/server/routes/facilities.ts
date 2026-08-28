@@ -338,6 +338,7 @@ router.post('/register', optionalAuth, async (req, res, next) => {
           isIndoor: court.isIndoor || false,
           hasLights: court.hasLights || false,
           isWalkUp: court.isWalkUp || false,
+          isAdminOnly: court.isAdminOnly || false,
           requirePayment: Boolean(court.requirePayment),
           bookingAmountCents: court.bookingAmountCents != null ? parseInt(court.bookingAmountCents) : undefined,
           guestFeeCents: court.guestFeeCents != null ? parseInt(court.guestFeeCents) : undefined,

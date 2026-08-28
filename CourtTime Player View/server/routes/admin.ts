@@ -875,6 +875,7 @@ router.patch('/courts/:courtId', async (req, res) => {
       isIndoor,
       hasLights,
       isWalkUp,
+      isAdminOnly,
       requirePayment,
       require_payment,
       bookingAmountCents,
@@ -930,6 +931,10 @@ router.patch('/courts/:courtId', async (req, res) => {
       if (billingMode === 'daily' && !(await isFeatureEnabled(facilityIdForCourt, FEATURE_FLAGS.COURT_DAILY_BILLING))) {
         return res.status(403).json({ success: false, error: 'Daily court billing is not enabled for this facility' });
       }
+    }
+
+    if (isAdminOnly === true && !(await isFeatureEnabled(facilityIdForCourt, FEATURE_FLAGS.ADMIN_ONLY_COURTS))) {
+      return res.status(403).json({ success: false, error: 'Admin only courts are not enabled for this facility' });
     }
 
     if (wantsPayment !== undefined && wantsPayment) {
@@ -994,6 +999,7 @@ router.patch('/courts/:courtId', async (req, res) => {
         is_indoor = COALESCE($5, is_indoor),
         has_lights = COALESCE($6, has_lights),
         is_walk_up = COALESCE($7, is_walk_up),
+        is_admin_only = COALESCE($21, is_admin_only),
         require_payment = COALESCE($8, require_payment),
         booking_amount_cents = CASE
           WHEN $8 = true THEN COALESCE($9, booking_amount_cents)
@@ -1025,6 +1031,7 @@ router.patch('/courts/:courtId', async (req, res) => {
         is_indoor as "isIndoor",
         has_lights as "hasLights",
         is_walk_up as "isWalkUp",
+        is_admin_only as "isAdminOnly",
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
         billing_mode as "billingMode",
@@ -1058,6 +1065,7 @@ router.patch('/courts/:courtId', async (req, res) => {
       ballMachineFeeValue ?? null,
       billingMode ?? null,
       dailyAmountCents ?? null,
+      isAdminOnly,
     ]);
 
     if (result.rows.length === 0) {
@@ -1160,6 +1168,7 @@ router.post('/courts/:facilityId', async (req, res) => {
       isIndoor,
       hasLights,
       isWalkUp,
+      isAdminOnly,
       requirePayment,
       require_payment,
       bookingAmountCents,
@@ -1208,6 +1217,9 @@ router.post('/courts/:facilityId', async (req, res) => {
       rawBillingModeCreate === 'daily' ? 'daily' : 'hourly';
     if (billingModeCreate === 'daily' && !(await isFeatureEnabled(facilityId, FEATURE_FLAGS.COURT_DAILY_BILLING))) {
       return res.status(403).json({ success: false, error: 'Daily court billing is not enabled for this facility' });
+    }
+    if (isAdminOnly === true && !(await isFeatureEnabled(facilityId, FEATURE_FLAGS.ADMIN_ONLY_COURTS))) {
+      return res.status(403).json({ success: false, error: 'Admin only courts are not enabled for this facility' });
     }
     let dailyAmountCentsCreate: number | null = null;
     if (dailyRateCentsCreate != null) dailyAmountCentsCreate = parseInt(String(dailyRateCentsCreate), 10);
@@ -1259,6 +1271,7 @@ router.post('/courts/:facilityId', async (req, res) => {
           isIndoor: isIndoor || false,
           hasLights: hasLights || false,
           isWalkUp: isWalkUp || false,
+          isAdminOnly: isAdminOnly || false,
           requirePayment: wantsPayment,
           bookingAmountCents: wantsPayment ? amountCents : null,
           billingMode: wantsPayment ? billingModeCreate : 'hourly',

@@ -34,6 +34,7 @@ export type SingleCourtAddPayload = {
     isIndoor: boolean;
     hasLights: boolean;
     isWalkUp?: boolean;
+    isAdminOnly?: boolean;
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
     billingMode?: 'hourly' | 'daily';
@@ -276,6 +277,7 @@ async function executeCourtAddPayload(
     isIndoor: court.isIndoor,
     hasLights: court.hasLights,
     isWalkUp: court.isWalkUp || false,
+    isAdminOnly: court.isAdminOnly || false,
     requirePayment: court.requirePayment || false,
     bookingAmountCents: court.requirePayment ? court.bookingAmountCents ?? null : null,
     billingMode: court.requirePayment ? court.billingMode ?? 'hourly' : 'hourly',

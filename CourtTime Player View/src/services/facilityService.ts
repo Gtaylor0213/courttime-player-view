@@ -344,6 +344,7 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
       c.is_indoor as "isIndoor",
       c.has_lights as "hasLights",
       c.is_walk_up as "isWalkUp",
+      c.is_admin_only as "isAdminOnly",
       c.status,
       c.parent_court_id as "parentCourtId",
       c.split_configuration as "splitConfiguration",

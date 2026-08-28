@@ -68,6 +68,7 @@ interface Court extends PaidCourtFormFields {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp: boolean;
+  isAdminOnly: boolean;
   status: 'available' | 'maintenance' | 'closed';
   enableGuestFee?: boolean;
   guestFeeCents?: number | null;
@@ -98,6 +99,7 @@ export function CourtManagement() {
   const { user } = useAuth();
   const { selectedFacilityId: currentFacilityId, enabledFeatures } = useAppContext();
   const dailyBillingEnabled = enabledFeatures?.includes(FEATURE_FLAGS.COURT_DAILY_BILLING) ?? false;
+  const adminOnlyCourtsEnabled = enabledFeatures?.includes(FEATURE_FLAGS.ADMIN_ONLY_COURTS) ?? false;
   const navigate = useNavigate();
   const [courts, setCourts] = useState<Court[]>([]);
   const [editingCourt, setEditingCourt] = useState<Court | null>(null);
@@ -242,6 +244,7 @@ export function CourtManagement() {
           ...c,
           status: c.status === 'active' ? 'available' : c.status === 'inactive' ? 'closed' : c.status,
           isWalkUp: c.isWalkUp === true,
+          isAdminOnly: c.isAdminOnly === true,
           requirePayment: c.requirePayment === true || c.require_payment === true,
           bookingAmountCents:
             c.bookingAmountCents != null
@@ -315,6 +318,7 @@ export function CourtManagement() {
       isIndoor: false,
       hasLights: false,
       isWalkUp: false,
+      isAdminOnly: false,
       requirePayment: false,
       bookingFeeDollars: '',
       billingMode: 'hourly',
@@ -449,6 +453,7 @@ export function CourtManagement() {
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
           isWalkUp: editingCourt.isWalkUp,
+          isAdminOnly: editingCourt.isAdminOnly,
           returnUrl: getCourtAddReturnUrl(),
           promoCode: courtAddPromo.appliedPromoCode,
           ...paymentPayload,
@@ -463,6 +468,7 @@ export function CourtManagement() {
           isIndoor: editingCourt.isIndoor,
           hasLights: editingCourt.hasLights,
           isWalkUp: editingCourt.isWalkUp,
+          isAdminOnly: editingCourt.isAdminOnly,
           status: editingCourt.status,
           ...paymentPayload,
         });
@@ -484,6 +490,7 @@ export function CourtManagement() {
                 isIndoor: editingCourt.isIndoor,
                 hasLights: editingCourt.hasLights,
                 isWalkUp: editingCourt.isWalkUp,
+                isAdminOnly: editingCourt.isAdminOnly,
                 paymentSessionId: sessionId,
                 ...paymentPayload,
               });
@@ -954,6 +961,18 @@ export function CourtManagement() {
                     />
                     <Label htmlFor="walkUp">Walk-up Court (no online booking)</Label>
                   </div>
+                  {adminOnlyCourtsEnabled && (
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="adminOnly"
+                        checked={editingCourt.isAdminOnly}
+                        onCheckedChange={(checked) =>
+                          setEditingCourt((prev) => (prev ? { ...prev, isAdminOnly: checked } : prev))
+                        }
+                      />
+                      <Label htmlFor="adminOnly">Admin Only Court (only admins/sub-admins can book)</Label>
+                    </div>
+                  )}
                 </div>
                 {editingCourt && (
                   <PaidCourtBookingFields
@@ -1137,6 +1156,7 @@ export function CourtManagement() {
                               <span className="text-xs text-gray-600 font-normal">{hoursSummary}</span>
                             ) : null}
                             {court.isWalkUp && <Badge variant="secondary">Walk-up</Badge>}
+                            {court.isAdminOnly && <Badge variant="secondary">Admin Only</Badge>}
                             {court.requirePayment && court.billingMode === 'daily' && court.dailyRateCents && (
                               <Badge className="bg-amber-100 text-amber-900 border-amber-200">
                                 Paid · ${(court.dailyRateCents / 100).toFixed(2)}/day
@@ -1313,6 +1333,18 @@ export function CourtManagement() {
                           />
                           <Label htmlFor={`walkUp-${court.id}`}>Walk-up Court (no online booking)</Label>
                         </div>
+                        {adminOnlyCourtsEnabled && (
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              id={`adminOnly-${court.id}`}
+                              checked={editingCourt.isAdminOnly}
+                              onCheckedChange={(checked) =>
+                          setEditingCourt((prev) => (prev ? { ...prev, isAdminOnly: checked } : prev))
+                        }
+                            />
+                            <Label htmlFor={`adminOnly-${court.id}`}>Admin Only Court (only admins/sub-admins can book)</Label>
+                          </div>
+                        )}
                       </div>
                       {editingCourt && (
                         <PaidCourtBookingFields

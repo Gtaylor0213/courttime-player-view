@@ -16,6 +16,7 @@ export interface CourtCreateData {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp?: boolean;
+  isAdminOnly?: boolean;
   requirePayment?: boolean;
   bookingAmountCents?: number | null;
   billingMode?: 'hourly' | 'daily';
@@ -40,6 +41,7 @@ export interface Court {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp: boolean;
+  isAdminOnly: boolean;
   requirePayment: boolean;
   bookingAmountCents: number | null;
   billingMode: 'hourly' | 'daily';
@@ -61,15 +63,16 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
   const result = await query(
     `INSERT INTO courts (
       facility_id, name, court_number, surface_type, court_type,
-      is_indoor, has_lights, is_walk_up, require_payment, booking_amount_cents,
+      is_indoor, has_lights, is_walk_up, is_admin_only, require_payment, booking_amount_cents,
       billing_mode, daily_rate_cents,
       guest_fee_cents, ball_machine_fee_cents, court_rules, parent_court_id, split_configuration,
       is_split_court, status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'available')
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'available')
     RETURNING
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      is_admin_only as "isAdminOnly",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
       billing_mode as "billingMode",
@@ -89,6 +92,7 @@ export async function createCourt(courtData: CourtCreateData): Promise<Court> {
       courtData.isIndoor,
       courtData.hasLights,
       courtData.isWalkUp || false,
+      courtData.isAdminOnly || false,
       courtData.requirePayment || false,
       courtData.requirePayment && courtData.bookingAmountCents ? courtData.bookingAmountCents : null,
       courtData.billingMode || 'hourly',
@@ -121,9 +125,9 @@ export async function createCourtsBulk(
     for (let i = 0; i < count; i++) {
       const courtNumber = startingNumber + i;
       const courtName = `Court ${courtNumber}`;
-      const offset = i * 9;
+      const offset = i * 10;
       placeholders.push(
-        `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, 'available', false)`
+        `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, 'available', false)`
       );
       values.push(
         courtData.facilityId,
@@ -134,6 +138,7 @@ export async function createCourtsBulk(
         courtData.isIndoor,
         courtData.hasLights,
         courtData.isWalkUp || false,
+        courtData.isAdminOnly || false,
         courtData.courtRules || null,
       );
     }
@@ -141,12 +146,13 @@ export async function createCourtsBulk(
     const result = await client.query(
       `INSERT INTO courts (
         facility_id, name, court_number, surface_type, court_type,
-        is_indoor, has_lights, is_walk_up, court_rules, status, is_split_court
+        is_indoor, has_lights, is_walk_up, is_admin_only, court_rules, status, is_split_court
       ) VALUES ${placeholders.join(', ')}
       RETURNING
         id, facility_id as "facilityId", name, court_number as "courtNumber",
         surface_type as "surfaceType", court_type as "courtType",
         is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+        is_admin_only as "isAdminOnly",
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
         billing_mode as "billingMode",
@@ -202,12 +208,13 @@ export async function createSplitCourt(
       const result = await client.query(
         `INSERT INTO courts (
           facility_id, name, court_number, surface_type, court_type,
-          is_indoor, has_lights, is_walk_up, parent_court_id, status, is_split_court
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'available', false)
+          is_indoor, has_lights, is_walk_up, is_admin_only, parent_court_id, status, is_split_court
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'available', false)
         RETURNING
           id, facility_id as "facilityId", name, court_number as "courtNumber",
           surface_type as "surfaceType", court_type as "courtType",
           is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+          is_admin_only as "isAdminOnly",
           COALESCE(require_payment, false) as "requirePayment",
           booking_amount_cents as "bookingAmountCents",
           billing_mode as "billingMode",
@@ -225,6 +232,7 @@ export async function createSplitCourt(
           parentCourt.is_indoor,
           parentCourt.has_lights,
           parentCourt.is_walk_up || false,
+          parentCourt.is_admin_only || false,
           parentCourtId,
         ]
       );
@@ -238,6 +246,7 @@ export async function createSplitCourt(
         id, facility_id as "facilityId", name, court_number as "courtNumber",
         surface_type as "surfaceType", court_type as "courtType",
         is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+        is_admin_only as "isAdminOnly",
         COALESCE(require_payment, false) as "requirePayment",
         booking_amount_cents as "bookingAmountCents",
         billing_mode as "billingMode",
@@ -269,6 +278,7 @@ export async function updateCourtsBulk(
     isIndoor?: boolean;
     hasLights?: boolean;
     isWalkUp?: boolean;
+    isAdminOnly?: boolean;
     status?: string;
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
@@ -303,6 +313,10 @@ export async function updateCourtsBulk(
   if (updates.isWalkUp !== undefined) {
     setClauses.push(`is_walk_up = $${paramIndex++}`);
     params.push(updates.isWalkUp);
+  }
+  if (updates.isAdminOnly !== undefined) {
+    setClauses.push(`is_admin_only = $${paramIndex++}`);
+    params.push(updates.isAdminOnly);
   }
   if (updates.status !== undefined) {
     const statusMap: Record<string, string> = { active: 'available', inactive: 'closed' };
@@ -355,6 +369,7 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      is_admin_only as "isAdminOnly",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
       billing_mode as "billingMode",
@@ -380,6 +395,7 @@ export async function getCourtById(courtId: string): Promise<Court | null> {
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      is_admin_only as "isAdminOnly",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
       billing_mode as "billingMode",
@@ -405,6 +421,7 @@ export async function getSplitCourts(parentCourtId: string): Promise<Court[]> {
       id, facility_id as "facilityId", name, court_number as "courtNumber",
       surface_type as "surfaceType", court_type as "courtType",
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      is_admin_only as "isAdminOnly",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
       billing_mode as "billingMode",
@@ -457,6 +474,10 @@ export async function updateCourt(
     fields.push(`is_walk_up = $${paramCount++}`);
     values.push(updates.isWalkUp);
   }
+  if (updates.isAdminOnly !== undefined) {
+    fields.push(`is_admin_only = $${paramCount++}`);
+    values.push(updates.isAdminOnly);
+  }
   if (updates.requirePayment !== undefined) {
     fields.push(`require_payment = $${paramCount++}`);
     values.push(updates.requirePayment);
@@ -498,6 +519,7 @@ export async function updateCourt(
        id, facility_id as "facilityId", name, court_number as "courtNumber",
        surface_type as "surfaceType", court_type as "courtType",
       is_indoor as "isIndoor", has_lights as "hasLights", is_walk_up as "isWalkUp",
+      is_admin_only as "isAdminOnly",
       COALESCE(require_payment, false) as "requirePayment",
       booking_amount_cents as "bookingAmountCents",
       billing_mode as "billingMode",

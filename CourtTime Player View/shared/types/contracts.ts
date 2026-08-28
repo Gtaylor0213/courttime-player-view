@@ -45,6 +45,7 @@ export interface Court {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp?: boolean;
+  isAdminOnly?: boolean;
   status: "available" | "maintenance" | "closed";
   /** Stripe Connect: court booking fee (cents). */
   requirePayment?: boolean;

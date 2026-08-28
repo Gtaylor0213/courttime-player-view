@@ -293,6 +293,7 @@ export const facilitiesApi = {
       isIndoor: boolean;
       hasLights: boolean;
       isWalkUp?: boolean;
+      isAdminOnly?: boolean;
       canSplit?: boolean;
       splitConfig?: {
         splitNames: string[];
@@ -1080,6 +1081,7 @@ export const adminApi = {
     isIndoor: boolean;
     hasLights: boolean;
     isWalkUp?: boolean;
+    isAdminOnly?: boolean;
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
     bookingFeeDollars?: string;
@@ -1131,6 +1133,7 @@ export const adminApi = {
     isIndoor?: boolean;
     hasLights?: boolean;
     isWalkUp?: boolean;
+    isAdminOnly?: boolean;
     status?: string;
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
@@ -1153,6 +1156,7 @@ export const adminApi = {
     isIndoor?: boolean;
     hasLights?: boolean;
     isWalkUp?: boolean;
+    isAdminOnly?: boolean;
     requirePayment?: boolean;
     bookingAmountCents?: number | null;
     bookingFeeDollars?: string;

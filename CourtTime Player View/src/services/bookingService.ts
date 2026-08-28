@@ -831,6 +831,32 @@ export async function validateBooking(bookingData: {
     };
   }
 
+  const adminOnlyCourt = await query(
+    `SELECT 1 FROM courts WHERE id = $1 AND is_admin_only = true`,
+    [bookingData.courtId]
+  );
+  if (adminOnlyCourt.rows.length > 0) {
+    const bypass =
+      (await isFacilityAdminUser(bookingData.userId, bookingData.facilityId)) ||
+      (await isSubAdminUser(bookingData.userId, bookingData.facilityId));
+    if (!bypass) {
+      const blocker = {
+        ruleCode: 'COURT-ADMIN-ONLY',
+        ruleName: 'Admin only court',
+        message: 'This is an admin-only court, please book a different court.',
+        severity: 'error' as const,
+        passed: false,
+      };
+      return {
+        allowed: false,
+        results: [blocker],
+        blockers: [blocker],
+        warnings: [],
+        isPrimeTime: false,
+      };
+    }
+  }
+
   const hardCap = await assertHardBookingRuleCaps({
     userId: bookingData.userId,
     facilityId: bookingData.facilityId,

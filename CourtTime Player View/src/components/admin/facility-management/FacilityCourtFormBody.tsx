@@ -44,6 +44,7 @@ export function FacilityCourtFormBody({
 }) {
   const { enabledFeatures } = useAppContext();
   const dailyBillingEnabled = enabledFeatures?.includes(FEATURE_FLAGS.COURT_DAILY_BILLING) ?? false;
+  const adminOnlyCourtsEnabled = enabledFeatures?.includes(FEATURE_FLAGS.ADMIN_ONLY_COURTS) ?? false;
   const id = (suffix: string) => `${idPrefix}-${suffix}`;
   return (
     <>
@@ -156,6 +157,18 @@ export function FacilityCourtFormBody({
           />
           <Label htmlFor={id('walkUp')}>Walk-up Court (no online booking)</Label>
         </div>
+        {adminOnlyCourtsEnabled && (
+          <div className="flex items-center space-x-2">
+            <Switch
+              id={id('adminOnly')}
+              checked={editingCourt.isAdminOnly === true}
+              onCheckedChange={(checked) =>
+                setEditingCourt((prev) => (prev ? { ...prev, isAdminOnly: checked } : prev))
+              }
+            />
+            <Label htmlFor={id('adminOnly')}>Admin Only Court (only admins/sub-admins can book)</Label>
+          </div>
+        )}
       </div>
 
       <div className="mt-4">

@@ -664,20 +664,23 @@ export function ReservationManagementModal({
       }
 
       // Prepaid / non-settlement: create new then cancel old.
-      // excludeBookingId prevents the old slot from conflicting with the reshaped time.
+      // excludeBookingId prevents the old slot from conflicting with the reshaped time,
+      // but the server only honors it when userId matches the old booking's owner — so
+      // this must stay the reservation's actual owner, not whichever admin is editing it.
       const response = await bookingApi.create({
         courtId: editCourt,
-        userId: user?.id || '',
+        userId: reservation.userId,
         facilityId: reservation.facilityId,
         bookingDate: editDate,
         startTime: editStartTime,
         endTime: endTime,
         durationMinutes: durationMinutes,
         notes: editNotes,
-        // Carry the add-on and type across the re-create, otherwise editing a
-        // reservation silently drops them. Pass coverage is re-resolved server-side.
+        // Carry the add-on, type, and walk-in guest name across the re-create, otherwise
+        // editing a reservation silently drops them. Pass coverage is re-resolved server-side.
         addBallMachine: reservation.addBallMachine || undefined,
         bookingType: editBookingType || undefined,
+        walkInName: reservation.walkInName || undefined,
         excludeBookingId: reservation.id,
       });
 

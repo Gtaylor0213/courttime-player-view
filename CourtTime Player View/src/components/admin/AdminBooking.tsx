@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../ui/textarea';
 import { Checkbox } from '../ui/checkbox';
 import { useAuth } from '../../contexts/AuthContext';
-import { bookingApi, membersApi, facilitiesApi } from '../../api/client';
+import { bookingApi, membersApi, facilitiesApi, courtConfigApi } from '../../api/client';
 import { toast } from 'sonner';
 import { sortFacilitiesByName } from '../../../shared/utils/facilitySort';
 import { parseLocalDate } from '../../utils/dateUtils';
@@ -29,6 +29,32 @@ interface Facility {
   name: string;
   type: string;
   courts: Array<{ id: string; name: string; type: string }>;
+}
+
+// Used only until a facility/court's real operating hours load.
+const DEFAULT_OPEN_MINUTES = 6 * 60;
+const DEFAULT_CLOSE_MINUTES = 21 * 60;
+
+type CourtDayOperatingBounds = { isOpen: boolean; openMin: number; closeMin: number };
+
+function parseApiTimeToMinutes(value: unknown): number | null {
+  if (value == null) return null;
+  const s = typeof value === 'string' ? value : String(value);
+  const timePart = s.includes('T') ? s.split('T')[1] || '' : s;
+  const m = timePart.trim().match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+  return h * 60 + min;
+}
+
+function formatMinutesAs12h(totalMinutes: number): string {
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
 }
 
 export function AdminBooking() {
@@ -199,6 +225,56 @@ export function AdminBooking() {
     filteredCourts: availableCourts,
   } = useCourtTypeFilter(allCourts);
 
+  /** Effective open/close window per court for the selected day (facility hours merged with any court override). */
+  const [courtDayOperating, setCourtDayOperating] = useState<Record<string, CourtDayOperatingBounds>>({});
+
+  // Facility/court operating hours for the selected day — same endpoint the calendar
+  // grid uses to gate which slots are selectable, so admin-created reservations can't
+  // be booked outside the facility's real hours.
+  useEffect(() => {
+    if (!selectedFacility || !selectedDate) {
+      setCourtDayOperating({});
+      return;
+    }
+    let cancelled = false;
+    courtConfigApi.getFacilityDayOperating(selectedFacility, selectedDate).then((res: any) => {
+      if (cancelled) return;
+      if (res?.success && Array.isArray(res.data?.courtConfigs)) {
+        const next: Record<string, CourtDayOperatingBounds> = {};
+        res.data.courtConfigs.forEach((row: any) => {
+          const openMin = parseApiTimeToMinutes(row.openTime);
+          const closeMin = parseApiTimeToMinutes(row.closeTime);
+          if (openMin === null || closeMin === null) return;
+          next[row.courtId] = { isOpen: row.isOpen !== false, openMin, closeMin };
+        });
+        setCourtDayOperating(next);
+      } else {
+        setCourtDayOperating({});
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFacility, selectedDate]);
+
+  // Open/close window every available (type-filtered) court is open for on this day —
+  // the intersection, since one time-slot list is shown before a specific court is
+  // chosen. Falls back to a wide default while operating-hours data is still loading.
+  const { slotStartMinutes, slotEndMinutes } = React.useMemo(() => {
+    const bounds = availableCourts
+      .map((c: any) => courtDayOperating[c.id])
+      .filter((b): b is CourtDayOperatingBounds => !!b && b.isOpen);
+    if (bounds.length === 0) {
+      return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES };
+    }
+    const openMin = Math.max(...bounds.map((b) => b.openMin));
+    const closeMin = Math.min(...bounds.map((b) => b.closeMin));
+    if (openMin >= closeMin) {
+      return { slotStartMinutes: DEFAULT_OPEN_MINUTES, slotEndMinutes: DEFAULT_CLOSE_MINUTES };
+    }
+    return { slotStartMinutes: openMin, slotEndMinutes: closeMin };
+  }, [availableCourts, courtDayOperating]);
+
   // Fetch bookings when facility or date changes
   useEffect(() => {
     const fetchBookings = async () => {
@@ -242,16 +318,13 @@ export function AdminBooking() {
     fetchBookings();
   }, [selectedFacility, selectedDate]);
 
-  // Generate time slots (15-minute intervals), filtering out fully booked times
+  // Generate time slots (15-minute intervals) within facility hours, filtering out fully booked times
   const timeSlots = React.useMemo(() => {
-    const allSlots = [];
-    for (let hour = 6; hour <= 21; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const displayMinute = minute.toString().padStart(2, '0');
-        allSlots.push(`${displayHour}:${displayMinute} ${period}`);
-      }
+    const start = Math.ceil(slotStartMinutes / 15) * 15;
+    const end = Math.floor(slotEndMinutes / 15) * 15;
+    const allSlots: string[] = [];
+    for (let m = start; m <= end; m += 15) {
+      allSlots.push(formatMinutesAs12h(m));
     }
 
     if (!selectedCourtType || availableCourts.length === 0) {
@@ -267,7 +340,7 @@ export function AdminBooking() {
       }
       return false;
     });
-  }, [selectedCourtType, availableCourts, existingBookings]);
+  }, [slotStartMinutes, slotEndMinutes, selectedCourtType, availableCourts, existingBookings]);
 
   // Auto-select first available court and find soonest available time
   useEffect(() => {
@@ -277,14 +350,11 @@ export function AdminBooking() {
       if (userChoseTime && selectedTime && timeSlots.includes(selectedTime)) return;
 
       const generateTimeSlots = () => {
-        const slots = [];
-        for (let hour = 6; hour <= 21; hour++) {
-          for (let minute = 0; minute < 60; minute += 15) {
-            const period = hour >= 12 ? 'PM' : 'AM';
-            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-            const displayMinute = minute.toString().padStart(2, '0');
-            slots.push(`${displayHour}:${displayMinute} ${period}`);
-          }
+        const start = Math.ceil(slotStartMinutes / 15) * 15;
+        const end = Math.floor(slotEndMinutes / 15) * 15;
+        const slots: string[] = [];
+        for (let m = start; m <= end; m += 15) {
+          slots.push(formatMinutesAs12h(m));
         }
         return slots;
       };
@@ -379,7 +449,7 @@ export function AdminBooking() {
       setSelectedCourt('');
       setSelectedCourtId('');
     }
-  }, [selectedCourtType, availableCourts, existingBookings, selectedDate, duration, selectedTime, timeSlots, userChoseTime]);
+  }, [selectedCourtType, availableCourts, existingBookings, selectedDate, duration, selectedTime, timeSlots, userChoseTime, slotStartMinutes, slotEndMinutes]);
 
   // Default padel bookings to a 90-minute block (vs. the standard 2-hour default),
   // only when the duration hasn't already been changed from that default.
@@ -529,20 +599,18 @@ export function AdminBooking() {
     return `${displayHours}:${minutes.toString().padStart(2, '0')} ${endPeriod}`;
   };
 
-  // Generate end time options (all slots after selected start time)
+  // Generate end time options (all slots within facility hours after selected start time)
   const endTimeSlots = React.useMemo(() => {
     if (!selectedTime) return [];
+    const start = Math.ceil(slotStartMinutes / 15) * 15;
+    const end = Math.floor(slotEndMinutes / 15) * 15;
     const allSlots: string[] = [];
-    for (let hour = 6; hour <= 21; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        allSlots.push(`${displayHour}:${minute.toString().padStart(2, '0')} ${period}`);
-      }
+    for (let m = start; m <= end; m += 15) {
+      allSlots.push(formatMinutesAs12h(m));
     }
     const startIdx = allSlots.indexOf(selectedTime);
     return startIdx >= 0 ? allSlots.slice(startIdx + 1) : allSlots;
-  }, [selectedTime]);
+  }, [selectedTime, slotStartMinutes, slotEndMinutes]);
 
   // Sync selectedEndTime when selectedTime or duration changes
   useEffect(() => {

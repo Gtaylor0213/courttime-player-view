@@ -89,6 +89,13 @@ function calendarSlotToMinutes(timeSlot: string): number {
   return hours * 60 + (minutes || 0);
 }
 
+/** "HH:MM:00" for the API, from minutes-since-midnight. */
+function minutesToApiTime(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+}
+
 // Helper to get current time components in a given timezone
 const getTimeComponents = (tz: string = 'America/New_York'): { hours: number; minutes: number; date: Date } => {
   const now = new Date();
@@ -141,6 +148,8 @@ export function CourtCalendarView() {
   const selectedFacility = selectedFacilityId;
   const [selectedView, setSelectedView] = useState('week');
   const weekMonthViewEnabled = enabledFeatures.includes('week_month_view');
+  const isAdmin = user?.userType === 'admin';
+  const dragReassignEnabled = isAdmin && enabledFeatures.includes(FEATURE_FLAGS.DRAG_RESCHEDULE_RESERVATIONS);
   const needsMemberNumber =
     user?.userType === 'player' &&
     !!selectedFacility &&
@@ -196,6 +205,48 @@ export function CourtCalendarView() {
   const handleEmptySlotClickRef = useRef<
     (courtId: string, time: string, dragCells?: Set<string>) => void
   >(() => {});
+
+  // Admin drag-to-reassign — moving an EXISTING reservation to a different court/time.
+  // Fully separate from `dragState` above (which only creates new bookings on empty cells).
+  type ReservationDragState = {
+    isDragging: boolean;
+    booking: any | null;
+    originCourtId: string | null;
+    originStartTime: string | null;
+    durationMinutes: number;
+    grabOffsetY: number;
+    candidateCourtId: string | null;
+    candidateStartTime: string | null;
+    candidateValid: boolean;
+  };
+  const emptyReservationDragState: ReservationDragState = {
+    isDragging: false,
+    booking: null,
+    originCourtId: null,
+    originStartTime: null,
+    durationMinutes: 0,
+    grabOffsetY: 0,
+    candidateCourtId: null,
+    candidateStartTime: null,
+    candidateValid: false,
+  };
+  const [reservationDragState, setReservationDragState] = useState<ReservationDragState>(emptyReservationDragState);
+  const reservationDragStateRef = useRef(reservationDragState);
+  reservationDragStateRef.current = reservationDragState;
+  const reservationDragCleanupRef = useRef<(() => void) | null>(null);
+  const reservationDragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reservationTouchGestureRef = useRef<{
+    touchId: number;
+    startClientX: number;
+    startClientY: number;
+    armed: boolean;
+    horizontalSwipe: boolean;
+  } | null>(null);
+  const reservationDragJustFinishedRef = useRef(false);
+  /** bookingId -> fullDetails, refreshed whenever the overlay list changes — lets the native
+   * touchstart handler below (which only gets a DOM element, not a JS closure) look up a
+   * reservation's data from its `data-reservation-drag-id` attribute. */
+  const reservationDetailsByIdRef = useRef<Record<string, any>>({});
 
   /** Mobile web: long-press vertical drag (mirrors CourtCalendarGrid). */
   const mobileDragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1360,6 +1411,15 @@ export function CourtCalendarView() {
     return overlays;
   }, [courts, bookings, allTimeSlots]);
 
+  useEffect(() => {
+    const map: Record<string, any> = {};
+    for (const overlay of bookingOverlays) {
+      const details = overlay.booking?.fullDetails;
+      if (details?.id) map[details.id] = details;
+    }
+    reservationDetailsByIdRef.current = map;
+  }, [bookingOverlays]);
+
   const navigateDate = (direction: 'prev' | 'next') => {
     const newDate = new Date(selectedDate);
     newDate.setDate(selectedDate.getDate() + (direction === 'next' ? 1 : -1));
@@ -1416,6 +1476,111 @@ export function CourtCalendarView() {
       });
     }
   };
+
+  /**
+   * Slots (in `allTimeSlots` label form) a dragged reservation would occupy starting at
+   * `startTime` on `courtId`, and whether every one of them is actually droppable — free
+   * (or occupied only by the reservation's own current booking), within operating hours,
+   * and not a walk-up-only court.
+   */
+  const getReservationDropTarget = useCallback((
+    courtId: string,
+    startTime: string,
+    durationMinutes: number,
+    excludeBookingId?: string
+  ): { slots: string[]; valid: boolean } => {
+    const courtObj = courts.find((c) => c.id === courtId);
+    if (!courtObj || courtObj.isWalkUp) return { slots: [], valid: false };
+
+    const startIdx = allTimeSlots.indexOf(startTime);
+    if (startIdx < 0) return { slots: [], valid: false };
+
+    const slotCount = Math.max(1, Math.ceil(durationMinutes / 30));
+    const slots: string[] = [];
+    for (let i = 0; i < slotCount; i++) {
+      const slot = allTimeSlots[startIdx + i];
+      if (!slot) return { slots, valid: false };
+      slots.push(slot);
+    }
+
+    const valid = slots.every((slot) => {
+      if (isCourtSlotOutsideOperatingHours(courtId, slot)) return false;
+      const occupant = bookings[courtId as keyof typeof bookings]?.[slot];
+      if (!occupant) return true;
+      return !!excludeBookingId && occupant.bookingId === excludeBookingId;
+    });
+
+    return { slots, valid };
+  }, [courts, allTimeSlots, isCourtSlotOutsideOperatingHours, bookings]);
+
+  /** Reassigns an existing reservation to a new court/time, keeping name/duration — mirrors
+   * ReservationManagementModal's create-then-cancel (or update-in-place for unsettled) reschedule. */
+  const handleReservationDragDrop = useCallback(async (
+    booking: any,
+    targetCourtId: string,
+    targetStartTime: string
+  ) => {
+    const durationMinutes = Number(booking.durationMinutes) || 0;
+    const startMin = calendarSlotToMinutes(targetStartTime);
+    const endTime = minutesToApiTime(startMin + durationMinutes);
+    const targetCourt = courts.find((c) => c.id === targetCourtId);
+
+    try {
+      const detail = await bookingApi.getById(booking.id);
+      const fresh = (detail as any)?.booking || (detail as any)?.data?.booking;
+      const settlementStatus = fresh?.settlementStatus || booking.settlementStatus || 'not_applicable';
+
+      if (settlementStatus === 'unsettled') {
+        const response = await bookingApi.updateUnsettled(booking.id, {
+          courtId: targetCourtId,
+          bookingDate: booking.bookingDate,
+          startTime: minutesToApiTime(startMin),
+          endTime,
+          durationMinutes,
+          notes: booking.notes,
+          bookingType: booking.bookingType || undefined,
+        });
+        if (!response.success) {
+          toast.error(response.error || 'Failed to move reservation');
+          return;
+        }
+      } else {
+        // excludeBookingId prevents the old slot from conflicting with the new one, but the
+        // server only honors it when userId matches the old booking's owner — so this must
+        // stay the reservation's actual owner, not the admin doing the dragging.
+        const response = await bookingApi.create({
+          courtId: targetCourtId,
+          userId: booking.userId,
+          facilityId: booking.facilityId,
+          bookingDate: booking.bookingDate,
+          startTime: minutesToApiTime(startMin),
+          endTime,
+          durationMinutes,
+          notes: booking.notes,
+          addBallMachine: booking.addBallMachine || undefined,
+          bookingType: booking.bookingType || undefined,
+          walkInName: booking.walkInName || undefined,
+          excludeBookingId: booking.id,
+        });
+
+        if (!response.success) {
+          toast.error(response.error || 'Failed to move reservation');
+          return;
+        }
+        if (response.requiresPayment) {
+          toast.error('This change requires payment. Use the reservation details modal instead.');
+          return;
+        }
+        await bookingApi.cancel(booking.id, user?.id || '');
+      }
+
+      toast.success(`Reservation moved to ${targetCourt?.name || 'the new court'} at ${targetStartTime}`);
+      await fetchBookings();
+    } catch (error) {
+      console.error('Error moving reservation:', error);
+      toast.error('Failed to move reservation. Please try again.');
+    }
+  }, [courts, user, fetchBookings]);
 
   const handleEmptySlotClick = (courtId: string, time: string, dragCells?: Set<string>) => {
     if (strikeLockout?.isLockedOut) {
@@ -1835,6 +2000,104 @@ export function CourtCalendarView() {
     });
   };
 
+  /** Mouse (and desktop-width touch) drag-to-reassign, started from pointerdown on a reservation block. */
+  const handleReservationPointerDown = (booking: any, event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragReassignEnabled || strikeLockout?.isLockedOut) return;
+    if (isMobile && event.pointerType === 'touch') return; // handled by the native touchstart listener instead
+
+    const details = booking.fullDetails;
+    if (!details) return;
+
+    const captureTarget = event.currentTarget;
+    const blockRect = captureTarget.getBoundingClientRect();
+    const grabOffsetY = event.clientY - blockRect.top;
+    const originCourtId = details.courtId as string;
+    const originStartMinutes = parseApiTimeToMinutes(details.startTime);
+    const durationMinutes = Number(details.durationMinutes) || 0;
+
+    const pointerId = event.pointerId;
+    const startClientX = event.clientX;
+    const startClientY = event.clientY;
+    let dragStarted = false;
+
+    reservationDragCleanupRef.current?.();
+    reservationDragCleanupRef.current = null;
+
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      if (!dragStarted) {
+        const dx = ev.clientX - startClientX;
+        const dy = ev.clientY - startClientY;
+        if (Math.abs(dx) < MOBILE_MOVEMENT_THRESHOLD_PX && Math.abs(dy) < MOBILE_MOVEMENT_THRESHOLD_PX) return;
+        dragStarted = true;
+        setCalendarTouchLocked(true);
+      }
+      ev.preventDefault();
+
+      const resolved = resolveSlotFromPoint(ev.clientX, ev.clientY - grabOffsetY);
+      const candidate = resolved
+        ? getReservationDropTarget(resolved.court, resolved.time, durationMinutes, details.id)
+        : null;
+      const next: ReservationDragState = {
+        isDragging: true,
+        booking: details,
+        originCourtId,
+        originStartTime: null,
+        durationMinutes,
+        grabOffsetY,
+        candidateCourtId: resolved?.court ?? null,
+        candidateStartTime: resolved?.time ?? null,
+        candidateValid: !!candidate?.valid,
+      };
+      reservationDragStateRef.current = next;
+      setReservationDragState(next);
+    };
+
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+      reservationDragCleanupRef.current = null;
+      setCalendarTouchLocked(false);
+
+      if (dragStarted) {
+        reservationDragJustFinishedRef.current = true;
+        setTimeout(() => {
+          reservationDragJustFinishedRef.current = false;
+        }, 300);
+
+        const finalState = reservationDragStateRef.current;
+        const changed =
+          !!finalState.candidateCourtId &&
+          !!finalState.candidateStartTime &&
+          (finalState.candidateCourtId !== originCourtId ||
+            calendarSlotToMinutes(finalState.candidateStartTime) !== originStartMinutes);
+        if (finalState.candidateValid && changed) {
+          void handleReservationDragDrop(details, finalState.candidateCourtId as string, finalState.candidateStartTime as string);
+        }
+      }
+
+      reservationDragStateRef.current = emptyReservationDragState;
+      setReservationDragState(emptyReservationDragState);
+    };
+
+    try {
+      captureTarget.setPointerCapture?.(pointerId);
+    } catch {
+      // ignore
+    }
+
+    window.addEventListener('pointermove', onMove, { capture: true, passive: false });
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onUp, true);
+    reservationDragCleanupRef.current = () => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+    };
+  };
+
   useEffect(() => {
     const root = calendarScrollRef.current;
     if (!root || courts.length === 0) return;
@@ -2019,11 +2282,170 @@ export function CourtCalendarView() {
     startSlotDragTracking,
   ]);
 
+  // Admin drag-to-reassign on real touch devices (mobile web / tablets): long-press to arm,
+  // matching the empty-slot long-press system above, but tracking a single point (the block's
+  // grabbed position) rather than a vertical multi-cell range.
+  useEffect(() => {
+    const root = calendarScrollRef.current;
+    if (!root || !dragReassignEnabled) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || strikeLockout?.isLockedOut) return;
+      const block = (e.target as HTMLElement | null)?.closest?.('[data-reservation-drag-id]');
+      if (!block || !root.contains(block)) return;
+
+      const bookingId = block.getAttribute('data-reservation-drag-id');
+      const details = bookingId ? reservationDetailsByIdRef.current[bookingId] : null;
+      if (!details) return;
+
+      const touch = e.touches[0];
+      if (!touch) return;
+
+      const blockRect = block.getBoundingClientRect();
+      const grabOffsetY = touch.clientY - blockRect.top;
+      const originCourtId = details.courtId as string;
+      const originStartMinutes = parseApiTimeToMinutes(details.startTime);
+      const durationMinutes = Number(details.durationMinutes) || 0;
+      const touchId = touch.identifier;
+
+      reservationTouchGestureRef.current = {
+        touchId,
+        startClientX: touch.clientX,
+        startClientY: touch.clientY,
+        armed: false,
+        horizontalSwipe: false,
+      };
+
+      reservationDragArmTimerRef.current = setTimeout(() => {
+        const gesture = reservationTouchGestureRef.current;
+        if (!gesture) return;
+        gesture.armed = true;
+        setCalendarTouchLocked(true);
+        const next: ReservationDragState = {
+          isDragging: true,
+          booking: details,
+          originCourtId,
+          originStartTime: null,
+          durationMinutes,
+          grabOffsetY,
+          candidateCourtId: originCourtId,
+          candidateStartTime: null,
+          candidateValid: false,
+        };
+        reservationDragStateRef.current = next;
+        setReservationDragState(next);
+      }, MOBILE_DRAG_ARM_DELAY_MS);
+
+      const onTouchMove = (ev: TouchEvent) => {
+        const gesture = reservationTouchGestureRef.current;
+        if (!gesture) return;
+        const finger = Array.from(ev.touches).find((t) => t.identifier === touchId);
+        if (!finger) return;
+
+        const deltaX = finger.clientX - gesture.startClientX;
+        const deltaY = finger.clientY - gesture.startClientY;
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+
+        if (!gesture.armed) {
+          if (absX > MOBILE_MOVEMENT_THRESHOLD_PX || absY > MOBILE_MOVEMENT_THRESHOLD_PX) {
+            if (reservationDragArmTimerRef.current) {
+              clearTimeout(reservationDragArmTimerRef.current);
+              reservationDragArmTimerRef.current = null;
+            }
+            if (absX > MOBILE_MOVEMENT_THRESHOLD_PX && absX > absY + 2) {
+              gesture.horizontalSwipe = true;
+            }
+          }
+          return;
+        }
+
+        ev.preventDefault();
+        const resolved = resolveSlotFromPoint(finger.clientX, finger.clientY - grabOffsetY);
+        const candidate = resolved
+          ? getReservationDropTarget(resolved.court, resolved.time, durationMinutes, details.id)
+          : null;
+        const next: ReservationDragState = {
+          isDragging: true,
+          booking: details,
+          originCourtId,
+          originStartTime: null,
+          durationMinutes,
+          grabOffsetY,
+          candidateCourtId: resolved?.court ?? null,
+          candidateStartTime: resolved?.time ?? null,
+          candidateValid: !!candidate?.valid,
+        };
+        reservationDragStateRef.current = next;
+        setReservationDragState(next);
+      };
+
+      const onTouchEnd = (ev: TouchEvent) => {
+        const endedHere = Array.from(ev.changedTouches).some((t) => t.identifier === touchId);
+        if (!endedHere) return;
+
+        window.removeEventListener('touchmove', onTouchMove, true);
+        window.removeEventListener('touchend', onTouchEnd, true);
+        window.removeEventListener('touchcancel', onTouchEnd, true);
+        if (reservationDragArmTimerRef.current) {
+          clearTimeout(reservationDragArmTimerRef.current);
+          reservationDragArmTimerRef.current = null;
+        }
+        setCalendarTouchLocked(false);
+
+        const gesture = reservationTouchGestureRef.current;
+        reservationTouchGestureRef.current = null;
+
+        if (gesture?.armed && !gesture.horizontalSwipe) {
+          ev.preventDefault();
+          reservationDragJustFinishedRef.current = true;
+          setTimeout(() => {
+            reservationDragJustFinishedRef.current = false;
+          }, 300);
+
+          const finalState = reservationDragStateRef.current;
+          const changed =
+            !!finalState.candidateCourtId &&
+            !!finalState.candidateStartTime &&
+            (finalState.candidateCourtId !== originCourtId ||
+              calendarSlotToMinutes(finalState.candidateStartTime) !== originStartMinutes);
+          if (finalState.candidateValid && changed) {
+            void handleReservationDragDrop(
+              details,
+              finalState.candidateCourtId as string,
+              finalState.candidateStartTime as string
+            );
+          }
+        }
+
+        reservationDragStateRef.current = emptyReservationDragState;
+        setReservationDragState(emptyReservationDragState);
+      };
+
+      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+      window.addEventListener('touchend', onTouchEnd, true);
+      window.addEventListener('touchcancel', onTouchEnd, true);
+    };
+
+    root.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+    return () => {
+      root.removeEventListener('touchstart', onTouchStart, true);
+      if (reservationDragArmTimerRef.current) {
+        clearTimeout(reservationDragArmTimerRef.current);
+        reservationDragArmTimerRef.current = null;
+      }
+    };
+  }, [dragReassignEnabled, resolveSlotFromPoint, getReservationDropTarget, handleReservationDragDrop, strikeLockout]);
+
   useEffect(
     () => () => {
       pointerDragCleanupRef.current?.();
       mobileTouchCleanupRef.current?.();
       clearMobileDragArmTimer();
+      reservationDragCleanupRef.current?.();
+      if (reservationDragArmTimerRef.current) {
+        clearTimeout(reservationDragArmTimerRef.current);
+      }
     },
     [clearMobileDragArmTimer]
   );
@@ -2416,11 +2838,16 @@ export function CourtCalendarView() {
         const showNotes = !isBlocked && !!booking.notes && remaining >= NOTES_ROW_HEIGHT;
         const isCompact = !showDurationRow;
 
+        const isDraggable = dragReassignEnabled && !isBlocked;
+        const isBeingDragged =
+          reservationDragState.isDragging && reservationDragState.booking?.id === booking.bookingId;
+
         return (
           <div
             key={`booking-${booking.bookingId || idx}`}
             title={tooltipText}
-            className={`absolute rounded-lg border ${isBlocked ? '' : 'cursor-pointer'} ${isBlocked ? 'opacity-70' : ''} transition-shadow pointer-events-auto overflow-hidden ${isMobile && !calendarTouchLocked ? 'calendar-booking-pan-x' : ''} ${colorClass}`}
+            data-reservation-drag-id={isDraggable ? booking.bookingId : undefined}
+            className={`absolute rounded-lg border ${isBlocked ? '' : 'cursor-pointer'} ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isBlocked ? 'opacity-70' : ''} ${isBeingDragged ? 'opacity-30' : ''} transition-shadow pointer-events-auto overflow-hidden ${isMobile && !calendarTouchLocked && !reservationDragState.isDragging ? 'calendar-booking-pan-x' : ''} ${colorClass}`}
             style={{
               top,
               left,
@@ -2432,7 +2859,8 @@ export function CourtCalendarView() {
                 ? 'none'
                 : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
             }}
-            onClick={() => !isBlocked && handleBookingClick(booking)}
+            onClick={() => !isBlocked && !reservationDragJustFinishedRef.current && handleBookingClick(booking)}
+            onPointerDown={isDraggable ? (e) => handleReservationPointerDown(booking, e) : undefined}
           >
             <div className={`px-1.5 py-0.5 h-full flex flex-col overflow-hidden ${isCompact ? 'justify-center' : ''}`}>
               <div className={`text-[11px] font-semibold leading-tight break-words ${nameLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}>
@@ -2464,6 +2892,39 @@ export function CourtCalendarView() {
       })}
     </div>
   );
+
+  /** Ghost preview of a reservation being drag-reassigned, snapped to its live candidate cell —
+   * green when the drop target is open, red when it's occupied/closed/out of hours. */
+  const renderReservationDragOverlay = (timeColOffset: number) => {
+    if (!reservationDragState.isDragging) return null;
+    const { booking, candidateCourtId, candidateStartTime, candidateValid, durationMinutes } = reservationDragState;
+    if (!booking || !candidateCourtId || !candidateStartTime) return null;
+
+    const courtIndex = courts.findIndex((c) => c.id === candidateCourtId);
+    const startIdx = allTimeSlots.indexOf(candidateStartTime);
+    if (courtIndex < 0 || startIdx < 0) return null;
+
+    const slotCount = Math.max(1, Math.ceil(durationMinutes / 30));
+    const top = (isMobile ? 0 : measuredHeaderHeight) + startIdx * effectiveSubSlotHeight + 2;
+    const left = timeColOffset + courtIndex * effectiveCourtWidth + 4;
+    const width = effectiveCourtWidth - 8;
+    const height = Math.max(slotCount * effectiveSubSlotHeight - 4, effectiveSubSlotHeight * 0.85);
+
+    return (
+      <div
+        className={`absolute rounded-lg border-2 border-dashed pointer-events-none flex items-center justify-center px-1.5 text-center ${
+          candidateValid
+            ? 'bg-green-100/90 border-green-500 text-green-900'
+            : 'bg-red-100/90 border-red-500 text-red-900'
+        }`}
+        style={{ top, left, width, height, zIndex: 6 }}
+      >
+        <span className="text-[11px] font-semibold leading-tight line-clamp-2 break-words">
+          {booking.walkInName || booking.userName || 'Reservation'}
+        </span>
+      </div>
+    );
+  };
 
   const renderCurrentTimeIndicator = (timeColOffset: number, showLabelInTimeColumn: boolean) => {
     if (currentTimeLinePosition === null) return null;
@@ -3018,6 +3479,7 @@ export function CourtCalendarView() {
                     </tbody>
                   </table>
                   {renderBookingOverlayLayer(0)}
+                  {renderReservationDragOverlay(0)}
                   {renderMobileCurrentTimeLine()}
                 </div>
               </div>
@@ -3053,6 +3515,7 @@ export function CourtCalendarView() {
               </tbody>
             </table>
             {renderBookingOverlayLayer(effectiveTimeColWidth)}
+            {renderReservationDragOverlay(effectiveTimeColWidth)}
             {renderCurrentTimeIndicator(effectiveTimeColWidth, false)}
           </div>
         )}

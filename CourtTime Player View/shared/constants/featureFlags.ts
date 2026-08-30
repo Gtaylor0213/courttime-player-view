@@ -20,6 +20,7 @@ export const FEATURE_FLAGS = {
   BHR_RESERVATION_TYPES: 'bhr_reservation_types',
   PADEL: 'padel',
   ADMIN_ONLY_COURTS: 'admin_only_courts',
+  DRAG_RESCHEDULE_RESERVATIONS: 'drag_reschedule_reservations',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -44,4 +45,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   bhr_reservation_types: 'BHR Reservation Types (adds a "Party" reservation type alongside the standard types)',
   padel: 'Padel (padel courts, Americano/Mexicano social play, open matches)',
   admin_only_courts: 'Admin Only Courts (let admins restrict a court to admin/sub-admin booking only)',
+  drag_reschedule_reservations: 'Drag to Reassign Reservations (let admins drag a reservation on the calendar to a different court/time)',
 };

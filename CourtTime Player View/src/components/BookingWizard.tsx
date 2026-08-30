@@ -9,6 +9,7 @@ import { Checkbox } from './ui/checkbox';
 import { Calendar, Clock, MapPin, AlertCircle, Info, Repeat } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
 import { SplitPaymentPicker } from './SplitPaymentPicker';
+import { BookForControl, type BookForMode } from './BookForControl';
 import { CourtWaiverAcceptanceDialog, useCourtWaiverGate } from './CourtWaiverAcceptanceDialog';
 import { useNotifications } from '../contexts/NotificationContext';
 import {
@@ -152,6 +153,10 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [splitPayment, setSplitPayment] = useState(false);
   const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
+  const [bookForMode, setBookForMode] = useState<BookForMode>('self');
+  const [bookForMemberId, setBookForMemberId] = useState<string | null>(null);
+  const [bookForMemberLabel, setBookForMemberLabel] = useState<string | null>(null);
+  const [bookForCustomName, setBookForCustomName] = useState('');
   const [facilityCourts, setFacilityCourts] = useState<
     Array<{
       id: string;
@@ -179,6 +184,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const isAdmin = user?.userType === 'admin';
   const canUseRecurring = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const canBookAdditionalCourts = isAdmin || enabledFeatures.includes(FEATURE_FLAGS.PLAYER_MULTIPLE_COURTS);
+  const canBookForOthers = isAdmin && enabledFeatures.includes(FEATURE_FLAGS.ADMIN_BOOK_FOR_OTHERS);
   const postPlaySettlement = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const universityClubGuestFee = enabledFeatures.includes(FEATURE_FLAGS.UNIVERSITY_CLUB_GUEST_FEE);
   const ballMachineEnabled = enabledFeatures.includes(FEATURE_FLAGS.BALL_MACHINE);
@@ -382,6 +388,10 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       setGuestCount(0);
       setGuestNames([]);
       setAddBallMachine(false);
+      setBookForMode('self');
+      setBookForMemberId(null);
+      setBookForMemberLabel(null);
+      setBookForCustomName('');
     }
   }, [selectedSlots, isOpen, time]);
 
@@ -607,6 +617,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       return;
     }
 
+    if (canBookForOthers && bookForMode === 'member' && !bookForMemberId) {
+      showToast('error', 'Error', 'Please select a member, or switch to Myself/Custom Name.');
+      return;
+    }
+    if (canBookForOthers && bookForMode === 'custom' && !bookForCustomName.trim()) {
+      showToast('error', 'Error', 'Please enter a name for the reservation.');
+      return;
+    }
+
     // Court-specific waivers must be accepted before booking
     const waiversAccepted = await courtWaiverGate.ensureAccepted(
       selectedCourts.map((c) => c.courtId)
@@ -650,11 +669,18 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         return;
       }
 
+      const bookForUserId = canBookForOthers && bookForMode === 'member' && bookForMemberId
+        ? bookForMemberId
+        : user.id;
+      const bookForWalkInName = canBookForOthers && bookForMode === 'custom' && bookForCustomName.trim()
+        ? bookForCustomName.trim()
+        : undefined;
+
       const bookingRequests = selectedCourts.flatMap(c =>
         datesToBook.map(bookingDate => ({
           courtId: c.courtId,
           courtName: c.court,
-          userId: user.id,
+          userId: bookForUserId,
           facilityId,
           bookingDate,
           startTime: startTime24,
@@ -662,6 +688,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
           durationMinutes: durationMins,
           bookingType: bookingType || undefined,
           notes: notes || undefined,
+          walkInName: bookForWalkInName,
           maxPlayers: isPadelCourtType(facilityCourts.find(fc => fc.id === c.courtId)?.courtType) ? 4 : undefined
         }))
       );
@@ -670,10 +697,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       const results = isRecurringSeries
         ? await (async () => {
             const seriesPayload = {
-              userId: user.id,
+              userId: bookForUserId,
               facilityId,
               bookingType: bookingType || undefined,
               notes: notes || undefined,
+              walkInName: bookForWalkInName,
               instances: bookingRequests.map(({ courtName, ...req }) => req)
             };
             let res = await bookingApi.createRecurringSeries(seriesPayload);
@@ -898,6 +926,24 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               </div>
             </div>
           </div>
+
+          {canBookForOthers && (
+            <BookForControl
+              facilityId={facilityId}
+              currentUserId={user?.id}
+              mode={bookForMode}
+              onModeChange={setBookForMode}
+              memberId={bookForMemberId}
+              memberLabel={bookForMemberLabel}
+              onMemberSelect={(userId, fullName) => {
+                setBookForMemberId(userId || null);
+                setBookForMemberLabel(fullName || null);
+              }}
+              customName={bookForCustomName}
+              onCustomNameChange={setBookForCustomName}
+              idPrefix="booking-wizard-book-for"
+            />
+          )}
 
           {/* Rule Violations Dialog */}
           <RuleViolationDialog

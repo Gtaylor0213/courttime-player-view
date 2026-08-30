@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Calendar, Clock, MapPin, User, Zap, AlertCircle, Info } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
 import { SplitPaymentPicker } from './SplitPaymentPicker';
+import { BookForControl, type BookForMode } from './BookForControl';
 import { CourtWaiverAcceptanceDialog, useCourtWaiverGate } from './CourtWaiverAcceptanceDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingApi, courtConfigApi } from '../api/client';
@@ -222,6 +223,7 @@ export function QuickReservePopup({
   const [facilityFeatures, setFacilityFeatures] = useState<string[]>([]);
   const canUseRecurring = isAdmin || facilityFeatures.includes(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const canSplitPayment = facilityFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
+  const canBookForOthers = isAdmin && facilityFeatures.includes(FEATURE_FLAGS.ADMIN_BOOK_FOR_OTHERS);
   const deerLakeReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
   const reservationTypeKeys = deerLakeReservationTypes
@@ -256,6 +258,12 @@ export function QuickReservePopup({
   const [splitPayment, setSplitPayment] = useState(false);
   const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
 
+  // Admin "book for" state
+  const [bookForMode, setBookForMode] = useState<BookForMode>('self');
+  const [bookForMemberId, setBookForMemberId] = useState<string | null>(null);
+  const [bookForMemberLabel, setBookForMemberLabel] = useState<string | null>(null);
+  const [bookForCustomName, setBookForCustomName] = useState('');
+
   // Set once the user picks a start or end time; their choice then wins over autofill
   const [userChoseTime, setUserChoseTime] = useState(false);
 
@@ -280,6 +288,10 @@ export function QuickReservePopup({
     setAdditionalCourtIds([]);
     setSplitPayment(false);
     setSplitMembers([]);
+    setBookForMode('self');
+    setBookForMemberId(null);
+    setBookForMemberLabel(null);
+    setBookForCustomName('');
   }, [isOpen]);
 
   // Reset court selection when facility changes
@@ -288,6 +300,10 @@ export function QuickReservePopup({
     setSelectedCourtId('');
     setSelectedCourtType(null);
     setAdditionalCourtIds([]);
+    setBookForMode('self');
+    setBookForMemberId(null);
+    setBookForMemberLabel(null);
+    setBookForCustomName('');
   }, [selectedFacility]);
 
   // Fetch feature flags for the currently selected facility
@@ -626,6 +642,15 @@ export function QuickReservePopup({
       return;
     }
 
+    if (canBookForOthers && bookForMode === 'member' && !bookForMemberId) {
+      alert('Please select a member, or switch to Myself/Custom Name');
+      return;
+    }
+    if (canBookForOthers && bookForMode === 'custom' && !bookForCustomName.trim()) {
+      alert('Please enter a name for the reservation');
+      return;
+    }
+
     // Court-specific waivers must be accepted before booking
     const waiversAccepted = await courtWaiverGate.ensureAccepted(
       allSelectedCourts.map((c) => c.id)
@@ -654,11 +679,18 @@ export function QuickReservePopup({
       // Generate dates for booking
       const datesToBook = generateRecurringDates();
 
+      const bookForUserId = canBookForOthers && bookForMode === 'member' && bookForMemberId
+        ? bookForMemberId
+        : user.id;
+      const bookForWalkInName = canBookForOthers && bookForMode === 'custom' && bookForCustomName.trim()
+        ? bookForCustomName.trim()
+        : undefined;
+
       // Create bookings for all courts × all dates
       const bookingRequests = allSelectedCourts.flatMap(c =>
         datesToBook.map(date => ({
           courtId: c.id,
-          userId: user.id,
+          userId: bookForUserId,
           facilityId: selectedFacility,
           bookingDate: date,
           startTime: startTime24,
@@ -666,6 +698,7 @@ export function QuickReservePopup({
           durationMinutes: Math.round(durationMinutes),
           bookingType: bookingType || undefined,
           notes: notes || undefined
+          ,walkInName: bookForWalkInName
           ,splitParticipantIds: splitPayment ? splitMembers.map(m => m.userId) : undefined
           ,maxPlayers: isPadelCourtType(availableCourts.find(ac => ac.id === c.id)?.type) ? 4 : undefined
         }))
@@ -675,10 +708,11 @@ export function QuickReservePopup({
       const results = isRecurringSeries
         ? await (async () => {
             const seriesPayload = {
-              userId: user.id,
+              userId: bookForUserId,
               facilityId: selectedFacility,
               bookingType: bookingType || undefined,
               notes: notes || undefined,
+              walkInName: bookForWalkInName,
               instances: bookingRequests
             };
             let res = await bookingApi.createRecurringSeries(seriesPayload);
@@ -977,6 +1011,24 @@ export function QuickReservePopup({
                   </SelectContent>
                 </Select>
               </div>
+
+          {canBookForOthers && (
+            <BookForControl
+              facilityId={selectedFacility}
+              currentUserId={user?.id}
+              mode={bookForMode}
+              onModeChange={setBookForMode}
+              memberId={bookForMemberId}
+              memberLabel={bookForMemberLabel}
+              onMemberSelect={(userId, fullName) => {
+                setBookForMemberId(userId || null);
+                setBookForMemberLabel(fullName || null);
+              }}
+              customName={bookForCustomName}
+              onCustomNameChange={setBookForCustomName}
+              idPrefix="quick-reserve-book-for"
+            />
+          )}
 
           {/* Court Type Filter - Only show if facility has multiple court types */}
           {hasMultipleCourtTypes && (

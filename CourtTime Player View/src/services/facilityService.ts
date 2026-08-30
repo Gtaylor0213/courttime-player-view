@@ -12,6 +12,7 @@ import {
 } from './courtOperatingConfigSync';
 import { normalizeCourtOperatingScheduleRows } from '../../shared/utils/operatingHours';
 import type { CourtScheduleRowInput } from '../../shared/utils/operatingHours';
+import { DEFAULT_ON_FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const ALLOWED_BOOKING_RULE_CODES = new Set([
@@ -393,6 +394,20 @@ export async function getFacilitiesWithStats(): Promise<any[]> {
 }
 
 /**
+ * Enable the flags in DEFAULT_ON_FEATURE_FLAGS for a newly created facility.
+ */
+async function seedDefaultOnFeatureFlags(client: PoolClient, facilityId: string): Promise<void> {
+  for (const featureKey of DEFAULT_ON_FEATURE_FLAGS) {
+    await client.query(
+      `INSERT INTO facility_features (facility_id, feature_key, is_enabled, updated_at)
+       VALUES ($1, $2, true, NOW())
+       ON CONFLICT (facility_id, feature_key) DO NOTHING`,
+      [facilityId, featureKey]
+    );
+  }
+}
+
+/**
  * Create a new facility with super admin
  */
 export async function createFacilityWithAdmin(
@@ -432,6 +447,8 @@ export async function createFacilityWithAdmin(
     );
 
     const facility = facilityResult.rows[0];
+
+    await seedDefaultOnFeatureFlags(client, facilityId);
 
     // 2. Add user as facility admin (facility-level super admin only —
     // users.is_super_admin is the platform-wide flag and must not be set here)
@@ -1034,6 +1051,8 @@ export async function registerFacility(
     );
 
     const facility = facilityResult.rows[0];
+
+    await seedDefaultOnFeatureFlags(client, facilityId);
 
     // 3b. Publish initial Terms & Conditions if provided during registration.
     if (data.termsAndConditions && data.termsAndConditions.trim()) {

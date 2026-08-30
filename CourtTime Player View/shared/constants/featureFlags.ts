@@ -26,6 +26,16 @@ export const FEATURE_FLAGS = {
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
 
+// Flags in this list are seeded as enabled for every newly created facility
+// (see facilityService.ts) and were backfilled to enabled for existing
+// facilities via migration. Everything else defaults to OFF.
+export const DEFAULT_ON_FEATURE_FLAGS: FeatureFlagKey[] = [
+  FEATURE_FLAGS.WEEK_MONTH_VIEW,
+  FEATURE_FLAGS.COURT_WAIVERS,
+  FEATURE_FLAGS.PLAYER_LEVEL_GROUPS,
+  FEATURE_FLAGS.DRAG_RESCHEDULE_RESERVATIONS,
+];
+
 export const FEATURE_FLAG_LABELS: Record<string, string> = {
   pro_shop: 'Pro Shop',
   annual_membership_fees: 'Annual Membership Fees',

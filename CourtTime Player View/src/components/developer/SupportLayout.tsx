@@ -6,7 +6,7 @@ import {
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { cn } from '../ui/utils';
-import { globalSearch } from '../../api/supportClient';
+import { globalSearch, getTeamConversations } from '../../api/supportClient';
 import type { SupportView } from './SupportConsole';
 
 interface SupportLayoutProps {
@@ -40,11 +40,37 @@ export function SupportLayout({ currentView, onNavigate, onLogout, children }: S
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
   const handleNav = (view: SupportView) => {
     onNavigate(view);
     setSidebarOpen(false);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkUnread = async () => {
+      const res = await getTeamConversations();
+      if (!cancelled && res.success) {
+        const total = (res.data || []).reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0);
+        setHasUnreadMessages(total > 0);
+      }
+    };
+
+    checkUnread();
+    const interval = setInterval(checkUnread, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Landing on the Messages tab counts as "having looked" — clear the dot
+  // immediately rather than waiting on each conversation to be opened.
+  useEffect(() => {
+    if (currentView === 'messages') setHasUnreadMessages(false);
+  }, [currentView]);
 
   const runSearch = useCallback(async (q: string) => {
     if (q.length < 2) {
@@ -110,7 +136,12 @@ export function SupportLayout({ currentView, onNavigate, onLogout, children }: S
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                     )}
                   >
-                    <Icon className="h-4 w-4" />
+                    <span className="relative inline-flex">
+                      <Icon className="h-4 w-4" />
+                      {view === 'messages' && hasUnreadMessages && (
+                        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-600" />
+                      )}
+                    </span>
                     {label}
                   </button>
                 ))}

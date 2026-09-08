@@ -352,6 +352,8 @@ export async function getFacilityCourts(facilityId: string): Promise<Court[]> {
       c.is_split_court as "isSplitCourt",
       (COALESCE(c.require_payment, false) OR COALESCE(p.require_payment, false)) as "requirePayment",
       COALESCE(c.booking_amount_cents, p.booking_amount_cents) as "bookingAmountCents",
+      COALESCE(c.billing_mode, p.billing_mode) as "billingMode",
+      COALESCE(c.daily_rate_cents, p.daily_rate_cents) as "dailyRateCents",
       COALESCE(c.guest_fee_cents, p.guest_fee_cents) as "guestFeeCents",
       COALESCE(c.ball_machine_fee_cents, p.ball_machine_fee_cents) as "ballMachineFeeCents",
       c.created_at as "createdAt",

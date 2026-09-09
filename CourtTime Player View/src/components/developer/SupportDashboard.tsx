@@ -65,6 +65,7 @@ export function SupportDashboard({ onNavigate }: SupportDashboardProps) {
     { label: 'Users', value: stats.totalUsers, icon: Users, color: 'text-green-600 bg-green-50', action: () => onNavigate('users') },
     { label: 'Active Members', value: stats.totalActiveMembers, icon: UserCheck, color: 'text-purple-600 bg-purple-50', action: () => onNavigate('members') },
     { label: 'Bookings (Month)', value: stats.bookingsThisMonth, icon: CalendarDays, color: 'text-orange-600 bg-orange-50', action: () => onNavigate('bookings') },
+    { label: 'Bookings (All Time)', value: stats.totalBookings, icon: Activity, color: 'text-pink-600 bg-pink-50', action: () => onNavigate('bookings') },
     { label: 'Active Subs', value: stats.activeSubscriptions, icon: CreditCard, color: 'text-indigo-600 bg-indigo-50', action: () => onNavigate('subscriptions') },
     { label: 'Revenue (Month)', value: formatCurrency(stats.revenueThisMonthCents), icon: DollarSign, color: 'text-emerald-600 bg-emerald-50', action: () => onNavigate('subscriptions') },
     { label: 'New Users (7d)', value: stats.newUsersThisWeek, icon: TrendingUp, color: 'text-cyan-600 bg-cyan-50', action: () => onNavigate('users') },

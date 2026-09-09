@@ -33,6 +33,7 @@ export interface DashboardStats {
   totalFacilities: number;
   totalUsers: number;
   totalActiveMembers: number;
+  totalBookings: number;
   bookingsThisMonth: number;
   activeSubscriptions: number;
   revenueThisMonthCents: number;
@@ -81,6 +82,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
        AND booking_date < date_trunc('month', CURRENT_DATE) + interval '1 month'`
   );
   const bookingsThisMonth = parseInt(bookingResult.rows[0]?.count || '0', 10);
+
+  // Total bookings ever
+  const totalBookingResult = await query('SELECT COUNT(*) as count FROM bookings');
+  const totalBookings = parseInt(totalBookingResult.rows[0]?.count || '0', 10);
 
   const [activeSubResult, revenueResult, newUsersResult, newFacResult, attentionResult, facilitiesResult, recentFacilities, recentUsers, recentPayments, attentionSubs] =
     await Promise.all([
@@ -219,6 +224,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     totalFacilities,
     totalUsers,
     totalActiveMembers,
+    totalBookings,
     bookingsThisMonth,
     activeSubscriptions,
     revenueThisMonthCents,

@@ -1682,6 +1682,15 @@ const syncBookingRulesToEngine = async (rulesSnapshot?: FacilityData['bookingRul
             ruleConfig.max_duration_minutes = Math.round(rawHours * 60);
           }
         }
+        // Bulk-sync replaces rule_config wholesale, so carry the by-court-type override through here too —
+        // otherwise this overwrites the value the PATCH /facilities save just wrote milliseconds earlier.
+        if (rules.maxReservationDurationByCourtTypeEnabled) {
+          ruleConfig.max_duration_by_court_type = {
+            enabled: true,
+            tennisMinutes: Number(rules.maxReservationDurationTennisMinutes) || 0,
+            pickleballMinutes: Number(rules.maxReservationDurationPickleballMinutes) || 0,
+          };
+        }
       }
 
       // Preserve expected default fields for common rules when values are missing.

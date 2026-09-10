@@ -195,6 +195,12 @@ export interface SimplifiedBookingRules {
   restrictionType: 'account' | 'address';
   daysInAdvance: SimplifiedRuleWithLimit;
   maxReservationDuration: SimplifiedRuleWithLimit;
+  /** When enabled, overrides maxReservationDuration.limit for tennis/pickleball courts specifically. */
+  maxReservationDurationByCourtType?: {
+    enabled: boolean;
+    tennisMinutes: number;
+    pickleballMinutes: number;
+  };
   userLimits: {
     perWeekIndividual: SimplifiedRuleWithLimit;
     perWeekHousehold: SimplifiedRuleWithLimit;
@@ -491,6 +497,12 @@ export interface CRT005Config {
   slot_minutes: number;
   min_duration_minutes: number;
   max_duration_minutes: number;
+  /** When enabled, overrides max_duration_minutes for tennis/pickleball courts specifically. */
+  max_duration_by_court_type?: {
+    enabled: boolean;
+    tennisMinutes: number;
+    pickleballMinutes: number;
+  };
 }
 
 export interface CRT008Config {

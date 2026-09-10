@@ -21,6 +21,11 @@ export function isPadelCourtType(value: string | null | undefined): boolean {
   return String(value ?? '').trim().toLowerCase() === 'padel';
 }
 
+/** True when the court is typed as Pickleball (not Tennis, Padel, Dual Purpose, or custom). */
+export function isPickleballCourtType(value: string | null | undefined): boolean {
+  return String(value ?? '').trim().toLowerCase() === 'pickleball';
+}
+
 /** Display label for a lowercased court type key (e.g. from the calendar filter). */
 export function courtTypeLabel(type: string | null | undefined): string {
   const key = String(type ?? '').trim().toLowerCase();

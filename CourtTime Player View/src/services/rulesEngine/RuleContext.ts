@@ -987,6 +987,11 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
         enabled: !!existingMaxReservationDuration.enabled,
         limit: normalizeDurationLimit(existingMaxReservationDuration.limit, 120),
       },
+      maxReservationDurationByCourtType: {
+        enabled: !!raw.maxReservationDurationByCourtType?.enabled,
+        tennisMinutes: toNumber(raw.maxReservationDurationByCourtType?.tennisMinutes, 0),
+        pickleballMinutes: toNumber(raw.maxReservationDurationByCourtType?.pickleballMinutes, 0),
+      },
       userLimits: {
         perWeekIndividual: {
           enabled: !!existingPerWeekIndividual.enabled,
@@ -1049,6 +1054,22 @@ function normalizeSimplifiedBookingRules(raw: any): SimplifiedBookingRules | und
         raw.maxReservationDurationMinutes,
         pickNumber(existingMaxReservationDuration.limit, raw.maxBookingDurationHours, 120)
       )
+    },
+    maxReservationDurationByCourtType: {
+      enabled: pickEnabled(
+        raw.maxReservationDurationByCourtTypeEnabled,
+        raw.maxReservationDurationByCourtType?.enabled,
+        undefined,
+        false
+      ),
+      tennisMinutes: toNum(
+        raw.maxReservationDurationTennisMinutes ?? raw.maxReservationDurationByCourtType?.tennisMinutes,
+        0
+      ),
+      pickleballMinutes: toNum(
+        raw.maxReservationDurationPickleballMinutes ?? raw.maxReservationDurationByCourtType?.pickleballMinutes,
+        0
+      ),
     },
     userLimits: {
       perWeekIndividual: {

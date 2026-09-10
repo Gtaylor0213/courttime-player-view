@@ -20,6 +20,8 @@ import {
 import { toast } from 'sonner';
 import { RULE_METADATA, CATEGORIES } from '../../facility-registration/rule-defaults';
 import { getFacilityTypeSelectOptions } from '../../../../shared/constants/facilityTypes';
+import { useAppContext } from '../../../contexts/AppContext';
+import { FEATURE_FLAGS } from '../../../../shared/constants/featureFlags';
 import { CourtScheduleEditor } from '../CourtScheduleEditor';
 import { FacilityCourtFormBody } from './FacilityCourtFormBody';
 import { US_STATES } from './usStates';
@@ -58,6 +60,9 @@ export function FacilityRulesTab(props: Props) {
     handleAddBlackout, handleSaveBlackout, handleDeleteBlackout,
     renderRuleCategoryCard, getCourtStatusColor, formatCourtStatus, performSave,
   } = props;
+
+  const { enabledFeatures } = useAppContext();
+  const courtTypeMaxDurationEnabled = enabledFeatures?.includes(FEATURE_FLAGS.COURT_TYPE_MAX_DURATION) ?? false;
 
   return (
 <TabsContent value="rules" className="space-y-6">
@@ -247,6 +252,59 @@ export function FacilityRulesTab(props: Props) {
             <span className="text-sm text-gray-500 whitespace-nowrap">hours</span>
           </div>
         </div>
+
+        {courtTypeMaxDurationEnabled && facilityData.bookingRules.maxReservationDurationEnabled && (
+          <div className="space-y-3 border-t pt-3 mt-1">
+            <div className="flex items-center justify-between">
+              <Label>Different Max Duration for Tennis vs. Pickleball</Label>
+              <BookingRuleSwitch
+                checked={facilityData.bookingRules.maxReservationDurationByCourtTypeEnabled}
+                onCheckedChange={(v: boolean) => handleBookingRulesChange('maxReservationDurationByCourtTypeEnabled', v)}
+                disabled={!isEditing}
+              />
+            </div>
+            {facilityData.bookingRules.maxReservationDurationByCourtTypeEnabled && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-sm font-normal">Tennis</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0.25"
+                      step="0.25"
+                      value={String((Number(facilityData.bookingRules.maxReservationDurationTennisMinutes) || 0) / 60)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const n = parseFloat(e.target.value);
+                        const minutes = Number.isFinite(n) ? Math.round(n * 60) : 0;
+                        handleBookingRulesChange('maxReservationDurationTennisMinutes', String(minutes));
+                      }}
+                      disabled={!isEditing}
+                    />
+                    <span className="text-sm text-gray-500 whitespace-nowrap">hours</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm font-normal">Pickleball</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0.25"
+                      step="0.25"
+                      value={String((Number(facilityData.bookingRules.maxReservationDurationPickleballMinutes) || 0) / 60)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const n = parseFloat(e.target.value);
+                        const minutes = Number.isFinite(n) ? Math.round(n * 60) : 0;
+                        handleBookingRulesChange('maxReservationDurationPickleballMinutes', String(minutes));
+                      }}
+                      disabled={!isEditing}
+                    />
+                    <span className="text-sm text-gray-500 whitespace-nowrap">hours</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
       {renderSectionSaveFooter('max reservation duration')}
     </Card>

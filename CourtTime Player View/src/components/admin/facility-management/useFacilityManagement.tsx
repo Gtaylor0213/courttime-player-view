@@ -386,6 +386,20 @@ const loadFacilityData = async () => {
                 parsedSimplified?.maxReservationDuration?.limit,
               parsedSimplified?.maxBookingDurationHours
             ),
+            maxReservationDurationByCourtTypeEnabled:
+              typeof parsedSimplified?.maxReservationDurationByCourtTypeEnabled === 'boolean'
+                ? parsedSimplified.maxReservationDurationByCourtTypeEnabled
+                : !!parsedSimplified?.maxReservationDurationByCourtType?.enabled,
+            maxReservationDurationTennisMinutes: String(
+              parsedSimplified?.maxReservationDurationTennisMinutes ??
+                parsedSimplified?.maxReservationDurationByCourtType?.tennisMinutes ??
+                defaultBookingRules.maxReservationDurationTennisMinutes
+            ),
+            maxReservationDurationPickleballMinutes: String(
+              parsedSimplified?.maxReservationDurationPickleballMinutes ??
+                parsedSimplified?.maxReservationDurationByCourtType?.pickleballMinutes ??
+                defaultBookingRules.maxReservationDurationPickleballMinutes
+            ),
             courtsPerWeekUserEnabled:
               parsedSimplified?.courtsPerWeekUserEnabled ??
               parsedSimplified?.userLimits?.perWeekIndividual?.enabled ??
@@ -499,6 +513,17 @@ const loadFacilityData = async () => {
                 facility.maxBookingDurationHours,
                 Number(defaultBookingRules.maxReservationDurationMinutes) || 120
               )
+            ),
+            maxReservationDurationByCourtTypeEnabled:
+              parsedSimplified?.maxReservationDurationByCourtType?.enabled ??
+              defaultBookingRules.maxReservationDurationByCourtTypeEnabled,
+            maxReservationDurationTennisMinutes: String(
+              parsedSimplified?.maxReservationDurationByCourtType?.tennisMinutes ??
+                defaultBookingRules.maxReservationDurationTennisMinutes
+            ),
+            maxReservationDurationPickleballMinutes: String(
+              parsedSimplified?.maxReservationDurationByCourtType?.pickleballMinutes ??
+                defaultBookingRules.maxReservationDurationPickleballMinutes
             ),
             courtsPerWeekUserEnabled:
               parsedSimplified?.courtsPerWeekUserEnabled ??

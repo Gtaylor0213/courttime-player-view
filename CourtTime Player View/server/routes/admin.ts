@@ -149,6 +149,7 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
 
   const existingDaysInAdvance = bookingRules.daysInAdvance || {};
   const existingMaxReservationDuration = bookingRules.maxReservationDuration || {};
+  const existingMaxReservationDurationByCourtType = bookingRules.maxReservationDurationByCourtType || {};
   const existingUserLimits = bookingRules.userLimits || {};
   const existingPerWeekIndividual = existingUserLimits.perWeekIndividual || {};
   const existingPerWeekHousehold = existingUserLimits.perWeekHousehold || {};
@@ -170,6 +171,21 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
     maxDurationFallback
   );
 
+  const maxReservationDurationByCourtTypeEnabled = pickEnabled(
+    bookingRules.maxReservationDurationByCourtTypeEnabled,
+    existingMaxReservationDurationByCourtType.enabled,
+    undefined,
+    false
+  );
+  const maxReservationDurationTennisMinutes = toDurationMinutes(
+    bookingRules.maxReservationDurationTennisMinutes ?? existingMaxReservationDurationByCourtType.tennisMinutes,
+    maxReservationDurationLimit
+  );
+  const maxReservationDurationPickleballMinutes = toDurationMinutes(
+    bookingRules.maxReservationDurationPickleballMinutes ?? existingMaxReservationDurationByCourtType.pickleballMinutes,
+    maxReservationDurationLimit
+  );
+
   const merged: Record<string, any> = {
     ...bookingRules,
     restrictionType: bookingRules.restrictionType === 'address' ? 'address' : 'account',
@@ -188,6 +204,11 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
     maxReservationDuration: {
       enabled: maxReservationDurationEnabled,
       limit: maxReservationDurationLimit,
+    },
+    maxReservationDurationByCourtType: {
+      enabled: maxReservationDurationByCourtTypeEnabled,
+      tennisMinutes: maxReservationDurationTennisMinutes,
+      pickleballMinutes: maxReservationDurationPickleballMinutes,
     },
     userLimits: {
       perWeekIndividual: {
@@ -278,6 +299,14 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
       merged.maxBookingDurationHours =
         Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
     }
+  }
+
+  // Mirror max-duration-by-court-type into flat keys on every save (same idea as maxReservationDuration).
+  const mrdByType = merged.maxReservationDurationByCourtType;
+  if (mrdByType && typeof mrdByType === 'object') {
+    merged.maxReservationDurationByCourtTypeEnabled = !!mrdByType.enabled;
+    merged.maxReservationDurationTennisMinutes = String(Math.round(mrdByType.tennisMinutes) || 0);
+    merged.maxReservationDurationPickleballMinutes = String(Math.round(mrdByType.pickleballMinutes) || 0);
   }
 
   delete merged.adminRestrictions;
@@ -475,6 +504,13 @@ router.patch('/facilities/:facilityId', async (req, res) => {
       );
     }
 
+    if (
+      bookingRules?.maxReservationDurationByCourtTypeEnabled === true &&
+      !(await isFeatureEnabled(facilityId, FEATURE_FLAGS.COURT_TYPE_MAX_DURATION))
+    ) {
+      return res.status(403).json({ success: false, error: 'Max duration by court type is not enabled for this facility' });
+    }
+
     const normalizedBookingRules = normalizeBookingRulesPayload(bookingRules);
     // Extract generalRules from bookingRules if provided
     const generalRules = normalizedBookingRules?.generalRules ?? null;
@@ -600,6 +636,7 @@ router.patch('/facilities/:facilityId', async (req, res) => {
           const crt005RuleDefinitionId = crt005Def.rows[0].id;
           const maxDurationEnabled = !!normalizedBookingRules.maxReservationDuration?.enabled;
           const maxDurationMinutes = toDurationMinutes(normalizedBookingRules.maxReservationDuration?.limit, 120);
+          const maxDurationByCourtType = normalizedBookingRules.maxReservationDurationByCourtType;
 
           if (maxDurationEnabled) {
             await query(
@@ -610,7 +647,20 @@ router.patch('/facilities/:facilityId', async (req, res) => {
                  rule_config = EXCLUDED.rule_config,
                  is_enabled = true,
                  updated_at = CURRENT_TIMESTAMP`,
-              [facilityId, crt005RuleDefinitionId, JSON.stringify({ max_duration_minutes: maxDurationMinutes })]
+              [
+                facilityId,
+                crt005RuleDefinitionId,
+                JSON.stringify({
+                  max_duration_minutes: maxDurationMinutes,
+                  max_duration_by_court_type: maxDurationByCourtType && typeof maxDurationByCourtType === 'object'
+                    ? {
+                        enabled: !!maxDurationByCourtType.enabled,
+                        tennisMinutes: Number(maxDurationByCourtType.tennisMinutes) || 0,
+                        pickleballMinutes: Number(maxDurationByCourtType.pickleballMinutes) || 0,
+                      }
+                    : undefined,
+                })
+              ]
             );
           } else {
             await query(

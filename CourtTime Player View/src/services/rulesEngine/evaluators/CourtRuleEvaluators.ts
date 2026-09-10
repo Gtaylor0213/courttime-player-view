@@ -26,6 +26,7 @@ import {
   matchesRecurrenceRule
 } from '../utils/timeUtils';
 import { isTierEligibleForPrimeTime } from '../utils/primeTimeUtils';
+import { isTennisCourtType, isPickleballCourtType } from '../../../../shared/constants/courtTypes';
 
 /**
  * CRT-001: Peak-Hours Schedule
@@ -268,7 +269,15 @@ const CRT005: RuleEvaluator = {
     const dayConfig = context.court.operatingConfig?.find(c => c.dayOfWeek === dayOfWeek);
 
     // Admin-configured booking rule must take precedence over court defaults.
-    const maxDuration = config.max_duration_minutes || dayConfig?.maxDuration || 120;
+    let maxDuration = config.max_duration_minutes || dayConfig?.maxDuration || 120;
+    const byCourtType = config.max_duration_by_court_type;
+    if (byCourtType?.enabled) {
+      if (isTennisCourtType(context.court.courtType) && byCourtType.tennisMinutes > 0) {
+        maxDuration = byCourtType.tennisMinutes;
+      } else if (isPickleballCourtType(context.court.courtType) && byCourtType.pickleballMinutes > 0) {
+        maxDuration = byCourtType.pickleballMinutes;
+      }
+    }
 
     if (context.request.durationMinutes > maxDuration) {
       return {

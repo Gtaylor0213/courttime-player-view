@@ -3,6 +3,7 @@ import {
   COURT_TYPE_CUSTOM_SELECT,
   courtTypeCustomLabel,
   courtTypeSelectValue,
+  isPickleballCourtType,
   isStandardCourtType,
   isTennisCourtType,
   resolveCourtTypeForSave,
@@ -16,6 +17,13 @@ describe('courtTypes', () => {
     expect(isTennisCourtType('tennis')).toBe(true);
     expect(isTennisCourtType('Pickleball')).toBe(false);
     expect(isTennisCourtType('Dual Purpose')).toBe(false);
+  });
+
+  it('recognizes pickleball court type', () => {
+    expect(isPickleballCourtType('Pickleball')).toBe(true);
+    expect(isPickleballCourtType('pickleball')).toBe(true);
+    expect(isPickleballCourtType('Tennis')).toBe(false);
+    expect(isPickleballCourtType('Dual Purpose')).toBe(false);
   });
 
   it('recognizes standard and dual aliases', () => {

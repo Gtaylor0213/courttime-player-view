@@ -34,6 +34,7 @@ import {
   minutesBetween,
   timeRangesOverlap
 } from './utils/timeUtils';
+import { isTennisCourtType, isPickleballCourtType } from '../../../shared/constants/courtTypes';
 
 // Import evaluators
 import { accountEvaluators } from './evaluators/AccountRuleEvaluators';
@@ -659,7 +660,15 @@ export class RulesEngine {
     }
 
     if (config.maxReservationDuration?.enabled) {
-      const maxDuration = Number(config.maxReservationDuration.limit) || 0;
+      let maxDuration = Number(config.maxReservationDuration.limit) || 0;
+      const byCourtType = config.maxReservationDurationByCourtType;
+      if (byCourtType?.enabled) {
+        if (isTennisCourtType(context.court.courtType) && byCourtType.tennisMinutes > 0) {
+          maxDuration = byCourtType.tennisMinutes;
+        } else if (isPickleballCourtType(context.court.courtType) && byCourtType.pickleballMinutes > 0) {
+          maxDuration = byCourtType.pickleballMinutes;
+        }
+      }
       if (maxDuration > 0 && context.request.durationMinutes > maxDuration) {
         const formatted = maxDuration >= 60
           ? `${maxDuration / 60} ${maxDuration / 60 === 1 ? 'hour' : 'hours'}`

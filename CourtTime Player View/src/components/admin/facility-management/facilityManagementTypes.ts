@@ -35,6 +35,10 @@ export interface BookingRules {
   daysInAdvance: string;
   maxReservationDurationEnabled: boolean;
   maxReservationDurationMinutes: string;
+  // Requires the court_type_max_duration feature flag
+  maxReservationDurationByCourtTypeEnabled: boolean;
+  maxReservationDurationTennisMinutes: string;
+  maxReservationDurationPickleballMinutes: string;
   courtsPerWeekUserEnabled: boolean;
   courtsPerWeekUser: string;
   courtsPerWeekHouseholdEnabled: boolean;
@@ -178,6 +182,9 @@ export const defaultBookingRules: BookingRules = {
   daysInAdvance: '',
   maxReservationDurationEnabled: false,
   maxReservationDurationMinutes: '',
+  maxReservationDurationByCourtTypeEnabled: false,
+  maxReservationDurationTennisMinutes: '',
+  maxReservationDurationPickleballMinutes: '',
   courtsPerWeekUserEnabled: false,
   courtsPerWeekUser: '',
   courtsPerWeekHouseholdEnabled: false,

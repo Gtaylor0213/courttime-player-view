@@ -263,7 +263,7 @@ export async function createCheckoutSession(params: {
     };
   }
 
-  const listPriceCents = getAmountForCourts(params.courtCount);
+  const listPriceCents = getAmountForCourts(params.courtCount, params.facilityId);
 
   try {
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -389,7 +389,7 @@ export async function createFacilitySubscriptionCheckout(
 
   const courtCount = Number(refreshedSub.courtCount) || syncResult.courtCount || 1;
   const amountCents =
-    refreshedSub.amountCents > 0 ? refreshedSub.amountCents : getAmountForCourts(courtCount);
+    refreshedSub.amountCents > 0 ? refreshedSub.amountCents : getAmountForCourts(courtCount, facilityId);
 
   if (amountCents <= 0) {
     return { error: 'No payment amount configured for this facility' };
@@ -819,7 +819,7 @@ export async function syncFacilitySubscriptionCourts(
 
   const courtCount =
     options?.courtCount ?? (await getActiveCourtCountForFacility(facilityId, options?.client));
-  const amountCents = getAmountForCourts(Math.max(courtCount, 1));
+  const amountCents = getAmountForCourts(Math.max(courtCount, 1), facilityId);
   const currentCourtCount = Number(sub.courtCount) || 0;
   const currentAmountCents = Number(sub.amountCents) || 0;
 

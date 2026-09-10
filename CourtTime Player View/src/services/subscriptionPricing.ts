@@ -10,11 +10,24 @@ export const MAX_COURTS_AT_LIST_PRICE = 11;
 export const MIN_COURTS_COVERED = MIN_SUBSCRIPTION_CENTS / PER_COURT_CENTS; // 4
 
 /**
- * Annual subscription amount in cents: $50/court, min $200, max $550.
+ * Facilities exempted from the $550 annual maximum — they pay pure $50/court
+ * (still subject to the $200 minimum) with no ceiling. Set by business request,
+ * not derivable from court count or plan.
  */
-export function getAmountForCourts(courtCount: number): number {
+const UNCAPPED_FACILITY_IDS = new Set(['fields-club-amberfield', 'st-marlo-tennis-pickleball']);
+
+export function isUncappedFacility(facilityId?: string | null): boolean {
+  return !!facilityId && UNCAPPED_FACILITY_IDS.has(facilityId);
+}
+
+/**
+ * Annual subscription amount in cents: $50/court, min $200, max $550
+ * (no max for facilities in UNCAPPED_FACILITY_IDS).
+ */
+export function getAmountForCourts(courtCount: number, facilityId?: string | null): number {
   const raw = courtCount * PER_COURT_CENTS;
-  return Math.min(MAX_SUBSCRIPTION_CENTS, Math.max(MIN_SUBSCRIPTION_CENTS, raw));
+  const floored = Math.max(MIN_SUBSCRIPTION_CENTS, raw);
+  return isUncappedFacility(facilityId) ? floored : Math.min(MAX_SUBSCRIPTION_CENTS, floored);
 }
 
 export function formatAnnualPrice(cents: number): string {
@@ -26,7 +39,12 @@ export function formatAnnualPricePerYear(cents: number): string {
 }
 
 /** Whether the facility is at the annual subscription cap (no per-court add fee). */
-export function isAtSubscriptionCap(activeCourtCount: number, amountCents: number): boolean {
+export function isAtSubscriptionCap(
+  activeCourtCount: number,
+  amountCents: number,
+  facilityId?: string | null
+): boolean {
+  if (isUncappedFacility(facilityId)) return false;
   return amountCents >= MAX_SUBSCRIPTION_CENTS
     || activeCourtCount >= MAX_COURTS_AT_LIST_PRICE;
 }
@@ -34,17 +52,22 @@ export function isAtSubscriptionCap(activeCourtCount: number, amountCents: numbe
 /**
  * One-time platform fee in cents when adding courts post-registration.
  * The $200 minimum already covers the first 4 courts, so only courts 5-11
- * are charged $50 each; $0 once at the subscription cap.
+ * are charged $50 each; $0 once at the subscription cap. Uncapped facilities
+ * keep paying $50/court past court 11 instead of getting it free.
  */
 export function courtAddPaymentCents(
   courtsToAdd: number,
   activeCourtCount: number,
-  amountCents: number
+  amountCents: number,
+  facilityId?: string | null
 ): number {
   if (courtsToAdd <= 0) return 0;
-  if (isAtSubscriptionCap(activeCourtCount, amountCents)) return 0;
+  if (isAtSubscriptionCap(activeCourtCount, amountCents, facilityId)) return 0;
   const firstChargeable = Math.max(activeCourtCount, MIN_COURTS_COVERED);
-  const lastChargeable = Math.min(activeCourtCount + courtsToAdd, MAX_COURTS_AT_LIST_PRICE);
+  const uncapped = isUncappedFacility(facilityId);
+  const lastChargeable = uncapped
+    ? activeCourtCount + courtsToAdd
+    : Math.min(activeCourtCount + courtsToAdd, MAX_COURTS_AT_LIST_PRICE);
   const chargeableCourts = Math.max(0, lastChargeable - firstChargeable);
   return chargeableCourts * PER_COURT_CENTS;
 }

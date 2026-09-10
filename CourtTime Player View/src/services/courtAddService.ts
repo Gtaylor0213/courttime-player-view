@@ -114,8 +114,8 @@ export async function evaluateCourtAddPayment(
 
   const activeCourtCount = await getActiveCourtCount(facilityId);
   const amountCents = Number(sub.amountCents) || 0;
-  const atCap = isAtSubscriptionCap(activeCourtCount, amountCents);
-  const baseAmountCents = courtAddPaymentCents(courtsToAdd, activeCourtCount, amountCents);
+  const atCap = isAtSubscriptionCap(activeCourtCount, amountCents, facilityId);
+  const baseAmountCents = courtAddPaymentCents(courtsToAdd, activeCourtCount, amountCents, facilityId);
 
   let finalAmountCents = baseAmountCents;
   let promoValid: boolean | undefined;

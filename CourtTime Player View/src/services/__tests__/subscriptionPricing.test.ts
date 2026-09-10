@@ -3,12 +3,15 @@ import {
   courtAddPaymentCents,
   getAmountForCourts,
   isAtSubscriptionCap,
+  isUncappedFacility,
   MAX_COURTS_AT_LIST_PRICE,
   MAX_SUBSCRIPTION_CENTS,
   MIN_COURTS_COVERED,
   MIN_SUBSCRIPTION_CENTS,
   PER_COURT_CENTS,
 } from '../subscriptionPricing';
+
+const UNCAPPED_FACILITY_ID = 'st-marlo-tennis-pickleball';
 
 describe('subscriptionPricing', () => {
   describe('getAmountForCourts', () => {
@@ -80,6 +83,35 @@ describe('subscriptionPricing', () => {
       expect(courtAddPaymentCents(5, 10, 50000)).toBe(PER_COURT_CENTS);
       expect(courtAddPaymentCents(2, 10, 50000)).toBe(PER_COURT_CENTS);
       expect(courtAddPaymentCents(2, 9, 45000)).toBe(2 * PER_COURT_CENTS);
+    });
+  });
+
+  describe('uncapped facilities', () => {
+    it('identifies known uncapped facility ids and rejects others', () => {
+      expect(isUncappedFacility(UNCAPPED_FACILITY_ID)).toBe(true);
+      expect(isUncappedFacility('fields-club-amberfield')).toBe(true);
+      expect(isUncappedFacility('some-other-facility')).toBe(false);
+      expect(isUncappedFacility(undefined)).toBe(false);
+    });
+
+    it('getAmountForCourts keeps charging $50/court past 11 with no max', () => {
+      expect(getAmountForCourts(11, UNCAPPED_FACILITY_ID)).toBe(11 * PER_COURT_CENTS);
+      expect(getAmountForCourts(20, UNCAPPED_FACILITY_ID)).toBe(20 * PER_COURT_CENTS);
+      expect(getAmountForCourts(20, UNCAPPED_FACILITY_ID)).toBeGreaterThan(MAX_SUBSCRIPTION_CENTS);
+    });
+
+    it('still applies the $200 minimum for an uncapped facility', () => {
+      expect(getAmountForCourts(1, UNCAPPED_FACILITY_ID)).toBe(MIN_SUBSCRIPTION_CENTS);
+    });
+
+    it('isAtSubscriptionCap is always false for an uncapped facility', () => {
+      expect(isAtSubscriptionCap(MAX_COURTS_AT_LIST_PRICE, MAX_SUBSCRIPTION_CENTS, UNCAPPED_FACILITY_ID)).toBe(false);
+      expect(isAtSubscriptionCap(50, 999999, UNCAPPED_FACILITY_ID)).toBe(false);
+    });
+
+    it('courtAddPaymentCents keeps charging past the 11-court cap for uncapped facilities', () => {
+      expect(courtAddPaymentCents(3, 12, MAX_SUBSCRIPTION_CENTS, UNCAPPED_FACILITY_ID)).toBe(3 * PER_COURT_CENTS);
+      expect(courtAddPaymentCents(1, MAX_COURTS_AT_LIST_PRICE, 55000, UNCAPPED_FACILITY_ID)).toBe(PER_COURT_CENTS);
     });
   });
 });

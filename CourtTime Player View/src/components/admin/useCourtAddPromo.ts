@@ -13,15 +13,15 @@ export type CourtAddPromoValidation = {
   message?: string;
 };
 
-export function useCourtAddPromo(activeCourtCount: number, courtsToAdd: number) {
+export function useCourtAddPromo(activeCourtCount: number, courtsToAdd: number, facilityId?: string) {
   const [promoCode, setPromoCode] = useState('');
   const [promoValidation, setPromoValidation] = useState<CourtAddPromoValidation | null>(null);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   const baseAmountCents = useMemo(() => {
-    const subscriptionAmount = getAmountForCourts(Math.max(activeCourtCount, 1));
-    return courtAddPaymentCents(courtsToAdd, activeCourtCount, subscriptionAmount);
-  }, [activeCourtCount, courtsToAdd]);
+    const subscriptionAmount = getAmountForCourts(Math.max(activeCourtCount, 1), facilityId);
+    return courtAddPaymentCents(courtsToAdd, activeCourtCount, subscriptionAmount, facilityId);
+  }, [activeCourtCount, courtsToAdd, facilityId]);
 
   const finalAmountCents = promoValidation?.valid
     ? (promoValidation.finalAmountCents ?? baseAmountCents)

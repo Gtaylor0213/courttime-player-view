@@ -45,7 +45,7 @@ import { CourtScheduleEditor } from './CourtScheduleEditor';
 import { SetFeesForAllPanel } from './SetFeesForAllPanel';
 import { CourtTypeField } from './CourtTypeField';
 import { validateStoredCourtType } from '../../../shared/constants/courtTypes';
-import { MAX_COURTS_AT_LIST_PRICE, MIN_COURTS_COVERED } from '../../services/subscriptionPricing';
+import { MAX_COURTS_AT_LIST_PRICE, MIN_COURTS_COVERED, isUncappedFacility } from '../../services/subscriptionPricing';
 import {
   clearCourtAddWaiverDraft,
   confirmCourtAddPaymentFromUrl,
@@ -299,10 +299,11 @@ export function CourtManagement() {
 
   // --- Court Limit ---
   const activeCourts = courts.filter(c => c.status !== 'closed');
-  const atSubscriptionCap = activeCourts.length >= MAX_COURTS_AT_LIST_PRICE;
+  const atSubscriptionCap =
+    !isUncappedFacility(currentFacilityId) && activeCourts.length >= MAX_COURTS_AT_LIST_PRICE;
   const belowMinCourtsCovered = activeCourts.length < MIN_COURTS_COVERED;
   const courtsToAddForPromo = bulkAddMode ? bulkAddForm.count : 1;
-  const courtAddPromo = useCourtAddPromo(activeCourts.length, courtsToAddForPromo);
+  const courtAddPromo = useCourtAddPromo(activeCourts.length, courtsToAddForPromo, currentFacilityId);
 
   // --- Single Add/Edit ---
 

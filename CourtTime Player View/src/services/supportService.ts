@@ -788,7 +788,7 @@ export async function updateSubscription(
     params.push(data.courtCount);
     sets.push(`court_count = $${params.length}`);
     if (data.amountCents === undefined) {
-      params.push(getAmountForCourts(data.courtCount));
+      params.push(getAmountForCourts(data.courtCount, facilityId));
       sets.push(`amount_cents = $${params.length}`);
     }
   }

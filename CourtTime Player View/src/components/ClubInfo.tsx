@@ -289,6 +289,44 @@ export function ClubInfo() {
     return null;
   };
 
+  const formatMinutesAsHoursLabel = (totalMin: number): string | null => {
+    const hours = totalMin / 60;
+    const label = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
+    return renderRuleValue(label);
+  };
+
+  /**
+   * Mirrors the tennis/pickleball override precedence in the booking rules
+   * engine (rulesEngine/index.ts): when the per-court-type max duration is
+   * enabled, each court type uses its own override if set, otherwise falls
+   * back to the facility's default max duration.
+   */
+  const getMaxBookingDurationDisplay = (
+    bookingRules: any
+  ): { tennis: string | null; pickleball: string | null } | string | null => {
+    if (!bookingRules || typeof bookingRules !== 'object') return null;
+
+    const defaultLabel = getMaxBookingDurationHoursLabel(bookingRules);
+
+    const byCourtType = bookingRules.maxReservationDurationByCourtType;
+    const byCourtTypeEnabled =
+      byCourtType && typeof byCourtType === 'object'
+        ? byCourtType.enabled === true
+        : bookingRules.maxReservationDurationByCourtTypeEnabled === true;
+
+    if (!byCourtTypeEnabled) return defaultLabel;
+
+    const tennisMin = Number(byCourtType?.tennisMinutes ?? bookingRules.maxReservationDurationTennisMinutes) || 0;
+    const pickleballMin = Number(byCourtType?.pickleballMinutes ?? bookingRules.maxReservationDurationPickleballMinutes) || 0;
+
+    const tennisLabel = tennisMin > 0 ? formatMinutesAsHoursLabel(tennisMin) : defaultLabel;
+    const pickleballLabel = pickleballMin > 0 ? formatMinutesAsHoursLabel(pickleballMin) : defaultLabel;
+
+    if (tennisLabel === pickleballLabel) return tennisLabel;
+
+    return { tennis: tennisLabel, pickleball: pickleballLabel };
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
@@ -338,7 +376,7 @@ export function ClubInfo() {
     return [];
   })();
 
-  const maxBookingDurationHoursDisplay = getMaxBookingDurationHoursLabel(facility.bookingRules);
+  const maxBookingDurationDisplay = getMaxBookingDurationDisplay(facility.bookingRules);
 
   const currentClubMembership = memberFacilities.find(
     (membership: MemberFacilityRow) => membership.facilityId === clubId
@@ -645,11 +683,28 @@ export function ClubInfo() {
                         <span className="text-gray-600">{renderRuleValue(facility.bookingRules.advanceBookingDays)} days in advance</span>
                       </div>
                     )}
-                    {maxBookingDurationHoursDisplay && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-medium text-gray-700 min-w-[180px]">Max booking duration:</span>
-                        <span className="text-gray-600">{maxBookingDurationHoursDisplay} hours</span>
-                      </div>
+                    {maxBookingDurationDisplay && (
+                      typeof maxBookingDurationDisplay === 'string' ? (
+                        <div className="flex items-start gap-2">
+                          <span className="font-medium text-gray-700 min-w-[180px]">Max booking duration:</span>
+                          <span className="text-gray-600">{maxBookingDurationDisplay} hours</span>
+                        </div>
+                      ) : (
+                        <>
+                          {maxBookingDurationDisplay.tennis && (
+                            <div className="flex items-start gap-2">
+                              <span className="font-medium text-gray-700 min-w-[180px]">Max duration (Tennis):</span>
+                              <span className="text-gray-600">{maxBookingDurationDisplay.tennis} hours</span>
+                            </div>
+                          )}
+                          {maxBookingDurationDisplay.pickleball && (
+                            <div className="flex items-start gap-2">
+                              <span className="font-medium text-gray-700 min-w-[180px]">Max duration (Pickleball):</span>
+                              <span className="text-gray-600">{maxBookingDurationDisplay.pickleball} hours</span>
+                            </div>
+                          )}
+                        </>
+                      )
                     )}
                     {(facility.bookingRules?.maxBookingsPerWeekUnlimited === false && renderRuleValue(facility.bookingRules?.maxBookingsPerWeek)) && (
                       <div className="flex items-start gap-2">

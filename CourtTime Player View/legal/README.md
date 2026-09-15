@@ -1,6 +1,8 @@
 # Legal Documents
 
-> ⚠️ **DRAFT — NOT LEGAL ADVICE.** These files are starting templates tailored to CourtTime's actual data flows and third-party integrations. **Have an attorney review before publishing.** Apple and Google can reject submissions where the published policy does not accurately match what the app does, and inaccurate disclosures create real legal exposure (FTC, CCPA, GDPR).
+> ⚠️ **NOT LEGAL ADVICE — attorney review still outstanding.** These files are tailored to CourtTime's actual data flows and third-party integrations, and the entity details are filled in, but **no attorney has reviewed them.** Apple and Google can reject submissions where the published policy does not accurately match what the app does, and inaccurate disclosures create real legal exposure (FTC, CCPA, GDPR).
+>
+> **Status (15 Sep 2026):** entity name, business address, governing-state and effective date are filled in, and the member-facing DRAFT banners are removed, so the pages are publishable. The remaining gate is a lawyer reading them.
 
 ## Files in this folder
 
@@ -14,10 +16,10 @@
 
 Search every file for these tokens and replace:
 
-- `[STATE]` — the U.S. state whose laws govern your contract (likely the state where CourtTime is incorporated or operates from)
-- `[ENTITY NAME]` — your legal entity name (e.g. "CourtTime, LLC" or "CourtTime, Inc.")
-- `[BUSINESS ADDRESS]` — physical mailing address for legal notices
-- `[EFFECTIVE DATE]` — the date the policy/terms take effect
+- `Georgia` — the U.S. state whose laws govern your contract (likely the state where CourtTime is incorporated or operates from)
+- `CourtTimeApp LLC` — your legal entity name (e.g. "CourtTime, LLC" or "CourtTime, Inc.")
+- `4239 Allenhurst Dr, Norcross, GA 30092` — physical mailing address for legal notices
+- `September 15, 2026` — the date the policy/terms take effect
 - `reidbissell@courttimeapp.com` — replace with your real support email if different
 
 ## Hosting requirements

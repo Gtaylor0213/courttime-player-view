@@ -1,11 +1,9 @@
 # CourtTime Privacy Policy
 
-**Effective date:** [EFFECTIVE DATE]
-**Last updated:** [EFFECTIVE DATE]
+**Effective date:** September 15, 2026
+**Last updated:** September 15, 2026
 
-> ⚠️ **DRAFT — Requires legal review before publication.**
-
-This Privacy Policy describes how [ENTITY NAME] ("**CourtTime**," "**we**," "**us**") collects, uses, and shares information when you use the CourtTime mobile app and website at courttimeapp.com (together, the "**Service**").
+This Privacy Policy describes how CourtTimeApp LLC ("**CourtTime**," "**we**," "**us**") collects, uses, and shares information when you use the CourtTime mobile app and website at courttimeapp.com (together, the "**Service**").
 
 By using the Service you agree to the collection and use of information in accordance with this Policy.
 
@@ -180,6 +178,6 @@ We may update this Privacy Policy from time to time. When we make material chang
 For privacy questions, requests, or complaints:
 
 **Email:** reidbissell@courttimeapp.com
-**Mail:** [ENTITY NAME], [BUSINESS ADDRESS]
+**Mail:** CourtTimeApp LLC, 4239 Allenhurst Dr, Norcross, GA 30092
 
 If you are an EU/UK resident and unsatisfied with our response, you have the right to lodge a complaint with your local data protection authority.

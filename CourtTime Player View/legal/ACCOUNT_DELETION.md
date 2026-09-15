@@ -1,8 +1,6 @@
 # Account Deletion
 
-**Effective date:** [EFFECTIVE DATE]
-
-> ⚠️ **DRAFT — Requires legal review before publication.**
+**Effective date:** September 15, 2026
 
 This page explains how to delete your CourtTime account, what data is removed, and what is retained.
 
@@ -91,4 +89,4 @@ If you change your mind, you can sign up again at any time using the same email 
 ## Questions
 
 **Email:** reidbissell@courttimeapp.com
-**Mail:** [ENTITY NAME], [BUSINESS ADDRESS]
+**Mail:** CourtTimeApp LLC, 4239 Allenhurst Dr, Norcross, GA 30092

@@ -119,9 +119,9 @@ export function GeneralRulesManager() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>General Rules</CardTitle>
+          <CardTitle>General Rules (Requires Acceptance)</CardTitle>
           <p className="text-sm text-gray-600">
-            Publish versioned General Rules for this facility by pasting content below. Publishing a new version requires all active members to accept again. Members must scroll through the full text before they can accept. This is only enforced for facilities with the "General Rules" feature flag enabled.
+            Publish versioned General Rules that members must formally accept before using the club — separate from the informational "Club Info Rules Summary" above. Publishing a new version requires all active members to accept again, and they must scroll through the full text before they can accept. This is only enforced for facilities with the "General Rules" feature flag enabled.
           </p>
           {currentVersion && (
             <p className="text-xs text-gray-500">

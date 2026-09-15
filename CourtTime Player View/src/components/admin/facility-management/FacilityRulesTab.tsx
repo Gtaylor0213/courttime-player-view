@@ -23,6 +23,7 @@ import { getFacilityTypeSelectOptions } from '../../../../shared/constants/facil
 import { useAppContext } from '../../../contexts/AppContext';
 import { FEATURE_FLAGS } from '../../../../shared/constants/featureFlags';
 import { CourtScheduleEditor } from '../CourtScheduleEditor';
+import { GeneralRulesManager } from '../GeneralRulesManager';
 import { FacilityCourtFormBody } from './FacilityCourtFormBody';
 import { US_STATES } from './usStates';
 import type { UseFacilityManagementReturn } from './useFacilityManagement';
@@ -91,18 +92,18 @@ export function FacilityRulesTab(props: Props) {
       <CardHeader className="pb-2">
         <CardTitle className="text-lg flex items-center gap-2">
           <Shield className="h-5 w-5" />
-          General Rules
+          Club Info Rules Summary
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
           <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-green-800">
-            Set general facility policies and member expectations shown to users during booking.
+            Public informational text shown on the Club Info page. Members do not need to accept this — for a rules document members must formally accept (and re-accept when updated), use "General Rules" below.
           </p>
         </div>
         <div>
-          <Label>General Usage Rules</Label>
+          <Label>Rules Summary (shown on Club Info page)</Label>
           <Textarea
             value={facilityData.bookingRules.generalRules}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleBookingRulesChange('generalRules', e.target.value)}
@@ -114,6 +115,8 @@ export function FacilityRulesTab(props: Props) {
       </CardContent>
       {renderSectionSaveFooter('general rules')}
     </Card>
+
+    <GeneralRulesManager />
 
     <Card>
       <CardHeader className="pb-2">

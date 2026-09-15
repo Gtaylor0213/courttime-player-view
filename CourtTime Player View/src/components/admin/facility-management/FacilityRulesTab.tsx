@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
+import { Textarea } from '../../ui/textarea';
 import {
   Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users,
-  Upload, AlertTriangle, Zap, Home, FileText, Calendar, ChevronDown, ChevronRight, Info,
+  Upload, Shield, AlertTriangle, Zap, Home, FileText, Calendar, ChevronDown, ChevronRight, Info,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { TabsContent } from '../../ui/tabs';
@@ -63,6 +64,7 @@ export function FacilityRulesTab(props: Props) {
 
   const { enabledFeatures } = useAppContext();
   const courtTypeMaxDurationEnabled = enabledFeatures?.includes(FEATURE_FLAGS.COURT_TYPE_MAX_DURATION) ?? false;
+  const generalRulesFeatureEnabled = enabledFeatures?.includes(FEATURE_FLAGS.GENERAL_RULES) ?? false;
 
   return (
 <TabsContent value="rules" className="space-y-6">
@@ -87,7 +89,37 @@ export function FacilityRulesTab(props: Props) {
   </div>
 
   <div className="space-y-6">
-    <GeneralRulesManager />
+    {generalRulesFeatureEnabled ? (
+      <GeneralRulesManager />
+    ) : (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            General Rules
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
+            <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-green-800">
+              Set general facility policies and member expectations shown to users during booking.
+            </p>
+          </div>
+          <div>
+            <Label>General Usage Rules</Label>
+            <Textarea
+              value={facilityData.bookingRules.generalRules}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleBookingRulesChange('generalRules', e.target.value)}
+              placeholder="Enter your facility's general booking rules"
+              className="min-h-[100px] mt-1"
+              disabled={!isEditing}
+            />
+          </div>
+        </CardContent>
+        {renderSectionSaveFooter('general rules')}
+      </Card>
+    )}
 
     <Card>
       <CardHeader className="pb-2">

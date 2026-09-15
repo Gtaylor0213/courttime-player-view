@@ -92,12 +92,24 @@ export function ClubInfo() {
   const [secondaryLocations, setSecondaryLocations] = useState<any[]>([]);
   const [courtOperatingHours, setCourtOperatingHours] = useState<Record<string, OperatingHoursMap>>({});
   const [courtHoursLoading, setCourtHoursLoading] = useState(false);
+  const [generalRulesFeatureEnabled, setGeneralRulesFeatureEnabled] = useState(false);
 
   useEffect(() => {
     if (clubId) {
       loadFacilityData();
     }
   }, [clubId, user?.id]);
+
+  useEffect(() => {
+    if (!clubId) {
+      setGeneralRulesFeatureEnabled(false);
+      return;
+    }
+    fetch(`/api/facilities/${clubId}/feature-flags`)
+      .then((r) => r.json())
+      .then((res) => setGeneralRulesFeatureEnabled(res.success && Array.isArray(res.data) && res.data.includes('general_rules')))
+      .catch(() => setGeneralRulesFeatureEnabled(false));
+  }, [clubId]);
 
   const loadCourtOperatingHours = async (courts: FacilityData['courts']) => {
     if (!courts.length) {
@@ -684,10 +696,14 @@ export function ClubInfo() {
                   {/* General rules text */}
                   {facility.generalRules && (
                     <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                      <div
-                        className={`text-sm text-gray-700 ${generalRulesIsPlainText ? 'whitespace-pre-wrap' : ''}`}
-                        dangerouslySetInnerHTML={{ __html: sanitizedGeneralRules }}
-                      />
+                      {generalRulesFeatureEnabled ? (
+                        <div
+                          className={`text-sm text-gray-700 ${generalRulesIsPlainText ? 'whitespace-pre-wrap' : ''}`}
+                          dangerouslySetInnerHTML={{ __html: sanitizedGeneralRules }}
+                        />
+                      ) : (
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{renderSafeText(facility.generalRules)}</p>
+                      )}
                     </div>
                   )}
                   {/* Structured rules from booking configuration */}

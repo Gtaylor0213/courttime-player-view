@@ -111,7 +111,7 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 
 **Verified green:** mobile 14/14 suites, 65/65 tests, 0 type errors.
 
-### Phase 2 — Sync the screens that already exist 🔄 *(in progress)*
+### Phase 2 — Sync the screens that already exist ✅ *(complete)*
 
 *Catching up existing surfaces to 240 commits of web change. Do this before adding new screens — it's where silent breakage lives.*
 
@@ -142,11 +142,13 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 | 13 | ~~Reservation type when editing~~ ✅ **done** | — | Mobile already preserved it; it could not be *changed* |
 | 14 | ~~Default booking length 2h~~ ✅ **done** | — | Mobile tapped to a 30-minute row, not 1h as first triaged |
 | 15 | ~~Custom court type labels~~ ✅ **already correct** | — | Mobile renders the stored type verbatim; no filter to break |
-| 16 | Bulletin signup withdrawal, min-participant messaging | — | Mobile has signup + share, no withdraw |
+| 16 | ~~Bulletin min-participant messaging~~ ✅ **done** | — | Withdrawal already existed; the minimum was never shown |
 
 Lessons, Pro Shop, Padel and My Level Group appear in this window too, but they are new screens and belong to Phase 3.
 
-**Landed so far:** items 1–15. **One remains: item 16** (bulletin signup withdrawal).
+**Phase 2 complete — all 16 items.**
+
+**Item 16 — bulletin minimums.** Half of this item was a mis-triage: mobile *already had* signup withdrawal, in `handleCancelEventSignup`, which my original grep missed because of the naming. The real gap was the minimum-participant information — mobile showed spots and waitlist but never the minimum, so a member could not tell an event was short of the number it needs to run. `minParticipantsNotice` (shared, 5 tests) states the minimum, and where the organiser has opted to cancel below it, how many more are needed.
 
 **Item 9 — pay at front desk.** A second booking button, under web's conditions, sending `payAtFrontDesk`. The server validates the flag and the guest fee itself ("never trust the client alone"), so an unmet condition falls through to Stripe rather than booking free.
 

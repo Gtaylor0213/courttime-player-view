@@ -5,6 +5,7 @@ import {
   formatSignupFee,
   isPaidSignupPost,
   mapPostFromApi,
+  minParticipantsNotice,
 } from '../bulletinPostDisplay';
 
 describe('bulletinPostDisplay', () => {
@@ -63,5 +64,34 @@ describe('bulletinPostDisplay', () => {
     expect(email.plainTextBody).toContain('Thought you would like this.');
     expect(email.plainTextBody).toContain('All levels welcome.');
     expect(email.plainTextBody).toContain(url);
+  });
+});
+
+describe('minParticipantsNotice', () => {
+  it('returns nothing when no minimum is set', () => {
+    expect(minParticipantsNotice({})).toBeNull();
+    expect(minParticipantsNotice({ minParticipants: 0 })).toBeNull();
+  });
+
+  it('states the minimum when the organiser will run it regardless', () => {
+    expect(minParticipantsNotice({ minParticipants: 4, drillConfirmedCount: 1 })).toBe('Minimum 4');
+  });
+
+  it('warns how many more are needed when the event cancels below the minimum', () => {
+    expect(
+      minParticipantsNotice({ minParticipants: 4, cancelIfMinNotMet: true, drillConfirmedCount: 1 })
+    ).toBe('Minimum 4 · 3 more needed or this may be cancelled');
+  });
+
+  it('drops the warning once the minimum is met', () => {
+    expect(
+      minParticipantsNotice({ minParticipants: 4, cancelIfMinNotMet: true, drillConfirmedCount: 4 })
+    ).toBe('Minimum 4');
+  });
+
+  it('treats a missing confirmed count as zero', () => {
+    expect(minParticipantsNotice({ minParticipants: 2, cancelIfMinNotMet: true })).toBe(
+      'Minimum 2 · 2 more needed or this may be cancelled'
+    );
   });
 });

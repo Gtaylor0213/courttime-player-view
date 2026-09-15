@@ -37,7 +37,10 @@ import type { HittingPartnerPostWithUser } from '../../src/types/database';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { EmptyState } from '../../src/components/EmptyState';
 import { createPollingTransport } from '../../../shared/api/sync';
-import { formatBulletinPostProminentDate } from '../../../shared/utils/bulletinPostDisplay';
+import {
+  formatBulletinPostProminentDate,
+  minParticipantsNotice,
+} from '../../../shared/utils/bulletinPostDisplay';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
 import { Skeleton } from '../../src/components/Skeleton';
@@ -815,6 +818,16 @@ export default function CommunityScreen() {
                   {post.drillConfirmedCount || 0} / {post.drillMaxParticipants} signed up
                   {post.drillWaitlistCount > 0 ? ` · ${post.drillWaitlistCount} waitlist` : ''}
                 </Text>
+              </View>
+            ) : null}
+            {minParticipantsNotice(post) ? (
+              <View style={styles.bulletinEventRow}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={14}
+                  color={post.cancelIfMinNotMet ? Colors.warning : Colors.primary}
+                />
+                <Text style={styles.bulletinEventText}>{minParticipantsNotice(post)}</Text>
               </View>
             ) : null}
             {genderRestrictionLabel(post.drillGenderRestriction) ? (

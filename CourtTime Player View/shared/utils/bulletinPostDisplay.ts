@@ -49,6 +49,32 @@ export interface BulletinPostView {
   }>;
 }
 
+/**
+ * Minimum-participant notice for an event with sign-ups.
+ *
+ * A member deciding whether to sign up needs to know both that a minimum
+ * exists and, when the organiser has opted to cancel below it, how far short
+ * the event currently is — that is the difference between "this is happening"
+ * and "this may not happen".
+ */
+export function minParticipantsNotice(post: {
+  minParticipants?: number | null;
+  cancelIfMinNotMet?: boolean;
+  drillConfirmedCount?: number | null;
+}): string | null {
+  const min = Number(post.minParticipants ?? 0);
+  if (!Number.isFinite(min) || min <= 0) return null;
+
+  const confirmed = Number(post.drillConfirmedCount ?? 0);
+  const shortfall = min - (Number.isFinite(confirmed) ? confirmed : 0);
+
+  if (!post.cancelIfMinNotMet || shortfall <= 0) {
+    return `Minimum ${min}`;
+  }
+
+  return `Minimum ${min} · ${shortfall} more needed or this may be cancelled`;
+}
+
 export function isPaidSignupPost(post: {
   requirePayment?: boolean;
   signupAmountCents?: number | null;

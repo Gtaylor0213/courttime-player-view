@@ -8,11 +8,14 @@ interface BallMachineAccessDialogProps {
   isOpen: boolean;
   onClose: () => void;
   facilityId: string;
+  /** Which named machine to show the code for. */
+  machineId: string;
   /** Shown under the code so the member knows which reservation this is for. */
   bookingSummary?: string;
 }
 
 interface AccessCodeData {
+  machineName: string;
   accessCode: string;
   instructions: string | null;
   activePass: { expiresAt: string; durationMonths: number } | null;
@@ -35,6 +38,7 @@ export function BallMachineAccessDialog({
   isOpen,
   onClose,
   facilityId,
+  machineId,
   bookingSummary,
 }: BallMachineAccessDialogProps) {
   const [data, setData] = useState<AccessCodeData | null>(null);
@@ -42,7 +46,7 @@ export function BallMachineAccessDialog({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!isOpen || !facilityId) return;
+    if (!isOpen || !facilityId || !machineId) return;
     let cancelled = false;
 
     setIsLoading(true);
@@ -50,7 +54,7 @@ export function BallMachineAccessDialog({
     setData(null);
 
     ballMachineApi
-      .getAccessCode(facilityId)
+      .getAccessCode(facilityId, machineId)
       .then((res: any) => {
         if (cancelled) return;
         if (res.success && res.data?.accessCode) {
@@ -71,7 +75,7 @@ export function BallMachineAccessDialog({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, facilityId]);
+  }, [isOpen, facilityId, machineId]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -79,7 +83,7 @@ export function BallMachineAccessDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-green-700" />
-            Ball machine access
+            {data ? `${data.machineName} access` : 'Ball machine access'}
           </DialogTitle>
           <DialogDescription>
             {bookingSummary || 'Use this code on the ball machine keypad.'}

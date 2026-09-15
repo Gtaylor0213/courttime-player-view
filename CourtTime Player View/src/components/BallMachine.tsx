@@ -12,18 +12,34 @@ import { toast } from 'sonner';
 /**
  * Member Ball Machine tab (st_marlow_ball_machine feature flag).
  *
- * Passes bought here are unlimited-use for their term. The per-hour alternative is
- * charged on the booking itself, so this page only explains it.
+ * A facility can offer more than one named machine (e.g. separate tennis and
+ * pickleball machines), each sold as its own pass, plus an optional "all
+ * machines" pass that covers every machine. Passes bought here are unlimited-use
+ * for their term. The per-hour alternative is charged on the booking itself, so
+ * this page only explains it.
  */
+
+const ALL_MACHINES_KEY = '__all__';
+
+interface Machine {
+  id: string;
+  name: string;
+  isActive: boolean;
+  hourlyFeeCents: number | null;
+  machineCount: number;
+  hasAccessCode: boolean;
+}
 
 interface PassProduct {
   id: string;
+  machineId: string | null;
   durationMonths: number;
   priceCents: number;
 }
 
 interface Pass {
   id: string;
+  machineId: string | null;
   durationMonths: number;
   priceCentsAtPurchase: number;
   startsAt: string;
@@ -33,13 +49,10 @@ interface Pass {
 }
 
 interface Status {
-  machineCount: number;
-  instructions: string | null;
-  hasAccessCode: boolean;
+  machines: Machine[];
   products: PassProduct[];
-  activePass: Pass | null;
+  activePasses: Pass[];
   passes: Pass[];
-  hourlyFromCents: number | null;
 }
 
 function formatDollars(cents: number): string {
@@ -67,8 +80,8 @@ export function BallMachine() {
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
-  const [accessCode, setAccessCode] = useState<string | null>(null);
-  const [buyingMonths, setBuyingMonths] = useState<number | null>(null);
+  const [accessCodes, setAccessCodes] = useState<Record<string, { code: string; instructions: string | null }>>({});
+  const [buyingKey, setBuyingKey] = useState<string | null>(null);
   const confirmInFlightRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
@@ -77,22 +90,33 @@ export function BallMachine() {
       setLoading(true);
       const res: any = await ballMachineApi.getStatus(selectedFacilityId);
       if (res.success && res.data) {
-        // Normalize the collections: a partial payload must not white-screen the tab.
-        setStatus({
-          ...res.data,
-          machineCount: Number(res.data.machineCount) || 1,
+        const nextStatus: Status = {
+          machines: Array.isArray(res.data.machines) ? res.data.machines : [],
           products: Array.isArray(res.data.products) ? res.data.products : [],
+          activePasses: Array.isArray(res.data.activePasses) ? res.data.activePasses : [],
           passes: Array.isArray(res.data.passes) ? res.data.passes : [],
-        });
+        };
+        setStatus(nextStatus);
         setUnavailable(false);
 
-        // Only pass holders can read the code; a 403 here is expected and silent.
-        if (res.data.activePass && res.data.hasAccessCode) {
-          const codeRes: any = await ballMachineApi.getAccessCode(selectedFacilityId);
-          setAccessCode(codeRes.success ? codeRes.data?.accessCode ?? null : null);
-        } else {
-          setAccessCode(null);
-        }
+        // Only fetch a code for machines the member actually has covering access to.
+        const coveredMachineIds = nextStatus.machines
+          .filter(
+            (m) =>
+              m.hasAccessCode &&
+              nextStatus.activePasses.some((p) => p.machineId === m.id || p.machineId === null)
+          )
+          .map((m) => m.id);
+        const entries = await Promise.all(
+          coveredMachineIds.map(async (machineId) => {
+            const codeRes: any = await ballMachineApi.getAccessCode(selectedFacilityId, machineId);
+            if (codeRes.success && codeRes.data?.accessCode) {
+              return [machineId, { code: codeRes.data.accessCode, instructions: codeRes.data.instructions ?? null }] as const;
+            }
+            return null;
+          })
+        );
+        setAccessCodes(Object.fromEntries(entries.filter((e): e is NonNullable<typeof e> => e !== null)));
       } else {
         setStatus(null);
         setUnavailable(true);
@@ -147,11 +171,11 @@ export function BallMachine() {
     })();
   }, [searchParams, user?.id, navigate, load]);
 
-  const handleBuy = async (durationMonths: number) => {
+  const handleBuy = async (machineId: string | null, durationMonths: number) => {
     if (!selectedFacilityId) return;
-    setBuyingMonths(durationMonths);
+    setBuyingKey(`${machineId ?? ALL_MACHINES_KEY}:${durationMonths}`);
     try {
-      const res: any = await ballMachineApi.purchasePass(selectedFacilityId, durationMonths);
+      const res: any = await ballMachineApi.purchasePass(selectedFacilityId, machineId, durationMonths);
       if (res.success && res.data?.url) {
         window.location.href = res.data.url;
         return;
@@ -160,7 +184,7 @@ export function BallMachine() {
     } catch {
       toast.error('Could not start checkout.');
     } finally {
-      setBuyingMonths(null);
+      setBuyingKey(null);
     }
   };
 
@@ -190,8 +214,15 @@ export function BallMachine() {
     );
   }
 
-  const { activePass, products, passes, hourlyFromCents, machineCount } = status;
-  const history = passes.filter((p) => p.id !== activePass?.id);
+  const { machines, products, activePasses, passes } = status;
+  const activeMachines = machines.filter((m) => m.isActive);
+  const showMachineHeaders = activeMachines.length > 1;
+  const history = passes.filter((p) => !activePasses.some((a) => a.id === p.id));
+  const allMachinesProducts = products.filter((p) => p.machineId === null);
+  const allMachinesPass = activePasses.find((p) => p.machineId === null) ?? null;
+
+  const passForMachine = (machineId: string) =>
+    activePasses.find((p) => p.machineId === machineId) ?? allMachinesPass;
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
@@ -205,105 +236,141 @@ export function BallMachine() {
         </p>
       </div>
 
-      {/* Current status */}
-      {activePass ? (
-        <Card className="p-5 border-green-200 bg-green-50/60">
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="h-5 w-5 text-green-700 mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-green-900">
-                {durationLabel(activePass.durationMonths)} pass — unlimited use
-              </p>
-              <p className="text-sm text-green-800 mt-0.5">
-                Active through {formatDate(activePass.expiresAt)}
-              </p>
-
-              {accessCode ? (
-                <div className="mt-4 rounded-lg border-2 border-green-300 bg-white px-4 py-3 inline-block">
-                  <p className="text-xs font-medium uppercase tracking-wide text-green-800 flex items-center gap-1">
-                    <KeyRound className="h-3 w-3" />
-                    Keypad code
-                  </p>
-                  <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-green-900">
-                    {accessCode}
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-green-800">
-                  The club hasn't set an access code yet — ask the front desk.
-                </p>
-              )}
-
-              <p className="text-xs text-green-800 mt-3">
-                Tick "Add ball machine" when you book and you won't be charged again.
-              </p>
-            </div>
-          </div>
-        </Card>
-      ) : (
+      {activePasses.length === 0 && (
         <Card className="p-5">
           <p className="font-medium text-gray-900">No active pass</p>
           <p className="text-sm text-gray-500 mt-1">
-            {hourlyFromCents
-              ? `You can still add the ball machine to any booking at ${formatDollars(hourlyFromCents)}/hr.`
+            {activeMachines.some((m) => m.hourlyFeeCents)
+              ? 'You can still add the ball machine to any booking and pay by the hour.'
               : 'Buy a pass below to use the ball machine.'}
           </p>
         </Card>
       )}
 
-      {/* Pass options */}
-      {products.length > 0 && (
-        <div>
-          <h2 className="text-lg font-medium text-gray-900 mb-3">
-            {activePass ? 'Extend or add a pass' : 'Passes'}
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {products.map((p) => (
-              <Card key={p.id} className="p-4 flex flex-col">
-                <p className="font-medium text-gray-900">{durationLabel(p.durationMonths)}</p>
-                <p className="text-2xl font-semibold text-gray-900 mt-1">
-                  {formatDollars(p.priceCents)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1 flex-1">Unlimited use</p>
-                <Button
-                  className="mt-3 w-full"
-                  onClick={() => handleBuy(p.durationMonths)}
-                  disabled={buyingMonths !== null}
-                >
-                  {buyingMonths === p.durationMonths ? 'Starting…' : 'Buy'}
-                </Button>
+      {activeMachines.map((machine) => {
+        const pass = passForMachine(machine.id);
+        const machineProducts = products.filter((p) => p.machineId === machine.id);
+        const code = accessCodes[machine.id];
+
+        return (
+          <div key={machine.id} className="space-y-3">
+            {showMachineHeaders && (
+              <h2 className="text-lg font-medium text-gray-900">{machine.name}</h2>
+            )}
+
+            {pass ? (
+              <Card className="p-5 border-green-200 bg-green-50/60">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-700 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-green-900">
+                      {durationLabel(pass.durationMonths)} pass — unlimited use
+                      {pass.machineId === null && showMachineHeaders ? ' (all machines)' : ''}
+                    </p>
+                    <p className="text-sm text-green-800 mt-0.5">
+                      Active through {formatDate(pass.expiresAt)}
+                    </p>
+
+                    {code ? (
+                      <div className="mt-4 rounded-lg border-2 border-green-300 bg-white px-4 py-3 inline-block">
+                        <p className="text-xs font-medium uppercase tracking-wide text-green-800 flex items-center gap-1">
+                          <KeyRound className="h-3 w-3" />
+                          Keypad code
+                        </p>
+                        <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-green-900">
+                          {code.code}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-green-800">
+                        The club hasn't set an access code yet — ask the front desk.
+                      </p>
+                    )}
+
+                    <p className="text-xs text-green-800 mt-3">
+                      Tick "Add ball machine" when you book and you won't be charged again.
+                    </p>
+                  </div>
+                </div>
               </Card>
-            ))}
+            ) : machineProducts.length === 0 ? null : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {machineProducts.map((p) => {
+                  const key = `${machine.id}:${p.durationMonths}`;
+                  return (
+                    <Card key={p.id} className="p-4 flex flex-col">
+                      <p className="font-medium text-gray-900">{durationLabel(p.durationMonths)}</p>
+                      <p className="text-2xl font-semibold text-gray-900 mt-1">
+                        {formatDollars(p.priceCents)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1 flex-1">Unlimited use</p>
+                      <Button
+                        className="mt-3 w-full"
+                        onClick={() => handleBuy(machine.id, p.durationMonths)}
+                        disabled={buyingKey !== null}
+                      >
+                        {buyingKey === key ? 'Starting…' : 'Buy'}
+                      </Button>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {machine.hourlyFeeCents !== null && !pass && (
+              <Card className="p-4 flex items-start gap-3">
+                <Clock className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
+                <div className="text-sm text-gray-600">
+                  <p className="font-medium text-gray-900">Prefer to pay per session?</p>
+                  <p className="mt-0.5">
+                    Add the ball machine when you book and pay {formatDollars(machine.hourlyFeeCents)}/hr —
+                    no pass needed.
+                  </p>
+                </div>
+              </Card>
+            )}
+
+            {machine.machineCount > 1 && (
+              <p className="text-xs text-gray-500">
+                This club has {machine.machineCount} of this machine. They're first come, first served
+                when you book.
+              </p>
+            )}
+          </div>
+        );
+      })}
+
+      {allMachinesProducts.length > 0 && !allMachinesPass && (
+        <div className="space-y-3">
+          {showMachineHeaders && <h2 className="text-lg font-medium text-gray-900">All machines</h2>}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {allMachinesProducts.map((p) => {
+              const key = `${ALL_MACHINES_KEY}:${p.durationMonths}`;
+              return (
+                <Card key={p.id} className="p-4 flex flex-col">
+                  <p className="font-medium text-gray-900">{durationLabel(p.durationMonths)}</p>
+                  <p className="text-2xl font-semibold text-gray-900 mt-1">
+                    {formatDollars(p.priceCents)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1 flex-1">Unlimited use — every machine</p>
+                  <Button
+                    className="mt-3 w-full"
+                    onClick={() => handleBuy(null, p.durationMonths)}
+                    disabled={buyingKey !== null}
+                  >
+                    {buyingKey === key ? 'Starting…' : 'Buy'}
+                  </Button>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {products.length === 0 && (
+      {activeMachines.length === 0 && (
         <Card className="p-5">
-          <p className="text-sm text-gray-500">
-            This club hasn't set up ball machine passes yet.
-          </p>
+          <p className="text-sm text-gray-500">This club hasn't set up ball machine passes yet.</p>
         </Card>
-      )}
-
-      {/* Pay-per-use explainer */}
-      {hourlyFromCents !== null && (
-        <Card className="p-4 flex items-start gap-3">
-          <Clock className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
-          <div className="text-sm text-gray-600">
-            <p className="font-medium text-gray-900">Prefer to pay per session?</p>
-            <p className="mt-0.5">
-              Add the ball machine when you book and pay {formatDollars(hourlyFromCents)}/hr — no pass
-              needed.
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {machineCount > 1 && (
-        <p className="text-xs text-gray-500">
-          This club has {machineCount} ball machines. They're first come, first served when you book.
-        </p>
       )}
 
       {/* History */}
@@ -311,26 +378,30 @@ export function BallMachine() {
         <div>
           <h2 className="text-lg font-medium text-gray-900 mb-3">Past passes</h2>
           <Card className="divide-y">
-            {history.map((p) => (
-              <div key={p.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {durationLabel(p.durationMonths)} pass
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {formatDate(p.startsAt)} – {formatDate(p.expiresAt)}
-                  </p>
+            {history.map((p) => {
+              const machineName = machines.find((m) => m.id === p.machineId)?.name;
+              return (
+                <div key={p.id} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {durationLabel(p.durationMonths)} pass
+                      {machineName ? ` — ${machineName}` : showMachineHeaders ? ' — all machines' : ''}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formatDate(p.startsAt)} – {formatDate(p.expiresAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600">
+                      {p.grantedBy ? 'Comped' : formatDollars(p.priceCentsAtPurchase)}
+                    </span>
+                    <Badge variant="secondary" className="capitalize">
+                      {new Date(p.expiresAt) < new Date() ? 'expired' : p.status}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-600">
-                    {p.grantedBy ? 'Comped' : formatDollars(p.priceCentsAtPurchase)}
-                  </span>
-                  <Badge variant="secondary" className="capitalize">
-                    {new Date(p.expiresAt) < new Date() ? 'expired' : p.status}
-                  </Badge>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </Card>
         </div>
       )}

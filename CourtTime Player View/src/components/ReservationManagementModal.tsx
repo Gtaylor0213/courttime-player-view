@@ -41,6 +41,8 @@ interface ReservationDetails {
   addBallMachine?: boolean;
   /** Non-null when a St. Marlow pass covered the machine (no hourly fee). */
   ballMachinePassId?: string | null;
+  /** Which named machine was claimed; null when the facility has no named machines configured. */
+  ballMachineId?: string | null;
   /** General capacity for this booking (e.g. 4 for a padel court). Null = no cap tracked. */
   maxPlayers?: number | null;
   /** Host is advertising open spots on this booking to other club members. */
@@ -754,14 +756,17 @@ export function ReservationManagementModal({
 
   return (
     <>
-      <BallMachineAccessDialog
-        isOpen={showBallMachineCode}
-        onClose={() => setShowBallMachineCode(false)}
-        facilityId={reservation.facilityId}
-        bookingSummary={[reservation.courtName, reservation.bookingDate, reservation.startTime]
-          .filter(Boolean)
-          .join(' · ')}
-      />
+      {reservation.ballMachineId && (
+        <BallMachineAccessDialog
+          isOpen={showBallMachineCode}
+          onClose={() => setShowBallMachineCode(false)}
+          facilityId={reservation.facilityId}
+          machineId={reservation.ballMachineId}
+          bookingSummary={[reservation.courtName, reservation.bookingDate, reservation.startTime]
+            .filter(Boolean)
+            .join(' · ')}
+        />
+      )}
       <Dialog open={isOpen && !showCancelConfirm && !showBallMachineCode} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1318,7 +1323,7 @@ export function ReservationManagementModal({
                 >
                   Close
                 </Button>
-                {reservation.addBallMachine && isOwnReservation && (
+                {reservation.addBallMachine && reservation.ballMachineId && isOwnReservation && (
                   <Button
                     variant="outline"
                     onClick={() => setShowBallMachineCode(true)}

@@ -70,6 +70,8 @@ export interface Booking {
   status: "confirmed" | "pending" | "cancelled" | "completed";
   bookingType?: string;
   notes?: string;
+  /** Which named ball machine was claimed; null when the facility has no named machines configured. */
+  ballMachineId?: Id | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }

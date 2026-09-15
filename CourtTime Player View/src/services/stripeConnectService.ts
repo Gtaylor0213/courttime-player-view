@@ -942,6 +942,8 @@ export async function createBulletinSignupCheckoutSession(params: {
 export async function createBallMachinePassCheckoutSession(params: {
   facilityId: string;
   memberId: string;
+  /** null = an all-machines pass; a machine id = scoped to that one machine. */
+  machineId?: string | null;
   durationMonths: number;
   successUrl: string;
   cancelUrl: string;
@@ -951,11 +953,16 @@ export async function createBallMachinePassCheckoutSession(params: {
     throw new Error('Stripe is not configured on this server');
   }
 
-  const { getActivePassProduct, addMonths } = await import('./ballMachineService');
+  const machineId = params.machineId ?? null;
+  const { getActivePassProduct, getMachine, addMonths } = await import('./ballMachineService');
 
-  const product = await getActivePassProduct(params.facilityId, params.durationMonths);
+  const product = await getActivePassProduct(params.facilityId, machineId, params.durationMonths);
   if (!product) {
     throw new Error('That ball machine pass is not currently offered by this club');
+  }
+  const machine = machineId ? await getMachine(params.facilityId, machineId) : null;
+  if (machineId && !machine) {
+    throw new Error('That ball machine is not available at this facility');
   }
   if (product.priceCents <= 0) {
     throw new Error('This pass has no price set. Ask the club to set one.');
@@ -987,10 +994,11 @@ export async function createBallMachinePassCheckoutSession(params: {
       WHERE p.facility_id = $1
         AND p.user_id = $2
         AND p.duration_months = $3
+        AND p.machine_id IS NOT DISTINCT FROM $4
         AND p.status = 'pending'
       ORDER BY p.created_at DESC
       LIMIT 1`,
-    [params.facilityId, params.memberId, params.durationMonths]
+    [params.facilityId, params.memberId, params.durationMonths, machineId]
   );
   const existingPass = pendingPass.rows[0];
   const priceUnchanged =
@@ -1049,12 +1057,13 @@ export async function createBallMachinePassCheckoutSession(params: {
   const provisionalStart = new Date();
   const insertPass = await query(
     `INSERT INTO ball_machine_passes
-       (facility_id, user_id, duration_months, price_cents_at_purchase,
+       (facility_id, machine_id, user_id, duration_months, price_cents_at_purchase,
         starts_at, expires_at, status, connect_payment_id)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
      RETURNING id`,
     [
       params.facilityId,
+      machineId,
       params.memberId,
       params.durationMonths,
       amountCents,
@@ -1066,6 +1075,7 @@ export async function createBallMachinePassCheckoutSession(params: {
   const passId: string = insertPass.rows[0].id;
 
   const monthLabel = params.durationMonths === 1 ? '1 month' : `${params.durationMonths} months`;
+  const passLabel = machine ? machine.name : 'Ball machine (all machines)';
   const customerOpts = await connectCheckoutCustomerOptions(params.memberId, params.facilityId);
 
   const session = await stripe.checkout.sessions.create(
@@ -1080,8 +1090,8 @@ export async function createBallMachinePassCheckoutSession(params: {
             currency: 'usd',
             unit_amount: amountCents,
             product_data: {
-              name: `Ball machine pass — ${monthLabel}`,
-              description: `Unlimited ball machine use at ${club.name} for ${monthLabel}`,
+              name: `${passLabel} pass — ${monthLabel}`,
+              description: `Unlimited ${machine ? machine.name.toLowerCase() : 'ball machine'} use at ${club.name} for ${monthLabel}`,
             },
           },
         },
@@ -1164,23 +1174,44 @@ export async function createCourtBookingCheckoutSession(params: {
   if (!court) {
     throw new Error('Court not found');
   }
+
+  // Once the booking claimed a specific named machine, that machine's own hourly
+  // rate is authoritative — not the court's ball_machine_fee_cents (the legacy
+  // per-court fallback for facilities with no named machines configured).
+  let ballMachine: import('./ballMachineService').BallMachine | null = null;
+  let ballMachineFeeCentsOverride: number | null | undefined = undefined;
+  if (pb.ballMachineId) {
+    const { getMachine } = await import('./ballMachineService');
+    ballMachine = await getMachine(pb.facilityId, pb.ballMachineId);
+    ballMachineFeeCentsOverride = ballMachine?.hourlyFeeCents ?? null;
+  }
+  const effectiveBallMachineFeeCents =
+    ballMachineFeeCentsOverride !== undefined ? ballMachineFeeCentsOverride : court.ball_machine_fee_cents;
+
   const hasGuestFee = pb.bringGuest && court.guest_fee_cents;
-  const hasBallMachineFee = pb.addBallMachine && court.ball_machine_fee_cents;
-  if (!courtBookingNeedsPayment(court, { bringGuest: pb.bringGuest, addBallMachine: pb.addBallMachine })) {
+  // A pass already covering the machine makes this $0 — must not be charged again here.
+  const hasBallMachineFee = Boolean(pb.addBallMachine && !pb.ballMachinePassId && effectiveBallMachineFeeCents);
+  if (
+    !courtBookingNeedsPayment(court, {
+      bringGuest: pb.bringGuest,
+      addBallMachine: pb.addBallMachine && !pb.ballMachinePassId,
+      ballMachineFeeCentsOverride,
+    })
+  ) {
     throw new Error('This court does not require payment to book');
   }
   if (!court.stripe_account_id || !court.stripe_onboarded) {
     throw new Error('This club has not finished Stripe Connect onboarding yet');
   }
 
-  // booking_amount_cents / ball_machine_fee_cents are hourly rates and scale by duration;
-  // daily_rate_cents (billing_mode 'daily') is a flat rate regardless of duration.
+  // booking_amount_cents / effectiveBallMachineFeeCents are hourly rates and scale by
+  // duration; daily_rate_cents (billing_mode 'daily') is a flat rate regardless of duration.
   const durationMinutes = pb.durationMinutes > 0 ? pb.durationMinutes : 60;
   const hours = durationMinutes / 60;
   const bookingAmountCents = computeCourtFeeCents(court, durationMinutes);
   const guestAmountCents = hasGuestFee ? Number(court.guest_fee_cents) : 0;
   const ballMachineAmountCents = hasBallMachineFee
-    ? Math.round(Number(court.ball_machine_fee_cents) * hours)
+    ? Math.round(Number(effectiveBallMachineFeeCents) * hours)
     : 0;
   const totalAmountCents = bookingAmountCents + guestAmountCents + ballMachineAmountCents;
   const platformFeePercent = Number(court.platform_fee_percent ?? 0);
@@ -1271,7 +1302,7 @@ export async function createCourtBookingCheckoutSession(params: {
         currency: 'usd',
         unit_amount: ballMachineAmountCents,
         product_data: {
-          name: `Ball machine — ${court.name}`,
+          name: `${ballMachine ? ballMachine.name : 'Ball machine'} — ${court.name}`,
           description: `${court.facility_name} · ${dateLabel} ${pb.startTime}–${pb.endTime}`,
         },
       },

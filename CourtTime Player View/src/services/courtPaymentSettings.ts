@@ -47,7 +47,16 @@ export function computeCourtFeeCents(
   return Math.round(Number(courtRow.booking_amount_cents) * hours);
 }
 
-/** Authoritative total (court + guest + ball machine fees), hours-scaled like computeSettlementAmounts. */
+/**
+ * Authoritative total (court + guest + ball machine fees), hours-scaled like computeSettlementAmounts.
+ *
+ * ballMachineFeeCentsOverride lets a caller substitute a specific named machine's own
+ * hourly rate for the court's ball_machine_fee_cents — used once a facility has any
+ * row in ball_machine_machines, since pricing then comes from the selected machine,
+ * not the court. Pass `null` explicitly for "no charge" (e.g. all-machines pass
+ * covered it); omit entirely (undefined) to keep today's court-fee-based behavior
+ * unchanged for facilities that never configured named machines.
+ */
 export function computeBookingFeeTotalCents(
   courtRow:
     | (CourtFeeRow & {
@@ -56,16 +65,25 @@ export function computeBookingFeeTotalCents(
       })
     | null
     | undefined,
-  options: { durationMinutes: number; bringGuest?: boolean; addBallMachine?: boolean }
+  options: {
+    durationMinutes: number;
+    bringGuest?: boolean;
+    addBallMachine?: boolean;
+    ballMachineFeeCentsOverride?: number | null;
+  }
 ): number {
   if (!courtRow) return 0;
   const hours = options.durationMinutes > 0 ? options.durationMinutes / 60 : 1;
   const courtFeeCents = computeCourtFeeCents(courtRow, options.durationMinutes);
   const guestFeeCents =
     options.bringGuest && courtRow.guest_fee_cents ? Number(courtRow.guest_fee_cents) : 0;
+  const effectiveBallMachineFeeCents =
+    options.ballMachineFeeCentsOverride !== undefined
+      ? options.ballMachineFeeCentsOverride
+      : courtRow.ball_machine_fee_cents;
   const ballMachineFeeCents =
-    options.addBallMachine && courtRow.ball_machine_fee_cents
-      ? Math.round(Number(courtRow.ball_machine_fee_cents) * hours)
+    options.addBallMachine && effectiveBallMachineFeeCents
+      ? Math.round(Number(effectiveBallMachineFeeCents) * hours)
       : 0;
   return courtFeeCents + guestFeeCents + ballMachineFeeCents;
 }
@@ -78,16 +96,24 @@ export function courtBookingNeedsPayment(
       })
     | null
     | undefined,
-  options?: { bringGuest?: boolean; addBallMachine?: boolean }
+  options?: {
+    bringGuest?: boolean;
+    addBallMachine?: boolean;
+    ballMachineFeeCentsOverride?: number | null;
+  }
 ): boolean {
   if (!courtRow) return false;
   const hasCourtFee =
     courtRow.billing_mode === 'daily'
       ? Boolean(courtRow.require_payment && courtRow.daily_rate_cents)
       : Boolean(courtRow.require_payment && courtRow.booking_amount_cents);
+  const effectiveBallMachineFeeCents =
+    options?.ballMachineFeeCentsOverride !== undefined
+      ? options.ballMachineFeeCentsOverride
+      : courtRow.ball_machine_fee_cents;
   return Boolean(
     hasCourtFee ||
       (options?.bringGuest && courtRow.guest_fee_cents) ||
-      (options?.addBallMachine && courtRow.ball_machine_fee_cents)
+      (options?.addBallMachine && effectiveBallMachineFeeCents)
   );
 }

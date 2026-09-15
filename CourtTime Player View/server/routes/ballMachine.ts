@@ -1,8 +1,9 @@
 /**
- * St. Marlow Ball Machine routes (st_marlow_ball_machine feature flag).
+ * Ball Machine routes (st_marlow_ball_machine feature flag).
  *
- * Mounted at /api/ball-machine. Members buy time-based passes here; the per-hour
- * rate stays on courts.ball_machine_fee_cents and is charged through the normal
+ * Mounted at /api/ball-machine. A facility can configure one or more named
+ * machines; members buy time-based passes here (scoped to one machine or to
+ * "all machines"), and the per-machine hourly rate is charged through the normal
  * court-booking checkout.
  */
 
@@ -14,14 +15,19 @@ import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import {
   PASS_DURATIONS_MONTHS,
   canViewAccessCode,
-  getActivePass,
-  getConfig,
+  createMachine,
+  deactivateMachine,
+  getActivePassForMachine,
+  getActivePasses,
+  getMachine,
   getMemberPasses,
   getPassHolders,
   getPassProducts,
   grantPass,
+  listMachines,
+  reorderMachines,
   revokePass,
-  upsertConfig,
+  updateMachine,
   upsertPassProduct,
 } from '../../src/services/ballMachineService';
 import {
@@ -90,13 +96,18 @@ function defaultAppUrl(): string {
     : process.env.APP_URL || 'http://localhost:5173';
 }
 
+function parseMachineIdBody(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return String(value);
+}
+
 // ---------------------------------------------------------------------------
 // Member
 // ---------------------------------------------------------------------------
 
 /**
- * Everything the player tab needs. Deliberately omits the access code — that is
- * gated separately behind GET /access-code/:facilityId.
+ * Everything the player tab needs. Deliberately omits access codes — those are
+ * gated separately behind GET /access-code/:facilityId/:machineId.
  */
 router.get('/status/:facilityId', async (req, res) => {
   try {
@@ -105,32 +116,27 @@ router.get('/status/:facilityId', async (req, res) => {
     if (!(await requireMember(facilityId, req.user?.userId, res))) return;
 
     const userId = req.user!.userId;
-    const [config, products, activePass, passes] = await Promise.all([
-      getConfig(facilityId),
+    const [machines, products, activePasses, passes] = await Promise.all([
+      listMachines(facilityId, { activeOnly: true }),
       getPassProducts(facilityId, { activeOnly: true }),
-      getActivePass(facilityId, userId),
+      getActivePasses(facilityId, userId),
       getMemberPasses(facilityId, userId),
     ]);
-
-    // The hourly rate lives per-court; surface the cheapest configured one as the
-    // "from" price so the player tab can explain the pay-per-use alternative.
-    const hourly = await query(
-      `SELECT MIN(ball_machine_fee_cents) AS "hourlyFromCents"
-         FROM courts
-        WHERE facility_id = $1 AND ball_machine_fee_cents IS NOT NULL`,
-      [facilityId]
-    );
 
     res.json({
       success: true,
       data: {
-        machineCount: config.machineCount,
-        instructions: config.instructions,
-        hasAccessCode: Boolean(config.accessCode),
+        machines: machines.map((m) => ({
+          id: m.id,
+          name: m.name,
+          isActive: m.isActive,
+          hourlyFeeCents: m.hourlyFeeCents,
+          machineCount: m.machineCount,
+          hasAccessCode: Boolean(m.accessCode),
+        })),
         products,
-        activePass,
+        activePasses,
         passes,
-        hourlyFromCents: hourly.rows[0]?.hourlyFromCents ?? null,
       },
     });
   } catch (error: any) {
@@ -139,37 +145,42 @@ router.get('/status/:facilityId', async (req, res) => {
 });
 
 /**
- * The keypad code. Only for members who hold a live pass or who have a booking
- * where they claimed the machine (i.e. they already paid one way or the other).
+ * The keypad code for one machine. Only for members who hold a covering pass or
+ * who have a booking where they claimed that machine (i.e. they already paid).
  */
-router.get('/access-code/:facilityId', async (req, res) => {
+router.get('/access-code/:facilityId/:machineId', async (req, res) => {
   try {
-    const { facilityId } = req.params;
+    const { facilityId, machineId } = req.params;
     if (!(await checkFlag(facilityId, res))) return;
     if (!(await requireMember(facilityId, req.user?.userId, res))) return;
 
     const userId = req.user!.userId;
-    if (!(await canViewAccessCode(facilityId, userId))) {
+    const machine = await getMachine(facilityId, machineId);
+    if (!machine || !machine.isActive) {
+      return res.status(404).json({ success: false, error: 'That ball machine is not available' });
+    }
+
+    if (!(await canViewAccessCode(facilityId, userId, machineId))) {
       return res.status(403).json({
         success: false,
         error: 'Buy a ball machine pass or add the machine to a booking to see the code',
       });
     }
 
-    const config = await getConfig(facilityId);
-    if (!config.accessCode) {
+    if (!machine.accessCode) {
       return res.status(404).json({
         success: false,
         error: 'The club has not set an access code yet. Please ask the front desk.',
       });
     }
 
-    const activePass = await getActivePass(facilityId, userId);
+    const activePass = await getActivePassForMachine(facilityId, userId, machineId);
     res.json({
       success: true,
       data: {
-        accessCode: config.accessCode,
-        instructions: config.instructions,
+        machineName: machine.name,
+        accessCode: machine.accessCode,
+        instructions: machine.instructions,
         activePass,
       },
     });
@@ -212,11 +223,19 @@ router.post('/purchase/:facilityId', async (req, res) => {
         error: `durationMonths must be one of ${PASS_DURATIONS_MONTHS.join(', ')}`,
       });
     }
+    const machineId = parseMachineIdBody(req.body?.machineId);
+    if (machineId) {
+      const machine = await getMachine(facilityId, machineId);
+      if (!machine || !machine.isActive) {
+        return res.status(400).json({ success: false, error: 'That ball machine is not available' });
+      }
+    }
 
     const base = defaultAppUrl();
     const { url } = await createBallMachinePassCheckoutSession({
       facilityId,
       memberId: req.user!.userId,
+      machineId,
       durationMonths,
       successUrl:
         req.body?.successUrl ||
@@ -231,48 +250,128 @@ router.post('/purchase/:facilityId', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Admin
+// Admin — machines
 // ---------------------------------------------------------------------------
 
-router.get('/admin/config/:facilityId', async (req, res) => {
+router.get('/admin/machines/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!(await checkFlag(facilityId, res))) return;
     if (!(await requireAdmin(facilityId, req.user?.userId, res))) return;
 
-    const [config, products] = await Promise.all([
-      getConfig(facilityId),
-      getPassProducts(facilityId),
-    ]);
-    res.json({ success: true, data: { config, products } });
+    res.json({ success: true, data: await listMachines(facilityId) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.put('/admin/config/:facilityId', async (req, res) => {
+router.post('/admin/machines/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!(await checkFlag(facilityId, res))) return;
     if (!(await requireAdmin(facilityId, req.user?.userId, res))) return;
 
-    const { accessCode, machineCount, instructions } = req.body || {};
-    const config = await upsertConfig(
+    const { name, accessCode, instructions, hourlyFeeCents, machineCount } = req.body || {};
+    const machine = await createMachine(
       facilityId,
       {
-        ...(accessCode !== undefined ? { accessCode } : {}),
-        ...(machineCount !== undefined ? { machineCount: Number(machineCount) } : {}),
-        ...(instructions !== undefined ? { instructions } : {}),
+        name,
+        accessCode: accessCode ?? null,
+        instructions: instructions ?? null,
+        hourlyFeeCents:
+          hourlyFeeCents === null || hourlyFeeCents === undefined ? null : Number(hourlyFeeCents),
+        machineCount: machineCount === undefined ? undefined : Number(machineCount),
       },
       req.user!.userId
     );
-    res.json({ success: true, data: config });
+    res.status(201).json({ success: true, data: machine });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
   }
 });
 
-/** Replaces the whole price list in one call — the admin form edits all four rows together. */
+/**
+ * MUST stay above PUT /admin/machines/:facilityId/:machineId — same route-order
+ * pitfall as /purchase/confirm above: both paths have the same segment count, so
+ * :machineId would otherwise swallow "reorder" as a machine id.
+ */
+router.put('/admin/machines/:facilityId/reorder', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!(await checkFlag(facilityId, res))) return;
+    if (!(await requireAdmin(facilityId, req.user?.userId, res))) return;
+
+    const machineIds = req.body?.machineIds;
+    if (!Array.isArray(machineIds) || machineIds.some((id) => typeof id !== 'string')) {
+      return res.status(400).json({ success: false, error: 'machineIds must be an array of ids' });
+    }
+
+    await reorderMachines(facilityId, machineIds, req.user!.userId);
+    res.json({ success: true, data: await listMachines(facilityId) });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/admin/machines/:facilityId/:machineId', async (req, res) => {
+  try {
+    const { facilityId, machineId } = req.params;
+    if (!(await checkFlag(facilityId, res))) return;
+    if (!(await requireAdmin(facilityId, req.user?.userId, res))) return;
+
+    const { name, accessCode, instructions, hourlyFeeCents, machineCount, isActive } = req.body || {};
+    const machine = await updateMachine(
+      facilityId,
+      machineId,
+      {
+        ...(name !== undefined ? { name } : {}),
+        ...(accessCode !== undefined ? { accessCode } : {}),
+        ...(instructions !== undefined ? { instructions } : {}),
+        ...(hourlyFeeCents !== undefined
+          ? { hourlyFeeCents: hourlyFeeCents === null ? null : Number(hourlyFeeCents) }
+          : {}),
+        ...(machineCount !== undefined ? { machineCount: Number(machineCount) } : {}),
+        ...(isActive !== undefined ? { isActive: isActive === true } : {}),
+      },
+      req.user!.userId
+    );
+    res.json({ success: true, data: machine });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/** Soft-delete only: bookings/passes/products may reference the machine historically. */
+router.delete('/admin/machines/:facilityId/:machineId', async (req, res) => {
+  try {
+    const { facilityId, machineId } = req.params;
+    if (!(await checkFlag(facilityId, res))) return;
+    if (!(await requireAdmin(facilityId, req.user?.userId, res))) return;
+
+    await deactivateMachine(facilityId, machineId, req.user!.userId);
+    res.json({ success: true, data: await listMachines(facilityId) });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Admin — pricing
+// ---------------------------------------------------------------------------
+
+router.get('/admin/products/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!(await checkFlag(facilityId, res))) return;
+    if (!(await requireAdmin(facilityId, req.user?.userId, res))) return;
+
+    res.json({ success: true, data: await getPassProducts(facilityId) });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/** Replaces the whole price list in one call — the admin form edits every row together. */
 router.put('/admin/products/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
@@ -285,8 +384,16 @@ router.put('/admin/products/:facilityId', async (req, res) => {
     }
 
     for (const p of products) {
+      const machineId = parseMachineIdBody(p.machineId);
+      if (machineId) {
+        const machine = await getMachine(facilityId, machineId);
+        if (!machine) {
+          return res.status(400).json({ success: false, error: 'One of those machines was not found' });
+        }
+      }
       await upsertPassProduct(
         facilityId,
+        machineId,
         Number(p.durationMonths),
         Number(p.priceCents),
         p.isActive === true
@@ -298,6 +405,10 @@ router.put('/admin/products/:facilityId', async (req, res) => {
     res.status(400).json({ success: false, error: error.message });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Admin — passes
+// ---------------------------------------------------------------------------
 
 router.get('/admin/passes/:facilityId', async (req, res) => {
   try {
@@ -328,6 +439,13 @@ router.post('/admin/passes/:facilityId', async (req, res) => {
         error: `durationMonths must be one of ${PASS_DURATIONS_MONTHS.join(', ')}`,
       });
     }
+    const machineId = parseMachineIdBody(req.body?.machineId);
+    if (machineId) {
+      const machine = await getMachine(facilityId, machineId);
+      if (!machine) {
+        return res.status(400).json({ success: false, error: 'That ball machine was not found' });
+      }
+    }
 
     const memberCheck = await query(
       `SELECT 1 FROM facility_memberships WHERE facility_id = $1 AND user_id = $2`,
@@ -339,6 +457,7 @@ router.post('/admin/passes/:facilityId', async (req, res) => {
 
     const pass = await grantPass({
       facilityId,
+      machineId,
       userId,
       durationMonths: Number(durationMonths),
       grantedBy: req.user!.userId,

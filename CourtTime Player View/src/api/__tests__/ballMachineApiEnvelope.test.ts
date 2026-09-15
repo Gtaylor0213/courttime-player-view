@@ -27,13 +27,12 @@ describe('ballMachineApi envelope', () => {
     const raw = asClientResponse({
       success: true,
       data: {
-        machineCount: 1,
-        instructions: null,
-        hasAccessCode: false,
+        machines: [
+          { id: 'm1', name: 'Ball Machine', isActive: true, hourlyFeeCents: 2000, machineCount: 1, hasAccessCode: false },
+        ],
         products: [],
-        activePass: null,
+        activePasses: [],
         passes: [],
-        hourlyFromCents: 2000,
       },
     });
 
@@ -43,15 +42,16 @@ describe('ballMachineApi envelope', () => {
     const res = unwrapped(raw);
     expect(Array.isArray(res.data.passes)).toBe(true);
     expect(Array.isArray(res.data.products)).toBe(true);
-    expect(res.data.hourlyFromCents).toBe(2000);
-    expect(res.data.machineCount).toBe(1);
+    expect(Array.isArray(res.data.activePasses)).toBe(true);
+    expect(Array.isArray(res.data.machines)).toBe(true);
+    expect(res.data.machines[0].hourlyFeeCents).toBe(2000);
   });
 
   it('exposes the access code directly', () => {
     const res = unwrapped(
       asClientResponse({
         success: true,
-        data: { accessCode: '4821', instructions: null, activePass: null },
+        data: { machineName: 'Ball Machine', accessCode: '4821', instructions: null, activePass: null },
       })
     );
     expect(res.data.accessCode).toBe('4821');

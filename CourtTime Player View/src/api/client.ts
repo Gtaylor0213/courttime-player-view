@@ -817,6 +817,8 @@ export const bookingApi = {
     cancelUrl?: string;
     bringGuest?: boolean;
     addBallMachine?: boolean;
+    /** Which named ball machine to claim; omit when the facility has 0 or 1 active machines. */
+    machineId?: string;
     guestCount?: number;
     guestNames?: string[];
     provisionalSameRequestBookings?: Array<{
@@ -2445,13 +2447,18 @@ export const ballMachineApi = {
   getStatus: (facilityId: string) =>
     ballMachineRequest(`/api/ball-machine/status/${facilityId}`),
 
-  getAccessCode: (facilityId: string) =>
-    ballMachineRequest(`/api/ball-machine/access-code/${facilityId}`),
+  getAccessCode: (facilityId: string, machineId: string) =>
+    ballMachineRequest(`/api/ball-machine/access-code/${facilityId}/${machineId}`),
 
-  purchasePass: (facilityId: string, durationMonths: number, urls?: { successUrl?: string; cancelUrl?: string }) =>
+  purchasePass: (
+    facilityId: string,
+    machineId: string | null,
+    durationMonths: number,
+    urls?: { successUrl?: string; cancelUrl?: string }
+  ) =>
     ballMachineRequest(`/api/ball-machine/purchase/${facilityId}`, {
       method: 'POST',
-      body: JSON.stringify({ durationMonths, ...urls }),
+      body: JSON.stringify({ machineId, durationMonths, ...urls }),
     }),
 
   confirmPurchase: (sessionId: string) =>
@@ -2460,35 +2467,74 @@ export const ballMachineApi = {
       body: JSON.stringify({ sessionId }),
     }),
 
-  // Admin
-  getAdminConfig: (facilityId: string) =>
-    ballMachineRequest(`/api/ball-machine/admin/config/${facilityId}`),
+  // Admin — machines
+  getMachines: (facilityId: string) =>
+    ballMachineRequest(`/api/ball-machine/admin/machines/${facilityId}`),
 
-  updateConfig: (
+  createMachine: (
     facilityId: string,
-    data: { accessCode?: string | null; machineCount?: number; instructions?: string | null }
+    data: {
+      name: string;
+      accessCode?: string | null;
+      instructions?: string | null;
+      hourlyFeeCents?: number | null;
+      machineCount?: number;
+    }
   ) =>
-    ballMachineRequest(`/api/ball-machine/admin/config/${facilityId}`, {
+    ballMachineRequest(`/api/ball-machine/admin/machines/${facilityId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateMachine: (
+    facilityId: string,
+    machineId: string,
+    data: {
+      name?: string;
+      accessCode?: string | null;
+      instructions?: string | null;
+      hourlyFeeCents?: number | null;
+      machineCount?: number;
+      isActive?: boolean;
+    }
+  ) =>
+    ballMachineRequest(`/api/ball-machine/admin/machines/${facilityId}/${machineId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
 
+  deactivateMachine: (facilityId: string, machineId: string) =>
+    ballMachineRequest(`/api/ball-machine/admin/machines/${facilityId}/${machineId}`, {
+      method: 'DELETE',
+    }),
+
+  reorderMachines: (facilityId: string, machineIds: string[]) =>
+    ballMachineRequest(`/api/ball-machine/admin/machines/${facilityId}/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ machineIds }),
+    }),
+
+  // Admin — pricing
+  getProducts: (facilityId: string) =>
+    ballMachineRequest(`/api/ball-machine/admin/products/${facilityId}`),
+
   updateProducts: (
     facilityId: string,
-    products: { durationMonths: number; priceCents: number; isActive: boolean }[]
+    products: { machineId: string | null; durationMonths: number; priceCents: number; isActive: boolean }[]
   ) =>
     ballMachineRequest(`/api/ball-machine/admin/products/${facilityId}`, {
       method: 'PUT',
       body: JSON.stringify({ products }),
     }),
 
+  // Admin — passes
   getPassHolders: (facilityId: string) =>
     ballMachineRequest(`/api/ball-machine/admin/passes/${facilityId}`),
 
-  grantPass: (facilityId: string, userId: string, durationMonths: number) =>
+  grantPass: (facilityId: string, userId: string, machineId: string | null, durationMonths: number) =>
     ballMachineRequest(`/api/ball-machine/admin/passes/${facilityId}`, {
       method: 'POST',
-      body: JSON.stringify({ userId, durationMonths }),
+      body: JSON.stringify({ userId, machineId, durationMonths }),
     }),
 
   revokePass: (facilityId: string, passId: string) =>

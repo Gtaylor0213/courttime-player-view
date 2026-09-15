@@ -267,6 +267,7 @@ export function CourtCalendarView() {
   const [showQuickReserve, setShowQuickReserve] = useState(false);
   const [ballMachineCodeBooking, setBallMachineCodeBooking] = useState<{
     facilityId: string;
+    machineId: string;
     summary: string;
   } | null>(null);
 
@@ -843,9 +844,10 @@ export function CourtCalendarView() {
       try {
         const detail = await bookingApi.getById(bookingId);
         const booking = (detail as any)?.booking || (detail as any)?.data?.booking;
-        if (booking?.addBallMachine) {
+        if (booking?.addBallMachine && booking?.ballMachineId) {
           setBallMachineCodeBooking({
             facilityId: booking.facilityId,
+            machineId: booking.ballMachineId,
             summary: [booking.courtName, booking.bookingDate, booking.startTime]
               .filter(Boolean)
               .join(' · '),
@@ -3526,12 +3528,15 @@ export function CourtCalendarView() {
       </div>
 
       {/* Ball machine keypad code, after returning from a paid checkout */}
-      <BallMachineAccessDialog
-        isOpen={ballMachineCodeBooking !== null}
-        onClose={() => setBallMachineCodeBooking(null)}
-        facilityId={ballMachineCodeBooking?.facilityId || ''}
-        bookingSummary={ballMachineCodeBooking?.summary}
-      />
+      {ballMachineCodeBooking && (
+        <BallMachineAccessDialog
+          isOpen={ballMachineCodeBooking !== null}
+          onClose={() => setBallMachineCodeBooking(null)}
+          facilityId={ballMachineCodeBooking.facilityId}
+          machineId={ballMachineCodeBooking.machineId}
+          bookingSummary={ballMachineCodeBooking.summary}
+        />
+      )}
 
       {/* Booking Wizard */}
       <BookingWizard

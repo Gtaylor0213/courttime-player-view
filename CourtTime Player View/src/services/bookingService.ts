@@ -376,6 +376,8 @@ export interface Booking {
   addBallMachine?: boolean;
   /** Non-null when a St. Marlow pass covered the machine, so no hourly fee applies. */
   ballMachinePassId?: string | null;
+  /** Which named machine was claimed; null when the facility has no named machines configured. */
+  ballMachineId?: string | null;
   paymentMode?: 'single_payer' | 'split';
   paymentDeadlineAt?: string | null;
   /** General capacity for this booking (e.g. 4 for a padel court). */
@@ -425,6 +427,7 @@ export async function getBookingsByFacilityAndDate(
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",
         b.ball_machine_pass_id as "ballMachinePassId",
+        b.ball_machine_id as "ballMachineId",
         b.bulletin_post_id as "bulletinPostId",
         b.created_at as "createdAt",
         b.updated_at as "updatedAt",
@@ -478,6 +481,7 @@ export async function getBookingsByFacilityAndDateRange(
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",
         b.ball_machine_pass_id as "ballMachinePassId",
+        b.ball_machine_id as "ballMachineId",
         b.bulletin_post_id as "bulletinPostId",
         b.created_at as "createdAt",
         b.updated_at as "updatedAt",
@@ -534,6 +538,7 @@ export async function getBookingsByCourtAndDate(
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",
         b.ball_machine_pass_id as "ballMachinePassId",
+        b.ball_machine_id as "ballMachineId",
         b.created_at as "createdAt",
         b.updated_at as "updatedAt",
         c.name as "courtName",
@@ -584,6 +589,7 @@ export async function getBookingsByUser(
           b.notes,
           COALESCE(b.add_ball_machine, false) as "addBallMachine",
           b.ball_machine_pass_id as "ballMachinePassId",
+          b.ball_machine_id as "ballMachineId",
           b.max_players as "maxPlayers",
           COALESCE(b.open_to_members, false) as "openToMembers",
           b.created_at as "createdAt",
@@ -620,6 +626,7 @@ export async function getBookingsByUser(
           b.notes,
           COALESCE(b.add_ball_machine, false) as "addBallMachine",
           b.ball_machine_pass_id as "ballMachinePassId",
+          b.ball_machine_id as "ballMachineId",
           b.max_players as "maxPlayers",
           COALESCE(b.open_to_members, false) as "openToMembers",
           b.created_at as "createdAt",
@@ -678,6 +685,8 @@ export type PendingCourtBookingPayload = {
   addBallMachine?: boolean;
   /** Set when a St. Marlow ball machine pass already covers the machine for this booking. */
   ballMachinePassId?: string | null;
+  /** The specific machine resolved pre-payment; null when the facility has no named machines. */
+  ballMachineId?: string | null;
 };
 
 function sameMemberId(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -733,6 +742,11 @@ export function parsePendingCourtBooking(raw: unknown): PendingCourtBookingPaylo
       ? String(r.ballMachinePassId)
       : r.ball_machine_pass_id
         ? String(r.ball_machine_pass_id)
+        : null,
+    ballMachineId: r.ballMachineId
+      ? String(r.ballMachineId)
+      : r.ball_machine_id
+        ? String(r.ball_machine_id)
         : null,
   };
 }
@@ -934,6 +948,8 @@ export async function createBooking(bookingData: {
   addBallMachine?: boolean;
   /** Pre-resolved pass coverage; set when finalizing a booking after Stripe checkout. */
   ballMachinePassId?: string | null;
+  /** Which named machine the client wants; ignored/auto-resolved when the facility has 0 or 1 active machines. */
+  ballMachineId?: string | null;
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
   successUrl?: string;
   cancelUrl?: string;
@@ -977,6 +993,8 @@ async function createBookingCore(bookingData: {
   addBallMachine?: boolean;
   /** Pre-resolved pass coverage; set when finalizing a booking after Stripe checkout. */
   ballMachinePassId?: string | null;
+  /** Which named machine the client wants; ignored/auto-resolved when the facility has 0 or 1 active machines. */
+  ballMachineId?: string | null;
   provisionalSameRequestBookings?: ProvisionalBookingSlice[];
   successUrl?: string;
   cancelUrl?: string;
@@ -1088,17 +1106,31 @@ async function createBookingCore(bookingData: {
 
     let settlementStatus: 'not_applicable' | 'unsettled' = 'not_applicable';
 
-    // A live St. Marlow ball machine pass makes the hourly fee $0 for this booking.
-    // Resolved once here and pinned onto the row below so post-play settlement and any
-    // later edit can't re-charge for a session the pass already covered.
-    // When finalizing after Stripe checkout the decision was already made pre-payment,
-    // so trust the value carried through pending_booking rather than re-resolving.
+    // Which physical machine this booking claims. null means the facility has no
+    // named machines configured — every call below then falls back to the legacy
+    // per-court fee + facility-wide lock, unchanged from before this feature shipped.
+    // A live pass (exact-machine or all-machines) makes the hourly fee $0 for this
+    // booking. Both are resolved once here and pinned onto the row below so
+    // post-play settlement and any later edit can't re-decide (or re-charge for a
+    // session the pass already covered).
+    // When finalizing after Stripe checkout, both decisions were already made
+    // pre-payment, so trust the values carried through pending_booking rather than
+    // re-resolving (the machine picked pre-checkout must be the one that's booked).
+    let ballMachineId: string | null = bookingData.ballMachineId ?? null;
+    // Substituted into court fee calculations once a machine is resolved; stays
+    // `undefined` (not `null`) otherwise so computeBookingFeeTotalCents/
+    // courtBookingNeedsPayment keep reading the legacy court field unchanged.
+    let ballMachineFeeCentsOverride: number | null | undefined = undefined;
     let ballMachinePassId: string | null = bookingData.ballMachinePassId ?? null;
     if (!bookingData.skipPaymentCheck && bookingData.addBallMachine) {
-      const { resolveBallMachineCoverage } = await import('./ballMachineService');
+      const { resolveSelectedMachine, resolveBallMachineCoverage } = await import('./ballMachineService');
+      const { machine } = await resolveSelectedMachine(bookingData.facilityId, bookingData.ballMachineId ?? null);
+      ballMachineId = machine?.id ?? null;
+      if (machine) ballMachineFeeCentsOverride = machine.hourlyFeeCents;
       const coverage = await resolveBallMachineCoverage(
         bookingData.facilityId,
         bookingData.userId,
+        ballMachineId,
         bookingData.addBallMachine
       );
       ballMachinePassId = coverage.passId;
@@ -1127,6 +1159,7 @@ async function createBookingCore(bookingData: {
             durationMinutes: bookingData.durationMinutes,
             bringGuest: true,
             addBallMachine: bookingData.addBallMachine && !ballMachinePassId,
+            ballMachineFeeCentsOverride,
           });
         }
       }
@@ -1141,6 +1174,7 @@ async function createBookingCore(bookingData: {
           bringGuest: bookingData.bringGuest,
           // Covered by a pass ⇒ contributes $0, so it must not force a checkout.
           addBallMachine: bookingData.addBallMachine && !ballMachinePassId,
+          ballMachineFeeCentsOverride,
         }
       );
 
@@ -1192,6 +1226,7 @@ async function createBookingCore(bookingData: {
             guestNames: bookingData.guestNames,
             addBallMachine: bookingData.addBallMachine || false,
             ballMachinePassId,
+            ballMachineId,
           },
           successUrl:
             bookingData.successUrl ||
@@ -1242,32 +1277,63 @@ async function createBookingCore(bookingData: {
           throw Object.assign(new Error('Time slot is already booked'), { code: 'BOOKING_CONFLICT' });
         }
 
-        // The ball machine is a club-wide resource, so the court lock above doesn't
-        // serialize claims on it — take the config row lock too, then count overlaps.
+        // The ball machine is a shared resource, so the court lock above doesn't
+        // serialize claims on it — take a machine-scoped lock too, then count overlaps.
+        // A resolved ballMachineId means the facility has named machines: lock and
+        // count against that one specific machine. Otherwise (legacy facility, no
+        // named machines) fall back to the old facility-wide config lock, unchanged.
         if (bookingData.addBallMachine) {
-          const { countOverlappingMachineClaims, lockMachineConfig } = await import(
-            './ballMachineService'
-          );
-          const { machineCount } = await lockMachineConfig(bookingData.facilityId, client);
-          const claimed = await countOverlappingMachineClaims(
-            {
-              facilityId: bookingData.facilityId,
-              bookingDate: bookingData.bookingDate,
-              startTime: bookingData.startTime,
-              endTime: bookingData.endTime,
-              excludeBookingId: bookingData.excludeBookingId,
-            },
-            client
-          );
-          if (claimed >= machineCount) {
-            throw Object.assign(
-              new Error(
-                machineCount === 1
-                  ? 'The ball machine is already reserved for that time.'
-                  : `All ${machineCount} ball machines are already reserved for that time.`
-              ),
-              { code: 'BOOKING_CONFLICT' }
+          if (ballMachineId) {
+            const { countOverlappingMachineClaimsForMachine, lockMachine } = await import(
+              './ballMachineService'
             );
+            const { machineCount } = await lockMachine(ballMachineId, client);
+            const claimed = await countOverlappingMachineClaimsForMachine(
+              {
+                facilityId: bookingData.facilityId,
+                machineId: ballMachineId,
+                bookingDate: bookingData.bookingDate,
+                startTime: bookingData.startTime,
+                endTime: bookingData.endTime,
+                excludeBookingId: bookingData.excludeBookingId,
+              },
+              client
+            );
+            if (claimed >= machineCount) {
+              throw Object.assign(
+                new Error(
+                  machineCount === 1
+                    ? 'That ball machine is already reserved for that time.'
+                    : `All ${machineCount} of that ball machine are already reserved for that time.`
+                ),
+                { code: 'BOOKING_CONFLICT' }
+              );
+            }
+          } else {
+            const { countOverlappingMachineClaims, lockMachineConfig } = await import(
+              './ballMachineService'
+            );
+            const { machineCount } = await lockMachineConfig(bookingData.facilityId, client);
+            const claimed = await countOverlappingMachineClaims(
+              {
+                facilityId: bookingData.facilityId,
+                bookingDate: bookingData.bookingDate,
+                startTime: bookingData.startTime,
+                endTime: bookingData.endTime,
+                excludeBookingId: bookingData.excludeBookingId,
+              },
+              client
+            );
+            if (claimed >= machineCount) {
+              throw Object.assign(
+                new Error(
+                  machineCount === 1
+                    ? 'The ball machine is already reserved for that time.'
+                    : `All ${machineCount} ball machines are already reserved for that time.`
+                ),
+                { code: 'BOOKING_CONFLICT' }
+              );
+            }
           }
         }
 
@@ -1330,9 +1396,9 @@ async function createBookingCore(bookingData: {
             activity_type, notes, bulletin_post_id, status, is_prime_time,
             bring_guest, add_ball_machine, settlement_status, ball_machine_pass_id,
             payment_mode, payment_deadline_at, front_desk_amount_due_cents, guest_names,
-            max_players, padel_session_id, booked_by_staff_id, walk_in_name
+            max_players, padel_session_id, booked_by_staff_id, walk_in_name, ball_machine_id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
           RETURNING
             id,
             series_id as "seriesId",
@@ -1351,6 +1417,7 @@ async function createBookingCore(bookingData: {
             is_prime_time as "isPrimeTime",
             add_ball_machine as "addBallMachine",
             ball_machine_pass_id as "ballMachinePassId",
+            ball_machine_id as "ballMachineId",
             payment_mode as "paymentMode",
             payment_deadline_at as "paymentDeadlineAt",
             front_desk_amount_due_cents as "frontDeskAmountDueCents",
@@ -1388,6 +1455,7 @@ async function createBookingCore(bookingData: {
             bookingData.padelSessionId ?? null,
             bookingData.bookedByStaffId || null,
             bookingData.walkInName || null,
+            ballMachineId,
           ]
         );
         return ins.rows[0];
@@ -2200,6 +2268,7 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
         b.notes,
         COALESCE(b.add_ball_machine, false) as "addBallMachine",
         b.ball_machine_pass_id as "ballMachinePassId",
+        b.ball_machine_id as "ballMachineId",
         b.max_players as "maxPlayers",
         COALESCE(b.open_to_members, false) as "openToMembers",
         b.created_at as "createdAt",

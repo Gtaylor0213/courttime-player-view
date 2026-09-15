@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { KeyRound, Target, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, KeyRound, Plus, Target, Trash2 } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -8,23 +8,59 @@ import { Switch } from '../ui/switch';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useAppContext } from '../../contexts/AppContext';
-import { adminApi, ballMachineApi, facilitiesApi, membersApi } from '../../api/client';
+import { ballMachineApi, membersApi } from '../../api/client';
 import { toast } from 'sonner';
 
 /**
- * Admin Ball Machine tab (st_marlow_ball_machine feature flag). Sets the keypad code,
- * how many machines exist, pass pricing, and the club-wide hourly rate; also lists and
- * comps passes.
+ * Admin Ball Machine tab (st_marlow_ball_machine feature flag).
  *
- * The hourly rate lives per-court (courts.ball_machine_fee_cents), so saving it here
- * bulk-applies to every court — same call SetFeesForAllPanel makes.
+ * A facility can configure one or more named machines (e.g. separate tennis and
+ * pickleball machines), each with its own keypad code, instructions, hourly rate,
+ * and pass pricing. A pass can also be sold as "all machines" (machineId null),
+ * covering every machine at the facility.
  */
 
 const DURATIONS = [1, 3, 6, 12] as const;
+const ALL_MACHINES_KEY = '__all__';
+
+interface Machine {
+  id: string;
+  name: string;
+  accessCode: string | null;
+  instructions: string | null;
+  hourlyFeeCents: number | null;
+  machineCount: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface MachineDraft {
+  name: string;
+  accessCode: string;
+  instructions: string;
+  hourlyDollars: string;
+  machineCountStr: string;
+}
+
+interface Product {
+  id: string;
+  machineId: string | null;
+  durationMonths: number;
+  priceCents: number;
+  isActive: boolean;
+}
+
+interface ProductForm {
+  durationMonths: number;
+  priceDollars: string;
+  isActive: boolean;
+}
 
 interface PassHolder {
   id: string;
   userId: string;
+  machineId: string | null;
+  machineName: string | null;
   fullName: string;
   email: string;
   durationMonths: number;
@@ -32,12 +68,6 @@ interface PassHolder {
   expiresAt: string;
   status: string;
   grantedBy: string | null;
-}
-
-interface ProductForm {
-  durationMonths: number;
-  priceDollars: string;
-  isActive: boolean;
 }
 
 function formatDate(iso: string): string {
@@ -56,67 +86,132 @@ function isLive(p: PassHolder): boolean {
   return p.status === 'active' && new Date(p.expiresAt) > new Date();
 }
 
+function draftFromMachine(m: Machine): MachineDraft {
+  return {
+    name: m.name,
+    accessCode: m.accessCode ?? '',
+    instructions: m.instructions ?? '',
+    hourlyDollars: m.hourlyFeeCents ? (m.hourlyFeeCents / 100).toFixed(2) : '',
+    machineCountStr: String(m.machineCount),
+  };
+}
+
+function productFormsFor(products: Product[], machineKey: string): ProductForm[] {
+  return DURATIONS.map((months) => {
+    const existing = products.find(
+      (p) => p.durationMonths === months && (p.machineId ?? ALL_MACHINES_KEY) === machineKey
+    );
+    return {
+      durationMonths: months,
+      priceDollars: existing ? (existing.priceCents / 100).toFixed(2) : '',
+      isActive: existing?.isActive ?? false,
+    };
+  });
+}
+
+/** Pricing sub-section shared by each machine card and the all-machines card. */
+function PricingEditor({
+  forms,
+  onChange,
+  onSave,
+  saving,
+}: {
+  forms: ProductForm[];
+  onChange: (next: ProductForm[]) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <p className="text-sm font-medium text-gray-900">Pass pricing</p>
+      <div className="space-y-2">
+        {forms.map((p, i) => (
+          <div key={p.durationMonths} className="flex items-center gap-3">
+            <span className="w-20 text-sm text-gray-700">{durationLabel(p.durationMonths)}</span>
+            <div className="relative flex-1 max-w-[140px]">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                className="pl-7 h-8"
+                value={p.priceDollars}
+                onChange={(e) =>
+                  onChange(forms.map((x, xi) => (xi === i ? { ...x, priceDollars: e.target.value } : x)))
+                }
+                placeholder="—"
+              />
+            </div>
+            <Switch
+              checked={p.isActive}
+              onCheckedChange={(checked) =>
+                onChange(forms.map((x, xi) => (xi === i ? { ...x, isActive: checked === true } : x)))
+              }
+            />
+            <span className="text-xs text-gray-500 w-16">{p.isActive ? 'For sale' : 'Hidden'}</span>
+          </div>
+        ))}
+      </div>
+      <Button size="sm" variant="outline" onClick={onSave} disabled={saving}>
+        {saving ? 'Saving…' : 'Save pricing'}
+      </Button>
+    </div>
+  );
+}
+
 export function BallMachineAdmin() {
   const { selectedFacilityId } = useAppContext();
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
 
-  const [accessCode, setAccessCode] = useState('');
-  const [machineCount, setMachineCount] = useState('1');
-  const [instructions, setInstructions] = useState('');
-  const [products, setProducts] = useState<ProductForm[]>([]);
-  const [hourlyDollars, setHourlyDollars] = useState('');
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, MachineDraft>>({});
+  const [productForms, setProductForms] = useState<Record<string, ProductForm[]>>({});
   const [holders, setHolders] = useState<PassHolder[]>([]);
+  const [addingMachine, setAddingMachine] = useState(false);
+  const [newMachineName, setNewMachineName] = useState('');
 
   const [members, setMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
   const [grantUserId, setGrantUserId] = useState('');
+  const [grantMachineKey, setGrantMachineKey] = useState<string>(ALL_MACHINES_KEY);
   const [grantMonths, setGrantMonths] = useState('12');
 
   const load = useCallback(async () => {
     if (!selectedFacilityId) return;
     try {
       setLoading(true);
-      const res: any = await ballMachineApi.getAdminConfig(selectedFacilityId);
-      if (!res.success || !res.data) {
+      const [machinesRes, productsRes, holdersRes]: any[] = await Promise.all([
+        ballMachineApi.getMachines(selectedFacilityId),
+        ballMachineApi.getProducts(selectedFacilityId),
+        ballMachineApi.getPassHolders(selectedFacilityId),
+      ]);
+
+      if (!machinesRes.success) {
         setUnavailable(true);
         return;
       }
       setUnavailable(false);
 
-      const config = res.data.config ?? {};
-      const saved: any[] = Array.isArray(res.data.products) ? res.data.products : [];
-      setAccessCode(config.accessCode ?? '');
-      setMachineCount(String(config.machineCount ?? 1));
-      setInstructions(config.instructions ?? '');
+      const machineList: Machine[] = Array.isArray(machinesRes.data) ? machinesRes.data : [];
+      setMachines(machineList);
 
-      // Always render all four durations, pre-filled where the club has set a price.
-      setProducts(
-        DURATIONS.map((months) => {
-          const existing = saved.find((p: any) => p.durationMonths === months);
-          return {
-            durationMonths: months,
-            priceDollars: existing ? (existing.priceCents / 100).toFixed(2) : '',
-            isActive: existing?.isActive ?? false,
-          };
-        })
-      );
+      const nextDrafts: Record<string, MachineDraft> = {};
+      machineList.forEach((m) => {
+        nextDrafts[m.id] = draftFromMachine(m);
+      });
+      setDrafts(nextDrafts);
 
-      const holdersRes: any = await ballMachineApi.getPassHolders(selectedFacilityId);
-      setHolders(
-        holdersRes.success && Array.isArray(holdersRes.data) ? holdersRes.data : []
-      );
+      const products: Product[] = Array.isArray(productsRes.data) ? productsRes.data : [];
+      const nextForms: Record<string, ProductForm[]> = {
+        [ALL_MACHINES_KEY]: productFormsFor(products, ALL_MACHINES_KEY),
+      };
+      machineList.forEach((m) => {
+        nextForms[m.id] = productFormsFor(products, m.id);
+      });
+      setProductForms(nextForms);
 
-      const courtsRes: any = await facilitiesApi.getCourts(selectedFacilityId);
-      const courts = courtsRes?.data?.courts ?? [];
-      const rates: number[] = courts
-        .map((c: any) => c.ballMachineFeeCents ?? c.ball_machine_fee_cents)
-        .filter((v: any) => v != null)
-        .map(Number);
-      // Only prefill when every court agrees, so saving doesn't silently flatten
-      // intentional per-court overrides.
-      const uniform = rates.length === courts.length && new Set(rates).size === 1;
-      setHourlyDollars(uniform && rates[0] ? (rates[0] / 100).toFixed(2) : '');
+      setHolders(Array.isArray(holdersRes.data) ? holdersRes.data : []);
     } catch (err) {
       console.error('Error loading ball machine admin:', err);
       setUnavailable(true);
@@ -145,32 +240,121 @@ export function BallMachineAdmin() {
       .catch(() => setMembers([]));
   }, [selectedFacilityId]);
 
-  const saveConfig = async () => {
-    if (!selectedFacilityId) return;
-    const count = parseInt(machineCount, 10);
-    if (!Number.isInteger(count) || count < 1) {
-      toast.error('Machine count must be at least 1');
+  const handleAddMachine = async () => {
+    if (!selectedFacilityId || !newMachineName.trim()) {
+      toast.error('Give the machine a name');
       return;
     }
-    setSaving('config');
+    setSaving('add-machine');
     try {
-      const res: any = await ballMachineApi.updateConfig(selectedFacilityId, {
-        accessCode: accessCode.trim() || null,
-        machineCount: count,
-        instructions: instructions.trim() || null,
+      const res: any = await ballMachineApi.createMachine(selectedFacilityId, {
+        name: newMachineName.trim(),
       });
-      if (res.success) toast.success('Ball machine settings saved');
-      else toast.error(res.error || 'Could not save settings');
+      if (res.success) {
+        toast.success('Machine added');
+        setNewMachineName('');
+        setAddingMachine(false);
+        await load();
+      } else {
+        toast.error(res.error || 'Could not add the machine');
+      }
     } finally {
       setSaving(null);
     }
   };
 
-  const savePricing = async () => {
+  const saveMachine = async (machineId: string) => {
     if (!selectedFacilityId) return;
-    const payload = products
+    const draft = drafts[machineId];
+    if (!draft) return;
+    const count = parseInt(draft.machineCountStr, 10);
+    if (!Number.isInteger(count) || count < 1) {
+      toast.error('Machine count must be at least 1');
+      return;
+    }
+    const dollars = draft.hourlyDollars.trim();
+    const cents = dollars === '' ? null : Math.round(parseFloat(dollars) * 100);
+    if (cents !== null && (!Number.isFinite(cents) || cents <= 0)) {
+      toast.error('Hourly rate must be a positive dollar amount, or blank for no charge');
+      return;
+    }
+
+    setSaving(`machine-${machineId}`);
+    try {
+      const res: any = await ballMachineApi.updateMachine(selectedFacilityId, machineId, {
+        name: draft.name.trim(),
+        accessCode: draft.accessCode.trim() || null,
+        instructions: draft.instructions.trim() || null,
+        hourlyFeeCents: cents,
+        machineCount: count,
+      });
+      if (res.success) {
+        toast.success('Machine saved');
+        await load();
+      } else {
+        toast.error(res.error || 'Could not save the machine');
+      }
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const toggleActive = async (machine: Machine) => {
+    if (!selectedFacilityId) return;
+    setSaving(`active-${machine.id}`);
+    try {
+      const res: any = machine.isActive
+        ? await ballMachineApi.deactivateMachine(selectedFacilityId, machine.id)
+        : await ballMachineApi.updateMachine(selectedFacilityId, machine.id, { isActive: true });
+      if (res.success) {
+        toast.success(machine.isActive ? 'Machine deactivated' : 'Machine reactivated');
+        await load();
+      } else {
+        toast.error(res.error || 'Could not update the machine');
+      }
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  // Active machines first (by sort order), inactive ones after — matches the
+  // order rendered below. moveMachine swaps within this exact sequence so the
+  // arrows move a card to where it visually appears to go, not its raw sortOrder
+  // slot (which can differ once an inactive machine sits between active ones).
+  const sortedMachines = [...machines].sort((a, b) => {
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+    return a.sortOrder - b.sortOrder;
+  });
+
+  const moveMachine = async (machineId: string, direction: -1 | 1) => {
+    if (!selectedFacilityId) return;
+    const ordered = sortedMachines.map((m) => m.id);
+    const idx = ordered.indexOf(machineId);
+    const swapWith = idx + direction;
+    if (idx < 0 || swapWith < 0 || swapWith >= ordered.length) return;
+    [ordered[idx], ordered[swapWith]] = [ordered[swapWith], ordered[idx]];
+
+    setSaving(`reorder-${machineId}`);
+    try {
+      const res: any = await ballMachineApi.reorderMachines(selectedFacilityId, ordered);
+      if (res.success) {
+        await load();
+      } else {
+        toast.error(res.error || 'Could not reorder machines');
+      }
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const savePricing = async (machineKey: string) => {
+    if (!selectedFacilityId) return;
+    const forms = productForms[machineKey] ?? [];
+    const machineId = machineKey === ALL_MACHINES_KEY ? null : machineKey;
+    const payload = forms
       .filter((p) => p.priceDollars.trim() !== '')
       .map((p) => ({
+        machineId,
         durationMonths: p.durationMonths,
         priceCents: Math.round(parseFloat(p.priceDollars) * 100),
         isActive: p.isActive,
@@ -185,45 +369,11 @@ export function BallMachineAdmin() {
       return;
     }
 
-    setSaving('pricing');
+    setSaving(`pricing-${machineKey}`);
     try {
       const res: any = await ballMachineApi.updateProducts(selectedFacilityId, payload);
       if (res.success) toast.success('Pass pricing saved');
       else toast.error(res.error || 'Could not save pricing');
-    } finally {
-      setSaving(null);
-    }
-  };
-
-  const saveHourly = async () => {
-    if (!selectedFacilityId) return;
-    const dollars = hourlyDollars.trim();
-    const cents = dollars === '' ? null : Math.round(parseFloat(dollars) * 100);
-    if (cents !== null && (!Number.isFinite(cents) || cents <= 0)) {
-      toast.error('Hourly rate must be a positive dollar amount, or blank for no charge');
-      return;
-    }
-
-    setSaving('hourly');
-    try {
-      const courtsRes: any = await facilitiesApi.getCourts(selectedFacilityId);
-      const courtIds = (courtsRes?.data?.courts ?? []).map((c: any) => c.id);
-      if (courtIds.length === 0) {
-        toast.error('This club has no courts to apply the rate to');
-        return;
-      }
-      const res: any = await adminApi.bulkUpdateCourts(courtIds, {
-        ballMachineFeeCents: cents,
-      });
-      if (res.success) {
-        toast.success(
-          cents === null
-            ? 'Hourly ball machine charge removed from all courts'
-            : `Hourly rate applied to ${courtIds.length} court${courtIds.length === 1 ? '' : 's'}`
-        );
-      } else {
-        toast.error(res.error || 'Could not apply the hourly rate');
-      }
     } finally {
       setSaving(null);
     }
@@ -236,9 +386,11 @@ export function BallMachineAdmin() {
     }
     setSaving('grant');
     try {
+      const machineId = grantMachineKey === ALL_MACHINES_KEY ? null : grantMachineKey;
       const res: any = await ballMachineApi.grantPass(
         selectedFacilityId,
         grantUserId,
+        machineId,
         parseInt(grantMonths, 10)
       );
       if (res.success) {
@@ -261,9 +413,7 @@ export function BallMachineAdmin() {
       if (res.success) {
         const count = res.data?.count ?? 1;
         toast.success(
-          count > 1
-            ? `Access ended — ${count} overlapping passes cancelled`
-            : 'Pass revoked'
+          count > 1 ? `Access ended — ${count} overlapping passes cancelled` : 'Pass revoked'
         );
         await load();
       } else {
@@ -291,159 +441,218 @@ export function BallMachineAdmin() {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
         <Target className="h-12 w-12 mb-3" />
-        <p className="text-sm">The St. Marlow Ball Machine isn't enabled for this facility.</p>
+        <p className="text-sm">The ball machine isn't enabled for this facility.</p>
       </div>
     );
   }
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-          <Target className="h-6 w-6 text-green-700" />
-          Ball Machine
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Set the keypad code and what members pay to use the machine.
-        </p>
-      </div>
-
-      {/* Access code + machines */}
-      <Card className="p-5 space-y-4">
-        <h2 className="font-medium text-gray-900 flex items-center gap-2">
-          <KeyRound className="h-4 w-4" />
-          Access
-        </h2>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="bm-code">Keypad code</Label>
-            <Input
-              id="bm-code"
-              value={accessCode}
-              onChange={(e) => setAccessCode(e.target.value)}
-              placeholder="e.g. 4821"
-              maxLength={32}
-            />
-            <p className="text-xs text-gray-500">
-              Everyone with access sees this code. Changing it takes effect immediately.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="bm-count">Machines at this club</Label>
-            <Input
-              id="bm-count"
-              type="number"
-              min="1"
-              value={machineCount}
-              onChange={(e) => setMachineCount(e.target.value)}
-            />
-            <p className="text-xs text-gray-500">
-              Overlapping bookings beyond this many are blocked.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="bm-instructions">Instructions (optional)</Label>
-          <Input
-            id="bm-instructions"
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-            placeholder="e.g. Machine is in the shed behind Court 4"
-          />
-        </div>
-
-        <Button onClick={saveConfig} disabled={saving === 'config'}>
-          {saving === 'config' ? 'Saving…' : 'Save access settings'}
-        </Button>
-      </Card>
-
-      {/* Pass pricing */}
-      <Card className="p-5 space-y-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-medium text-gray-900">Pass pricing</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            A pass is unlimited use for its term. Turn off any length you don't want to sell.
+          <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+            <Target className="h-6 w-6 text-green-700" />
+            Ball Machine
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Set up each machine's keypad code, instructions, and pricing. Add a second machine if you
+            have, say, a separate tennis and pickleball machine.
           </p>
         </div>
+        {!addingMachine && (
+          <Button variant="outline" size="sm" onClick={() => setAddingMachine(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add machine
+          </Button>
+        )}
+      </div>
 
-        <div className="space-y-3">
-          {products.map((p, i) => (
-            <div key={p.durationMonths} className="flex items-center gap-3">
-              <span className="w-24 text-sm font-medium text-gray-900">
-                {durationLabel(p.durationMonths)}
-              </span>
-              <div className="relative flex-1 max-w-[160px]">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-                  $
-                </span>
+      {addingMachine && (
+        <Card className="p-4 flex items-end gap-3">
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor="new-machine-name">Machine name</Label>
+            <Input
+              id="new-machine-name"
+              value={newMachineName}
+              onChange={(e) => setNewMachineName(e.target.value)}
+              placeholder="e.g. Pickleball Ball Machine"
+              autoFocus
+            />
+          </div>
+          <Button onClick={handleAddMachine} disabled={saving === 'add-machine'}>
+            {saving === 'add-machine' ? 'Adding…' : 'Add'}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setAddingMachine(false);
+              setNewMachineName('');
+            }}
+          >
+            Cancel
+          </Button>
+        </Card>
+      )}
+
+      {sortedMachines.map((machine, i) => {
+        const draft = drafts[machine.id] ?? draftFromMachine(machine);
+        const isFirst = i === 0;
+        const isLastActive =
+          machine.isActive &&
+          sortedMachines.filter((m) => m.isActive).slice(-1)[0]?.id === machine.id;
+
+        return (
+          <Card key={machine.id} className={`p-5 space-y-4 ${!machine.isActive ? 'opacity-60' : ''}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <Label htmlFor={`name-${machine.id}`}>Name</Label>
                 <Input
+                  id={`name-${machine.id}`}
+                  value={draft.name}
+                  onChange={(e) =>
+                    setDrafts((prev) => ({ ...prev, [machine.id]: { ...draft, name: e.target.value } }))
+                  }
+                />
+              </div>
+              <div className="flex items-center gap-1 pt-6 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={isFirst || saving === `reorder-${machine.id}`}
+                  onClick={() => moveMachine(machine.id, -1)}
+                  title="Move up"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={isLastActive || saving === `reorder-${machine.id}`}
+                  onClick={() => moveMachine(machine.id, 1)}
+                  title="Move down"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+                <div className="flex items-center gap-1.5 pl-2">
+                  <Switch
+                    checked={machine.isActive}
+                    onCheckedChange={() => toggleActive(machine)}
+                    disabled={saving === `active-${machine.id}`}
+                  />
+                  <span className="text-xs text-gray-500 w-14">
+                    {machine.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor={`code-${machine.id}`} className="flex items-center gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Keypad code
+                </Label>
+                <Input
+                  id={`code-${machine.id}`}
+                  value={draft.accessCode}
+                  onChange={(e) =>
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [machine.id]: { ...draft, accessCode: e.target.value },
+                    }))
+                  }
+                  placeholder="e.g. 4821"
+                  maxLength={32}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`count-${machine.id}`}>Units at this club</Label>
+                <Input
+                  id={`count-${machine.id}`}
+                  type="number"
+                  min="1"
+                  value={draft.machineCountStr}
+                  onChange={(e) =>
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [machine.id]: { ...draft, machineCountStr: e.target.value },
+                    }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor={`instructions-${machine.id}`}>Instructions (optional)</Label>
+              <Input
+                id={`instructions-${machine.id}`}
+                value={draft.instructions}
+                onChange={(e) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [machine.id]: { ...draft, instructions: e.target.value },
+                  }))
+                }
+                placeholder="e.g. Machine is in the shed behind Court 4"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor={`hourly-${machine.id}`}>Hourly rate (no pass)</Label>
+              <div className="relative w-[160px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                <Input
+                  id={`hourly-${machine.id}`}
                   type="number"
                   step="0.01"
                   min="0"
                   className="pl-7"
-                  value={p.priceDollars}
+                  value={draft.hourlyDollars}
                   onChange={(e) =>
-                    setProducts((prev) =>
-                      prev.map((x, xi) => (xi === i ? { ...x, priceDollars: e.target.value } : x))
-                    )
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [machine.id]: { ...draft, hourlyDollars: e.target.value },
+                    }))
                   }
                   placeholder="—"
                 />
               </div>
-              <Switch
-                checked={p.isActive}
-                onCheckedChange={(checked) =>
-                  setProducts((prev) =>
-                    prev.map((x, xi) => (xi === i ? { ...x, isActive: checked === true } : x))
-                  )
-                }
-              />
-              <span className="text-xs text-gray-500 w-16">
-                {p.isActive ? 'For sale' : 'Hidden'}
-              </span>
             </div>
-          ))}
-        </div>
 
-        <Button onClick={savePricing} disabled={saving === 'pricing'}>
-          {saving === 'pricing' ? 'Saving…' : 'Save pricing'}
-        </Button>
-      </Card>
+            <Button
+              size="sm"
+              onClick={() => saveMachine(machine.id)}
+              disabled={saving === `machine-${machine.id}`}
+            >
+              {saving === `machine-${machine.id}` ? 'Saving…' : 'Save machine'}
+            </Button>
 
-      {/* Hourly rate */}
-      <Card className="p-5 space-y-4">
+            <PricingEditor
+              forms={productForms[machine.id] ?? productFormsFor([], machine.id)}
+              onChange={(next) => setProductForms((prev) => ({ ...prev, [machine.id]: next }))}
+              onSave={() => savePricing(machine.id)}
+              saving={saving === `pricing-${machine.id}`}
+            />
+          </Card>
+        );
+      })}
+
+      {/* All-machines pass pricing */}
+      <Card className="p-5 space-y-2">
         <div>
-          <h2 className="font-medium text-gray-900">Hourly rate</h2>
+          <h2 className="font-medium text-gray-900">All-machines pass</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            What members without a pass pay per hour. Saving applies this to every court; you can
-            still override individual courts in Court Management.
+            A pass sold here covers every machine at the club, instead of just one.
           </p>
         </div>
-
-        <div className="flex items-end gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="bm-hourly">Per hour</Label>
-            <div className="relative w-[160px]">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
-              <Input
-                id="bm-hourly"
-                type="number"
-                step="0.01"
-                min="0"
-                className="pl-7"
-                value={hourlyDollars}
-                onChange={(e) => setHourlyDollars(e.target.value)}
-                placeholder="—"
-              />
-            </div>
-          </div>
-          <Button variant="outline" onClick={saveHourly} disabled={saving === 'hourly'}>
-            {saving === 'hourly' ? 'Applying…' : 'Apply to all courts'}
-          </Button>
-        </div>
+        <PricingEditor
+          forms={productForms[ALL_MACHINES_KEY] ?? productFormsFor([], ALL_MACHINES_KEY)}
+          onChange={(next) => setProductForms((prev) => ({ ...prev, [ALL_MACHINES_KEY]: next }))}
+          onSave={() => savePricing(ALL_MACHINES_KEY)}
+          saving={saving === `pricing-${ALL_MACHINES_KEY}`}
+        />
       </Card>
 
       {/* Pass holders */}
@@ -451,8 +660,8 @@ export function BallMachineAdmin() {
         <div>
           <h2 className="font-medium text-gray-900">Pass holders</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {holders.filter(isLive).length} member
-            {holders.filter(isLive).length === 1 ? '' : 's'} with a live pass.
+            {holders.filter(isLive).length} member{holders.filter(isLive).length === 1 ? '' : 's'} with a
+            live pass.
           </p>
         </div>
 
@@ -472,6 +681,24 @@ export function BallMachineAdmin() {
               </SelectContent>
             </Select>
           </div>
+          {machines.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-xs">Machine</Label>
+              <Select value={grantMachineKey} onValueChange={setGrantMachineKey}>
+                <SelectTrigger className="w-[170px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_MACHINES_KEY}>All machines</SelectItem>
+                  {machines.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1">
             <Label className="text-xs">Length</Label>
             <Select value={grantMonths} onValueChange={setGrantMonths}>
@@ -501,7 +728,8 @@ export function BallMachineAdmin() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{p.fullName}</p>
                   <p className="text-xs text-gray-500">
-                    {durationLabel(p.durationMonths)} · through {formatDate(p.expiresAt)}
+                    {p.machineName ?? 'All machines'} · {durationLabel(p.durationMonths)} · through{' '}
+                    {formatDate(p.expiresAt)}
                     {p.grantedBy ? ' · comped' : ''}
                   </p>
                 </div>

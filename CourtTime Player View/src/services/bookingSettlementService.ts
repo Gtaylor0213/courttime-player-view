@@ -303,6 +303,7 @@ export async function previewSettlement(
        COALESCE(b.bring_guest, false) AS "bringGuest",
        COALESCE(b.add_ball_machine, false) AS "addBallMachine",
        b.ball_machine_pass_id AS "ballMachinePassId",
+       b.ball_machine_id AS "ballMachineId",
        b.status
      FROM bookings b
      WHERE b.id = $1`,
@@ -320,6 +321,15 @@ export async function previewSettlement(
   }
 
   const court = await loadCourtPaymentSettings(booking.courtId);
+  // Once the booking claimed a specific named machine, that machine's own hourly
+  // rate is authoritative — not the court's ball_machine_fee_cents (which is the
+  // legacy per-court fallback for facilities with no named machines).
+  let ballMachineFeeCents = court?.ball_machine_fee_cents ?? null;
+  if (booking.ballMachineId) {
+    const { getMachine } = await import('./ballMachineService');
+    const machine = await getMachine(booking.facilityId, booking.ballMachineId);
+    ballMachineFeeCents = machine?.hourlyFeeCents ?? null;
+  }
   const computed = computeSettlementAmounts({
     ownerId: booking.ownerId,
     participantIds: participants.map((p) => p.userId),
@@ -328,7 +338,7 @@ export async function previewSettlement(
     billingMode: court?.billing_mode ?? 'hourly',
     dailyRateCents: court?.daily_rate_cents ?? null,
     guestFeeCents: court?.guest_fee_cents ?? null,
-    ballMachineFeeCents: court?.ball_machine_fee_cents ?? null,
+    ballMachineFeeCents,
     durationMinutes: Number(booking.durationMinutes) || 60,
     bringGuest: booking.bringGuest === true,
     addBallMachine: booking.addBallMachine === true,
@@ -824,7 +834,11 @@ export async function markFrontDeskFeeCollected(params: {
 export async function shouldUsePostPlaySettlement(
   facilityId: string,
   courtId: string,
-  options?: { bringGuest?: boolean; addBallMachine?: boolean }
+  options?: {
+    bringGuest?: boolean;
+    addBallMachine?: boolean;
+    ballMachineFeeCentsOverride?: number | null;
+  }
 ): Promise<{ usePostPlay: boolean; needsPayment: boolean }> {
   const courtRow = await loadCourtPaymentSettings(courtId);
   const needsPayment = courtBookingNeedsPayment(courtRow, options);

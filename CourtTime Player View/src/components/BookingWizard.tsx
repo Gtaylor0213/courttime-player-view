@@ -176,6 +176,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [guestNames, setGuestNames] = useState<string[]>([]);
   const [addBallMachine, setAddBallMachine] = useState(false);
   const [showBallMachineCode, setShowBallMachineCode] = useState(false);
+  const [ballMachines, setBallMachines] = useState<
+    Array<{ id: string; name: string; isActive: boolean; hourlyFeeCents: number | null; machineCount: number }>
+  >([]);
+  const [ballMachineActivePasses, setBallMachineActivePasses] = useState<Array<{ machineId: string | null }>>([]);
+  const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [existingBookings, setExistingBookings] = useState<Record<string, Set<string>>>({});
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
   const { showToast, addNotification } = useNotifications();
@@ -196,7 +201,6 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     : bhrReservationTypes
     ? BHR_RESERVATION_TYPE_KEYS
     : RESERVATION_LABEL_TYPE_KEYS;
-  const [hasBallMachinePass, setHasBallMachinePass] = useState(false);
   /** Effective open/close window per court for the selected day (facility hours merged with any court override). */
   const [courtDayOperating, setCourtDayOperating] = useState<Record<string, CourtDayOperatingBounds>>({});
 
@@ -240,25 +244,58 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     };
   }, [isOpen, facilityId, date]);
 
-  // A live St. Marlow pass means the ball machine costs nothing on this booking.
+  // Which named machines this facility has configured, and any live passes —
+  // a pass (exact-machine or all-machines) means the ball machine costs nothing.
   useEffect(() => {
     if (!isOpen || !facilityId || !ballMachineEnabled) {
-      setHasBallMachinePass(false);
+      setBallMachines([]);
+      setBallMachineActivePasses([]);
       return;
     }
     let cancelled = false;
     ballMachineApi
       .getStatus(facilityId)
       .then((res: any) => {
-        if (!cancelled) setHasBallMachinePass(Boolean(res?.success && res.data?.activePass));
+        if (cancelled) return;
+        if (res?.success) {
+          setBallMachines(Array.isArray(res.data?.machines) ? res.data.machines : []);
+          setBallMachineActivePasses(Array.isArray(res.data?.activePasses) ? res.data.activePasses : []);
+        } else {
+          setBallMachines([]);
+          setBallMachineActivePasses([]);
+        }
       })
       .catch(() => {
-        if (!cancelled) setHasBallMachinePass(false);
+        if (!cancelled) {
+          setBallMachines([]);
+          setBallMachineActivePasses([]);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [isOpen, facilityId, ballMachineEnabled]);
+
+  // 0 active machines: legacy facility, no picker. 1: auto-selected, no picker.
+  // 2+: the member must choose; reset the selection if it no longer applies.
+  const activeBallMachines = useMemo(() => ballMachines.filter((m) => m.isActive), [ballMachines]);
+  useEffect(() => {
+    if (activeBallMachines.length === 1) {
+      setSelectedMachineId(activeBallMachines[0].id);
+    } else if (!activeBallMachines.some((m) => m.id === selectedMachineId)) {
+      setSelectedMachineId(null);
+    }
+  }, [activeBallMachines, selectedMachineId]);
+
+  const selectedBallMachine = useMemo(
+    () => activeBallMachines.find((m) => m.id === selectedMachineId) ?? null,
+    [activeBallMachines, selectedMachineId]
+  );
+
+  const hasBallMachinePass = useMemo(() => {
+    if (!selectedMachineId) return false;
+    return ballMachineActivePasses.some((p) => p.machineId === selectedMachineId || p.machineId === null);
+  }, [ballMachineActivePasses, selectedMachineId]);
 
   // Per-court availability (same API as mobile book flow)
   useEffect(() => {
@@ -359,11 +396,17 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     return meta?.guestFeeCents ?? null;
   }, [selectedCourts, facilityCourts]);
 
+  // Once the facility has named machines, pricing comes from the selected machine's
+  // own hourly rate — not the court's field, which is the legacy fallback for a
+  // facility that has never configured a named machine.
   const primaryCourtBallMachineFeeCents = useMemo(() => {
     if (selectedCourts.length !== 1) return null;
+    if (activeBallMachines.length > 0) {
+      return selectedBallMachine?.hourlyFeeCents ?? null;
+    }
     const meta = facilityCourts.find((fc) => fc.id === selectedCourts[0].courtId);
     return meta?.ballMachineFeeCents ?? null;
-  }, [selectedCourts, facilityCourts]);
+  }, [selectedCourts, activeBallMachines, selectedBallMachine, facilityCourts]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -388,6 +431,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       setGuestCount(0);
       setGuestNames([]);
       setAddBallMachine(false);
+      setSelectedMachineId(null);
       setBookForMode('self');
       setBookForMemberId(null);
       setBookForMemberLabel(null);
@@ -626,6 +670,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       return;
     }
 
+    if (addBallMachine && activeBallMachines.length > 1 && !selectedMachineId) {
+      showToast('error', 'Error', 'Please choose which ball machine to add.');
+      return;
+    }
+
     // Court-specific waivers must be accepted before booking
     const waiversAccepted = await courtWaiverGate.ensureAccepted(
       selectedCourts.map((c) => c.courtId)
@@ -730,6 +779,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                 guestNames: guestCount > 0 ? guestNames.slice(0, guestCount).map(n => n.trim()) : undefined,
                 bringGuest: guestCount > 0 || undefined,
                 addBallMachine: addBallMachine || undefined,
+                machineId: addBallMachine && selectedMachineId ? selectedMachineId : undefined,
                 splitParticipantIds: splitPayment ? splitMembers.map((member) => member.userId) : undefined,
                 provisionalSameRequestBookings: prior.length > 0 ? [...prior] : undefined,
                 payAtFrontDesk: payAtFrontDesk || undefined
@@ -893,12 +943,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   return (
     <>
     <CourtWaiverAcceptanceDialog {...courtWaiverGate.dialogProps} />
-    <BallMachineAccessDialog
-      isOpen={showBallMachineCode}
-      onClose={() => setShowBallMachineCode(false)}
-      facilityId={facilityId}
-      bookingSummary={`${court} · ${date} · ${startTime} – ${endTime}`}
-    />
+    {selectedMachineId && (
+      <BallMachineAccessDialog
+        isOpen={showBallMachineCode}
+        onClose={() => setShowBallMachineCode(false)}
+        facilityId={facilityId}
+        machineId={selectedMachineId}
+        bookingSummary={`${court} · ${date} · ${startTime} – ${endTime}`}
+      />
+    )}
     <Dialog open={isOpen} onOpenChange={() => !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90dvh] sm:max-h-[calc(100dvh-5rem)] overflow-y-auto sm:top-4 sm:translate-y-0">
         <DialogHeader>
@@ -1230,28 +1283,44 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
 
           {/* Ball machine */}
           {showBallMachineOption && selectedCourts.length === 1 && !advancedBooking && (
-            <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
-              <div>
-                <Label htmlFor="addBallMachine" className="text-sm font-medium cursor-pointer">
-                  Add ball machine
-                </Label>
-                <p className="text-xs text-gray-500">
-                  {hasBallMachinePass
-                    ? 'Included with your pass'
-                    : primaryCourtBallMachineFeeCents
-                      ? `$${(primaryCourtBallMachineFeeCents / 100).toFixed(2)}/hr${
-                          addBallMachine && durationLabel
-                            ? ` × ${durationLabel} = $${(ballMachineTotalCents / 100).toFixed(2)}`
-                            : ''
-                        }`
-                    : 'No charge'}
-                </p>
+            <div className="space-y-2 rounded-md border px-3 py-2">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor="addBallMachine" className="text-sm font-medium cursor-pointer">
+                    Add ball machine
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    {hasBallMachinePass
+                      ? 'Included with your pass'
+                      : primaryCourtBallMachineFeeCents
+                        ? `$${(primaryCourtBallMachineFeeCents / 100).toFixed(2)}/hr${
+                            addBallMachine && durationLabel
+                              ? ` × ${durationLabel} = $${(ballMachineTotalCents / 100).toFixed(2)}`
+                              : ''
+                          }`
+                      : 'No charge'}
+                  </p>
+                </div>
+                <Checkbox
+                  id="addBallMachine"
+                  checked={addBallMachine}
+                  onCheckedChange={(checked) => setAddBallMachine(checked === true)}
+                />
               </div>
-              <Checkbox
-                id="addBallMachine"
-                checked={addBallMachine}
-                onCheckedChange={(checked) => setAddBallMachine(checked === true)}
-              />
+              {addBallMachine && activeBallMachines.length > 1 && (
+                <Select value={selectedMachineId ?? undefined} onValueChange={setSelectedMachineId}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Choose a machine" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeBallMachines.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
 

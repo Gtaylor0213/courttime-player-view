@@ -123,6 +123,15 @@ export async function publishGeneralRulesVersion(
       [facilityId]
     );
 
+    // Keep facilities.general_rules (shown on the Club Info page) in sync with the
+    // latest published version, so there's a single place admins edit this content.
+    await client.query(
+      `UPDATE facilities
+       SET general_rules = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [facilityId, contentHtml]
+    );
+
     return mapGeneralRulesVersion(insertResult.rows[0]);
   });
 }

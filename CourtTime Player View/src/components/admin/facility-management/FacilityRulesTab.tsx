@@ -3,10 +3,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
-import { Textarea } from '../../ui/textarea';
 import {
   Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users,
-  Upload, Shield, AlertTriangle, Zap, Home, FileText, Calendar, ChevronDown, ChevronRight, Info,
+  Upload, AlertTriangle, Zap, Home, FileText, Calendar, ChevronDown, ChevronRight, Info,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { TabsContent } from '../../ui/tabs';
@@ -88,34 +87,6 @@ export function FacilityRulesTab(props: Props) {
   </div>
 
   <div className="space-y-6">
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Shield className="h-5 w-5" />
-          Club Info Rules Summary
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
-          <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-green-800">
-            Public informational text shown on the Club Info page. Members do not need to accept this — for a rules document members must formally accept (and re-accept when updated), use "General Rules" below.
-          </p>
-        </div>
-        <div>
-          <Label>Rules Summary (shown on Club Info page)</Label>
-          <Textarea
-            value={facilityData.bookingRules.generalRules}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleBookingRulesChange('generalRules', e.target.value)}
-            placeholder="Enter your facility's general booking rules"
-            className="min-h-[100px] mt-1"
-            disabled={!isEditing}
-          />
-        </div>
-      </CardContent>
-      {renderSectionSaveFooter('general rules')}
-    </Card>
-
     <GeneralRulesManager />
 
     <Card>

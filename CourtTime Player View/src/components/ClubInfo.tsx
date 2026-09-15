@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { useParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { ArrowLeft, MapPin, Phone, Mail, Globe, Clock, Users, Star, Calendar, Clipboard, AlertCircle } from 'lucide-react';
@@ -258,6 +259,17 @@ export function ClubInfo() {
   };
 
   const renderSafeText = (value: any): string => safeDisplayText(value);
+
+  // General Rules content can be plain text or HTML (admins may paste either in the
+  // General Rules admin editor), so sanitize + detect like the acceptance-gate views do.
+  const sanitizedGeneralRules = useMemo(
+    () => (facility?.generalRules ? DOMPurify.sanitize(facility.generalRules) : ''),
+    [facility?.generalRules]
+  );
+  const generalRulesIsPlainText = useMemo(
+    () => !/<\/?[a-z][^>]*>/i.test(facility?.generalRules || ''),
+    [facility?.generalRules]
+  );
 
   /** Hours label for max booking duration; aligns with admin `maxReservationDuration` (minutes) and legacy flat keys. */
   const getMaxBookingDurationHoursLabel = (bookingRules: any): string | null => {
@@ -672,7 +684,10 @@ export function ClubInfo() {
                   {/* General rules text */}
                   {facility.generalRules && (
                     <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{renderSafeText(facility.generalRules)}</p>
+                      <div
+                        className={`text-sm text-gray-700 ${generalRulesIsPlainText ? 'whitespace-pre-wrap' : ''}`}
+                        dangerouslySetInnerHTML={{ __html: sanitizedGeneralRules }}
+                      />
                     </div>
                   )}
                   {/* Structured rules from booking configuration */}

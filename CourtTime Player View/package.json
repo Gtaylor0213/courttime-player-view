@@ -72,7 +72,7 @@
     "test:mobile": "npm --prefix mobile run test:ci",
     "typecheck:mobile": "npm --prefix mobile run typecheck",
     "expo:start": "npm --prefix mobile start",
-    "postinstall": "npm --prefix mobile install"
+    "mobile:install": "npm --prefix mobile install"
   },
   "description": "This is a code bundle for CourtTime Player View. The original project is available at https://www.figma.com/design/UQjuGWTemayM81rKCsqEHl/CourtTime-Player-View.",
   "keywords": [],

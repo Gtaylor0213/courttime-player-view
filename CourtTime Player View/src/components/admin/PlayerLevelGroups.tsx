@@ -485,7 +485,7 @@ export function PlayerLevelGroups({ facilityId }: PlayerLevelGroupsProps) {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-gray-600">
-          Levels run strongest at the top. Drag players between levels, or use the menu on each
+          Groups run strongest at the top. Drag players between groups, or use the menu on each
           player. {saving && <span className="text-gray-400">Saving…</span>}
         </p>
         <div className="flex gap-2">
@@ -541,9 +541,9 @@ export function PlayerLevelGroups({ facilityId }: PlayerLevelGroupsProps) {
           {board.groups.length === 0 ? (
             <div className="rounded-lg border border-dashed bg-card p-8 text-center">
               <Layers className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-              <p className="text-sm font-medium text-gray-700">No levels yet</p>
+              <p className="text-sm font-medium text-gray-700">No groups yet</p>
               <p className="mt-1 text-sm text-gray-500">
-                Add your first level above, then drag players into it.
+                Add your first group above, then drag players into it.
               </p>
             </div>
           ) : (
@@ -599,7 +599,7 @@ export function PlayerLevelGroups({ facilityId }: PlayerLevelGroupsProps) {
                       className="mr-1 flex cursor-pointer items-center gap-1.5 text-xs text-gray-500"
                       title={
                         group.isVisibleToPlayers
-                          ? 'Players in this level can see it'
+                          ? 'Players in this group can see it'
                           : 'Hidden from players'
                       }
                     >
@@ -623,7 +623,7 @@ export function PlayerLevelGroups({ facilityId }: PlayerLevelGroupsProps) {
                       title={
                         group.members.length > GROUP_CHAT_LIMIT
                           ? `Group chats are limited to ${GROUP_CHAT_LIMIT} members`
-                          : 'Start a group chat with this level'
+                          : 'Start a group chat with this group'
                       }
                     >
                       <MessageCircle className="mr-1 h-4 w-4" />
@@ -707,7 +707,7 @@ export function PlayerLevelGroups({ facilityId }: PlayerLevelGroupsProps) {
             {filteredUnassigned.length === 0 ? (
               <p className="py-4 text-center text-sm text-gray-400">
                 {board.unassigned.length === 0
-                  ? 'Everyone is placed in a level'
+                  ? 'Everyone is placed in a group'
                   : 'No players match that search'}
               </p>
             ) : (

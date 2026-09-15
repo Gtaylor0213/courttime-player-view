@@ -63,9 +63,9 @@ export function MyLevelGroup({ facilityId }: MyLevelGroupProps) {
       <Card>
         <CardContent className="p-8 text-center">
           <Layers className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-          <p className="text-sm font-medium text-gray-700">You're not in a level group yet</p>
+          <p className="text-sm font-medium text-gray-700">You're not in a group yet</p>
           <p className="mt-1 text-sm text-gray-500">
-            Your facility's staff group players by level. Once you're placed in one, you'll see
+            Your facility's staff sort players into groups. Once you're placed in one, you'll see
             your group and its other players here.
           </p>
         </CardContent>
@@ -82,13 +82,13 @@ export function MyLevelGroup({ facilityId }: MyLevelGroupProps) {
           <Layers className="h-5 w-5 text-green-600" />
           <span>{group.name}</span>
           <Badge variant="secondary">
-            Level {group.rank} of {group.totalGroups}
+            Group {group.rank} of {group.totalGroups}
           </Badge>
         </CardTitle>
         <p className="text-sm text-gray-500">
           {members.length === 0
-            ? 'You are the only player in this level right now.'
-            : `${members.length} other player${members.length === 1 ? '' : 's'} at your level — message anyone to set up a hit.`}
+            ? 'You are the only player in this group right now.'
+            : `${members.length} other player${members.length === 1 ? '' : 's'} in your group — message anyone to set up a hit.`}
         </p>
       </CardHeader>
       <CardContent className="p-3">

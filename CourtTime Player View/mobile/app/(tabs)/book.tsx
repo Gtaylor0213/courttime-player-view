@@ -27,6 +27,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
+import { ScheduleOverview } from '../../src/components/ScheduleOverview';
 import { TimePicker, PICKER_HEIGHT } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api, paymentApi } from '../../src/api/client';
@@ -206,6 +207,8 @@ export default function BookCourtScreen() {
   // bringGuest boolean, so admins saw nameless guests on the reservation.
   const [guestCount, setGuestCount] = useState(0);
   const [guestNames, setGuestNames] = useState<string[]>([]);
+  /** Day is the default; the overview is an alternative behind week_month_view. */
+  const [calendarViewMode, setCalendarViewMode] = useState<'day' | 'overview'>('day');
   const [splitPayment, setSplitPayment] = useState(false);
   const [splitMembers, setSplitMembers] = useState<SplitPaymentMember[]>([]);
   const bringGuest = guestCount > 0;
@@ -221,6 +224,7 @@ export default function BookCourtScreen() {
   const canUseRecurring = isAdmin || isFeatureEnabled(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   // Reservation type list, same precedence as web's BookingWizard: Deer Lake's
   // list replaces the standard one, BHR's appends "Party" to it.
+  const weekMonthViewEnabled = isFeatureEnabled(FEATURE_FLAGS.WEEK_MONTH_VIEW);
   const splitCourtPaymentsEnabled = isFeatureEnabled(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const postPlaySettlementEnabled = isFeatureEnabled(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
@@ -1304,15 +1308,57 @@ export default function BookCourtScreen() {
           }}
         />
       ) : facilityId ? (
-        <CourtCalendarGrid
-          courts={courts}
-          selectedDate={selectedDate}
-          facilityId={facilityId}
-          onBookingSelected={handleCalendarGridSelection}
-          onBookedSlotPress={onBookedSlotPress}
-          onInteractionLockChange={onCalendarInteractionLock}
-          onRequestToday={onRequestTodayForGrid}
-        />
+        <>
+          {weekMonthViewEnabled && (
+            <View style={styles.calendarViewSwitch}>
+              {(['day', 'overview'] as const).map((viewMode) => (
+                <TouchableOpacity
+                  key={viewMode}
+                  style={[
+                    styles.calendarViewChip,
+                    calendarViewMode === viewMode && styles.typeChipSelected,
+                  ]}
+                  onPress={() => setCalendarViewMode(viewMode)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: calendarViewMode === viewMode }}
+                  accessibilityLabel={viewMode === 'day' ? 'Day view' : 'Week and month overview'}
+                >
+                  <Text
+                    style={[
+                      styles.typeChipText,
+                      calendarViewMode === viewMode && styles.typeChipTextSelected,
+                    ]}
+                  >
+                    {viewMode === 'day' ? 'Day' : 'Week / Month'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {weekMonthViewEnabled && calendarViewMode === 'overview' ? (
+            <ScheduleOverview
+              facilityId={facilityId}
+              selectedDate={selectedDate}
+              onSelectDate={(date) => {
+                // Match web's "switch to court view": pick the day, show it.
+                setSelectedDate(date);
+                setSelectedBookDate(date);
+                setCalendarViewMode('day');
+              }}
+            />
+          ) : (
+            <CourtCalendarGrid
+              courts={courts}
+              selectedDate={selectedDate}
+              facilityId={facilityId}
+              onBookingSelected={handleCalendarGridSelection}
+              onBookedSlotPress={onBookedSlotPress}
+              onInteractionLockChange={onCalendarInteractionLock}
+              onRequestToday={onRequestTodayForGrid}
+            />
+          )}
+        </>
       ) : null}
 
       <View style={{ height: Spacing.xl }} />
@@ -2166,6 +2212,19 @@ const styles = StyleSheet.create({
   typeChipTextSelected: {
     color: Colors.primary,
     fontWeight: '600',
+  },
+  calendarViewSwitch: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  calendarViewChip: {
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   guestSection: {
     gap: Spacing.sm,

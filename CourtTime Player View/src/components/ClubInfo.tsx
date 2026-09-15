@@ -10,6 +10,7 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { facilitiesApi, facilityLocationsApi, courtConfigApi } from '../api/client';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
+import { getMaxBookingDurationDisplay } from '../../shared/utils/clubInfoRules';
 import {
   courtScheduleRowsToOperatingHoursMap,
   groupOperatingHoursForCompactDisplay,
@@ -283,73 +284,6 @@ export function ClubInfo() {
     [facility?.generalRules]
   );
 
-  /** Hours label for max booking duration; aligns with admin `maxReservationDuration` (minutes) and legacy flat keys. */
-  const getMaxBookingDurationHoursLabel = (bookingRules: any): string | null => {
-    if (!bookingRules || typeof bookingRules !== 'object') return null;
-    const mrd = bookingRules.maxReservationDuration;
-    if (mrd && typeof mrd === 'object') {
-      if (mrd.enabled === false) return null;
-      const limitMin = Number(mrd.limit);
-      if (Number.isFinite(limitMin) && limitMin > 0 && mrd.enabled !== false) {
-        const hours = limitMin / 60;
-        const label = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
-        return renderRuleValue(label);
-      }
-    }
-    if (bookingRules.maxReservationDurationEnabled === false) return null;
-    if (bookingRules.maxReservationDurationEnabled === true) {
-      const flatMin = Number(bookingRules.maxReservationDurationMinutes);
-      if (Number.isFinite(flatMin) && flatMin > 0) {
-        const totalMin = flatMin <= 12 ? Math.round(flatMin * 60) : Math.round(flatMin);
-        const hours = totalMin / 60;
-        const label = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
-        return renderRuleValue(label);
-      }
-    }
-    if (bookingRules.maxBookingDurationUnlimited === true) return null;
-    if (bookingRules.maxBookingDurationUnlimited === false) {
-      return renderRuleValue(bookingRules.maxBookingDurationHours);
-    }
-    return null;
-  };
-
-  const formatMinutesAsHoursLabel = (totalMin: number): string | null => {
-    const hours = totalMin / 60;
-    const label = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
-    return renderRuleValue(label);
-  };
-
-  /**
-   * Mirrors the tennis/pickleball override precedence in the booking rules
-   * engine (rulesEngine/index.ts): when the per-court-type max duration is
-   * enabled, each court type uses its own override if set, otherwise falls
-   * back to the facility's default max duration.
-   */
-  const getMaxBookingDurationDisplay = (
-    bookingRules: any
-  ): { tennis: string | null; pickleball: string | null } | string | null => {
-    if (!bookingRules || typeof bookingRules !== 'object') return null;
-
-    const defaultLabel = getMaxBookingDurationHoursLabel(bookingRules);
-
-    const byCourtType = bookingRules.maxReservationDurationByCourtType;
-    const byCourtTypeEnabled =
-      byCourtType && typeof byCourtType === 'object'
-        ? byCourtType.enabled === true
-        : bookingRules.maxReservationDurationByCourtTypeEnabled === true;
-
-    if (!byCourtTypeEnabled) return defaultLabel;
-
-    const tennisMin = Number(byCourtType?.tennisMinutes ?? bookingRules.maxReservationDurationTennisMinutes) || 0;
-    const pickleballMin = Number(byCourtType?.pickleballMinutes ?? bookingRules.maxReservationDurationPickleballMinutes) || 0;
-
-    const tennisLabel = tennisMin > 0 ? formatMinutesAsHoursLabel(tennisMin) : defaultLabel;
-    const pickleballLabel = pickleballMin > 0 ? formatMinutesAsHoursLabel(pickleballMin) : defaultLabel;
-
-    if (tennisLabel === pickleballLabel) return tennisLabel;
-
-    return { tennis: tennisLabel, pickleball: pickleballLabel };
-  };
 
   if (loading) {
     return (

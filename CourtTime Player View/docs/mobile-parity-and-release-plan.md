@@ -133,8 +133,8 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 | 4 | ~~Member number prompt~~ ✅ **done** | `member_number` | Mobile never asked, so those members had no number on file |
 | 5 | ~~Split court payments~~ ✅ **done** | `split_court_payments` | Entirely absent on mobile |
 | 6 | ~~Guest count + names~~ ✅ **done** | — | Mobile sent a bare `bringGuest` boolean, so admins saw nameless guests |
-| 7 | Club Info: rules, General Rules, per-court-type max duration | `general_rules`, `court_type_max_duration` | `a603537`, `c3f6971`, `84d61a0` |
-| 8 | Week/month calendar overview | `week_month_view` *(default ON)* | `b89a408`; mobile is day-view only |
+| 7 | ~~Club Info: rules, General Rules, per-court-type max duration~~ ✅ **done** | `general_rules`, `court_type_max_duration` | `a603537`, `c3f6971`, `84d61a0` |
+| 8 | ~~Week/month calendar overview~~ ✅ **done** | `week_month_view` *(default ON)* | `b89a408`; mobile was day-view only |
 | 9 | University Club "pay at front desk" | `university_club_guest_fee` | `85545f8` |
 | 10 | Daily vs. hourly court billing | `court_daily_billing` | `4f8d109` |
 | 11 | ~~BHR "Party" reservation type~~ ✅ **done** (with item 3) | `bhr_reservation_types` | `bc5e401` |
@@ -146,7 +146,13 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 
 Lessons, Pro Shop, Padel and My Level Group appear in this window too, but they are new screens and belong to Phase 3.
 
-**Landed so far:** items 1–6 and 11. Ten remain (7–10, 12–16).
+**Landed so far:** items 1–8 and 11. Eight remain (9, 10, 12–16).
+
+**Item 7 — Club Info rules.** The max-duration precedence was worth sharing rather than porting: three generations of key names plus the tennis/pickleball split, mirroring the rules engine. It now lives in `shared/utils/clubInfoRules.ts` with 26 tests, **web was refactored onto it** (67 lines of duplicated logic deleted from `ClubInfo.tsx`), and mobile renders the same rows. Also shared: `parseBookingRules`, which handles the booking rules arriving as an object *or* a JSON string with `peakHoursSlots` itself sometimes double-encoded. Mobile gates the section on membership and General Rules text on its flag, as web does, rendering the HTML through `htmlToDisplayText`.
+
+**Item 8 — week/month overview.** A 7-column time grid is unreadable on a phone, so mobile shows the same information in two shapes that suit the screen: a **week agenda** (seven days, each listing its bookings) and a **month grid** of per-day booking counts. Tapping any day hands the date back and switches to the day view — the equivalent of web's "switch to court view". Range maths live in `shared/utils/scheduleOverview.ts` (23 tests) so both clients agree on what a week is; the Monday anchoring and the month-step-from-the-31st case are both covered.
+
+One thing to watch: the month mode issues **one request per day**, 31 on a long month, because that is what the existing `/api/bookings/facility/:id?date=` endpoint allows — web does the same. It is worth a date-range endpoint before this sees heavy mobile use on cellular.
 
 **Items 3 + 11 — reservation type lists.** `reservationTypeKeys` now follows web's precedence (Deer Lake replaces the standard list, BHR appends "Party"), the type is required where Deer Lake requires it, and the label drops "(Optional)" accordingly. The subtle part: mobile defaults `bookingType` to `match`, which Deer Lake's list does not contain — so the chip row would have shown nothing selected while still submitting `match`, and the new required-type check would have waved it through. An effect clears a selection the active list does not offer.
 

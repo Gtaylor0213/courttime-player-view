@@ -20,6 +20,14 @@ import { api } from '../src/api/client';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useFeatureFlags } from '../src/contexts/FeatureFlagContext';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import {
+  getClubInfoRuleRows,
+  getPeakHoursSlotDisplays,
+  parseBookingRules,
+} from '../../shared/utils/clubInfoRules';
+import { htmlToDisplayText } from '../src/utils/htmlToText';
 import { OperatingHoursCard } from '../src/components/OperatingHoursCard';
 import { EmptyState } from '../src/components/EmptyState';
 import { CardSkeleton } from '../src/components/LoadingSkeleton';
@@ -47,6 +55,10 @@ interface FacilityData {
   operatingHours?: Record<string, { open: string; close: string; closed?: boolean }>;
   memberCount?: number;
   status?: string;
+  /** Plain text or HTML, authored in the General Rules admin editor. */
+  generalRules?: string;
+  /** Stored as an object or a JSON string — see parseBookingRules. */
+  bookingRules?: unknown;
 }
 
 interface CourtData {
@@ -84,6 +96,7 @@ export default function ClubInfoScreen() {
   const router = useRouter();
   const { facilityId: routeFacilityId } = useLocalSearchParams<{ facilityId: string }>();
   const { user, facilityId: authFacilityId, isLoading: authLoading } = useAuth();
+  const { isFeatureEnabled } = useFeatureFlags();
   const resolvedFacilityId = routeFacilityId || authFacilityId || null;
   const [facility, setFacility] = useState<FacilityData | null>(null);
   const [courts, setCourts] = useState<CourtData[]>([]);
@@ -224,6 +237,16 @@ export default function ClubInfoScreen() {
   }
 
   const address = [facility.streetAddress, facility.city, facility.state, facility.zipCode].filter(Boolean).join(', ');
+  // Booking rules are members-only on web; match that here.
+  const isMember =
+    (user?.memberFacilities?.includes(facility.id) ?? false) ||
+    (user?.adminFacilities?.includes(facility.id) ?? false);
+  const generalRulesEnabled = isFeatureEnabled(FEATURE_FLAGS.GENERAL_RULES);
+  const bookingRules = parseBookingRules(facility.bookingRules);
+  const ruleRows = getClubInfoRuleRows(bookingRules);
+  const peakHoursSlots = bookingRules?.hasPeakHours
+    ? getPeakHoursSlotDisplays(bookingRules.peakHoursSlots)
+    : [];
 
   const canViewClubDescription = Boolean(
     resolvedFacilityId &&
@@ -302,6 +325,51 @@ export default function ClubInfoScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Operating Hours</Text>
             <OperatingHoursCard operatingHours={facility.operatingHours as any} timezone={facility.timezone} />
+          </View>
+        )}
+
+        {/* Booking Rules & Policies — members only, as on web */}
+        {isMember && (bookingRules || facility.generalRules) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Booking Rules &amp; Policies</Text>
+            <View style={styles.card}>
+              {facility.generalRules && generalRulesEnabled ? (
+                <View style={styles.generalRulesBox}>
+                  <Text style={styles.generalRulesText}>
+                    {htmlToDisplayText(facility.generalRules)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {ruleRows.map((row) => (
+                <View key={row.label} style={styles.ruleRow}>
+                  <Text style={styles.ruleLabel}>{row.label}:</Text>
+                  <Text style={styles.ruleValue}>{row.value}</Text>
+                </View>
+              ))}
+
+              {peakHoursSlots.length > 0 ? (
+                <View style={styles.peakSection}>
+                  <Text style={styles.ruleLabel}>Peak Hours</Text>
+                  {peakHoursSlots.map((slot, idx) => (
+                    <View key={`${slot.heading}-${idx}`} style={styles.peakSlot}>
+                      <Text style={styles.peakHeading}>{slot.heading}</Text>
+                      {slot.details.map((detail) => (
+                        <Text key={detail} style={styles.peakDetail}>
+                          {detail}
+                        </Text>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {ruleRows.length === 0 && peakHoursSlots.length === 0 && !facility.generalRules ? (
+                <Text style={styles.rulesEmpty}>
+                  No booking rules have been configured for this facility.
+                </Text>
+              ) : null}
+            </View>
           </View>
         )}
 
@@ -384,6 +452,61 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     lineHeight: 22,
     marginTop: Spacing.sm,
+  },
+  generalRulesBox: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  generalRulesText: {
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    lineHeight: 21,
+  },
+  ruleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+  },
+  ruleLabel: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bold,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  ruleValue: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    flexShrink: 1,
+  },
+  peakSection: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  peakSlot: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
+    gap: 2,
+  },
+  peakHeading: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bold,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  peakDetail: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+  },
+  rulesEmpty: {
+    padding: Spacing.md,
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
   },
   section: {
     padding: Spacing.md,

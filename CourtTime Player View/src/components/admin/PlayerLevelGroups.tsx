@@ -490,7 +490,7 @@ export function PlayerLevelGroups({ facilityId }: PlayerLevelGroupsProps) {
         </p>
         <div className="flex gap-2">
           <Input
-            placeholder="New level name (e.g. 3.5)"
+            placeholder="New group name (e.g. 3.5)"
             value={newGroupName}
             onChange={(event) => setNewGroupName(event.target.value)}
             onKeyDown={(event) => {

@@ -1,6 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { TouchableOpacity, Text, Modal, Pressable } from 'react-native';
 import BookCourtScreen from '../app/(tabs)/book';
 import { api, paymentApi } from '../src/api/client';
@@ -66,6 +67,19 @@ function mockAuth(overrides: Record<string, unknown> = {}) {
 
 jest.mock('../src/contexts/AuthContext', () => ({
   useAuth: jest.fn(() => mockAuth()),
+}));
+
+/** Facility flags under test; per-test overrides push keys into this set. */
+const mockEnabledFeatures = new Set<string>();
+
+jest.mock('../src/contexts/FeatureFlagContext', () => ({
+  useFeatureFlags: jest.fn(() => ({
+    enabledFeatures: [...mockEnabledFeatures],
+    isFeatureEnabled: (key: string) => mockEnabledFeatures.has(key),
+    flagsLoaded: true,
+    flagsFromCache: false,
+    refreshFlags: jest.fn(() => Promise.resolve()),
+  })),
 }));
 
 jest.mock('../src/components/CourtCalendarGrid', () => {
@@ -198,6 +212,7 @@ describe('BookCourtScreen booking modal confirm copy', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEnabledFeatures.clear();
     tree = undefined;
     createBookingSpy = jest
       .spyOn(paymentApi.bookings, 'create')
@@ -380,5 +395,49 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     );
 
     jest.useRealTimers();
+  });
+
+  /**
+   * Both capabilities used to be gated on isAdmin alone on mobile, while web
+   * gates them on `isAdmin || flag`. A facility that switched the flag on gave
+   * its members the feature on web and not in the app.
+   */
+  describe('flag-gated booking capabilities', () => {
+    async function renderAsMember() {
+      const { useAuth } = require('../src/contexts/AuthContext');
+      (useAuth as jest.Mock).mockImplementation(() =>
+        mockAuth({ user: { id: 'user-1', adminFacilities: [] } })
+      );
+      await act(async () => {
+        tree = renderer.create(<BookCourtScreen />);
+      });
+      await flushMicrotasks();
+      await expandBookingTools(tree!);
+      // The booking modal is where these controls live; the mocked calendar
+      // grid opens it the same way the real grid does.
+      await pressByTestId(tree!, 'open-booking-modal');
+      await flushMicrotasks();
+      return visibleModalTexts(tree!);
+    }
+
+    it('hides additional courts and recurring from a member when both flags are off', async () => {
+      const texts = await renderAsMember();
+      expect(texts.join(' ')).not.toContain('Additional Courts');
+      expect(texts.join(' ')).not.toContain('Recurring Booking');
+    });
+
+    it('offers additional courts to a member when player_multiple_courts is on', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.PLAYER_MULTIPLE_COURTS);
+      const texts = await renderAsMember();
+      expect(texts.join(' ')).toContain('Additional Courts');
+      expect(texts.join(' ')).not.toContain('Recurring Booking');
+    });
+
+    it('offers recurring to a member when player_recurring_bookings is on', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
+      const texts = await renderAsMember();
+      expect(texts.join(' ')).toContain('Recurring Booking');
+      expect(texts.join(' ')).not.toContain('Additional Courts');
+    });
   });
 });

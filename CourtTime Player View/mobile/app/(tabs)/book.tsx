@@ -63,6 +63,12 @@ import {
 } from '../../../shared/constants/bookingTypes';
 import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/utils/strikeLockout';
 import { StrikeLockoutBanner } from '../../src/components/StrikeLockoutBanner';
+import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
+import {
+  CourtWaiverAcceptanceModal,
+  useCourtWaiverGate,
+} from '../../src/components/CourtWaiverGate';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import {
   buildTimeSlotsFromAvailability,
   parseHHMMToMinutes,
@@ -145,6 +151,8 @@ export default function BookCourtScreen() {
   }>();
   const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate, refreshTermsStatus } = useAuth();
   const { bannerState, lastCachedAt, retryConnectivity } = useOfflineApi();
+  const { isFeatureEnabled } = useFeatureFlags();
+  const waiverGate = useCourtWaiverGate();
   const facilityList = facilities ?? [];
   const currentFacilityName = facilityList.find(f => f.id === facilityId)?.name;
   /** Avoid applying slot results from a stale availability request after the user picks another court on the grid. */
@@ -190,6 +198,10 @@ export default function BookCourtScreen() {
   const [violations, setViolations] = useState<RuleViolation[]>([]);
   const [warnings, setWarnings] = useState<RuleViolation[]>([]);
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
+  // Mirrors web (BookingWizard / QuickReservePopup): admins always have these,
+  // members get them only where the facility has turned the flag on.
+  const canBookAdditionalCourts = isAdmin || isFeatureEnabled(FEATURE_FLAGS.PLAYER_MULTIPLE_COURTS);
+  const canUseRecurring = isAdmin || isFeatureEnabled(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   const [selectedCalendarBooking, setSelectedCalendarBooking] = useState<BookingWithDetails | null>(null);
   const [courtLoadError, setCourtLoadError] = useState<ApiFailureShape | null>(null);
 
@@ -677,6 +689,14 @@ export default function BookCourtScreen() {
     const extraCourtIds = additionalCourtIds.filter((id) => id !== selectedCourt.id);
     const allCourtIds = [selectedCourt.id, ...extraCourtIds];
 
+    // Per-court waivers must be accepted before any booking call — the server
+    // rejects an unaccepted waiver, and until now mobile had no way to resolve
+    // that. Returns immediately when the facility has the flag off.
+    if (!(await waiverGate.ensureAccepted(allCourtIds))) {
+      setBooking(false);
+      return;
+    }
+
     const extraCourtsRequirePayment = extraCourtIds.some((id) => {
       const court = courts.find((c) => c.id === id);
       return court ? courtRequiresPayment(court) : false;
@@ -696,7 +716,7 @@ export default function BookCourtScreen() {
       return;
     }
 
-    if (isAdmin && recurringBookingEnabled) {
+    if (canUseRecurring && recurringBookingEnabled) {
       if (needsPaidCheckout) {
         showAlert(
           'Paid booking',
@@ -1347,8 +1367,8 @@ export default function BookCourtScreen() {
                   </View>
                 </ScrollView>
 
-                {/* Additional Courts (Admin only) */}
-                {isAdmin && courts.length > 1 && (
+                {/* Additional Courts — admins, or members where the flag is on */}
+                {canBookAdditionalCourts && courts.length > 1 && (
                   <>
                     <TouchableOpacity
                       style={styles.dropdownToggle}
@@ -1384,8 +1404,8 @@ export default function BookCourtScreen() {
                   </>
                 )}
 
-                {/* Recurring Booking (Admin only) */}
-                {isAdmin && (
+                {/* Recurring Booking — admins, or members where the flag is on */}
+                {canUseRecurring && (
                   <>
                     <TouchableOpacity
                       style={styles.dropdownToggle}
@@ -1393,7 +1413,7 @@ export default function BookCourtScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`${recurringBookingExpanded ? 'Collapse' : 'Expand'} recurring booking options`}
                     >
-                      <Text style={styles.modalLabel}>Recurring Booking (Admin)</Text>
+                      <Text style={styles.modalLabel}>Recurring Booking</Text>
                       <Ionicons
                         name={recurringBookingExpanded ? 'chevron-up' : 'chevron-down'}
                         size={16}
@@ -1718,6 +1738,7 @@ export default function BookCourtScreen() {
         </View>
       </Modal>
 
+      <CourtWaiverAcceptanceModal {...waiverGate.modalProps} />
     </View>
   );
 }

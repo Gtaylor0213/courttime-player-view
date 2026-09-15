@@ -111,9 +111,51 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 
 **Verified green:** mobile 14/14 suites, 65/65 tests, 0 type errors.
 
-### Phase 2 — Sync the screens that already exist
+### Phase 2 — Sync the screens that already exist 🔄 *(in progress)*
 
 *Catching up existing surfaces to 240 commits of web change. Do this before adding new screens — it's where silent breakage lives.*
+
+#### Drift sweep — done first, because it sets the real worklist
+
+73 commits since `9bf2fd2` touch the core player-facing web components (`BookingWizard`, `QuickReservePopup`, `CourtCalendarView`, `MyReservations`, `ClubInfo`, `BulletinBoard`, `ReservationManagementModal`, `PlayerProfile`). Triaged:
+
+**Intentionally web-only — no mobile work.** Admin drag-to-reassign (`d3a8e5e`), reschedule attribution (`7357844`), kiosk midnight rollover (`e5b077e`), admin booking attribution (`5f82e78`), `:15`/`:45` clickability and blocked/shadow card styling (`900471b`, `c50d985`, `fbdeb01`, `c6e1df8`), drag-to-book fixes (`c45dae6`, `50d68e0`, `fcf463b`), 30-min grid + tooltips (`7d69b34`), post-play close-out (`b7fe7a4`, `747e718`, `f8209ca`), web responsive/viewport fixes (`e0a4dc0`, `1931ea0`, `d31ba23`), date-picker fix (`82da94e`). Mobile has its own calendar grid and no admin console.
+
+**Already ported.** `0066ec3`, `0c2867d`, `a3664ac`, `e883ddc`, `16da84b`, `127ab61`, `ddf91d8`, `acbfd88`, `f73ea3e`, `825970c`.
+
+**Needs porting**, ordered by risk:
+
+| # | Item | Flag | Why it matters |
+|---|------|------|----------------|
+| 1 | ~~Additional courts + recurring gated on `isAdmin` alone~~ ✅ **done** | `player_multiple_courts`, `player_recurring_bookings` | Mobile was *stricter* than web: a facility that enabled either flag gave its members the feature on web and not in the app |
+| 2 | ~~Court waiver acceptance~~ ✅ **done** | `court_waivers` *(default ON)* | Members were hard-blocked: the server rejects with `COURT-WAIVER-NOT-ACCEPTED` and mobile offered no way to resolve it |
+| 3 | Deer Lake booking type required | `deer_lake_reservation_types` | Web requires a booking type when on (`901b614`); mobile does not, so the server can reject |
+| 4 | Member number prompt | `member_number` | New members never get asked on mobile (`ed2522b`) |
+| 5 | Split court payments | `split_court_payments` | Five web commits (`9c7529f`→`bd28061`); entirely absent on mobile |
+| 6 | Guest count + names | — | Web requires names (`2547bc2`, `e9af548`); mobile sends a bare `bringGuest` boolean, so admins see nameless guests. Server accepts either, so this is divergence, not breakage |
+| 7 | Club Info: rules, General Rules, per-court-type max duration | `general_rules`, `court_type_max_duration` | `a603537`, `c3f6971`, `84d61a0` |
+| 8 | Week/month calendar overview | `week_month_view` *(default ON)* | `b89a408`; mobile is day-view only |
+| 9 | University Club "pay at front desk" | `university_club_guest_fee` | `85545f8` |
+| 10 | Daily vs. hourly court billing | `court_daily_billing` | `4f8d109` |
+| 11 | BHR "Party" reservation type | `bhr_reservation_types` | `bc5e401` |
+| 12 | Multiple named ball machines | `st_marlow_ball_machine` | `8f1573a`; mobile assumes a single machine |
+| 13 | Reservation type preserved when editing | — | `d68f464` |
+| 14 | Default booking length 2h | — | `434fb6e`; mobile still defaults to 1h |
+| 15 | Custom court type labels | — | `6c84b0b` |
+| 16 | Bulletin signup withdrawal, min-participant messaging | — | Mobile has signup + share, no withdraw |
+
+Lessons, Pro Shop, Padel and My Level Group appear in this window too, but they are new screens and belong to Phase 3.
+
+**Landed so far:** items 1–2.
+
+**Item 1** — `canBookAdditionalCourts` / `canUseRecurring` in `book.tsx` now mirror web's `isAdmin || flag`, the submit path uses the same capability as the UI that offered it, and the "(Admin)" label is gone from the recurring control. Three tests, two of which were confirmed to fail against the old gating. This is also the first production consumer of the Phase 1 flag context.
+
+**Item 2 — court waivers.** This was a hard block, not a missing nicety: `buildCourtWaiverBookingBlocker` rejects the booking server-side, so a member at a `court_waivers` facility could not book a waiver-required court from the app at all. Added `useCourtWaiverGate` + `CourtWaiverAcceptanceModal` (mirroring web's hook/dialog pair), wired into the booking submit before any booking call, covering every court in the request including additional ones. Acceptance is per booking — the server only counts one recorded in the last 15 minutes — so the gate runs on every attempt. No client-side flag check is needed: the flag is enforced in the server's SQL, so the pending list comes back empty when it's off.
+
+Two notes on this one:
+
+- **Waivers render as text, not HTML.** Mobile has no HTML renderer and no WebView, and adding one would force a new native build. `htmlToDisplayText` converts admin-authored HTML for display under one rule — *never drop text*; unknown tags are unwrapped rather than removed, since these are consent documents. Formatting is lost, wording is not.
+- **It replaced three duplicates.** `TermsAcceptanceGate`, `GeneralRulesAcceptanceGate` and `profile.tsx` each carried their own weaker `htmlToPlainText` (no script/style stripping, no numeric or hex entities). All three now use the shared util, which also upgrades them. 13 tests on the converter, 7 on the gate.
 
 - **Booking flow:** court waiver acceptance (`court_waivers`, default ON — a booking on a waiver-required court today has no consent path), member number prompt (`member_number`), split payments (`split_court_payments`), per-court-type max duration (`court_type_max_duration`), Deer Lake / BHR reservation-type variants, University Club "pay guest fee at front desk", daily vs. hourly billing display, peak/prime-hour indication.
 - **Club Info:** add the booking-rules section, General Rules rendering, and the tennis/pickleball max-duration split that web gained in `a603537` / `c3f6971` / `84d61a0`.

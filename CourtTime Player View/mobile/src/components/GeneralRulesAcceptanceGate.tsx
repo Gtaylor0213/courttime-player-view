@@ -11,23 +11,8 @@ import { showAlert } from '../utils/alert';
 import { useAuth } from '../contexts/AuthContext';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../constants/theme';
 import { Button } from './Button';
+import { htmlToDisplayText } from '../utils/htmlToText';
 
-function htmlToPlainText(html: string): string {
-  if (!html) return '';
-  return html
-    .replace(/<\s*br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|h[1-6]|li)>/gi, '\n\n')
-    .replace(/<li[^>]*>/gi, '• ')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 function tryMarkNoScrollNeeded(viewportH: number, contentH: number, setScrolled: (v: boolean) => void) {
   if (viewportH > 0 && contentH > 0 && contentH <= viewportH + 8) {
@@ -45,7 +30,7 @@ export function GeneralRulesAcceptanceGate() {
 
   const current = pendingGeneralRulesAcceptances[0];
   const plainText = useMemo(
-    () => htmlToPlainText(current?.contentHtml || ''),
+    () => htmlToDisplayText(current?.contentHtml || ''),
     [current?.contentHtml]
   );
 

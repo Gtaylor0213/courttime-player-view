@@ -31,6 +31,7 @@ import { CachedImage } from '../../src/components/CachedImage';
 import { FacilityLockoutRow } from '../../src/components/StrikeLockoutBanner';
 import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/utils/strikeLockout';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { htmlToDisplayText } from '../../src/utils/htmlToText';
 
 export const ErrorBoundary = createRouteErrorBoundary('Profile');
 
@@ -58,22 +59,6 @@ interface FacilityTermsVersion {
   publishedAt: string;
 }
 
-function htmlToPlainText(html: string): string {
-  if (!html) return '';
-  return html
-    .replace(/<\s*br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|h[1-6]|li)>/gi, '\n\n')
-    .replace(/<li[^>]*>/gi, '* ')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 function tryMarkJoinTermsFitWithoutScroll(
   viewportH: number,
@@ -825,7 +810,7 @@ export default function ProfileScreen() {
                 scrollEventThrottle={16}
               >
                 <Text style={{ fontSize: FontSize.sm, lineHeight: 22, color: Colors.text }}>
-                  {htmlToPlainText(joinTerms?.contentHtml || '')}
+                  {htmlToDisplayText(joinTerms?.contentHtml || '')}
                 </Text>
               </ScrollView>
             </View>

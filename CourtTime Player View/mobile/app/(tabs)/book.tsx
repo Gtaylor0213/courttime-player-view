@@ -3,7 +3,7 @@
  * Calendar date picker → court selector → time slot grid → booking details → confirm
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -68,6 +68,7 @@ import {
 import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/utils/strikeLockout';
 import { StrikeLockoutBanner } from '../../src/components/StrikeLockoutBanner';
 import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
+import { ballMachineEndpoints } from '../../src/api/endpoints';
 import {
   CourtWaiverAcceptanceModal,
   useCourtWaiverGate,
@@ -138,6 +139,8 @@ interface RuleViolation {
 }
 
 /** Web caps guests at 3 per booking; keep the two in step. */
+type BallMachineOption = { id: string; name?: string; isActive?: boolean };
+
 const MAX_GUESTS = 3;
 const GUEST_COUNT_OPTIONS = [0, 1, 2, 3] as const;
 
@@ -213,6 +216,13 @@ export default function BookCourtScreen() {
   const [splitMembers, setSplitMembers] = useState<SplitPaymentMember[]>([]);
   const bringGuest = guestCount > 0;
   const [addBallMachine, setAddBallMachine] = useState(false);
+  /**
+   * Named machines, for facilities with more than one. With 2+ active machines
+   * the server rejects a booking that does not say which — "Choose which ball
+   * machine to add" — so the picker is required, not cosmetic.
+   */
+  const [ballMachines, setBallMachines] = useState<BallMachineOption[]>([]);
+  const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
 
   // Rule violations modal payload (shown when modalKind === 'violations')
   const [violations, setViolations] = useState<RuleViolation[]>([]);
@@ -224,6 +234,7 @@ export default function BookCourtScreen() {
   const canUseRecurring = isAdmin || isFeatureEnabled(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
   // Reservation type list, same precedence as web's BookingWizard: Deer Lake's
   // list replaces the standard one, BHR's appends "Party" to it.
+  const universityClubGuestFee = isFeatureEnabled(FEATURE_FLAGS.UNIVERSITY_CLUB_GUEST_FEE);
   const weekMonthViewEnabled = isFeatureEnabled(FEATURE_FLAGS.WEEK_MONTH_VIEW);
   const splitCourtPaymentsEnabled = isFeatureEnabled(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const postPlaySettlementEnabled = isFeatureEnabled(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
@@ -304,6 +315,41 @@ export default function BookCourtScreen() {
     setSplitMembers([]);
     setAddBallMachine(false);
   }, [modalKind]);
+
+  useEffect(() => {
+    if (!facilityId) {
+      setBallMachines([]);
+      return;
+    }
+    let cancelled = false;
+    void ballMachineEndpoints
+      .status(facilityId)
+      .then((res) => {
+        if (cancelled) return;
+        const payload = res.success ? (res.data as { machines?: unknown }) : null;
+        setBallMachines(Array.isArray(payload?.machines) ? (payload.machines as BallMachineOption[]) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setBallMachines([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityId]);
+
+  const activeBallMachines = useMemo(
+    () => ballMachines.filter((m) => m.isActive !== false),
+    [ballMachines]
+  );
+
+  // 0 machines: legacy facility, no picker. 1: auto-selected. 2+: must choose.
+  useEffect(() => {
+    if (activeBallMachines.length === 1) {
+      setSelectedMachineId(activeBallMachines[0]!.id);
+    } else if (!activeBallMachines.some((m) => m.id === selectedMachineId)) {
+      setSelectedMachineId(null);
+    }
+  }, [activeBallMachines, selectedMachineId]);
 
   const primaryCourtGuestFee = selectedCourt ? courtGuestFeeCents(selectedCourt) : null;
   const primaryCourtBallMachineFee = selectedCourt ? courtBallMachineFeeCents(selectedCourt) : null;
@@ -683,7 +729,11 @@ export default function BookCourtScreen() {
   }
 
   // ── Submit booking ──
-  async function handleConfirmBooking() {
+  /**
+   * `payAtFrontDesk` books without a Stripe checkout, for facilities with the
+   * University Club guest fee flag on — the member settles at the desk.
+   */
+  async function handleConfirmBooking(payAtFrontDesk = false) {
     console.log('[book.confirm] start', {
       hasSelectedCourt: Boolean(selectedCourt),
       selectedCourtId: selectedCourt?.id,
@@ -713,6 +763,12 @@ export default function BookCourtScreen() {
     }
     if (!modalStartTime || !modalEndTime) {
       showAlert('Booking failed', 'Please pick a start and end time.');
+      hapticError();
+      return;
+    }
+
+    if (addBallMachine && activeBallMachines.length > 1 && !selectedMachineId) {
+      showAlert('Ball machine', 'Choose which ball machine to add.');
       hapticError();
       return;
     }
@@ -909,6 +965,7 @@ export default function BookCourtScreen() {
         notes: bookingNotes.trim() || undefined,
         ...bookingCheckoutUrls,
         bringGuest: bringGuest || undefined,
+        payAtFrontDesk: payAtFrontDesk || undefined,
         splitParticipantIds:
           splitPayment && splitMembers.length > 0
             ? splitMembers.map((member) => member.userId)
@@ -917,6 +974,7 @@ export default function BookCourtScreen() {
         guestNames:
           guestCount > 0 ? guestNames.slice(0, guestCount).map((n) => n.trim()) : undefined,
         addBallMachine: addBallMachine || undefined,
+        machineId: addBallMachine && selectedMachineId ? selectedMachineId : undefined,
         ...(priorInThisRequest.length > 0
           ? { provisionalSameRequestBookings: [...priorInThisRequest] }
           : {}),
@@ -1694,6 +1752,36 @@ export default function BookCourtScreen() {
                   </View>
                 ) : null}
 
+                {addBallMachine && activeBallMachines.length > 1 ? (
+                  <View style={styles.guestSection}>
+                    <Text style={styles.modalLabel}>Which ball machine?</Text>
+                    <View style={styles.guestCountRow}>
+                      {activeBallMachines.map((machine) => (
+                        <TouchableOpacity
+                          key={machine.id}
+                          style={[
+                            styles.typeChip,
+                            selectedMachineId === machine.id && styles.typeChipSelected,
+                          ]}
+                          onPress={() => setSelectedMachineId(machine.id)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: selectedMachineId === machine.id }}
+                          accessibilityLabel={`Ball machine ${machine.name || 'Machine'}`}
+                        >
+                          <Text
+                            style={[
+                              styles.typeChipText,
+                              selectedMachineId === machine.id && styles.typeChipTextSelected,
+                            ]}
+                          >
+                            {machine.name || 'Machine'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
                 {(selectedCourtRequiresPayment ||
                   (guestCount > 0 && primaryCourtGuestFee) ||
                   (addBallMachine && primaryCourtBallMachineFee)) &&
@@ -1727,10 +1815,23 @@ export default function BookCourtScreen() {
                         ? 'Pay and Book'
                         : 'Confirm Booking'
                   }
-                  onPress={handleConfirmBooking}
+                  onPress={() => handleConfirmBooking(false)}
                   loading={booking}
                   style={styles.confirmButton}
                 />
+                {universityClubGuestFee &&
+                guestCount > 0 &&
+                primaryCourtGuestFee &&
+                additionalCourtIds.length === 0 &&
+                !recurringBookingEnabled ? (
+                  <Button
+                    title="Book Now, Pay at Front Desk"
+                    variant="secondary"
+                    onPress={() => handleConfirmBooking(true)}
+                    disabled={booking}
+                    style={styles.confirmButton}
+                  />
+                ) : null}
               </View>
             </View>
           </KeyboardAvoidingView>

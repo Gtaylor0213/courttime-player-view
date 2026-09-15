@@ -75,6 +75,9 @@ const mockEnabledFeatures = new Set<string>();
 /** Lets a test swap the court the mocked grid opens the modal with. */
 let mockCourtOverrides: Record<string, unknown> | null = null;
 
+/** Named ball machines the facility has configured. */
+let mockBallMachines: Array<{ id: string; name: string; isActive: boolean }> = [];
+
 jest.mock('../src/contexts/FeatureFlagContext', () => ({
   useFeatureFlags: jest.fn(() => ({
     enabledFeatures: [...mockEnabledFeatures],
@@ -225,11 +228,15 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     jest.clearAllMocks();
     mockEnabledFeatures.clear();
     mockCourtOverrides = null;
+    mockBallMachines = [];
     tree = undefined;
     createBookingSpy = jest
       .spyOn(paymentApi.bookings, 'create')
       .mockResolvedValue({ success: true, data: {} });
     getSpy = jest.spyOn(api, 'get').mockImplementation(async (url: string) => {
+      if (url.includes('/api/ball-machine/status/')) {
+        return { success: true, data: { machines: mockBallMachines, activePasses: [] } };
+      }
       if (url.includes('/api/facilities/') && url.includes('/courts')) {
         return {
           success: true,
@@ -457,6 +464,82 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       const texts = await renderAsMember();
       expect(texts.join(' ')).toContain('Recurring Booking');
       expect(texts.join(' ')).not.toContain('Additional Courts');
+    });
+  });
+
+  /**
+   * Ball machines: with 2+ active machines the server rejects a booking that
+   * does not name one ("Choose which ball machine to add"), so the picker is a
+   * correctness requirement rather than a nicety.
+   */
+  describe('ball machine selection', () => {
+    function courtWithMachineFee() {
+      return {
+        id: 'court-1',
+        name: 'Court 1',
+        status: 'available',
+        isWalkUp: false,
+        ballMachineFeeCents: 800,
+      };
+    }
+
+    function renderedText(): string {
+      return tree!.root
+        .findAllByType(Text)
+        .map((n) => {
+          const c = n.props.children;
+          return Array.isArray(c) ? c.map(String).join('') : String(c ?? '');
+        })
+        .join(' ');
+    }
+
+    async function enableBallMachine() {
+      const toggle = tree!.root.findAll(
+        (n) => typeof (n.props as { onValueChange?: unknown })?.onValueChange === 'function'
+      );
+      // The ball machine switch is the last toggle in the modal.
+      await act(async () => {
+        (toggle[toggle.length - 1]!.props as { onValueChange?: (v: boolean) => void }).onValueChange?.(
+          true
+        );
+      });
+      await flushMicrotasks();
+    }
+
+    it('shows no picker when the facility has a single machine', async () => {
+      mockCourtOverrides = courtWithMachineFee();
+      mockBallMachines = [{ id: 'm1', name: 'Tennis Machine', isActive: true }];
+      await renderAsMember();
+      await enableBallMachine();
+
+      expect(renderedText()).not.toContain('Which ball machine?');
+    });
+
+    it('asks which machine once a second one exists', async () => {
+      mockCourtOverrides = courtWithMachineFee();
+      mockBallMachines = [
+        { id: 'm1', name: 'Tennis Machine', isActive: true },
+        { id: 'm2', name: 'Pickleball Machine', isActive: true },
+      ];
+      await renderAsMember();
+      await enableBallMachine();
+
+      const text = renderedText();
+      expect(text).toContain('Which ball machine?');
+      expect(text).toContain('Tennis Machine');
+      expect(text).toContain('Pickleball Machine');
+    });
+
+    it('ignores inactive machines when deciding to ask', async () => {
+      mockCourtOverrides = courtWithMachineFee();
+      mockBallMachines = [
+        { id: 'm1', name: 'Tennis Machine', isActive: true },
+        { id: 'm2', name: 'Retired Machine', isActive: false },
+      ];
+      await renderAsMember();
+      await enableBallMachine();
+
+      expect(renderedText()).not.toContain('Which ball machine?');
     });
   });
 

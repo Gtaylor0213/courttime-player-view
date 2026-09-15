@@ -28,6 +28,15 @@ import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUr
 import { MiniCalendar } from './MiniCalendar';
 import { TimePicker } from './TimePicker';
 import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { useFeatureFlags } from '../contexts/FeatureFlagContext';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
+import {
+  BHR_RESERVATION_TYPE_KEYS,
+  DEER_LAKE_RESERVATION_TYPE_KEYS,
+  RESERVATION_LABEL_TYPE_KEYS,
+  getBookingTypeLabel,
+  type BookingTypeKey,
+} from '../../../shared/constants/bookingTypes';
 import type { Court, BookingWithDetails } from '../types/database';
 
 interface RuleViolation {
@@ -45,6 +54,16 @@ interface Props {
 }
 
 export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) {
+  const { isFeatureEnabled } = useFeatureFlags();
+  // Same precedence as the Book tab: Deer Lake replaces the standard list,
+  // BHR appends "Party".
+  const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const reservationTypeKeys = deerLakeReservationTypes
+    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES)
+      ? BHR_RESERVATION_TYPE_KEYS
+      : RESERVATION_LABEL_TYPE_KEYS;
+  const [editBookingType, setEditBookingType] = useState('');
   const [courts, setCourts] = useState<Court[]>([]);
   const [date, setDate] = useState('');
   const [courtId, setCourtId] = useState('');
@@ -68,6 +87,7 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
     setCourtId(booking.courtId);
     setStartTime(booking.startTime.slice(0, 5));
     setEndTime(booking.endTime.slice(0, 5));
+    setEditBookingType(booking.bookingType || '');
     setViolations([]);
   }, [booking, visible]);
 
@@ -174,6 +194,13 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
     setSaving(true);
     setViolations([]);
 
+    if (deerLakeReservationTypes && !editBookingType) {
+      showAlert('Reservation type', 'Please select a reservation type.');
+      hapticError();
+      setSaving(false);
+      return;
+    }
+
     const startTimeFull = `${startTime}:00`;
     const endTimeFull = `${endTime}:00`;
     const durationMinutes = toMinutes(endTime) - toMinutes(startTime);
@@ -186,7 +213,7 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
       startTime: startTimeFull,
       endTime: endTimeFull,
       durationMinutes,
-      bookingType: booking.bookingType,
+      bookingType: editBookingType || undefined,
       notes: booking.notes,
       excludeBookingId: booking.id,
       ...courtBookingCheckoutUrls(),
@@ -324,6 +351,39 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
               </View>
             )}
 
+            {/* Reservation type — editable, as on web */}
+            <Text style={styles.label}>
+              {deerLakeReservationTypes ? 'Reservation Type' : 'Reservation Type (Optional)'}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={styles.typeScroll}
+            >
+              <View style={styles.typeRow}>
+                {reservationTypeKeys.map((key) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.typeChip, editBookingType === key && styles.typeChipSelected]}
+                    onPress={() => setEditBookingType(key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: editBookingType === key }}
+                    accessibilityLabel={`Reservation type ${getBookingTypeLabel(key)}`}
+                  >
+                    <Text
+                      style={[
+                        styles.typeChipText,
+                        editBookingType === key && styles.typeChipTextSelected,
+                      ]}
+                    >
+                      {getBookingTypeLabel(key)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
             {/* Rule violations */}
             {violations.length > 0 && (
               <View style={styles.violationsBox}>
@@ -417,6 +477,32 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md, marginBottom: Spacing.md,
   },
   unavailableText: { flex: 1, fontSize: FontSize.sm, color: Colors.text },
+  typeScroll: {
+    marginBottom: Spacing.sm,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  typeChip: {
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  typeChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  typeChipText: {
+    fontSize: FontSize.sm,
+    color: Colors.text,
+  },
+  typeChipTextSelected: {
+    color: Colors.textInverse,
+    fontWeight: '600',
+  },
   violationsBox: {
     backgroundColor: Colors.error + '08', borderRadius: BorderRadius.md,
     padding: Spacing.md, marginBottom: Spacing.md,

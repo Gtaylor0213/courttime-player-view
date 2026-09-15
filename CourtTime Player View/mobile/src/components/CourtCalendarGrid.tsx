@@ -30,6 +30,8 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TIME_LABEL_WIDTH = 46;
 const ROW_HEIGHT = 48;
+import { DEFAULT_BOOKING_DURATION_MINUTES } from '../../../shared/constants/bookingTypes';
+
 const DEFAULT_SLOT_MINUTES = 30;
 const COURTS_PER_PAGE = 4;
 const ACTIVE_DAY_POLL_MS = 5000;
@@ -869,10 +871,23 @@ export function CourtCalendarGrid({
 
       const resolvedStartRow = Math.min(startRow, endRow);
       const resolvedEndRow = Math.max(startRow, endRow);
-      const startTime = timeRows[resolvedStartRow] + ':00';
-      const endTime = getRowEndTime(resolvedEndRow) + ':00';
+      const startHHMM = timeRows[resolvedStartRow]!;
+      const startTime = startHHMM + ':00';
 
-      void onBookingSelected(court, startTime, endTime);
+      // A single row means "tap", not a deliberate span: ask for the same
+      // default length web's booking wizard uses. The booking screen clamps
+      // this down to what the court actually has free, so a court with only
+      // 30 minutes left still opens at 30 minutes.
+      let endHHMM = getRowEndTime(resolvedEndRow);
+      if (resolvedStartRow === resolvedEndRow) {
+        const startMinutes = parseTimeToMinutesSafe(startHHMM);
+        if (startMinutes !== null) {
+          const target = startMinutes + DEFAULT_BOOKING_DURATION_MINUTES;
+          endHHMM = `${String(Math.floor(target / 60)).padStart(2, '0')}:${String(target % 60).padStart(2, '0')}`;
+        }
+      }
+
+      void onBookingSelected(court, startTime, endHHMM + ':00');
     },
     [courts, getRowEndTime, onBookingSelected, timeRows]
   );

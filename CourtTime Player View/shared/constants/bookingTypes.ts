@@ -143,6 +143,15 @@ export const BOOKING_TYPES = {
 
 export type BookingTypeKey = keyof typeof BOOKING_TYPES;
 
+/**
+ * Default length for a new booking, in minutes.
+ *
+ * Web applies this as the booking wizard's and quick-reserve's default
+ * duration (see `434fb6e`); mobile applies it when a single calendar slot is
+ * tapped, clamping down when the court has less time free.
+ */
+export const DEFAULT_BOOKING_DURATION_MINUTES = 120;
+
 export const RESERVATION_LABEL_TYPE_KEYS: readonly BookingTypeKey[] = [
   'match',
   'league_match',

@@ -27,9 +27,18 @@ export async function openStripeCheckout(checkoutUrl: string): Promise<boolean> 
 export function courtRequiresPayment(court: {
   requirePayment?: boolean;
   bookingAmountCents?: number | null;
+  billingMode?: string | null;
+  dailyRateCents?: number | null;
 }): boolean {
-  const cents = court.bookingAmountCents != null ? Number(court.bookingAmountCents) : 0;
-  return Boolean(court.requirePayment && Number.isFinite(cents) && cents > 0);
+  if (!court.requirePayment) return false;
+  // A court billed daily carries its price in dailyRateCents; bookingAmountCents
+  // can be zero there. Reading only the hourly field made such a court look free
+  // and offered "Confirm Booking" on a reservation the server charges for.
+  const cents =
+    court.billingMode === 'daily'
+      ? Number(court.dailyRateCents ?? 0)
+      : Number(court.bookingAmountCents ?? 0);
+  return Number.isFinite(cents) && cents > 0;
 }
 
 export function courtGuestFeeCents(court: { guestFeeCents?: number | null }): number | null {

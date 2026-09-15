@@ -45,6 +45,14 @@ export const bookingMemberEndpoints = {
     api.get(`/api/bookings/facility/${facilityId}/members?q=${encodeURIComponent(q)}`),
 };
 
+export const ballMachineEndpoints = {
+  /**
+   * Named machines and the caller's live passes. Returns an empty list when the
+   * facility has the ball machine flag off — enforced in the route.
+   */
+  status: (facilityId: string) => api.get(`/api/ball-machine/status/${facilityId}`),
+};
+
 export const strikesEndpoints = {
   check: (userId: string, facilityId: string) =>
     api.get(`/api/strikes/check/${userId}?facilityId=${encodeURIComponent(facilityId)}`),

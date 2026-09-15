@@ -135,18 +135,30 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 | 6 | ~~Guest count + names~~ ✅ **done** | — | Mobile sent a bare `bringGuest` boolean, so admins saw nameless guests |
 | 7 | ~~Club Info: rules, General Rules, per-court-type max duration~~ ✅ **done** | `general_rules`, `court_type_max_duration` | `a603537`, `c3f6971`, `84d61a0` |
 | 8 | ~~Week/month calendar overview~~ ✅ **done** | `week_month_view` *(default ON)* | `b89a408`; mobile was day-view only |
-| 9 | University Club "pay at front desk" | `university_club_guest_fee` | `85545f8` |
-| 10 | Daily vs. hourly court billing | `court_daily_billing` | `4f8d109` |
+| 9 | ~~University Club "pay at front desk"~~ ✅ **done** | `university_club_guest_fee` | `85545f8` |
+| 10 | ~~Daily vs. hourly court billing~~ ✅ **done** | `court_daily_billing` | A daily-rate court read as **free** on mobile |
 | 11 | ~~BHR "Party" reservation type~~ ✅ **done** (with item 3) | `bhr_reservation_types` | `bc5e401` |
-| 12 | Multiple named ball machines | `st_marlow_ball_machine` | `8f1573a`; mobile assumes a single machine |
-| 13 | Reservation type preserved when editing | — | `d68f464` |
-| 14 | Default booking length 2h | — | `434fb6e`; mobile still defaults to 1h |
-| 15 | Custom court type labels | — | `6c84b0b` |
+| 12 | ~~Multiple named ball machines~~ ✅ **done** | `st_marlow_ball_machine` | With 2+ machines the server rejected every mobile booking that added one |
+| 13 | ~~Reservation type when editing~~ ✅ **done** | — | Mobile already preserved it; it could not be *changed* |
+| 14 | ~~Default booking length 2h~~ ✅ **done** | — | Mobile tapped to a 30-minute row, not 1h as first triaged |
+| 15 | ~~Custom court type labels~~ ✅ **already correct** | — | Mobile renders the stored type verbatim; no filter to break |
 | 16 | Bulletin signup withdrawal, min-participant messaging | — | Mobile has signup + share, no withdraw |
 
 Lessons, Pro Shop, Padel and My Level Group appear in this window too, but they are new screens and belong to Phase 3.
 
-**Landed so far:** items 1–8 and 11. Eight remain (9, 10, 12–16).
+**Landed so far:** items 1–15. **One remains: item 16** (bulletin signup withdrawal).
+
+**Item 9 — pay at front desk.** A second booking button, under web's conditions, sending `payAtFrontDesk`. The server validates the flag and the guest fee itself ("never trust the client alone"), so an unmet condition falls through to Stripe rather than booking free.
+
+**Item 10 — daily billing.** This was a live bug, not a display gap: `courtRequiresPayment` read only `bookingAmountCents`, so a court billed daily — whose price sits in `dailyRateCents` — **read as free**. Mobile offered "Confirm Booking" on a reservation the server charges for. Now mirrors web's `billingMode` check, with 10 tests.
+
+**Item 12 — multiple ball machines.** Also a hard failure, not a gap. `resolveSelectedMachine` throws "Choose which ball machine to add" when a facility has 2+ active machines and the client names none — so at those facilities *every* mobile booking that added a ball machine failed. Mobile now fetches the machines, auto-selects when there is one, shows a picker at two or more, and blocks the submit rather than sending a request the server will reject.
+
+**Item 13 — reservation type on edit.** Mobile already carried the type through the recreate path, so web's "drops the type" bug never existed here. What was missing was the other half: the type could not be *changed*. `EditBookingModal` now has the same flag-aware chip row as the Book tab, including the Deer Lake required rule.
+
+**Item 14 — default booking length.** My triage had this backwards: `434fb6e` moved *web* to 2 hours to match mobile. But mobile's calendar tap actually selects a single 30-minute row, so the two still diverged. A single-row tap now requests `DEFAULT_BOOKING_DURATION_MINUTES` (shared constant), which the booking screen clamps to real availability — a court with 30 minutes free still opens at 30 minutes. A deliberate drag is untouched.
+
+**Item 15 — custom court labels.** No work needed. Mobile renders `court.courtType` verbatim through the shared subtitle helper, so a custom label like "Clubhouse" already displays; mobile never had the court-type filter that web's `courtTypeLabel` serves.
 
 **Item 7 — Club Info rules.** The max-duration precedence was worth sharing rather than porting: three generations of key names plus the tennis/pickleball split, mirroring the rules engine. It now lives in `shared/utils/clubInfoRules.ts` with 26 tests, **web was refactored onto it** (67 lines of duplicated logic deleted from `ClubInfo.tsx`), and mobile renders the same rows. Also shared: `parseBookingRules`, which handles the booking rules arriving as an object *or* a JSON string with `peakHoursSlots` itself sometimes double-encoded. Mobile gates the section on membership and General Rules text on its flag, as web does, rendering the HTML through `htmlToDisplayText`.
 

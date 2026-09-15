@@ -17,13 +17,13 @@ You have three ways to delete your account.
 ### From the mobile app (recommended)
 
 1. Open the CourtTime mobile app and sign in.
-2. Tap **Profile** → **Settings** → **Delete Account**.
-3. Confirm the deletion when prompted.
+2. Go to the **Profile** tab and scroll to the bottom.
+3. Tap **Delete Account** and confirm when prompted.
 
 ### From the web app
 
 1. Sign in at [courttimeapp.com](https://courttimeapp.com).
-2. Open your profile menu and choose **Delete Account**.
+2. Open **My Profile** and scroll to **Delete Account**.
 3. Confirm the deletion.
 
 ### By email
@@ -78,6 +78,7 @@ We do **not** retain your messages, profile content, or contact information afte
 - **Future bookings** — any future court reservations under your account are cancelled and the slots are released.
 - **Past bookings** — anonymized records remain for facility statistics. Personal identifiers are removed.
 - **Outstanding fees** — any facility fees, fines, or other obligations owed to your facility are between you and the facility. Deleting your CourtTime account does not discharge those obligations. Resolve any outstanding matters with the facility before deleting.
+- **Facility administrators** — if you are the only administrator of a facility, deletion is refused until another administrator is added. Otherwise the facility would be left with nobody able to manage its courts, members, or billing. Add a second administrator, or contact support, and then delete.
 
 ---
 

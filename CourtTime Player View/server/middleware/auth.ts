@@ -53,7 +53,7 @@ export function verifyToken(token: string): JwtPayload | null {
  * Middleware: Require authentication
  * Returns 401 if no valid token is provided
  */
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith('Bearer ')) {
@@ -69,8 +69,36 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
 
+  // A deleted account must stop working immediately, as
+  // legal/ACCOUNT_DELETION.md promises. Tokens live for 7 days and carry no
+  // revocation, so without this check a deleted member's existing session
+  // would keep working for up to a week. The cost is one primary-key lookup
+  // per authenticated request.
+  if (await isDeletedAccount(payload.userId)) {
+    res.status(401).json({ success: false, error: 'This account has been deleted' });
+    return;
+  }
+
   req.user = payload;
   next();
+}
+
+/**
+ * Whether this account has been deleted.
+ *
+ * Fails open: if the database is unreachable we let the request through rather
+ * than locking every member out of the app over a transient error. The worst
+ * case is a deleted account working slightly longer, which the login block and
+ * token expiry still bound.
+ */
+async function isDeletedAccount(userId: string): Promise<boolean> {
+  try {
+    const { query } = await import('../../src/database/connection');
+    const result = await query('SELECT deleted_at FROM users WHERE id = $1', [userId]);
+    return Boolean(result.rows[0]?.deleted_at);
+  } catch {
+    return false;
+  }
 }
 
 /**

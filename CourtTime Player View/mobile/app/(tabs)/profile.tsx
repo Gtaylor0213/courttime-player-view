@@ -72,6 +72,7 @@ function tryMarkJoinTermsFitWithoutScroll(
 
 export default function ProfileScreen() {
   const { user, logout, updateUser, facilities } = useAuth();
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const canManageMembershipRequestEmailAlerts =
     (user?.adminFacilities?.length ?? 0) > 0 || user?.userType === 'admin';
   const router = useRouter();
@@ -350,6 +351,53 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: logout },
     ]);
+  }
+
+  /**
+   * Account deletion, required by both app stores for any app that allows
+   * account creation. Two steps on purpose: the first explains what is about to
+   * happen, the second is the point of no return.
+   */
+  function handleDeleteAccount() {
+    showAlert(
+      'Delete Account',
+      'This permanently deletes your CourtTime account.\n\n' +
+        '· Your upcoming reservations are cancelled and the courts released\n' +
+        '· Your club memberships end\n' +
+        '· Your profile and messages are deleted\n\n' +
+        'Any fees you owe a club are still owed. This cannot be undone.',
+      [
+        { text: 'Keep My Account', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            showAlert('Delete Account', 'Last chance — delete your account permanently?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete Account', style: 'destructive', onPress: confirmDeleteAccount },
+            ]);
+          },
+        },
+      ]
+    );
+  }
+
+  async function confirmDeleteAccount() {
+    if (!user?.id || deletingAccount) return;
+    setDeletingAccount(true);
+    const res = await api.delete(`/api/users/${user.id}`);
+    setDeletingAccount(false);
+
+    if (res.success) {
+      // Sign out locally so the cached session cannot outlive the account.
+      await logout();
+      return;
+    }
+
+    showAlert(
+      'Could not delete account',
+      res.error || 'Something went wrong. Please try again, or contact support.'
+    );
   }
 
   const getInitials = () => {
@@ -1018,6 +1066,25 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Account deletion — required by the App Store and Play Store */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={handleDeleteAccount}
+          disabled={deletingAccount}
+          accessibilityRole="button"
+          accessibilityLabel="Delete account"
+        >
+          <Text style={styles.deleteAccountText}>
+            {deletingAccount ? 'Deleting…' : 'Delete Account'}
+          </Text>
+        </TouchableOpacity>
+        <Text style={styles.deleteAccountHint}>
+          Permanently deletes your account, cancels upcoming reservations, and ends your club
+          memberships.
+        </Text>
+      </View>
+
       <View style={{ height: Spacing.xl }} />
     </ScrollView>
   );
@@ -1190,6 +1257,21 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  deleteAccountButton: {
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
+  deleteAccountText: {
+    fontSize: FontSize.md,
+    color: Colors.error,
+    fontWeight: '600',
+  },
+  deleteAccountHint: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.lg,
   },
   logoutButton: {
     backgroundColor: Colors.card,

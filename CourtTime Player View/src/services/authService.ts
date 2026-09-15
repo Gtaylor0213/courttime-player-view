@@ -1,4 +1,5 @@
 import { query, transaction } from '../database/connection';
+import { deleteUserAccount, SoleFacilityAdminError } from './accountDeletionService';
 import { User, UserPreferences, PlayerProfile, FacilityMembership } from '../types/database';
 import * as bcrypt from 'bcrypt';
 
@@ -132,7 +133,7 @@ export async function registerUser(
   try {
     // Check if user already exists
     const existingUser = await query(
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL',
       [email.toLowerCase()]
     );
 
@@ -266,7 +267,8 @@ export async function loginUser(email: string, password: string): Promise<LoginR
         pp.ntrp_rating as "ustaRating"
        FROM users u
        LEFT JOIN player_profiles pp ON u.id = pp.user_id
-       WHERE u.email = $1`,
+       WHERE u.email = $1
+         AND u.deleted_at IS NULL`,
       [email.toLowerCase()]
     );
 
@@ -405,7 +407,8 @@ export async function getUserById(userId: string): Promise<User | null> {
         pp.ntrp_rating as "ustaRating"
        FROM users u
        LEFT JOIN player_profiles pp ON u.id = pp.user_id
-       WHERE u.id = $1`,
+       WHERE u.id = $1
+         AND u.deleted_at IS NULL`,
       [userId]
     );
 
@@ -541,45 +544,27 @@ export async function updateUserProfile(
 /**
  * Delete user account and all associated data (GDPR-style hard delete)
  */
+/**
+ * Delete the caller's own account.
+ *
+ * Delegates to accountDeletionService, which anonymizes the account inside a
+ * single transaction. The previous implementation here ran a sequence of
+ * unwrapped statements ending in `DELETE FROM users`; that threw for any member
+ * with pro-shop history (those tables reference users ON DELETE RESTRICT) after
+ * already deleting their memberships and profile, and it cascaded past bookings
+ * away, which `legal/ACCOUNT_DELETION.md` promises to keep in anonymized form.
+ */
 export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // Cancel all active/confirmed future bookings first
-    await query(
-      `UPDATE bookings
-       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $1 AND status IN ('confirmed', 'pending')
-         AND booking_date >= CURRENT_DATE`,
-      [userId]
-    );
-
-    // Remove facility memberships and admin roles
-    await query(`DELETE FROM facility_memberships WHERE user_id = $1`, [userId]);
-    await query(`DELETE FROM facility_admins WHERE user_id = $1`, [userId]);
-
-    // Remove player profile data
-    await query(`DELETE FROM player_profiles WHERE user_id = $1`, [userId]);
-
-    // Remove user preferences
-    await query(`DELETE FROM user_preferences WHERE user_id = $1`, [userId]);
-
-    // Remove strikes
-    await query(`DELETE FROM strikes WHERE user_id = $1`, [userId]);
-
-    // Remove notifications
-    await query(`DELETE FROM notifications WHERE user_id = $1`, [userId]).catch(() => {});
-
-    // Remove rate limits
-    await query(`DELETE FROM rate_limits WHERE user_id = $1`, [userId]).catch(() => {});
-
-    // Finally delete the user record
-    const result = await query(`DELETE FROM users WHERE id = $1 RETURNING id`, [userId]);
-
-    if (result.rows.length === 0) {
-      return { success: false, error: 'User not found' };
-    }
-
+    await deleteUserAccount(userId);
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
+    if (error instanceof SoleFacilityAdminError) {
+      return { success: false, error: error.message };
+    }
+    if (error?.message === 'Account not found' || error?.message?.includes('already been deleted')) {
+      return { success: false, error: error.message };
+    }
     console.error('Delete user error:', error);
     return { success: false, error: 'Failed to delete account' };
   }

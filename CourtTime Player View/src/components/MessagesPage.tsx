@@ -73,7 +73,7 @@ export function MessagesPage() {
               </TabsTrigger>
               <TabsTrigger value="levels" className="gap-2">
                 <Layers className="h-4 w-4 shrink-0" />
-                {isFacilityAdmin ? 'Player Levels' : 'My Level'}
+                {isFacilityAdmin ? 'Player Groups' : 'My Group'}
               </TabsTrigger>
             </TabsList>
 

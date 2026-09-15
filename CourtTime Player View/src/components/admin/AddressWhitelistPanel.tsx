@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
-import { Home, Plus, Upload, Download, X } from 'lucide-react';
+import { Home, Plus, Upload, Download, Send, X } from 'lucide-react';
 import { addressWhitelistApi } from '../../api/client';
 import {
   buildWhitelistExportRows,
@@ -37,6 +37,7 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
   const [newLastName, setNewLastName] = useState('');
   const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [whitelistUploading, setWhitelistUploading] = useState(false);
+  const [resendingPending, setResendingPending] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const whitelistFileRef = useRef<HTMLInputElement>(null);
 
@@ -190,6 +191,31 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
     XLSX.writeFile(workbook, `whitelist-${filterLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
+  const handleResendPending = async () => {
+    if (!facilityId || pendingCount === 0) return;
+
+    setResendingPending(true);
+    try {
+      const response = await addressWhitelistApi.resendPending(facilityId);
+      if (response.success) {
+        const invitesQueued = response.data?.invitesQueued ?? 0;
+        toast.success(
+          invitesQueued > 0
+            ? `Resending ${invitesQueued} setup invite${invitesQueued === 1 ? '' : 's'} in the background`
+            : 'No pending invites to resend'
+        );
+        loadWhitelistAddresses();
+      } else {
+        toast.error(response.error || 'Failed to resend invites');
+      }
+    } catch (error) {
+      console.error('Error resending pending invites:', error);
+      toast.error('Failed to resend invites');
+    } finally {
+      setResendingPending(false);
+    }
+  };
+
   const handleRemoveAddress = async (addressId: string) => {
     if (!facilityId) return;
 
@@ -314,6 +340,17 @@ export function AddressWhitelistPanel({ facilityId }: AddressWhitelistPanelProps
                   <TabsTrigger value="pending">Not Joined ({pendingCount})</TabsTrigger>
                 </TabsList>
               </Tabs>
+              {statusFilter === 'pending' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResendPending}
+                  disabled={resendingPending || pendingCount === 0}
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  {resendingPending ? 'Resending...' : 'Resend'}
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleExport}>
                 <Download className="h-4 w-4 mr-1" />
                 Export

@@ -7,7 +7,8 @@ import {
   updateWhitelistedAddress,
   isAddressWhitelisted,
   getAccountCountAtAddress,
-  getWhitelistWithMembers
+  getWhitelistWithMembers,
+  resendPendingInvites
 } from '../../src/services/addressWhitelistService';
 import { ensureFacilityAdmin } from '../middleware/facilityAdmin';
 
@@ -107,6 +108,28 @@ router.post('/:facilityId/bulk', async (req, res, next) => {
 
     const result = await bulkAddWhitelistedAddresses(facilityId, addresses);
     res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/address-whitelist/:facilityId/resend-pending
+ * Resend setup invites to every whitelist row that hasn't joined yet
+ */
+router.post('/:facilityId/resend-pending', async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+
+    if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
+
+    const result = await resendPendingInvites(facilityId);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
   } catch (error) {
     next(error);
   }

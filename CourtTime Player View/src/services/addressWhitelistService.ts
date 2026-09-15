@@ -159,6 +159,40 @@ async function sendBulkInvitesThrottled(rows: Array<{ id: string; email: string 
 }
 
 /**
+ * Resend setup invites to every whitelist row for a facility that has an email
+ * on file but hasn't joined yet. Mirrors the throttled send used for bulk
+ * imports so a large "not joined" list doesn't hit Resend's rate limit.
+ */
+export async function resendPendingInvites(
+  facilityId: string
+): Promise<{ success: boolean; invitesQueued: number; error?: string }> {
+  try {
+    const result = await query(
+      `SELECT id, email
+       FROM address_whitelist
+       WHERE facility_id = $1
+         AND email IS NOT NULL
+         AND TRIM(email) <> ''
+         AND setup_invite_accepted_at IS NULL`,
+      [facilityId]
+    );
+
+    const rows = result.rows as Array<{ id: string; email: string }>;
+
+    if (rows.length > 0) {
+      sendBulkInvitesThrottled(rows).catch((err) =>
+        console.error('Resend pending invites failed:', err)
+      );
+    }
+
+    return { success: true, invitesQueued: rows.length };
+  } catch (error) {
+    console.error('Error resending pending invites:', error);
+    return { success: false, invitesQueued: 0, error: 'Failed to resend invites' };
+  }
+}
+
+/**
  * Get all whitelisted addresses for a facility
  */
 export async function getWhitelistedAddresses(facilityId: string): Promise<AddressWhitelist[]> {

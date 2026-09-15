@@ -1631,6 +1631,12 @@ export const addressWhitelistApi = {
       body: JSON.stringify({ addresses }),
     });
   },
+
+  resendPending: async (facilityId: string) => {
+    return apiRequest(`/api/address-whitelist/${facilityId}/resend-pending`, {
+      method: 'POST',
+    });
+  },
 };
 
 // Messages API

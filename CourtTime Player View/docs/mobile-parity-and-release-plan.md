@@ -129,15 +129,15 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 |---|------|------|----------------|
 | 1 | ~~Additional courts + recurring gated on `isAdmin` alone~~ ✅ **done** | `player_multiple_courts`, `player_recurring_bookings` | Mobile was *stricter* than web: a facility that enabled either flag gave its members the feature on web and not in the app |
 | 2 | ~~Court waiver acceptance~~ ✅ **done** | `court_waivers` *(default ON)* | Members were hard-blocked: the server rejects with `COURT-WAIVER-NOT-ACCEPTED` and mobile offered no way to resolve it |
-| 3 | Deer Lake booking type required | `deer_lake_reservation_types` | Web requires a booking type when on (`901b614`); mobile does not, so the server can reject |
-| 4 | Member number prompt | `member_number` | New members never get asked on mobile (`ed2522b`) |
-| 5 | Split court payments | `split_court_payments` | Five web commits (`9c7529f`→`bd28061`); entirely absent on mobile |
-| 6 | Guest count + names | — | Web requires names (`2547bc2`, `e9af548`); mobile sends a bare `bringGuest` boolean, so admins see nameless guests. Server accepts either, so this is divergence, not breakage |
+| 3 | ~~Deer Lake booking type required~~ ✅ **done** | `deer_lake_reservation_types` | Mobile used the standard list and defaulted to `match`, which Deer Lake's list does not contain |
+| 4 | ~~Member number prompt~~ ✅ **done** | `member_number` | Mobile never asked, so those members had no number on file |
+| 5 | ~~Split court payments~~ ✅ **done** | `split_court_payments` | Entirely absent on mobile |
+| 6 | ~~Guest count + names~~ ✅ **done** | — | Mobile sent a bare `bringGuest` boolean, so admins saw nameless guests |
 | 7 | Club Info: rules, General Rules, per-court-type max duration | `general_rules`, `court_type_max_duration` | `a603537`, `c3f6971`, `84d61a0` |
 | 8 | Week/month calendar overview | `week_month_view` *(default ON)* | `b89a408`; mobile is day-view only |
 | 9 | University Club "pay at front desk" | `university_club_guest_fee` | `85545f8` |
 | 10 | Daily vs. hourly court billing | `court_daily_billing` | `4f8d109` |
-| 11 | BHR "Party" reservation type | `bhr_reservation_types` | `bc5e401` |
+| 11 | ~~BHR "Party" reservation type~~ ✅ **done** (with item 3) | `bhr_reservation_types` | `bc5e401` |
 | 12 | Multiple named ball machines | `st_marlow_ball_machine` | `8f1573a`; mobile assumes a single machine |
 | 13 | Reservation type preserved when editing | — | `d68f464` |
 | 14 | Default booking length 2h | — | `434fb6e`; mobile still defaults to 1h |
@@ -146,7 +146,17 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 
 Lessons, Pro Shop, Padel and My Level Group appear in this window too, but they are new screens and belong to Phase 3.
 
-**Landed so far:** items 1–2.
+**Landed so far:** items 1–6 and 11. Ten remain (7–10, 12–16).
+
+**Items 3 + 11 — reservation type lists.** `reservationTypeKeys` now follows web's precedence (Deer Lake replaces the standard list, BHR appends "Party"), the type is required where Deer Lake requires it, and the label drops "(Optional)" accordingly. The subtle part: mobile defaults `bookingType` to `match`, which Deer Lake's list does not contain — so the chip row would have shown nothing selected while still submitting `match`, and the new required-type check would have waved it through. An effect clears a selection the active list does not offer.
+
+**Item 4 — member number.** `MemberNumberGate`, rendered over the app rather than as an early return like the terms and rules gates, because it depends on the selected facility, which the member changes from inside the tabs. Deliberately not dismissible: no cancel, and Android back is a no-op. `memberNumbers` already reached mobile in the auth payload (it is on `AuthUserShape`, not `User`) and was simply being ignored; mobile's `AuthUser` now declares it.
+
+**Item 5 — split court payments.** `SplitPaymentPicker` mirroring web's, shown under the same five conditions (flag, paid court, single court, not recurring, not post-play settlement), with `splitParticipantIds` reaching the booking payload. The split response flows through the same `requiresPayment` / `checkoutUrl` path mobile already handles, so no new payment plumbing was needed.
+
+**Item 6 — guests.** Replaced the `bringGuest` boolean with web's 0–3 count selector plus a required name per guest, sending `guestCount` and `guestNames`, and the fee total now scales with the count.
+
+**Landed earlier:** items 1–2.
 
 **Item 1** — `canBookAdditionalCourts` / `canUseRecurring` in `book.tsx` now mirror web's `isAdmin || flag`, the submit path uses the same capability as the UI that offered it, and the "(Admin)" label is gone from the recurring control. Three tests, two of which were confirmed to fail against the old gating. This is also the first production consumer of the Phase 1 flag context.
 

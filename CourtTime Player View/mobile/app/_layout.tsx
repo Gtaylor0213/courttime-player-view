@@ -21,6 +21,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
 import { GeneralRulesAcceptanceGate } from '../src/components/GeneralRulesAcceptanceGate';
+import { MemberNumberGate } from '../src/components/MemberNumberGate';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 import {
   getNotificationData,
@@ -132,30 +133,38 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        animation: 'fade',
-        contentStyle: { backgroundColor: Colors.surface },
-      }}
-    >
-      {/* Tabs render their own header; auth screens are bare. */}
-      <Stack.Screen
-        name="(tabs)"
-        options={{
-          title: 'Home',
-          headerShown: false,
-          // Fade + native stack can leave the tab group receiving touches incorrectly in Expo Go.
-          animation: 'none',
+    <>
+      <Stack
+        screenOptions={{
+          animation: 'fade',
+          contentStyle: { backgroundColor: Colors.surface },
         }}
-      />
-      <Stack.Screen name="auth" options={{ headerShown: false }} />
-      {/* Top-level screens get the default Stack header with a back button. */}
-      <Stack.Screen name="club-info" />
-      <Stack.Screen name="notification-settings" />
-      <Stack.Screen name="payments" options={{ title: 'Payments' }} />
-      <Stack.Screen name="payment-success" options={{ title: 'Payment' }} />
-      <Stack.Screen name="lockout-paid" options={{ title: 'Payment' }} />
-    </Stack>
+      >
+        {/* Tabs render their own header; auth screens are bare. */}
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            title: 'Home',
+            headerShown: false,
+            // Fade + native stack can leave the tab group receiving touches incorrectly in Expo Go.
+            animation: 'none',
+          }}
+        />
+        <Stack.Screen name="auth" options={{ headerShown: false }} />
+        {/* Top-level screens get the default Stack header with a back button. */}
+        <Stack.Screen name="club-info" />
+        <Stack.Screen name="notification-settings" />
+        <Stack.Screen name="payments" options={{ title: 'Payments' }} />
+        <Stack.Screen name="payment-success" options={{ title: 'Payment' }} />
+          <Stack.Screen name="lockout-paid" options={{ title: 'Payment' }} />
+      </Stack>
+      {/*
+        Rendered over the app rather than as an early return: unlike the terms
+        and rules gates above, this one depends on the selected facility, which
+        the member changes from inside the tabs.
+      */}
+      {isAuthenticated && <MemberNumberGate />}
+    </>
   );
 }
 

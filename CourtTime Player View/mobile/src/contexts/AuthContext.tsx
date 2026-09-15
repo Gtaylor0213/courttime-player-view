@@ -17,6 +17,8 @@ import { sortFacilitiesByName } from '../../../shared/utils/facilitySort';
 interface AuthUser extends User {
   memberFacilities: string[];
   adminFacilities: string[];
+  /** Member number per facility, for clubs with the member_number flag on. */
+  memberNumbers?: Record<string, string>;
   skillLevel?: string;
   bio?: string;
   ustaRating?: string;

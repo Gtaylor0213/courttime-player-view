@@ -72,6 +72,9 @@ jest.mock('../src/contexts/AuthContext', () => ({
 /** Facility flags under test; per-test overrides push keys into this set. */
 const mockEnabledFeatures = new Set<string>();
 
+/** Lets a test swap the court the mocked grid opens the modal with. */
+let mockCourtOverrides: Record<string, unknown> | null = null;
+
 jest.mock('../src/contexts/FeatureFlagContext', () => ({
   useFeatureFlags: jest.fn(() => ({
     enabledFeatures: [...mockEnabledFeatures],
@@ -96,7 +99,15 @@ jest.mock('../src/components/CourtCalendarGrid', () => {
           testID="open-booking-modal"
           onPress={() =>
             onBookingSelected(
-              { id: 'court-1', name: 'Court 1', status: 'available', isWalkUp: false },
+              mockCourtOverrides ?? {
+                id: 'court-1',
+                name: 'Court 1',
+                status: 'available',
+                isWalkUp: false,
+                // The real grid passes courts straight from the facility list,
+                // fees included.
+                guestFeeCents: 1500,
+              },
               '10:00:00',
               '11:00:00'
             )
@@ -213,6 +224,7 @@ describe('BookCourtScreen booking modal confirm copy', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockEnabledFeatures.clear();
+    mockCourtOverrides = null;
     tree = undefined;
     createBookingSpy = jest
       .spyOn(paymentApi.bookings, 'create')
@@ -223,7 +235,13 @@ describe('BookCourtScreen booking modal confirm copy', () => {
           success: true,
           data: {
             courts: [
-              { id: 'court-1', name: 'Court 1', status: 'available', isWalkUp: false },
+              {
+                id: 'court-1',
+                name: 'Court 1',
+                status: 'available',
+                isWalkUp: false,
+                guestFeeCents: 1500,
+              },
               { id: 'court-2', name: 'Court 2', status: 'available', isWalkUp: false },
             ],
           },
@@ -402,24 +420,25 @@ describe('BookCourtScreen booking modal confirm copy', () => {
    * gates them on `isAdmin || flag`. A facility that switched the flag on gave
    * its members the feature on web and not in the app.
    */
-  describe('flag-gated booking capabilities', () => {
-    async function renderAsMember() {
-      const { useAuth } = require('../src/contexts/AuthContext');
-      (useAuth as jest.Mock).mockImplementation(() =>
-        mockAuth({ user: { id: 'user-1', adminFacilities: [] } })
-      );
-      await act(async () => {
-        tree = renderer.create(<BookCourtScreen />);
-      });
-      await flushMicrotasks();
-      await expandBookingTools(tree!);
-      // The booking modal is where these controls live; the mocked calendar
-      // grid opens it the same way the real grid does.
-      await pressByTestId(tree!, 'open-booking-modal');
-      await flushMicrotasks();
-      return visibleModalTexts(tree!);
-    }
+  /** Renders as a plain member (no admin facilities) with the booking modal open. */
+  async function renderAsMember() {
+    const { useAuth } = require('../src/contexts/AuthContext');
+    (useAuth as jest.Mock).mockImplementation(() =>
+      mockAuth({ user: { id: 'user-1', adminFacilities: [] } })
+    );
+    await act(async () => {
+      tree = renderer.create(<BookCourtScreen />);
+    });
+    await flushMicrotasks();
+    await expandBookingTools(tree!);
+    // The booking modal is where these controls live; the mocked calendar
+    // grid opens it the same way the real grid does.
+    await pressByTestId(tree!, 'open-booking-modal');
+    await flushMicrotasks();
+    return visibleModalTexts(tree!);
+  }
 
+  describe('flag-gated booking capabilities', () => {
     it('hides additional courts and recurring from a member when both flags are off', async () => {
       const texts = await renderAsMember();
       expect(texts.join(' ')).not.toContain('Additional Courts');
@@ -438,6 +457,175 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       const texts = await renderAsMember();
       expect(texts.join(' ')).toContain('Recurring Booking');
       expect(texts.join(' ')).not.toContain('Additional Courts');
+    });
+  });
+
+  /**
+   * Split court payments: the picker only appears for a paid court under the
+   * flag, and the chosen participants have to reach the booking payload — this
+   * is a money path, so the payload assertion is the point of the test.
+   */
+  describe('split court payments', () => {
+    /** A paid court, so selectedCourtRequiresPayment is true. */
+    function paidCourt() {
+      return {
+        id: 'court-1',
+        name: 'Court 1',
+        status: 'available',
+        isWalkUp: false,
+        requirePayment: true,
+        bookingAmountCents: 4000,
+      };
+    }
+
+    /**
+     * The picker is a composite component, so its text does not appear in the
+     * modal's static children — read the rendered tree.
+     */
+    function renderedText(): string {
+      return tree!.root
+        .findAllByType(Text)
+        .map((n) => {
+          const c = n.props.children;
+          return Array.isArray(c) ? c.map(String).join('') : String(c ?? '');
+        })
+        .join(' ');
+    }
+
+    it('stays hidden when the flag is off', async () => {
+      mockCourtOverrides = paidCourt();
+      await renderAsMember();
+      expect(renderedText()).not.toContain('Split this court fee');
+    });
+
+    it('is offered for a paid court when the flag is on', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
+      mockCourtOverrides = paidCourt();
+      await renderAsMember();
+      expect(renderedText()).toContain('Split this court fee with members');
+    });
+
+    it('stays hidden for an unpaid court even with the flag on', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
+      await renderAsMember();
+      expect(renderedText()).not.toContain('Split this court fee');
+    });
+
+    it('stays hidden for a paid court when post-play settlement is on', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
+      mockEnabledFeatures.add(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
+      mockCourtOverrides = paidCourt();
+      await renderAsMember();
+      expect(renderedText()).not.toContain('Split this court fee');
+    });
+  });
+
+  /**
+   * Guests: web collects a count (0-3) and a required name each. Mobile sent
+   * only a bringGuest boolean, so admins saw nameless guests on the booking.
+   */
+  describe('guests', () => {
+    function pressGuestCount(count: number) {
+      const label = count === 0 ? 'No guests' : `${count} guest${count > 1 ? 's' : ''}`;
+      const node = tree!.root.findAll(
+        (n) => (n.props as { accessibilityLabel?: string })?.accessibilityLabel === label
+      )[0];
+      if (!node) throw new Error(`no guest count control for "${label}"`);
+      act(() => {
+        (node.props as { onPress?: () => void }).onPress?.();
+      });
+    }
+
+    /** Text is split across nodes, so collapse the joined whitespace. */
+    function squash(parts: string[]): string {
+      return parts.join(' ').replace(/\s+/g, ' ');
+    }
+
+    it('offers a guest count with the per-guest fee', async () => {
+      const texts = squash(await renderAsMember());
+      expect(texts).toContain('Guests');
+      expect(texts).toContain('$15.00 per guest, max 3');
+    });
+
+    it('asks for a name per guest and totals the fee', async () => {
+      await renderAsMember();
+      pressGuestCount(2);
+      await flushMicrotasks();
+
+      expect(squash(visibleModalTexts(tree!))).toContain('= $30.00 guest fee');
+
+      // findAll matches the composite and its host node, so count distinct labels.
+      const names = new Set(
+        tree!.root
+          .findAll((n) =>
+            /^Guest \d name$/.test((n.props as { accessibilityLabel?: string })?.accessibilityLabel || '')
+          )
+          .map((n) => (n.props as { accessibilityLabel: string }).accessibilityLabel)
+      );
+      expect([...names].sort()).toEqual(['Guest 1 name', 'Guest 2 name']);
+    });
+
+    it('blocks the booking until every guest is named', async () => {
+      const { showAlert } = require('../src/utils/alert');
+      await renderAsMember();
+      pressGuestCount(1);
+      await flushMicrotasks();
+
+      await act(async () => {
+        pressTouchableContainingText(tree!, 'Pay and Book');
+      });
+      await flushMicrotasks();
+
+      expect(showAlert).toHaveBeenCalledWith('Booking failed', 'Please enter a name for each guest.');
+      expect(createBookingSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * Reservation type lists, mirroring web's BookingWizard: Deer Lake's list
+   * replaces the standard one and makes a type mandatory; BHR's appends
+   * "Party" to it.
+   */
+  describe('reservation type lists', () => {
+    it('shows the standard list and marks the type optional by default', async () => {
+      const texts = (await renderAsMember()).join(' ');
+      expect(texts).toContain('Booking Type (Optional)');
+      expect(texts).toContain('Fun');
+      expect(texts).not.toContain('ALTA Tennis');
+      expect(texts).not.toContain('Party');
+    });
+
+    it('swaps in the Deer Lake list and drops the optional labelling', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+      const texts = (await renderAsMember()).join(' ');
+      expect(texts).toContain('ALTA Tennis');
+      expect(texts).toContain('General Pickleball');
+      // The standard list is replaced, not extended.
+      expect(texts).not.toContain('Flex Match (T-2)');
+      expect(texts).toContain('Booking Type');
+      expect(texts).not.toContain('Booking Type (Optional)');
+    });
+
+    it('appends Party to the standard list for BHR', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
+      const texts = (await renderAsMember()).join(' ');
+      expect(texts).toContain('Party');
+      expect(texts).toContain('Fun');
+      expect(texts).toContain('Booking Type (Optional)');
+    });
+
+    it('clears the default type when the active list does not offer it', async () => {
+      // The 'match' default is absent from Deer Lake's list. If it survived,
+      // the chip row would show nothing selected while still submitting
+      // 'match', and the required-type check would pass it through.
+      mockEnabledFeatures.add(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+      await renderAsMember();
+
+      const selected = tree!.root
+        .findAll((n) => Boolean((n.props as { accessibilityState?: { selected?: boolean } })?.accessibilityState?.selected))
+        .map((n) => collectText((n.props as { children?: unknown }).children).join(' '));
+
+      expect(selected.join(' ')).not.toContain('Fun');
     });
   });
 });

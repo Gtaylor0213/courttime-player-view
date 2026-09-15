@@ -29,6 +29,22 @@ export const courtWaiverEndpoints = {
   accept: (courtId: string) => api.post('/api/bookings/court-waivers/accept', { courtId }),
 };
 
+export const memberEndpoints = {
+  /** Record the caller's member number for a facility that requires one. */
+  saveMyMemberNumber: (facilityId: string, memberNumber: string) =>
+    api.post(`/api/members/${facilityId}/me/member-number`, { memberNumber }),
+};
+
+export const bookingMemberEndpoints = {
+  /**
+   * Members of a facility matching a search, for picking split-payment
+   * participants. The server returns `{ success, members }` and requires at
+   * least 2 characters.
+   */
+  lookup: (facilityId: string, q: string) =>
+    api.get(`/api/bookings/facility/${facilityId}/members?q=${encodeURIComponent(q)}`),
+};
+
 export const strikesEndpoints = {
   check: (userId: string, facilityId: string) =>
     api.get(`/api/strikes/check/${userId}?facilityId=${encodeURIComponent(facilityId)}`),

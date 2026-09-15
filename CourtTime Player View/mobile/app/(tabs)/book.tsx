@@ -58,8 +58,11 @@ import {
 } from '../../src/utils/bookingCalendar';
 import { userFacingApiMessage, type ApiFailureShape } from '../../src/utils/apiUserMessages';
 import {
+  BHR_RESERVATION_TYPE_KEYS,
+  DEER_LAKE_RESERVATION_TYPE_KEYS,
   RESERVATION_LABEL_TYPE_KEYS,
   getBookingTypeLabel,
+  type BookingTypeKey,
 } from '../../../shared/constants/bookingTypes';
 import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/utils/strikeLockout';
 import { StrikeLockoutBanner } from '../../src/components/StrikeLockoutBanner';
@@ -68,6 +71,10 @@ import {
   CourtWaiverAcceptanceModal,
   useCourtWaiverGate,
 } from '../../src/components/CourtWaiverGate';
+import {
+  SplitPaymentPicker,
+  type SplitPaymentMember,
+} from '../../src/components/SplitPaymentPicker';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import {
   buildTimeSlotsFromAvailability,
@@ -128,6 +135,10 @@ interface RuleViolation {
   message: string;
   severity?: string;
 }
+
+/** Web caps guests at 3 per booking; keep the two in step. */
+const MAX_GUESTS = 3;
+const GUEST_COUNT_OPTIONS = [0, 1, 2, 3] as const;
 
 function bookingTypeLabel(typeKey: string): string {
   return getBookingTypeLabel(typeKey);
@@ -191,7 +202,13 @@ export default function BookCourtScreen() {
   const [recurringBookingEnabled, setRecurringBookingEnabled] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
-  const [bringGuest, setBringGuest] = useState(false);
+  // Web collects a guest count (0-3) and a name per guest; mobile sent only a
+  // bringGuest boolean, so admins saw nameless guests on the reservation.
+  const [guestCount, setGuestCount] = useState(0);
+  const [guestNames, setGuestNames] = useState<string[]>([]);
+  const [splitPayment, setSplitPayment] = useState(false);
+  const [splitMembers, setSplitMembers] = useState<SplitPaymentMember[]>([]);
+  const bringGuest = guestCount > 0;
   const [addBallMachine, setAddBallMachine] = useState(false);
 
   // Rule violations modal payload (shown when modalKind === 'violations')
@@ -202,6 +219,25 @@ export default function BookCourtScreen() {
   // members get them only where the facility has turned the flag on.
   const canBookAdditionalCourts = isAdmin || isFeatureEnabled(FEATURE_FLAGS.PLAYER_MULTIPLE_COURTS);
   const canUseRecurring = isAdmin || isFeatureEnabled(FEATURE_FLAGS.PLAYER_RECURRING_BOOKINGS);
+  // Reservation type list, same precedence as web's BookingWizard: Deer Lake's
+  // list replaces the standard one, BHR's appends "Party" to it.
+  const splitCourtPaymentsEnabled = isFeatureEnabled(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
+  const postPlaySettlementEnabled = isFeatureEnabled(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
+  const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const bhrReservationTypes = isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
+  const reservationTypeKeys = deerLakeReservationTypes
+    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : bhrReservationTypes
+      ? BHR_RESERVATION_TYPE_KEYS
+      : RESERVATION_LABEL_TYPE_KEYS;
+  // The 'match' default is not in Deer Lake's list. Without this the chip row
+  // would show nothing selected while still sending a type the facility does
+  // not use — and the required-type check below would wave it through.
+  useEffect(() => {
+    if (bookingType && !reservationTypeKeys.includes(bookingType as BookingTypeKey)) {
+      setBookingType('');
+    }
+  }, [reservationTypeKeys, bookingType]);
   const [selectedCalendarBooking, setSelectedCalendarBooking] = useState<BookingWithDetails | null>(null);
   const [courtLoadError, setCourtLoadError] = useState<ApiFailureShape | null>(null);
 
@@ -258,7 +294,10 @@ export default function BookCourtScreen() {
     setRecurringBookingEnabled(false);
     setRecurringDays([]);
     setRecurringEndDate('');
-    setBringGuest(false);
+    setGuestCount(0);
+    setGuestNames([]);
+    setSplitPayment(false);
+    setSplitMembers([]);
     setAddBallMachine(false);
   }, [modalKind]);
 
@@ -674,6 +713,18 @@ export default function BookCourtScreen() {
       return;
     }
 
+    if (guestCount > 0 && guestNames.slice(0, guestCount).some((n) => !n.trim())) {
+      showAlert('Booking failed', 'Please enter a name for each guest.');
+      hapticError();
+      return;
+    }
+
+    if (deerLakeReservationTypes && !bookingType) {
+      showAlert('Booking failed', 'Please select a reservation type.');
+      hapticError();
+      return;
+    }
+
     const startTime = modalStartTime + ':00';
     const endTime = modalEndTime + ':00';
 
@@ -704,7 +755,7 @@ export default function BookCourtScreen() {
     const needsPaidCheckout =
       selectedCourtRequiresPayment ||
       extraCourtsRequirePayment ||
-      Boolean(bringGuest && primaryCourtGuestFee) ||
+      Boolean(guestCount > 0 && primaryCourtGuestFee) ||
       Boolean(addBallMachine && primaryCourtBallMachineFee);
     if (needsPaidCheckout && allCourtIds.length > 1) {
       showAlert(
@@ -854,6 +905,13 @@ export default function BookCourtScreen() {
         notes: bookingNotes.trim() || undefined,
         ...bookingCheckoutUrls,
         bringGuest: bringGuest || undefined,
+        splitParticipantIds:
+          splitPayment && splitMembers.length > 0
+            ? splitMembers.map((member) => member.userId)
+            : undefined,
+        guestCount: guestCount > 0 ? guestCount : undefined,
+        guestNames:
+          guestCount > 0 ? guestNames.slice(0, guestCount).map((n) => n.trim()) : undefined,
         addBallMachine: addBallMachine || undefined,
         ...(priorInThisRequest.length > 0
           ? { provisionalSameRequestBookings: [...priorInThisRequest] }
@@ -1342,7 +1400,9 @@ export default function BookCourtScreen() {
                 )}
 
                 {/* Booking Type */}
-                <Text style={styles.modalLabel}>Booking Type</Text>
+                <Text style={styles.modalLabel}>
+                  {deerLakeReservationTypes ? 'Booking Type' : 'Booking Type (Optional)'}
+                </Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -1350,7 +1410,7 @@ export default function BookCourtScreen() {
                   style={{ marginBottom: Spacing.sm }}
                 >
                   <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                    {RESERVATION_LABEL_TYPE_KEYS.map((key) => (
+                    {reservationTypeKeys.map((key) => (
                       <TouchableOpacity
                         key={key}
                         style={[styles.typeChip, bookingType === key && styles.typeChipSelected]}
@@ -1493,20 +1553,73 @@ export default function BookCourtScreen() {
                   </>
                 )}
 
+                {splitCourtPaymentsEnabled &&
+                selectedCourtRequiresPayment &&
+                additionalCourtIds.length === 0 &&
+                !recurringBookingEnabled &&
+                !postPlaySettlementEnabled ? (
+                  <SplitPaymentPicker
+                    facilityId={facilityId || ''}
+                    currentUserId={user?.id}
+                    enabled={splitPayment}
+                    onEnabledChange={setSplitPayment}
+                    members={splitMembers}
+                    onMembersChange={setSplitMembers}
+                  />
+                ) : null}
+
                 {primaryCourtGuestFee && additionalCourtIds.length === 0 && !recurringBookingEnabled ? (
-                  <View style={styles.guestFeeRow}>
-                    <View style={styles.guestFeeText}>
-                      <Text style={styles.modalLabel}>Bringing a guest</Text>
-                      <Text style={styles.guestFeeHint}>
-                        +{formatCentsAsUsd(primaryCourtGuestFee)} guest fee
-                      </Text>
+                  <View style={styles.guestSection}>
+                    <Text style={styles.modalLabel}>
+                      Guests ({formatCentsAsUsd(primaryCourtGuestFee)} per guest, max {MAX_GUESTS})
+                    </Text>
+                    <View style={styles.guestCountRow}>
+                      {GUEST_COUNT_OPTIONS.map((n) => (
+                        <TouchableOpacity
+                          key={n}
+                          style={[styles.guestCountChip, guestCount === n && styles.typeChipSelected]}
+                          onPress={() => {
+                            setGuestCount(n);
+                            setGuestNames((prev) =>
+                              Array.from({ length: n }, (_, i) => prev[i] || '')
+                            );
+                          }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: guestCount === n }}
+                          accessibilityLabel={n === 0 ? 'No guests' : `${n} guest${n > 1 ? 's' : ''}`}
+                        >
+                          <Text
+                            style={[
+                              styles.typeChipText,
+                              guestCount === n && styles.typeChipTextSelected,
+                            ]}
+                          >
+                            {n === 0 ? 'None' : n}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                      {guestCount > 0 ? (
+                        <Text style={styles.guestFeeHint}>
+                          = {formatCentsAsUsd(primaryCourtGuestFee * guestCount)} guest fee
+                        </Text>
+                      ) : null}
                     </View>
-                    <Switch
-                      value={bringGuest}
-                      onValueChange={setBringGuest}
-                      trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-                      thumbColor={bringGuest ? Colors.primary : Colors.textMuted}
-                    />
+                    {Array.from({ length: guestCount }, (_, i) => (
+                      <Input
+                        key={i}
+                        value={guestNames[i] || ''}
+                        onChangeText={(text) =>
+                          setGuestNames((prev) => {
+                            const updated = [...prev];
+                            updated[i] = text;
+                            return updated;
+                          })
+                        }
+                        placeholder={`Guest ${i + 1} name`}
+                        accessibilityLabel={`Guest ${i + 1} name`}
+                        maxLength={80}
+                      />
+                    ))}
                   </View>
                 ) : null}
 
@@ -1536,7 +1649,7 @@ export default function BookCourtScreen() {
                 ) : null}
 
                 {(selectedCourtRequiresPayment ||
-                  (bringGuest && primaryCourtGuestFee) ||
+                  (guestCount > 0 && primaryCourtGuestFee) ||
                   (addBallMachine && primaryCourtBallMachineFee)) &&
                 additionalCourtIds.length === 0 ? (
                   <Text style={styles.paidBookingHint}>
@@ -1563,7 +1676,7 @@ export default function BookCourtScreen() {
                     additionalCourtIds.length > 0
                       ? `Book ${1 + additionalCourtIds.length} Courts`
                       : selectedCourtRequiresPayment ||
-                          (bringGuest && primaryCourtGuestFee) ||
+                          (guestCount > 0 && primaryCourtGuestFee) ||
                           (addBallMachine && primaryCourtBallMachineFee)
                         ? 'Pay and Book'
                         : 'Confirm Booking'
@@ -2053,6 +2166,26 @@ const styles = StyleSheet.create({
   typeChipTextSelected: {
     color: Colors.primary,
     fontWeight: '600',
+  },
+  guestSection: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  guestCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flexWrap: 'wrap',
+  },
+  guestCountChip: {
+    minWidth: 44,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   guestFeeRow: {
     flexDirection: 'row',

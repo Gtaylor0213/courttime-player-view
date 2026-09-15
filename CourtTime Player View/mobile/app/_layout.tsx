@@ -16,6 +16,7 @@ import * as Notifications from 'expo-notifications';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { PaymentLockoutProvider } from '../src/contexts/PaymentLockoutContext';
+import { FeatureFlagProvider } from '../src/contexts/FeatureFlagContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
@@ -178,10 +179,13 @@ function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <AuthProvider>
-          <PaymentLockoutProvider>
-            <StatusBar style="auto" />
-            <RootLayoutNav />
-          </PaymentLockoutProvider>
+          {/* Inside AuthProvider: flags are resolved per selected facility. */}
+          <FeatureFlagProvider>
+            <PaymentLockoutProvider>
+              <StatusBar style="auto" />
+              <RootLayoutNav />
+            </PaymentLockoutProvider>
+          </FeatureFlagProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

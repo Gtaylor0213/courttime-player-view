@@ -98,15 +98,18 @@ Phases are ordered by dependency. Phases 4–6 can run in parallel with 2–3 be
 >
 > Also noted: `mobile/src/types/database.ts` tells the same `Date`-vs-string lie on the `Booking` interface, where `book.tsx` works around it with three `as any` casts. Not error-producing, so left alone to keep this phase tight.
 
-### Phase 1 — Feature-flag awareness (architectural prerequisite)
+### Phase 1 — Feature-flag awareness ✅ *(plumbing complete, 2026-09-15)*
 
 *Everything in Phase 3 depends on this.*
 
-- Add a `FeatureFlagContext` to mobile that fetches `GET /api/facilities/:id/feature-flags` on login and on facility switch, caches through `src/utils/offlineCache.ts` (flags must resolve offline), and re-fetches on app foreground.
-- Import flag keys from `shared/constants/featureFlags.ts` — never re-declare strings in mobile.
-- Make the tab bar and any new entry points flag-driven. With 8+ flagged player features, the bottom tab bar cannot absorb them all: **recommend a "More" tab** (or a hub section on Profile) that lists only the features enabled for the selected facility, leaving Home / Book / Community / Messages / Profile as the fixed tabs.
-- Decide and document the fail-closed rule: if the flag fetch fails, flagged features stay hidden. Add it to `docs/mobile-web-sync.md`.
-- Tests: flag-on renders entry point, flag-off hides it, fetch failure hides it, facility switch swaps the set.
+- ✅ **`FeatureFlagContext` added** (`mobile/src/contexts/FeatureFlagContext.tsx`), provided inside `AuthProvider` so it resolves per selected facility. Exposes `isFeatureEnabled(key)`, `enabledFeatures`, `flagsLoaded`, `flagsFromCache`, `refreshFlags`. Re-resolves on login, on facility switch, and on app foreground.
+- ✅ **Keys imported from `shared/constants/featureFlags.ts`.** No flag strings are re-typed in mobile.
+- ✅ **Resolution order documented** in `docs/mobile-web-sync.md`: live fetch → last known good cached set (**including stale**) → nothing. Flags **fail closed**. The stale tolerance is deliberate and needed its own cache primitive (`getStaleCachedData`), because the ordinary 30-minute TTL would strip a member's features mid-session while offline.
+- ✅ **8 tests** covering flag-on, flag-off, fetch failure, malformed payload, offline fallback to cache, facility switch, no-facility, and the stale-response race — a slow answer for a facility the member already left must not repaint the new one. That last test was verified to fail with the guard removed, so it is not vacuous.
+
+**Deferred to Phase 3, deliberately:** the flag-driven **"More" tab**. There is currently nothing to put in it — mobile has no flagged player feature today. (Checked: the ball-machine UI in `book.tsx` is driven by a per-court `ballMachineFeeCents`, not the `st_marlow_ball_machine` flag, which covers passes and access codes; and the General Rules gate is already filtered by flag in server-side SQL, so it needs no client gating.) The tab should land with the first flagged screen rather than shipping empty.
+
+**Verified green:** mobile 14/14 suites, 65/65 tests, 0 type errors.
 
 ### Phase 2 — Sync the screens that already exist
 

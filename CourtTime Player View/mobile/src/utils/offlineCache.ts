@@ -62,6 +62,26 @@ export async function getCachedDataWithMeta<T>(key: string): Promise<{ data: T; 
   }
 }
 
+/**
+ * Read cached data ignoring the TTL.
+ *
+ * For values where a stale answer beats no answer. Feature flags are the case
+ * this exists for: they decide which screens a facility has, they change
+ * rarely, and expiring them mid-flight offline would silently strip features
+ * from a member's app. Ordinary screen data should use the TTL-respecting
+ * readers above.
+ */
+export async function getStaleCachedData<T>(key: string): Promise<T | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+    const item: CachedItem<T> = JSON.parse(raw);
+    return item.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function setCachedData<T>(key: string, data: T): Promise<void> {
   try {
     const now = Date.now();

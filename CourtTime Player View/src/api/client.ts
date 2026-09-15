@@ -143,6 +143,17 @@ export const authApi = {
     });
   },
 
+  getGeneralRulesStatus: async () => {
+    return apiRequest('/api/auth/general-rules/status');
+  },
+
+  acceptGeneralRules: async (facilityId: string) => {
+    return apiRequest('/api/auth/general-rules/accept', {
+      method: 'POST',
+      body: JSON.stringify({ facilityId }),
+    });
+  },
+
   forgotPassword: async (email: string) => {
     return apiRequest('/api/auth/forgot-password', {
       method: 'POST',
@@ -1320,6 +1331,22 @@ export const adminApi = {
 
   getTermsAcceptanceSummary: async (facilityId: string) => {
     return apiRequest(`/api/admin/terms/${facilityId}/acceptance`);
+  },
+
+  // General Rules
+  getGeneralRules: async (facilityId: string) => {
+    return apiRequest(`/api/admin/general-rules/${facilityId}`);
+  },
+
+  publishGeneralRules: async (facilityId: string, contentHtml: string) => {
+    return apiRequest(`/api/admin/general-rules/${facilityId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ contentHtml }),
+    });
+  },
+
+  getGeneralRulesAcceptanceSummary: async (facilityId: string) => {
+    return apiRequest(`/api/admin/general-rules/${facilityId}/acceptance`);
   },
 
   // Court Waivers

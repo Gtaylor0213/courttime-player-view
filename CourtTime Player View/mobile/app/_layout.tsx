@@ -19,6 +19,7 @@ import { PaymentLockoutProvider } from '../src/contexts/PaymentLockoutContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
+import { GeneralRulesAcceptanceGate } from '../src/components/GeneralRulesAcceptanceGate';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 import {
   getNotificationData,
@@ -31,7 +32,7 @@ import {
 export const ErrorBoundary = createRouteErrorBoundary('App Shell');
 
 function RootLayoutNav() {
-  const { isAuthenticated, isLoading, pendingTermsAcceptances } = useAuth();
+  const { isAuthenticated, isLoading, pendingTermsAcceptances, pendingGeneralRulesAcceptances } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   /** Only the top segment — avoids re-running this effect on every in-tab route change (can interrupt tab presses). */
@@ -121,6 +122,10 @@ function RootLayoutNav() {
 
   if (isAuthenticated && pendingTermsAcceptances.length > 0) {
     return <TermsAcceptanceGate />;
+  }
+
+  if (isAuthenticated && pendingGeneralRulesAcceptances.length > 0) {
+    return <GeneralRulesAcceptanceGate />;
   }
 
   return (

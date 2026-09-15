@@ -29,6 +29,12 @@ import {
   publishTermsVersion
 } from '../../src/services/termsService';
 import {
+  getCurrentGeneralRulesVersion,
+  getGeneralRulesAcceptanceSummaryForFacility,
+  getGeneralRulesVersionHistory,
+  publishGeneralRulesVersion
+} from '../../src/services/generalRulesService';
+import {
   getCurrentCourtWaiver,
   getCourtWaiverAcceptanceSummary,
   publishCourtWaiver,
@@ -2533,6 +2539,79 @@ router.get('/terms/:facilityId/acceptance', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error fetching Terms acceptance summary:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/general-rules/:facilityId
+ * Get current and historical General Rules versions for a facility
+ */
+router.get('/general-rules/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const [currentVersion, versions] = await Promise.all([
+      getCurrentGeneralRulesVersion(facilityId),
+      getGeneralRulesVersionHistory(facilityId),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        currentVersion,
+        versions,
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching General Rules:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/general-rules/:facilityId
+ * Publish a new General Rules version for a facility
+ */
+router.put('/general-rules/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { contentHtml } = req.body;
+
+    if (!contentHtml || typeof contentHtml !== 'string' || !contentHtml.trim()) {
+      return res.status(400).json({ success: false, error: 'contentHtml is required' });
+    }
+
+    const createdBy = req.user?.userId;
+    const version = await publishGeneralRulesVersion(facilityId, contentHtml, createdBy);
+
+    res.json({
+      success: true,
+      data: {
+        version
+      },
+      message: 'General Rules published successfully'
+    });
+  } catch (error: any) {
+    console.error('Error publishing General Rules:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/general-rules/:facilityId/acceptance
+ * Get acceptance summary for the currently published General Rules
+ */
+router.get('/general-rules/:facilityId/acceptance', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const summary = await getGeneralRulesAcceptanceSummaryForFacility(facilityId);
+
+    res.json({
+      success: true,
+      data: summary
+    });
+  } catch (error: any) {
+    console.error('Error fetching General Rules acceptance summary:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

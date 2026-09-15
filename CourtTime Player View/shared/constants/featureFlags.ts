@@ -23,6 +23,7 @@ export const FEATURE_FLAGS = {
   DRAG_RESCHEDULE_RESERVATIONS: 'drag_reschedule_reservations',
   ADMIN_BOOK_FOR_OTHERS: 'admin_book_for_others',
   COURT_TYPE_MAX_DURATION: 'court_type_max_duration',
+  GENERAL_RULES: 'general_rules',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -61,4 +62,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   drag_reschedule_reservations: 'Drag to Reassign Reservations (let admins drag a reservation on the calendar to a different court/time)',
   admin_book_for_others: 'Admin Book For Others (let admins choose who a Quick Reserve / drag-created reservation is booked for — themselves, a member, or a custom name)',
   court_type_max_duration: 'Max Duration by Court Type (set a different max reservation duration for tennis vs. pickleball courts)',
+  general_rules: 'General Rules (require members to accept facility rules, re-accept when updated)',
 };

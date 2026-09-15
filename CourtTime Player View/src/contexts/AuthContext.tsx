@@ -58,13 +58,16 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   termsLoading: boolean;
+  generalRulesLoading: boolean;
   pendingTermsAcceptances: PendingTermsAcceptance[];
+  pendingGeneralRulesAcceptances: PendingGeneralRulesAcceptance[];
   login: (email: string, password: string, setupToken?: string) => Promise<boolean>;
   register: (email: string, password: string, fullName: string, userType?: 'player' | 'admin', additionalData?: RegistrationData) => Promise<boolean>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<boolean>;
   refreshTermsStatus: () => Promise<void>;
   acceptTermsAndContinue: (facilityId: string) => Promise<boolean>;
+  acceptGeneralRulesAndContinue: (facilityId: string) => Promise<boolean>;
   getAccessToken: () => string | null;
 }
 
@@ -76,6 +79,17 @@ export interface PendingTermsAcceptance {
   contentHtml: string;
   attachments: TermsAttachment[];
   requiredReviewSeconds: number;
+  publishedAt: string;
+  acceptedVersionNumber: number | null;
+  acceptedAt: string | null;
+}
+
+export interface PendingGeneralRulesAcceptance {
+  facilityId: string;
+  facilityName: string;
+  currentVersionId: string;
+  currentVersionNumber: number;
+  contentHtml: string;
   publishedAt: string;
   acceptedVersionNumber: number | null;
   acceptedAt: string | null;
@@ -95,7 +109,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [termsLoading, setTermsLoading] = useState(false);
+  const [generalRulesLoading, setGeneralRulesLoading] = useState(false);
   const [pendingTermsAcceptances, setPendingTermsAcceptances] = useState<PendingTermsAcceptance[]>([]);
+  const [pendingGeneralRulesAcceptances, setPendingGeneralRulesAcceptances] = useState<PendingGeneralRulesAcceptance[]>([]);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
   const clearStoredSession = () => {
@@ -104,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setAccessToken(null);
     setPendingTermsAcceptances([]);
+    setPendingGeneralRulesAcceptances([]);
   };
 
   // Initialize auth state
@@ -116,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const refreshOnFocus = () => {
       void loadTermsStatus(user);
+      void loadGeneralRulesStatus(user);
     };
 
     window.addEventListener('focus', refreshOnFocus);
@@ -149,13 +167,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(refreshedUser);
             // Update localStorage with fresh data
             localStorage.setItem('auth_user', JSON.stringify(refreshedUser));
-            await loadTermsStatus(refreshedUser, { blockUi: true });
+            await Promise.all([
+              loadTermsStatus(refreshedUser, { blockUi: true }),
+              loadGeneralRulesStatus(refreshedUser, { blockUi: true }),
+            ]);
           } else if (isSessionAuthError(result.error)) {
             clearStoredSession();
           } else {
             // Fall back to cached user if API fails (e.g. network)
             setUser(parsedUser);
-            await loadTermsStatus(parsedUser, { blockUi: true });
+            await Promise.all([
+              loadTermsStatus(parsedUser, { blockUi: true }),
+              loadGeneralRulesStatus(parsedUser, { blockUi: true }),
+            ]);
           }
         } catch (parseError) {
           console.error('Failed to parse saved user:', parseError);
@@ -198,6 +222,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const loadGeneralRulesStatus = async (
+    currentUser: User | null,
+    options?: { blockUi?: boolean }
+  ) => {
+    if (!currentUser) {
+      setPendingGeneralRulesAcceptances([]);
+      return;
+    }
+
+    const blockUi = options?.blockUi ?? false;
+
+    try {
+      if (blockUi) setGeneralRulesLoading(true);
+      const response = await authApi.getGeneralRulesStatus();
+      if (response.success) {
+        const payload = response.data as { pendingAcceptances?: PendingGeneralRulesAcceptance[] } | undefined;
+        setPendingGeneralRulesAcceptances(payload?.pendingAcceptances ?? []);
+      } else {
+        setPendingGeneralRulesAcceptances([]);
+      }
+    } catch (error) {
+      console.error('Failed to load general rules status:', error);
+      setPendingGeneralRulesAcceptances([]);
+    } finally {
+      if (blockUi) setGeneralRulesLoading(false);
+    }
+  };
+
   const login = async (email: string, password: string, setupToken?: string): Promise<boolean> => {
     try {
       setLoading(true);
@@ -212,7 +264,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('auth_user', JSON.stringify(backendResponse.user));
           localStorage.setItem('auth_token', backendResponse.token);
           resetSessionExpiryNotification();
-          await loadTermsStatus(backendResponse.user, { blockUi: true });
+          await Promise.all([
+            loadTermsStatus(backendResponse.user, { blockUi: true }),
+            loadGeneralRulesStatus(backendResponse.user, { blockUi: true }),
+          ]);
           toast.success(setupToken ? 'Logged in and joined facility' : 'Logged in successfully');
           return true;
         }
@@ -266,7 +321,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('auth_user', JSON.stringify(registeredUser));
         localStorage.setItem('auth_token', token);
         resetSessionExpiryNotification();
-        await loadTermsStatus(registeredUser, { blockUi: true });
+        await Promise.all([
+          loadTermsStatus(registeredUser, { blockUi: true }),
+          loadGeneralRulesStatus(registeredUser, { blockUi: true }),
+        ]);
         return true;
       } else {
         toast.error(result.error || 'Registration failed');
@@ -293,6 +351,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setAccessToken(null);
       setPendingTermsAcceptances([]);
+      setPendingGeneralRulesAcceptances([]);
       toast.success('Logged out successfully');
     } catch (error: any) {
       console.error('Logout failed:', error);
@@ -347,17 +406,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const acceptGeneralRulesAndContinue = async (facilityId: string): Promise<boolean> => {
+    try {
+      const response = await authApi.acceptGeneralRules(facilityId);
+      if (!response.success) {
+        toast.error(response.error || 'Failed to accept General Rules');
+        return false;
+      }
+
+      setPendingGeneralRulesAcceptances((prev) => prev.filter((item) => item.facilityId !== facilityId));
+      await loadGeneralRulesStatus(user);
+      toast.success('General Rules accepted');
+      return true;
+    } catch (error: any) {
+      console.error('Failed to accept general rules:', error);
+      toast.error(error.message || 'Failed to accept General Rules');
+      return false;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     loading,
     termsLoading,
+    generalRulesLoading,
     pendingTermsAcceptances,
+    pendingGeneralRulesAcceptances,
     login,
     register,
     logout,
     updateProfile,
     refreshTermsStatus,
     acceptTermsAndContinue,
+    acceptGeneralRulesAndContinue,
     getAccessToken,
   };
 

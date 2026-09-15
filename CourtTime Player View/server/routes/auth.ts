@@ -19,6 +19,10 @@ import {
   acceptCurrentTermsForUser,
   getUserPendingTermsAcceptances
 } from '../../src/services/termsService';
+import {
+  acceptCurrentGeneralRulesForUser,
+  getUserPendingGeneralRulesAcceptances
+} from '../../src/services/generalRulesService';
 
 const router = express.Router();
 
@@ -303,6 +307,57 @@ router.post('/terms/accept', async (req, res, next) => {
       || null;
 
     const accepted = await acceptCurrentTermsForUser(userId, facilityId, ipAddress);
+    res.json({ success: true, accepted });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/auth/general-rules/status
+ * Get all pending General Rules acceptances for the authenticated user
+ */
+router.get('/general-rules/status', async (req, res, next) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const userWithMemberships = await getUserWithMemberships(userId);
+    if (!userWithMemberships) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const pendingAcceptances = await getUserPendingGeneralRulesAcceptances(userId);
+    res.json({ success: true, pendingAcceptances });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/auth/general-rules/accept
+ * Accept latest General Rules version for a facility as authenticated user
+ */
+router.post('/general-rules/accept', async (req, res, next) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const { facilityId } = req.body;
+    if (!facilityId) {
+      return res.status(400).json({ success: false, error: 'facilityId is required' });
+    }
+
+    const forwarded = req.headers['x-forwarded-for'];
+    const ipAddress = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim()
+      || req.ip
+      || null;
+
+    const accepted = await acceptCurrentGeneralRulesForUser(userId, facilityId, ipAddress);
     res.json({ success: true, accepted });
   } catch (error) {
     next(error);

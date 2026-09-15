@@ -1,9 +1,10 @@
 import React from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
-import { Mail, FileText, ScrollText } from 'lucide-react';
+import { Mail, FileText, ScrollText, ClipboardList } from 'lucide-react';
 import { AdminEmailBlast } from './AdminEmailBlast';
 import { EmailTemplateEditor } from './EmailTemplateEditor';
 import { TermsConditionsManager } from './TermsConditionsManager';
+import { GeneralRulesManager } from './GeneralRulesManager';
 
 export function AdminCommunication() {
   return (
@@ -14,7 +15,7 @@ export function AdminCommunication() {
       </div>
 
       <Tabs defaultValue="email-blast">
-        <TabsList className="w-full grid grid-cols-3 h-auto">
+        <TabsList className="w-full grid grid-cols-4 h-auto">
           <TabsTrigger
             value="email-blast"
             className="flex-col gap-1 px-1 py-2 text-xs leading-tight whitespace-normal sm:flex-row sm:gap-2 sm:px-2 sm:py-1 sm:text-sm sm:whitespace-nowrap"
@@ -42,6 +43,15 @@ export function AdminCommunication() {
             <span className="sm:hidden">Terms</span>
             <span className="hidden sm:inline">Terms & Conditions</span>
           </TabsTrigger>
+          <TabsTrigger
+            value="general-rules"
+            className="flex-col gap-1 px-1 py-2 text-xs leading-tight whitespace-normal sm:flex-row sm:gap-2 sm:px-2 sm:py-1 sm:text-sm sm:whitespace-nowrap"
+            aria-label="General Rules"
+          >
+            <ClipboardList className="h-4 w-4 shrink-0" />
+            <span className="sm:hidden">Rules</span>
+            <span className="hidden sm:inline">General Rules</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="email-blast" className="mt-4">
@@ -54,6 +64,10 @@ export function AdminCommunication() {
 
         <TabsContent value="terms" className="mt-4">
           <TermsConditionsManager />
+        </TabsContent>
+
+        <TabsContent value="general-rules" className="mt-4">
+          <GeneralRulesManager />
         </TabsContent>
       </Tabs>
     </div>

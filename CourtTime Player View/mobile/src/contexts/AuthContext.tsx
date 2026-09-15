@@ -7,7 +7,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, useCallb
 import { AppState, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { api, setToken, getToken, removeToken, cacheUser, getCachedUser, clearCache } from '../api/client';
-import type { PendingTermsAcceptance } from '../api/client';
+import type { PendingTermsAcceptance, PendingGeneralRulesAcceptance } from '../api/client';
 import { registerForPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications';
 import type { User } from '../types/database';
 import type { AuthResponseShape } from '../../../shared/types';
@@ -49,6 +49,9 @@ interface AuthContextType extends AuthState {
   pendingTermsAcceptances: PendingTermsAcceptance[];
   acceptTermsAndContinue: (facilityId: string) => Promise<boolean>;
   refreshTermsStatus: () => Promise<void>;
+  pendingGeneralRulesAcceptances: PendingGeneralRulesAcceptance[];
+  acceptGeneralRulesAndContinue: (facilityId: string) => Promise<boolean>;
+  refreshGeneralRulesStatus: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -114,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [selectedBookDate, setSelectedBookDateState] = useState<string>(getTodayString());
   const [facilities, setFacilities] = useState<FacilityInfo[]>([]);
   const [pendingTermsAcceptances, setPendingTermsAcceptances] = useState<PendingTermsAcceptance[]>([]);
+  const [pendingGeneralRulesAcceptances, setPendingGeneralRulesAcceptances] = useState<PendingGeneralRulesAcceptance[]>([]);
   const pushTokenRef = useRef<string | null>(null);
 
   // Check for existing session on app launch
@@ -202,12 +206,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await loadTermsStatus(state.user);
   }, [state.user]);
 
+  async function loadGeneralRulesStatus(currentUser: AuthUser | null) {
+    if (!currentUser) {
+      setPendingGeneralRulesAcceptances([]);
+      return;
+    }
+    try {
+      const res = await api.get('/api/auth/general-rules/status');
+      if (res.success) {
+        const payload = res.data as { pendingAcceptances?: PendingGeneralRulesAcceptance[] } | undefined;
+        setPendingGeneralRulesAcceptances(payload?.pendingAcceptances ?? []);
+      } else {
+        setPendingGeneralRulesAcceptances([]);
+      }
+    } catch {
+      setPendingGeneralRulesAcceptances([]);
+    }
+  }
+
+  const refreshGeneralRulesStatus = useCallback(async () => {
+    await loadGeneralRulesStatus(state.user);
+  }, [state.user]);
+
   useEffect(() => {
     if (!state.user) return;
 
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         void loadTermsStatus(state.user);
+        void loadGeneralRulesStatus(state.user);
       }
     });
 
@@ -228,7 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await cacheUser(freshUser);
         await hydrateFacilitiesForUser(freshUser);
         setState({ user: freshUser, isLoading: false, isAuthenticated: true });
-        await loadTermsStatus(freshUser);
+        await Promise.all([loadTermsStatus(freshUser), loadGeneralRulesStatus(freshUser)]);
         return true;
       }
 
@@ -265,7 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await cacheUser(user);
         await hydrateFacilitiesForUser(user);
         setState({ user, isLoading: false, isAuthenticated: true });
-        await loadTermsStatus(user);
+        await Promise.all([loadTermsStatus(user), loadGeneralRulesStatus(user)]);
         return { success: true };
       }
     }
@@ -289,7 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await hydrateFacilitiesForUser(user);
         await cacheUser(user);
         setState({ user, isLoading: false, isAuthenticated: true });
-        await loadTermsStatus(user);
+        await Promise.all([loadTermsStatus(user), loadGeneralRulesStatus(user)]);
         return { success: true };
       }
     }
@@ -305,6 +332,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true;
   }
 
+  async function acceptGeneralRulesAndContinue(facilityId: string): Promise<boolean> {
+    const res = await api.post('/api/auth/general-rules/accept', { facilityId });
+    if (!res.success) return false;
+    setPendingGeneralRulesAcceptances((prev) => prev.filter((item) => item.facilityId !== facilityId));
+    await loadGeneralRulesStatus(state.user);
+    return true;
+  }
+
   async function logout() {
     // Unregister push token before clearing state
     if (state.user?.id) {
@@ -313,6 +348,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     await clearCache();
     setPendingTermsAcceptances([]);
+    setPendingGeneralRulesAcceptances([]);
     setState({ user: null, isLoading: false, isAuthenticated: false });
   }
 
@@ -347,7 +383,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [facilities, selectedFacilityId]);
 
   return (
-    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, refreshSession, updateUser, pendingTermsAcceptances, acceptTermsAndContinue, refreshTermsStatus }}>
+    <AuthContext.Provider value={{ ...state, facilityId: selectedFacilityId, facilities, setFacilityId: handleSetFacilityId, selectedBookDate, setSelectedBookDate: handleSetSelectedBookDate, login, register, logout, refreshSession, updateUser, pendingTermsAcceptances, acceptTermsAndContinue, refreshTermsStatus, pendingGeneralRulesAcceptances, acceptGeneralRulesAndContinue, refreshGeneralRulesStatus }}>
       {children}
     </AuthContext.Provider>
   );

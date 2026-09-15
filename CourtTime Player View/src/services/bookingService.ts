@@ -17,6 +17,7 @@ import type { FacilityRuleConfig } from './rulesEngine/types';
 import { sendStrikeIssuedEmail, sendLockoutEmail } from './emailService';
 import { notificationService } from './notificationService';
 import { buildTermsAcceptanceBookingBlocker } from './termsService';
+import { buildGeneralRulesAcceptanceBookingBlocker } from './generalRulesService';
 import { buildCourtWaiverBookingBlocker } from './courtWaiverService';
 import { isFacilityAdmin as isFacilityAdminBroad } from './memberService';
 import {
@@ -796,6 +797,20 @@ export async function validateBooking(bookingData: {
     };
   }
 
+  const rulesBlocker = await buildGeneralRulesAcceptanceBookingBlocker(
+    bookingData.userId,
+    bookingData.facilityId
+  );
+  if (rulesBlocker) {
+    return {
+      allowed: false,
+      results: [rulesBlocker],
+      blockers: [rulesBlocker],
+      warnings: [],
+      isPrimeTime: false,
+    };
+  }
+
   const waiverBlocker = await buildCourtWaiverBookingBlocker(
     bookingData.userId,
     bookingData.courtId
@@ -999,6 +1014,18 @@ async function createBookingCore(bookingData: {
         success: false,
         error: termsBlocker.message,
         ruleViolations: [termsBlocker],
+      };
+    }
+
+    const rulesBlocker = await buildGeneralRulesAcceptanceBookingBlocker(
+      bookingData.userId,
+      bookingData.facilityId
+    );
+    if (rulesBlocker) {
+      return {
+        success: false,
+        error: rulesBlocker.message,
+        ruleViolations: [rulesBlocker],
       };
     }
 
@@ -1552,6 +1579,16 @@ async function createRecurringBookingSeriesCore(
       };
     }
 
+    // General Rules acceptance always applies, even for admin-created bookings that skip booking rules.
+    const rulesBlocker = await buildGeneralRulesAcceptanceBookingBlocker(payload.userId, payload.facilityId);
+    if (rulesBlocker) {
+      return {
+        success: false,
+        error: rulesBlocker.message,
+        ruleViolations: [rulesBlocker],
+      };
+    }
+
     for (const instance of payload.instances) {
       const walkUpCourt = await query(
         `SELECT 1 FROM courts WHERE id = $1 AND is_walk_up = true`,
@@ -1799,6 +1836,18 @@ export async function createBookingWithOverride(
         success: false,
         error: termsBlocker.message,
         ruleViolations: [termsBlocker],
+      };
+    }
+
+    const rulesBlocker = await buildGeneralRulesAcceptanceBookingBlocker(
+      bookingData.userId,
+      bookingData.facilityId
+    );
+    if (rulesBlocker) {
+      return {
+        success: false,
+        error: rulesBlocker.message,
+        ruleViolations: [rulesBlocker],
       };
     }
 

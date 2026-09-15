@@ -268,6 +268,19 @@ export interface PendingTermsAcceptance {
   acceptedAt: string | null;
 }
 
+// ── General Rules ──
+
+export interface PendingGeneralRulesAcceptance {
+  facilityId: string;
+  facilityName: string;
+  currentVersionId: string;
+  currentVersionNumber: number;
+  contentHtml: string;
+  publishedAt: string;
+  acceptedVersionNumber: number | null;
+  acceptedAt: string | null;
+}
+
 // Convenience methods
 export const api = {
   get: <T = any>(endpoint: string) =>

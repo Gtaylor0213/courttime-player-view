@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { membersApi, strikesApi } from '../api/client';
 import { TermsAcceptanceGate } from './TermsAcceptanceGate';
+import { GeneralRulesAcceptanceGate } from './GeneralRulesAcceptanceGate';
 import { PaymentLockoutScreen } from './PaymentLockoutScreen';
 import { StrikeLockoutScreen } from './StrikeLockoutScreen';
 import { facilityIdsFromAuthUser } from '../utils/memberFacilities';
@@ -39,7 +40,7 @@ function normalizeLockoutPayload(raw: unknown): PaymentLockoutInfo | null {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading, termsLoading, pendingTermsAcceptances } = useAuth();
+  const { user, loading, termsLoading, pendingTermsAcceptances, generalRulesLoading, pendingGeneralRulesAcceptances } = useAuth();
   const { selectedFacilityId } = useAppContext();
   const location = useLocation();
   const [lockoutInfo, setLockoutInfo] = useState<PaymentLockoutInfo | null>(null);
@@ -140,13 +141,17 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return () => { cancelled = true; };
   }, [user?.id, user?.userType, user?.memberFacilities, user?.adminFacilities, selectedFacilityId]);
 
-  if (loading || (termsLoading && pendingTermsAcceptances.length === 0)) {
+  if (
+    loading ||
+    (termsLoading && pendingTermsAcceptances.length === 0) ||
+    (generalRulesLoading && pendingGeneralRulesAcceptances.length === 0)
+  ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
           <p className="text-muted-foreground">
-            {termsLoading ? 'Checking terms acceptance...' : 'Loading...'}
+            {termsLoading ? 'Checking terms acceptance...' : generalRulesLoading ? 'Checking rules acceptance...' : 'Loading...'}
           </p>
         </div>
       </div>
@@ -190,6 +195,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (pendingTermsAcceptances.length > 0) {
     return <TermsAcceptanceGate />;
+  }
+
+  if (pendingGeneralRulesAcceptances.length > 0) {
+    return <GeneralRulesAcceptanceGate />;
   }
 
   return <>{children}</>;

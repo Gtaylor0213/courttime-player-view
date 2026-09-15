@@ -83,9 +83,10 @@ export interface BulletinPost {
   cancelIfMinNotMet?: boolean;
   isPinned: boolean;
   isAdminPost: boolean;
-  postedDate: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  // ISO strings: these come straight off the JSON API, never parsed into Date.
+  postedDate: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface BulletinPostWithAuthor extends BulletinPost {

@@ -33,7 +33,9 @@ export const ErrorBoundary = createRouteErrorBoundary('App Shell');
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading, pendingTermsAcceptances, pendingGeneralRulesAcceptances } = useAuth();
-  const segments = useSegments();
+  // expo-router types this as a 1-tuple when typed routes aren't generated;
+  // the runtime value is the full segment array and these routes are nested.
+  const segments: string[] = useSegments();
   const router = useRouter();
   /** Only the top segment — avoids re-running this effect on every in-tab route change (can interrupt tab presses). */
   const rootSegment = segments[0];

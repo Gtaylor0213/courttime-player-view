@@ -30,7 +30,7 @@ const TAB_BACK_TITLES: Record<string, string> = {
 
 function useTabsStackBackTitle() {
   const navigation = useNavigation();
-  const segments = useSegments();
+  const segments: string[] = useSegments();
   const tabKey = segments[0] === '(tabs)' ? (segments[1] ?? 'index') : 'index';
 
   useEffect(() => {

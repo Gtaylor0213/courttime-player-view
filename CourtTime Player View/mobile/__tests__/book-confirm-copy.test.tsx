@@ -38,8 +38,13 @@ jest.mock('@react-native-async-storage/async-storage', () => {
   };
 });
 
-jest.mock('../src/contexts/AuthContext', () => ({
-  useAuth: jest.fn(() => ({
+/**
+ * Every field `book.tsx` reads off `useAuth()`. Declared as a hoisted function so
+ * per-test overrides can spread it instead of rebuilding the object — rebuilding
+ * is how the terms-acceptance fields went missing and broke this suite.
+ */
+function mockAuth(overrides: Record<string, unknown> = {}) {
+  return {
     user: {
       id: 'user-1',
       adminFacilities: ['facility-1'],
@@ -49,7 +54,18 @@ jest.mock('../src/contexts/AuthContext', () => ({
     setFacilityId: jest.fn(),
     selectedBookDate: '2026-05-04',
     setSelectedBookDate: jest.fn(),
-  })),
+    refreshTermsStatus: jest.fn(() => Promise.resolve()),
+    acceptTermsAndContinue: jest.fn(() => Promise.resolve(true)),
+    pendingTermsAcceptances: [],
+    refreshGeneralRulesStatus: jest.fn(() => Promise.resolve()),
+    acceptGeneralRulesAndContinue: jest.fn(() => Promise.resolve(true)),
+    pendingGeneralRulesAcceptances: [],
+    ...overrides,
+  };
+}
+
+jest.mock('../src/contexts/AuthContext', () => ({
+  useAuth: jest.fn(() => mockAuth()),
 }));
 
 jest.mock('../src/components/CourtCalendarGrid', () => {
@@ -288,14 +304,12 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     jest.setSystemTime(new Date('2026-05-04T14:30:00'));
 
     const { useAuth } = require('../src/contexts/AuthContext');
-    (useAuth as jest.Mock).mockImplementation(() => ({
-      user: { id: 'user-1', adminFacilities: [] },
-      facilityId: 'facility-1',
-      facilities: [{ id: 'facility-1', name: 'Test Club' }],
-      setFacilityId: jest.fn(),
-      selectedBookDate: '2026-01-15',
-      setSelectedBookDate: jest.fn(),
-    }));
+    (useAuth as jest.Mock).mockImplementation(() =>
+      mockAuth({
+        user: { id: 'user-1', adminFacilities: [] },
+        selectedBookDate: '2026-01-15',
+      })
+    );
 
     await act(async () => {
       tree = renderer.create(<BookCourtScreen />);
@@ -323,12 +337,7 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       })
     );
 
-    (useAuth as jest.Mock).mockImplementation(() => ({
-      user: { id: 'user-1', adminFacilities: ['facility-1'] },
-      facilityId: 'facility-1',
-      selectedBookDate: '2026-05-04',
-      setSelectedBookDate: jest.fn(),
-    }));
+    (useAuth as jest.Mock).mockImplementation(() => mockAuth());
   });
 
   it('offers Add to Calendar after a successful single-court booking', async () => {

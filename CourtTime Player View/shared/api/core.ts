@@ -66,11 +66,23 @@ export function normalizeBookingCreateResponse<
   };
 }
 
+/** The flattened shape `normalizeCourtAddResponse` returns on every path. */
+export type NormalizedCourtAddResponse<T> = T & {
+  requiresPayment?: boolean;
+  checkoutUrl?: string;
+  sessionId?: string;
+  pendingId?: string;
+  court?: unknown;
+  courts?: unknown[];
+  data?: unknown;
+  error?: string;
+};
+
 /** Flatten court-add API responses so payment redirect fields are on the top level. */
 export function normalizeCourtAddResponse<
   T extends { success?: boolean; data?: unknown; error?: string }
->(res: T) {
-  if (!res.success) return res;
+>(res: T): NormalizedCourtAddResponse<T> {
+  if (!res.success) return res as NormalizedCourtAddResponse<T>;
 
   const envelope =
     res.data && typeof res.data === 'object'
@@ -90,7 +102,7 @@ export function normalizeCourtAddResponse<
         })
       : undefined;
 
-  if (!envelope) return res;
+  if (!envelope) return res as NormalizedCourtAddResponse<T>;
 
   const paymentData = envelope.data;
 

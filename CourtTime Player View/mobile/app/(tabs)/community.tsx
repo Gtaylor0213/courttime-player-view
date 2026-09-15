@@ -77,7 +77,8 @@ const BULLETIN_TYPE_COLORS: Record<string, string> = {
 const ACTIVE_FEED_POLL_MS = 5000;
 const SIGNUP_EVENT_CATEGORIES = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
 
-function formatRelativeTime(iso: string | undefined): string {
+/** `postedDate` is `Date | string` in the shared contract — accept either. */
+function formatRelativeTime(iso: string | Date | undefined): string {
   if (!iso) return '';
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return '';
@@ -664,7 +665,7 @@ export default function CommunityScreen() {
   const renderPartnerItem = useCallback(
     ({ item: post }: { item: HittingPartnerPostWithUser }) => {
       const initials = post.userInitials || getInitials(post.userName);
-      const rel = formatRelativeTime(post.postedDate as unknown as string);
+      const rel = formatRelativeTime(post.postedDate);
       return (
         <Card style={styles.listCardSpacing} padded>
           <View style={styles.postHeader}>

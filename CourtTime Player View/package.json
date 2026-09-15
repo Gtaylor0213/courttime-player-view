@@ -69,6 +69,8 @@
     "db:test-data": "tsx scripts/setup-test-data.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:mobile": "npm --prefix mobile run test:ci",
+    "typecheck:mobile": "npm --prefix mobile run typecheck",
     "expo:start": "npm --prefix mobile start",
     "postinstall": "npm --prefix mobile install"
   },

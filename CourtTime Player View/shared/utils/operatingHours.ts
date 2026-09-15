@@ -391,10 +391,13 @@ export function normalizeCourtOperatingScheduleRows(
 }
 
 export type CourtScheduleRowInput = {
-  day_of_week?: number;
-  dayOfWeek?: number;
-  is_open?: boolean;
-  isOpen?: boolean;
+  // Registration payloads and API rows arrive as JSON, where these can be
+  // strings ("0", "false"). The normalizers below already parse both forms —
+  // declaring them narrowly made that handling dead code.
+  day_of_week?: number | string;
+  dayOfWeek?: number | string;
+  is_open?: boolean | string;
+  isOpen?: boolean | string;
   open_time?: string;
   openTime?: string;
   close_time?: string;

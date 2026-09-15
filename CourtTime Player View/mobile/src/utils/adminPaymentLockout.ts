@@ -9,7 +9,7 @@ export type AdminLockoutMember = {
 export function parseAdminLockoutMembers(raw: unknown): AdminLockoutMember[] {
   const list = Array.isArray(raw) ? raw : [];
   return list
-    .map((m: Record<string, unknown>) => {
+    .map((m: Record<string, unknown>): AdminLockoutMember | null => {
       const userId = String(m.userId ?? m.id ?? '').trim();
       if (!userId) return null;
       return {

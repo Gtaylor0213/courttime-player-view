@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The mobile app is a nested npm project (mobile/) sharing shared/ with the web
+# app. Its type errors and tests were invisible for months because nothing ran
+# them; this workflow is what keeps that from recurring.
+defaults:
+  run:
+    working-directory: "CourtTime Player View"
+
+jobs:
+  web:
+    name: Web tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # postinstall installs mobile/ too, which this job does not need, but
+      # keeping one install path avoids the two projects drifting apart.
+      - run: npm ci --include=dev
+      - run: npm test
+
+  mobile:
+    name: Mobile typecheck + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --include=dev
+      - run: npm run typecheck:mobile
+      - run: npm run test:mobile

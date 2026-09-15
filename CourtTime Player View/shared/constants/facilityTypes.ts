@@ -48,7 +48,9 @@ export function getFacilityTypeSelectOptions(
   currentValue: string | null | undefined
 ): Array<{ value: string; label: string }> {
   const normalized = normalizeFacilityType(currentValue);
-  const options = [...FACILITY_TYPE_OPTIONS];
+  // Widened from the `as const` literal tuple: a stored non-canonical type is
+  // prepended below as a plain string.
+  const options: Array<{ value: string; label: string }> = [...FACILITY_TYPE_OPTIONS];
 
   if (normalized && !FACILITY_TYPE_VALUES.has(normalized)) {
     options.unshift({ value: normalized, label: normalized });

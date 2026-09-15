@@ -259,6 +259,13 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     lineHeight: 24,
   },
+  /** Centered secondary text for the standalone "Validating reset link…" state. */
+  subtitle: {
+    fontSize: FontSize.md,
+    color: Colors.textSecondary,
+    lineHeight: 24,
+    textAlign: 'center',
+  },
   form: {
     gap: Spacing.md,
   },

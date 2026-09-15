@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@jest/globals';
+import { afterAll, beforeAll, describe, it, expect } from '@jest/globals';
 import {
   aggregateThisMonthBreakdown,
   formatCentsAsDollars,
@@ -7,6 +7,18 @@ import {
 } from '../src/utils/adminRevenue';
 
 describe('adminRevenue utils', () => {
+  // parseAdminRevenueResponse breaks down "this month" against the real clock,
+  // so the fixture month below has to be the current month or the test only
+  // passes during May 2026.
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-05-15T12:00:00Z'));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   it('formats cents as dollars', () => {
     expect(formatCentsAsDollars(1250)).toBe('12.50');
   });

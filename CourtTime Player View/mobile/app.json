@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.courttime.player"
+      "bundleIdentifier": "com.courttime.player",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -56,6 +59,9 @@
       "expo-image",
       "expo-splash-screen",
       "expo-status-bar"
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    }
   }
 }

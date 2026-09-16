@@ -9,11 +9,25 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "preview",
+      "ios": { "simulator": false },
+      "android": { "buildType": "apk" }
     },
-    "production": {}
+    "production": {
+      "channel": "production",
+      "autoIncrement": true,
+      "android": { "buildType": "app-bundle" },
+      "env": {
+        "EXPO_PUBLIC_PRODUCTION_API_URL": "https://www.courttimeapp.com"
+      }
+    }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
   }
 }

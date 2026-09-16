@@ -39,3 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Store credentials — never commit
+play-service-account.json
+*.p8
+*.p12
+*.mobileprovision

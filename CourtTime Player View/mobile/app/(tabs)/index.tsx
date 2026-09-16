@@ -11,7 +11,6 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Modal,
   Alert,
   Platform,
 } from 'react-native';
@@ -24,7 +23,6 @@ import { api } from '../../src/api/client';
 import { Colors, Gradients, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { EditBookingModal } from '../../src/components/EditBookingModal';
-import { QuickBook } from '../../src/components/QuickBook';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
@@ -37,13 +35,6 @@ import {
 
 export const ErrorBoundary = createRouteErrorBoundary('Home');
 
-interface RuleViolation {
-  ruleCode: string;
-  ruleName: string;
-  message: string;
-  severity?: string;
-}
-
 export default function HomeScreen() {
   const { user, facilityId, facilities } = useAuth();
   const currentFacilityName = facilities.find((f) => f.id === facilityId)?.name;
@@ -54,10 +45,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [lockout, setLockout] = useState<{ isLockedOut: boolean; activeStrikes: number; threshold: number; lockoutEndsAt?: string } | null>(null);
   const [editingBooking, setEditingBooking] = useState<BookingWithDetails | null>(null);
-  const [quickBookKey, setQuickBookKey] = useState(0);
-  const [violations, setViolations] = useState<RuleViolation[]>([]);
-  const [warnings, setWarnings] = useState<RuleViolation[]>([]);
-  const [showViolations, setShowViolations] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user || !facilityId) return;
@@ -235,33 +222,6 @@ export default function HomeScreen() {
         ) : null}
       </View>
 
-      {/* Quick Book — soonest open slots today */}
-      {user && facilityId && !lockout?.isLockedOut && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionIconBadge}>
-              <Ionicons name="flash" size={16} color={Colors.primary} />
-            </View>
-            <Text style={styles.sectionTitle}>Quick Book</Text>
-          </View>
-          <QuickBook
-            userId={user.id}
-            facilityId={facilityId}
-            facilityName={currentFacilityName}
-            refreshKey={quickBookKey}
-            onBooked={() => {
-              fetchData();
-              setQuickBookKey(k => k + 1);
-            }}
-            onRuleViolations={(v, w) => {
-              setViolations(v);
-              setWarnings(w);
-              setShowViolations(true);
-            }}
-          />
-        </View>
-      )}
-
       {/* Upcoming Bookings */}
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
@@ -373,60 +333,6 @@ export default function HomeScreen() {
         onClose={() => setEditingBooking(null)}
         onSaved={fetchData}
       />
-
-      {/* Rule violations from Quick Book */}
-      <Modal
-        visible={showViolations}
-        transparent
-        animationType="fade"
-        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
-        onRequestClose={() => setShowViolations(false)}
-      >
-        <View style={styles.violationsOverlay}>
-          <View style={styles.violationsSheet}>
-            <View style={styles.violationsHeader}>
-              <Text style={styles.violationsTitle}>Booking Not Allowed</Text>
-              <TouchableOpacity onPress={() => setShowViolations(false)}>
-                <Ionicons name="close" size={22} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.violationsSubtitle}>
-              This booking violates the following facility rules:
-            </Text>
-            <ScrollView style={{ maxHeight: 280 }}>
-              {violations.map((v, i) => (
-                <View key={i} style={styles.violationCard}>
-                  <Ionicons name="alert-circle" size={18} color={Colors.error} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.violationName}>{v.ruleName}</Text>
-                    <Text style={styles.violationMsg}>{v.message}</Text>
-                  </View>
-                </View>
-              ))}
-              {warnings.length > 0 && (
-                <>
-                  <Text style={[styles.violationsSubtitle, { marginTop: Spacing.md }]}>Warnings:</Text>
-                  {warnings.map((w, i) => (
-                    <View key={`w-${i}`} style={[styles.violationCard, { borderLeftColor: Colors.warning, backgroundColor: Colors.warning + '08' }]}>
-                      <Ionicons name="warning" size={18} color={Colors.warning} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.violationName}>{w.ruleName}</Text>
-                        <Text style={styles.violationMsg}>{w.message}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </>
-              )}
-            </ScrollView>
-            <TouchableOpacity
-              style={styles.violationsDismiss}
-              onPress={() => setShowViolations(false)}
-            >
-              <Text style={styles.violationsDismissText}>Dismiss</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -608,65 +514,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  violationsOverlay: {
-    flex: 1,
-    backgroundColor: Colors.overlay,
-    justifyContent: 'center',
-    padding: Spacing.lg,
-  },
-  violationsSheet: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-  },
-  violationsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  violationsTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.error,
-  },
-  violationsSubtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
-  },
-  violationCard: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    backgroundColor: Colors.error + '08',
-    borderRadius: BorderRadius.md,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.error,
-    marginBottom: Spacing.sm,
-  },
-  violationName: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  violationMsg: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  violationsDismiss: {
-    backgroundColor: Colors.textSecondary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  violationsDismissText: {
-    color: Colors.textInverse,
-    fontSize: FontSize.md,
-    fontWeight: '700',
   },
   bookingCard: {
     backgroundColor: Colors.card,

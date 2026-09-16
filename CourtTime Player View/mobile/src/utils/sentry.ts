@@ -10,7 +10,12 @@ if (SENTRY_DSN) {
     enabled: enableEventsInThisRuntime,
     // Keep production noise low, but allow an explicit opt-in for development verification.
     debug: __DEV__ && enableEventsInThisRuntime,
-    sendDefaultPii: true,
+    // Off deliberately. With this on, Sentry attaches IP addresses and request
+    // context to every event, which contradicts the privacy policy's statement
+    // that Sentry receives an anonymized user identifier — the kind of mismatch
+    // App Store review rejects. Nothing calls Sentry.setUser, so no diagnostic
+    // value is lost.
+    sendDefaultPii: false,
   });
 }
 

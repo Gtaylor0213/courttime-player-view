@@ -20,6 +20,7 @@ By using the Service you agree to the collection and use of information in accor
 - **Bulletin board content** — posts, sign-ups for drills or events, and waitlist entries.
 - **Membership requests** — facilities you request to join and your membership status with each.
 - **Terms acceptance records** — when you accept facility-specific Terms & Conditions, we record the version you accepted, the timestamp, and your IP address.
+- **Purchase records** — where your club charges for something (court fees, guest fees, ball machine rentals or passes, event and drill sign-ups, pro shop orders), we record what you bought, the amount, and whether it was paid. **We never receive or store your card details**: payment is completed on Stripe's own checkout page.
 
 ### Information collected automatically
 
@@ -77,9 +78,9 @@ We share information with third parties that help us operate the Service. These 
 | **Supabase** (PostgreSQL hosting) | Primary database storage | All account, booking, message, and profile data |
 | **Render** | Application hosting | Same data plus server logs |
 | **Resend** | Transactional email delivery | Recipient email, message subject and body |
-| **Stripe** | Payment processing for facility subscriptions only | Facility billing details (players are not charged via the app) |
+| **Stripe** | Payment processing | Facility subscription billing, and member payments where a club charges for them — court fees, guest fees, ball machine rentals and passes, event and drill sign-ups, and pro shop orders. Card details are entered on Stripe's own checkout page and never reach CourtTime's servers. |
 | **Expo Push Service / Apple APNs / Google FCM** | Push notification delivery | Push token, notification title and body |
-| **Sentry** | Error monitoring | Error reports, app version, device info, anonymized user identifier |
+| **Sentry** | Error monitoring | Error reports, app version, device model and OS version. Personally identifying context is disabled, so reports are not tied to your account. |
 
 ### With facility administrators
 

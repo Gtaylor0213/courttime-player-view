@@ -30,7 +30,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TIME_LABEL_WIDTH = 46;
 const ROW_HEIGHT = 48;
-import { DEFAULT_BOOKING_DURATION_MINUTES } from '../../../shared/constants/bookingTypes';
+import { DEFAULT_BOOKING_DURATION_MINUTES, getBookingTypeLabel, getBookingTypeRNColors } from '../../../shared/constants/bookingTypes';
 
 const DEFAULT_SLOT_MINUTES = 30;
 const COURTS_PER_PAGE = 4;
@@ -1205,23 +1205,44 @@ export function CourtCalendarGrid({
                               }
                             }}
                           >
-                            {bookingStart && (
-                              <View
-                                style={[
-                                  styles.bookingBlock,
-                                  bookingStart.bookingType === 'blocked' && styles.bookingBlockBlocked,
-                                  { height: span * ROW_HEIGHT - 2 },
-                                ]}
-                                accessible={false}
-                              >
-                                <Text style={styles.bookingBlockText} numberOfLines={1}>
-                                  {bookingStart.bookingType === 'blocked' ? 'Blocked' : (bookingStart.bookingType || 'Booked')}
-                                </Text>
-                                <Text style={styles.bookingBlockTime} numberOfLines={1}>
-                                  {formatFullTime(bookingStart.startTime)} - {formatFullTime(bookingStart.endTime)}
-                                </Text>
-                              </View>
-                            )}
+                            {bookingStart && (() => {
+                              const isBlockedBooking = bookingStart.bookingType === 'blocked';
+                              const typeColors = getBookingTypeRNColors(bookingStart.bookingType);
+                              return (
+                                <View
+                                  style={[
+                                    styles.bookingBlock,
+                                    isBlockedBooking
+                                      ? styles.bookingBlockBlocked
+                                      : {
+                                          backgroundColor: typeColors.bg,
+                                          borderLeftColor: typeColors.border,
+                                        },
+                                    { height: span * ROW_HEIGHT - 2 },
+                                  ]}
+                                  accessible={false}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.bookingBlockText,
+                                      { color: isBlockedBooking ? Colors.textMuted : typeColors.text },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {isBlockedBooking ? 'Blocked' : getBookingTypeLabel(bookingStart.bookingType)}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.bookingBlockTime,
+                                      { color: isBlockedBooking ? Colors.textMuted : typeColors.text },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {formatFullTime(bookingStart.startTime)} - {formatFullTime(bookingStart.endTime)}
+                                  </Text>
+                                </View>
+                              );
+                            })()}
                           </View>
                         );
                       })}
@@ -1435,16 +1456,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.error + '20',
   },
 
-  // Booking blocks
+  // Booking blocks — background/border color is set per booking type (see getBookingTypeRNColors)
   bookingBlock: {
     position: 'absolute',
     top: 1,
     left: 2,
     right: 2,
-    backgroundColor: Colors.primary + '20',
     borderRadius: BorderRadius.sm,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
     paddingHorizontal: 4,
     paddingVertical: 2,
     overflow: 'hidden',
@@ -1458,12 +1477,10 @@ const styles = StyleSheet.create({
   bookingBlockText: {
     fontSize: 10,
     fontWeight: '600',
-    color: Colors.primary,
     textAlign: 'center',
   },
   bookingBlockTime: {
     fontSize: 9,
-    color: Colors.textSecondary,
     textAlign: 'center',
   },
 

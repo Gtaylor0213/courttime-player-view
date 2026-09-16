@@ -156,6 +156,7 @@ export function ReservationManagementModal({
   const [showBallMachineCode, setShowBallMachineCode] = useState(false);
 
   const postPlayEnabled = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
+  const editPastReservationsEnabled = enabledFeatures.includes(FEATURE_FLAGS.EDIT_PAST_RESERVATIONS);
   const deerLakeReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
   const reservationTypeKeys = deerLakeReservationTypes
@@ -365,7 +366,7 @@ export function ReservationManagementModal({
   };
   const canCancelReservation = (isOwnReservation || isFacilityAdmin) &&
     reservation.status !== 'cancelled' &&
-    !isPastReservation() &&
+    (!isPastReservation() || editPastReservationsEnabled) &&
     settlementStatus !== 'settled';
 
   const canAddToCalendar =

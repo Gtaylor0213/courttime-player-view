@@ -35,6 +35,8 @@ import {
   timeRangesOverlap
 } from './utils/timeUtils';
 import { isTennisCourtType, isPickleballCourtType } from '../../../shared/constants/courtTypes';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
+import { isFeatureEnabled } from '../featureFlagService';
 
 // Import evaluators
 import { accountEvaluators } from './evaluators/AccountRuleEvaluators';
@@ -864,13 +866,19 @@ export class RulesEngine {
 
       const bookingEnd = combineDateAndTime(booking.bookingDate, booking.endTime);
       if (now > bookingEnd) {
-        return {
-          allowed: false,
-          isLateCancel: false,
-          strikeWillBeIssued: false,
-          minutesBeforeStart,
-          message: 'This reservation has already ended and cannot be cancelled'
-        };
+        const editPastReservationsEnabled = await isFeatureEnabled(
+          booking.facilityId,
+          FEATURE_FLAGS.EDIT_PAST_RESERVATIONS
+        );
+        if (!editPastReservationsEnabled) {
+          return {
+            allowed: false,
+            isLateCancel: false,
+            strikeWillBeIssued: false,
+            minutesBeforeStart,
+            message: 'This reservation has already ended and cannot be cancelled'
+          };
+        }
       }
 
       return {

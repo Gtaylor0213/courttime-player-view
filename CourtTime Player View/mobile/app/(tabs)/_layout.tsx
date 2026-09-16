@@ -73,7 +73,7 @@ function TabsShell() {
   const { hasUnreadMessages } = useMessageUnread();
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
   const { isFeatureEnabled } = useFeatureFlags();
-  // Hidden unless this facility has at least one flagged feature on.
+  // Always true — Community lives under More with no flag of its own.
   const showMore = shouldShowMoreTab(isFeatureEnabled);
 
   const screenOptions = useMemo(
@@ -137,7 +137,7 @@ function TabsShell() {
         name="community"
         options={{
           title: 'Community',
-          tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+          href: null,
           headerTitle: () => <HeaderFacilitySelector fallbackTitle="Community" />,
         }}
       />

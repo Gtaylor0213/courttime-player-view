@@ -1,11 +1,10 @@
 /**
  * The "More" tab's contents.
  *
- * Mobile has five fixed tabs — Home, Book, Community, Messages, Profile — plus
- * Admin for facility staff. The flagged features cannot each have a tab, so
- * they live behind More, which itself only appears when the selected facility
- * has at least one of them enabled. A member at a club with none of these
- * features never sees the tab at all.
+ * Mobile has four fixed tabs — Home, Book, Messages, Profile — plus Admin for
+ * facility staff. Community lives here too, always available, alongside any
+ * flagged features the selected facility has enabled. Because Community has
+ * no flag, More itself is always visible.
  *
  * Web reaches the same screens from its sidebar; the flags and the wording are
  * kept in step with `UnifiedSidebar`.
@@ -21,14 +20,22 @@ export interface MoreMenuItem {
   icon: string;
   /** Route to push, relative to the app root. */
   route: string;
-  flag: FeatureFlagKey;
+  /** Feature flag gating this item. Omitted for items that are always available. */
+  flag?: FeatureFlagKey;
 }
 
 /**
- * Every flagged feature that can appear, in display order. Order matches web's
- * sidebar so a member moving between the two finds things in the same sequence.
+ * Every item that can appear, in display order. Order matches web's sidebar so
+ * a member moving between the two finds things in the same sequence.
  */
 export const MORE_MENU_ITEMS: MoreMenuItem[] = [
+  {
+    key: 'community',
+    label: 'Community',
+    description: 'Find hitting partners, the bulletin board, and notifications',
+    icon: 'people-outline',
+    route: '/(tabs)/community',
+  },
   {
     key: 'shop',
     label: 'Pro Shop',
@@ -71,17 +78,12 @@ export const MORE_MENU_ITEMS: MoreMenuItem[] = [
   },
 ];
 
-/** The menu items this facility has switched on, in display order. */
+/** The menu items available to this facility, in display order. */
 export function getMoreMenuItems(isFeatureEnabled: (flag: FeatureFlagKey) => boolean): MoreMenuItem[] {
-  return MORE_MENU_ITEMS.filter((item) => isFeatureEnabled(item.flag));
+  return MORE_MENU_ITEMS.filter((item) => !item.flag || isFeatureEnabled(item.flag));
 }
 
-/**
- * Whether the More tab should appear at all.
- *
- * Hidden when nothing is enabled: an empty tab is worse than no tab, and flags
- * fail closed, so an unresolved flag set hides it too.
- */
+/** Whether the More tab should appear at all. Always true — Community has no flag. */
 export function shouldShowMoreTab(isFeatureEnabled: (flag: FeatureFlagKey) => boolean): boolean {
   return getMoreMenuItems(isFeatureEnabled).length > 0;
 }

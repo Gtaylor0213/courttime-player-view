@@ -1,7 +1,5 @@
 /**
- * The "More" tab: the flagged features this facility has enabled.
- *
- * Only reachable when at least one is on — see `shouldShowMoreTab`.
+ * The "More" tab: Community, plus whatever flagged features this facility has enabled.
  */
 
 import React from 'react';
@@ -10,7 +8,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
 import { getMoreMenuItems } from '../../src/utils/moreMenu';
-import { EmptyState } from '../../src/components/EmptyState';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
@@ -18,22 +15,8 @@ export const ErrorBoundary = createRouteErrorBoundary('More');
 
 export default function MoreScreen() {
   const router = useRouter();
-  const { isFeatureEnabled, flagsLoaded } = useFeatureFlags();
+  const { isFeatureEnabled } = useFeatureFlags();
   const items = getMoreMenuItems(isFeatureEnabled);
-
-  if (items.length === 0) {
-    return (
-      <EmptyState
-        icon="apps-outline"
-        title={flagsLoaded ? 'Nothing extra here yet' : 'Loading…'}
-        description={
-          flagsLoaded
-            ? 'Your club has not enabled any additional features. Check back later.'
-            : 'Checking what your club has enabled.'
-        }
-      />
-    );
-  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

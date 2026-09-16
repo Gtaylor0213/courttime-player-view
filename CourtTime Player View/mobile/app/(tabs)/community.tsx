@@ -148,6 +148,7 @@ export default function CommunityScreen() {
     signupSuccess?: string;
     session_id?: string;
     postId?: string;
+    tab?: string;
   }>();
   const { bannerState, lastCachedAt, retryConnectivity } = useOfflineApi();
   const [activeTab, setActiveTab] = useState<Tab>('partners');
@@ -244,6 +245,12 @@ export default function CommunityScreen() {
       setLoadingNotifications(false);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (params.tab === 'bulletin' || params.tab === 'partners' || params.tab === 'notifications') {
+      setActiveTab(params.tab);
+    }
+  }, [params.tab]);
 
   useEffect(() => {
     if (activeTab === 'partners') fetchPartners();

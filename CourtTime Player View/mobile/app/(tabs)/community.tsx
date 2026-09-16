@@ -1306,7 +1306,7 @@ export default function CommunityScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.surface },
+  container: { flex: 1, backgroundColor: Colors.background },
 
   segmentOuter: {
     paddingHorizontal: Spacing.md,
@@ -1483,7 +1483,7 @@ const styles = StyleSheet.create({
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary, marginTop: 6 },
 
   // Modal
-  modalContainer: { flex: 1, backgroundColor: Colors.surface },
+  modalContainer: { flex: 1, backgroundColor: Colors.background },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
   modalHeaderSticky: {
     flexDirection: 'row',
@@ -1492,7 +1492,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
   },
   modalCancel: { color: Colors.textSecondary, fontSize: FontSize.md },
   modalTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },

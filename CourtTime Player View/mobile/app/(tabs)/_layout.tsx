@@ -78,13 +78,18 @@ function TabsShell() {
 
   const screenOptions = useMemo(
     () => ({
-      sceneStyle: { backgroundColor: Colors.surface },
+      sceneStyle: { backgroundColor: Colors.background },
       tabBarActiveTintColor: Colors.chromeAccent,
       tabBarInactiveTintColor: Colors.chromeTextMuted,
       freezeOnBlur: false,
       tabBarBackground: () => (
         <View style={StyleSheet.absoluteFill}>
-          <LinearGradient colors={[...Gradients.tabBar]} style={StyleSheet.absoluteFill} />
+          <LinearGradient
+            colors={[...Gradients.chrome]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
         </View>
       ),
       // Do not set a fixed tabBar height — it can clip touch targets vs. safe area / font scale.
@@ -97,6 +102,14 @@ function TabsShell() {
         },
       ],
       tabBarLabelStyle: styles.tabLabel,
+      headerBackground: () => (
+        <LinearGradient
+          colors={[...Gradients.chrome]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      ),
       headerStyle: styles.header,
       headerTintColor: Colors.chromeText,
       headerTitleStyle: styles.headerTitle,
@@ -224,7 +237,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.chromeBackground,
   },
   header: {
-    backgroundColor: Colors.chromeBackground,
+    backgroundColor: 'transparent',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.chromeBorder,
     shadowColor: '#000',

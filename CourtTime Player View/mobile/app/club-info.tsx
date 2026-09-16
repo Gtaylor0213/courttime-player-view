@@ -420,7 +420,7 @@ export default function ClubInfoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
   },
   header: {
     backgroundColor: Colors.card,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   },
   loadingWrap: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
     paddingTop: Spacing.md,
   },
   contactRow: {

@@ -428,8 +428,8 @@ export default function MessagesScreen() {
   }
 
   // ── Helpers ──
-  const getInitials = (name: string) =>
-    name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const getInitials = (name?: string) =>
+    (name || '').trim().split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   const formatDate = (date: string) => {
     const d = new Date(date);
@@ -510,11 +510,11 @@ export default function MessagesScreen() {
                 <CachedImage uri={activeConversation.otherUser.profileImageUrl} style={styles.avatarImageSmall} />
               ) : (
                 <Text style={styles.avatarSmallText}>
-                  {getInitials(activeConversation.otherUser.name)}
+                  {getInitials(activeConversation.otherUser.name) || '?'}
                 </Text>
               )}
             </View>
-            <Text style={styles.threadName}>{activeConversation.otherUser.name}</Text>
+            <Text style={styles.threadName}>{activeConversation.otherUser.name || 'Member'}</Text>
           </View>
         </View>
 
@@ -539,7 +539,7 @@ export default function MessagesScreen() {
               description={
                 threadLoadError
                   ? threadLoadError
-                  : `Start the conversation with ${activeConversation.otherUser.name}.`
+                  : `Start the conversation with ${activeConversation.otherUser.name || 'this member'}.`
               }
               actionLabel={threadLoadError ? 'Try again' : undefined}
               onAction={threadLoadError ? () => void fetchMessages(activeConversation.id) : undefined}
@@ -628,18 +628,18 @@ export default function MessagesScreen() {
             style={styles.conversationItem}
             onPress={() => openConversation(item)}
             accessibilityRole="button"
-            accessibilityLabel={`${item.otherUser.name}. ${item.unreadCount > 0 ? `${item.unreadCount} unread message${item.unreadCount === 1 ? '' : 's'}.` : 'No unread messages.'} ${item.lastMessage?.text ? `Last message: ${item.lastMessage.text}.` : 'No messages yet.'}`}
+            accessibilityLabel={`${item.otherUser.name || 'Member'}. ${item.unreadCount > 0 ? `${item.unreadCount} unread message${item.unreadCount === 1 ? '' : 's'}.` : 'No unread messages.'} ${item.lastMessage?.text ? `Last message: ${item.lastMessage.text}.` : 'No messages yet.'}`}
           >
             <View style={styles.avatar}>
               {item.otherUser.profileImageUrl ? (
                 <CachedImage uri={item.otherUser.profileImageUrl} style={styles.avatarImage} />
               ) : (
-                <Text style={styles.avatarText}>{getInitials(item.otherUser.name)}</Text>
+                <Text style={styles.avatarText}>{getInitials(item.otherUser.name) || '?'}</Text>
               )}
             </View>
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
-                <Text style={styles.userName}>{item.otherUser.name}</Text>
+                <Text style={styles.userName}>{item.otherUser.name || 'Member'}</Text>
                 {item.lastMessage && (
                   <Text style={styles.timestamp}>{formatDate(item.lastMessage.sentAt)}</Text>
                 )}
@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
   // ── New Message Modal ──
   modalContainer: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
   },
   modalHeader: {
     flexDirection: 'row',

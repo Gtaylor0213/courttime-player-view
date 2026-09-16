@@ -4,27 +4,28 @@
  */
 import { Appearance } from 'react-native';
 
-/** Top tab bar + headers: dark evergreen chrome (same in light/dark for a bold, app-like shell). */
+/** Top header + bottom tab bar: matches the web sidebar header's `from-green-700 to-green-800` gradient. */
 const Chrome = {
-  chromeBackground: '#061912',
-  chromeBorder: 'rgba(255,255,255,0.08)',
-  chromeText: '#F2FFF7',
-  chromeTextMuted: 'rgba(242,255,247,0.52)',
-  chromeAccent: '#8FFFD4',
-  chromeChipBg: 'rgba(255,255,255,0.12)',
-  chromeChipBorder: 'rgba(255,255,255,0.18)',
+  chromeBackground: '#016630',
+  chromeBorder: 'rgba(255,255,255,0.12)',
+  chromeText: '#FFFFFF',
+  chromeTextMuted: 'rgba(255,255,255,0.65)',
+  chromeAccent: '#FFFFFF',
+  chromeChipBg: 'rgba(255,255,255,0.16)',
+  chromeChipBorder: 'rgba(255,255,255,0.22)',
 };
 
 const LightColors = {
   ...Chrome,
-  // Mirrors web `--primary: oklch(0.55 0.22 150)` — slightly richer for mobile contrast
-  primary: '#1F6B47',
-  primaryLight: '#2A8A5C',
-  primaryDark: '#185A3C',
+  // Exact match for web `--primary: oklch(0.55 0.22 150)`
+  primary: '#00910F',
+  primaryLight: '#00BB13',
+  primaryDark: '#00790D',
   secondary: '#E4F0EA',
   accent: '#D4EAD9',
 
-  background: '#FAFCFA',
+  // Exact match for web `--background: #ffffff`
+  background: '#FFFFFF',
   surface: '#EEF4F0',
   card: '#FFFFFF',
 
@@ -37,17 +38,17 @@ const LightColors = {
   borderLight: '#E8EFE9',
   inputBackground: '#F2F6F3',
 
-  success: '#1F6B47',
+  success: '#00910F',
   error: '#D4183D',
   warning: '#B7791F',
   info: '#0EA5E9',
   destructive: '#D4183D',
-  ring: '#1F6B47',
+  ring: '#00910F',
   overlay: 'rgba(15, 23, 42, 0.5)',
   purple: '#A855F7',
   cyan: '#0EA5E9',
 
-  courtAvailable: '#1F6B47',
+  courtAvailable: '#00910F',
   courtMaintenance: '#B7791F',
   courtClosed: '#D4183D',
   shadow: 'rgba(15, 23, 42, 0.08)',
@@ -140,8 +141,8 @@ export const TouchTarget = {
 
 /** `expo-linear-gradient` color stops — obvious, saturated bands (not subtle token tweaks). */
 export const Gradients = {
-  login: ['#022018', '#0D4D35', '#14805A', '#23B07A'] as const,
   homeHero: ['#031910', '#0F4D36', '#1A7A55', '#2EB87E'] as const,
-  tabBar: ['#041510', '#071E18'] as const,
+  /** Header + bottom tab bar — matches the web sidebar header's `from-green-700 to-green-800`. */
+  chrome: ['#008236', '#016630'] as const,
   bookCalendar: ['#DCF5E8', '#F7FDF9', '#FFFFFF'] as const,
 } as const;

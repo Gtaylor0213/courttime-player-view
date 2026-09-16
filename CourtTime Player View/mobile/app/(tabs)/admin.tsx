@@ -387,7 +387,7 @@ export default function AdminScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.surface, padding: Spacing.md },
+  container: { flex: 1, backgroundColor: Colors.background, padding: Spacing.md },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, gap: Spacing.sm },
   centeredTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   centeredBody: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },

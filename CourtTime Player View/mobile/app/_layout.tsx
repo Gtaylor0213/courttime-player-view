@@ -137,7 +137,7 @@ function RootLayoutNav() {
       <Stack
         screenOptions={{
           animation: 'fade',
-          contentStyle: { backgroundColor: Colors.surface },
+          contentStyle: { backgroundColor: Colors.background },
         }}
       >
         {/* Tabs render their own header; auth screens are bare. */}

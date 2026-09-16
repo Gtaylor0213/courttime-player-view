@@ -281,10 +281,10 @@ export default function ProShopScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.surface },
+  screen: { flex: 1, backgroundColor: Colors.background },
   container: { flex: 1 },
   content: { padding: Spacing.md, gap: Spacing.sm },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

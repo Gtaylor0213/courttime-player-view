@@ -739,7 +739,7 @@ export default function ProfileScreen() {
 
       {/* Find Facility Modal */}
       <Modal visible={showFindFacility} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowFindFacility(false)}>
-        <View style={{ flex: 1, backgroundColor: Colors.surface }}>
+        <View style={{ flex: 1, backgroundColor: Colors.background }}>
           <View style={styles.editHeader}>
             <TouchableOpacity onPress={() => { setShowFindFacility(false); setSearchQuery(''); setSearchResults([]); }} accessibilityRole="button" accessibilityLabel="Close facility search">
               <Text style={styles.cancelText}>Close</Text>
@@ -800,7 +800,7 @@ export default function ProfileScreen() {
           joinTermsContentRef.current = 0;
         }}
       >
-        <View style={{ flex: 1, backgroundColor: Colors.surface }}>
+        <View style={{ flex: 1, backgroundColor: Colors.background }}>
           <View style={styles.editHeader}>
             <TouchableOpacity
               onPress={() => {
@@ -1093,7 +1093,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
   },
   // ── View Mode ──
   header: {

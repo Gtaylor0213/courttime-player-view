@@ -145,9 +145,9 @@ export default function LevelGroupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.surface },
+  container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.md, gap: Spacing.sm },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
   headerCard: {
     backgroundColor: Colors.background,
     borderRadius: BorderRadius.md,

@@ -116,7 +116,7 @@ function Row({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
     justifyContent: 'center',
     padding: Spacing.lg,
   },

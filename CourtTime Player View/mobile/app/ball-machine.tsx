@@ -304,9 +304,9 @@ export default function BallMachineScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.surface },
+  container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.md, gap: Spacing.lg },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
   section: { gap: Spacing.sm },
   sectionTitle: {
     fontSize: FontSize.md,

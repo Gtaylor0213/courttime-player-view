@@ -16,12 +16,11 @@ import {
   type AppStateStatus,
 } from 'react-native';
 import { Link, Stack, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../../src/api/client';
-import { Colors, Gradients, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
@@ -108,15 +107,7 @@ export default function RegisterFacilityScreen() {
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ title: 'Register Facility', headerShown: false }} />
-      <StatusBar style="light" />
-      <LinearGradient
-        colors={[...Gradients.login]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={[styles.blob, styles.blob1]} />
-      <View style={[styles.blob, styles.blob2]} />
+      <StatusBar style="dark" />
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <TouchableOpacity
@@ -131,21 +122,19 @@ export default function RegisterFacilityScreen() {
             accessibilityRole="button"
             accessibilityLabel={isAuthenticated ? 'Go back' : 'Back to sign in'}
           >
-            <Ionicons name="arrow-back" size={22} color="rgba(255,255,255,0.95)" />
+            <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
             <Text style={styles.backText}>
               {isAuthenticated ? 'Back' : 'Back to sign in'}
             </Text>
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <View style={styles.logoCard}>
-              <Image
-                source={require('../../assets/splash-logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-                accessibilityLabel="CourtTime logo"
-              />
-            </View>
+            <Image
+              source={require('../../assets/splash-logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+              accessibilityLabel="CourtTime logo"
+            />
             <Text style={styles.title}>Register your facility</Text>
             <Text style={styles.subtitle}>
               Set up courts, booking rules, and admin access on the web — then sign in here to manage
@@ -243,30 +232,10 @@ export default function RegisterFacilityScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#022018',
+    backgroundColor: Colors.background,
   },
   safe: {
     flex: 1,
-    backgroundColor: 'transparent',
-  },
-  blob: {
-    position: 'absolute',
-    borderRadius: 999,
-    opacity: 0.35,
-  },
-  blob1: {
-    width: 280,
-    height: 280,
-    backgroundColor: '#4FFFB0',
-    top: -80,
-    right: -100,
-  },
-  blob2: {
-    width: 220,
-    height: 220,
-    backgroundColor: '#0EA5E9',
-    bottom: 120,
-    left: -90,
   },
   scrollContent: {
     flexGrow: 1,
@@ -280,7 +249,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   backText: {
-    color: 'rgba(255,255,255,0.92)',
+    color: Colors.textSecondary,
     fontSize: FontSize.sm,
     fontFamily: FontFamily.semiBold,
   },
@@ -288,38 +257,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.lg,
   },
-  logoCard: {
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    marginBottom: Spacing.md,
-  },
   logoImage: {
     width: 200,
     height: 50,
+    marginBottom: Spacing.md,
   },
   title: {
     fontSize: FontSize.xl,
     fontFamily: FontFamily.bold,
-    color: '#fff',
+    color: Colors.text,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   subtitle: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.88)',
+    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: Spacing.sm,
   },
   card: {
-    borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    backgroundColor: 'rgba(255,255,255,0.98)',
   },
   iconRow: {
     flexDirection: 'row',
@@ -410,13 +369,13 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
   },
   playerFooterText: {
-    color: 'rgba(255,255,255,0.75)',
+    color: Colors.textSecondary,
     fontSize: FontSize.sm,
     fontFamily: FontFamily.regular,
   },
   playerLink: {},
   playerLinkText: {
-    color: '#4FFFB0',
+    color: Colors.primary,
     fontSize: FontSize.sm,
     fontFamily: FontFamily.semiBold,
   },

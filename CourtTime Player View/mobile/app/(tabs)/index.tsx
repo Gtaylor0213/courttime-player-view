@@ -170,40 +170,16 @@ export default function HomeScreen() {
       {/* Quick Actions */}
       <View style={styles.quickActions}>
         <TouchableOpacity
-          style={styles.actionCard}
+          style={[styles.actionCard, !facilityId && styles.actionCardFull]}
           onPress={() => router.push('/(tabs)/book')}
           activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Book a court"
         >
           <View style={[styles.actionIconWrap, styles.actionIconWrapPrimary]}>
-            <Text style={styles.actionEmoji}>{'\u{1F3BE}'}</Text>
+            <Ionicons name="calendar" size={32} color={Colors.primary} />
           </View>
           <Text style={styles.actionLabel}>Book a Court</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => router.push('/(tabs)/community')}
-          activeOpacity={0.88}
-          accessibilityRole="button"
-          accessibilityLabel="Open community"
-        >
-          <View style={styles.actionIconWrap}>
-            <Ionicons name="people" size={24} color={Colors.primary} />
-          </View>
-          <Text style={styles.actionLabel}>Community</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionCard, !facilityId && styles.actionCardFull]}
-          onPress={() => router.push('/payments')}
-          activeOpacity={0.88}
-          accessibilityRole="button"
-          accessibilityLabel="Open club payments"
-        >
-          <View style={[styles.actionIconWrap, styles.actionIconWrapPrimary]}>
-            <Ionicons name="card-outline" size={24} color={Colors.primary} />
-          </View>
-          <Text style={styles.actionLabel}>Payments</Text>
         </TouchableOpacity>
 
         {facilityId ? (
@@ -215,11 +191,37 @@ export default function HomeScreen() {
             accessibilityLabel="Open club information"
           >
             <View style={styles.actionIconWrap}>
-              <Ionicons name="information-circle" size={24} color={Colors.primary} />
+              <Ionicons name="information-circle" size={32} color={Colors.primary} />
             </View>
             <Text style={styles.actionLabel}>Club Info</Text>
           </TouchableOpacity>
         ) : null}
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => router.push('/(tabs)/messages')}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Open messages"
+        >
+          <View style={[styles.actionIconWrap, styles.actionIconWrapPrimary]}>
+            <Ionicons name="chatbubbles" size={32} color={Colors.primary} />
+          </View>
+          <Text style={styles.actionLabel}>Messages</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => router.push({ pathname: '/(tabs)/community', params: { tab: 'bulletin' } })}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Open bulletin board"
+        >
+          <View style={styles.actionIconWrap}>
+            <Ionicons name="megaphone" size={32} color={Colors.primary} />
+          </View>
+          <Text style={styles.actionLabel}>Bulletin Board</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Upcoming Bookings */}
@@ -470,18 +472,15 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   actionIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
     backgroundColor: Colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionIconWrapPrimary: {
     backgroundColor: Colors.primary + '1A',
-  },
-  actionEmoji: {
-    fontSize: 26,
   },
   actionLabel: {
     fontSize: FontSize.xs,

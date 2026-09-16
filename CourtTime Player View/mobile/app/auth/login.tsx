@@ -11,13 +11,14 @@ import {
   Platform,
   ScrollView,
   Image,
+  Pressable,
 } from 'react-native';
-import { Link } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Link, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { Colors, Gradients, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
@@ -26,9 +27,11 @@ import { Card } from '../../src/components/Card';
 export const ErrorBoundary = createRouteErrorBoundary('Login');
 
 export default function LoginScreen() {
+  const router = useRouter();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -52,10 +55,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
-      <LinearGradient colors={[...Gradients.login]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <View style={[styles.blob, styles.blob1]} />
-      <View style={[styles.blob, styles.blob2]} />
+      <StatusBar style="dark" />
       <SafeAreaView style={styles.safe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -66,73 +66,93 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.header}>
-              <View style={styles.logoCard}>
-                <Image
-                  source={require('../../assets/splash-logo.png')}
-                  style={styles.logoImage}
-                  resizeMode="contain"
-                  accessibilityLabel="CourtTime logo"
-                />
-              </View>
-              <Text style={styles.tagline}>Book courts · Find partners · Play better</Text>
+              <Image
+                source={require('../../assets/splash-logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+                accessibilityLabel="CourtTime logo"
+              />
+              <Text style={styles.tagline}>Book courts with ease</Text>
             </View>
 
             <Card style={styles.formCard}>
-            <View style={styles.form}>
-              {error ? (
-                <View style={styles.errorBox}>
-                  <Text style={styles.errorText}>{error}</Text>
+              <View style={styles.form}>
+                <Text style={styles.title}>Welcome to CourtTime</Text>
+                <Text style={styles.subtitle}>Sign in to manage facilities and book courts</Text>
+
+                {error ? (
+                  <View style={styles.errorBox}>
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <Text style={styles.label}>Email</Text>
+                <Input
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Enter your email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  accessibilityLabel="Email address"
+                />
+
+                <View style={styles.passwordLabelRow}>
+                  <Text style={styles.label}>Password</Text>
+                  <Link href="/auth/forgot-password" style={styles.forgotLink}>
+                    <Text style={styles.forgotText}>Forgot password?</Text>
+                  </Link>
                 </View>
-              ) : null}
+                <View style={styles.passwordField}>
+                  <Input
+                    style={styles.passwordInput}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Enter your password"
+                    secureTextEntry={!showPassword}
+                    autoComplete="password"
+                    accessibilityLabel="Password"
+                  />
+                  <Pressable
+                    onPress={() => setShowPassword((v) => !v)}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                    style={styles.eyeButton}
+                    hitSlop={8}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={20}
+                      color={Colors.textMuted}
+                    />
+                  </Pressable>
+                </View>
 
-              <Text style={styles.label}>Email</Text>
-              <Input
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                accessibilityLabel="Email address"
-              />
+                <Button
+                  style={styles.button}
+                  title={loading ? 'Signing in...' : 'Sign In'}
+                  onPress={handleLogin}
+                  disabled={loading}
+                />
 
-              <Text style={styles.label}>Password</Text>
-              <Input
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor={Colors.textMuted}
-                secureTextEntry
-                autoComplete="password"
-                accessibilityLabel="Password"
-              />
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>New to CourtTime?</Text>
+                  <View style={styles.dividerLine} />
+                </View>
 
-              <Button
-                style={styles.button}
-                title={loading ? 'Signing in...' : 'Sign In'}
-                onPress={handleLogin}
-                disabled={loading}
-              />
-
-              <Link href="/auth/forgot-password" style={styles.forgotLink}>
-                <Text style={styles.forgotText}>Forgot Password?</Text>
-              </Link>
-
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>Don't have an account? </Text>
-                <Link href="/auth/register" style={styles.link}>
-                  <Text style={styles.linkText}>Sign Up</Text>
-                </Link>
+                <Button
+                  variant="secondary"
+                  title="Create Player Account"
+                  onPress={() => router.push('/auth/register')}
+                />
+                <Button
+                  variant="secondary"
+                  title="Register a Facility"
+                  onPress={() => router.push('/auth/register-facility')}
+                />
               </View>
-
-              <Link href="/auth/register-facility" style={styles.facilityLink}>
-                <Text style={styles.facilityLinkText}>Register your facility</Text>
-              </Link>
-            </View>
-          </Card>
+            </Card>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -143,30 +163,10 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#022018',
+    backgroundColor: Colors.background,
   },
   safe: {
     flex: 1,
-    backgroundColor: 'transparent',
-  },
-  blob: {
-    position: 'absolute',
-    borderRadius: 999,
-    opacity: 0.35,
-  },
-  blob1: {
-    width: 280,
-    height: 280,
-    backgroundColor: '#4FFFB0',
-    top: -80,
-    right: -100,
-  },
-  blob2: {
-    width: 220,
-    height: 220,
-    backgroundColor: '#0EA5E9',
-    bottom: 120,
-    left: -90,
   },
   flex: {
     flex: 1,
@@ -181,43 +181,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xl,
   },
-  logoCard: {
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-    elevation: 12,
-    marginBottom: Spacing.md,
-  },
   logoImage: {
     width: 220,
     height: 56,
+    marginBottom: Spacing.sm,
   },
   tagline: {
     fontSize: FontSize.md,
-    color: 'rgba(255,255,255,0.92)',
+    color: Colors.textSecondary,
     fontFamily: FontFamily.medium,
     textAlign: 'center',
-    letterSpacing: 0.3,
   },
   formCard: {
-    borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    backgroundColor: 'rgba(255,255,255,0.98)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.2,
-    shadowRadius: 28,
-    elevation: 16,
   },
   form: {
     gap: Spacing.md,
+  },
+  title: {
+    fontSize: FontSize.xxl,
+    fontFamily: FontFamily.bold,
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: -Spacing.sm,
   },
   label: {
     fontSize: FontSize.sm,
@@ -225,8 +217,29 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginTop: Spacing.xs,
   },
-  input: {
-    backgroundColor: Colors.inputBackground,
+  passwordLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.xs,
+  },
+  forgotLink: {},
+  forgotText: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.semiBold,
+    color: Colors.primary,
+  },
+  passwordField: {
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: Spacing.xxl,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: Spacing.md,
+    height: '100%',
+    justifyContent: 'center',
   },
   button: {
     marginTop: Spacing.md,
@@ -243,43 +256,20 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontFamily: FontFamily.regular,
   },
-  forgotLink: {
-    alignSelf: 'center',
-    marginTop: Spacing.md,
-  },
-  forgotText: {
-    color: Colors.primary,
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.semiBold,
-  },
-  footer: {
+  divider: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: Spacing.lg,
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
-  footerText: {
-    color: Colors.textSecondary,
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+  },
+  dividerText: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.regular,
-  },
-  link: {},
-  linkText: {
-    color: Colors.primary,
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.semiBold,
-  },
-  facilityLink: {
-    alignSelf: 'center',
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    width: '100%',
-    alignItems: 'center',
-  },
-  facilityLinkText: {
-    color: Colors.textSecondary,
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.semiBold,
+    color: Colors.textMuted,
   },
 });

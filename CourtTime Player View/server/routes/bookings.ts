@@ -41,6 +41,8 @@ import {
   buildIcsEventContent,
   buildIcsFilename,
 } from '../../shared/utils/bookingCalendar';
+import { getFacilityLocalNow } from '../../src/services/rulesEngine/RuleContext';
+import { combineDateAndTime } from '../../src/services/rulesEngine/utils/timeUtils';
 const pool = { query: (text: string, params?: any[]) => getPool().query(text, params) };
 
 const router = express.Router();
@@ -1027,13 +1029,20 @@ router.get('/upcoming/:userId', async (req, res, next) => {
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
+    // Booking times are stored as facility-local wall-clock values, so "upcoming" can't be
+    // decided in SQL against CURRENT_DATE/CURRENT_TIME (server/DB session time is UTC) — a
+    // facility behind UTC would have today's not-yet-finished bookings excluded as soon as
+    // the UTC clock passed their local end time. Pull a generously buffered window (a full
+    // day covers every real-world UTC offset) and do the actual comparison per-booking in JS
+    // using that facility's own timezone, same as the cancellation-eligibility check in
+    // admin.ts's PATCH /bookings/:bookingId/status.
     let query = `
       SELECT
         b.id,
         b.court_id     as "courtId",
         b.user_id      as "userId",
         b.facility_id  as "facilityId",
-        b.booking_date as "bookingDate",
+        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
         b.start_time   as "startTime",
         b.end_time     as "endTime",
         b.duration_minutes as "durationMinutes",
@@ -1045,14 +1054,14 @@ router.get('/upcoming/:userId', async (req, res, next) => {
         b.created_at   as "createdAt",
         b.updated_at   as "updatedAt",
         c.name as "courtName",
-        f.name as "facilityName"
+        f.name as "facilityName",
+        COALESCE(f.timezone, 'America/New_York') as "timezone"
       FROM bookings b
       JOIN courts c ON b.court_id = c.id
       JOIN facilities f ON b.facility_id = f.id
       WHERE b.user_id = $1
         AND b.status != 'cancelled'
-        AND (b.booking_date > CURRENT_DATE
-             OR (b.booking_date = CURRENT_DATE AND b.end_time > CURRENT_TIME))
+        AND b.booking_date >= CURRENT_DATE - INTERVAL '1 day'
     `;
     const params: any[] = [userId];
 
@@ -1063,30 +1072,33 @@ router.get('/upcoming/:userId', async (req, res, next) => {
 
     query += ` ORDER BY b.booking_date ASC, b.start_time ASC`;
 
-    if (limit) {
-      params.push(parseInt(limit as string));
-      query += ` LIMIT $${params.length}`;
-    }
-
     const result = await pool.query(query, params);
 
     // Cancellation is always allowed until reservation end under simplified policy.
-    const bookingsWithInfo = result.rows.map((b: any) => {
-      const startDateTime = new Date(`${b.bookingDate}T${b.startTime}`);
-      const now = new Date();
-      const hoursUntilStart = (startDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    const bookingsWithInfo = result.rows
+      .map((b: any) => {
+        const facilityNow = getFacilityLocalNow(b.timezone);
+        const startDateTime = combineDateAndTime(b.bookingDate, b.startTime);
+        const endDateTime = combineDateAndTime(b.bookingDate, b.endTime);
+        const hoursUntilStart = (startDateTime.getTime() - facilityNow.getTime()) / (1000 * 60 * 60);
 
-      return {
-        ...b,
-        hoursUntilStart: Math.round(hoursUntilStart * 10) / 10,
-        canCancelWithoutPenalty: true,
-        checkInAvailable: hoursUntilStart <= 0.5 && hoursUntilStart >= -0.5 // 30 min window
-      };
-    });
+        return {
+          ...b,
+          isUpcoming: endDateTime.getTime() > facilityNow.getTime(),
+          hoursUntilStart: Math.round(hoursUntilStart * 10) / 10,
+          canCancelWithoutPenalty: true,
+          checkInAvailable: hoursUntilStart <= 0.5 && hoursUntilStart >= -0.5 // 30 min window
+        };
+      })
+      .filter((b: any) => b.isUpcoming);
+
+    const limited = limit
+      ? bookingsWithInfo.slice(0, parseInt(limit as string))
+      : bookingsWithInfo;
 
     res.json({
       success: true,
-      bookings: bookingsWithInfo
+      bookings: limited.map(({ isUpcoming, ...b }: any) => b)
     });
   } catch (error) {
     next(error);

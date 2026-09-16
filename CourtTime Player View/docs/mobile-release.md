@@ -103,7 +103,10 @@ eas update --branch production --message "Fix booking confirmation copy"
 - [ ] Confirm `/privacy`, `/terms`, `/support`, `/delete-account` all load on the live site
 - [ ] Trigger a test crash and confirm it reaches Sentry
 - [ ] Walk the deletion flow end to end on a real device — reviewers do
-- [ ] Seed a **reviewer demo account** with an active membership, bookings and messages, and put the credentials in App Review notes. Every meaningful screen needs a facility membership; an app that looks empty to a reviewer gets rejected as incomplete
+- [ ] **Refresh the reviewer demo account** — `npm run seed:review` from `CourtTime Player View`. Re-run it before *every* submission so the demo bookings stay in the future; a reviewer who opens the app to an empty calendar is the same problem as no account at all.
+  - Credentials to paste into App Review notes: `appreview@courttimeapp.com` / `CourtTimeReview1!`
+  - It builds an isolated **CourtTime Demo Club**, never a membership at a real club — a reviewer placed in a live club would see your members' real names, reservations and messages
+  - `npm run seed:review -- --remove` tears it down
 - [ ] Assets per `appstore/ASSETS.md`, listing copy from `appstore/LISTING.md`
 - [ ] Privacy answers from `appstore/PRIVACY_DECLARATIONS.md` in both consoles
 

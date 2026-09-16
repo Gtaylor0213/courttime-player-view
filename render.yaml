@@ -4,6 +4,7 @@ services:
     runtime: node
     rootDir: CourtTime Player View
     buildCommand: npm ci --include=dev && npm run build
+    preDeployCommand: node scripts/run-migration.js --pending
     startCommand: npm start
     envVars:
       - key: NODE_ENV

@@ -47,10 +47,48 @@ export const bookingMemberEndpoints = {
 
 export const ballMachineEndpoints = {
   /**
-   * Named machines and the caller's live passes. Returns an empty list when the
-   * facility has the ball machine flag off — enforced in the route.
+   * Named machines, pass products, and the caller's passes. Returns an empty
+   * list when the facility has the ball machine flag off — enforced in the route.
    */
   status: (facilityId: string) => api.get(`/api/ball-machine/status/${facilityId}`),
+  /**
+   * The keypad code for one machine. 403s unless the member holds a covering
+   * pass or claimed the machine on a booking — i.e. has already paid for it.
+   */
+  accessCode: (facilityId: string, machineId: string) =>
+    api.get(`/api/ball-machine/access-code/${facilityId}/${machineId}`),
+  /** Starts a Stripe checkout for a pass; returns the URL to open. */
+  purchasePass: (
+    facilityId: string,
+    body: { durationMonths: number; machineId?: string | null; successUrl?: string; cancelUrl?: string }
+  ) => api.post(`/api/ball-machine/purchase/${facilityId}`, body),
+  /** Completes a pass purchase after the Stripe redirect. */
+  confirmPurchase: (sessionId: string) =>
+    api.post('/api/ball-machine/purchase/confirm', { sessionId }),
+};
+
+export const lessonsEndpoints = {
+  /** Upcoming lessons and clinics. Returns `{ success, posts }` (bulletin-shaped). */
+  upcoming: (facilityId: string) => api.get(`/api/lessons/${facilityId}`),
+};
+
+export const levelGroupEndpoints = {
+  /** The caller's own skill group and who else is in it. */
+  mine: (facilityId: string) => api.get(`/api/player-level-groups/${facilityId}/me`),
+};
+
+export const proShopEndpoints = {
+  products: (facilityId: string) => api.get(`/api/pro-shop/products/${facilityId}`),
+  myOrders: (facilityId: string) => api.get(`/api/pro-shop/my-orders/${facilityId}`),
+  checkout: (facilityId: string, body: Record<string, unknown>) =>
+    api.post(`/api/pro-shop/checkout/${facilityId}`, body),
+};
+
+export const padelEndpoints = {
+  sessions: (facilityId: string) => api.get(`/api/padel/sessions/${facilityId}`),
+  join: (sessionId: string) => api.post(`/api/padel/sessions/${sessionId}/join`, {}),
+  leave: (sessionId: string) => api.post(`/api/padel/sessions/${sessionId}/leave`, {}),
+  standings: (sessionId: string) => api.get(`/api/padel/sessions/${sessionId}/standings`),
 };
 
 export const strikesEndpoints = {

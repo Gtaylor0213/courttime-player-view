@@ -15,6 +15,13 @@ export function bulletinSignupCheckoutUrls(postId: string) {
   };
 }
 
+export function ballMachinePassCheckoutUrls() {
+  return {
+    successUrl: `${SCHEME}://ball-machine?passPurchased=1&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${SCHEME}://ball-machine`,
+  };
+}
+
 export function memberPaymentCheckoutUrls() {
   return {
     successUrl: `${SCHEME}://payment-success?session_id={CHECKOUT_SESSION_ID}`,

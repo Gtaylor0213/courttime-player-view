@@ -157,6 +157,12 @@ function RootLayoutNav() {
         <Stack.Screen name="payments" options={{ title: 'Payments' }} />
         <Stack.Screen name="payment-success" options={{ title: 'Payment' }} />
           <Stack.Screen name="lockout-paid" options={{ title: 'Payment' }} />
+        {/* Flagged features, reached from the More tab */}
+        <Stack.Screen name="ball-machine" options={{ title: 'Ball Machine' }} />
+        <Stack.Screen name="lessons" options={{ title: 'Lessons' }} />
+        <Stack.Screen name="level-group" options={{ title: 'My Player Group' }} />
+        <Stack.Screen name="pro-shop" options={{ title: 'Pro Shop' }} />
+        <Stack.Screen name="padel" options={{ title: 'Padel' }} />
       </Stack>
       {/*
         Rendered over the app rather than as an early return: unlike the terms

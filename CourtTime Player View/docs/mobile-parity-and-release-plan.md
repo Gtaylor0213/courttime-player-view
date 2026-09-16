@@ -193,7 +193,7 @@ Two notes on this one:
 - **Calendar:** week/month overview (`week_month_view`, default ON).
 - **Systematic drift sweep:** walk `git log 9bf2fd2..HEAD -- "CourtTime Player View/src"` and triage every player-visible commit as *ported / intentionally web-only / needs porting*. Record the verdicts in `docs/mobile-web-sync.md` so the next sync starts from a known line rather than a 240-commit diff.
 
-### Phase 3 — Build the missing flagged features
+### Phase 3 — Build the missing flagged features ✅ *(complete)*
 
 Each is a self-contained screen behind its flag, consuming existing endpoints. Suggested order by member impact:
 
@@ -204,6 +204,15 @@ Each is a self-contained screen behind its flag, consuming existing endpoints. S
 5. **Padel** — largest of the five: session list, create social play, join/leave, standings, drop-in payment (`/api/padel/*`). Reuse `shared/utils/padelPairing.ts` rather than reimplementing pairing logic.
 
 Rule for the whole phase: business logic goes in `shared/` and is consumed by both clients. Resist re-implementing web logic in React Native — that's how this drift happened.
+
+**All five shipped**, plus the **More tab** deferred from Phase 1. The tab appears only when the facility has at least one flagged feature on, and its contents live in `mobile/src/utils/moreMenu.ts` — add a feature there rather than in the tab layout.
+
+Two deliberate scope calls, both recorded in `mobile-web-sync.md`:
+
+- **Padel** is view, join and leave. Creating a session, starting rounds and entering scores stay on web, where the organiser is already working — the same split as the admin console.
+- **Lessons** links to Community for sign-up rather than duplicating the bulletin sign-up and payment flow, which already handles paid sign-ups, waitlists and Stripe returns.
+
+Writing the tests caught one real defect: Padel's join handler relied solely on the button's `disabled` prop, so any non-touch caller could have sent a join for a full session. The handler guards it now.
 
 ### Phase 4 — Store-compliance blockers *(start in parallel with Phase 2)*
 

@@ -15,6 +15,8 @@ import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelec
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { MessageUnreadProvider, useMessageUnread } from '../../src/contexts/MessageUnreadContext';
+import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
+import { shouldShowMoreTab } from '../../src/utils/moreMenu';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
 
@@ -24,6 +26,7 @@ const TAB_BACK_TITLES: Record<string, string> = {
   book: 'Book',
   community: 'Community',
   messages: 'Messages',
+  more: 'More',
   profile: 'Profile',
   admin: 'Admin',
 };
@@ -69,6 +72,9 @@ function TabsShell() {
   const { user, facilityId } = useAuth();
   const { hasUnreadMessages } = useMessageUnread();
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
+  const { isFeatureEnabled } = useFeatureFlags();
+  // Hidden unless this facility has at least one flagged feature on.
+  const showMore = shouldShowMoreTab(isFeatureEnabled);
 
   const screenOptions = useMemo(
     () => ({
@@ -141,6 +147,15 @@ function TabsShell() {
             </View>
           ),
           headerTitle: () => <HeaderFacilitySelector fallbackTitle="Messages" />,
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: 'More',
+          href: showMore ? undefined : null,
+          tabBarIcon: ({ color, size }) => <Ionicons name="apps" size={size} color={color} />,
+          headerTitle: () => <HeaderFacilitySelector fallbackTitle="More" />,
         }}
       />
       <Tabs.Screen

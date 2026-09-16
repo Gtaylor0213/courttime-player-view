@@ -66,6 +66,20 @@ Mobile re-resolves on login, on facility switch, and on app foreground (an admin
 
 `flagsLoaded` is false until the first attempt settles — gate flagged entry points on it so they don't appear and then vanish.
 
+## Flagged feature screens
+
+Five flagged features have a mobile screen, reached from the **More** tab. That tab only appears when the selected facility has at least one of them on, so a club with none never sees it.
+
+| Feature | Flag | Mobile screen | Web |
+|---------|------|---------------|-----|
+| Pro Shop | `pro_shop` | `app/pro-shop.tsx` | `/shop` |
+| Lessons | `lessons_tab` | `app/lessons.tsx` | `/lessons` |
+| Padel | `padel` | `app/padel.tsx` | `/padel` |
+| Ball machine passes | `st_marlow_ball_machine` | `app/ball-machine.tsx` | `/ball-machine` |
+| My Player Group | `player_level_groups` | `app/level-group.tsx` | `MyLevelGroup` |
+
+Menu contents live in `mobile/src/utils/moreMenu.ts` — add a feature there, not in the tab layout.
+
 ## Notification preferences
 
 Same API: `GET/PATCH /api/user-preferences/notifications`
@@ -89,6 +103,8 @@ Same API: `GET/PATCH /api/user-preferences/notifications`
 | Recurring bookings | Players with advanced booking | **Admin-only** on mobile |
 | Push delivery | N/A | Expo push |
 | Platform billing | Facility subscriptions | N/A |
+| Padel session creation & scoring | Organiser creates sessions, starts rounds, enters scores | **View, join and leave only** — organising stays on web |
+| Lesson sign-up | On the Lessons page | Lessons screen links to Community, which owns the bulletin sign-up and payment flow |
 
 ## QA checklist
 
@@ -103,3 +119,7 @@ Same API: `GET/PATCH /api/user-preferences/notifications`
 - [ ] Flag on/off parity: a flagged feature shows on both clients for the same facility
 - [ ] Multi-facility switch between a flag-on and a flag-off club mid-session
 - [ ] Mobile offline: cached flags survive; a never-fetched facility shows no flagged features
+- [ ] More tab appears only when a flagged feature is on, and lists exactly those
+- [ ] Ball machine: pass purchase returns from Stripe and the pass shows active; access code appears only after paying
+- [ ] Pro shop: basket respects stock, checkout returns from Stripe
+- [ ] Padel: join, leave, and a full session refusing a join

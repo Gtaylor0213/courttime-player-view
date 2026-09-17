@@ -68,6 +68,13 @@ const ADMIN_MENU_ITEMS = [
     description: 'Limits, advance window, durations, and household caps.',
   },
   {
+    key: 'pro-shop',
+    route: '/admin/pro-shop',
+    icon: 'storefront',
+    label: 'Pro Shop',
+    description: 'Products, orders, member tabs, and in-person sales.',
+  },
+  {
     key: 'annual-fees',
     route: '/admin/annual-fees',
     icon: 'cash',

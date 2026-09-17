@@ -668,3 +668,27 @@ export const annualFeesAdmin = {
   history: (f: string) => api.get(`/api/annual-fees/billing/history/${f}`),
   runRecords: (f: string, runId: string) => api.get(`/api/annual-fees/billing/runs/${runId}/${f}`),
 };
+
+// ── Pro Shop admin (web ProShopAdmin) ──
+export interface ProShopAdminProduct { id: string; name: string; description?: string | null; category: string; price_cents: number; stock_quantity: number | null; image_data?: string | null; is_active: boolean }
+export interface ProShopAdminOrder { id: string; status: string; total_cents: number; created_at: string; member_name?: string | null; member_email?: string | null; is_guest?: boolean; guest_name?: string | null; items?: Array<{ name: string; quantity: number; price_cents: number }> }
+export interface ProShopTabRow { user_id: string; member_name: string; member_email?: string; has_card: boolean; unbilled_cents: number }
+export interface ProShopMemberRow { id: string; full_name: string; email?: string; has_card: boolean }
+export type ProShopProductInput = { name: string; description?: string; category: string; price_cents: number; stock_quantity: number | null; image_data?: string | null; is_active: boolean };
+export const proShopAdmin = {
+  products: (f: string) => api.get(`/api/pro-shop/admin/products/${f}`),
+  createProduct: (f: string, body: ProShopProductInput) => api.post(`/api/pro-shop/admin/products/${f}`, body),
+  updateProduct: (productId: string, body: Partial<ProShopProductInput>) => api.patch(`/api/pro-shop/admin/products/${productId}`, body),
+  deleteProduct: (productId: string) => api.delete(`/api/pro-shop/admin/products/${productId}`),
+  orders: (f: string) => api.get(`/api/pro-shop/admin/orders/${f}`),
+  settings: (f: string) => api.get(`/api/pro-shop/admin/settings/${f}`),
+  updateSettings: (f: string, body: { tab_billing_day?: number; require_card?: boolean }) => api.patch(`/api/pro-shop/admin/settings/${f}`, body),
+  members: (f: string) => api.get(`/api/pro-shop/admin/members/${f}`),
+  assign: (f: string, mode: 'charge' | 'tab' | 'cash', user_id: string, items: { product_id: string; quantity: number }[]) =>
+    api.post(`/api/pro-shop/admin/assign/${mode}/${f}`, { user_id, items }),
+  guestSale: (f: string, body: { guest_name: string; guest_email: string | null; items: { product_id: string; quantity: number }[]; payment_mode: 'cash' | 'stripe' }) =>
+    api.post(`/api/pro-shop/admin/guest-sale/${f}`, body),
+  tabs: (f: string) => api.get(`/api/pro-shop/admin/tabs/${f}`),
+  billTab: (f: string, userId: string) => api.post(`/api/pro-shop/admin/bill-tab/${f}/${userId}`, {}),
+  billAll: (f: string) => api.post(`/api/pro-shop/admin/bill-all/${f}`, {}),
+};

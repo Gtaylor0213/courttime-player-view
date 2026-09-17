@@ -40,6 +40,13 @@ const ADMIN_MENU_ITEMS = [
     description: 'Court list, schedules, and maintenance blackouts.',
   },
   {
+    key: 'facility',
+    route: '/admin/facility',
+    icon: 'business',
+    label: 'Facility Settings',
+    description: 'Name, address, contacts, logo, timezone, and locations.',
+  },
+  {
     key: 'member-payments',
     route: '/admin/member-payments',
     icon: 'card',

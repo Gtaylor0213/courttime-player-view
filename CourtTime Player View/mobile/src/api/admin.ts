@@ -507,3 +507,55 @@ export function bulkAddCourts(
 ) {
   return api.post(`/api/admin/courts/${facilityId}/bulk`, input);
 }
+
+// ── Facility details + locations (web FacilityManagement > Details) ──
+export interface FacilityContact {
+  name?: string;
+  email?: string;
+  phone?: string;
+}
+export interface AdminFacilityDetails {
+  id: string;
+  name: string;
+  type?: string | null;
+  facilityType?: string | null;
+  description?: string | null;
+  primaryLocationLabel?: string | null;
+  streetAddress?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  timezone?: string | null;
+  logoUrl?: string | null;
+  primaryContact?: FacilityContact | null;
+  secondaryContacts?: FacilityContact[] | null;
+}
+export function getFacilityDetails(facilityId: string) {
+  return api.get(`/api/facilities/${facilityId}`);
+}
+export function updateFacilityDetails(facilityId: string, data: Partial<AdminFacilityDetails>) {
+  return api.patch(`/api/admin/facilities/${facilityId}`, data);
+}
+export interface FacilityLocationRow {
+  id: string;
+  locationName?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  phone?: string | null;
+}
+export function listFacilityLocations(facilityId: string) {
+  return api.get(`/api/facility-locations/${facilityId}`);
+}
+export function createFacilityLocation(facilityId: string, data: Omit<FacilityLocationRow, 'id'>) {
+  return api.post(`/api/facility-locations/${facilityId}`, data);
+}
+export function updateFacilityLocation(facilityId: string, locationId: string, data: Omit<FacilityLocationRow, 'id'>) {
+  return api.patch(`/api/facility-locations/${facilityId}/${locationId}`, data);
+}
+export function deleteFacilityLocation(facilityId: string, locationId: string) {
+  return api.delete(`/api/facility-locations/${facilityId}/${locationId}`);
+}

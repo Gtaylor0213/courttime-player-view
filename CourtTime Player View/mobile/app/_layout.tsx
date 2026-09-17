@@ -165,7 +165,8 @@ function RootLayoutNav() {
         <Stack.Screen name="lessons" options={{ title: 'Lessons' }} />
         <Stack.Screen name="level-group" options={{ title: 'Player Groups' }} />
         <Stack.Screen name="pro-shop" options={{ title: 'Pro Shop' }} />
-        <Stack.Screen name="padel" options={{ title: 'Padel' }} />
+        <Stack.Screen name="padel/index" options={{ title: 'Padel' }} />
+        <Stack.Screen name="padel/[sessionId]" options={{ title: 'Session' }} />
         {/* Admin sub-screens, reached from the Admin tab */}
         <Stack.Screen name="admin/dashboard" options={{ title: 'Dashboard' }} />
         <Stack.Screen name="admin/bookings" options={{ title: 'Bookings' }} />

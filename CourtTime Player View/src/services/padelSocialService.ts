@@ -77,6 +77,8 @@ export async function createSession(params: {
   durationMinutes: number;
   playerCount: number;
   roundsCount: number;
+  /** Where Stripe sends the payer afterwards; defaults to the web app (the mobile app passes courttime:// links). */
+  returnUrls?: { successUrl: string; cancelUrl: string };
 }): Promise<{ sessionId: string; requiresPayment?: boolean; checkoutUrl?: string }> {
   if (params.playerCount <= 0 || params.playerCount % 4 !== 0) {
     throw new Error('playerCount must be a positive multiple of 4');
@@ -144,8 +146,8 @@ export async function createSession(params: {
     memberId: params.createdBy,
     amountCents: dropInRateCents!,
     sessionLabel: `${params.format === 'americano' ? 'Americano' : 'Mexicano'} · ${params.sessionDate} ${params.startTime}`,
-    successUrl: `${defaultAppUrl()}/padel?padelPaymentSuccess=1&sessionId=${sessionId}`,
-    cancelUrl: `${defaultAppUrl()}/padel?padelPaymentCancelled=1`,
+    successUrl: params.returnUrls?.successUrl ?? `${defaultAppUrl()}/padel?padelPaymentSuccess=1&sessionId=${sessionId}`,
+    cancelUrl: params.returnUrls?.cancelUrl ?? `${defaultAppUrl()}/padel?padelPaymentCancelled=1`,
   });
 
   return { sessionId, requiresPayment: true, checkoutUrl: url };
@@ -159,7 +161,11 @@ export interface JoinSessionResult {
   checkoutUrl?: string;
 }
 
-export async function joinSession(sessionId: string, userId: string): Promise<JoinSessionResult> {
+export async function joinSession(
+  sessionId: string,
+  userId: string,
+  returnUrls?: { successUrl: string; cancelUrl: string }
+): Promise<JoinSessionResult> {
   const priceResult = await query(
     `SELECT f.padel_dropin_rate_cents as "dropInRateCents", s.session_date as "sessionDate",
             s.start_time as "startTime", s.format
@@ -279,8 +285,8 @@ export async function joinSession(sessionId: string, userId: string): Promise<Jo
     memberId: userId,
     amountCents: dropInRateCents!,
     sessionLabel: `${format === 'americano' ? 'Americano' : 'Mexicano'} · ${sessionDate} ${startTime}`,
-    successUrl: `${defaultAppUrl()}/padel?padelPaymentSuccess=1&sessionId=${sessionId}`,
-    cancelUrl: `${defaultAppUrl()}/padel?padelPaymentCancelled=1`,
+    successUrl: returnUrls?.successUrl ?? `${defaultAppUrl()}/padel?padelPaymentSuccess=1&sessionId=${sessionId}`,
+    cancelUrl: returnUrls?.cancelUrl ?? `${defaultAppUrl()}/padel?padelPaymentCancelled=1`,
   });
 
   return { joined: true, playerCount: newOccupancy, playerTarget, requiresPayment: true, checkoutUrl: url };

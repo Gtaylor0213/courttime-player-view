@@ -25,6 +25,13 @@ const checkFlag = requireFeatureFlag(FEATURE_FLAGS.PADEL, 'Padel is not enabled 
  * Drop-in rate for the "Join" button and session creation form to display.
  * Null = free / members-only.
  */
+/** Optional Stripe return URLs from the client (the mobile app sends courttime:// deep links). */
+function readReturnUrls(body: any): { successUrl: string; cancelUrl: string } | undefined {
+  const successUrl = typeof body?.successUrl === 'string' ? body.successUrl : '';
+  const cancelUrl = typeof body?.cancelUrl === 'string' ? body.cancelUrl : '';
+  return successUrl && cancelUrl ? { successUrl, cancelUrl } : undefined;
+}
+
 router.get('/pricing/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
@@ -92,6 +99,7 @@ router.post('/sessions', async (req, res, next) => {
   try {
     const userId = req.user!.userId;
     const { facilityId, format, sessionDate, startTime, durationMinutes, playerCount, roundsCount } = req.body || {};
+    const returnUrls = readReturnUrls(req.body);
     if (!(await checkFlag(facilityId, res))) return;
 
     if (!facilityId || !['americano', 'mexicano'].includes(format) || !sessionDate || !startTime || !durationMinutes || !playerCount) {
@@ -107,6 +115,7 @@ router.post('/sessions', async (req, res, next) => {
       durationMinutes: Number(durationMinutes),
       playerCount: Number(playerCount),
       roundsCount: Number(roundsCount) || 5,
+      returnUrls,
     });
     res.json({ success: true, ...result });
   } catch (error: any) {
@@ -117,7 +126,7 @@ router.post('/sessions', async (req, res, next) => {
 router.post('/sessions/:id/join', async (req, res, next) => {
   try {
     const userId = req.user!.userId;
-    const result = await joinSession(req.params.id, userId);
+    const result = await joinSession(req.params.id, userId, readReturnUrls(req.body));
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message || 'Could not join session' });

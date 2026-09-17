@@ -157,9 +157,33 @@ export const proShopEndpoints = {
 
 export const padelEndpoints = {
   sessions: (facilityId: string) => api.get(`/api/padel/sessions/${facilityId}`),
-  join: (sessionId: string) => api.post(`/api/padel/sessions/${sessionId}/join`, {}),
+  /** `{ success, joined, requiresPayment?, checkoutUrl? }` — the app passes its deep-link return URLs. */
+  join: (sessionId: string, returnUrls?: { successUrl: string; cancelUrl: string }) =>
+    api.post(`/api/padel/sessions/${sessionId}/join`, returnUrls ?? {}),
   leave: (sessionId: string) => api.post(`/api/padel/sessions/${sessionId}/leave`, {}),
   standings: (sessionId: string) => api.get(`/api/padel/sessions/${sessionId}/standings`),
+  /** `{ success, session, roster, rounds }` */
+  detail: (sessionId: string) => api.get(`/api/padel/sessions/${sessionId}/detail`),
+  create: (body: {
+    facilityId: string;
+    format: 'americano' | 'mexicano';
+    sessionDate: string;
+    startTime: string;
+    durationMinutes: number;
+    playerCount: number;
+    roundsCount: number;
+    successUrl?: string;
+    cancelUrl?: string;
+  }) => api.post('/api/padel/sessions', body),
+  start: (sessionId: string) => api.post(`/api/padel/sessions/${sessionId}/start`, {}),
+  cancel: (sessionId: string) => api.post(`/api/padel/sessions/${sessionId}/cancel`, {}),
+  nextRound: (sessionId: string) => api.post(`/api/padel/sessions/${sessionId}/rounds/next`, {}),
+  recordScore: (matchId: string, team1Score: number, team2Score: number) =>
+    api.post(`/api/padel/matches/${matchId}/score`, { team1Score, team2Score }),
+  /** `{ success, dropInRateCents }`; null = free / members-only. */
+  pricing: (facilityId: string) => api.get(`/api/padel/pricing/${facilityId}`),
+  setPricing: (facilityId: string, dropInRateCents: number | null) =>
+    api.patch(`/api/padel/pricing/${facilityId}`, { dropInRateCents }),
 };
 
 export const strikesEndpoints = {

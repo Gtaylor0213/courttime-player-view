@@ -31,6 +31,14 @@ export function lessonSignupCheckoutUrls(postId: string) {
   };
 }
 
+/** Padel drop-in fee (create or join a Social Play session); returns to the Padel screen. */
+export function padelDropInCheckoutUrls() {
+  return {
+    successUrl: `${SCHEME}://padel?padelPaymentSuccess=1&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${SCHEME}://padel?padelPaymentCancelled=1`,
+  };
+}
+
 export function ballMachinePassCheckoutUrls() {
   return {
     successUrl: `${SCHEME}://ball-machine?passPurchased=1&session_id={CHECKOUT_SESSION_ID}`,

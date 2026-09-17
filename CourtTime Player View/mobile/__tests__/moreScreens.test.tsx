@@ -443,7 +443,11 @@ describe('Padel screen', () => {
       await Promise.resolve();
     });
 
-    expect(postSpy).toHaveBeenCalledWith('/api/padel/sessions/s1/join', {});
+    // The app passes its deep-link return URLs so a drop-in payment comes back to Padel.
+    expect(postSpy).toHaveBeenCalledWith(
+      '/api/padel/sessions/s1/join',
+      expect.objectContaining({ successUrl: expect.stringContaining('courttime://padel') })
+    );
   });
 
   it('offers to leave a session already joined', async () => {

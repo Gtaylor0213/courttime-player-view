@@ -163,6 +163,12 @@ function RootLayoutNav() {
         <Stack.Screen name="level-group" options={{ title: 'My Player Group' }} />
         <Stack.Screen name="pro-shop" options={{ title: 'Pro Shop' }} />
         <Stack.Screen name="padel" options={{ title: 'Padel' }} />
+        {/* Admin sub-screens, reached from the Admin tab */}
+        <Stack.Screen name="admin/dashboard" options={{ title: 'Dashboard' }} />
+        <Stack.Screen name="admin/bookings" options={{ title: 'Bookings' }} />
+        <Stack.Screen name="admin/members" options={{ title: 'Members' }} />
+        <Stack.Screen name="admin/courts" options={{ title: 'Courts & Facility' }} />
+        <Stack.Screen name="admin/communication" options={{ title: 'Communication' }} />
       </Stack>
       {/*
         Rendered over the app rather than as an early return: unlike the terms

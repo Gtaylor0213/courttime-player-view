@@ -313,9 +313,9 @@ Mobile has Dashboard, Bookings, Members, Courts & Facility, Communication. Web h
 
 | # | Item | Size | Done when |
 |---|------|------|-----------|
-| D1 | **API-parity check in CI.** Script the audit: extract `/api/...` paths used by `src/` and by `mobile/`, diff, and fail on a web-only path not listed in `docs/mobile-web-sync.md` under an explicit "web-only" allowlist. | S | `npm run parity:check` runs in CI; today's list seeds the allowlist and shrinks as items land. |
-| D2 | **PR checklist line**: "Player- or admin-visible change? Mobile item filed or `web-only` justified." | S | In `.github/PULL_REQUEST_TEMPLATE.md`. |
-| D3 | **Update `docs/mobile-web-sync.md`** after each workstream with the new shared modules and any "Open on web" decisions. | S | Doc reflects shipped state. |
+| D1 | ✅ **API-parity check in CI.** Script the audit: extract `/api/...` paths used by `src/` and by `mobile/`, diff, and fail on a web-only path not listed in `docs/mobile-web-sync.md` under an explicit "web-only" allowlist. | S | `npm run parity:check` runs in CI; today's list seeds the allowlist and shrinks as items land. |
+| D2 | ✅ **PR checklist line**: "Player- or admin-visible change? Mobile item filed or `web-only` justified." | S | In `.github/PULL_REQUEST_TEMPLATE.md`. |
+| D3 | ✅ **Update `docs/mobile-web-sync.md`** after each workstream with the new shared modules and any "Open on web" decisions. | S | Doc reflects shipped state. |
 
 #### Order
 

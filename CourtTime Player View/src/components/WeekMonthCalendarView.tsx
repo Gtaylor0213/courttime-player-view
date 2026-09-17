@@ -6,7 +6,7 @@ import {
   getBookingTypeColor,
   getBookingTypeBadgeColor,
   getBookingTypeLabel,
-} from '../constants/bookingTypes';
+} from '../../shared/constants/bookingTypes';
 import { ReservationManagementModal } from './ReservationManagementModal';
 
 // Week view time grid constants

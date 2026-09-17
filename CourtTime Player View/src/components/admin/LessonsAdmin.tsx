@@ -24,7 +24,7 @@ import {
   isPaidSignupPost,
   mapPostFromApi,
   type BulletinPostView,
-} from '../../utils/bulletinPostDisplay';
+} from '../../../shared/utils/bulletinPostDisplay';
 import { BulletinPostCreateModal } from '../BulletinPostCreateModal';
 import { toast } from 'sonner';
 

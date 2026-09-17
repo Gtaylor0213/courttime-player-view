@@ -1,1 +1,0 @@
-export { SupportConsole } from './SupportConsole';

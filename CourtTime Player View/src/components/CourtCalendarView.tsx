@@ -22,7 +22,7 @@ import { parseLocalDate } from '../utils/dateUtils';
 import { toast } from 'sonner';
 import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Grid3X3, Info, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
-import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
+import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../../shared/constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { formatCourtCalendarSubtitle } from '../../shared/utils/courtNaming';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
@@ -33,7 +33,7 @@ import { fetchBookingCalendarDetails, offerAddBookingToCalendar } from '../utils
 import {
   BULLETIN_ACTIVITY_BOOKING_TYPES,
   isBulletinActivityBooking,
-} from '../utils/bulletinPostDisplay';
+} from '../../shared/utils/bulletinPostDisplay';
 
 // Layout constants
 const SUB_SLOT_HEIGHT = 25;       // 30-min row height (desktop)

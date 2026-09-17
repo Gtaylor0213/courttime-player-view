@@ -12,7 +12,7 @@ import {
   isPaidSignupPost,
   mapPostFromApi,
   type BulletinPostView,
-} from '../utils/bulletinPostDisplay';
+} from '../../shared/utils/bulletinPostDisplay';
 import { BulletinActivitySignupModal } from './BulletinActivitySignupModal';
 import { toast } from 'sonner';
 

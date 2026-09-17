@@ -22,7 +22,7 @@ import {
   formatBulletinPostProminentDate,
   getBulletinPostEventAt,
   getBulletinPostSortTimestamp,
-} from '../utils/bulletinPostDisplay';
+} from '../../shared/utils/bulletinPostDisplay';
 import { toast } from 'sonner';
 import { BulletinPostShareModal } from './BulletinPostShareModal';
 import { BulletinPostCreateModal } from './BulletinPostCreateModal';

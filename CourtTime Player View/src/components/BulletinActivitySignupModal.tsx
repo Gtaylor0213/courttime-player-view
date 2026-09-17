@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { bulletinBoardApi, unwrapApiPayload } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
+import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../../shared/constants/bookingTypes';
 import { toast } from 'sonner';
 import {
   bulletinSignupReturnUrls,
@@ -15,7 +15,7 @@ import {
   isPaidSignupPost,
   mapPostFromApi,
   type BulletinPostView,
-} from '../utils/bulletinPostDisplay';
+} from '../../shared/utils/bulletinPostDisplay';
 
 interface BulletinActivitySignupModalProps {
   isOpen: boolean;

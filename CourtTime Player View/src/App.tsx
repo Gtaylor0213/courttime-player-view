@@ -50,7 +50,7 @@ import AnnualFeesAdmin from './components/admin/AnnualFeesAdmin';
 import AdminReports from './components/admin/AdminReports';
 
 // Support Console
-import { SupportConsole } from './components/developer';
+import { SupportConsole } from './components/developer/SupportConsole';
 
 // Legal pages (public, no auth)
 import { PrivacyPolicyPage } from './components/legal/PrivacyPolicyPage';

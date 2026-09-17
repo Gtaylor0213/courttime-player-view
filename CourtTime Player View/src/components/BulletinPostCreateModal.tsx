@@ -9,7 +9,7 @@ import { Label } from './ui/label';
 import { useAuth } from '../contexts/AuthContext';
 import { bulletinBoardApi, facilitiesApi, stripeConnectApi, unwrapApiPayload } from '../api/client';
 import { parseDollarsToCents } from '../../shared/utils/money';
-import { EVENT_SIGNUP_TYPES } from '../utils/bulletinPostDisplay';
+import { EVENT_SIGNUP_TYPES } from '../../shared/utils/bulletinPostDisplay';
 import { toast } from 'sonner';
 
 const eventSignupTypes = EVENT_SIGNUP_TYPES;

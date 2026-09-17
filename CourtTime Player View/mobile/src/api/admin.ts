@@ -75,6 +75,8 @@ export interface AdminBookingRow {
   paymentMode?: string | null;
   frontDeskAmountDueCents?: number | null;
   frontDeskCollectedAt?: string | null;
+  durationMinutes?: number;
+  notes?: string | null;
 }
 
 export function getAdminBookings(facilityId: string, filters: AdminBookingFilters) {
@@ -97,6 +99,31 @@ export function updateBookingStatus(
 
 export function collectFrontDeskFee(bookingId: string) {
   return api.post(`/api/bookings/${bookingId}/front-desk-fee/collect`, {});
+}
+
+// ── Recurring series (web's BookingManagement series controls) ──
+export interface SeriesEditPayload {
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  bookingType?: string;
+  notes?: string;
+}
+
+export function updateBookingSeries(seriesId: string, data: SeriesEditPayload) {
+  return api.patch(`/api/admin/booking-series/${seriesId}`, data);
+}
+
+export function deleteBookingSeries(seriesId: string) {
+  return api.delete(`/api/admin/booking-series/${seriesId}`);
+}
+
+export function updateBookingSeriesInstances(seriesId: string, data: SeriesEditPayload & { bookingIds: string[] }) {
+  return api.patch(`/api/admin/booking-series/${seriesId}/instances`, data);
+}
+
+export function deleteBookingSeriesInstances(seriesId: string, bookingIds: string[]) {
+  return api.delete(`/api/admin/booking-series/${seriesId}/instances`, { bookingIds });
 }
 
 // ── Members ──
@@ -129,6 +156,7 @@ export function updateMember(
     status: string;
     suspendedUntil: string | null;
     membershipType: string;
+    memberNumber: string | null;
   }>
 ) {
   return api.patch<{ success: boolean; member: AdminMemberRow; message?: string }>(
@@ -329,4 +357,101 @@ export function sendEmailBlast(facilityId: string, subject: string, message: str
     success: boolean;
     data: { sent: number; failed: number; total: number; errorMessage?: string };
   }>(`/api/admin/email-blast/${facilityId}`, { subject, message, recipientFilter });
+}
+
+// ── Member Payments admin (web's AdminMemberPayments: PaymentsTab + BillingTab) ──
+
+export type PaymentCategory = 'BALL_MACHINE' | 'CLINIC' | 'DRILL' | 'DUES' | 'OTHER';
+
+export interface AdminPaymentItem {
+  id: string;
+  clubId: string;
+  name: string;
+  description?: string | null;
+  amountCents: number;
+  category: PaymentCategory;
+  isRecurring: boolean;
+  recurringInterval?: 'month' | 'year' | null;
+  isActive: boolean;
+}
+
+export interface ClubPaymentRow {
+  id: string;
+  source?: 'connect' | 'settlement' | 'annual_fee' | 'pro_shop' | string;
+  memberName?: string | null;
+  memberEmail?: string | null;
+  itemName?: string | null;
+  amountCents: number;
+  platformFeeCents?: number | null;
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | string;
+  refundable?: boolean;
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+export interface FacilitySubscription {
+  planType?: string;
+  status?: string;
+  amountCents?: number;
+  courtCount?: number;
+  currentPeriodEnd?: string | null;
+  billingPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
+}
+
+export function getStripeConnectStatus(clubId: string) {
+  return api.get(`/api/stripe/connect/status?clubId=${encodeURIComponent(clubId)}`);
+}
+
+/** `{ success, data: { url } }` — open in the browser to onboard or update Stripe details. */
+export function startStripeOnboarding(clubId: string) {
+  return api.get(`/api/stripe/connect?clubId=${encodeURIComponent(clubId)}&format=json`);
+}
+
+export function listPaymentItems(clubId: string) {
+  return api.get<{ success: boolean; data: AdminPaymentItem[] }>(`/api/payment-items/club/${encodeURIComponent(clubId)}`);
+}
+
+export function createPaymentItem(data: {
+  clubId: string;
+  name: string;
+  description?: string;
+  amountCents: number;
+  category: PaymentCategory;
+  isRecurring?: boolean;
+  recurringInterval?: 'month' | 'year' | null;
+}) {
+  return api.post('/api/payment-items', data);
+}
+
+export function updatePaymentItem(id: string, data: Partial<Omit<AdminPaymentItem, 'id' | 'clubId'>>) {
+  return api.put(`/api/payment-items/${encodeURIComponent(id)}`, data);
+}
+
+export function getClubPaymentHistory(clubId: string) {
+  return api.get(`/api/payments/history?clubId=${encodeURIComponent(clubId)}`);
+}
+
+export function refundConnectPayment(connectPaymentId: string) {
+  return api.post(`/api/payments/${encodeURIComponent(connectPaymentId)}/refund`, {});
+}
+
+export function getFacilitySubscription(facilityId: string) {
+  return api.get(`/api/payments/subscription/${facilityId}`);
+}
+
+export function getFacilityBillingHistory(facilityId: string) {
+  return api.get(`/api/payments/history/${facilityId}`);
+}
+
+export function createBillingPortalSession(facilityId: string, returnUrl: string) {
+  return api.post('/api/payments/portal-session', { facilityId, returnUrl });
+}
+
+export function createFacilityCheckout(facilityId: string, returnUrl: string) {
+  return api.post('/api/payments/facility-checkout', { facilityId, returnUrl });
+}
+
+export function cancelFacilitySubscription(facilityId: string) {
+  return api.post('/api/payments/cancel-subscription', { facilityId });
 }

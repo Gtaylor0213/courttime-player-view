@@ -2,7 +2,7 @@
  * Admin Bookings: Reservations (list/filter/manage) + Create (book on behalf of a member or a walk-in guest).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
@@ -11,9 +11,16 @@ import {
   updateBookingStatus,
   collectFrontDeskFee,
   getFacilityCourts,
+  updateBookingSeries,
+  deleteBookingSeries,
+  updateBookingSeriesInstances,
+  deleteBookingSeriesInstances,
   type AdminBookingRow,
   type AdminCourtRow,
+  type SeriesEditPayload,
 } from '../../src/api/admin';
+import { groupBookingsBySeries, minutesBetween } from '../../src/utils/adminBookings';
+import { generateWeeklyDates, WEEKDAY_NAMES } from '../../src/utils/recurringDates';
 import { buildTimeSlotsFromAvailability, type CourtAvailabilityData } from '../../../shared/utils/courtAvailability';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
@@ -106,6 +113,21 @@ function ReservationsTab({
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // Recurring series controls (web: Show Dates / Edit Entire Series / Edit or Delete Selected Dates)
+  const [expandedSeries, setExpandedSeries] = useState<Record<string, boolean>>({});
+  const [selectedSeriesDates, setSelectedSeriesDates] = useState<Record<string, string[]>>({});
+  const [seriesEdit, setSeriesEdit] = useState<{
+    mode: 'all' | 'selected';
+    seriesId: string;
+    bookingIds: string[];
+    startTime: string;
+    endTime: string;
+    durationMinutes: string;
+    bookingType: string;
+    notes: string;
+  } | null>(null);
+  const [seriesSubmitting, setSeriesSubmitting] = useState(false);
+
   const loadBookings = useCallback(async () => {
     if (!facilityId) return;
     setLoading(true);
@@ -135,6 +157,95 @@ function ReservationsTab({
       [b.userName, b.courtName, b.walkInName].some((v) => (v || '').toLowerCase().includes(q))
     );
   }, [bookings, search]);
+  const groups = useMemo(() => groupBookingsBySeries(filtered.slice(0, 120)), [filtered]);
+
+  const toggleSeriesDate = (seriesId: string, bookingId: string) =>
+    setSelectedSeriesDates((prev) => {
+      const existing = prev[seriesId] || [];
+      return { ...prev, [seriesId]: existing.includes(bookingId) ? existing.filter((id) => id !== bookingId) : [...existing, bookingId] };
+    });
+
+  const openSeriesEdit = (mode: 'all' | 'selected', seriesId: string, seed: AdminBookingRow, bookingIds: string[] = []) =>
+    setSeriesEdit({
+      mode,
+      seriesId,
+      bookingIds,
+      startTime: seed.startTime || '',
+      endTime: seed.endTime || '',
+      durationMinutes: String(seed.durationMinutes || minutesBetween(seed.startTime, seed.endTime) || 60),
+      bookingType: seed.bookingType || '',
+      notes: seed.notes || '',
+    });
+
+  const confirmDeleteSeries = (seriesId: string) =>
+    Alert.alert('Delete series', 'Delete all reservations in this recurring series?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const res = await deleteBookingSeries(seriesId);
+            if (res.success) await loadBookings();
+            else showApiErrorAlert(res, 'Failed to delete recurring series');
+          })();
+        },
+      },
+    ]);
+
+  const confirmDeleteSelected = (seriesId: string) => {
+    const ids = selectedSeriesDates[seriesId] || [];
+    if (ids.length === 0) {
+      showAlert('Select dates', 'Select at least one date first.');
+      return;
+    }
+    Alert.alert('Delete selected dates', `Delete ${ids.length} selected date${ids.length === 1 ? '' : 's'}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const res = await deleteBookingSeriesInstances(seriesId, ids);
+            if (res.success) {
+              setSelectedSeriesDates((prev) => ({ ...prev, [seriesId]: [] }));
+              await loadBookings();
+            } else showApiErrorAlert(res, 'Failed to delete selected dates');
+          })();
+        },
+      },
+    ]);
+  };
+
+  async function submitSeriesEdit() {
+    if (!seriesEdit) return;
+    const duration = Number(seriesEdit.durationMinutes);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      showAlert('Duration', 'Duration must be a positive number.');
+      return;
+    }
+    const withSeconds = (t: string) => (t.length === 5 ? `${t}:00` : t);
+    const payload: SeriesEditPayload = {
+      startTime: withSeconds(seriesEdit.startTime.trim()),
+      endTime: withSeconds(seriesEdit.endTime.trim()),
+      durationMinutes: duration,
+      bookingType: seriesEdit.bookingType.trim() || undefined,
+      notes: seriesEdit.notes.trim() || undefined,
+    };
+    setSeriesSubmitting(true);
+    const res =
+      seriesEdit.mode === 'all'
+        ? await updateBookingSeries(seriesEdit.seriesId, payload)
+        : await updateBookingSeriesInstances(seriesEdit.seriesId, { bookingIds: seriesEdit.bookingIds, ...payload });
+    setSeriesSubmitting(false);
+    if (!res.success) {
+      showApiErrorAlert(res, 'Failed to update recurring reservation');
+      return;
+    }
+    if (seriesEdit.mode === 'selected') setSelectedSeriesDates((prev) => ({ ...prev, [seriesEdit.seriesId]: [] }));
+    setSeriesEdit(null);
+    await loadBookings();
+  }
 
   async function doAction(action: () => Promise<void>, bookingId: string) {
     setBusyId(bookingId);
@@ -231,7 +342,68 @@ function ReservationsTab({
         {!loading && filtered.length === 0 ? (
           <Text style={styles.emptyText}>No bookings match these filters.</Text>
         ) : (
-          filtered.slice(0, 60).map((b) => {
+          groups.map((group) => {
+            if (group.kind === 'series') {
+              const seed = group.bookings[0]!;
+              const expanded = !!expandedSeries[group.seriesId];
+              const selected = selectedSeriesDates[group.seriesId] || [];
+              const allSelected = group.bookings.length > 0 && group.bookings.every((b) => selected.includes(b.id));
+              return (
+                <View key={`series-${group.seriesId}`} style={[styles.bookingItem, styles.seriesItem]}>
+                  <Text style={styles.bookingTitle}>
+                    <Ionicons name="repeat" size={12} color={Colors.primary} /> Recurring • {seed.courtName || 'Court'} • {seed.walkInName || seed.userName || 'Member'}
+                  </Text>
+                  <Text style={styles.bookingMeta}>
+                    {formatTime(seed.startTime)} - {formatTime(seed.endTime)} • {group.bookings.length} date{group.bookings.length === 1 ? '' : 's'} in range
+                  </Text>
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => setExpandedSeries((p) => ({ ...p, [group.seriesId]: !expanded }))}>
+                      <Text style={styles.actionDefault}>{expanded ? 'Hide dates' : 'Show dates'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => openSeriesEdit('all', group.seriesId, seed)}>
+                      <Text style={styles.actionDefault}>Edit series</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => confirmDeleteSeries(group.seriesId)}>
+                      <Text style={styles.actionCancel}>Delete series</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {expanded ? (
+                    <View style={styles.seriesDates}>
+                      <View style={styles.actionRow}>
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => setSelectedSeriesDates((p) => ({ ...p, [group.seriesId]: allSelected ? [] : group.bookings.map((b) => b.id) }))}>
+                          <Text style={styles.actionDefault}>{allSelected ? 'Clear all' : 'Select all dates'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => selected.length ? openSeriesEdit('selected', group.seriesId, seed, selected) : showAlert('Select dates', 'Select at least one date first.')}>
+                          <Text style={styles.actionDefault}>Edit selected</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => confirmDeleteSelected(group.seriesId)}>
+                          <Text style={styles.actionCancel}>Delete selected</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {group.bookings.map((b) => {
+                        const isSel = selected.includes(b.id);
+                        return (
+                          <TouchableOpacity
+                            key={b.id}
+                            style={styles.seriesDateRow}
+                            onPress={() => toggleSeriesDate(group.seriesId, b.id)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: isSel }}
+                            accessibilityLabel={`${b.bookingDate} ${formatTime(b.startTime)}${isSel ? ', selected' : ''}`}
+                          >
+                            <Ionicons name={isSel ? 'checkbox' : 'square-outline'} size={18} color={isSel ? Colors.primary : Colors.textMuted} />
+                            <Text style={styles.seriesDateText}>
+                              {b.bookingDate} • {formatTime(b.startTime)} - {formatTime(b.endTime)} • {b.status}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+              );
+            }
+            const b = group.booking;
             const busy = busyId === b.id;
             const canCollectFee = !!b.frontDeskAmountDueCents && !b.frontDeskCollectedAt;
             return (
@@ -241,7 +413,6 @@ function ReservationsTab({
                 </Text>
                 <Text style={styles.bookingMeta}>
                   {b.bookingDate} • {formatTime(b.startTime)} - {formatTime(b.endTime)} • {b.status}
-                  {b.isRecurring ? ' • recurring' : ''}
                 </Text>
                 <View style={styles.actionRow}>
                   <TouchableOpacity disabled={busy} style={styles.actionBtn} onPress={() => patchStatus(b.id, 'cancelled')}>
@@ -267,6 +438,38 @@ function ReservationsTab({
           })
         )}
       </Card>
+
+      {/* Series edit (web: "Edit Entire Recurring Series" / "Edit Selected Dates") */}
+      <Modal visible={seriesEdit !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSeriesEdit(null)}>
+        <View style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setSeriesEdit(null)} accessibilityRole="button" accessibilityLabel="Cancel">
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{seriesEdit?.mode === 'all' ? 'Edit Entire Series' : 'Edit Selected Dates'}</Text>
+            <TouchableOpacity onPress={() => void submitSeriesEdit()} disabled={seriesSubmitting} accessibilityRole="button" accessibilityLabel="Save changes">
+              <Text style={[styles.modalSave, seriesSubmitting && { opacity: 0.5 }]}>{seriesSubmitting ? '…' : 'Save'}</Text>
+            </TouchableOpacity>
+          </View>
+          {seriesEdit ? (
+            <ScrollView contentContainerStyle={{ padding: Spacing.md }} keyboardShouldPersistTaps="handled">
+              {seriesEdit.mode === 'selected' ? (
+                <Text style={styles.emptyText}>Applies to {seriesEdit.bookingIds.length} selected date{seriesEdit.bookingIds.length === 1 ? '' : 's'}.</Text>
+              ) : null}
+              <Text style={styles.label}>Start time (HH:MM)</Text>
+              <Input value={seriesEdit.startTime} onChangeText={(v) => setSeriesEdit({ ...seriesEdit, startTime: v })} placeholder="18:00" autoCapitalize="none" />
+              <Text style={styles.label}>End time (HH:MM)</Text>
+              <Input value={seriesEdit.endTime} onChangeText={(v) => setSeriesEdit({ ...seriesEdit, endTime: v })} placeholder="19:00" autoCapitalize="none" />
+              <Text style={styles.label}>Duration (minutes)</Text>
+              <Input value={seriesEdit.durationMinutes} onChangeText={(v) => setSeriesEdit({ ...seriesEdit, durationMinutes: v.replace(/[^0-9]/g, '') })} keyboardType="number-pad" />
+              <Text style={styles.label}>Reservation type (optional)</Text>
+              <Input value={seriesEdit.bookingType} onChangeText={(v) => setSeriesEdit({ ...seriesEdit, bookingType: v })} placeholder="match" autoCapitalize="none" />
+              <Text style={styles.label}>Notes (optional)</Text>
+              <Input value={seriesEdit.notes} onChangeText={(v) => setSeriesEdit({ ...seriesEdit, notes: v })} multiline style={styles.multiline} />
+            </ScrollView>
+          ) : null}
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -296,6 +499,10 @@ function CreateTab({
   const [bookingType, setBookingType] = useState('match');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Recurring (web AdminBooking): weekly on chosen days until an end date; members only.
+  const [recurring, setRecurring] = useState(false);
+  const [recurringDays, setRecurringDays] = useState<string[]>([]);
+  const [recurringEndDate, setRecurringEndDate] = useState('');
 
   useEffect(() => {
     if (!facilityId) return;
@@ -346,11 +553,13 @@ function CreateTab({
     setSelectedCourtIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   }
 
+  const recurringActive = recurring && !isWalkIn;
   const canSubmit =
     !!facilityId &&
     selectedCourtIds.length > 0 &&
     !!startTime &&
-    (isWalkIn ? walkInName.trim().length > 0 : !!memberId);
+    (isWalkIn ? walkInName.trim().length > 0 : !!memberId) &&
+    (!recurringActive || (recurringDays.length > 0 && !!recurringEndDate));
 
   async function submit() {
     if (!facilityId || !canSubmit || !startTime) return;
@@ -358,6 +567,46 @@ function CreateTab({
     const [sh, sm] = startTime.split(':').map(Number);
     const endMinutes = sh * 60 + sm + durationMinutes;
     const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}:00`;
+
+    if (recurringActive) {
+      const dates = generateWeeklyDates(date, recurringDays, recurringEndDate);
+      if (dates.length === 0) {
+        setSubmitting(false);
+        showAlert('Recurring', 'Pick at least one weekday and an end date on or after the start date.');
+        return;
+      }
+      const instances = dates.flatMap((bookingDate) =>
+        selectedCourtIds.map((courtId) => ({ courtId, bookingDate, startTime, endTime, durationMinutes }))
+      );
+      const payload = { userId: memberId, facilityId, bookingType, notes: notes.trim() || undefined, instances, bookedByStaffId: adminUserId };
+      let res = await api.post('/api/bookings/recurring-series', payload);
+      if (!res.success && res.conflicts?.length) {
+        const proceed = await new Promise<boolean>((resolve) =>
+          showAlert(
+            'Booking Conflicts',
+            `${res.conflicts!.length} date(s) conflict with existing reservations. Book the other dates and skip the conflicts?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Book the rest', onPress: () => resolve(true) },
+            ]
+          )
+        );
+        if (!proceed) {
+          setSubmitting(false);
+          return;
+        }
+        res = await api.post('/api/bookings/recurring-series', { ...payload, skipConflicts: true });
+      }
+      setSubmitting(false);
+      if (res.success) {
+        const created = (res.data as { bookings?: unknown[] } | undefined)?.bookings?.length ?? instances.length;
+        showAlert('Created', `Recurring series created: ${created} booking${created === 1 ? '' : 's'}.`);
+        setNotes('');
+      } else {
+        showApiErrorAlert(res, 'Could not create recurring series');
+      }
+      return;
+    }
 
     let successCount = 0;
     let firstError: string | undefined;
@@ -481,6 +730,41 @@ function CreateTab({
           </ScrollView>
         )}
 
+        {!isWalkIn ? (
+          <>
+            <Text style={styles.label}>Repeat weekly</Text>
+            <View style={styles.row}>
+              <TouchableOpacity style={[styles.chip, !recurring && styles.chipSelected]} onPress={() => setRecurring(false)} accessibilityRole="button" accessibilityLabel="One-time booking">
+                <Text style={[styles.chipText, !recurring && styles.chipTextSelected]}>One time</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.chip, recurring && styles.chipSelected]} onPress={() => setRecurring(true)} accessibilityRole="button" accessibilityLabel="Recurring weekly booking">
+                <Text style={[styles.chipText, recurring && styles.chipTextSelected]}>Recurring</Text>
+              </TouchableOpacity>
+            </View>
+            {recurring ? (
+              <>
+                <Text style={styles.label}>Days of week</Text>
+                <View style={styles.chipsWrap}>
+                  {WEEKDAY_NAMES.map((d) => (
+                    <TouchableOpacity
+                      key={d}
+                      style={[styles.chip, recurringDays.includes(d) && styles.chipSelected]}
+                      onPress={() => setRecurringDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]))}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: recurringDays.includes(d) }}
+                      accessibilityLabel={d}
+                    >
+                      <Text style={[styles.chipText, recurringDays.includes(d) && styles.chipTextSelected]}>{d.slice(0, 3)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.label}>Repeat until (YYYY-MM-DD)</Text>
+                <Input value={recurringEndDate} onChangeText={setRecurringEndDate} placeholder="YYYY-MM-DD" autoCapitalize="none" />
+              </>
+            ) : null}
+          </>
+        ) : null}
+
         <Text style={styles.label}>Duration</Text>
         <View style={styles.chipsWrap}>
           {DURATION_OPTIONS.map((d) => (
@@ -548,6 +832,15 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
     marginBottom: Spacing.sm,
   },
+  seriesItem: { borderColor: Colors.primary + '55', backgroundColor: Colors.primary + '06' },
+  seriesDates: { marginTop: Spacing.sm, gap: 4 },
+  seriesDateRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 4 },
+  seriesDateText: { fontSize: FontSize.xs, color: Colors.text, flexShrink: 1 },
+  modal: { flex: 1, backgroundColor: Colors.background },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  modalCancel: { color: Colors.textSecondary, fontSize: FontSize.md },
+  modalTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
+  modalSave: { color: Colors.primary, fontSize: FontSize.md, fontWeight: '700' },
   bookingTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
   bookingMeta: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2, marginBottom: 6 },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },

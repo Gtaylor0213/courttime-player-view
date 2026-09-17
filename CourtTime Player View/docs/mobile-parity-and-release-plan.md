@@ -4,7 +4,7 @@
 **Goal:** Bring the Expo app to full **player-facing** parity with the web app, then ship to the iOS App Store and Google Play.
 **Decisions locked:** full player parity (including flagged features) · both stores this round.
 
-Supersedes the feature-gap sections of [`MOBILE_DEVELOPMENT_PLAN.md`](../MOBILE_DEVELOPMENT_PLAN.md), which describes an April–May 2026 state. Keep [`docs/mobile-web-sync.md`](./mobile-web-sync.md) as the living contract doc and update it as each phase lands.
+Supersedes the feature-gap sections of [`MOBILE_DEVELOPMENT_PLAN.md`](./archive/MOBILE_DEVELOPMENT_PLAN.md), which describes an April–May 2026 state. Keep [`docs/mobile-web-sync.md`](./mobile-web-sync.md) as the living contract doc and update it as each phase lands.
 
 ---
 

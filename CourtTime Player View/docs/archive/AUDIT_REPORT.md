@@ -1,3 +1,5 @@
+> **Archived (September 2026).** Historical snapshot from March 31, 2026. Its "OPEN" items have since been addressed (routes are behind requireAuth, the test suite exists, console logging was removed). Kept for history only; do not treat as a current tracker.
+
 # CourtTime Codebase Audit Report
 
 **Audit Date:** March 31, 2026

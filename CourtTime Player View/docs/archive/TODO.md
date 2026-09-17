@@ -1,3 +1,5 @@
+> **Archived (September 2026).** All items here were completed. Kept because the ACC-/CRT-/HH- rule-code tables still describe live `src/services/rulesEngine/` code.
+
 # CourtTime - Future TODO List
 
 This document tracks features and improvements that need to be completed in future development cycles.

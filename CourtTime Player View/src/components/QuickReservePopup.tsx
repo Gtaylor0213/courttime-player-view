@@ -849,26 +849,26 @@ export function QuickReservePopup({
     const timeParts = time.split(':');
     let hours = parseInt(timeParts[0]);
     let minutes = timeParts[1] ? parseInt(timeParts[1]) : 0;
-    
+
     // Convert to 24-hour format
     if (period === 'PM' && hours !== 12) hours += 12;
     if (period === 'AM' && hours === 12) hours = 0;
-    
+
     // Add duration
     const durationFloat = parseFloat(durationHours);
     hours += Math.floor(durationFloat);
     minutes += (durationFloat % 1) * 60;
-    
+
     // Handle minutes overflow
     if (minutes >= 60) {
       hours += Math.floor(minutes / 60);
       minutes = minutes % 60;
     }
-    
+
     // Convert back to 12-hour format
     const endPeriod = hours >= 12 ? 'PM' : 'AM';
     const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours === 12 ? 12 : hours;
-    
+
     return `${displayHours}:${minutes.toString().padStart(2, '0')} ${endPeriod}`;
   };
 
@@ -963,7 +963,7 @@ export function QuickReservePopup({
             Quick Reserve autofills for the soonest possible date and time of reservation.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="flex-1 overflow-y-auto min-h-0">
           <form onSubmit={handleSubmit} id="quick-reserve-form" className="h-full flex flex-col">
             <div className="flex-1 space-y-3 overflow-y-auto pb-4">

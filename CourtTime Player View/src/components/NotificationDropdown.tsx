@@ -50,7 +50,7 @@ export function NotificationDropdown({ children }: NotificationDropdownProps) {
 
   const getPriorityColor = (priority: Notification['priority'], read: boolean) => {
     if (read) return 'text-gray-600 bg-gray-50';
-    
+
     switch (priority) {
       case 'high':
         return 'text-gray-900 bg-green-50 border-l-4 border-green-500';

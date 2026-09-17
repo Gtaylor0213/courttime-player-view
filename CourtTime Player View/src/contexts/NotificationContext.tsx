@@ -192,9 +192,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const showToast = (
-    type: Notification['type'], 
-    title: string, 
-    message: string, 
+    type: Notification['type'],
+    title: string,
+    message: string,
     reservation?: Notification['relatedReservation']
   ) => {
     // Add to notifications list

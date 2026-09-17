@@ -32,7 +32,7 @@ export function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     try {
       const success = await login(email, password, setupToken);
       if (success) {
@@ -60,7 +60,7 @@ export function LoginPage() {
         <div className="absolute inset-0 z-10 flex flex-col justify-center items-center px-12 text-white text-center">
           <h1 className="text-4xl font-bold mb-6">CourtTime</h1>
           <p className="text-xl mb-8 leading-relaxed max-w-lg">
-            Book your favorite courts with ease. From tennis to pickleball, 
+            Book your favorite courts with ease. From tennis to pickleball,
             find and reserve the perfect space for your game.
           </p>
           <div className="flex flex-col items-center space-y-4 text-center">
@@ -192,7 +192,7 @@ export function LoginPage() {
                     <span className="bg-card px-2 text-muted-foreground">New to CourtTime?</span>
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Button
                     variant="outline"

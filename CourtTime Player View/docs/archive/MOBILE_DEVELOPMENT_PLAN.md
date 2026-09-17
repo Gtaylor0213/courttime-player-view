@@ -1,3 +1,5 @@
+> **Archived (September 2026).** Describes the April–May 2026 mobile plan. Superseded by [`docs/mobile-parity-and-release-plan.md`](../mobile-parity-and-release-plan.md) and [`docs/mobile-release.md`](../mobile-release.md).
+
 # CourtTime Mobile App — Development Plan
 
 **Created:** April 1, 2026

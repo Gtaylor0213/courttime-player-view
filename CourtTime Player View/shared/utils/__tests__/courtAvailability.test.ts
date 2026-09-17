@@ -43,6 +43,22 @@ describe('courtAvailability', () => {
     });
   });
 
+  it('treats blackouts as occupied slots', () => {
+    const slots = buildTimeSlotsFromAvailability(
+      {
+        ...base,
+        date: '2026-05-20',
+        blackouts: [
+          { court_id: null, title: 'Resurfacing', start_datetime: '2026-05-20T09:00:00', end_datetime: '2026-05-20T09:30:00' },
+        ],
+      },
+      '2026-05-20',
+      '2026-05-19'
+    );
+    expect(slots.find((s) => s.startTime.startsWith('09:00'))?.available).toBe(false);
+    expect(slots.find((s) => s.startTime.startsWith('09:30'))?.available).toBe(true);
+  });
+
   it('expands bookings to start times', () => {
     const booked = bookedStartTimesFromAvailability(base);
     expect(booked.has('08:00')).toBe(true);

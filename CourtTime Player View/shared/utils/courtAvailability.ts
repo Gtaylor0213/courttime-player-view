@@ -1,3 +1,5 @@
+import { blackoutsToBlockedRanges, type BlackoutRow } from './blackoutSlots';
+
 /** Response shape from GET /api/court-config/:courtId/availability */
 export interface CourtAvailabilityData {
   date: string;
@@ -5,6 +7,8 @@ export interface CourtAvailabilityData {
   operatingHours: { open: string; close: string };
   slotDuration: number;
   existingBookings: Array<{ startTime: string; endTime: string; start_time?: string; end_time?: string }>;
+  /** Court-specific and facility-wide maintenance blackouts touching this date. */
+  blackouts?: BlackoutRow[];
 }
 
 export interface TimeSlot {
@@ -42,14 +46,24 @@ export function bookedStartTimesFromAvailability(
 ): Set<string> {
   const slotDuration = slotDurationMinutes ?? data.slotDuration ?? 30;
   const booked = new Set<string>();
-  for (const row of data.existingBookings || []) {
-    const bounds = bookingBounds(row);
-    if (!bounds) continue;
-    let t = parseHHMMToMinutes(bounds.start);
-    const endMin = parseHHMMToMinutes(bounds.end);
+  const occupy = (start: string, end: string) => {
+    let t = parseHHMMToMinutes(start);
+    const endMin = parseHHMMToMinutes(end);
     while (t < endMin) {
       booked.add(formatMinutesAsHHMM(t));
       t += slotDuration;
+    }
+  };
+  for (const row of data.existingBookings || []) {
+    const bounds = bookingBounds(row);
+    if (!bounds) continue;
+    occupy(bounds.start, bounds.end);
+  }
+  // Maintenance blackouts occupy their slots too, so Quick Reserve and the
+  // booking form never offer a window the calendar shows as blocked.
+  if (data.blackouts?.length && data.date) {
+    for (const range of blackoutsToBlockedRanges(data.blackouts, data.date, ['*'])) {
+      occupy(range.startTime.slice(0, 5), range.endTime.slice(0, 5));
     }
   }
   return booked;

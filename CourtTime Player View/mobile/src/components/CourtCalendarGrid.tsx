@@ -31,6 +31,7 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TIME_LABEL_WIDTH = 46;
 const ROW_HEIGHT = 48;
 import { DEFAULT_BOOKING_DURATION_MINUTES, getBookingTypeLabel, getBookingTypeRNColors } from '../../../shared/constants/bookingTypes';
+import { blackoutsToBlockedRanges } from '../../../shared/utils/blackoutSlots';
 
 const DEFAULT_SLOT_MINUTES = 30;
 const COURTS_PER_PAGE = 4;
@@ -64,6 +65,8 @@ interface Booking {
   endTime: string;
   userName?: string;
   bookingType?: string;
+  /** Shown instead of "Blocked" for a maintenance blackout (its title). */
+  blockedLabel?: string;
 }
 
 interface CourtAvailability {
@@ -337,10 +340,12 @@ export function CourtCalendarGrid({
       courtCount: courts.length,
     });
 
-    const [bookingsRes, configRes, facilityRes] = await Promise.all([
+    // Blackouts are non-critical: a failed fetch just leaves the grid without them (web does the same).
+    const [bookingsRes, configRes, facilityRes, blackoutsRes] = await Promise.all([
       api.get(`/api/bookings/facility/${facilityId}?date=${selectedDate}`),
       api.get(`/api/court-config/facility/${facilityId}?date=${selectedDate}`),
       api.get(`/api/facilities/${facilityId}`),
+      api.get(`/api/court-config/facility/${facilityId}/blackouts?startDate=${selectedDate}&endDate=${selectedDate}`),
     ]);
 
     console.log('[book-grid] day endpoints response', {
@@ -456,6 +461,25 @@ export function CourtCalendarGrid({
         bookingsByCourtId.set(relatedCourtId, existingRelated);
       }
     });
+
+    // Maintenance blackouts render as blocked ranges on each affected court.
+    const blackoutList = blackoutsRes.success
+      ? (Array.isArray((blackoutsRes.data as any)?.blackouts) ? (blackoutsRes.data as any).blackouts : [])
+      : [];
+    for (const range of blackoutsToBlockedRanges(blackoutList, selectedDate, courts.map((c: any) => c.id))) {
+      const existing = bookingsByCourtId.get(range.courtId) || [];
+      existing.push({
+        id: `${range.blackoutId}-blackout-${range.courtId}`,
+        courtId: range.courtId,
+        bookingDate: selectedDate,
+        startTime: range.startTime,
+        endTime: range.endTime,
+        userName: range.label,
+        bookingType: 'blocked',
+        blockedLabel: range.label,
+      });
+      bookingsByCourtId.set(range.courtId, existing);
+    }
 
     const configList = configRes.success
       ? (Array.isArray((configRes.data as any)?.courtConfigs) ? (configRes.data as any).courtConfigs : [])
@@ -1229,7 +1253,7 @@ export function CourtCalendarGrid({
                                     ]}
                                     numberOfLines={1}
                                   >
-                                    {isBlockedBooking ? 'Blocked' : getBookingTypeLabel(bookingStart.bookingType)}
+                                    {isBlockedBooking ? bookingStart.blockedLabel || 'Blocked' : getBookingTypeLabel(bookingStart.bookingType)}
                                   </Text>
                                   <Text
                                     style={[

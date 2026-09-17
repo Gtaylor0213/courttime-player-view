@@ -40,6 +40,13 @@ const ADMIN_MENU_ITEMS = [
     description: 'Court list, schedules, and maintenance blackouts.',
   },
   {
+    key: 'member-payments',
+    route: '/admin/member-payments',
+    icon: 'card',
+    label: 'Member Payments',
+    description: 'Stripe Connect, payment items, lockouts, refunds, and club billing.',
+  },
+  {
     key: 'communication',
     route: '/admin/communication',
     icon: 'megaphone',

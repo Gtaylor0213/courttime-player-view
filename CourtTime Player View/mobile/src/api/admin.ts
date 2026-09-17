@@ -692,3 +692,27 @@ export const proShopAdmin = {
   billTab: (f: string, userId: string) => api.post(`/api/pro-shop/admin/bill-tab/${f}/${userId}`, {}),
   billAll: (f: string) => api.post(`/api/pro-shop/admin/bill-all/${f}`, {}),
 };
+
+// ── Club policies: general rules, terms, address whitelist, email templates (web C3d) ──
+export interface PolicyVersion { versionNumber: number; contentHtml: string; publishedAt: string; requiredReviewSeconds?: number }
+export interface PolicyDoc { currentVersion: PolicyVersion | null; versions: PolicyVersion[] }
+export interface PolicyAcceptance { currentVersion?: PolicyVersion | null; accepted: Array<{ userId: string; fullName: string; acceptedAt?: string }>; notAccepted: Array<{ userId: string; fullName: string }> }
+export interface WhitelistRow { id: string; address: string; lastName?: string | null; email?: string | null; accountsLimit: number; setupInviteSentAt?: string | null; setupInviteAcceptedAt?: string | null }
+export interface EmailTemplateRow { id: string | null; templateType: string; subject: string; bodyHtml: string; isCustom: boolean; label: string; description?: string; availableVariables?: string[]; bodyFormat?: 'html' | 'text' }
+export const policiesAdmin = {
+  generalRules: (f: string) => api.get(`/api/admin/general-rules/${f}`),
+  publishGeneralRules: (f: string, contentHtml: string) => api.put(`/api/admin/general-rules/${f}`, { contentHtml }),
+  generalRulesAcceptance: (f: string) => api.get(`/api/admin/general-rules/${f}/acceptance`),
+  terms: (f: string) => api.get(`/api/admin/terms/${f}`),
+  publishTerms: (f: string, contentHtml: string, requiredReviewSeconds: number) => api.put(`/api/admin/terms/${f}`, { contentHtml, requiredReviewSeconds }),
+  termsAcceptance: (f: string) => api.get(`/api/admin/terms/${f}/acceptance`),
+  whitelist: (f: string) => api.get(`/api/address-whitelist/${f}`),
+  addWhitelist: (f: string, body: { address: string; lastName?: string; email?: string; accountsLimit: number }) => api.post(`/api/address-whitelist/${f}`, body),
+  bulkWhitelist: (f: string, addresses: Array<{ address: string; lastName?: string; email?: string; accountsLimit?: number }>) => api.post(`/api/address-whitelist/${f}/bulk`, { addresses }),
+  resendPendingInvites: (f: string) => api.post(`/api/address-whitelist/${f}/resend-pending`, {}),
+  updateWhitelist: (f: string, id: string, body: { accountsLimit?: number; email?: string }) => api.patch(`/api/address-whitelist/${f}/${id}`, body),
+  removeWhitelist: (f: string, id: string) => api.delete(`/api/address-whitelist/${f}/${id}`),
+  emailTemplates: (f: string) => api.get(`/api/admin/email-templates/${f}`),
+  saveEmailTemplate: (f: string, templateType: string, body: { subject: string; bodyHtml: string }) => api.put(`/api/admin/email-templates/${f}/${templateType}`, body),
+  resetEmailTemplate: (f: string, templateType: string) => api.delete(`/api/admin/email-templates/${f}/${templateType}`),
+};

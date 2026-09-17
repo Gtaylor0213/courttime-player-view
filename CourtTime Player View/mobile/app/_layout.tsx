@@ -182,6 +182,7 @@ function RootLayoutNav() {
         <Stack.Screen name="admin/booking-rules" options={{ title: 'Booking Rules' }} />
         <Stack.Screen name="admin/annual-fees" options={{ title: 'Annual Fees' }} />
         <Stack.Screen name="admin/pro-shop" options={{ title: 'Pro Shop Admin' }} />
+        <Stack.Screen name="admin/policies" options={{ title: 'Club Policies' }} />
       </Stack>
       {/*
         Rendered over the app rather than as an early return: unlike the terms

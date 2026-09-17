@@ -68,6 +68,13 @@ const ADMIN_MENU_ITEMS = [
     description: 'Limits, advance window, durations, and household caps.',
   },
   {
+    key: 'policies',
+    route: '/admin/policies',
+    icon: 'document-text',
+    label: 'Club Policies',
+    description: 'General rules, terms & conditions, address whitelist, email templates.',
+  },
+  {
     key: 'pro-shop',
     route: '/admin/pro-shop',
     icon: 'storefront',

@@ -102,6 +102,22 @@ export function buildTimeSlotsFromAvailability(
   return slots;
 }
 
+/**
+ * Open start times with the end of each contiguous open run — what Quick
+ * Reserve lists per court. Exported for tests.
+ */
+export function openStartWindows(slots: TimeSlot[]): Array<{ startTime: string; endTime: string; runEnd: string }> {
+  const out: Array<{ startTime: string; endTime: string; runEnd: string }> = [];
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i]!;
+    if (!s.available) continue;
+    let j = i;
+    while (j + 1 < slots.length && slots[j + 1]!.available && slots[j + 1]!.startTime === slots[j]!.endTime) j++;
+    out.push({ startTime: s.startTime, endTime: s.endTime, runEnd: slots[j]!.endTime });
+  }
+  return out;
+}
+
 /** Build court-name → booked HH:MM slots map (BookingWizard additional-courts check). */
 export function buildExistingBookingsMapByCourtName(
   courts: Array<{ id: string; name: string }>,

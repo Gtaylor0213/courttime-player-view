@@ -28,6 +28,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
 import { ReservationSheet } from '../../src/components/ReservationSheet';
+import { EditBookingModal } from '../../src/components/EditBookingModal';
+import { QuickReserveSheet } from '../../src/components/QuickReserveSheet';
+import { filterCourtsByType, getCourtTypes } from '../../../shared/utils/courtTypeFilter';
 import { ScheduleOverview } from '../../src/components/ScheduleOverview';
 import { TimePicker, PICKER_HEIGHT } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -184,6 +187,12 @@ export default function BookCourtScreen() {
   /** Avoid applying slot results from a stale availability request after the user picks another court on the grid. */
   const selectedCourtIdRef = useRef<string | null>(null);
   const [courts, setCourts] = useState<Court[]>([]);
+  // Web's court-type filter above the calendar (null = all courts).
+  const [courtTypeFilter, setCourtTypeFilter] = useState<string | null>(null);
+  const courtTypes = useMemo(() => getCourtTypes(courts), [courts]);
+  const visibleCourts = useMemo(() => filterCourtsByType(courts, courtTypeFilter), [courts, courtTypeFilter]);
+  const [editingBooking, setEditingBooking] = useState<BookingWithDetails | null>(null);
+  const [showQuickReserve, setShowQuickReserve] = useState(false);
   const [selectedDate, setSelectedDate] = useState(selectedBookDate || getTodayString());
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
@@ -1314,7 +1323,7 @@ export default function BookCourtScreen() {
           <View style={styles.quickReserveRow}>
             <Button
               title="Quick Reserve"
-              onPress={handleQuickReserve}
+              onPress={() => setShowQuickReserve(true)}
               disabled={!facilityId}
               loading={quickReserving}
               leftIcon={<Ionicons name="flash" size={14} color={Colors.textInverse} />}
@@ -1377,6 +1386,32 @@ export default function BookCourtScreen() {
             </View>
           )}
 
+          {courtTypes.length > 1 && !(weekMonthViewEnabled && calendarViewMode === 'overview') ? (
+            <View style={styles.courtTypeRow}>
+              <TouchableOpacity
+                style={[styles.calendarViewChip, courtTypeFilter === null && styles.typeChipSelected]}
+                onPress={() => setCourtTypeFilter(null)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: courtTypeFilter === null }}
+                accessibilityLabel="Show all courts"
+              >
+                <Text style={[styles.typeChipText, courtTypeFilter === null && styles.typeChipTextSelected]}>All courts</Text>
+              </TouchableOpacity>
+              {courtTypes.map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.calendarViewChip, courtTypeFilter === t && styles.typeChipSelected]}
+                  onPress={() => setCourtTypeFilter(t)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: courtTypeFilter === t }}
+                  accessibilityLabel={`Show ${t} courts`}
+                >
+                  <Text style={[styles.typeChipText, courtTypeFilter === t && styles.typeChipTextSelected]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
           {weekMonthViewEnabled && calendarViewMode === 'overview' ? (
             <ScheduleOverview
               facilityId={facilityId}
@@ -1392,7 +1427,7 @@ export default function BookCourtScreen() {
             />
           ) : (
             <CourtCalendarGrid
-              courts={courts}
+              courts={visibleCourts}
               selectedDate={selectedDate}
               facilityId={facilityId}
               onBookingSelected={handleCalendarGridSelection}
@@ -1900,14 +1935,46 @@ export default function BookCourtScreen() {
           fetchCourts();
           fetchTimeSlots();
         }}
-        onEdit={async (b) => {
-          const court = courts.find((c) => c.id === b.courtId);
-          if (!court) {
-            showAlert('Error', 'Could not find this court to open booking details.');
-            return;
-          }
+        onEdit={(b) => {
+          // Change court, date or time (web's Edit Reservation; recreate-then-cancel like Home).
           setSelectedCalendarBooking(null);
-          await handleCalendarGridSelection(court, b.startTime, b.endTime);
+          setEditingBooking(b);
+        }}
+      />
+      <EditBookingModal
+        booking={editingBooking}
+        visible={editingBooking !== null}
+        onClose={() => setEditingBooking(null)}
+        onSaved={() => {
+          fetchCourts();
+          fetchTimeSlots();
+        }}
+      />
+      <QuickReserveSheet
+        visible={showQuickReserve}
+        courts={courts}
+        onClose={() => setShowQuickReserve(false)}
+        quickBooking={quickReserving}
+        onQuickBook={() => {
+          setShowQuickReserve(false);
+          void handleQuickReserve();
+        }}
+        onPickSlot={(date, court, startTime, runEnd) => {
+          // Default to one hour (or the rest of the open run if shorter), like the one-tap path.
+          const startMin = parseHHMMToMinutes(startTime);
+          const endMin = Math.min(parseHHMMToMinutes(runEnd), startMin + 60);
+          setShowQuickReserve(false);
+          setSelectedDate(date);
+          setSelectedBookDate(date);
+          setCalendarExpanded(false);
+          setSelectedCourt(court);
+          setSelectedSlot({ startTime, endTime: `${formatMinutesAsHHMM(endMin)}:00`, available: true });
+          setModalStartTime(startTime.slice(0, 5));
+          setModalEndTime(formatMinutesAsHHMM(endMin));
+          setBookingType('match');
+          setBookingNotes('');
+          setAdditionalCourtIds([]);
+          setModalKind('booking');
         }}
       />
 
@@ -2227,6 +2294,13 @@ const styles = StyleSheet.create({
   typeChipTextSelected: {
     color: Colors.primary,
     fontWeight: '600',
+  },
+  courtTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   calendarViewSwitch: {
     flexDirection: 'row',

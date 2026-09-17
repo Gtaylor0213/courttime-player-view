@@ -11,8 +11,16 @@
  * clients agree on what a week is.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
 import {
@@ -39,6 +47,12 @@ interface ScheduleOverviewProps {
   selectedDate: string;
   /** Called when a day is tapped — the caller opens that day's court view. */
   onSelectDate: (date: string) => void;
+  /**
+   * Window-space Y the month grid should extend down to (e.g. the bottom of the
+   * screen's scroll area). When set, month rows grow so the grid fills that
+   * space instead of leaving it blank; cells never shrink below square.
+   */
+  fillToWindowY?: number | null;
 }
 
 function parseYmd(ymd: string): Date {
@@ -68,6 +82,7 @@ export function ScheduleOverview({
   facilityId,
   selectedDate,
   onSelectDate,
+  fillToWindowY = null,
 }: ScheduleOverviewProps) {
   const [mode, setMode] = useState<OverviewMode>('week');
   const [anchorDate, setAnchorDate] = useState<Date>(() => parseYmd(selectedDate));
@@ -178,6 +193,7 @@ export function ScheduleOverview({
           byDate={byDate}
           todayStr={todayStr}
           onSelectDate={onSelectDate}
+          fillToWindowY={fillToWindowY}
         />
       )}
     </View>
@@ -249,14 +265,38 @@ function MonthGrid({
   byDate,
   todayStr,
   onSelectDate,
+  fillToWindowY,
 }: {
   anchorDate: Date;
   byDate: Record<string, OverviewBooking[]>;
   todayStr: string;
   onSelectDate: (date: string) => void;
+  fillToWindowY: number | null;
 }) {
   const days = getMonthDays(anchorDate);
   const blanks = getMonthLeadingBlankCount(anchorDate);
+  const rowCount = Math.max(1, Math.ceil((blanks + days.length) / 7));
+
+  const gridRef = useRef<View>(null);
+  const [gridWidth, setGridWidth] = useState(0);
+  const [gridTopY, setGridTopY] = useState<number | null>(null);
+
+  const onGridLayout = useCallback((e: LayoutChangeEvent) => {
+    setGridWidth(e.nativeEvent.layout.width);
+    // Refs are null under react-test-renderer; the grid then keeps square cells.
+    gridRef.current?.measureInWindow((_x, y) => {
+      if (Number.isFinite(y)) setGridTopY(y);
+    });
+  }, []);
+
+  // Square cells by default; stretch rows to fill the remaining screen when we know where the grid sits.
+  const squareSize = gridWidth > 0 ? gridWidth / 7 : null;
+  let cellHeight: number | null = null;
+  if (squareSize != null && fillToWindowY != null && gridTopY != null) {
+    const available = fillToWindowY - gridTopY;
+    cellHeight = Math.max(squareSize, Math.floor(available / rowCount));
+  }
+  const cellSizeStyle = cellHeight != null ? { height: cellHeight } : styles.monthCellSquare;
 
   return (
     <View>
@@ -267,9 +307,9 @@ function MonthGrid({
           </Text>
         ))}
       </View>
-      <View style={styles.monthGrid}>
+      <View ref={gridRef} style={styles.monthGrid} onLayout={onGridLayout}>
         {Array.from({ length: blanks }, (_, i) => (
-          <View key={`blank-${i}`} style={styles.monthCell} />
+          <View key={`blank-${i}`} style={[styles.monthCell, cellSizeStyle]} />
         ))}
         {days.map((day) => {
           const ymd = toDateStr(day);
@@ -279,7 +319,7 @@ function MonthGrid({
           return (
             <TouchableOpacity
               key={ymd}
-              style={[styles.monthCell, isToday && styles.monthCellToday]}
+              style={[styles.monthCell, cellSizeStyle, isToday && styles.monthCellToday]}
               onPress={() => onSelectDate(ymd)}
               accessibilityRole="button"
               accessibilityLabel={`${day.toLocaleDateString('en-US', {
@@ -400,11 +440,13 @@ const styles = StyleSheet.create({
   },
   monthCell: {
     width: `${100 / 7}%`,
-    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 0.5,
     borderColor: Colors.border,
+  },
+  monthCellSquare: {
+    aspectRatio: 1,
   },
   monthCellToday: {
     backgroundColor: Colors.surface,

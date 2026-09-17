@@ -155,6 +155,14 @@ const BOOKING_MODAL_MIN_HEIGHT = 360;
 
 export default function BookCourtScreen() {
   const { height: windowHeight } = useWindowDimensions();
+  /** Bottom edge of the Book scroll area in window coords, so the month overview can stretch down to it. */
+  const screenRootRef = useRef<View>(null);
+  const [scrollAreaBottomY, setScrollAreaBottomY] = useState<number | null>(null);
+  const onScreenRootLayout = useCallback(() => {
+    screenRootRef.current?.measureInWindow((_x, y, _w, h) => {
+      if (Number.isFinite(y) && Number.isFinite(h) && h > 0) setScrollAreaBottomY(y + h);
+    });
+  }, []);
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     facilityId?: string;
@@ -1219,7 +1227,7 @@ export default function BookCourtScreen() {
   };
 
   return (
-    <View style={styles.screenRoot}>
+    <View style={styles.screenRoot} ref={screenRootRef} onLayout={onScreenRootLayout}>
       <ScrollView
         style={styles.container}
         scrollEnabled={!calendarScrollLocked}
@@ -1372,6 +1380,8 @@ export default function BookCourtScreen() {
             <ScheduleOverview
               facilityId={facilityId}
               selectedDate={selectedDate}
+              // Leave room for the trailing spacer below the grid.
+              fillToWindowY={scrollAreaBottomY != null ? scrollAreaBottomY - Spacing.xl : null}
               onSelectDate={(date) => {
                 // Match web's "switch to court view": pick the day, show it.
                 setSelectedDate(date);

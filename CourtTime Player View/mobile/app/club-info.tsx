@@ -17,6 +17,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../src/api/client';
+import { facilityLocationEndpoints } from '../src/api/endpoints';
 import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -99,6 +100,7 @@ export default function ClubInfoScreen() {
   const { isFeatureEnabled } = useFeatureFlags();
   const resolvedFacilityId = routeFacilityId || authFacilityId || null;
   const [facility, setFacility] = useState<FacilityData | null>(null);
+  const [locations, setLocations] = useState<Array<{ id: string; locationName?: string; streetAddress?: string; city?: string; state?: string; zipCode?: string; phone?: string }>>([]);
   const [courts, setCourts] = useState<CourtData[]>([]);
   const [courtOperatingHours, setCourtOperatingHours] = useState<Record<string, OperatingHoursMap>>({});
   const [courtHoursLoading, setCourtHoursLoading] = useState(false);
@@ -151,10 +153,13 @@ export default function ClubInfoScreen() {
     setLoading(true);
     setNotFound(false);
 
-    const [facRes, courtsRes] = await Promise.all([
+    const [facRes, courtsRes, locRes] = await Promise.all([
       api.get(`/api/facilities/${resolvedFacilityId}`),
       api.get(`/api/facilities/${resolvedFacilityId}/courts`),
+      facilityLocationEndpoints.list(resolvedFacilityId),
     ]);
+    const locList = locRes.success ? ((locRes.data as any)?.locations ?? (locRes.data as any)?.data?.locations) : null;
+    setLocations(Array.isArray(locList) ? locList : []);
 
     if (facRes.success && facRes.data) {
       const fac = facRes.data.facility || facRes.data;
@@ -319,6 +324,37 @@ export default function ClubInfoScreen() {
             )}
           </View>
         </View>
+
+        {/* Additional locations (web: "Additional Locations" card) */}
+        {locations.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Additional Locations</Text>
+            <View style={styles.card}>
+              {locations.map((loc, idx) => {
+                const line2 = [loc.city, loc.state].filter(Boolean).join(', ') + (loc.zipCode ? ` ${loc.zipCode}` : '');
+                const mapsQuery = [loc.streetAddress, line2].filter(Boolean).join(', ');
+                return (
+                  <TouchableOpacity
+                    key={loc.id}
+                    style={[styles.contactRow, idx === locations.length - 1 && { borderBottomWidth: 0 }]}
+                    onPress={() => mapsQuery && Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(mapsQuery)}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${loc.locationName || 'Location'}, ${mapsQuery}`}
+                  >
+                    <Ionicons name="location-outline" size={18} color={Colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      {loc.locationName ? <Text style={styles.contactText}>{loc.locationName}</Text> : null}
+                      {loc.streetAddress ? <Text style={styles.locationLine}>{loc.streetAddress}</Text> : null}
+                      {line2.trim() ? <Text style={styles.locationLine}>{line2.trim()}</Text> : null}
+                      {loc.phone ? <Text style={styles.locationLine}>{loc.phone}</Text> : null}
+                    </View>
+                    <Ionicons name="open-outline" size={14} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         {/* Operating Hours */}
         {facility.operatingHours && Object.keys(facility.operatingHours).length > 0 && (
@@ -527,6 +563,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     paddingTop: Spacing.md,
   },
+  locationLine: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 1 },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',

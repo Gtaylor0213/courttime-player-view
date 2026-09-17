@@ -651,3 +651,20 @@ export const rulesAdmin = {
   setSplitPayments: (f: string, enabled: boolean) => api.put(`/api/rules/facility/${f}/split-court-payments`, { enabled }),
 };
 
+// ── Annual fees (web AnnualFeesAdmin) ──
+export interface AnnualFeeTier { id: string; name: string; amountCents: number; description?: string | null; isActive?: boolean }
+export interface AnnualFeeMember { userId: string; fullName: string; email?: string; tierId?: string | null; hasSavedCard?: boolean; cardBrand?: string | null; cardLast4?: string | null }
+export const annualFeesAdmin = {
+  config: (f: string) => api.get(`/api/annual-fees/config/${f}`),
+  setConfig: (f: string, billingMonth: number, billingDay: number) => api.put(`/api/annual-fees/config/${f}`, { billingMonth, billingDay }),
+  tiers: (f: string) => api.get(`/api/annual-fees/tiers/${f}`),
+  createTier: (f: string, body: { name: string; amountCents: number; description?: string }) => api.post(`/api/annual-fees/tiers/${f}`, body),
+  updateTier: (f: string, id: string, body: Partial<{ name: string; amountCents: number; description: string; isActive: boolean }>) => api.patch(`/api/annual-fees/tiers/${f}/${id}`, body),
+  deleteTier: (f: string, id: string) => api.delete(`/api/annual-fees/tiers/${f}/${id}`),
+  members: (f: string) => api.get(`/api/annual-fees/members/${f}`),
+  setMemberTier: (f: string, userId: string, tierId: string | null) => api.patch(`/api/annual-fees/members/${f}/${userId}/tier`, { tierId }),
+  preview: (f: string) => api.get(`/api/annual-fees/billing/preview/${f}`),
+  run: (f: string) => api.post(`/api/annual-fees/billing/run/${f}`, {}),
+  history: (f: string) => api.get(`/api/annual-fees/billing/history/${f}`),
+  runRecords: (f: string, runId: string) => api.get(`/api/annual-fees/billing/runs/${runId}/${f}`),
+};

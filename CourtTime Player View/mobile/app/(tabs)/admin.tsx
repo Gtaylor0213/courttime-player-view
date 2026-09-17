@@ -68,6 +68,13 @@ const ADMIN_MENU_ITEMS = [
     description: 'Limits, advance window, durations, and household caps.',
   },
   {
+    key: 'annual-fees',
+    route: '/admin/annual-fees',
+    icon: 'cash',
+    label: 'Annual Fees',
+    description: 'Fee tiers, member tiers, and the annual billing run.',
+  },
+  {
     key: 'households',
     route: '/admin/households',
     icon: 'home',

@@ -43,6 +43,7 @@ import {
 } from '../../../shared/utils/bulletinPostDisplay';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
+import { BulletinPostCreateModal } from '../../src/components/BulletinPostCreateModal';
 import { Skeleton } from '../../src/components/Skeleton';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
@@ -169,10 +170,6 @@ export default function CommunityScreen() {
   const [bulletins, setBulletins] = useState<any[]>([]);
   const [bulletinFilter, setBulletinFilter] = useState('All');
   const [showCreateBulletin, setShowCreateBulletin] = useState(false);
-  const [bulletinTitle, setBulletinTitle] = useState('');
-  const [bulletinContent, setBulletinContent] = useState('');
-  const [bulletinCategory, setBulletinCategory] = useState('announcement');
-  const [bulletinCreating, setBulletinCreating] = useState(false);
   const [showShareBulletin, setShowShareBulletin] = useState(false);
   const [shareBulletinPost, setShareBulletinPost] = useState<any | null>(null);
   const [shareMode, setShareMode] = useState<'one' | 'all'>('one');
@@ -409,24 +406,6 @@ export default function CommunityScreen() {
   };
 
   // ── Bulletin board CRUD ──
-  async function handleCreateBulletin() {
-    if (!bulletinTitle.trim() || !bulletinContent.trim() || !user || !facilityId) return;
-    setBulletinCreating(true);
-    const res = await api.post('/api/bulletin-board', {
-      facilityId, authorId: user.id,
-      title: bulletinTitle.trim(), content: bulletinContent.trim(),
-      category: bulletinCategory, isAdminPost: isAdmin,
-    });
-    if (res.success) {
-      setShowCreateBulletin(false);
-      setBulletinTitle(''); setBulletinContent(''); setBulletinCategory('announcement');
-      fetchBulletins();
-    } else {
-      showAlert('Error', res.error || 'Could not create post');
-    }
-    setBulletinCreating(false);
-  }
-
   function openShareBulletin(post: any) {
     setShareBulletinPost(post);
     setShareMode('one');
@@ -1269,45 +1248,13 @@ export default function CommunityScreen() {
         </View>
       </Modal>
 
-      {/* ── Create Bulletin Post Modal ── */}
-      <Modal visible={showCreateBulletin} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCreateBulletin(false)}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCreateBulletin(false)}><Text style={styles.modalCancel}>Cancel</Text></TouchableOpacity>
-            <Text style={styles.modalTitle}>New Bulletin Post</Text>
-            <TouchableOpacity onPress={handleCreateBulletin} disabled={bulletinCreating}>
-              <Text style={[styles.modalSave, bulletinCreating && { opacity: 0.5 }]}>{bulletinCreating ? '...' : 'Post'}</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalBody}>
-            <Text style={styles.formLabel}>Title *</Text>
-            <Input style={styles.formInput} value={bulletinTitle} onChangeText={setBulletinTitle} placeholder="Post title" />
-
-            <Text style={styles.formLabel}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bulletinCategoryScroll}>
-              <View style={styles.filterRow}>
-                {BULLETIN_TYPES.filter(t => t !== 'All' && t !== 'drill').map(type => (
-                  <TouchableOpacity key={type} style={[styles.filterChip, bulletinCategory === type && styles.filterChipActive]}
-                    onPress={() => setBulletinCategory(type)}>
-                    <Text style={[styles.filterChipText, bulletinCategory === type && styles.filterChipTextActive]}>
-                      {BULLETIN_TYPE_LABELS[type] || type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            <Text style={styles.formLabel}>Content *</Text>
-            <Input
-              style={[styles.formInput, styles.formTextArea]}
-              value={bulletinContent}
-              onChangeText={setBulletinContent}
-              placeholder="Write your announcement..."
-              multiline
-            />
-          </ScrollView>
-        </View>
-      </Modal>
+      {/* ── Create Bulletin Post Modal (same sections as web) ── */}
+      <BulletinPostCreateModal
+        visible={showCreateBulletin}
+        facilityId={facilityId ?? null}
+        onClose={() => setShowCreateBulletin(false)}
+        onCreated={fetchBulletins}
+      />
     </View>
   );
 }
@@ -1395,7 +1342,6 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
   filterChipText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600' },
   filterChipTextActive: { color: Colors.primary },
-  bulletinCategoryScroll: { marginBottom: Spacing.md },
 
   // Partner Posts
   postHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, marginBottom: Spacing.sm },

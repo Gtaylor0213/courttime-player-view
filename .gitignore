@@ -36,3 +36,9 @@ lerna-debug.log*
 # Design review repro artifacts (screenshots, Metro dumps)
 CourtTime Player View/design-review/repro/
 design-review/repro/
+
+# Node compile cache / scratch
+.tmp/
+
+# Expo local state
+.expo/

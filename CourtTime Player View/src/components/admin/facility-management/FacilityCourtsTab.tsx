@@ -26,29 +26,17 @@ type Props = UseFacilityManagementReturn;
 
 export function FacilityCourtsTab(props: Props) {
   const {
-    isEditing, setIsEditing, saving, facilityData, setFacilityData,
-    handleSave, handleCancel, getHoursDisplay, handleOperatingHoursChange,
-    handlePrimaryContactChange, addSecondaryContact, updateSecondaryContact,
-    removeSecondaryContact, renderSectionSaveFooter, renderTabFooterSaveBar,
-    secondaryLocations, addingSecondaryLocation, setAddingSecondaryLocation,
-    newSecondaryLocation, setNewSecondaryLocation, savingSecondaryLocation,
-    editingSecondaryLocationId, editingSecondaryLocation, setEditingSecondaryLocation,
-    cancelEditingSecondaryLocation, handleAddSecondaryLocation, handleRemoveSecondaryLocation,
-    startEditingSecondaryLocation, handleUpdateSecondaryLocation,
-    handleBookingRulesChange, handleWeekendPolicyChange, addPeakHourSlot, removePeakHourSlot,
-    updatePeakHourSlotTime, updatePeakHourSlotRule, togglePeakHourSlotExpanded,
-    setPeakHourSlotCourtMode, togglePeakHourSlotCourt, togglePeakHourSlotDay,
-    expandedPeakHourSlots, courts, courtsLoading, loadCourts, editingCourt, setEditingCourt,
-    isAddingNewCourt,     courtSaving, stripeOnboarded, stripeStatusLoading,
+    courts, courtsLoading, loadCourts, editingCourt, setEditingCourt,
+    isAddingNewCourt, courtSaving, stripeOnboarded, stripeStatusLoading,
     courtAddPromo,
     configuringCourtId, setConfiguringCourtId, courtSchedule, courtScheduleLoading, courtScheduleSaving,
     courtOperatingHours, courtHoursLoading, facilityCourtEditPanelRef,
     blackouts, blackoutsLoading, editingBlackout, setEditingBlackout,
-    isAddingBlackout, setIsAddingBlackout, blackoutSaving, handleAddNewCourt, handleEditCourt,
+    setIsAddingBlackout, blackoutSaving, handleAddNewCourt, handleEditCourt,
     handleSaveCourt, handleCancelCourtEdit, handleDeleteCourt, handleToggleCourtConfig,
-    updateCourtScheduleDay, updateAllScheduleDays, saveCourtSchedule,
+    updateCourtScheduleDay, saveCourtSchedule,
     handleAddBlackout, handleSaveBlackout, handleDeleteBlackout,
-    renderRuleCategoryCard, getCourtStatusColor, formatCourtStatus, performSave,
+    getCourtStatusColor, formatCourtStatus,
   } = props;
 
   const [feesAllMode, setFeesAllMode] = useState(false);

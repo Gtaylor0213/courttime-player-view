@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { adminApi, unwrapApiPayload } from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
 
@@ -55,7 +54,6 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function AdminDashboard() {
-  const { user } = useAuth();
   const { selectedFacilityId: currentFacilityId } = useAppContext();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'overview' | 'courts' | 'members'>('overview');

@@ -853,7 +853,7 @@ export class RulesEngine {
     request: CancellationRequest
   ): Promise<CancellationEvaluationResult> {
     try {
-      const { booking, strikes, facility } = await buildCancellationContext(
+      const { booking, facility } = await buildCancellationContext(
         request.bookingId,
         request.userId
       );

@@ -13,7 +13,6 @@ import { WeekMonthCalendarView } from './WeekMonthCalendarView';
 import { NotificationBell } from './NotificationBell';
 import { ReservationManagementModal } from './ReservationManagementModal';
 import { BulletinActivitySignupModal } from './BulletinActivitySignupModal';
-import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { bulletinBoardApi, facilitiesApi, bookingApi, courtConfigApi, strikesApi, unwrapApiPayload } from '../api/client';
 import { StrikeLockoutAlerts } from './StrikeLockoutAlerts';
@@ -37,7 +36,6 @@ import {
 } from '../utils/bulletinPostDisplay';
 
 // Layout constants
-const ROW_HEIGHT = 50;            // unused (kept for reference)
 const SUB_SLOT_HEIGHT = 25;       // 30-min row height (desktop)
 const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
@@ -138,11 +136,9 @@ export function CourtCalendarView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { selectedFacilityId = 'sunrise-valley', enabledFeatures } = useAppContext();
-  const { unreadCount } = useNotifications();
   const { user, loading: authLoading, refreshTermsStatus, updateProfile } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const selectedFacility = selectedFacilityId;
-  const [selectedView, setSelectedView] = useState('week');
   const weekMonthViewEnabled = enabledFeatures.includes('week_month_view');
   const isAdmin = user?.userType === 'admin';
   const dragReassignEnabled = isAdmin && enabledFeatures.includes(FEATURE_FLAGS.DRAG_RESCHEDULE_RESERVATIONS);
@@ -160,7 +156,6 @@ export function CourtCalendarView() {
   const [courtDayOperatingByCourtId, setCourtDayOperatingByCourtId] = useState<
     Record<string, CourtDayOperatingBounds>
   >({});
-  const [loadingBookings, setLoadingBookings] = useState(false);
   const [strikeLockout, setStrikeLockout] = useState<StrikeLockoutStatus | null>(null);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const calendarGridRef = useRef<HTMLTableElement>(null);
@@ -291,7 +286,6 @@ export function CourtCalendarView() {
 
   // Responsive dimensions for mobile touch targets
   const effectiveSubSlotHeight = isMobile ? 40 : SUB_SLOT_HEIGHT;
-  const effectiveRowHeight = isMobile ? 80 : ROW_HEIGHT;
   const effectiveTimeColWidth = isMobile ? 56 : TIME_COL_WIDTH;
   const effectiveHeaderHeight = isMobile ? 34 : HEADER_HEIGHT;
 
@@ -467,7 +461,6 @@ export function CourtCalendarView() {
     }
 
     try {
-      setLoadingBookings(true);
 
       const dateForFetch =
         typeof dateOverride === 'string'
@@ -707,7 +700,6 @@ export function CourtCalendarView() {
       setBookingsData({});
       setCourtDayOperatingByCourtId({});
     } finally {
-      setLoadingBookings(false);
     }
   }, [selectedFacility, selectedDate, memberFacilities]);
 
@@ -990,104 +982,12 @@ export function CourtCalendarView() {
     };
   }, [authLoading, user?.id, searchParams, fetchBookings]);
 
-  // Hardcoded fallback facilities (for users without memberships)
-  const fallbackFacilities = [
-    { 
-      id: 'sunrise-valley', 
-      name: 'Sunrise Valley HOA', 
-      type: 'HOA Tennis & Pickleball Courts',
-      courts: [
-        { id: 'sunrise-valley-tennis-1', name: 'Tennis Court 1', type: 'tennis' },
-        { id: 'sunrise-valley-tennis-2', name: 'Tennis Court 2', type: 'tennis' },
-        { id: 'sunrise-valley-pickleball-1', name: 'Pickleball Court 1', type: 'pickleball' },
-        { id: 'sunrise-valley-pickleball-2', name: 'Pickleball Court 2', type: 'pickleball' }
-      ]
-    },
-    { 
-      id: 'downtown', 
-      name: 'Downtown Tennis Center', 
-      type: 'Tennis Club',
-      courts: [
-        { id: 'downtown-tennis-1', name: 'Court 1', type: 'tennis' },
-        { id: 'downtown-tennis-2', name: 'Court 2', type: 'tennis' },
-        { id: 'downtown-tennis-3', name: 'Court 3', type: 'tennis' },
-        { id: 'downtown-tennis-4', name: 'Court 4', type: 'tennis' }
-      ]
-    },
-    { 
-      id: 'riverside', 
-      name: 'Riverside Tennis Club', 
-      type: 'Premium Tennis Club',
-      courts: [
-        { id: 'riverside-center-court', name: 'Center Court', type: 'tennis' },
-        { id: 'riverside-court-a', name: 'Court A', type: 'tennis' },
-        { id: 'riverside-court-b', name: 'Court B', type: 'tennis' },
-        { id: 'riverside-practice-court', name: 'Practice Court', type: 'tennis' }
-      ]
-    },
-    {
-      id: 'westside',
-      name: 'Westside Pickleball Club',
-      type: 'Pickleball Club',
-      courts: [
-        { id: 'westside-pickleball-1', name: 'Court 1', type: 'pickleball' },
-        { id: 'westside-pickleball-2', name: 'Court 2', type: 'pickleball' },
-        { id: 'westside-pickleball-3', name: 'Court 3', type: 'pickleball' },
-        { id: 'westside-pickleball-4', name: 'Court 4', type: 'pickleball' },
-        { id: 'westside-pickleball-5', name: 'Court 5', type: 'pickleball' },
-        { id: 'westside-pickleball-6', name: 'Court 6', type: 'pickleball' }
-      ]
-    },
-    {
-      id: 'eastgate',
-      name: 'Eastgate Sports Complex',
-      type: 'Multi-Sport Complex',
-      courts: [
-        { id: 'eastgate-tennis-a', name: 'Tennis Court A', type: 'tennis' },
-        { id: 'eastgate-tennis-b', name: 'Tennis Court B', type: 'tennis' },
-        { id: 'eastgate-pickleball-1', name: 'Pickleball Court 1', type: 'pickleball' },
-        { id: 'eastgate-pickleball-2', name: 'Pickleball Court 2', type: 'pickleball' },
-        { id: 'eastgate-pickleball-3', name: 'Pickleball Court 3', type: 'pickleball' },
-        { id: 'eastgate-pickleball-4', name: 'Pickleball Court 4', type: 'pickleball' }
-      ]
-    }
-  ];
-
-  // Admin facilities (if user is admin)
-  const adminFacilities = [
-    { 
-      id: 'sunrise-valley', 
-      name: 'Sunrise Valley HOA', 
-      type: 'HOA Tennis & Pickleball Courts' 
-    },
-    { 
-      id: 'downtown', 
-      name: 'Downtown Tennis Center', 
-      type: 'Tennis Club' 
-    },
-    { 
-      id: 'riverside', 
-      name: 'Riverside Tennis Club', 
-      type: 'Premium Tennis Club' 
-    },
-    {
-      id: 'westside',
-      name: 'Westside Pickleball Club',
-      type: 'Pickleball Club'
-    },
-    {
-      id: 'eastgate',
-      name: 'Eastgate Sports Complex',
-      type: 'Multi-Sport Complex'
-    }
-  ];
-
   // Only use member facilities - no fallback for users without memberships
   const availableFacilities = memberFacilities;
   const currentFacility = availableFacilities.find(f => f.id === selectedFacility);
 
   // Derive operating hours (minute-precise) and timezone from facility config
-  const { startHour, endHour, dayStartMinutes, dayEndMinutes, facilityTimezone } = useMemo(() => {
+  const { dayStartMinutes, dayEndMinutes, facilityTimezone } = useMemo(() => {
     const oh = currentFacility?.operatingHours;
     const tz = currentFacility?.timezone || 'America/New_York';
     if (!oh) {

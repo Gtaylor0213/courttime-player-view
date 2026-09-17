@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -59,7 +58,6 @@ function formatMinutesAs12h(totalMinutes: number): string {
 
 export function AdminBooking() {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   // Facility and court selection
   const [facilities, setFacilities] = useState<Facility[]>([]);
@@ -288,8 +286,6 @@ export function AdminBooking() {
           response.data.bookings.forEach((booking: any) => {
             const courtName = booking.courtName;
             const [hours24, minutes] = booking.startTime.split(':').map(Number);
-            const period = hours24 >= 12 ? 'PM' : 'AM';
-            const hours12 = hours24 % 12 || 12;
 
             if (!bookingsMap[courtName]) {
               bookingsMap[courtName] = new Set();

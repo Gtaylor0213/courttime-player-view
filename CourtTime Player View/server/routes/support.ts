@@ -132,7 +132,7 @@ router.post('/users/:userId/reset-password-email', async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    const result = await requestPasswordReset(userResult.rows[0].email);
+    await requestPasswordReset(userResult.rows[0].email);
     res.json({ success: true, message: 'Password reset email sent' });
   } catch (error: any) {
     console.error('[Support] Password reset email error:', error);

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { Checkbox } from '../ui/checkbox';
-import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 import {
   facilitiesApi,
@@ -96,11 +94,9 @@ interface BulkEditForm {
 }
 
 export function CourtManagement() {
-  const { user } = useAuth();
   const { selectedFacilityId: currentFacilityId, enabledFeatures } = useAppContext();
   const dailyBillingEnabled = enabledFeatures?.includes(FEATURE_FLAGS.COURT_DAILY_BILLING) ?? false;
   const adminOnlyCourtsEnabled = enabledFeatures?.includes(FEATURE_FLAGS.ADMIN_ONLY_COURTS) ?? false;
-  const navigate = useNavigate();
   const [courts, setCourts] = useState<Court[]>([]);
   const [editingCourt, setEditingCourt] = useState<Court | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -737,10 +733,6 @@ export function CourtManagement() {
     setCourtSchedule(prev => prev.map(day =>
       day.day_of_week === dayOfWeek ? { ...day, [field]: value } : day
     ));
-  };
-
-  const updateAllScheduleDays = (field: string, value: any) => {
-    setCourtSchedule(prev => prev.map(day => ({ ...day, [field]: value })));
   };
 
   const saveCourtSchedule = async () => {

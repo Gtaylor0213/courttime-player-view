@@ -41,19 +41,6 @@ export function FacilityDetailsTab(props: Props) {
     editingSecondaryLocationId, editingSecondaryLocation, setEditingSecondaryLocation,
     cancelEditingSecondaryLocation, handleAddSecondaryLocation, handleRemoveSecondaryLocation,
     startEditingSecondaryLocation, handleUpdateSecondaryLocation,
-    handleBookingRulesChange, handleWeekendPolicyChange, addPeakHourSlot, removePeakHourSlot,
-    updatePeakHourSlotTime, updatePeakHourSlotRule, togglePeakHourSlotExpanded,
-    setPeakHourSlotCourtMode, togglePeakHourSlotCourt, togglePeakHourSlotDay,
-    expandedPeakHourSlots, courts, courtsLoading, editingCourt, setEditingCourt,
-    isAddingNewCourt, courtSaving, stripeOnboarded, stripeStatusLoading,
-    configuringCourtId, courtSchedule, courtScheduleLoading, courtScheduleSaving,
-    courtOperatingHours, courtHoursLoading, facilityCourtEditPanelRef,
-    blackouts, blackoutsLoading, editingBlackout, setEditingBlackout,
-    isAddingBlackout, blackoutSaving, handleAddNewCourt, handleEditCourt,
-    handleSaveCourt, handleCancelCourtEdit, handleDeleteCourt, handleToggleCourtConfig,
-    updateCourtScheduleDay, updateAllScheduleDays, saveCourtSchedule,
-    handleAddBlackout, handleSaveBlackout, handleDeleteBlackout,
-    renderRuleCategoryCard, getCourtStatusColor, formatCourtStatus, performSave,
   } = props;
 
   return (

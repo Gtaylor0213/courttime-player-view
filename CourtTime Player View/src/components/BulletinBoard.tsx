@@ -105,7 +105,6 @@ function formatSignupFee(cents?: number | null) {
 export function BulletinBoard() {
   const [searchParams] = useSearchParams();
   const clubId = searchParams.get('clubId') || undefined;
-  const clubName = searchParams.get('clubName') || undefined;
   const navigate = useNavigate();
   const { user } = useAuth();
   const { selectedFacilityId } = useAppContext();

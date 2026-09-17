@@ -19,23 +19,11 @@ import { FACILITY_TYPE_OPTIONS } from '../../../shared/constants/facilityTypes';
 import { useRegistration } from './RegistrationContext';
 export function FacilityInfoStep() {
   const {
-    formData, errors, user, step1Mode, setStep1Mode, loginEmail, setLoginEmail,
-    loginPassword, setLoginPassword, loginError, isLoggingIn, handleRegistrationLogin,
+    formData, errors, user,
     handleInputChange, handlePrimaryContactChange, handleFacilityImageChange,
     removeFacilityImage, addSecondaryLocation, updateSecondaryLocation,
     removeSecondaryLocation, addSecondaryContact, updateSecondaryContact,
-    removeSecondaryContact, handleOperatingHoursChange, handleRulesChange,
-    handleRuleEntryChange, handleRuleConfigFieldChange, addPeakHourSlot,
-    removePeakHourSlot, updatePeakHourSlot, togglePeakHourSlotDay,
-    updatePeakHourSlotRule, handleAddressWhitelistChange, removeAddressWhitelist,
-    courtFormMode, setCourtFormMode, bulkCourtData, setBulkCourtData,
-    addCourt, addBulkCourts, updateCourt, removeCourt, updateCourtScheduleDay,
-    resetCourtScheduleToFacilityDefaults, buildDefaultCourtSchedule,
-    addAdminInvite, updateAdminInvite, removeAdminInvite,
-    preAuthenticated, loggedInDuringRegistration, buildRegistrationBookingRules,
-    promoCode, setPromoCode, promoValidation, setPromoValidation,
-    paymentComplete, paymentWaived, isValidatingPromo, isProcessingPayment,
-    handleValidatePromo, handleClearPromo, handlePayWithStripe,
+    removeSecondaryContact,
     US_STATES,
   } = useRegistration();
 

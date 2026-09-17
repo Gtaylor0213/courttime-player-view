@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Send, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { adminApi, membersApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
-import { useAuth } from '../../contexts/AuthContext';
 import { useAppContext } from '../../contexts/AppContext';
 
 interface Member {
@@ -20,7 +19,6 @@ interface Member {
 }
 
 export function AdminEmailBlast() {
-  const { user } = useAuth();
   const { selectedFacilityId } = useAppContext();
 
   const [members, setMembers] = useState<Member[]>([]);

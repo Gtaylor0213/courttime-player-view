@@ -67,7 +67,6 @@ router.post('/register', async (req, res, next) => {
       email,
       password,
       fullName,
-      userType,
       selectedFacilities,
       setupToken,
       phone,
@@ -79,7 +78,7 @@ router.post('/register', async (req, res, next) => {
       ustaRating,
       bio,
       profilePicture,
-      notificationPreferences
+      notificationPreferences,
     } = req.body;
 
     // Validation

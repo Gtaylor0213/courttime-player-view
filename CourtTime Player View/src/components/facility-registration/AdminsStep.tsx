@@ -6,24 +6,8 @@ import { useRegistration } from './RegistrationContext';
 
 export function AdminsStep() {
   const {
-    formData, errors, user, step1Mode, setStep1Mode, loginEmail, setLoginEmail,
-    loginPassword, setLoginPassword, loginError, isLoggingIn, handleRegistrationLogin,
-    handleInputChange, handlePrimaryContactChange, handleFacilityImageChange,
-    removeFacilityImage, addSecondaryLocation, updateSecondaryLocation,
-    removeSecondaryLocation, addSecondaryContact, updateSecondaryContact,
-    removeSecondaryContact, handleOperatingHoursChange, handleRulesChange,
-    handleRuleEntryChange, handleRuleConfigFieldChange, addPeakHourSlot,
-    removePeakHourSlot, updatePeakHourSlot, togglePeakHourSlotDay,
-    updatePeakHourSlotRule, handleAddressWhitelistChange, removeAddressWhitelist,
-    courtFormMode, setCourtFormMode, bulkCourtData, setBulkCourtData,
-    addCourt, addBulkCourts, updateCourt, removeCourt, updateCourtScheduleDay,
-    resetCourtScheduleToFacilityDefaults, buildDefaultCourtSchedule,
+    formData,
     addAdminInvite, updateAdminInvite, removeAdminInvite,
-    preAuthenticated, loggedInDuringRegistration, buildRegistrationBookingRules,
-    promoCode, setPromoCode, promoValidation, setPromoValidation,
-    paymentComplete, paymentWaived, isValidatingPromo, isProcessingPayment,
-    handleValidatePromo, handleClearPromo, handlePayWithStripe,
-    US_STATES,
   } = useRegistration();
 
   return (

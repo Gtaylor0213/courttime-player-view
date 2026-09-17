@@ -426,7 +426,6 @@ const CRT009: RuleEvaluator = {
   async evaluate(context: RuleContext, config: CRT009Config): Promise<RuleResult> {
     const subAmenityType = config.sub_amenity_type;
     const maxConcurrent = config.max_concurrent || 1;
-    const scope = config.scope || 'club_wide';
 
     // Only applies if booking uses this sub-amenity
     const requestedActivity = context.request.activityType || context.request.bookingType;

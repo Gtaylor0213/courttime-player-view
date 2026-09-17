@@ -180,10 +180,6 @@ router.post('/register', optionalAuth, async (req, res, next) => {
       maxBookingDurationHours,
       advanceBookingDays,
 
-      // Admin restrictions
-      restrictionsApplyToAdmins,
-      adminRestrictions,
-
       // Peak hours and weekend policies
       peakHoursPolicy,
       weekendPolicy,
@@ -214,7 +210,6 @@ router.post('/register', optionalAuth, async (req, res, next) => {
       promoCode,
       paymentAmountCents,
       paymentWaived,
-      customPricing,
     } = req.body;
 
     // Validation

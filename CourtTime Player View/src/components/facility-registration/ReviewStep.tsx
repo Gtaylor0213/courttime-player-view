@@ -12,24 +12,9 @@ import {
 
 export function ReviewStep() {
   const {
-    formData, errors, user, step1Mode, setStep1Mode, loginEmail, setLoginEmail,
-    loginPassword, setLoginPassword, loginError, isLoggingIn, handleRegistrationLogin,
-    handleInputChange, handlePrimaryContactChange, handleFacilityImageChange,
-    removeFacilityImage, addSecondaryLocation, updateSecondaryLocation,
-    removeSecondaryLocation, addSecondaryContact, updateSecondaryContact,
-    removeSecondaryContact, handleOperatingHoursChange, handleRulesChange,
-    handleRuleEntryChange, handleRuleConfigFieldChange, addPeakHourSlot,
-    removePeakHourSlot, updatePeakHourSlot, togglePeakHourSlotDay,
-    updatePeakHourSlotRule, handleAddressWhitelistChange, removeAddressWhitelist,
-    courtFormMode, setCourtFormMode, bulkCourtData, setBulkCourtData,
-    addCourt, addBulkCourts, updateCourt, removeCourt, updateCourtScheduleDay,
-    resetCourtScheduleToFacilityDefaults, buildDefaultCourtSchedule,
-    addAdminInvite, updateAdminInvite, removeAdminInvite,
+    formData, user,
+    buildDefaultCourtSchedule,
     preAuthenticated, loggedInDuringRegistration, buildRegistrationBookingRules,
-    promoCode, setPromoCode, promoValidation, setPromoValidation,
-    paymentComplete, paymentWaived, isValidatingPromo, isProcessingPayment,
-    handleValidatePromo, handleClearPromo, handlePayWithStripe,
-    US_STATES,
   } = useRegistration();
 
     const bookingRulesReview = buildRegistrationBookingRules(formData.rulesConfig);

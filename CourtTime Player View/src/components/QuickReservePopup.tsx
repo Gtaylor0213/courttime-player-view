@@ -514,31 +514,6 @@ export function QuickReservePopup({
     );
   };
 
-  // Toggle additional court selection
-  const toggleCourtSelection = (courtId: string, courtName: string) => {
-    if (courtId === selectedCourtId) {
-      // Clicking primary court — deselect only if there are additional courts
-      if (additionalCourtIds.length > 0) {
-        const nextPrimaryId = additionalCourtIds[0];
-        const nextPrimary = availableCourts.find(c => c.id === nextPrimaryId);
-        setSelectedCourtId(nextPrimaryId);
-        setSelectedCourt(nextPrimary?.name || '');
-        setAdditionalCourtIds(prev => prev.filter(id => id !== nextPrimaryId));
-      }
-    } else if (additionalCourtIds.includes(courtId)) {
-      // Already additional — remove it
-      setAdditionalCourtIds(prev => prev.filter(id => id !== courtId));
-    } else {
-      // Not selected — add it
-      if (!selectedCourtId) {
-        setSelectedCourtId(courtId);
-        setSelectedCourt(courtName);
-      } else {
-        setAdditionalCourtIds(prev => [...prev, courtId]);
-      }
-    }
-  };
-
   // All selected courts (primary + additional)
   const allSelectedCourts = React.useMemo(() => {
     const courts: Array<{ id: string; name: string }> = [];

@@ -391,6 +391,7 @@ async function startServer() {
         console.log('🔌 HTTP server closed');
         clearInterval(bulletinCancellationInterval);
         clearInterval(splitPaymentExpiryInterval);
+        clearInterval(padelDropInSweepInterval);
 
         try {
           await closePool();

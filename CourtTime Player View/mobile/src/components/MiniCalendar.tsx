@@ -4,9 +4,11 @@
  */
 
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
+
+const CELL_GAP = 4;
 
 interface MiniCalendarProps {
   selectedDate: string; // YYYY-MM-DD
@@ -25,6 +27,14 @@ export function MiniCalendar({ selectedDate, onSelectDate, minDate }: MiniCalend
     const [y, m] = selectedDate.split('-').map(Number);
     return new Date(y, m - 1, 1);
   });
+  const [gridWidth, setGridWidth] = useState(0);
+
+  function handleGridLayout(e: LayoutChangeEvent) {
+    setGridWidth(e.nativeEvent.layout.width);
+  }
+
+  const cellSize = gridWidth > 0 ? gridWidth / 7 : 0;
+  const buttonSize = cellSize > 0 ? Math.max(cellSize - CELL_GAP, 0) : 38;
 
   useEffect(() => {
     const [y, m] = selectedDate.split('-').map(Number);
@@ -89,9 +99,9 @@ export function MiniCalendar({ selectedDate, onSelectDate, minDate }: MiniCalend
       </View>
 
       {/* Day labels */}
-      <View style={styles.row}>
+      <View style={styles.row} onLayout={handleGridLayout}>
         {DAYS.map((d) => (
-          <View key={d} style={styles.cell}>
+          <View key={d} style={[styles.cell, { width: cellSize || undefined }]}>
             <Text style={styles.dayLabel}>{d}</Text>
           </View>
         ))}
@@ -102,7 +112,7 @@ export function MiniCalendar({ selectedDate, onSelectDate, minDate }: MiniCalend
         <View key={i} style={styles.row}>
           {w.map((day, j) => {
             if (day === null) {
-              return <View key={j} style={styles.cell} />;
+              return <View key={j} style={[styles.cell, { width: cellSize || undefined }]} />;
             }
 
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -111,10 +121,11 @@ export function MiniCalendar({ selectedDate, onSelectDate, minDate }: MiniCalend
             const disabled = isDisabled(day);
 
             return (
-              <View key={j} style={styles.cell}>
+              <View key={j} style={[styles.cell, { width: cellSize || undefined }]}>
                 <TouchableOpacity
                   style={[
                     styles.dayButton,
+                    { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 },
                     isSelected && styles.daySelected,
                     isToday && !isSelected && styles.dayToday,
                   ]}
@@ -141,7 +152,7 @@ export function MiniCalendar({ selectedDate, onSelectDate, minDate }: MiniCalend
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.xs,
     paddingBottom: Spacing.md,
     paddingTop: Spacing.xs,
     backgroundColor: Colors.card,
@@ -172,20 +183,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   cell: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
   dayLabel: {
-    fontSize: FontSize.xs,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     color: Colors.textMuted,
     paddingBottom: 4,
+    textAlign: 'center',
   },
   dayButton: {
-    width: 38,
-    height: 38,
-    borderRadius: BorderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -196,7 +204,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.secondary,
   },
   dayText: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     color: Colors.text,
   },
   dayTextSelected: {

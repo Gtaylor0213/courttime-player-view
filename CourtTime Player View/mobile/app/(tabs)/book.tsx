@@ -626,7 +626,6 @@ export default function BookCourtScreen() {
     setQuickReserving(true);
 
     const today = getTodayString();
-    const now = new Date();
 
     try {
       const availabilityResults = await Promise.all(
@@ -640,53 +639,28 @@ export default function BookCourtScreen() {
       const candidates: Candidate[] = [];
 
       for (const { court, res } of availabilityResults) {
-        if (!res.success || !res.data || !res.data.isOpen) continue;
+        if (!res.success || !res.data) continue;
 
         const data = res.data as AvailabilityResponse;
+        // Same slot computation the calendar grid uses (correctly handles
+        // booked/past slots), so Quick Reserve agrees with what's on screen.
+        const slots = buildTimeSlotsFromAvailability(data, today, today);
         const slotDur = data.slotDuration || 30;
         const slotsNeeded = Math.ceil(60 / slotDur); // Quick Reserve defaults to 1 hour
-        const bookedTimes = new Set((data.existingBookings || []).map((b) => b.startTime));
-        const [openH, openM] = data.operatingHours.open.split(':').map(Number);
-        const [closeH, closeM] = data.operatingHours.close.split(':').map(Number);
-        const closeMinutes = closeH * 60 + closeM;
 
-        let h = openH;
-        let m = openM;
+        for (let i = 0; i + slotsNeeded <= slots.length; i++) {
+          const window = slots.slice(i, i + slotsNeeded);
+          const contiguous =
+            window.every((s) => s.available) &&
+            window.every((s, idx) => idx === 0 || s.startTime === window[idx - 1].endTime);
 
-        while (h < closeH || (h === closeH && m < closeM)) {
-          const slotPast = h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
-          if (!slotPast) {
-            let checkH = h;
-            let checkM = m;
-            let contiguous = true;
-
-            for (let i = 0; i < slotsNeeded; i++) {
-              const checkTime = `${String(checkH).padStart(2, '0')}:${String(checkM).padStart(2, '0')}:00`;
-              const checkMinutes = checkH * 60 + checkM;
-              if (checkMinutes >= closeMinutes || bookedTimes.has(checkTime)) {
-                contiguous = false;
-                break;
-              }
-              checkM += slotDur;
-              if (checkM >= 60) {
-                checkH += Math.floor(checkM / 60);
-                checkM = checkM % 60;
-              }
-            }
-
-            if (contiguous) {
-              const startTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-              const endMinutes = h * 60 + m + 60;
-              const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}:00`;
-              candidates.push({ court, startTime, endTime });
-              break; // earliest valid slot for this court found
-            }
-          }
-
-          m += slotDur;
-          if (m >= 60) {
-            h += Math.floor(m / 60);
-            m = m % 60;
+          if (contiguous) {
+            candidates.push({
+              court,
+              startTime: window[0].startTime,
+              endTime: window[window.length - 1].endTime,
+            });
+            break; // earliest valid slot for this court found
           }
         }
       }
@@ -1277,7 +1251,7 @@ export default function BookCourtScreen() {
             accessibilityRole="button"
             accessibilityLabel="Previous day"
           >
-            <Ionicons name="chevron-back" size={18} color={Colors.primary} />
+            <Ionicons name="chevron-back" size={16} color={Colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.datePill}
@@ -1285,11 +1259,11 @@ export default function BookCourtScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Selected date ${selectedDateLabel}. Tap to ${calendarExpanded ? 'collapse' : 'expand'} calendar.`}
           >
-            <Ionicons name="calendar" size={16} color={Colors.primary} />
+            <Ionicons name="calendar" size={14} color={Colors.primary} />
             <Text style={styles.datePillText}>{selectedDateLabel}</Text>
             <Ionicons
               name={calendarExpanded ? 'chevron-up' : 'chevron-down'}
-              size={14}
+              size={12}
               color={Colors.textMuted}
             />
           </TouchableOpacity>
@@ -1299,7 +1273,7 @@ export default function BookCourtScreen() {
             accessibilityRole="button"
             accessibilityLabel="Next day"
           >
-            <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+            <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -2032,8 +2006,8 @@ const styles = StyleSheet.create({
   // ── Calendar ──
   calendarSection: {
     marginHorizontal: Spacing.md,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.md,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
     borderWidth: 1,
@@ -2048,12 +2022,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.xs,
     gap: Spacing.xs,
   },
   dayArrow: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2071,20 +2045,20 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.primary + '35',
     borderRadius: BorderRadius.full,
-    paddingVertical: Spacing.sm,
-    minHeight: TouchTarget.min,
-    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    minHeight: 32,
+    paddingHorizontal: Spacing.sm,
   },
   datePillText: {
     flex: 1,
-    fontSize: FontSize.sm,
+    fontSize: FontSize.xs,
     fontWeight: '600',
     color: Colors.text,
     textAlign: 'center',
   },
   quickReserveRow: {
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   quickReserveButton: {
     alignSelf: 'stretch',
@@ -2097,11 +2071,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingTop: 2,
+    paddingBottom: Spacing.xs,
   },
   compactToolsText: {
     flex: 1,
-    fontSize: FontSize.sm,
+    fontSize: FontSize.xs,
     fontFamily: FontFamily.medium,
     color: Colors.textSecondary,
   },
@@ -2109,9 +2084,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    minHeight: TouchTarget.min,
+    minHeight: 28,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    paddingVertical: 2,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.card,
     borderWidth: 1,

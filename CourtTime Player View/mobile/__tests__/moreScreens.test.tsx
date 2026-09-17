@@ -249,7 +249,73 @@ describe('My Player Group screen', () => {
       success: true,
       data: { success: true, data: { group: null, members: [] } },
     } as never);
-    expect(allText(await render(LevelGroupScreen))).toContain('No group yet');
+    expect(allText(await render(LevelGroupScreen))).toContain("You're not in a group yet");
+  });
+});
+
+describe('Player Groups admin board', () => {
+  const adminUser = { id: 'u1', adminFacilities: ['facility-1'] };
+  const board = {
+    groups: [
+      {
+        id: 'g1',
+        name: '4.0',
+        sortPosition: 0,
+        isVisibleToPlayers: true,
+        members: [{ userId: 'u2', fullName: 'Dana Other', skillLevel: '4.0', isFacilityAdmin: false }],
+      },
+      { id: 'g2', name: '3.5', sortPosition: 1, isVisibleToPlayers: false, members: [] },
+    ],
+    unassigned: [{ userId: 'u3', fullName: 'Pat Pool', skillLevel: null, isFacilityAdmin: true }],
+  };
+
+  beforeEach(() => {
+    (mockAuthState as { user: unknown }).user = adminUser;
+    getSpy.mockResolvedValue({ success: true, data: { success: true, data: board } } as never);
+  });
+  afterEach(() => {
+    (mockAuthState as { user: unknown }).user = { id: 'u1' };
+  });
+
+  it('shows every tier with its players and the unassigned pool', async () => {
+    const text = allText(await render(LevelGroupScreen));
+    expect(getSpy).toHaveBeenCalledWith('/api/player-level-groups/facility-1');
+    expect(text).toContain('4.0');
+    expect(text).toContain('Dana Other');
+    expect(text).toContain('3.5');
+    expect(text).toContain('Unassigned');
+    expect(text).toContain('Pat Pool');
+    expect(text).toContain('Admin');
+  });
+
+  it('creates a tier from the Add Level row', async () => {
+    postSpy.mockResolvedValue({ success: true, data: { success: true, data: { group: {} } } } as never);
+    const tree = await render(LevelGroupScreen);
+    const input = tree.root.findAll((n) => n.props.placeholder === 'New group name (e.g. 3.5)')[0];
+    act(() => {
+      input.props.onChangeText('3.0');
+    });
+    pressA11y(tree, 'Add level');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(postSpy).toHaveBeenCalledWith('/api/player-level-groups/facility-1/groups', { name: '3.0' });
+  });
+
+  it('moves a player to another tier from the player menu', async () => {
+    const putSpy = jest.spyOn(api, 'put').mockResolvedValue({ success: true, data: {} } as never);
+    const tree = await render(LevelGroupScreen);
+    pressA11y(tree, 'Move Pat Pool');
+    pressA11y(tree, '4.0');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(putSpy).toHaveBeenCalledWith('/api/player-level-groups/facility-1/assignments', {
+      userIds: ['u3'],
+      groupId: 'g1',
+      position: undefined,
+    });
+    putSpy.mockRestore();
   });
 });
 

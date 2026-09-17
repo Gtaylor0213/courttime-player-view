@@ -160,7 +160,7 @@ function RootLayoutNav() {
         {/* Flagged features, reached from the More tab */}
         <Stack.Screen name="ball-machine" options={{ title: 'Ball Machine' }} />
         <Stack.Screen name="lessons" options={{ title: 'Lessons' }} />
-        <Stack.Screen name="level-group" options={{ title: 'My Player Group' }} />
+        <Stack.Screen name="level-group" options={{ title: 'Player Groups' }} />
         <Stack.Screen name="pro-shop" options={{ title: 'Pro Shop' }} />
         <Stack.Screen name="padel" options={{ title: 'Padel' }} />
         {/* Admin sub-screens, reached from the Admin tab */}

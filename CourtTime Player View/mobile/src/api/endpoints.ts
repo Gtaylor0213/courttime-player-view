@@ -75,6 +75,25 @@ export const lessonsEndpoints = {
 export const levelGroupEndpoints = {
   /** The caller's own skill group and who else is in it. */
   mine: (facilityId: string) => api.get(`/api/player-level-groups/${facilityId}/me`),
+
+  // ── Admin board (facility admins only; mirrors web's playerLevelGroupsApi) ──
+  /** Every tier with its members, plus the unassigned pool. */
+  board: (facilityId: string) => api.get(`/api/player-level-groups/${facilityId}`),
+  createGroup: (facilityId: string, name: string) =>
+    api.post(`/api/player-level-groups/${facilityId}/groups`, { name }),
+  /** Rewrite the tier order, top (strongest) tier first. */
+  reorderGroups: (facilityId: string, groupIds: string[]) =>
+    api.put(`/api/player-level-groups/${facilityId}/groups/order`, { groupIds }),
+  updateGroup: (facilityId: string, groupId: string, updates: { name?: string; isVisibleToPlayers?: boolean }) =>
+    api.patch(`/api/player-level-groups/${facilityId}/groups/${groupId}`, updates),
+  deleteGroup: (facilityId: string, groupId: string) =>
+    api.delete(`/api/player-level-groups/${facilityId}/groups/${groupId}`),
+  /** Move players into a tier (or back to unassigned with groupId null); `position` is the landing index. */
+  assign: (facilityId: string, userIds: string[], groupId: string | null, position?: number) =>
+    api.put(`/api/player-level-groups/${facilityId}/assignments`, { userIds, groupId, position }),
+  /** Start a group chat with the tier's current members. */
+  createConversation: (facilityId: string, groupId: string) =>
+    api.post(`/api/player-level-groups/${facilityId}/groups/${groupId}/conversation`, {}),
 };
 
 export const proShopEndpoints = {

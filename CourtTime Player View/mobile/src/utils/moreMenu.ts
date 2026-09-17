@@ -70,7 +70,7 @@ export const MORE_MENU_ITEMS: MoreMenuItem[] = [
   },
   {
     key: 'level-group',
-    label: 'My Player Group',
+    label: 'Player Groups',
     description: 'Your skill group and who is in it',
     icon: 'people-circle-outline',
     route: '/level-group',

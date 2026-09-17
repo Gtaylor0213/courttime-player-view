@@ -76,7 +76,8 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
   const nameLen = facilityName.length;
   const textStyles = [styles.buttonText, nameLen > 28 ? styles.buttonTextXs : styles.buttonTextSm];
 
-  const chipMaxWidth = Math.max(160, Math.round(windowWidth - Spacing.sm - Spacing.xs));
+  // Header title container sits inside Spacing.md margins on both sides (see (tabs)/_layout.tsx).
+  const chipMaxWidth = Math.max(160, Math.round(windowWidth - Spacing.md * 2));
 
   return (
     <>
@@ -159,9 +160,11 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
 const styles = StyleSheet.create({
   titleStaticWrap: {
     flex: 1,
+    alignSelf: 'stretch',
     minWidth: 0,
     maxWidth: '100%',
     justifyContent: 'center',
+    alignItems: 'center',
     paddingVertical: 2,
   },
   titleStatic: {
@@ -169,6 +172,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
     lineHeight: 17,
+    textAlign: 'center',
   },
   titleStaticSm: {
     fontSize: FontSize.sm,
@@ -211,7 +215,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
   titleFlex: {
-    flex: 1,
+    // Content-sized (no flexGrow) so the name measures to its text width inside the centered chip,
+    // and shrinks with ellipsis when the chip hits its maxWidth.
     flexShrink: 1,
     minWidth: 0,
     justifyContent: 'center',

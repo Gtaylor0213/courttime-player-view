@@ -113,9 +113,12 @@ function TabsShell() {
       headerStyle: styles.header,
       headerTintColor: Colors.chromeText,
       headerTitleStyle: styles.headerTitle,
-      /** Left-aligned title uses most of the bar width so long club names are not clipped in a narrow center slot */
-      headerTitleAlign: 'left' as const,
+      /** Centered club-name chip; the tab headers have no side buttons, so the title slot still spans nearly the full bar */
+      headerTitleAlign: 'center' as const,
       headerTitleContainerStyle: styles.headerTitleContainer,
+      /** Tab headers have no side buttons; collapse the side slots so the title slot spans the whole bar and the chip centers within it */
+      headerLeftContainerStyle: styles.headerSideContainer,
+      headerRightContainerStyle: styles.headerSideContainer,
       tabBarButton: renderNavTabButton,
     }),
     [insets.bottom]
@@ -254,9 +257,12 @@ const styles = StyleSheet.create({
   headerTitleContainer: {
     flexGrow: 1,
     flexShrink: 1,
-    alignItems: 'flex-start',
-    marginLeft: Spacing.sm,
-    marginRight: Spacing.xs,
+    alignItems: 'center',
+    marginHorizontal: Spacing.md,
     maxWidth: '100%',
+  },
+  headerSideContainer: {
+    flexGrow: 0,
+    flexBasis: 'auto',
   },
 });

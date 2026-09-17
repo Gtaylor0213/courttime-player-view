@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
-import { Calendar, Clock, MapPin, AlertCircle, Info, Repeat } from 'lucide-react';
+import { Calendar, Clock, MapPin, Info, Repeat } from 'lucide-react';
 import { RuleViolationDialog } from './RuleViolationDialog';
 import { SplitPaymentPicker } from './SplitPaymentPicker';
 import { BookForControl, type BookForMode } from './BookForControl';

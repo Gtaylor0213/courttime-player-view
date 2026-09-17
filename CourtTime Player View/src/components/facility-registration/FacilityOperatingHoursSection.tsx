@@ -1,4 +1,3 @@
-import React from 'react';
 import { Clock } from 'lucide-react';
 import { CourtHoursEditor } from '../booking-rules/CourtHoursEditor';
 import { useRegistration } from './RegistrationContext';

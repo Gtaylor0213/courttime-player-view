@@ -2,7 +2,6 @@
  * Account Rule Evaluators (ACC-001 to ACC-010)
  */
 
-import { query } from '../../../database/connection';
 import {
   RuleEvaluator,
   RuleContext,
@@ -19,13 +18,12 @@ import {
   getTimeWindow,
   formatDate,
   timeRangesOverlap,
-  addDays,
   getDayOfWeek,
   getTodayYmdInTimeZone,
   diffCalendarDaysYmd,
   addCalendarDaysYmd,
   coerceDayOfWeekList,
-  combineDateAndTime
+  combineDateAndTime,
 } from '../utils/timeUtils';
 import { resolveWeeklyIndividualFromBookingRules } from '../RuleContext';
 import { countPrimeTimeBookings } from '../utils/primeTimeUtils';

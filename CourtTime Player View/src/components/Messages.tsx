@@ -3,7 +3,6 @@ import { Send, Search, MessageCircle, Users, X, Plus, UserPlus, ChevronLeft, Tra
 import { cn } from './ui/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { messagesApi } from '../api/client';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';

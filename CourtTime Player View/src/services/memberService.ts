@@ -1,5 +1,4 @@
-import { query, transaction } from '../database/connection';
-import { User, FacilityMembership } from '../types/database';
+import { query } from '../database/connection';
 
 /**
  * Member Management Service

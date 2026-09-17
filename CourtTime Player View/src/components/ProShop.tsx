@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { ShoppingBag, ShoppingCart, X, Plus, Minus, CheckCircle, Receipt, AlertTriangle } from 'lucide-react';

@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import { useParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
-import { ArrowLeft, MapPin, Phone, Mail, Globe, Clock, Users, Star, Calendar, Clipboard, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Mail, Globe, Clock, Users, Calendar, Clipboard, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { ImageWithFallback } from './figma/ImageWithFallback';
 import { facilitiesApi, facilityLocationsApi, courtConfigApi } from '../api/client';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
@@ -21,10 +20,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeFacilityType } from '../../shared/constants/facilityTypes';
 import { toast } from 'sonner';
-import {
-  loadMemberFacilitiesForUser,
-  type MemberFacilityRow,
-} from '../utils/memberFacilities';
+import { loadMemberFacilitiesForUser, type MemberFacilityRow } from '../utils/memberFacilities';
 
 interface FacilityData {
   id: string;

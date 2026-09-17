@@ -1,6 +1,6 @@
 import { query, transaction } from '../database/connection';
 import { deleteUserAccount, SoleFacilityAdminError } from './accountDeletionService';
-import { User, UserPreferences, PlayerProfile, FacilityMembership } from '../types/database';
+import { User } from '../types/database';
 import * as bcrypt from 'bcrypt';
 
 const SALT_ROUNDS = 10;

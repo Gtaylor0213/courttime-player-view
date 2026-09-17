@@ -1,30 +1,25 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
-import { Textarea } from '../../ui/textarea';
 import {
-  Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users,
-  Upload, Shield, AlertTriangle, Zap, Home, FileText, Calendar, ChevronDown, ChevronRight, Info,
+  Clock,
+  Save,
+  Edit,
+  X,
+  Plus,
+  Trash2,
   DollarSign,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { TabsContent } from '../../ui/tabs';
 import { Badge } from '../../ui/badge';
-import { Switch } from '../../ui/switch';
-import { toast } from 'sonner';
-import { RULE_METADATA, CATEGORIES } from '../../facility-registration/rule-defaults';
-import { getFacilityTypeSelectOptions } from '../../../../shared/constants/facilityTypes';
 import { CourtScheduleEditor } from '../CourtScheduleEditor';
 import { SetFeesForAllPanel } from '../SetFeesForAllPanel';
 import { FacilityCourtFormBody } from './FacilityCourtFormBody';
-import { US_STATES } from './usStates';
 import type { UseFacilityManagementReturn } from './useFacilityManagement';
-import {
-  parseLocalDate,
-  toDatetimeLocalInput,
-} from '../../../utils/dateUtils';
+import { parseLocalDate, toDatetimeLocalInput } from '../../../utils/dateUtils';
 import { formatGroupedOperatingHoursSummary } from '../../../../shared/utils/operatingHours';
 
 type Props = UseFacilityManagementReturn;

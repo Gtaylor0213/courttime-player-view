@@ -1,13 +1,9 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import type { StrikeLockoutStatus } from '../../shared/utils/strikeLockout';
-import {
-  formatLockoutEndDate,
-  strikeLockoutMessage,
-} from '../../shared/utils/strikeLockout';
+import { formatLockoutEndDate, strikeLockoutMessage } from '../../shared/utils/strikeLockout';
 
 interface StrikeLockoutScreenProps {
   status: StrikeLockoutStatus;

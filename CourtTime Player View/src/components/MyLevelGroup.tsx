@@ -5,7 +5,7 @@
  * a facility can keep the board purely internal.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Layers, MessageCircle, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback } from './ui/avatar';

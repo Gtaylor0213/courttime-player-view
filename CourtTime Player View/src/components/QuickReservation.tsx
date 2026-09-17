@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -8,7 +8,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { facilitiesApi, bookingApi } from '../api/client';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
-import { ArrowLeft, MapPin, Clock, Calendar, Filter, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Filter, AlertTriangle } from 'lucide-react';
 
 interface FacilityData {
   id: string;

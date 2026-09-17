@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
-import { Calendar, Clock, Users, MapPin, Tag, Pin, AlertCircle, Plus, X, Trash2, DollarSign } from 'lucide-react';
+import { Calendar, Users, MapPin, Tag, Pin, AlertCircle, Plus, Trash2, DollarSign } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Label } from './ui/label';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import {

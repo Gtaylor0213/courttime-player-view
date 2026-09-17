@@ -48,7 +48,6 @@ import {
   getFacilityRevenueThisMonth,
 } from '../../src/services/facilityRevenueService';
 import { facilityOperatingHoursScheduleFingerprint } from '../../shared/utils/operatingHours';
-import { isFacilityAdmin } from '../../src/services/memberService';
 import {
   isFacilityAdminUser,
   facilityIdForCourt,

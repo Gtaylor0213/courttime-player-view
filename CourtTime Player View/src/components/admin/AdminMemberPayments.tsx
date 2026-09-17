@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { useAppContext } from '../../contexts/AppContext';
 import { PaymentsTab } from './PaymentsTab';

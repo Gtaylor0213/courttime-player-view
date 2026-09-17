@@ -1,4 +1,3 @@
-import React from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { Mail, FileText, ScrollText } from 'lucide-react';
 import { AdminEmailBlast } from './AdminEmailBlast';

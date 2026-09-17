@@ -1,17 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
-import { RULE_METADATA, CATEGORIES, getRulesByCategory, RuleMeta } from '../../facility-registration/rule-defaults';
+import { CATEGORIES, getRulesByCategory, RuleMeta } from '../../facility-registration/rule-defaults';
 import { Button } from '../../ui/button';
 import { CardFooter } from '../../ui/card';
 import { Info, Save, X } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useAppContext } from '../../../contexts/AppContext';
-import {
-  parseLocalDate,
-  toDatetimeLocalInput,
-  normalizeLocalDatetimeForStorage,
-} from '../../../utils/dateUtils';
+import { normalizeLocalDatetimeForStorage } from '../../../utils/dateUtils';
 import {
   facilitiesApi,
   adminApi,
@@ -21,16 +16,12 @@ import {
   stripeConnectApi,
   isStripeConnectReadyFromResponse,
 } from '../../../api/client';
-import {
-  formatCentsToDollars,
-  parseBookingFeeDollars,
-} from '../PaidCourtBookingFields';
+import { formatCentsToDollars, parseBookingFeeDollars } from '../PaidCourtBookingFields';
 import { validateStoredCourtType } from '../../../../shared/constants/courtTypes';
 import { FEATURE_FLAGS } from '../../../../shared/constants/featureFlags';
 import {
   courtScheduleRowsToOperatingHoursMap,
   extractCourtScheduleFromApiResponse,
-  formatGroupedOperatingHoursSummary,
   type OperatingHoursMap,
 } from '../../../../shared/utils/operatingHours';
 import {

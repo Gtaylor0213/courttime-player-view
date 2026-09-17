@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Search, UserPlus, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, X, Settings, AlertTriangle, Clock, MapPin, Phone, User, MoreVertical, Eye, EyeOff, Lock, LockOpen, Zap, ZapOff } from 'lucide-react';
+import { Search, Mail, Shield, ShieldOff, Edit, Trash2, CheckCircle, XCircle, AlertTriangle, Clock, MapPin, Phone, MoreVertical, Eye, EyeOff, Lock, LockOpen, Zap, ZapOff } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
@@ -13,7 +13,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { membersApi, strikesApi, stripeConnectApi, isStripeConnectReadyFromResponse } from '../../api/client';
 import { LockMemberPaymentDialog, type LockMemberTarget } from './LockMemberPaymentDialog';
-import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { isSessionAuthError } from '../../../shared/utils/sessionAuth';

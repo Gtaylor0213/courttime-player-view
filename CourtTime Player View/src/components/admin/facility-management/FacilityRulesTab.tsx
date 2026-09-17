@@ -1,37 +1,34 @@
 import React from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Textarea } from '../../ui/textarea';
 import {
-  Building2, Clock, MapPin, Phone, Mail, Save, Edit, X, Plus, Trash2, Image, User, Users,
-  Upload, Shield, AlertTriangle, Zap, Home, FileText, Calendar, ChevronDown, ChevronRight, Info,
+  Clock,
+  Save,
+  Edit,
+  X,
+  Plus,
+  Trash2,
+  Users,
+  Shield,
+  Calendar,
+  Info,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { TabsContent } from '../../ui/tabs';
-import { Badge } from '../../ui/badge';
 import { MaxAccountsAndUserLimitsSection } from '../../booking-rules/MaxAccountsAndUserLimitsSection';
 import { SplitPaymentToggleSection } from '../../booking-rules/SplitPaymentToggleSection';
 import {
   BookingRuleSwitch,
   BookingRuleToggleInput,
 } from '../../booking-rules/BookingRuleToggleInput';
-import { toast } from 'sonner';
-import { RULE_METADATA, CATEGORIES } from '../../facility-registration/rule-defaults';
-import { getFacilityTypeSelectOptions } from '../../../../shared/constants/facilityTypes';
+import { RULE_METADATA } from '../../facility-registration/rule-defaults';
 import { useAppContext } from '../../../contexts/AppContext';
 import { FEATURE_FLAGS } from '../../../../shared/constants/featureFlags';
-import { CourtScheduleEditor } from '../CourtScheduleEditor';
 import { GeneralRulesManager } from '../GeneralRulesManager';
-import { FacilityCourtFormBody } from './FacilityCourtFormBody';
-import { US_STATES } from './usStates';
 import type { UseFacilityManagementReturn } from './useFacilityManagement';
-import {
-  parseLocalDate,
-  toDatetimeLocalInput,
-} from '../../../utils/dateUtils';
-import { formatGroupedOperatingHoursSummary } from '../../../../shared/utils/operatingHours';
 
 type Props = UseFacilityManagementReturn;
 

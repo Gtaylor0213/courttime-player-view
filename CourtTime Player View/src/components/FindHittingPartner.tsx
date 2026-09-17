@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
-import { Search, Filter, Users, Calendar, Plus, X, Building, Edit, Trash2, AlertCircle, MessageCircle } from 'lucide-react';
+import { Search, Users, Plus, Building, Edit, Trash2, AlertCircle, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { hittingPartnerApi, playerProfileApi, facilitiesApi } from '../api/client';
 import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import { Card, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';

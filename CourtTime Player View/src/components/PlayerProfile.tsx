@@ -9,14 +9,13 @@ import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { ReservationManagementModal } from './ReservationManagementModal';
-import { ArrowLeft, Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, LogOut, Mail } from 'lucide-react';
+import { Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, LogOut, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { playerProfileApi, facilitiesApi, strikesApi, membersApi, usersApi, userPreferencesApi } from '../api/client';
 import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { toast } from 'sonner';
-import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
 
 export function PlayerProfile() {
   const navigate = useNavigate();

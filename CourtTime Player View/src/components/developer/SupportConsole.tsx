@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { isSupportAuthenticated, clearSupportPassword } from '../../api/supportClient';
 import { SupportLogin } from './SupportLogin';
 import { SupportLayout } from './SupportLayout';

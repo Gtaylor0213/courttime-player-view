@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from './ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Badge } from './ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
@@ -16,25 +15,22 @@ import { ReservationManagementModal } from './ReservationManagementModal';
 import { BulletinActivitySignupModal } from './BulletinActivitySignupModal';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
-import { bulletinBoardApi, facilitiesApi, usersApi, bookingApi, courtConfigApi, strikesApi, unwrapApiPayload } from '../api/client';
+import { bulletinBoardApi, facilitiesApi, bookingApi, courtConfigApi, strikesApi, unwrapApiPayload } from '../api/client';
 import { StrikeLockoutAlerts } from './StrikeLockoutAlerts';
 import type { StrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { parseLocalDate } from '../utils/dateUtils';
 import { toast } from 'sonner';
-import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Filter, Grid3X3, Bell, Info, User, Settings, BarChart3, MapPin, Users, LogOut, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
+import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Grid3X3, Info, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
-import { getBookingTypeColor, getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
+import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { formatCourtCalendarSubtitle } from '../../shared/utils/courtNaming';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { courtTypeLabel } from '../../shared/constants/courtTypes';
 import { useCourtTypeFilter } from './useCourtTypeFilter';
-import {
-  fetchBookingCalendarDetails,
-  offerAddBookingToCalendar,
-} from '../utils/bookingCalendar';
+import { fetchBookingCalendarDetails, offerAddBookingToCalendar } from '../utils/bookingCalendar';
 import {
   BULLETIN_ACTIVITY_BOOKING_TYPES,
   isBulletinActivityBooking,

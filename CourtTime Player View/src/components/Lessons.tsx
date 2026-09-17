@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, DollarSign, GraduationCap, MapPin, Users } from 'lucide-react';
 import { Card } from './ui/card';

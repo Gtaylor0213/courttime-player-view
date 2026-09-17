@@ -15,8 +15,6 @@ import { DEFAULT_RULES_CONFIG, RulesConfig, type RuleEntry } from './rule-defaul
 import type { CourtScheduleDay } from '../admin/CourtScheduleEditor';
 import {
   buildCourtScheduleRowsFromFacilityOperatingHours,
-  courtScheduleRowsToOperatingHoursMap,
-  formatGroupedOperatingHoursSummary,
 } from '../../../shared/utils/operatingHours';
 import {
   courtFieldsAfterNameChange,

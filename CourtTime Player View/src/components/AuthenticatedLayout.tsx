@@ -1,4 +1,3 @@
-import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import { useAuth } from '../contexts/AuthContext';

@@ -71,6 +71,7 @@
     "test:watch": "vitest",
     "test:mobile": "npm --prefix mobile run test:ci",
     "typecheck:mobile": "npm --prefix mobile run typecheck",
+    "parity:check": "node scripts/check-api-parity.mjs",
     "expo:start": "npm --prefix mobile start",
     "mobile:install": "npm --prefix mobile install",
     "seed:review": "tsx scripts/seed-review-account.ts"

@@ -38,3 +38,16 @@ jobs:
       - run: npm --prefix mobile ci
       - run: npm run typecheck:mobile
       - run: npm run test:mobile
+
+  parity:
+    name: Web ↔ mobile API parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Pure Node script, no install: every /api path the web calls must also
+      # be called by mobile or be listed under "Web-only API paths" in
+      # docs/mobile-web-sync.md.
+      - run: npm run parity:check

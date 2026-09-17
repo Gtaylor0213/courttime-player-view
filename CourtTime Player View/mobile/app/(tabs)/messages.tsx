@@ -3,7 +3,7 @@
  * View conversations, read message threads, send new messages
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
 import { showApiErrorAlert } from '../../src/utils/alert';
@@ -32,14 +33,22 @@ import { useMessageUnread } from '../../src/contexts/MessageUnreadContext';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import { userFacingApiMessage } from '../../src/utils/apiUserMessages';
+import {
+  buildSendBody,
+  conversationTitle,
+  isGroupManager as computeIsGroupManager,
+  normalizeConversations,
+  type ConversationItem,
+} from '../../src/utils/messagesThread';
 
 export const ErrorBoundary = createRouteErrorBoundary('Messages');
 
-interface ConversationItem {
-  id: string;
-  otherUser: { id: string; name: string; email?: string; profileImageUrl?: string };
-  lastMessage: { text: string; senderId: string; sentAt: string } | null;
-  unreadCount: number;
+/** Row from GET /api/messages/groups/:id/members. */
+interface GroupMember {
+  userId: string;
+  fullName: string;
+  isFacilityAdmin: boolean;
+  isCreator: boolean;
 }
 
 interface MessageItem {
@@ -96,14 +105,36 @@ export default function MessagesScreen() {
   const messagesListRef = useRef<FlatList<MessageItem>>(null);
   const [threadLoadError, setThreadLoadError] = useState<string | null>(null);
 
-  // New message modal state
+  // New message modal state. "direct" picks one member; "group" names a group
+  // and picks several (web's Create Group dialog). "add" reuses the same picker
+  // to add members to the open group.
   const [showNewMessage, setShowNewMessage] = useState(false);
+  const [pickerMode, setPickerMode] = useState<'direct' | 'group' | 'add'>('direct');
   const [members, setMembers] = useState<MemberItem[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [memberLoadError, setMemberLoadError] = useState<string | null>(null);
   // Guards against a slower earlier search overwriting a newer one.
   const memberRequestId = useRef(0);
+  const [groupName, setGroupName] = useState('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
+  const [savingGroup, setSavingGroup] = useState(false);
+
+  // Group thread state: members (for sender names and the info sheet).
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+
+  const isGroupManager = computeIsGroupManager(
+    activeConversation,
+    user?.id,
+    user?.adminFacilities,
+    facilityId
+  );
+  const memberNameById = useMemo(
+    () => new Map(groupMembers.map((m) => [m.userId, m.fullName])),
+    [groupMembers]
+  );
 
   const clearDeepLinkParams = useCallback(() => {
     router.setParams({
@@ -130,13 +161,8 @@ export default function MessagesScreen() {
     if (res.data) {
       // Server wraps as { success, data: { conversations } }, so unwrap one level
       const convos = res.data.conversations || res.data.data?.conversations || [];
-      const normalized = convos.map((convo: any) => ({
-        ...convo,
-        otherUser: {
-          ...convo.otherUser,
-          profileImageUrl: convo.otherUser?.profileImageUrl || convo.otherUser?.profile_image_url,
-        },
-      }));
+      // Rows come in two shapes (direct vs group); normalise both.
+      const normalized = normalizeConversations(convos as unknown[]);
       setConversations(normalized);
       syncUnreadState(normalized);
       setConversationLoadError(null);
@@ -203,11 +229,19 @@ export default function MessagesScreen() {
     }
   }, [fetchWithCache, syncUnreadState, user]);
 
+  const fetchGroupMembers = useCallback(async (conversationId: string) => {
+    const res = await api.get(`/api/messages/groups/${conversationId}/members`);
+    const payload = res.data?.data || res.data;
+    setGroupMembers(res.success && Array.isArray(payload?.members) ? payload.members : []);
+  }, []);
+
   const openConversation = useCallback((convo: ConversationItem) => {
     setActiveConversation(convo);
     setThreadLoadError(null);
+    setGroupMembers([]);
     fetchMessages(convo.id);
-  }, [fetchMessages]);
+    if (convo.isGroup) void fetchGroupMembers(convo.id);
+  }, [fetchMessages, fetchGroupMembers]);
 
   useEffect(() => {
     if (!routeConversationId) return;
@@ -247,9 +281,7 @@ export default function MessagesScreen() {
     const text = newMessage.trim();
     const res = await api.post('/api/messages', {
       senderId: user.id,
-      recipientId: activeConversation.otherUser.id,
-      facilityId,
-      messageText: text,
+      ...buildSendBody(activeConversation, facilityId, text),
     });
     setSending(false);
 
@@ -321,18 +353,168 @@ export default function MessagesScreen() {
     return () => clearTimeout(timer);
   }, [showNewMessage, memberSearch, fetchMembers]);
 
-  function openNewMessage() {
+  function openNewMessage(mode: 'direct' | 'group' | 'add' = 'direct') {
+    setPickerMode(mode);
     setMemberSearch('');
     setMembers([]);
     setMemberLoadError(null);
     setLoadingMembers(true);
+    setGroupName('');
+    setSelectedMemberIds(new Set());
     setShowNewMessage(true);
   }
+
+  const toggleSelectedMember = (userId: string) => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  // ── Groups ──
+  async function handleCreateGroup() {
+    if (!facilityId || !groupName.trim() || selectedMemberIds.size === 0 || savingGroup) return;
+    setSavingGroup(true);
+    const res = await api.post('/api/messages/groups', {
+      facilityId,
+      name: groupName.trim(),
+      memberIds: Array.from(selectedMemberIds),
+    });
+    setSavingGroup(false);
+    const payload = res.data?.data || res.data;
+    if (res.success && payload?.conversationId) {
+      setShowNewMessage(false);
+      await fetchConversations();
+      openConversation({
+        id: payload.conversationId,
+        isGroup: true,
+        groupName: payload.name || groupName.trim(),
+        createdBy: user?.id,
+        memberCount: selectedMemberIds.size + 1,
+        lastMessage: null,
+        unreadCount: 0,
+      });
+    } else {
+      showApiErrorAlert(res, 'Could not create group');
+    }
+  }
+
+  async function handleAddGroupMembers() {
+    if (!activeConversation?.isGroup || selectedMemberIds.size === 0 || savingGroup) return;
+    setSavingGroup(true);
+    const res = await api.post(`/api/messages/groups/${activeConversation.id}/members`, {
+      userIds: Array.from(selectedMemberIds),
+    });
+    setSavingGroup(false);
+    if (res.success) {
+      setShowNewMessage(false);
+      await fetchGroupMembers(activeConversation.id);
+      setActiveConversation((prev) =>
+        prev ? { ...prev, memberCount: (prev.memberCount ?? 0) + selectedMemberIds.size } : prev
+      );
+      fetchConversations();
+    } else {
+      showApiErrorAlert(res, 'Could not add members');
+    }
+  }
+
+  async function handleRenameGroup() {
+    if (!activeConversation?.isGroup) return;
+    const name = renameValue.trim();
+    if (!name || name === activeConversation.groupName || savingGroup) return;
+    setSavingGroup(true);
+    const res = await api.patch(`/api/messages/groups/${activeConversation.id}`, { name });
+    setSavingGroup(false);
+    if (res.success) {
+      setActiveConversation((prev) => (prev ? { ...prev, groupName: name } : prev));
+      fetchConversations();
+    } else {
+      showApiErrorAlert(res, 'Could not rename group');
+    }
+  }
+
+  const removeGroupMember = useCallback(
+    async (member: GroupMember) => {
+      if (!activeConversation?.isGroup) return;
+      const res = await api.delete(`/api/messages/groups/${activeConversation.id}/members/${member.userId}`);
+      if (res.success) {
+        setGroupMembers((prev) => prev.filter((m) => m.userId !== member.userId));
+        setActiveConversation((prev) =>
+          prev ? { ...prev, memberCount: Math.max(0, (prev.memberCount ?? 1) - 1) } : prev
+        );
+        fetchConversations();
+      } else {
+        showApiErrorAlert(res, 'Could not remove member');
+      }
+    },
+    [activeConversation, fetchConversations]
+  );
+
+  const confirmRemoveGroupMember = (member: GroupMember) => {
+    Alert.alert('Remove member', `Remove ${member.fullName} from this group?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => void removeGroupMember(member) },
+    ]);
+  };
+
+  const leaveThread = () => {
+    setShowGroupInfo(false);
+    clearDeepLinkParams();
+    setActiveConversation(null);
+    setMessages([]);
+    setGroupMembers([]);
+    fetchConversations();
+  };
+
+  const confirmLeaveGroup = () => {
+    if (!activeConversation?.isGroup || !user) return;
+    const conversationId = activeConversation.id;
+    Alert.alert('Leave group', `Leave "${conversationTitle(activeConversation)}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Leave',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const res = await api.delete(`/api/messages/groups/${conversationId}/members/${user.id}`);
+            if (res.success) leaveThread();
+            else showApiErrorAlert(res, 'Could not leave group');
+          })();
+        },
+      },
+    ]);
+  };
+
+  const confirmDeleteGroup = () => {
+    if (!activeConversation?.isGroup) return;
+    const conversationId = activeConversation.id;
+    Alert.alert(
+      'Delete group',
+      `Delete "${conversationTitle(activeConversation)}" for everyone? Its messages will be removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              const res = await api.delete(`/api/messages/groups/${conversationId}`);
+              if (res.success) leaveThread();
+              else showApiErrorAlert(res, 'Could not delete group');
+            })();
+          },
+        },
+      ]
+    );
+  };
 
   // A draft thread has no id yet — the conversation row is created on first send.
   const openDraftConversation = useCallback((member: MemberItem) => {
     setActiveConversation({
       id: '',
+      isGroup: false,
       otherUser: {
         id: member.userId,
         name: member.fullName,
@@ -350,7 +532,7 @@ export default function MessagesScreen() {
 
     setShowNewMessage(false);
 
-    const existing = conversations.find(c => c.otherUser.id === member.userId);
+    const existing = conversations.find(c => !c.isGroup && c.otherUser?.id === member.userId);
     if (existing) {
       openConversation(existing);
       return;
@@ -378,12 +560,12 @@ export default function MessagesScreen() {
     if (!routeRecipientId || !facilityId || loading) return;
     if (routeFacilityId && routeFacilityId !== facilityId) return;
 
-    const existing = conversations.find(convo => convo.otherUser.id === routeRecipientId);
+    const existing = conversations.find(convo => !convo.isGroup && convo.otherUser?.id === routeRecipientId);
     if (existing) {
       if (activeConversation?.id !== existing.id) {
         openConversation(existing);
       }
-    } else if (activeConversation?.otherUser.id !== routeRecipientId) {
+    } else if (activeConversation?.otherUser?.id !== routeRecipientId) {
       void openRecipientThread(routeRecipientId);
     }
 
@@ -395,7 +577,7 @@ export default function MessagesScreen() {
     loading,
     conversations,
     activeConversation?.id,
-    activeConversation?.otherUser.id,
+    activeConversation?.otherUser?.id,
     openConversation,
     openRecipientThread,
     clearDeepLinkParams,
@@ -408,9 +590,7 @@ export default function MessagesScreen() {
     setSending(true);
     const res = await api.post('/api/messages', {
       senderId: user.id,
-      recipientId: activeConversation.otherUser.id,
-      facilityId,
-      messageText: newMessage.trim(),
+      ...buildSendBody(activeConversation, facilityId, newMessage.trim()),
     });
     setSending(false);
 
@@ -446,11 +626,18 @@ export default function MessagesScreen() {
   const renderMessageItem = useCallback(({ item }: { item: MessageItem }) => {
     const isMe = item.senderId === user?.id;
     const busy = deletingMessageId === item.id;
+    // In a group, label who sent each incoming bubble (web does the same).
+    const senderName = isMe
+      ? 'You'
+      : activeConversation?.isGroup
+        ? memberNameById.get(item.senderId) || 'Member'
+        : activeConversation?.otherUser?.name || 'Member';
+    const showSenderName = !isMe && !!activeConversation?.isGroup;
     return (
       <View
         style={[styles.messageBubbleRow, isMe && styles.messageBubbleRowMe]}
         accessible
-        accessibilityLabel={`${isMe ? 'You' : activeConversation?.otherUser.name || 'Member'} said ${item.messageText}. ${formatDate(item.createdAt)}.`}
+        accessibilityLabel={`${senderName} said ${item.messageText}. ${formatDate(item.createdAt)}.`}
       >
         {isMe && (
           <TouchableOpacity
@@ -469,6 +656,7 @@ export default function MessagesScreen() {
           </TouchableOpacity>
         )}
         <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+          {showSenderName ? <Text style={styles.senderName}>{senderName}</Text> : null}
           <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
             {item.messageText}
           </Text>
@@ -478,7 +666,7 @@ export default function MessagesScreen() {
         </View>
       </View>
     );
-  }, [activeConversation?.otherUser.name, confirmDeleteMessage, deletingMessageId, user?.id]);
+  }, [activeConversation?.otherUser?.name, activeConversation?.isGroup, memberNameById, confirmDeleteMessage, deletingMessageId, user?.id]);
 
   // ── RENDER: Message Thread View ──
   if (activeConversation) {
@@ -493,29 +681,48 @@ export default function MessagesScreen() {
         <View style={styles.threadHeader}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => {
-              clearDeepLinkParams();
-              setActiveConversation(null);
-              setMessages([]);
-              fetchConversations();
-            }}
+            onPress={leaveThread}
             accessibilityRole="button"
             accessibilityLabel="Back to conversations"
           >
             <Text style={styles.backText}>{'\u2190'} Back</Text>
           </TouchableOpacity>
           <View style={styles.threadHeaderInfo}>
-            <View style={styles.avatarSmall}>
-              {activeConversation.otherUser.profileImageUrl ? (
+            <View style={[styles.avatarSmall, activeConversation.isGroup && styles.avatarGroup]}>
+              {activeConversation.isGroup ? (
+                <Ionicons name="people" size={18} color={Colors.textInverse} />
+              ) : activeConversation.otherUser?.profileImageUrl ? (
                 <CachedImage uri={activeConversation.otherUser.profileImageUrl} style={styles.avatarImageSmall} />
               ) : (
                 <Text style={styles.avatarSmallText}>
-                  {getInitials(activeConversation.otherUser.name) || '?'}
+                  {getInitials(activeConversation.otherUser?.name) || '?'}
                 </Text>
               )}
             </View>
-            <Text style={styles.threadName}>{activeConversation.otherUser.name || 'Member'}</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.threadName} numberOfLines={1}>
+                {conversationTitle(activeConversation)}
+              </Text>
+              {activeConversation.isGroup ? (
+                <Text style={styles.threadMeta}>
+                  {activeConversation.memberCount ? `${activeConversation.memberCount} members` : 'Group'}
+                </Text>
+              ) : null}
+            </View>
           </View>
+          {activeConversation.isGroup ? (
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() => {
+                setRenameValue(activeConversation.groupName || '');
+                setShowGroupInfo(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Group info"
+            >
+              <Ionicons name="information-circle-outline" size={24} color={Colors.primary} />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Messages */}
@@ -539,7 +746,9 @@ export default function MessagesScreen() {
               description={
                 threadLoadError
                   ? threadLoadError
-                  : `Start the conversation with ${activeConversation.otherUser.name || 'this member'}.`
+                  : activeConversation.isGroup
+                    ? 'Say hello to the group.'
+                    : `Start the conversation with ${activeConversation.otherUser?.name || 'this member'}.`
               }
               actionLabel={threadLoadError ? 'Try again' : undefined}
               onAction={threadLoadError ? () => void fetchMessages(activeConversation.id) : undefined}
@@ -568,6 +777,122 @@ export default function MessagesScreen() {
             style={styles.sendButton}
           />
         </View>
+
+        {/* Group info: members, rename, add/remove, leave, delete (web's "Manage this group") */}
+        <Modal
+          visible={showGroupInfo}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowGroupInfo(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                onPress={() => setShowGroupInfo(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close group info"
+              >
+                <Text style={styles.modalCancel}>Done</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Group info</Text>
+              <View style={{ width: 60 }} />
+            </View>
+
+            {isGroupManager ? (
+              <View style={styles.groupSection}>
+                <Text style={styles.groupSectionLabel}>Group name</Text>
+                <View style={styles.renameRow}>
+                  <Input
+                    style={styles.renameInput}
+                    value={renameValue}
+                    onChangeText={setRenameValue}
+                    placeholder="Group name"
+                    accessibilityLabel="Group name"
+                    maxLength={80}
+                    onSubmitEditing={() => void handleRenameGroup()}
+                    returnKeyType="done"
+                  />
+                  <Button
+                    title="Rename"
+                    onPress={() => void handleRenameGroup()}
+                    disabled={
+                      savingGroup || !renameValue.trim() || renameValue.trim() === activeConversation.groupName
+                    }
+                    loading={savingGroup}
+                    accessibilityLabel="Rename group"
+                  />
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.groupSection}>
+              <View style={styles.groupSectionHeader}>
+                <Text style={styles.groupSectionLabel}>
+                  {groupMembers.length} member{groupMembers.length === 1 ? '' : 's'}
+                </Text>
+                {isGroupManager ? (
+                  <TouchableOpacity
+                    onPress={() => openNewMessage('add')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add members"
+                  >
+                    <Text style={styles.linkText}>+ Add members</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+            <FlatList
+              data={groupMembers}
+              keyExtractor={(item) => item.userId}
+              renderItem={({ item }) => (
+                <View style={styles.memberItem}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{getInitials(item.fullName)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.userName}>
+                      {item.fullName}
+                      {item.userId === user?.id ? ' (you)' : ''}
+                    </Text>
+                    <Text style={styles.memberMeta}>
+                      {item.isCreator ? 'Creator' : item.isFacilityAdmin ? 'Admin' : 'Member'}
+                    </Text>
+                  </View>
+                  {isGroupManager && !item.isCreator && item.userId !== user?.id ? (
+                    <TouchableOpacity
+                      onPress={() => confirmRemoveGroupMember(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${item.fullName}`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="person-remove-outline" size={20} color={Colors.destructive} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
+              ListFooterComponent={
+                <View style={styles.groupActions}>
+                  {activeConversation.createdBy !== user?.id ? (
+                    <Button
+                      title="Leave group"
+                      variant="secondary"
+                      onPress={confirmLeaveGroup}
+                      accessibilityLabel="Leave group"
+                    />
+                  ) : null}
+                  {isGroupManager ? (
+                    <Button
+                      title="Delete group"
+                      variant="destructive"
+                      onPress={confirmDeleteGroup}
+                      accessibilityLabel="Delete group"
+                    />
+                  ) : null}
+                </View>
+              }
+            />
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     );
   }
@@ -600,7 +925,20 @@ export default function MessagesScreen() {
       <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
       {/* New Message Button */}
       <View style={styles.newMessageButtonWrap}>
-        <Button title="+ New Message" onPress={openNewMessage} accessibilityLabel="Start a new message" />
+        <Button
+          title="+ New Message"
+          onPress={() => openNewMessage('direct')}
+          accessibilityLabel="Start a new message"
+          style={{ flex: 1 }}
+        />
+        <Button
+          title="New Group"
+          variant="secondary"
+          onPress={() => openNewMessage('group')}
+          accessibilityLabel="Create a group"
+          leftIcon={<Ionicons name="people-outline" size={16} color={Colors.primary} />}
+          style={{ flex: 1 }}
+        />
       </View>
 
       <FlatList
@@ -620,7 +958,7 @@ export default function MessagesScreen() {
                 : 'Tap "+ New Message" to start a conversation with a facility member.'
             }
             actionLabel={conversationLoadError ? 'Try again' : 'Start a conversation'}
-            onAction={conversationLoadError ? () => void fetchConversations() : openNewMessage}
+            onAction={conversationLoadError ? () => void fetchConversations() : () => openNewMessage('direct')}
           />
         }
         renderItem={({ item }) => (
@@ -628,18 +966,25 @@ export default function MessagesScreen() {
             style={styles.conversationItem}
             onPress={() => openConversation(item)}
             accessibilityRole="button"
-            accessibilityLabel={`${item.otherUser.name || 'Member'}. ${item.unreadCount > 0 ? `${item.unreadCount} unread message${item.unreadCount === 1 ? '' : 's'}.` : 'No unread messages.'} ${item.lastMessage?.text ? `Last message: ${item.lastMessage.text}.` : 'No messages yet.'}`}
+            accessibilityLabel={`${conversationTitle(item)}${item.isGroup ? ' group' : ''}. ${item.unreadCount > 0 ? `${item.unreadCount} unread message${item.unreadCount === 1 ? '' : 's'}.` : 'No unread messages.'} ${item.lastMessage?.text ? `Last message: ${item.lastMessage.text}.` : 'No messages yet.'}`}
           >
-            <View style={styles.avatar}>
-              {item.otherUser.profileImageUrl ? (
+            <View style={[styles.avatar, item.isGroup && styles.avatarGroup]}>
+              {item.isGroup ? (
+                <Ionicons name="people" size={22} color={Colors.textInverse} />
+              ) : item.otherUser?.profileImageUrl ? (
                 <CachedImage uri={item.otherUser.profileImageUrl} style={styles.avatarImage} />
               ) : (
-                <Text style={styles.avatarText}>{getInitials(item.otherUser.name) || '?'}</Text>
+                <Text style={styles.avatarText}>{getInitials(item.otherUser?.name) || '?'}</Text>
               )}
             </View>
             <View style={styles.conversationContent}>
               <View style={styles.conversationHeader}>
-                <Text style={styles.userName}>{item.otherUser.name || 'Member'}</Text>
+                <Text style={styles.userName} numberOfLines={1}>
+                  {conversationTitle(item)}
+                  {item.isGroup && item.memberCount ? (
+                    <Text style={styles.memberCountInline}> ({item.memberCount})</Text>
+                  ) : null}
+                </Text>
                 {item.lastMessage && (
                   <Text style={styles.timestamp}>{formatDate(item.lastMessage.sentAt)}</Text>
                 )}
@@ -670,9 +1015,49 @@ export default function MessagesScreen() {
             >
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>New Message</Text>
-            <View style={{ width: 60 }} />
+            <Text style={styles.modalTitle}>
+              {pickerMode === 'direct' ? 'New Message' : pickerMode === 'group' ? 'New Group' : 'Add Members'}
+            </Text>
+            {pickerMode === 'direct' ? (
+              <View style={{ width: 60 }} />
+            ) : (
+              <TouchableOpacity
+                onPress={() => void (pickerMode === 'group' ? handleCreateGroup() : handleAddGroupMembers())}
+                disabled={
+                  savingGroup || selectedMemberIds.size === 0 || (pickerMode === 'group' && !groupName.trim())
+                }
+                accessibilityRole="button"
+                accessibilityLabel={pickerMode === 'group' ? 'Create group' : 'Add selected members'}
+              >
+                <Text
+                  style={[
+                    styles.modalCancel,
+                    (savingGroup || selectedMemberIds.size === 0 || (pickerMode === 'group' && !groupName.trim())) &&
+                      styles.disabledText,
+                  ]}
+                >
+                  {savingGroup ? '...' : pickerMode === 'group' ? 'Create' : 'Add'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
+
+          {pickerMode === 'group' ? (
+            <Input
+              style={styles.groupNameInput}
+              value={groupName}
+              onChangeText={setGroupName}
+              placeholder="Group name"
+              accessibilityLabel="Group name"
+              maxLength={80}
+              autoFocus
+            />
+          ) : null}
+          {pickerMode !== 'direct' && selectedMemberIds.size > 0 ? (
+            <Text style={styles.selectedCount}>
+              {selectedMemberIds.size} selected
+            </Text>
+          ) : null}
 
           <Input
             style={styles.searchInput}
@@ -680,7 +1065,7 @@ export default function MessagesScreen() {
             onChangeText={setMemberSearch}
             placeholder="Search members..."
             accessibilityLabel="Search members"
-            autoFocus
+            autoFocus={pickerMode === 'direct'}
           />
 
           {loadingMembers ? (
@@ -705,28 +1090,50 @@ export default function MessagesScreen() {
                   onAction={memberLoadError ? () => void fetchMembers(memberSearch) : undefined}
                 />
               }
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.memberItem}
-                  onPress={() => startConversation(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Start a conversation with ${item.fullName}${item.skillLevel ? `. Skill level ${item.skillLevel}.` : '.'}`}
-                >
-                  <View style={styles.avatar}>
-                    {item.profileImageUrl ? (
-                      <CachedImage uri={item.profileImageUrl} style={styles.avatarImage} />
-                    ) : (
-                      <Text style={styles.avatarText}>{getInitials(item.fullName)}</Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.userName}>{item.fullName}</Text>
-                    {item.skillLevel && (
-                      <Text style={styles.memberMeta}>{item.skillLevel}</Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              )}
+              renderItem={({ item }) => {
+                const alreadyIn =
+                  pickerMode === 'add' && groupMembers.some((m) => m.userId === item.userId);
+                const selected = selectedMemberIds.has(item.userId);
+                return (
+                  <TouchableOpacity
+                    style={[styles.memberItem, alreadyIn && styles.memberItemDisabled]}
+                    disabled={alreadyIn}
+                    onPress={() =>
+                      pickerMode === 'direct' ? startConversation(item) : toggleSelectedMember(item.userId)
+                    }
+                    accessibilityRole="button"
+                    accessibilityState={pickerMode === 'direct' ? undefined : { selected, disabled: alreadyIn }}
+                    accessibilityLabel={
+                      pickerMode === 'direct'
+                        ? `Start a conversation with ${item.fullName}${item.skillLevel ? `. Skill level ${item.skillLevel}.` : '.'}`
+                        : `${selected ? 'Deselect' : 'Select'} ${item.fullName}`
+                    }
+                  >
+                    <View style={styles.avatar}>
+                      {item.profileImageUrl ? (
+                        <CachedImage uri={item.profileImageUrl} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatarText}>{getInitials(item.fullName)}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.userName}>{item.fullName}</Text>
+                      {alreadyIn ? (
+                        <Text style={styles.memberMeta}>Already in group</Text>
+                      ) : item.skillLevel ? (
+                        <Text style={styles.memberMeta}>{item.skillLevel}</Text>
+                      ) : null}
+                    </View>
+                    {pickerMode !== 'direct' && !alreadyIn ? (
+                      <Ionicons
+                        name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={22}
+                        color={selected ? Colors.primary : Colors.border}
+                      />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              }}
             />
           )}
         </View>
@@ -748,6 +1155,85 @@ const styles = StyleSheet.create({
 
   newMessageButtonWrap: {
     margin: Spacing.md,
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  avatarGroup: {
+    backgroundColor: Colors.info,
+  },
+  memberCountInline: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
+  },
+  senderName: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
+    color: Colors.textSecondary,
+    marginBottom: 2,
+  },
+  threadMeta: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
+  },
+  headerIconButton: {
+    width: TouchTarget.min,
+    height: TouchTarget.min,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupSection: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+  },
+  groupSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: Spacing.xs,
+  },
+  groupSectionLabel: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  renameRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    alignItems: 'center',
+    marginTop: Spacing.xs,
+  },
+  renameInput: {
+    flex: 1,
+  },
+  linkText: {
+    color: Colors.primary,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.semiBold,
+  },
+  groupActions: {
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  groupNameInput: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  selectedCount: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
+    color: Colors.primary,
+  },
+  memberItemDisabled: {
+    opacity: 0.5,
+  },
+  disabledText: {
+    opacity: 0.4,
   },
 
   // ── Conversation List ──

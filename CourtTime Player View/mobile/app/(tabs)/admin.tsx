@@ -61,6 +61,13 @@ const ADMIN_MENU_ITEMS = [
     description: 'Create lessons and clinics, manage rosters.',
   },
   {
+    key: 'booking-rules',
+    route: '/admin/booking-rules',
+    icon: 'options',
+    label: 'Booking Rules',
+    description: 'Limits, advance window, durations, and household caps.',
+  },
+  {
     key: 'households',
     route: '/admin/households',
     icon: 'home',

@@ -179,6 +179,7 @@ function RootLayoutNav() {
         <Stack.Screen name="admin/households" options={{ title: 'Households' }} />
         <Stack.Screen name="admin/reports" options={{ title: 'Reports' }} />
         <Stack.Screen name="admin/ball-machine" options={{ title: 'Ball Machine' }} />
+        <Stack.Screen name="admin/booking-rules" options={{ title: 'Booking Rules' }} />
       </Stack>
       {/*
         Rendered over the app rather than as an early return: unlike the terms

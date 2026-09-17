@@ -623,3 +623,31 @@ export const ballMachineAdmin = {
     api.post(`/api/ball-machine/admin/passes/${f}`, { userId, machineId, durationMonths }),
   revokePass: (f: string, passId: string) => api.delete(`/api/ball-machine/admin/passes/${f}/${passId}`),
 };
+
+// ── Booking rules (web FacilityRulesTab) ──
+export interface RuleDefinitionRow {
+  id: string;
+  rule_code: string;
+  rule_category: string;
+  rule_name: string;
+  description?: string | null;
+  default_config?: Record<string, unknown> | null;
+  config_schema?: Record<string, unknown> | null;
+  evaluation_order?: number;
+}
+export interface FacilityRuleRow extends RuleDefinitionRow {
+  rule_definition_id: string;
+  rule_config?: Record<string, unknown> | null;
+  is_enabled: boolean;
+}
+export const rulesAdmin = {
+  definitions: () => api.get('/api/rules/definitions'),
+  facilityRules: (f: string) => api.get(`/api/rules/facility/${f}`),
+  setRule: (f: string, ruleCode: string, body: { ruleConfig?: Record<string, unknown>; isEnabled: boolean }) =>
+    api.put(`/api/rules/facility/${f}/${ruleCode}`, body),
+  enableAll: (f: string) => api.post(`/api/rules/facility/${f}/enable-all`, {}),
+  disableAll: (f: string) => api.post(`/api/rules/facility/${f}/disable-all`, {}),
+  splitPayments: (f: string) => api.get(`/api/rules/facility/${f}/split-court-payments`),
+  setSplitPayments: (f: string, enabled: boolean) => api.put(`/api/rules/facility/${f}/split-court-payments`, { enabled }),
+};
+

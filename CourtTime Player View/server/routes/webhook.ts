@@ -1,18 +1,9 @@
 import express from 'express';
 import Stripe from 'stripe';
 import { query } from '../../src/database/connection';
+import { getStripe, allowUnsignedWebhookPayloads } from '../../src/services/stripeClient';
 
 const router = express.Router();
-
-function getStripe(): Stripe | null {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key || key.startsWith('sk_test_xxxx')) return null;
-  return new Stripe(key);
-}
-
-function allowUnsignedWebhookPayloads(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_UNSIGNED_STRIPE_WEBHOOKS === 'true';
-}
 
 /**
  * Stripe moved Invoice.subscription to invoice.parent.subscription_details.subscription

@@ -10,6 +10,7 @@ import {
   shouldReshuffleAmericanoGroups,
 } from '../../shared/utils/padelPairing';
 import { createPadelDropInCheckoutSession, executeConnectPaymentRefund } from './stripeConnectService';
+import { defaultAppUrl } from './appUrl';
 
 /**
  * Refunds a padel drop-in charge. No admin-authorization check here (unlike
@@ -41,12 +42,6 @@ async function refundPadelDropInPayment(connectPaymentId: string): Promise<void>
     `UPDATE padel_social_players SET payment_status = 'refunded' WHERE connect_payment_id = $1`,
     [connectPaymentId]
   );
-}
-
-function defaultAppUrl(): string {
-  return process.env.NODE_ENV !== 'production'
-    ? process.env.DEV_APP_URL || 'http://localhost:5173'
-    : process.env.APP_URL || 'http://localhost:5173';
 }
 
 export interface PadelSocialSessionSummary {

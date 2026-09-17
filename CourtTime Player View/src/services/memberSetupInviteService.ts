@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { query } from '../database/connection';
 import { getTemplateForFacility } from './emailService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout } from './emailTemplateDefaults';
+import { delay } from '../../shared/utils/delay';
 
 const TOKEN_EXPIRY_DAYS = 14;
 const RESEND_API_URL = 'https://api.resend.com/emails';
@@ -77,10 +78,6 @@ export interface SetupInviteInvalid {
 }
 
 export type SetupInviteValidation = SetupInviteDetails | SetupInviteInvalid;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 const MAX_RATE_LIMIT_RETRIES = 3;
 

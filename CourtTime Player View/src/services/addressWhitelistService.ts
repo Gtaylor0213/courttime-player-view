@@ -3,6 +3,7 @@ import {
   issueSetupInviteForWhitelistRow,
   normalizeWhitelistEmail,
 } from './memberSetupInviteService';
+import { delay } from '../../shared/utils/delay';
 
 export interface AddressWhitelist {
   id: string;
@@ -117,10 +118,6 @@ async function sendInviteIfEmailPresent(whitelistId: string, email: string | nul
   issueSetupInviteForWhitelistRow(whitelistId).catch((err) =>
     console.error('Failed to issue setup invite for whitelist row:', err)
   );
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Stay comfortably under Resend's default rate limit when a bulk import emails

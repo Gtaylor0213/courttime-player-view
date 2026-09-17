@@ -1,7 +1,5 @@
 import express from 'express';
 import { query } from '../../src/database/connection';
-import { isFeatureEnabled } from '../../src/services/featureFlagService';
-import { isFacilityAdmin } from '../../src/services/memberService';
 import {
   getActiveProducts,
   getAllProducts,
@@ -25,26 +23,12 @@ import {
   billAllTabs,
   recordGuestSale,
 } from '../../src/services/proShopService';
+import { isFacilityAdminRecordOrMembership } from '../middleware/facilityAdmin';
+import { requireFeatureFlag } from '../middleware/featureFlags';
 
 const router = express.Router();
 
-async function requireFacilityAdmin(facilityId: string, userId: string | undefined): Promise<boolean> {
-  if (!userId) return false;
-  const adminFromTable = await query(
-    `SELECT 1 FROM facility_admins WHERE facility_id = $1 AND user_id = $2 AND status = 'active'`,
-    [facilityId, userId]
-  );
-  return adminFromTable.rows.length > 0 || (await isFacilityAdmin(facilityId, userId));
-}
-
-async function checkFlag(facilityId: string, res: express.Response): Promise<boolean> {
-  const enabled = await isFeatureEnabled(facilityId, 'pro_shop');
-  if (!enabled) {
-    res.status(403).json({ success: false, error: 'Pro Shop is not enabled for this facility' });
-    return false;
-  }
-  return true;
-}
+const checkFlag = requireFeatureFlag('pro_shop', 'Pro Shop is not enabled for this facility');
 
 // ── Member routes ──────────────────────────────────────────
 
@@ -95,7 +79,7 @@ router.get('/admin/products/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const products = await getAllProducts(facilityId);
@@ -110,7 +94,7 @@ router.post('/admin/products/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const { name, description, category, price_cents, stock_quantity, image_data, is_active } = req.body;
@@ -133,7 +117,7 @@ router.patch('/admin/products/:productId', async (req, res) => {
     const facilityId = productResult.rows[0].facility_id;
 
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const updated = await updateProduct(productId, req.body);
@@ -152,7 +136,7 @@ router.delete('/admin/products/:productId', async (req, res) => {
     const facilityId = productResult.rows[0].facility_id;
 
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const result = await deleteProduct(productId);
@@ -167,7 +151,7 @@ router.get('/admin/orders/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const orders = await getAdminOrders(facilityId);
@@ -184,7 +168,7 @@ router.get('/admin/settings/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const settings = await getProShopSettings(facilityId);
@@ -198,7 +182,7 @@ router.patch('/admin/settings/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const { tab_billing_day, require_card } = req.body;
@@ -215,7 +199,7 @@ router.get('/admin/members/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const members = await getMembersWithCardStatus(facilityId);
@@ -231,7 +215,7 @@ router.post('/admin/assign/charge/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const { user_id, items } = req.body;
@@ -250,7 +234,7 @@ router.post('/admin/assign/tab/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const { user_id, items } = req.body;
@@ -271,7 +255,7 @@ router.post('/admin/assign/cash/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const { user_id, items } = req.body;
@@ -292,7 +276,7 @@ router.post('/admin/guest-sale/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const { guest_name, guest_email, items, payment_mode } = req.body;
@@ -335,7 +319,7 @@ router.get('/admin/tabs/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const tabs = await getAllTabs(facilityId);
@@ -349,7 +333,7 @@ router.post('/admin/bill-tab/:facilityId/:userId', async (req, res) => {
   try {
     const { facilityId, userId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const result = await billMemberTab(facilityId, userId);
@@ -364,7 +348,7 @@ router.post('/admin/bill-all/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
     if (!await checkFlag(facilityId, res)) return;
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
     const results = await billAllTabs(facilityId);

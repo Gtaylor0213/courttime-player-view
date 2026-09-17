@@ -3,7 +3,7 @@
  */
 
 import { CourtOperatingConfig, BookingWithDetails } from '../types';
-import { timeRangesOverlap, getDayOfWeek, getTimeWindow, formatDate } from './timeUtils';
+import { timeRangesOverlap, getDayOfWeek, getTimeWindow, formatDate, timeToMinutes } from './timeUtils';
 import type { WindowType } from '../types';
 
 /**
@@ -136,11 +136,6 @@ export function getPrimeTimeOverlapPercentage(
 /**
  * Helper: Parse time to minutes
  */
-function timeToMinutes(time: string): number {
-  const parts = time.split(':').map(Number);
-  return parts[0] * 60 + parts[1];
-}
-
 /**
  * Check if a tier is eligible for peak hours
  */

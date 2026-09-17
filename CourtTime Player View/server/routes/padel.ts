@@ -1,6 +1,5 @@
 import express from 'express';
 import { query } from '../../src/database/connection';
-import { isFeatureEnabled } from '../../src/services/featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import {
   createSession,
@@ -14,27 +13,12 @@ import {
   getSessionDetail,
   cancelSession,
 } from '../../src/services/padelSocialService';
+import { hasActiveFacilityAdminRecord } from '../middleware/facilityAdmin';
+import { requireFeatureFlag } from '../middleware/featureFlags';
 
 const router = express.Router();
 
-async function checkFlag(facilityId: string, res: express.Response): Promise<boolean> {
-  const enabled = await isFeatureEnabled(facilityId, FEATURE_FLAGS.PADEL);
-  if (!enabled) {
-    res.status(403).json({ success: false, error: 'Padel is not enabled for this facility' });
-    return false;
-  }
-  return true;
-}
-
-async function userIsFacilityAdmin(userId: string, facilityId: string): Promise<boolean> {
-  const result = await query(
-    `SELECT 1 FROM facility_admins
-     WHERE facility_id = $1 AND user_id = $2 AND status = 'active'
-     LIMIT 1`,
-    [facilityId, userId]
-  );
-  return result.rows.length > 0;
-}
+const checkFlag = requireFeatureFlag(FEATURE_FLAGS.PADEL, 'Padel is not enabled for this facility');
 
 /**
  * GET /api/padel/pricing/:facilityId
@@ -68,7 +52,7 @@ router.patch('/pricing/:facilityId', async (req, res, next) => {
     const { facilityId } = req.params;
     const userId = req.user!.userId;
     if (!(await checkFlag(facilityId, res))) return;
-    if (!(await userIsFacilityAdmin(userId, facilityId))) {
+    if (!(await hasActiveFacilityAdminRecord(facilityId, userId))) {
       return res.status(403).json({ success: false, error: 'Only a facility admin can set padel pricing' });
     }
 
@@ -192,7 +176,7 @@ router.post('/sessions/:id/rounds/next', async (req, res, next) => {
   try {
     const userId = req.user!.userId;
     const detail = await getSessionDetail(req.params.id);
-    const isAdmin = await userIsFacilityAdmin(userId, detail.session.facilityId);
+    const isAdmin = await hasActiveFacilityAdminRecord(detail.session.facilityId, userId);
     if (detail.session.createdBy !== userId && !isAdmin) {
       return res.status(403).json({ success: false, error: 'Only the host or a facility admin can generate the next round' });
     }

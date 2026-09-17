@@ -55,6 +55,7 @@ import {
   facilityIdForSeries,
   facilityIdForAdminRecord,
 } from '../middleware/facilityAdmin';
+import { delay } from '../../shared/utils/delay';
 
 const router = express.Router();
 
@@ -106,10 +107,6 @@ router.param('courtId', guardParam(facilityIdForCourt));
 router.param('bookingId', guardParam(facilityIdForBooking));
 router.param('seriesId', guardParam(facilityIdForSeries));
 router.param('adminId', guardParam(facilityIdForAdminRecord));
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 function toDurationMinutes(value: any, fallback: number): number {
   const n = Number(value);

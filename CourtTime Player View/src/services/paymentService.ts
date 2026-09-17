@@ -6,18 +6,13 @@ import {
   formatAnnualPricePerYear,
   MAX_SUBSCRIPTION_CENTS,
 } from './subscriptionPricing';
+import { getStripe } from './stripeClient';
 
 export { getAmountForCourts } from './subscriptionPricing';
 
 /**
  * Get Stripe instance (returns null if no key configured — dev mode)
  */
-function getStripe(): Stripe | null {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key || key.startsWith('sk_test_xxxx')) return null;
-  return new Stripe(key);
-}
-
 /** Resolve Stripe product ID for facility platform subscriptions. */
 async function resolveSubscriptionProductId(stripe: Stripe): Promise<string | null> {
   const isPlaceholder = (value?: string) =>

@@ -1,18 +1,8 @@
 import express from 'express';
-import { isFacilityAdmin } from '../../src/services/memberService';
-import { query } from '../../src/database/connection';
 import { getTransactionReport } from '../../src/services/reportingService';
+import { isFacilityAdminRecordOrMembership } from '../middleware/facilityAdmin';
 
 const router = express.Router();
-
-async function requireFacilityAdmin(facilityId: string, userId: string | undefined): Promise<boolean> {
-  if (!userId) return false;
-  const adminFromTable = await query(
-    `SELECT 1 FROM facility_admins WHERE facility_id = $1 AND user_id = $2 AND status = 'active'`,
-    [facilityId, userId]
-  );
-  return adminFromTable.rows.length > 0 || (await isFacilityAdmin(facilityId, userId));
-}
 
 /**
  * GET /api/reports/transactions/:facilityId
@@ -22,7 +12,7 @@ router.get('/transactions/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
 
-    if (!await requireFacilityAdmin(facilityId, req.user?.userId)) {
+    if (!await isFacilityAdminRecordOrMembership(facilityId, req.user?.userId)) {
       return res.status(403).json({ success: false, error: 'Admin access required' });
     }
 

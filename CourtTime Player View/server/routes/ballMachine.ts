@@ -8,7 +8,6 @@
  */
 
 import express from 'express';
-import { isFeatureEnabled } from '../../src/services/featureFlagService';
 import { isFacilityAdmin } from '../../src/services/memberService';
 import { query } from '../../src/database/connection';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
@@ -34,21 +33,14 @@ import {
   confirmBallMachinePassCheckout,
   createBallMachinePassCheckoutSession,
 } from '../../src/services/stripeConnectService';
+import { defaultAppUrl } from '../../src/services/appUrl';
+import { requireFeatureFlag } from '../middleware/featureFlags';
 
 const router = express.Router();
 
-/** False (and responds) when the facility doesn't have the feature turned on. */
-async function checkFlag(facilityId: string, res: express.Response): Promise<boolean> {
-  if (!(await isFeatureEnabled(facilityId, FEATURE_FLAGS.BALL_MACHINE))) {
-    res.status(403).json({
-      success: false,
-      error: 'The ball machine is not enabled for this facility',
-    });
-    return false;
-  }
-  return true;
-}
+const checkFlag = requireFeatureFlag(FEATURE_FLAGS.BALL_MACHINE, 'The ball machine is not enabled for this facility');
 
+/** False (and responds) when the facility doesn't have the feature turned on. */
 async function requireAdmin(
   facilityId: string,
   userId: string | undefined,
@@ -88,12 +80,6 @@ async function requireMember(
     return false;
   }
   return true;
-}
-
-function defaultAppUrl(): string {
-  return process.env.NODE_ENV !== 'production'
-    ? process.env.DEV_APP_URL || 'http://localhost:5173'
-    : process.env.APP_URL || 'http://localhost:5173';
 }
 
 function parseMachineIdBody(value: unknown): string | null {

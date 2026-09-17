@@ -1,11 +1,6 @@
 import Stripe from 'stripe';
 import { query, getClient } from '../database/connection';
-
-function getStripe(): Stripe | null {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key || key.startsWith('sk_test_xxxx')) return null;
-  return new Stripe(key);
-}
+import { getStripe } from './stripeClient';
 
 function getBaseUrl(): string {
   return process.env.APP_BASE_URL || process.env.CLIENT_URL || 'http://localhost:5173';

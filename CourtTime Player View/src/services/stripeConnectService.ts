@@ -13,6 +13,7 @@
 import Stripe from 'stripe';
 import { query, transaction } from '../database/connection';
 import { courtBookingNeedsPayment, loadCourtPaymentSettings, computeCourtFeeCents } from './courtPaymentSettings';
+import { getStripe } from './stripeClient';
 
 export type PaymentCategory = 'BALL_MACHINE' | 'CLINIC' | 'DRILL' | 'DUES' | 'OTHER';
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
@@ -57,12 +58,6 @@ export interface ConnectPayment {
  * Lazily-instantiated Stripe client. Returns null in local/dev environments
  * where the secret key has not been configured yet.
  */
-export function getStripe(): Stripe | null {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key || key.startsWith('sk_test_xxxx')) return null;
-  return new Stripe(key);
-}
-
 function rowToPaymentItem(row: any): PaymentItem {
   return {
     id: row.id,

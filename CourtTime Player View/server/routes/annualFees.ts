@@ -1,6 +1,5 @@
 import express from 'express';
 import { query } from '../../src/database/connection';
-import { isFeatureEnabled } from '../../src/services/featureFlagService';
 import { isFacilityAdmin } from '../../src/services/memberService';
 import {
   getAnnualFeeTiers,
@@ -16,9 +15,12 @@ import {
   getBillingRuns,
   getBillingRunRecords,
 } from '../../src/services/annualFeeService';
+import { requireFeatureFlag } from '../middleware/featureFlags';
 
 const router = express.Router();
+
 const FLAG = 'annual_membership_fees';
+const checkFlag = requireFeatureFlag(FLAG, 'Annual Membership Fees is not enabled for this facility');
 
 async function requireAdmin(facilityId: string, userId: string | undefined, res: express.Response): Promise<boolean> {
   if (!userId) {
@@ -31,15 +33,6 @@ async function requireAdmin(facilityId: string, userId: string | undefined, res:
   );
   if (adminRow.rows.length === 0 && !(await isFacilityAdmin(facilityId, userId))) {
     res.status(403).json({ success: false, error: 'Facility admin access required' });
-    return false;
-  }
-  return true;
-}
-
-async function checkFlag(facilityId: string, res: express.Response): Promise<boolean> {
-  const enabled = await isFeatureEnabled(facilityId, FLAG);
-  if (!enabled) {
-    res.status(403).json({ success: false, error: 'Annual Membership Fees is not enabled for this facility' });
     return false;
   }
   return true;

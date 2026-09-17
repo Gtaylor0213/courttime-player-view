@@ -1,4 +1,5 @@
 import { query } from '../database/connection';
+import { delay } from '../../shared/utils/delay';
 
 // Seeded in migration 083_seed_courttime_team_user.sql. Used as the sender
 // identity for every message sent from the /developer broadcast panel.
@@ -21,10 +22,6 @@ export interface BroadcastRecipient {
   id: string;
   fullName: string;
   email: string;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

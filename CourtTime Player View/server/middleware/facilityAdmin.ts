@@ -111,3 +111,38 @@ export async function facilityIdForStrike(strikeId: string): Promise<string | nu
   const r = await query(`SELECT facility_id FROM account_strikes WHERE id = $1`, [strikeId]);
   return r.rows[0]?.facility_id ?? null;
 }
+
+// ── Narrower checks kept for routes that used them before consolidation ─────
+// These deliberately do NOT short-circuit for platform super admins, so the
+// routes that call them behave exactly as they did when each had a private copy.
+
+/** True only when an active facility_admins row exists for this user + facility. */
+export async function hasActiveFacilityAdminRecord(
+  facilityId: string,
+  userId: string
+): Promise<boolean> {
+  const result = await query(
+    `SELECT 1 FROM facility_admins
+     WHERE facility_id = $1 AND user_id = $2 AND status = 'active'
+     LIMIT 1`,
+    [facilityId, userId]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * facility_admins row OR facility_memberships.is_facility_admin / owner
+ * (via memberService.isFacilityAdmin). Same as isFacilityAdminUser minus the
+ * super-admin short-circuit.
+ */
+export async function isFacilityAdminRecordOrMembership(
+  facilityId: string,
+  userId: string | undefined
+): Promise<boolean> {
+  if (!userId) return false;
+  const adminFromTable = await query(
+    `SELECT 1 FROM facility_admins WHERE facility_id = $1 AND user_id = $2 AND status = 'active'`,
+    [facilityId, userId]
+  );
+  return adminFromTable.rows.length > 0 || (await isFacilityAdmin(facilityId, userId));
+}

@@ -2,7 +2,7 @@ import { query, transaction } from '../database/connection';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { isFeatureEnabled } from './featureFlagService';
 import { courtBookingNeedsPayment, loadCourtPaymentSettings, computeCourtFeeCents } from './courtPaymentSettings';
-import { getStripe } from './stripeConnectService';
+import { getStripe } from './stripeClient';
 
 export type SettlementStatus =
   | 'not_applicable'

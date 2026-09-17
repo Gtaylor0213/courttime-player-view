@@ -18,16 +18,14 @@ import {
   buildBulletinPostShareEmailContent,
   formatBulletinPostProminentDate,
 } from '../../shared/utils/bulletinPostDisplay';
+import { delay } from '../../shared/utils/delay';
+import { hasActiveFacilityAdminRecord } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 const signupEnabledCategories = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
 
 function isValidShareEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function userCanShareBulletinPost(userId: string, facilityId: string): Promise<boolean> {
@@ -43,17 +41,6 @@ async function userCanShareBulletinPost(userId: string, facilityId: string): Pro
     [facilityId, userId]
   );
   return access.rows.length > 0;
-}
-
-async function userIsFacilityAdmin(userId: string, facilityId: string): Promise<boolean> {
-  const result = await query(
-    `SELECT 1
-     FROM facility_admins
-     WHERE facility_id = $1 AND user_id = $2 AND status = 'active'
-     LIMIT 1`,
-    [facilityId, userId]
-  );
-  return result.rows.length > 0;
 }
 
 /**
@@ -228,7 +215,7 @@ router.post('/:postId/share', async (req, res, next) => {
     }
 
     if (sendToAllMembers) {
-      const isAdmin = await userIsFacilityAdmin(req.user!.userId, post.facilityId);
+      const isAdmin = await hasActiveFacilityAdminRecord(post.facilityId, req.user!.userId);
       if (!isAdmin) {
         return res.status(403).json({
           success: false,

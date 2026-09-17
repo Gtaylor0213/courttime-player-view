@@ -10,14 +10,11 @@
 
 import express from 'express';
 import Stripe from 'stripe';
-import { getStripe, markCheckoutSessionPaid } from '../../src/services/stripeConnectService';
+import { markCheckoutSessionPaid } from '../../src/services/stripeConnectService';
 import { query } from '../../src/database/connection';
+import { getStripe, allowUnsignedWebhookPayloads } from '../../src/services/stripeClient';
 
 const router = express.Router();
-
-function allowUnsignedWebhookPayloads(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_UNSIGNED_STRIPE_WEBHOOKS === 'true';
-}
 
 router.post(
   '/stripe-connect',

@@ -64,7 +64,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export const ErrorBoundary = createRouteErrorBoundary('Community');
 
-type Tab = 'partners' | 'bulletin' | 'notifications';
+type Tab = 'partners' | 'bulletin';
 
 const SKILL_FILTERS = ['All', 'Beginner', 'Intermediate', 'Advanced', 'Professional'];
 const PLAY_STYLE_OPTIONS = ['Singles', 'Doubles', 'Competitive', 'Casual', 'Baseline', 'Serve & Volley', 'All-court'];
@@ -177,9 +177,6 @@ export default function CommunityScreen() {
   const [sharePersonalMessage, setSharePersonalMessage] = useState('');
   const [shareBulletinSending, setShareBulletinSending] = useState(false);
 
-  // Notifications state
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // Post form
   const [postDescription, setPostDescription] = useState('');
@@ -190,7 +187,6 @@ export default function CommunityScreen() {
   const [creating, setCreating] = useState(false);
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [loadingBulletins, setLoadingBulletins] = useState(false);
-  const [loadingNotifications, setLoadingNotifications] = useState(false);
 
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
@@ -222,38 +218,16 @@ export default function CommunityScreen() {
     }
   }, [facilityId]);
 
-  const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    setLoadingNotifications(true);
-    try {
-      const [notifRes, countRes] = await Promise.all([
-        api.get(`/api/notifications/${user.id}`),
-        api.get(`/api/notifications/${user.id}/unread-count`),
-      ]);
-      if (notifRes.success && notifRes.data) {
-        const payload = unwrapApiPayload<{ notifications?: any[] }>(notifRes.data);
-        setNotifications(payload?.notifications || []);
-      }
-      if (countRes.success && countRes.data) {
-        const payload = unwrapApiPayload<{ count?: number }>(countRes.data);
-        setUnreadCount(payload?.count || 0);
-      }
-    } finally {
-      setLoadingNotifications(false);
-    }
-  }, [user]);
-
   useEffect(() => {
-    if (params.tab === 'bulletin' || params.tab === 'partners' || params.tab === 'notifications') {
+    if (params.tab === 'bulletin' || params.tab === 'partners') {
       setActiveTab(params.tab);
     }
   }, [params.tab]);
 
   useEffect(() => {
     if (activeTab === 'partners') fetchPartners();
-    else if (activeTab === 'bulletin') fetchBulletins();
-    else fetchNotifications();
-  }, [activeTab, fetchPartners, fetchBulletins, fetchNotifications]);
+    else fetchBulletins();
+  }, [activeTab, fetchPartners, fetchBulletins]);
 
   useEffect(() => {
     const stopPolling = createPollingTransport(ACTIVE_FEED_POLL_MS).subscribe(() => {
@@ -269,10 +243,9 @@ export default function CommunityScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (activeTab === 'partners') await fetchPartners();
-    else if (activeTab === 'bulletin') await fetchBulletins();
-    else await fetchNotifications();
+    else await fetchBulletins();
     setRefreshing(false);
-  }, [activeTab, fetchPartners, fetchBulletins, fetchNotifications]);
+  }, [activeTab, fetchPartners, fetchBulletins]);
 
   const partnerFormInput = useMemo(
     () => ({
@@ -291,8 +264,8 @@ export default function CommunityScreen() {
   }, []);
 
   useEffect(() => {
-    const idx = activeTab === 'partners' ? 0 : activeTab === 'bulletin' ? 1 : 2;
-    const w = tabBarWidth > 0 ? tabBarWidth / 3 : 0;
+    const idx = activeTab === 'partners' ? 0 : 1;
+    const w = tabBarWidth > 0 ? tabBarWidth / 2 : 0;
     Animated.timing(underlineAnim, {
       toValue: idx * w,
       duration: Motion.standard,
@@ -560,45 +533,11 @@ export default function CommunityScreen() {
     return null;
   }
 
-  // ── Notifications ──
-  const markRead = useCallback(async (notificationId: string) => {
-    await api.patch(`/api/notifications/${notificationId}/read`, {});
-    fetchNotifications();
-  }, [fetchNotifications]);
-
-  const markAllRead = useCallback(async () => {
-    if (!user) return;
-    await api.patch(`/api/notifications/${user.id}/read-all`, {});
-    fetchNotifications();
-  }, [user, fetchNotifications]);
-
   // ── Helpers ──
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const formatDate = (date: string) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const formatShortDate = (date: string) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  const getNotifIcon = (type?: string): string => {
-    switch (type) {
-      case 'reservation_confirmed': return 'checkmark-circle';
-      case 'reservation_cancelled': return 'close-circle';
-      case 'reservation_reminder': return 'alarm';
-      case 'court_change': return 'swap-horizontal';
-      case 'payment_received': return 'card';
-      case 'facility_announcement': return 'megaphone';
-      case 'weather_alert': return 'thunderstorm';
-      default: return 'information-circle';
-    }
-  };
-  const getNotifColor = (type?: string, read?: boolean): string => {
-    if (read) return Colors.textMuted;
-    switch (type) {
-      case 'reservation_confirmed': return Colors.success;
-      case 'reservation_cancelled': return Colors.error;
-      case 'reservation_reminder': return Colors.success;
-      case 'weather_alert': return Colors.warning;
-      default: return Colors.primary;
-    }
-  };
 
   const sharePartnerPost = useCallback(async (post: HittingPartnerPostWithUser) => {
     try {
@@ -904,50 +843,6 @@ export default function CommunityScreen() {
     [user?.id, isAdmin, signupBusyId]
   );
 
-  const notificationsHeader = useMemo(
-    () =>
-      unreadCount > 0 ? (
-        <TouchableOpacity style={styles.markAllRead} onPress={markAllRead}>
-          <Text style={styles.markAllReadText}>Mark all as read</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.notifHeaderSpacer} />
-      ),
-    [unreadCount, markAllRead]
-  );
-
-  const renderNotifItem = useCallback(
-    ({ item: notif }: { item: any }) => (
-      <Card style={[styles.listCardSpacing, !notif.read && styles.notifUnread]} padded={false}>
-        <TouchableOpacity
-          style={styles.notifCardInner}
-          onPress={() => !notif.read && markRead(notif.id)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.notifIcon}>
-            <Ionicons name={getNotifIcon(notif.type) as any} size={24} color={getNotifColor(notif.type, notif.read)} />
-          </View>
-          <View style={styles.notifBody}>
-            <Text style={[styles.notifTitle, !notif.read && styles.notifTitleUnread]}>{notif.title}</Text>
-            <Text style={styles.notifMessage} numberOfLines={2}>
-              {notif.message}
-            </Text>
-            {notif.relatedReservation ? (
-              <View style={styles.notifReservation}>
-                <Text style={styles.notifReservationText}>
-                  {notif.relatedReservation.courtName} · {formatShortDate(notif.relatedReservation.date)}
-                </Text>
-              </View>
-            ) : null}
-            <Text style={styles.notifTime}>{formatRelativeTime(notif.timestamp || notif.createdAt)}</Text>
-          </View>
-          {!notif.read ? <View style={styles.unreadDot} /> : null}
-        </TouchableOpacity>
-      </Card>
-    ),
-    [markRead]
-  );
-
   const partnerEmpty = useMemo(
     () => (
       <EmptyState
@@ -980,17 +875,6 @@ export default function CommunityScreen() {
     [bulletins.length]
   );
 
-  const notifEmpty = useMemo(
-    () => (
-      <EmptyState
-        icon="notifications-off-outline"
-        title="You're all caught up"
-        description="No new alerts — we'll notify you when something changes."
-      />
-    ),
-    []
-  );
-
   const listCommon = {
     removeClippedSubviews: Platform.OS === 'android',
     initialNumToRender: 8,
@@ -1013,12 +897,6 @@ export default function CommunityScreen() {
               <Ionicons name="megaphone" size={14} color={activeTab === 'bulletin' ? Colors.primary : Colors.textMuted} />
               <Text style={[styles.segmentTabText, activeTab === 'bulletin' && styles.segmentTabTextActive]}>Bulletin</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.segmentTab} onPress={() => selectTab('notifications')}>
-              <Ionicons name="notifications" size={14} color={activeTab === 'notifications' ? Colors.primary : Colors.textMuted} />
-              <Text style={[styles.segmentTabText, activeTab === 'notifications' && styles.segmentTabTextActive]}>
-                Alerts{unreadCount > 0 ? ` (${unreadCount})` : ''}
-              </Text>
-            </TouchableOpacity>
           </View>
           {tabBarWidth > 0 ? (
             <View style={styles.underlineTrack}>
@@ -1026,7 +904,7 @@ export default function CommunityScreen() {
                 style={[
                   styles.tabUnderlineBar,
                   {
-                    width: tabBarWidth / 3,
+                    width: tabBarWidth / 2,
                     transform: [{ translateX: underlineAnim }],
                   },
                 ]}
@@ -1074,24 +952,6 @@ export default function CommunityScreen() {
         />
       ) : null}
 
-      {activeTab === 'notifications' && loadingNotifications && !refreshing ? (
-        <View style={styles.tabList}>
-          <CommunityListSkeleton />
-        </View>
-      ) : null}
-      {activeTab === 'notifications' && !(loadingNotifications && !refreshing) ? (
-        <FlatList
-          style={styles.tabList}
-          data={notifications}
-          keyExtractor={item => item.id}
-          renderItem={renderNotifItem}
-          ListHeaderComponent={notificationsHeader}
-          ListEmptyComponent={notifEmpty}
-          contentContainerStyle={styles.flatContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
-          {...listCommon}
-        />
-      ) : null}
 
       {/* ── Create / Edit Partner Post Modal ── */}
       <Modal visible={showPostModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPostModal(false)}>

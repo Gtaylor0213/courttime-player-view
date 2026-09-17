@@ -10,8 +10,9 @@ import { Tabs, useNavigation, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontFamily, FontSize, Gradients, Spacing } from '../../src/constants/theme';
+import { Colors, FontFamily, FontSize, Gradients, Spacing, TouchTarget } from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
+import { NotificationBell } from '../../src/components/NotificationBell';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { MessageUnreadProvider, useMessageUnread } from '../../src/contexts/MessageUnreadContext';
@@ -116,9 +117,11 @@ function TabsShell() {
       /** Centered club-name chip; the tab headers have no side buttons, so the title slot still spans nearly the full bar */
       headerTitleAlign: 'center' as const,
       headerTitleContainerStyle: styles.headerTitleContainer,
-      /** Tab headers have no side buttons; collapse the side slots so the title slot spans the whole bar and the chip centers within it */
+      /** Side slots size to content (bell on the right, an equal spacer on the left) so the title slot stays centred */
       headerLeftContainerStyle: styles.headerSideContainer,
       headerRightContainerStyle: styles.headerSideContainer,
+      headerLeft: () => <View style={styles.headerSpacer} />,
+      headerRight: () => <NotificationBell />,
       tabBarButton: renderNavTabButton,
     }),
     [insets.bottom]
@@ -264,5 +267,8 @@ const styles = StyleSheet.create({
   headerSideContainer: {
     flexGrow: 0,
     flexBasis: 'auto',
+  },
+  headerSpacer: {
+    width: TouchTarget.min,
   },
 });

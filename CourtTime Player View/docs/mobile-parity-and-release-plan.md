@@ -254,6 +254,84 @@ Writing the tests caught one real defect: Padel's join handler relied solely on 
 - **Give reviewers a working demo account** seeded at a facility with the flags you want shown, pre-loaded with bookings and messages. Put the credentials in App Review notes. An app whose content is invisible behind a club membership is a classic "incomplete functionality" rejection.
 - Submit iOS and Android. Start Play on internal testing → closed → production.
 
+### Phase 8 — Full parity: every remaining web ↔ app difference *(planned 2026-09-17)*
+
+**Source:** a full audit on 2026-09-17 comparing every web route and API call against the mobile screens and the endpoints they hit (`git log` to `9e5b69d`). Every endpoint the app calls exists on the server, there is no placeholder data in the app, and the Phase 2/3 surfaces are at parity. What is left falls into four workstreams below. Each item lists the endpoints it consumes (all already exist server-side unless marked **server**), the files it touches, a T-shirt size, and what "done" means. Sizes: S ≤ ½ day, M 1–2 days, L 3–5 days.
+
+**Scope decision to make before starting workstream C.** Full admin parity on a phone is the largest block of work in this plan (roughly 60% of it). Every item is planned below, but the text-heavy configuration screens (booking rules, general rules, terms, email templates, whitelist) are flagged as candidates for an "Open on web" hand-off instead of a native editor — the same pattern facility registration already uses. Decide per item; the plan works either way.
+
+#### Workstream A — Fix first (things that are wrong today, not merely missing) ✅ *(complete, 2026-09-17)*
+
+| # | Item | Endpoints / files | Size | Done when |
+|---|------|-------------------|------|-----------|
+| A1 | ✅ **Group conversations render and work in Messages.** The list assumes every thread has one `otherUser`; group threads (incl. the Player Groups chats the app can now create) arrive from the server and show no name. Then add web's group actions: create, rename, add/remove members, leave, delete. | `GET /api/messages/conversations/:f/:u` (rows carry `is_group`, `name`, `created_by`), `POST /api/messages/groups`, `PATCH/DELETE /api/messages/groups/:id`, `GET/POST/DELETE /api/messages/groups/:id/members[/:u]` · `app/(tabs)/messages.tsx`, new `src/components/GroupInfoSheet.tsx` | M | A level-group chat opens by name from the list; a member can start a group from the directory, rename it, add/remove members, leave; tests for list normalisation with a group row. |
+| A2 | ✅ **Calendar draws maintenance blackouts.** Admins create blocks in the app; players never see them until the server rejects the booking. | `GET /api/court-config/facility/:f/blackouts` (already used by admin) · `src/components/CourtCalendarGrid.tsx`, `app/(tabs)/book.tsx` | S–M | Blacked-out ranges render like blocked slots, are excluded from tap/drag selection and from Quick Reserve; test with a blackout spanning rows. |
+| A3 | ✅ **Reservation detail is fetched, not synthesised.** Tapping a booked slot builds a `BookingWithDetails` from the grid cell (placeholder club name, empty email, no participants). | `GET /api/bookings/:id` · `app/(tabs)/book.tsx` `onBookedSlotPress` | S | Detail sheet shows real facility, notes, participants, split status; prerequisite for B1. |
+| A4 | ✅ **Week/month overview uses the range endpoint.** Month = 31 requests today. | `GET /api/bookings/facility/:f/range?startDate&endDate` · `src/components/ScheduleOverview.tsx` | S | One request per view; existing 23 range tests still pass. |
+| A5 | ✅ **Push taps navigate for every notification type.** Only `message`, `membership_request`, `payment` route today; `court_booking`, bulletin/lesson signup, `pro_shop*`, `annual_fee`, `subscription`, `facility` open the app and stop. | `src/utils/notificationNavigation.ts` (+ `notificationNavigation.test.ts`) | S | Each server `type` maps to a screen; unknown types fall back to Home. |
+
+#### Workstream B — Player-facing parity
+
+| # | Item | Endpoints / files | Size | Done when |
+|---|------|-------------------|------|-----------|
+| B1 | **Reservation management sheet** mirroring web `ReservationManagementModal`: players on the reservation (add/remove), **Post Spot** / withdraw, **Pay my share** (split), settlement view (read-only for members). | `GET/POST/DELETE /api/bookings/:id/participants[/:u]`, `POST /api/bookings/:id/open-spot`, `GET /api/bookings/:id/split-payment`, `POST …/split-payment/checkout`, `POST …/split-payment/decline`, `PUT …/split-payment/participants`, `GET /api/bookings/:id/settlement`, `GET /api/bookings/facility/:f/members?q=` · new `src/components/ReservationSheet.tsx`, wired from Book grid and Home | L | Every action on web's modal that a *member* can take is available; depends on A3. |
+| B2 | **Open spots: list + claim.** Web lists open matches on Padel; on mobile put "Open spots" on Home (and Padel). | `GET /api/bookings/open?facilityId=`, `POST /api/bookings/:id/claim-spot` · `app/(tabs)/index.tsx`, `app/padel.tsx` | S–M | A posted spot appears for other members and can be claimed; claimed booking shows on Home. |
+| B3 | **My Reservations screen**: upcoming + past, facility/status/date filters, search. Entry from Home "See all" and Profile. | `GET /api/bookings/user/:u?upcoming=`, `GET /api/player-profile/:u/bookings?upcoming=` · new `app/my-reservations.tsx`, `src/utils/moreMenu.ts` (always-on item) | M | Past bookings are visible with the same filters as web. |
+| B4 | **Bulletin admin actions + deep link**: pin/unpin, signup roster with waitlist and remove, add-to-calendar for events, open a single post from a link. | `POST /api/bulletin-board/:id/pin`, `GET /api/bulletin-board/post/:id`, `DELETE /api/bulletin-board/:id/signup/:u` (admin), share URL → `courttime://community?post=` · `app/(tabs)/community.tsx`, `src/utils/notificationNavigation.ts`, **server** `buildBulletinPostShareUrl` (add app link) | M | Admin can pin and manage the roster from the phone; a shared post opens in the app. |
+| B5 | **Lessons sign-up in place.** Screen currently links to Community. Extract the bulletin signup/withdraw/pay flow into a shared sheet and use it on Lessons. | `POST /api/bulletin-board/:id/signup`, `DELETE …/signup`, `POST /api/bulletin-board/signup/confirm` (Stripe return to `/lessons`) · new `src/components/ActivitySignupSheet.tsx`, `app/lessons.tsx`, `app/(tabs)/community.tsx` | M | Sign up, join waitlist, pay, withdraw from Lessons without leaving it; Community reuses the same sheet. |
+| B6 | **Padel: full session lifecycle.** Session detail with rounds, create (facility admins, as web), start, next round, record scores, cancel, drop-in pricing (admin), open matches (via B2). | `POST /api/padel/sessions`, `GET …/:id/detail`, `POST …/:id/start`, `…/:id/rounds/next`, `POST /api/padel/matches/:id/score`, `POST …/:id/cancel`, `GET/PUT /api/padel/pricing/:f` · `app/padel.tsx` → split into `app/padel/index.tsx` + `app/padel/[sessionId].tsx` | L | An admin can run an Americano end-to-end from the phone; members see live standings. |
+| B7 | **Pro Shop tab + card on file.** Show running tab balance and saved card; respect the club's tab-billing setting. | `GET /api/pro-shop/my-tab/:f`, `GET /api/pro-shop/my-card/:f`, `GET /api/pro-shop/admin/settings/:f` (web's player page reads it) · `app/pro-shop.tsx` | S–M | Tab balance and card state match web for the same member. |
+| B8 | **Calendar: court-type filter, peak-hours highlight, admin reschedule.** Move `useCourtTypeFilter` logic to `shared/`; peak slots tinted from the facility's `peakHoursSlots` (already parsed for Club Info); reschedule via long-press "Move…" sheet rather than drag, gated on `drag_reschedule_reservations` + admin. | filter: `shared/utils/courtTypeFilter.ts` (new, from `src/components/useCourtTypeFilter.ts`); peak: `parseBookingRules` · reschedule: `PATCH /api/bookings/:id` (web `bookingApi.updateUnsettled` path) · `CourtCalendarGrid.tsx`, `book.tsx` | M | Filter chips above the grid; peak rows tinted; admin can move a booking to another court/time with the same validation web applies. |
+| B9 | **Quick Reserve parity.** Add web's availability browser (court-type filter, next open windows per court, pick one) as a sheet; keep the one-tap "book next open hour" as the default action inside it. | reuses `GET /api/court-config/:c/availability?date=` · new `src/components/QuickReserveSheet.tsx` | M | Member can see and choose among open windows instead of being handed the earliest. |
+| B10 | **Club Info: additional locations.** | `GET /api/facility-locations/:f` · `app/club-info.tsx` | S | Secondary locations listed with address, as on web. |
+| B11 | **Notifications bell + screen.** Move the in-app list out of Community into a header bell with unread badge and a dedicated screen. | `GET /api/notifications/:u`, `…/unread-count`, `PATCH …/read`, `…/read-all` · `app/(tabs)/_layout.tsx` (headerRight — note A: header centring assumes no side buttons; re-check `HeaderFacilitySelector` width), new `app/notifications.tsx` | S–M | Bell on every tab header; Community loses the notifications block. |
+| B12 | **Invite deep link.** Invited members set up their account in the app. | `GET/POST /api/auth/setup-invite/:token` · new `app/auth/setup-invite.tsx`, `app.json` linking, **server** invite email adds `courttime://auth/setup-invite/:token` (universal links later) | M | An invite email opens the app on a device that has it and completes setup. |
+
+#### Workstream C — Admin parity
+
+Mobile has Dashboard, Bookings, Members, Courts & Facility, Communication. Web has twelve admin pages. Items are ordered by how often a club admin is likely to reach for a phone.
+
+| # | Item | Endpoints / files | Size | Done when |
+|---|------|-------------------|------|-----------|
+| C1 | **Bookings: edit, recurring series, filters, complete.** | `PATCH /api/admin/bookings/:id`, `…/status`, `GET/PATCH/DELETE /api/admin/booking-series/:id`, `…/instances` · `app/admin/bookings.tsx`, reuse `EditBookingModal` with admin powers | M | Admin can edit any reservation, edit/delete a series or selected dates, filter by status/date range, mark completed. |
+| C2 | **Members: add/invite, member number, status filter.** | `POST /api/members/:f`, `PATCH /api/members/:f/:u` (`memberNumber`) · `app/admin/members.tsx` | S–M | New member can be added from the phone; number editable; pending/active/suspended filter. |
+| C3a | **Courts: bulk add, admin-only, per-court fees, waivers.** | `POST /api/admin/courts/:f/bulk`, `PATCH /api/admin/courts/:id` (`adminOnly`, `guestFeeCents`, `ballMachineHourlyCents`), `GET/PUT /api/admin/courts/:id/waiver`, `…/waiver/acceptance` · `app/admin/courts.tsx` | M | Every field on web's court form exists; waiver text editable (plain text; HTML round-trips untouched). |
+| C3b | **Facility details, logo, timezone, locations.** | `PATCH /api/admin/facilities/:id`, `GET/POST/DELETE /api/facility-locations/:f[/:id]`, image via `expo-image-picker` · new `app/admin/facility.tsx` | M | Name, type, address, contact, timezone, logo and locations editable. |
+| C3c | **Booking rules editor.** Limits (per day/week, individual/household), days in advance, max duration (tennis vs pickleball), enable/disable all, split payments toggle. | `GET /api/rules/definitions`, `GET/PUT /api/rules/facility/:f[/:code]`, `…/bulk`, `…/enable-all`, `…/disable-all`, `…/split-court-payments`, `…/effective` · new `app/admin/booking-rules.tsx` | L | Same rule set as web's Booking Rules tab; *candidate for "Open on web"*. |
+| C3d | **General rules, terms & conditions, address whitelist, email templates.** Long-form text and CSV-style lists. | `GET/PUT /api/admin/general-rules/:f`, `…/acceptance`, `GET/PUT /api/admin/terms/:f`, `…/acceptance`, `/api/address-whitelist/:f` (+ `/bulk`, `/with-members`, `/resend-pending`), `/api/admin/email-templates/:f[/:key][/preview]` · new screens under `app/admin/` | L | Present on the phone at least as viewers with acceptance counts; editors *strong candidate for "Open on web"*. |
+| C4 | **Member Payments admin.** Payment items CRUD, lock member & require payment (partly present), subscription + billing portal, refunds, Stripe Connect onboarding (opens browser). | `GET/POST/PATCH /api/payment-items[/:id]`, `POST /api/members/:f/:u/payment-lockout` (exists on mobile), `GET /api/payments/subscription/:f`, `POST /api/payments/portal-session`, `POST /api/payments/cancel-subscription`, `POST /api/payments/:id/refund`, `GET /api/payments/history/:f`, `GET /api/stripe/connect?clubId&format=json` · new `app/admin/member-payments.tsx` | L | Every action on web's Member Payments page; refunds behind a confirm. |
+| C5 | **Households.** List, search, members at an address, auto-create. | `GET /api/households/facility/:f`, `POST /api/households/auto-create`, `GET/POST/DELETE /api/households/:id/members[/:u]`, `GET /api/households/:id/bookings` · new `app/admin/households.tsx` | M | Mirrors web `HouseholdManagement`. |
+| C6 | **Reports.** Transactions by type/date; export as CSV through the share sheet. | `GET /api/reports/transactions/:f?…` · new `app/admin/reports.tsx`, `expo-sharing` | M | Same filters as web; CSV matches web's export columns. |
+| C7 | **Lessons admin.** Upcoming/past with rosters, remove participant, delete, create (reuse `BulletinPostCreateModal` with web's `mode='lesson'` — lesson type selector + custom label). | `GET /api/lessons/:f?scope=past` (admin), `DELETE /api/bulletin-board/:id/signup/:u`, `DELETE /api/bulletin-board/:id` · new `app/admin/lessons.tsx`, `BulletinPostCreateModal.tsx` | M | Admin creates and manages lessons from the phone; `lessonType`/`lessonTypeLabel` reach the server as on web. |
+| C8 | **Pro Shop admin.** Products with images, orders, member tabs, bill tab / bill all, guest sale, settings. | `/api/pro-shop/admin/products/:f`, `…/orders/:f`, `…/tabs/:f`, `…/bill-tab/:f/:u`, `…/bill-all/:f`, `…/guest-sale/:f`, `…/assign/{cash,charge,tab}/:f`, `…/members/:f`, `…/settings/:f` · new `app/admin/pro-shop.tsx` | L | Front-desk staff can ring a sale and bill tabs from a phone. |
+| C9 | **Annual Fees admin.** Config, tiers, member tier assignment, billing preview/run/history. | `/api/annual-fees/config/:f`, `…/tiers/:f[/:id]`, `…/members/:f[/:u/tier]`, `…/billing/{preview,run,history}/:f`, `…/billing/runs/:f/:id` · new `app/admin/annual-fees.tsx` | L | Mirrors web `AnnualFeesAdmin`; billing run behind a confirm with the preview total. |
+| C10 | **Ball Machine admin.** Machines CRUD + reorder, products/pricing, comp and revoke passes. | `/api/ball-machine/admin/machines/:f[/:id]`, `…/reorder`, `…/products/:f`, `…/passes/:f[/:id]` · new `app/admin/ball-machine.tsx` | M | Mirrors web `BallMachineAdmin`. |
+| C11 | **Dashboard analytics.** Utilization, heatmap, trends, member growth, top members, recent activity, export. Mobile already fetches `/admin/analytics` and `/admin/dashboard`; render them. | `GET /api/admin/analytics/:f?period=`, `GET /api/admin/dashboard/:f` · `app/admin/dashboard.tsx`, small inline-SVG bar/heatmap helpers (no chart lib) | M | Same sections as web, phone-sized. |
+| C12 | **Admin Booking page.** Book for a member or walk-in guest across several courts with recurring. Mobile already has admin override, member lookup and additional courts in Book; verify walk-in guest name and multi-court create match web `AdminBooking`, then add an "Admin booking" entry in the Admin tab that opens Book pre-set. | existing `POST /api/bookings`, `/admin-override` · `app/(tabs)/admin.tsx`, `book.tsx` | S | Parity confirmed by a test that mirrors web's request body. |
+
+#### Workstream D — Keep it from drifting again
+
+| # | Item | Size | Done when |
+|---|------|------|-----------|
+| D1 | **API-parity check in CI.** Script the audit: extract `/api/...` paths used by `src/` and by `mobile/`, diff, and fail on a web-only path not listed in `docs/mobile-web-sync.md` under an explicit "web-only" allowlist. | S | `npm run parity:check` runs in CI; today's list seeds the allowlist and shrinks as items land. |
+| D2 | **PR checklist line**: "Player- or admin-visible change? Mobile item filed or `web-only` justified." | S | In `.github/PULL_REQUEST_TEMPLATE.md`. |
+| D3 | **Update `docs/mobile-web-sync.md`** after each workstream with the new shared modules and any "Open on web" decisions. | S | Doc reflects shipped state. |
+
+#### Order
+
+```
+A1 A2 A3 A4 A5            ← fix-first, ~1 week, no decisions needed
+B1 B2 B3 B11               ← reservations + open spots + history + bell
+B4 B5 B7 B10               ← bulletin admin, lessons signup, shop tab, locations
+B6 B8 B9 B12               ← padel lifecycle, calendar extras, quick reserve, invites
+── decide native vs "Open on web" per C item ──
+C1 C2 C12 C4 C3a C3b C7 C11   ← the admin surfaces a club uses from a phone
+C5 C6 C10 C3c C8 C9 C3d       ← the rest, in impact order
+D1 lands with workstream A; D2/D3 as each workstream closes
+```
+
+Each item ships as its own commit with tests, the way Phases 2–3 did; tick it off in this table when it lands.
+
 ---
 
 ## 3. Risks
@@ -272,5 +350,7 @@ Phase 0 ──▶ Phase 1 ──▶ Phase 2 ──▶ Phase 3 ──┐
            Phase 4 (start early, parallel) ────┤
            Phase 5 (after Phase 1) ────────────┘
 ```
+
+Phase 8 (full parity, added 2026-09-17) runs after Phase 3 and alongside Phases 4–7: workstream A before device QA, B and C in the order given, D from the start.
 
 Critical path runs through Phase 3 (Padel and Pro Shop are the two largest builds) and Phase 6 (device QA can't be compressed). Phases 4 and 7 carry human wait time — legal review, developer-account approval, store review — so start them before the code is finished, not after.

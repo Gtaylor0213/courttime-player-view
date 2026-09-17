@@ -19,7 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { proShopEndpoints } from '../src/api/endpoints';
 import { unwrapApiPayload } from '../../shared/api/core';
@@ -55,7 +55,12 @@ function inStock(product: Product): boolean {
 
 export default function ProShopScreen() {
   const { facilityId } = useAuth();
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  // Web's ProShop: open tab balance, card on file, and whether the club requires a card.
+  const [tab, setTab] = useState<{ unbilled_cents: number; items?: Array<{ product_name?: string; quantity?: number }> } | null>(null);
+  const [cardStatus, setCardStatus] = useState<{ has_card?: boolean; card_brand?: string; card_last4?: string } | null>(null);
+  const [requireCard, setRequireCard] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [basket, setBasket] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -67,10 +72,19 @@ export default function ProShopScreen() {
       setLoading(false);
       return;
     }
-    const [productRes, orderRes] = await Promise.all([
+    const [productRes, orderRes, tabRes, cardRes, settingsRes] = await Promise.all([
       proShopEndpoints.products(facilityId),
       proShopEndpoints.myOrders(facilityId),
+      proShopEndpoints.myTab(facilityId),
+      proShopEndpoints.myCard(facilityId),
+      proShopEndpoints.settings(facilityId), // 403 for members; ignored below
     ]);
+    if (tabRes.success) {
+      const t = unwrapApiPayload<{ unbilled_cents?: number | string; items?: any[] }>(tabRes.data);
+      setTab(t && Number(t.unbilled_cents) > 0 ? { unbilled_cents: Number(t.unbilled_cents), items: t.items } : null);
+    }
+    if (cardRes.success) setCardStatus(unwrapApiPayload<{ has_card?: boolean }>(cardRes.data) ?? null);
+    if (settingsRes.success) setRequireCard(!!unwrapApiPayload<{ require_card?: boolean }>(settingsRes.data)?.require_card);
 
     if (productRes.success) {
       const list = unwrapApiPayload<Product[]>(productRes.data);
@@ -179,6 +193,34 @@ export default function ProShopScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {requireCard && cardStatus && !cardStatus.has_card ? (
+          <View style={styles.noticeWarn}>
+            <Ionicons name="card-outline" size={18} color={Colors.warning} />
+            <View style={styles.cardText}>
+              <Text style={styles.noticeTitle}>No card on file</Text>
+              <Text style={styles.noticeText}>This club charges pro shop purchases to a saved card. Add one under Payments.</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/payments')} accessibilityRole="button" accessibilityLabel="Open Payments">
+              <Text style={styles.noticeLink}>Payments</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        {tab ? (
+          <View style={styles.noticeInfo}>
+            <Ionicons name="receipt-outline" size={18} color={Colors.primary} />
+            <View style={styles.cardText}>
+              <Text style={styles.noticeTitle}>Open tab: {formatCentsAsUsd(tab.unbilled_cents)}</Text>
+              {tab.items?.length ? (
+                <Text style={styles.noticeText} numberOfLines={2}>
+                  {tab.items.map((i) => `${i.product_name ?? 'Item'} ×${i.quantity ?? 1}`).join(', ')}
+                </Text>
+              ) : null}
+              {cardStatus?.has_card && cardStatus.card_last4 ? (
+                <Text style={styles.noticeText}>Billed to {cardStatus.card_brand ?? 'card'} •••• {cardStatus.card_last4}</Text>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
         {products.map((product) => {
           const qty = basket[product.id] ?? 0;
           const available = inStock(product);
@@ -311,6 +353,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   outOfStock: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  noticeWarn: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.warning + '14', borderWidth: 1, borderColor: Colors.warning + '55',
+    borderRadius: BorderRadius.md, padding: Spacing.md,
+  },
+  noticeInfo: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.primary + '10', borderWidth: 1, borderColor: Colors.primary + '44',
+    borderRadius: BorderRadius.md, padding: Spacing.md,
+  },
+  noticeTitle: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  noticeText: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+  noticeLink: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
   lowStock: { fontSize: FontSize.xs, color: Colors.warning, marginTop: 2 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   qtyButton: {

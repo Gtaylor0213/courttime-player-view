@@ -64,6 +64,7 @@ export default function AdminMembersScreen() {
   const [members, setMembers] = useState<AdminMemberRow[]>([]);
   const [stripeConnected, setStripeConnected] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'suspended' | 'expired'>('all');
   const [selected, setSelected] = useState<AdminMemberRow | null>(null);
 
   const loadData = useCallback(async () => {
@@ -92,11 +93,11 @@ export default function AdminMembersScreen() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = q
-      ? members.filter((m) => m.fullName.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
-      : members;
+    const list = members
+      .filter((m) => statusFilter === 'all' || m.status === statusFilter)
+      .filter((m) => !q || m.fullName.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
     return list.slice(0, 60);
-  }, [members, search]);
+  }, [members, search, statusFilter]);
   const lockoutMembers = useMemo(() => parseAdminLockoutMembers(members), [members]);
 
   // Keep the modal's member fresh after any change (e.g. after a role toggle).
@@ -115,6 +116,20 @@ export default function AdminMembersScreen() {
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Members ({members.length})</Text>
         <Input value={search} onChangeText={setSearch} placeholder="Search name or email" />
+        <View style={[styles.chipsWrap, { marginVertical: Spacing.sm }]}>
+          {(['all', 'active', 'pending', 'suspended', 'expired'] as const).map((s) => (
+            <TouchableOpacity
+              key={s}
+              style={[styles.chip, statusFilter === s && styles.chipSelected]}
+              onPress={() => setStatusFilter(s)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: statusFilter === s }}
+              accessibilityLabel={s === 'all' ? 'All statuses' : `${s} members`}
+            >
+              <Text style={[styles.chipText, statusFilter === s && styles.chipTextSelected]}>{s === 'all' ? 'All' : s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         {filtered.length === 0 ? (
           <Text style={styles.emptyText}>No members match your search.</Text>
         ) : (
@@ -183,6 +198,10 @@ function MemberDetailModal({
   const [strikes, setStrikes] = useState<AdminStrikeRow[]>([]);
   const [strikeType, setStrikeType] = useState<StrikeType>('manual');
   const [strikeReason, setStrikeReason] = useState('');
+  const [memberNumberDraft, setMemberNumberDraft] = useState('');
+  useEffect(() => {
+    setMemberNumberDraft(member?.memberNumber ?? '');
+  }, [member?.userId, member?.memberNumber]);
 
   useEffect(() => {
     if (!member || !facilityId) {
@@ -282,6 +301,27 @@ function MemberDetailModal({
               {member.isFacilityAdmin ? <Badge label="Admin" color={Colors.primary} /> : null}
               {member.isSubAdmin ? <Badge label="Sub-Admin" color={Colors.secondary} /> : null}
               {member.isViewOnly ? <Badge label="View-only" color={Colors.textMuted} /> : null}
+            </View>
+
+            <Text style={styles.sectionLabel}>Member Number</Text>
+            <View style={styles.memberNumberRow}>
+              <Input
+                value={memberNumberDraft}
+                onChangeText={setMemberNumberDraft}
+                placeholder="Enter member number"
+                accessibilityLabel="Member number"
+                style={{ flex: 1 }}
+                autoCapitalize="characters"
+              />
+              <Button
+                title="Save"
+                onPress={() =>
+                  run(() => updateMember(facilityId, member.userId, { memberNumber: memberNumberDraft.trim() || null }))
+                }
+                loading={busy}
+                disabled={busy || (memberNumberDraft.trim() || '') === (member.memberNumber || '')}
+                accessibilityLabel="Save member number"
+              />
             </View>
 
             <Text style={styles.sectionLabel}>Membership</Text>
@@ -415,6 +455,7 @@ const styles = StyleSheet.create({
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
   sheetTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   sheetDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.sm },
+  memberNumberRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
   sectionLabel: {
     fontSize: FontSize.sm,
     fontWeight: '700',

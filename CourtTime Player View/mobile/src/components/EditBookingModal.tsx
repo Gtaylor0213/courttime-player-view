@@ -277,7 +277,9 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: Spacing.xl }}>
+          {/* flexShrink (not flex: 1): the sheet is content-sized with a maxHeight, and a
+              flex-grow child measures to zero height there, hiding the whole form. */}
+          <ScrollView style={styles.formScroll} contentContainerStyle={{ paddingBottom: Spacing.xl }}>
             {/* Date */}
             <Text style={styles.label}>Date</Text>
             <TouchableOpacity
@@ -444,6 +446,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.lg,
     padding: Spacing.lg,
     maxHeight: '90%',
+  },
+  formScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

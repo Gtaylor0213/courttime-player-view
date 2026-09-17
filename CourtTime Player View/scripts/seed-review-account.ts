@@ -24,6 +24,7 @@
 import dotenv from 'dotenv';
 import * as bcrypt from 'bcrypt';
 import { query } from '../src/database/connection';
+import { DEFAULT_ON_FEATURE_FLAGS } from '../shared/constants/featureFlags';
 
 dotenv.config();
 
@@ -99,6 +100,19 @@ async function seed() {
     ]
   );
   console.log(`  ✓ facility ${FACILITY_NAME}`);
+
+  // ── Default-on feature flags ──
+  // Inserting the facility directly bypasses facilityService's seeding, which
+  // would leave the reviewer without week/month view, court waivers, etc.
+  for (const featureKey of DEFAULT_ON_FEATURE_FLAGS) {
+    await query(
+      `INSERT INTO facility_features (facility_id, feature_key, is_enabled, updated_at)
+       VALUES ($1, $2, true, NOW())
+       ON CONFLICT (facility_id, feature_key) DO NOTHING`,
+      [FACILITY_ID, featureKey]
+    );
+  }
+  console.log(`  ✓ default-on feature flags (${DEFAULT_ON_FEATURE_FLAGS.join(', ')})`);
 
   // ── Courts ──
   const courtIds: string[] = [];

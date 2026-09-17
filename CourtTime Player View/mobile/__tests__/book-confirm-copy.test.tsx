@@ -358,8 +358,14 @@ describe('BookCourtScreen booking modal confirm copy', () => {
 
     await expandBookingTools(tree!);
 
+    // Quick Reserve now opens a sheet (web's Quick Reservation); its one-tap
+    // action is the old "earliest open hour today" behaviour.
     await act(async () => {
       pressTouchableContainingText(tree!, 'Quick Reserve');
+    });
+    await flushMicrotasks();
+    await act(async () => {
+      pressTouchableContainingText(tree!, 'Book the next open hour today');
     });
     await flushMicrotasks();
 

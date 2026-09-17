@@ -37,6 +37,13 @@ export const MORE_MENU_ITEMS: MoreMenuItem[] = [
     route: '/(tabs)/community',
   },
   {
+    key: 'my-reservations',
+    label: 'My Reservations',
+    description: 'Upcoming and past bookings, with filters',
+    icon: 'calendar-outline',
+    route: '/my-reservations',
+  },
+  {
     key: 'shop',
     label: 'Pro Shop',
     description: 'Browse and buy from your club',

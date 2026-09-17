@@ -17,6 +17,7 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { PaymentLockoutProvider } from '../src/contexts/PaymentLockoutContext';
 import { FeatureFlagProvider } from '../src/contexts/FeatureFlagContext';
+import { NotificationUnreadProvider } from '../src/contexts/NotificationUnreadContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
@@ -154,6 +155,8 @@ function RootLayoutNav() {
         {/* Top-level screens get the default Stack header with a back button. */}
         <Stack.Screen name="club-info" />
         <Stack.Screen name="notification-settings" />
+        <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="my-reservations" options={{ title: 'My Reservations' }} />
         <Stack.Screen name="payments" options={{ title: 'Payments' }} />
         <Stack.Screen name="payment-success" options={{ title: 'Payment' }} />
           <Stack.Screen name="lockout-paid" options={{ title: 'Payment' }} />
@@ -203,8 +206,10 @@ function RootLayout() {
           {/* Inside AuthProvider: flags are resolved per selected facility. */}
           <FeatureFlagProvider>
             <PaymentLockoutProvider>
+            <NotificationUnreadProvider>
               <StatusBar style="auto" />
               <RootLayoutNav />
+            </NotificationUnreadProvider>
             </PaymentLockoutProvider>
           </FeatureFlagProvider>
         </AuthProvider>

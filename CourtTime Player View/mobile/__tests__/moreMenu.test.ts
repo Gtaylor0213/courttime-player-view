@@ -11,7 +11,7 @@ function enabled(...flags: string[]) {
 describe('More menu', () => {
   it('still shows Community when the facility has no flagged features', () => {
     expect(shouldShowMoreTab(enabled())).toBe(true);
-    expect(getMoreMenuItems(enabled()).map((i) => i.key)).toEqual(['community']);
+    expect(getMoreMenuItems(enabled()).map((i) => i.key)).toEqual(['community', 'my-reservations']);
   });
 
   it('adds flagged features alongside Community as they are enabled', () => {
@@ -20,13 +20,13 @@ describe('More menu', () => {
 
   it('lists Community plus only the enabled features', () => {
     const items = getMoreMenuItems(enabled(FEATURE_FLAGS.PRO_SHOP, FEATURE_FLAGS.PADEL));
-    expect(items.map((i) => i.key)).toEqual(['community', 'shop', 'padel']);
+    expect(items.map((i) => i.key)).toEqual(['community', 'my-reservations', 'shop', 'padel']);
   });
 
   it('keeps a stable display order regardless of which flags are on', () => {
     // Enabling them in a different order must not reorder the menu.
     const items = getMoreMenuItems(enabled(FEATURE_FLAGS.PADEL, FEATURE_FLAGS.PRO_SHOP));
-    expect(items.map((i) => i.key)).toEqual(['community', 'shop', 'padel']);
+    expect(items.map((i) => i.key)).toEqual(['community', 'my-reservations', 'shop', 'padel']);
   });
 
   it('every item has a route, icon and label; flagged items also have a flag', () => {
@@ -34,7 +34,7 @@ describe('More menu', () => {
       expect(item.route.startsWith('/')).toBe(true);
       expect(item.icon).toBeTruthy();
       expect(item.label).toBeTruthy();
-      if (item.key !== 'community') {
+      if (!['community', 'my-reservations'].includes(item.key)) {
         expect(item.flag).toBeTruthy();
       }
     }

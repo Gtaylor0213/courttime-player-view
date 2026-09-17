@@ -8,7 +8,7 @@ import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Buildin
 import logoImage from '../assets/courttime-logo.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
-import { facilitiesApi, messagesApi } from '../api/client';
+import { facilitiesApi, messagesApi, membersApi } from '../api/client';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from './ui/select';
@@ -49,6 +49,7 @@ export function UnifiedSidebar({
   const [memberFacilities, setMemberFacilities] = React.useState<Club[]>([]);
   const [loadingFacilities, setLoadingFacilities] = React.useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = React.useState(false);
+  const [hasPendingMembers, setHasPendingMembers] = React.useState(false);
 
   // Use the actual user's type from AuthContext, or fall back to the prop
   const actualUserType = user?.userType || userType;
@@ -151,6 +152,37 @@ export function UnifiedSidebar({
       window.removeEventListener('messages:unread-changed', refreshUnreadMessages);
     };
   }, [user?.id, selectedFacilityId]);
+
+  // Track pending membership requests for the Member Management nav indicator
+  React.useEffect(() => {
+    const isFacilityAdmin = !!user?.adminFacilities?.includes(selectedFacilityId);
+    if (!isFacilityAdmin || !selectedFacilityId) {
+      setHasPendingMembers(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const refreshPendingMembers = async () => {
+      try {
+        const response = await membersApi.getFacilityMembers(selectedFacilityId);
+        const members = response.success ? (response.data?.members || []) : [];
+        if (!cancelled) {
+          setHasPendingMembers(members.some((member: any) => member.status === 'pending'));
+        }
+      } catch (error) {
+        console.error('Error fetching pending members:', error);
+      }
+    };
+
+    refreshPendingMembers();
+    const interval = setInterval(refreshPendingMembers, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [user?.adminFacilities, selectedFacilityId]);
 
   // Get user initials
   const getUserInitials = () => {
@@ -424,6 +456,7 @@ export function UnifiedSidebar({
                   icon={UserCog}
                   label="Member Management"
                   isActive={currentPage === 'member-management' || currentPage === 'household-management'}
+                  showDot={hasPendingMembers}
                 />
                 <SidebarButton
                   onClick={() => handleNav('/admin/bookings')}

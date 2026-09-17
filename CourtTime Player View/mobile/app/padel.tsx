@@ -28,6 +28,7 @@ import { showAlert } from '../src/utils/alert';
 import { hapticSuccess, hapticError } from '../src/utils/haptics';
 import { useAuth } from '../src/contexts/AuthContext';
 import { EmptyState } from '../src/components/EmptyState';
+import { OpenSpotsList } from '../src/components/OpenSpotsList';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../src/constants/theme';
 
@@ -158,19 +159,6 @@ export default function PadelScreen() {
     );
   }
 
-  if (sessions.length === 0) {
-    return (
-      <>
-        <Stack.Screen options={{ title: 'Padel' }} />
-        <EmptyState
-          icon="trophy-outline"
-          title="No open sessions"
-          description="When your club opens an Americano or Mexicano session, it will appear here."
-        />
-      </>
-    );
-  }
-
   return (
     <ScrollView
       style={styles.container}
@@ -178,6 +166,17 @@ export default function PadelScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Stack.Screen options={{ title: 'Padel' }} />
+
+      {/* Open spots on members' bookings (web: "Open Matches") */}
+      <OpenSpotsList facilityId={facilityId ?? null} refreshKey={refreshing ? 1 : 0} title="Open Matches" />
+
+      {sessions.length === 0 ? (
+        <EmptyState
+          icon="trophy-outline"
+          title="No open sessions"
+          description="When your club opens an Americano or Mexicano session, it will appear here."
+        />
+      ) : null}
 
       {sessions.map((session) => {
         const isFull = session.joinedCount >= session.playerCount;

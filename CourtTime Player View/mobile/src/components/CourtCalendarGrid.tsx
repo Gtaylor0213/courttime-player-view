@@ -32,6 +32,7 @@ const TIME_LABEL_WIDTH = 46;
 const ROW_HEIGHT = 48;
 import { DEFAULT_BOOKING_DURATION_MINUTES, getBookingTypeLabel, getBookingTypeRNColors } from '../../../shared/constants/bookingTypes';
 import { blackoutsToBlockedRanges } from '../../../shared/utils/blackoutSlots';
+import { isPeakSlot } from '../../../shared/utils/courtTypeFilter';
 
 const DEFAULT_SLOT_MINUTES = 30;
 const COURTS_PER_PAGE = 4;
@@ -312,9 +313,28 @@ export function CourtCalendarGrid({
   }, [selectedDate]);
 
   // Fetch availability for all courts on selected date
+  // Peak-hour windows per court (GET /court-config/:id/schedule), fetched once per court like web.
+  const scheduleCacheRef = useRef<Map<string, Array<Record<string, unknown>>>>(new Map());
+  const [scheduleByCourt, setScheduleByCourt] = useState<Record<string, Array<Record<string, unknown>>>>({});
+  const selectedDayOfWeek = useMemo(() => new Date(`${selectedDate}T00:00:00`).getDay(), [selectedDate]);
+
   const fetchAvailability = useCallback(async (options?: { background?: boolean }) => {
     const background = options?.background === true;
     const requestId = ++fetchRequestIdRef.current;
+
+    // Non-critical, cached: peak windows only tint cells.
+    void (async () => {
+      const missing = courts.filter((c: any) => c?.id && !scheduleCacheRef.current.has(c.id));
+      if (missing.length === 0) return;
+      await Promise.all(
+        missing.map(async (c: any) => {
+          const res = await api.get(`/api/court-config/${c.id}/schedule`);
+          const rows = res.success ? ((res.data as any)?.schedule ?? (res.data as any)?.data?.schedule) : null;
+          scheduleCacheRef.current.set(c.id, Array.isArray(rows) ? rows : []);
+        })
+      );
+      setScheduleByCourt(Object.fromEntries(scheduleCacheRef.current));
+    })();
 
     if (courts.length === 0) {
       if (requestId !== fetchRequestIdRef.current) return;
@@ -1121,6 +1141,7 @@ export function CourtCalendarGrid({
                               styles.cell,
                               { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
                               courtIndex > 0 && styles.courtColumnDividerLeft,
+                              !booked && !past && isPeakSlot(scheduleByCourt[court.id], selectedDayOfWeek, timeRows[rowIndex] ?? '') && styles.cellPeak,
                               past && styles.cellPast,
                               booked && styles.cellBooked,
                               isBlockedSlot && styles.cellBlocked,
@@ -1465,6 +1486,10 @@ const styles = StyleSheet.create({
   },
   cellPast: {
     backgroundColor: Colors.borderLight + '80',
+  },
+  // Peak hours (web: bg-purple-50)
+  cellPeak: {
+    backgroundColor: '#FAF5FF',
   },
   cellBooked: {
     backgroundColor: 'transparent',

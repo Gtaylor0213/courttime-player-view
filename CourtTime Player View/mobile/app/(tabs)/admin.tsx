@@ -61,6 +61,27 @@ const ADMIN_MENU_ITEMS = [
     description: 'Create lessons and clinics, manage rosters.',
   },
   {
+    key: 'households',
+    route: '/admin/households',
+    icon: 'home',
+    label: 'Households',
+    description: 'Accounts grouped by street address.',
+  },
+  {
+    key: 'reports',
+    route: '/admin/reports',
+    icon: 'document-text',
+    label: 'Reports',
+    description: 'Transactions by type and date, export as CSV.',
+  },
+  {
+    key: 'ball-machine-admin',
+    route: '/admin/ball-machine',
+    icon: 'tennisball-outline',
+    label: 'Ball Machine',
+    description: 'Machines, pass pricing, and passes.',
+  },
+  {
     key: 'communication',
     route: '/admin/communication',
     icon: 'megaphone',

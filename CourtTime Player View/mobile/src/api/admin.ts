@@ -559,3 +559,67 @@ export function updateFacilityLocation(facilityId: string, locationId: string, d
 export function deleteFacilityLocation(facilityId: string, locationId: string) {
   return api.delete(`/api/facility-locations/${facilityId}/${locationId}`);
 }
+
+// ── Reports (web AdminReports) ──
+export interface TransactionRow {
+  id: string;
+  date: string;
+  member_name: string | null;
+  member_email: string | null;
+  type: string;
+  description: string;
+  amount_cents: number;
+  status: string;
+}
+export function getTransactionReport(facilityId: string, params: { start: string; end: string; type: string }) {
+  const qs = new URLSearchParams({ start: params.start, end: params.end, type: params.type }).toString();
+  return api.get(`/api/reports/transactions/${facilityId}?${qs}`);
+}
+
+// ── Ball machine admin (web BallMachineAdmin) ──
+export interface BallMachineRow {
+  id: string;
+  name: string;
+  accessCode: string | null;
+  instructions: string | null;
+  hourlyFeeCents: number | null;
+  machineCount: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+export interface BallMachineProduct {
+  id: string;
+  machineId: string | null;
+  durationMonths: number;
+  priceCents: number;
+  isActive: boolean;
+}
+export interface BallMachinePassHolder {
+  id: string;
+  userId: string;
+  machineId: string | null;
+  machineName: string | null;
+  fullName: string;
+  email: string;
+  durationMonths: number;
+  priceCentsAtPurchase: number;
+  expiresAt: string;
+  status: string;
+  grantedBy: string | null;
+}
+export const ballMachineAdmin = {
+  machines: (f: string) => api.get(`/api/ball-machine/admin/machines/${f}`),
+  createMachine: (f: string, body: { name: string; accessCode?: string; instructions?: string; hourlyFeeCents?: number | null; machineCount?: number }) =>
+    api.post(`/api/ball-machine/admin/machines/${f}`, body),
+  updateMachine: (f: string, id: string, body: Partial<{ name: string; accessCode: string; instructions: string; hourlyFeeCents: number | null; machineCount: number; isActive: boolean }>) =>
+    api.put(`/api/ball-machine/admin/machines/${f}/${id}`, body),
+  deactivateMachine: (f: string, id: string) => api.delete(`/api/ball-machine/admin/machines/${f}/${id}`),
+  reorderMachines: (f: string, machineIds: string[]) => api.put(`/api/ball-machine/admin/machines/${f}/reorder`, { machineIds }),
+  products: (f: string) => api.get(`/api/ball-machine/admin/products/${f}`),
+  updateProducts: (f: string, products: Array<{ machineId: string | null; durationMonths: number; priceCents: number; isActive: boolean }>) =>
+    api.put(`/api/ball-machine/admin/products/${f}`, { products }),
+  passes: (f: string) => api.get(`/api/ball-machine/admin/passes/${f}`),
+  grantPass: (f: string, userId: string, machineId: string | null, durationMonths: number) =>
+    api.post(`/api/ball-machine/admin/passes/${f}`, { userId, machineId, durationMonths }),
+  revokePass: (f: string, passId: string) => api.delete(`/api/ball-machine/admin/passes/${f}/${passId}`),
+};

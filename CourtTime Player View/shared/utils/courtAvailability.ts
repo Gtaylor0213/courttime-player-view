@@ -72,12 +72,11 @@ export function buildTimeSlotsFromAvailability(
     if (endT > closeMin) break;
     const startTime = `${formatMinutesAsHHMM(t)}:00`;
     const endTime = `${formatMinutesAsHHMM(endT)}:00`;
+    // A slot stays bookable until it ends: 7:00–7:30 is still open at 7:05.
     const isToday = selectedDate === todayYmd;
     const now = new Date();
-    const slotPast =
-      isToday &&
-      (t / 60 < now.getHours() ||
-        (Math.floor(t / 60) === now.getHours() && t % 60 <= now.getMinutes()));
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const slotPast = isToday && nowMinutes >= endT;
 
     slots.push({
       startTime,

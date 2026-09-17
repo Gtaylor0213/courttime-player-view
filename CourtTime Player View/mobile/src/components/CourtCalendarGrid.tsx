@@ -599,7 +599,8 @@ export function CourtCalendarGrid({
     return null;
   };
 
-  // Check if a row is in the past
+  // A row is past only once its whole slot has elapsed (web does the same): the
+  // 7:00–7:30 slot stays bookable at 7:05 and greys out at 7:30.
   const isPast = (rowIndex: number): boolean => {
     const now = new Date();
     const today = localTodayYmd();
@@ -608,9 +609,8 @@ export function CourtCalendarGrid({
     if (!rowTime) return false;
     const rowMinutes = parseTimeToMinutesSafe(rowTime);
     if (rowMinutes === null) return false;
-    const h = Math.floor(rowMinutes / 60);
-    const m = rowMinutes % 60;
-    return h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return nowMinutes >= rowMinutes + slotStepMinutes;
   };
 
   const scrollToCurrentTime = useCallback((options?: { fromUserTap?: boolean; reliable?: boolean }) => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   bookedStartTimesFromAvailability,
   buildTimeSlotsFromAvailability,
@@ -20,6 +20,27 @@ describe('courtAvailability', () => {
     const nine = slots.find((s) => s.startTime.startsWith('09:00'));
     expect(eight?.available).toBe(false);
     expect(nine?.available).toBe(true);
+  });
+
+  describe('past slots on today', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('keeps a slot open until it ends, then marks it past', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2026, 4, 20, 8, 35)); // 8:35 local
+      const slots = buildTimeSlotsFromAvailability(base, '2026-05-20', '2026-05-20');
+      const eightThirty = slots.find((s) => s.startTime.startsWith('08:30'));
+      const nine = slots.find((s) => s.startTime.startsWith('09:00'));
+      expect(eightThirty?.available).toBe(true); // started, not over
+      expect(nine?.available).toBe(true);
+
+      vi.setSystemTime(new Date(2026, 4, 20, 9, 0)); // exactly at the slot end
+      const later = buildTimeSlotsFromAvailability(base, '2026-05-20', '2026-05-20');
+      expect(later.find((s) => s.startTime.startsWith('08:30'))?.available).toBe(false);
+      expect(later.find((s) => s.startTime.startsWith('09:00'))?.available).toBe(true);
+    });
   });
 
   it('expands bookings to start times', () => {

@@ -298,8 +298,8 @@ export function CourtCalendarGrid({
     return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   }, [mergedScheduleBounds]);
 
-  /** Fixed gutters between court columns so borders do not shrink column width math */
-  const COURT_COLUMN_GUTTER = Spacing.xs;
+  /** No gutter: the single 1px column divider is drawn inside each column's box (borders are inset in RN) */
+  const COURT_COLUMN_GUTTER = 0;
   const courtTrackWidth = SCREEN_WIDTH - TIME_LABEL_WIDTH;
   const courtColumnWidth =
     (courtTrackWidth - COURT_COLUMN_GUTTER * (COURTS_PER_PAGE - 1)) / COURTS_PER_PAGE;
@@ -1381,16 +1381,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: BorderRadius.sm,
   },
+  /** Single solid divider between court columns (cells draw no right border, so lines never double up) */
   courtColumnDividerLeft: {
-    borderLeftWidth: 2,
+    borderLeftWidth: 1,
     borderLeftColor: Colors.border,
   },
   timeLabelHeaderSpacer: {
-    borderRightWidth: 2,
+    borderRightWidth: 1,
     borderRightColor: Colors.border,
   },
   timeLabelGrid: {
-    borderRightWidth: 2,
+    borderRightWidth: 1,
     borderRightColor: Colors.border,
   },
   courtHeaderText: {
@@ -1437,8 +1438,6 @@ const styles = StyleSheet.create({
   cell: {
     justifyContent: 'center',
     alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: Colors.borderLight,
   },
   cellPast: {
     backgroundColor: Colors.borderLight + '80',

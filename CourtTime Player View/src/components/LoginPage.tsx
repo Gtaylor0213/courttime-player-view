@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useAuth } from '../contexts/AuthContext';
 import { ExternalLink, Eye, EyeOff } from 'lucide-react';
-import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
+import logoImage from '../assets/courttime-logo.png';
 
 const socialLinks = [
   { label: 'YouTube', href: 'https://www.youtube.com/@CourtTimeApp' },

@@ -7,7 +7,7 @@ import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../api/client';
-import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
+import logoImage from '../assets/courttime-logo.png';
 
 export function ResetPassword() {
   const navigate = useNavigate();

@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi, facilitiesApi, playerProfileApi } from '../api/client';
 import { toast } from 'sonner';
-import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
+import logoImage from '../assets/courttime-logo.png';
 
 export function UserRegistration() {
   const navigate = useNavigate();

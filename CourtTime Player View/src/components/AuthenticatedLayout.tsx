@@ -5,7 +5,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { Menu, AlertTriangle } from 'lucide-react';
 import { cn } from './ui/utils';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
-import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
+import logoImage from '../assets/courttime-logo.png';
 
 function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/admin/facilities')) return 'facility-management';

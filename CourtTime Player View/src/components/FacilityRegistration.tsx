@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
-import logoImage from 'figma:asset/8775e46e6be583b8cd937eefe50d395e0a3fcf52.png';
+import logoImage from '../assets/courttime-logo.png';
 import { RegistrationProvider, useRegistration } from './facility-registration/RegistrationContext';
 import { AdminAccountStep } from './facility-registration/AdminAccountStep';
 import { FacilityInfoStep } from './facility-registration/FacilityInfoStep';

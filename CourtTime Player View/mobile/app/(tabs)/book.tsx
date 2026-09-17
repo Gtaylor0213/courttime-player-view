@@ -1206,11 +1206,38 @@ export default function BookCourtScreen() {
       createdAt: new Date().toISOString() as any,
       updatedAt: new Date().toISOString() as any,
       courtName: court.name,
-      facilityName: 'CourtTime',
+      facilityName: currentFacilityName || 'CourtTime',
       userName: bookingUserName,
       userEmail: '',
     };
     setSelectedCalendarBooking(mapped);
+
+    // The grid cell only carries what the day endpoint returns; fetch the full
+    // record (notes, type, exact times, booker) like web's reservation modal.
+    if (booking.id || booking.bookingId || booking.booking_id) {
+      void api.get(`/api/bookings/${bookingId}`).then((res) => {
+        const full = res.success ? ((res.data as any)?.booking ?? (res.data as any)?.data?.booking) : null;
+        if (!full) return;
+        setSelectedCalendarBooking((prev) =>
+          prev && prev.id === bookingId
+            ? {
+                ...prev,
+                userId: full.userId || prev.userId,
+                bookingDate: (full.bookingDate ? String(full.bookingDate).slice(0, 10) : prev.bookingDate) as any,
+                startTime: full.startTime || prev.startTime,
+                endTime: full.endTime || prev.endTime,
+                durationMinutes: full.durationMinutes || prev.durationMinutes,
+                status: full.status || prev.status,
+                bookingType: full.bookingType ?? prev.bookingType,
+                notes: full.notes ?? prev.notes,
+                courtName: full.courtName || prev.courtName,
+                userName: full.userName || prev.userName,
+                userEmail: full.userEmail || prev.userEmail,
+              }
+            : prev
+        );
+      });
+    }
   }, [facilityId, selectedDate]);
 
   const handleCancelSelectedBooking = async () => {
@@ -1929,7 +1956,12 @@ export default function BookCourtScreen() {
                   Booked by: {selectedCalendarBooking.userName || 'Member'}
                 </Text>
                 {selectedCalendarBooking.bookingType ? (
-                  <Text style={[styles.summaryDate, { marginTop: 2 }]}>Type: {selectedCalendarBooking.bookingType}</Text>
+                  <Text style={[styles.summaryDate, { marginTop: 2 }]}>
+                    Type: {getBookingTypeLabel(selectedCalendarBooking.bookingType)}
+                  </Text>
+                ) : null}
+                {selectedCalendarBooking.notes ? (
+                  <Text style={[styles.summaryDate, { marginTop: 2 }]}>Notes: {selectedCalendarBooking.notes}</Text>
                 ) : null}
 
                 {user && (selectedCalendarBooking.userId === user.id || isAdmin) ? (

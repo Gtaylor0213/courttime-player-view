@@ -126,9 +126,31 @@ export const levelGroupEndpoints = {
     api.post(`/api/player-level-groups/${facilityId}/groups/${groupId}/conversation`, {}),
 };
 
+export const bulletinEndpoints = {
+  /** One post by id (deep links); `{ success, post }`. */
+  post: (postId: string) => api.get(`/api/bulletin-board/post/${postId}`),
+  /** Admin: pin/unpin a post to the top of the board. */
+  setPinned: (postId: string, facilityId: string, isPinned: boolean) =>
+    api.put(`/api/bulletin-board/${postId}/pin`, { facilityId, isPinned }),
+  /** Admin: remove a member from an event's roster or waitlist. */
+  adminRemoveSignup: (postId: string, memberUserId: string) =>
+    api.delete(`/api/bulletin-board/${postId}/signup/${memberUserId}`),
+};
+
+export const facilityLocationEndpoints = {
+  /** Additional (non-primary) locations; `{ success, locations }`. */
+  list: (facilityId: string) => api.get(`/api/facility-locations/${facilityId}`),
+};
+
 export const proShopEndpoints = {
   products: (facilityId: string) => api.get(`/api/pro-shop/products/${facilityId}`),
   myOrders: (facilityId: string) => api.get(`/api/pro-shop/my-orders/${facilityId}`),
+  /** The member's running tab (`unbilled_cents`, `items`), when the club bills to a tab. */
+  myTab: (facilityId: string) => api.get(`/api/pro-shop/my-tab/${facilityId}`),
+  /** Card on file at this club (`has_card`, `card_brand`, `card_last4`). */
+  myCard: (facilityId: string) => api.get(`/api/pro-shop/my-card/${facilityId}`),
+  /** Club settings (`require_card`); 403 for non-admins, which callers ignore. */
+  settings: (facilityId: string) => api.get(`/api/pro-shop/admin/settings/${facilityId}`),
   checkout: (facilityId: string, body: Record<string, unknown>) =>
     api.post(`/api/pro-shop/checkout/${facilityId}`, body),
 };

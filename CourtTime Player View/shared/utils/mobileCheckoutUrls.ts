@@ -23,6 +23,14 @@ export function bulletinSignupCheckoutUrls(postId: string) {
   };
 }
 
+/** Lesson/clinic sign-up paid from the Lessons screen; returns there. */
+export function lessonSignupCheckoutUrls(postId: string) {
+  return {
+    successUrl: `${SCHEME}://lessons?signupSuccess=1&postId=${encodeURIComponent(postId)}&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${SCHEME}://lessons?postId=${encodeURIComponent(postId)}`,
+  };
+}
+
 export function ballMachinePassCheckoutUrls() {
   return {
     successUrl: `${SCHEME}://ball-machine?passPurchased=1&session_id={CHECKOUT_SESSION_ID}`,

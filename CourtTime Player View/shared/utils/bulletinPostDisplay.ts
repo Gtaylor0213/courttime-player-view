@@ -294,6 +294,11 @@ export interface BulletinPostShareInput {
 }
 
 /** Deep link URL for a bulletin post (web app). */
+/** Deep link that opens the post in the CourtTime mobile app (Community tab, bulletin sub-tab). */
+export function buildBulletinPostAppUrl(postId: string): string {
+  return `courttime://community?tab=bulletin&postId=${encodeURIComponent(postId)}`;
+}
+
 export function buildBulletinPostShareUrl(
   post: Pick<BulletinPostShareInput, 'id' | 'facilityId' | 'facilityName'>,
   appOrigin?: string
@@ -362,6 +367,7 @@ export function buildBulletinPostShareEmailContent(
     lines.push('', description);
   }
   lines.push('', `View on CourtTime: ${shareUrl}`);
+  lines.push(`Open in the CourtTime app: ${buildBulletinPostAppUrl(post.id)}`);
 
   return {
     subject,

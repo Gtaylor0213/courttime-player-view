@@ -5,6 +5,7 @@
  */
 
 import { query } from '../database/connection';
+import { buildBulletinPostAppUrl } from '../../shared/utils/bulletinPostDisplay';
 import {
   EMAIL_TEMPLATE_TYPES,
   renderTemplate,
@@ -454,6 +455,17 @@ export async function sendBulletinPostShareEmail(
   const safeSender = senderName ? escapeHtml(senderName) : '';
   const safePersonal = personalMessage ? escapeHtml(personalMessage).replace(/\n/g, '<br>') : '';
   const safeUrl = escapeHtml(shareUrl);
+  // The share URL carries the post id; offer the same post as an app deep link.
+  let appLinkHtml = '';
+  try {
+    const postId = new URL(shareUrl).searchParams.get('postId');
+    if (postId) {
+      const safeAppUrl = escapeHtml(buildBulletinPostAppUrl(postId));
+      appLinkHtml = `<p style="color: #6b7280; font-size: 13px; margin-top: 8px;">Have the CourtTime app? <a href="${safeAppUrl}" style="color: #16a34a;">Open this post in the app</a>.</p>`;
+    }
+  } catch {
+    /* not a URL we can parse; skip the app link */
+  }
 
   const intro = safeSender
     ? `<p style="color: #374151; margin-top: 0;"><strong>${safeSender}</strong> shared a bulletin board post with you from <strong>${safeFacility}</strong>.</p>`
@@ -473,6 +485,7 @@ export async function sendBulletinPostShareEmail(
       <a href="${safeUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">View bulletin post</a>
     </p>
     <p style="color: #6b7280; font-size: 13px; margin-top: 24px;">If the button does not work, copy this link: ${safeUrl}</p>
+    ${appLinkHtml}
   `;
   const html = wrapInEmailLayout(bodyContent, facilityName);
   return sendEmail(recipientEmail, subject, html, recipientUserId, 'general');

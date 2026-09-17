@@ -24,6 +24,8 @@ import { showAlert } from '../../src/utils/alert';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api, paymentApi } from '../../src/api/client';
+import { bulletinEndpoints } from '../../src/api/endpoints';
+import { useActivitySignup } from '../../src/hooks/useActivitySignup';
 import { bulletinSignupCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
 import { unwrapApiPayload } from '../../../shared/api/core';
 import {
@@ -426,97 +428,51 @@ export default function CommunityScreen() {
     ]);
   }
 
-  // ── Event signup ──
-  const [signupBusyId, setSignupBusyId] = useState<string | null>(null);
-  const signupConfirmRef = useRef<string | null>(null);
+  // ── Event signup (shared with Lessons) ──
+  const { busyId: signupBusyId, signUp, cancelSignup, confirmReturn } = useActivitySignup(fetchBulletins);
+  // A shared/notification link lands with ?postId=; show just that post until dismissed.
+  const [focusPostId, setFocusPostId] = useState<string | null>(null);
+  useEffect(() => {
+    const postId = paramString(params.postId);
+    if (!postId || paramString(params.signupSuccess) === '1') return;
+    setFocusPostId(postId);
+    setActiveTab('bulletin');
+  }, [params.postId, params.signupSuccess]);
 
   useEffect(() => {
-    const signupSuccess = paramString(params.signupSuccess);
-    const sessionId = paramString(params.session_id);
-    if (signupSuccess !== '1' || !user?.id) return;
-
-    if (!sessionId || sessionId === '{CHECKOUT_SESSION_ID}') {
-      showAlert('Payment received', 'Refreshing your signup status…');
-      void fetchBulletins();
-      return;
-    }
-
-    if (signupConfirmRef.current === sessionId) return;
-    signupConfirmRef.current = sessionId;
-
-    let cancelled = false;
-    void (async () => {
-      const response = await paymentApi.bulletinBoard.confirmSignupPayment(sessionId);
-      if (cancelled) return;
-      const payload = unwrapApiPayload<{
-        status?: 'confirmed' | 'waitlist';
-        waitlistPosition?: number | null;
-      }>(response.data);
-      if (response.success) {
-        showAlert(
-          'Signed up',
-          response.message ||
-            (payload?.status === 'waitlist'
-              ? `Payment received — you are on the waitlist (#${payload.waitlistPosition ?? '?'})`
-              : 'Payment received — you are signed up!')
-        );
-      } else {
-        showAlert(
-          'Signup',
-          response.error || 'Payment received but signup could not be confirmed. Contact the club.'
-        );
-      }
-      await fetchBulletins();
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    if (paramString(params.signupSuccess) !== '1' || !user?.id) return;
+    void confirmReturn(paramString(params.session_id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.signupSuccess, params.session_id, user?.id]);
 
-  async function handleEventSignup(postId: string, post?: { requirePayment?: boolean; signupAmountCents?: number | null }) {
-    setSignupBusyId(postId);
-    const urls = bulletinSignupCheckoutUrls(postId);
-    const res = await paymentApi.bulletinBoard.signupForDrill(postId, urls);
-    const checkoutUrl = res.success ? extractCheckoutUrl(res.data) : null;
-    if (checkoutUrl) {
-      const opened = await openStripeCheckout(checkoutUrl);
-      if (!opened) {
-        showAlert('Payment', 'Could not open Stripe checkout. Try again.');
-      } else if (isPaidBulletinSignup(post ?? {})) {
-        showAlert(
-          'Complete payment',
-          `Finish card payment (${formatCentsAsUsd(post?.signupAmountCents)}) to complete your signup.`
-        );
-      }
-      setSignupBusyId(null);
-      return;
-    }
-    if (res.success) {
-      await fetchBulletins();
-      if (res.message) showAlert('Signed Up', res.message);
-    } else {
-      showAlert('Could not sign up', res.error || 'Please try again.');
-    }
-    setSignupBusyId(null);
-  }
+  // ── Bulletin admin actions (web: pin, roster remove) ──
+  const togglePin = useCallback(
+    async (post: { id: string; isPinned?: boolean }) => {
+      if (!facilityId) return;
+      const res = await bulletinEndpoints.setPinned(post.id, facilityId, !post.isPinned);
+      if (res.success) await fetchBulletins();
+      else showAlert('Error', res.error || 'Could not update pin.');
+    },
+    [facilityId, fetchBulletins]
+  );
 
-  async function handleCancelEventSignup(postId: string) {
-    showAlert('Cancel Signup', 'Remove yourself from this event?', [
-      { text: 'Keep Signup', style: 'cancel' },
-      {
-        text: 'Cancel Signup',
-        style: 'destructive',
-        onPress: async () => {
-          setSignupBusyId(postId);
-          const res = await api.delete(`/api/bulletin-board/${postId}/signup`);
-          if (res.success) await fetchBulletins();
-          else showAlert('Error', res.error || 'Could not cancel signup.');
-          setSignupBusyId(null);
+  const adminRemoveSignup = useCallback(
+    (postId: string, member: { userId: string; fullName: string }) => {
+      showAlert('Remove member', `Remove ${member.fullName} from this event?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const res = await bulletinEndpoints.adminRemoveSignup(postId, member.userId);
+            if (res.success) await fetchBulletins();
+            else showAlert('Error', res.error || 'Unable to remove member.');
+          },
         },
-      },
-    ]);
-  }
+      ]);
+    },
+    [fetchBulletins]
+  );
 
   function formatDrillDateTime(iso: string): string {
     const d = new Date(iso);
@@ -668,6 +624,14 @@ export default function CommunityScreen() {
   const bulletinHeader = useMemo(
     () => (
       <View style={styles.listHeaderBlock}>
+        {focusPostId ? (
+          <View style={styles.focusBanner}>
+            <Text style={styles.focusBannerText}>Showing one shared post</Text>
+            <TouchableOpacity onPress={() => { setFocusPostId(null); router.setParams({ postId: undefined } as never); }} accessibilityRole="button" accessibilityLabel="Show all posts">
+              <Text style={styles.focusBannerLink}>Show all</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         {isAdmin ? (
           <TouchableOpacity style={styles.createButton} onPress={() => setShowCreateBulletin(true)}>
             <Ionicons name="add-circle" size={20} color={Colors.textInverse} />
@@ -689,7 +653,7 @@ export default function CommunityScreen() {
         </ScrollView>
       </View>
     ),
-    [isAdmin, bulletinFilter]
+    [focusPostId, isAdmin, bulletinFilter]
   );
 
   const renderBulletinItem = useCallback(
@@ -712,11 +676,23 @@ export default function CommunityScreen() {
               {post.category ? post.category.charAt(0).toUpperCase() + post.category.slice(1) : 'Post'}
             </Text>
           </View>
-          {post.authorId === user?.id || isAdmin ? (
-            <TouchableOpacity onPress={() => handleDeleteBulletin(post.id)}>
-              <Ionicons name="trash-outline" size={16} color={Colors.error} />
-            </TouchableOpacity>
-          ) : null}
+          <View style={styles.bulletinHeaderActions}>
+            {isAdmin ? (
+              <TouchableOpacity
+                onPress={() => void togglePin(post)}
+                accessibilityRole="button"
+                accessibilityLabel={post.isPinned ? 'Unpin post' : 'Pin post'}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name={post.isPinned ? 'pin' : 'pin-outline'} size={16} color={post.isPinned ? Colors.warning : Colors.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+            {post.authorId === user?.id || isAdmin ? (
+              <TouchableOpacity onPress={() => handleDeleteBulletin(post.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="trash-outline" size={16} color={Colors.error} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
         <Text style={styles.bulletinTitle}>{post.title}</Text>
         <Text style={styles.bulletinContent} numberOfLines={4}>
@@ -755,6 +731,49 @@ export default function CommunityScreen() {
                 <Text style={styles.bulletinEventText}>{minParticipantsNotice(post)}</Text>
               </View>
             ) : null}
+            {Array.isArray(post.participants) && (post.drillShowParticipants || isAdmin) ? (
+              <View style={styles.rosterBox}>
+                <Text style={styles.rosterTitle}>
+                  Signed up so far ({post.participants.filter((p: any) => p.status === 'confirmed').length})
+                </Text>
+                {post.participants.filter((p: any) => p.status === 'confirmed').length === 0 ? (
+                  <Text style={styles.rosterEmpty}>No confirmed participants yet.</Text>
+                ) : (
+                  post.participants
+                    .filter((p: any) => p.status === 'confirmed')
+                    .map((p: any) => (
+                      <View key={p.userId} style={styles.rosterRow}>
+                        <Text style={styles.rosterName}>{p.fullName}</Text>
+                        {isAdmin ? (
+                          <TouchableOpacity onPress={() => adminRemoveSignup(post.id, p)} accessibilityRole="button" accessibilityLabel={`Remove ${p.fullName}`}>
+                            <Text style={styles.rosterRemove}>Remove</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    ))
+                )}
+                {isAdmin ? (
+                  <>
+                    <Text style={[styles.rosterTitle, { marginTop: Spacing.xs }]}>Waitlist</Text>
+                    {post.participants.filter((p: any) => p.status === 'waitlist').length === 0 ? (
+                      <Text style={styles.rosterEmpty}>No members on the waitlist.</Text>
+                    ) : (
+                      post.participants
+                        .filter((p: any) => p.status === 'waitlist')
+                        .sort((a: any, b: any) => (a.waitlistPosition || 0) - (b.waitlistPosition || 0))
+                        .map((p: any) => (
+                          <View key={p.userId} style={styles.rosterRow}>
+                            <Text style={styles.rosterName}>#{p.waitlistPosition} {p.fullName}</Text>
+                            <TouchableOpacity onPress={() => adminRemoveSignup(post.id, p)} accessibilityRole="button" accessibilityLabel={`Remove ${p.fullName}`}>
+                              <Text style={styles.rosterRemove}>Remove</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))
+                    )}
+                  </>
+                ) : null}
+              </View>
+            ) : null}
             {genderRestrictionLabel(post.drillGenderRestriction) ? (
               <View style={styles.bulletinEventRow}>
                 <Ionicons name="person-outline" size={14} color={Colors.primary} />
@@ -778,7 +797,7 @@ export default function CommunityScreen() {
             {post.currentUserSignupStatus ? (
               <TouchableOpacity
                 style={[styles.drillButton, styles.drillButtonCancel]}
-                onPress={() => handleCancelEventSignup(post.id)}
+                onPress={() => cancelSignup(post.id)}
                 disabled={signupBusyId === post.id}
               >
                 <Text style={styles.drillButtonCancelText}>{signupBusyId === post.id ? '...' : 'Cancel Signup'}</Text>
@@ -786,7 +805,7 @@ export default function CommunityScreen() {
             ) : post.currentUserCanSignup ? (
               <TouchableOpacity
                 style={styles.drillButton}
-                onPress={() => handleEventSignup(post.id, post)}
+                onPress={() => void signUp(post, bulletinSignupCheckoutUrls(post.id))}
                 disabled={signupBusyId === post.id}
               >
                 <Text style={styles.drillButtonText}>
@@ -840,7 +859,7 @@ export default function CommunityScreen() {
         </View>
       </Card>
     ),
-    [user?.id, isAdmin, signupBusyId]
+    [user?.id, isAdmin, signupBusyId, signUp, cancelSignup, togglePin, adminRemoveSignup]
   );
 
   const partnerEmpty = useMemo(
@@ -941,7 +960,7 @@ export default function CommunityScreen() {
       {activeTab === 'bulletin' && !(loadingBulletins && !refreshing) ? (
         <FlatList
           style={styles.tabList}
-          data={filteredBulletins}
+          data={focusPostId ? filteredBulletins.filter((p) => p.id === focusPostId) : filteredBulletins}
           keyExtractor={item => item.id}
           renderItem={renderBulletinItem}
           ListHeaderComponent={bulletinHeader}
@@ -1198,6 +1217,16 @@ const styles = StyleSheet.create({
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.border, gap: Spacing.sm },
   searchInput: { flex: 1, fontSize: FontSize.sm, color: Colors.text, paddingVertical: 0 },
   filterRow: { flexDirection: 'row', gap: Spacing.sm },
+  bulletinHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  rosterBox: { marginTop: Spacing.xs, borderWidth: 1, borderColor: Colors.borderLight, borderRadius: BorderRadius.sm, padding: Spacing.sm, gap: 4 },
+  rosterTitle: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  rosterEmpty: { fontSize: FontSize.xs, color: Colors.textMuted },
+  rosterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
+  rosterName: { fontSize: FontSize.sm, color: Colors.text, flexShrink: 1 },
+  rosterRemove: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.error },
+  focusBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.primary + '10', borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
+  focusBannerText: { fontSize: FontSize.sm, color: Colors.text },
+  focusBannerLink: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
   filterChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minHeight: TouchTarget.min, borderRadius: BorderRadius.full, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, justifyContent: 'center' },
   filterChipActive: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
   filterChipText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600' },

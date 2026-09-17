@@ -62,6 +62,8 @@ interface RegisterData {
   firstName: string;
   lastName: string;
   phone?: string;
+  /** From a club's setup-invite link; the server joins the inviting facility. */
+  setupToken?: string;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);

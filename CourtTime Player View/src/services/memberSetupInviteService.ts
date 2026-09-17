@@ -23,7 +23,7 @@ export function normalizeWhitelistEmail(email: string | null | undefined): strin
  * the real setup/login links) and not part of the editable template text, so
  * a facility customizing their invite message can't accidentally break them.
  */
-export function buildSetupInviteCtaHtml(setupLink: string, loginLink: string): string {
+function buildSetupInviteCtaCoreHtml(setupLink: string, loginLink: string): string {
   return [
     '<div style="text-align: center; margin: 30px 0;">',
     `<a href="${setupLink}" style="background-color: #2563eb; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Create your account</a>`,
@@ -45,7 +45,8 @@ export async function buildMemberSetupInviteHtml(
   email: string,
   facilityName: string,
   setupLink: string,
-  loginLink: string
+  loginLink: string,
+  appLink?: string
 ): Promise<{ subject: string; html: string }> {
   const defaults = EMAIL_TEMPLATE_TYPES[MEMBER_SETUP_INVITE_TEMPLATE_TYPE];
   const custom = await getTemplateForFacility(facilityId, MEMBER_SETUP_INVITE_TEMPLATE_TYPE);
@@ -58,7 +59,7 @@ export async function buildMemberSetupInviteHtml(
 
   const subject = renderTemplate(custom?.subject || defaults.defaultSubject, variables);
   const messageHtml = renderPlainTextBody(custom?.bodyHtml || defaults.defaultBody, variables);
-  const bodyContent = messageHtml + buildSetupInviteCtaHtml(setupLink, loginLink);
+  const bodyContent = messageHtml + buildSetupInviteCtaHtml(setupLink, loginLink, appLink);
 
   return { subject, html: wrapInEmailLayout(bodyContent, facilityName) };
 }
@@ -102,9 +103,11 @@ export async function sendMemberSetupInviteEmail(
   const encodedToken = encodeURIComponent(token);
   const setupLink = `${appUrl}/register?setupToken=${encodedToken}`;
   const loginLink = `${appUrl}/login?setupToken=${encodedToken}`;
+  // Same invitation inside the CourtTime mobile app (deep link).
+  const appLink = `courttime://auth/setup-invite?token=${encodedToken}`;
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'CourtTime <onboarding@resend.dev>';
 
-  const { subject, html } = await buildMemberSetupInviteHtml(facilityId, email, facilityName, setupLink, loginLink);
+  const { subject, html } = await buildMemberSetupInviteHtml(facilityId, email, facilityName, setupLink, loginLink, appLink);
 
   for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
     try {
@@ -280,4 +283,13 @@ export async function getFacilityIdForSetupToken(token: string): Promise<string 
   const validation = await validateSetupToken(token);
   if (!validation.valid) return null;
   return validation.facilityId;
+}
+
+export function buildSetupInviteCtaHtml(setupLink: string, loginLink: string, appLink?: string): string {
+  const core = buildSetupInviteCtaCoreHtml(setupLink, loginLink);
+  if (!appLink) return core;
+  return (
+    core +
+    `<p style="color: #6b7280; font-size: 13px; margin-top: 16px;">Have the CourtTime app? <a href="${appLink}" style="color: #2563eb;">Open this invitation in the app</a>.</p>`
+  );
 }

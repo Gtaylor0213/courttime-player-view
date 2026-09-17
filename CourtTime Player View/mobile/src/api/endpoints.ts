@@ -87,6 +87,11 @@ export const reservationEndpoints = {
   /** Advertise (or stop advertising) open spots on the caller's own booking. */
   setOpenToMembers: (bookingId: string, open: boolean, maxPlayers?: number) =>
     api.post(`/api/bookings/${bookingId}/open-spot`, { open, maxPlayers }),
+  /** Staff close-out (web ReservationManagementModal): `{ success, preview, charges }`. */
+  settlement: (bookingId: string) => api.get(`/api/bookings/${bookingId}/settlement`),
+  closeOutSettlement: (bookingId: string) => api.post(`/api/bookings/${bookingId}/settlement/close-out`, {}),
+  resolveSettlementCharge: (bookingId: string, userId: string, resolution: 'cash' | 'waived' | 'retry') =>
+    api.post(`/api/bookings/${bookingId}/settlement/charges/${userId}/resolve`, { resolution }),
   /** Bookings at the facility currently advertising an open spot. */
   openSpots: (facilityId: string) => api.get(`/api/bookings/open?facilityId=${encodeURIComponent(facilityId)}`),
   claimSpot: (bookingId: string) => api.post(`/api/bookings/${bookingId}/claim-spot`, {}),
@@ -98,8 +103,6 @@ export const reservationEndpoints = {
     api.post(`/api/bookings/${bookingId}/split-payment/decline`, { reason }),
   updateSplitParticipants: (bookingId: string, participantIds: string[]) =>
     api.put(`/api/bookings/${bookingId}/split-payment/participants`, { participantIds }),
-  /** Staff preview + charge rows; 403 for members. */
-  settlement: (bookingId: string) => api.get(`/api/bookings/${bookingId}/settlement`),
 };
 
 export const levelGroupEndpoints = {

@@ -101,6 +101,10 @@ function formatLongDate(value: unknown): string {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+interface SettlementCharge { userId: string; fullName: string; amountCents: number; status: 'pending' | 'charged' | 'failed' | 'cash' | 'waived'; errorMessage?: string | null }
+interface SettlementPreview { totalCents: number; lines: Array<{ userId: string; fullName: string; amountCents: number; isOwner: boolean; hasSavedCard: boolean; cardLast4: string | null }> }
+const CHARGE_LABELS: Record<string, string> = { pending: 'pending', charged: 'charged', failed: 'failed', cash: 'paid in cash', waived: 'waived' };
+
 const SETTLEMENT_LABELS: Record<string, string> = {
   unsettled: 'Pay after play',
   settling: 'Partial settlement',
@@ -123,6 +127,7 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
   const [searching, setSearching] = useState(false);
 
   const [editingRoster, setEditingRoster] = useState(false);
+  const [closeOut, setCloseOut] = useState<{ preview: SettlementPreview | null; charges: SettlementCharge[] } | null>(null);
   const [rosterMembers, setRosterMembers] = useState<SplitPaymentMember[]>([]);
 
   const bookingId = booking?.id ?? '';
@@ -133,6 +138,54 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
     settlementStatus === 'unsettled' || settlementStatus === 'settling' || settlementStatus === 'settled';
   const canEditRoster = isPostPlayBooking && settlementStatus === 'unsettled' && (isOwner || isFacilityAdmin);
   const showRosterSection = postPlayEnabled || isPostPlayBooking;
+  // Staff close-out, same gate as web: admin, post-play booking, not yet settled.
+  const canStaffCloseOut = isFacilityAdmin && isPostPlayBooking && (settlementStatus === 'unsettled' || settlementStatus === 'settling');
+
+  async function openCloseOut() {
+    if (!bookingId) return;
+    setBusy('settlement');
+    const res = await reservationEndpoints.settlement(bookingId);
+    setBusy(null);
+    if (!res.success) {
+      showApiErrorAlert(res, 'Could not load settlement');
+      return;
+    }
+    const d = res.data as any;
+    setCloseOut({ preview: d?.preview ?? d?.data?.preview ?? null, charges: d?.charges ?? d?.data?.charges ?? [] });
+  }
+
+  function applySettlementResult(data: any) {
+    const status = data?.settlementStatus ?? data?.data?.settlementStatus;
+    const charges = data?.charges ?? data?.data?.charges ?? [];
+    setCloseOut((prev) => ({ preview: prev?.preview ?? null, charges: Array.isArray(charges) ? charges : [] }));
+    if (status) setDetail((prev) => (prev ? { ...prev, settlementStatus: status } : prev));
+    if (status === 'settled') {
+      hapticSuccess();
+      showAlert('Settled', 'All charges resolved — reservation settled.');
+      onChanged?.();
+    }
+  }
+
+  function confirmCloseOut() {
+    const total = closeOut?.preview?.totalCents ?? 0;
+    const payers = closeOut?.preview?.lines.length ?? 0;
+    Alert.alert('Close out & charge cards?', `Charges ${formatCentsAsUsd(total)} across ${payers} player${payers === 1 ? '' : 's'} using their saved cards. Players without a card show as failed and can be marked cash or waived.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Charge', style: 'destructive', onPress: () => { void (async () => {
+        setBusy('close-out');
+        const res = await reservationEndpoints.closeOutSettlement(bookingId);
+        setBusy(null);
+        if (res.success) applySettlementResult(res.data); else { hapticError(); showApiErrorAlert(res, 'Close-out failed'); }
+      })(); } },
+    ]);
+  }
+
+  async function resolveCharge(userId: string, resolution: 'cash' | 'waived' | 'retry') {
+    setBusy(`resolve-${userId}`);
+    const res = await reservationEndpoints.resolveSettlementCharge(bookingId, userId, resolution);
+    setBusy(null);
+    if (res.success) applySettlementResult(res.data); else showApiErrorAlert(res, 'Could not update charge');
+  }
 
   const load = useCallback(async () => {
     if (!booking) return;
@@ -141,6 +194,7 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
     setParticipants([]);
     setSplit(null);
     setEditingRoster(false);
+    setCloseOut(null);
     setMemberSearch('');
     setMemberResults([]);
 
@@ -406,6 +460,47 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{SETTLEMENT_LABELS[settlementStatus ?? ''] ?? settlementStatus}</Text>
                 </View>
+              </View>
+            ) : null}
+
+            {/* Staff close-out (admin only, post-play bookings) */}
+            {canStaffCloseOut && !closeOut ? (
+              <Button title="Close-out settlement" variant="secondary" onPress={() => void openCloseOut()} loading={busy === 'settlement'} disabled={busy !== null} style={styles.mtSm} />
+            ) : null}
+            {canStaffCloseOut && closeOut ? (
+              <View style={styles.splitBox}>
+                <Text style={styles.splitTitle}>Close-out settlement · {formatCentsAsUsd(closeOut.preview?.totalCents ?? 0)}</Text>
+                {closeOut.charges.length === 0 && closeOut.preview
+                  ? closeOut.preview.lines.map((l) => (
+                      <View key={l.userId} style={styles.shareRow}>
+                        <Text style={styles.shareName}>{l.fullName}{l.isOwner ? ' (owner)' : ''}</Text>
+                        <Text style={styles.shareStatus}>{formatCentsAsUsd(l.amountCents)} · {l.hasSavedCard ? `card ${l.cardLast4 ?? ''}`.trim() : 'no card'}</Text>
+                      </View>
+                    ))
+                  : null}
+                {closeOut.charges.length === 0 ? (
+                  <Button title="Confirm close-out & charge cards" onPress={confirmCloseOut} loading={busy === 'close-out'} disabled={busy !== null} style={styles.mtSm} />
+                ) : (
+                  <>
+                    <Text style={styles.splitHint}>Charge results</Text>
+                    {closeOut.charges.map((c) => (
+                      <View key={c.userId} style={styles.mtSm}>
+                        <View style={styles.shareRow}>
+                          <Text style={styles.shareName}>{c.fullName}</Text>
+                          <Text style={styles.shareStatus}>{formatCentsAsUsd(c.amountCents)} · {CHARGE_LABELS[c.status] ?? c.status}</Text>
+                        </View>
+                        {c.status === 'failed' && c.errorMessage ? <Text style={styles.footnote}>{c.errorMessage}</Text> : null}
+                        {c.status === 'failed' || c.status === 'pending' ? (
+                          <View style={styles.actionRow}>
+                            <Button title="Retry card" variant="secondary" onPress={() => void resolveCharge(c.userId, 'retry')} loading={busy === `resolve-${c.userId}`} disabled={busy !== null} style={styles.flex1} />
+                            <Button title="Paid cash" variant="secondary" onPress={() => void resolveCharge(c.userId, 'cash')} disabled={busy !== null} style={styles.flex1} />
+                            <Button title="Waive" variant="secondary" onPress={() => void resolveCharge(c.userId, 'waived')} disabled={busy !== null} style={styles.flex1} />
+                          </View>
+                        ) : null}
+                      </View>
+                    ))}
+                  </>
+                )}
               </View>
             ) : null}
 

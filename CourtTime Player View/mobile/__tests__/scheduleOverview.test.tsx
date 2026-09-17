@@ -49,7 +49,8 @@ let onSelectDate: jest.Mock;
 /** One booking on 2026-05-06, so a known day has content. */
 function mockBookings() {
   getSpy.mockImplementation(async (url: string) => {
-    if (url.includes('date=2026-05-06')) {
+    // The range endpoint returns every booking in [startDate, endDate].
+    if (url.includes('/range?')) {
       return {
         success: true,
         data: {
@@ -101,8 +102,11 @@ describe('ScheduleOverview', () => {
   it('opens on the week containing the selected date and fetches its 7 days', async () => {
     const tree = await render();
 
-    expect(getSpy).toHaveBeenCalledTimes(7);
-    // Week of Mon 4 May to Sun 10 May.
+    // One range request for the week of Mon 4 May to Sun 10 May.
+    expect(getSpy).toHaveBeenCalledTimes(1);
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/bookings/facility/facility-1/range?startDate=2026-05-04&endDate=2026-05-10'
+    );
     expect(allText(tree)).toContain('May 4 – 10');
   });
 
@@ -130,8 +134,11 @@ describe('ScheduleOverview', () => {
       await Promise.resolve();
     });
 
-    // May has 31 days.
-    expect(getSpy).toHaveBeenCalledTimes(31);
+    // One range request covering all 31 days of May.
+    expect(getSpy).toHaveBeenCalledTimes(1);
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/bookings/facility/facility-1/range?startDate=2026-05-01&endDate=2026-05-31'
+    );
     expect(allText(tree)).toContain('May 2026');
   });
 

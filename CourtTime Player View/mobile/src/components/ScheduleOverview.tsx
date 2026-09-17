@@ -101,19 +101,18 @@ export function ScheduleOverview({
     let cancelled = false;
     setLoading(true);
 
-    Promise.all(
-      dateStrings.map((ds) =>
-        api
-          .get(`/api/bookings/facility/${facilityId}?date=${ds}`)
-          .then((res) => {
-            const data = res.success ? (res.data as { bookings?: unknown }) : null;
-            return Array.isArray(data?.bookings) ? (data.bookings as OverviewBooking[]) : [];
-          })
-          .catch(() => [] as OverviewBooking[])
-      )
-    )
+    // One request for the whole range (web's per-day loop is 31 calls on a long month).
+    const startDate = dateStrings[0]!;
+    const endDate = dateStrings[dateStrings.length - 1]!;
+    api
+      .get(`/api/bookings/facility/${facilityId}/range?startDate=${startDate}&endDate=${endDate}`)
+      .then((res) => {
+        const data = res.success ? (res.data as { bookings?: unknown }) : null;
+        return Array.isArray(data?.bookings) ? (data.bookings as OverviewBooking[]) : [];
+      })
+      .catch(() => [] as OverviewBooking[])
       .then((results) => {
-        if (!cancelled) setBookings(results.flat());
+        if (!cancelled) setBookings(results);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

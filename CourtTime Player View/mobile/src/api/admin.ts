@@ -35,6 +35,22 @@ export interface AdminStatusBreakdownRow {
   count: string;
 }
 
+export interface AdminAnalytics {
+  bookingsTrend: Array<{ date: string; bookings: string | number }>;
+  peakHours: Array<{ hour: string | number; bookings: string | number }>;
+  courtUsage: Array<{ court_name: string; court_number?: number; bookings: string | number }>;
+  memberGrowth: Array<{ date: string; new_members: string | number }>;
+  dayOfWeek: Array<{ day_of_week: string | number; bookings: string | number }>;
+  heatmap: Array<{ day_of_week: string | number; hour: string | number; bookings: string | number }>;
+  statusBreakdown: AdminStatusBreakdownRow[];
+  courtUtilization: Array<{ court_name: string; court_number?: number; total_bookings: string | number; total_minutes_booked: string | number }>;
+  topBookers: Array<{ member_name: string; email?: string; booking_count: string | number; total_minutes: string | number }>;
+}
+
+export function getFullAnalytics(facilityId: string, periodDays: number) {
+  return api.get<{ success: boolean; data: Partial<AdminAnalytics> }>(`/api/admin/analytics/${facilityId}?period=${periodDays}`);
+}
+
 export function getDashboardStats(facilityId: string) {
   return api.get<{
     success: boolean;
@@ -254,6 +270,14 @@ export interface AdminCourtRow {
   hasLights: boolean;
   isWalkUp: boolean;
   status: 'available' | 'maintenance' | 'closed' | string;
+  isAdminOnly?: boolean;
+  canSplit?: boolean;
+  requirePayment?: boolean;
+  bookingAmountCents?: number | null;
+  billingMode?: 'hourly' | 'daily' | string | null;
+  dailyRateCents?: number | null;
+  guestFeeCents?: number | null;
+  ballMachineFeeCents?: number | null;
 }
 
 export function getFacilityCourts(facilityId: string) {
@@ -270,6 +294,14 @@ export interface CreateCourtInput {
   isIndoor: boolean;
   hasLights: boolean;
   isWalkUp: boolean;
+  isAdminOnly?: boolean;
+  canSplit?: boolean;
+  requirePayment?: boolean;
+  bookingFeeDollars?: string;
+  billingMode?: 'hourly' | 'daily';
+  dailyRateDollars?: string;
+  guestFeeDollars?: string;
+  ballMachineFeeDollars?: string;
 }
 
 export function createCourt(facilityId: string, input: CreateCourtInput) {
@@ -454,4 +486,24 @@ export function createFacilityCheckout(facilityId: string, returnUrl: string) {
 
 export function cancelFacilitySubscription(facilityId: string) {
   return api.post('/api/payments/cancel-subscription', { facilityId });
+}
+
+// ── Court waivers + bulk add (web CourtManagement / CourtWaiverSection) ──
+export function getCourtWaiver(courtId: string) {
+  return api.get(`/api/admin/courts/${courtId}/waiver`);
+}
+export function publishCourtWaiver(courtId: string, contentHtml: string) {
+  return api.put(`/api/admin/courts/${courtId}/waiver`, { contentHtml });
+}
+export function removeCourtWaiver(courtId: string) {
+  return api.delete(`/api/admin/courts/${courtId}/waiver`);
+}
+export function getCourtWaiverAcceptance(courtId: string) {
+  return api.get(`/api/admin/courts/${courtId}/waiver/acceptance`);
+}
+export function bulkAddCourts(
+  facilityId: string,
+  input: { count: number; startingNumber: number } & Partial<CreateCourtInput>
+) {
+  return api.post(`/api/admin/courts/${facilityId}/bulk`, input);
 }

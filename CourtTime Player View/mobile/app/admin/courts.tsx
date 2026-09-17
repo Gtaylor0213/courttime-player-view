@@ -25,11 +25,19 @@ import {
   getFacilityBlackouts,
   createBlackout,
   deleteBlackout,
+  getCourtWaiver,
+  publishCourtWaiver,
+  removeCourtWaiver,
+  getCourtWaiverAcceptance,
+  bulkAddCourts,
   type AdminCourtRow,
   type CourtScheduleDay,
   type AdminBlackoutRow,
 } from '../../src/api/admin';
 import { STANDARD_COURT_TYPE_VALUES } from '../../../shared/constants/courtTypes';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
+import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
+import { htmlToDisplayText } from '../../src/utils/htmlToText';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
@@ -55,6 +63,7 @@ export default function AdminCourtsScreen() {
   const [editingCourt, setEditingCourt] = useState<AdminCourtRow | 'new' | null>(null);
   const [scheduleCourt, setScheduleCourt] = useState<AdminCourtRow | null>(null);
   const [addingBlackout, setAddingBlackout] = useState(false);
+  const [bulkAdding, setBulkAdding] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!facilityId) return;
@@ -92,9 +101,14 @@ export default function AdminCourtsScreen() {
       <Card style={styles.card}>
         <View style={styles.headerRow}>
           <Text style={styles.cardTitle}>Courts ({courts.length})</Text>
-          <TouchableOpacity onPress={() => setEditingCourt('new')} accessibilityLabel="Add court">
-            <Ionicons name="add-circle" size={26} color={Colors.primary} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: Spacing.md, alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setBulkAdding(true)} accessibilityRole="button" accessibilityLabel="Bulk add courts">
+              <Ionicons name="copy-outline" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setEditingCourt('new')} accessibilityLabel="Add court">
+              <Ionicons name="add-circle" size={26} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
         {courts.map((c) => (
           <View key={c.id} style={styles.courtRow}>
@@ -106,6 +120,8 @@ export default function AdminCourtsScreen() {
                 {c.courtType || 'Tennis'} • {c.surfaceType || 'Hard'} • {c.status}
                 {c.isIndoor ? ' • Indoor' : ''}
                 {c.hasLights ? ' • Lights' : ''}
+                {c.isAdminOnly ? ' • Admin only' : ''}
+                {c.requirePayment ? (c.billingMode === 'daily' ? ` • $${((c.dailyRateCents ?? 0) / 100).toFixed(2)}/day` : ` • $${((c.bookingAmountCents ?? 0) / 100).toFixed(2)}/hr`) : ''}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setScheduleCourt(c)} style={styles.scheduleBtn}>
@@ -166,6 +182,10 @@ export default function AdminCourtsScreen() {
         <ScheduleModal court={scheduleCourt} onClose={() => setScheduleCourt(null)} />
       ) : null}
 
+      {bulkAdding ? (
+        <BulkAddModal facilityId={facilityId} nextNumber={courts.reduce((m, c) => Math.max(m, Number(c.courtNumber) || 0), 0) + 1} onClose={() => setBulkAdding(false)} onChanged={loadData} />
+      ) : null}
+
       {addingBlackout ? (
         <BlackoutFormModal
           facilityId={facilityId}
@@ -196,10 +216,64 @@ function CourtFormModal({
   const [isIndoor, setIsIndoor] = useState(court?.isIndoor || false);
   const [hasLights, setHasLights] = useState(court?.hasLights || false);
   const [isWalkUp, setIsWalkUp] = useState(court?.isWalkUp || false);
+  const { isFeatureEnabled } = useFeatureFlags();
+  const adminOnlyEnabled = isFeatureEnabled(FEATURE_FLAGS.ADMIN_ONLY_COURTS);
+  const waiversEnabled = isFeatureEnabled(FEATURE_FLAGS.COURT_WAIVERS);
+  const [isAdminOnly, setIsAdminOnly] = useState(court?.isAdminOnly || false);
+  const [canSplit, setCanSplit] = useState(court?.canSplit || false);
+  // Fees (web PaidCourtBookingFields): hourly or daily court fee, guest fee, ball machine fee.
+  const dollars = (cents?: number | null) => (cents != null && cents > 0 ? (cents / 100).toFixed(2) : '');
+  const [requirePayment, setRequirePayment] = useState(court?.requirePayment || false);
+  const [billingMode, setBillingMode] = useState<'hourly' | 'daily'>(court?.billingMode === 'daily' ? 'daily' : 'hourly');
+  const [bookingFeeDollars, setBookingFeeDollars] = useState(dollars(court?.bookingAmountCents));
+  const [dailyRateDollars, setDailyRateDollars] = useState(dollars(court?.dailyRateCents));
+  const [guestFeeEnabled, setGuestFeeEnabled] = useState(!!court?.guestFeeCents);
+  const [guestFeeDollars, setGuestFeeDollars] = useState(dollars(court?.guestFeeCents));
+  const [ballFeeEnabled, setBallFeeEnabled] = useState(!!court?.ballMachineFeeCents);
+  const [ballFeeDollars, setBallFeeDollars] = useState(dollars(court?.ballMachineFeeCents));
   const [submitting, setSubmitting] = useState(false);
+
+  // Court waiver (web CourtWaiverSection): current version, acceptance counts, publish/remove.
+  const [waiverLoaded, setWaiverLoaded] = useState(false);
+  const [waiverEnabled, setWaiverEnabled] = useState(false);
+  const [waiverContent, setWaiverContent] = useState('');
+  const [waiverVersion, setWaiverVersion] = useState<{ versionNumber?: number; contentHtml?: string } | null>(null);
+  const [waiverCounts, setWaiverCounts] = useState<{ accepted?: number; notAccepted?: number } | null>(null);
+  const [waiverSaving, setWaiverSaving] = useState(false);
+  useEffect(() => {
+    if (!court || !waiversEnabled) return;
+    void (async () => {
+      const [w, a] = await Promise.all([getCourtWaiver(court.id), getCourtWaiverAcceptance(court.id)]);
+      const current = (w.data as any)?.data?.currentVersion ?? (w.data as any)?.currentVersion ?? null;
+      setWaiverVersion(current);
+      setWaiverEnabled(!!current);
+      setWaiverContent(current?.contentHtml ? htmlToDisplayText(current.contentHtml) : '');
+      const summary = (a.data as any)?.data ?? a.data;
+      setWaiverCounts(summary ? { accepted: summary.acceptedCount ?? summary.accepted, notAccepted: summary.notAcceptedCount ?? summary.notAccepted } : null);
+      setWaiverLoaded(true);
+    })();
+  }, [court?.id, waiversEnabled]);
+
+  async function saveWaiver() {
+    if (!court) return;
+    setWaiverSaving(true);
+    const res = waiverEnabled
+      ? await publishCourtWaiver(court.id, waiverContent.trim())
+      : await removeCourtWaiver(court.id);
+    setWaiverSaving(false);
+    if (!res.success) {
+      showApiErrorAlert(res, 'Could not save waiver');
+      return;
+    }
+    showAlert('Waiver', waiverEnabled ? 'New waiver version published — members must re-accept.' : 'Court waiver removed.');
+  }
 
   async function submit() {
     if (!facilityId || !name.trim()) return;
+    if (requirePayment && !(billingMode === 'daily' ? Number(dailyRateDollars) > 0 : Number(bookingFeeDollars) > 0)) {
+      showAlert('Court fee', billingMode === 'daily' ? 'Enter a valid daily rate.' : 'Enter a valid hourly booking fee.');
+      return;
+    }
     setSubmitting(true);
     const input = {
       name: name.trim(),
@@ -209,6 +283,14 @@ function CourtFormModal({
       isIndoor,
       hasLights,
       isWalkUp,
+      isAdminOnly,
+      canSplit,
+      requirePayment,
+      billingMode,
+      bookingFeeDollars: requirePayment && billingMode === 'hourly' ? bookingFeeDollars : '',
+      dailyRateDollars: requirePayment && billingMode === 'daily' ? dailyRateDollars : '',
+      guestFeeDollars: guestFeeEnabled ? guestFeeDollars : '',
+      ballMachineFeeDollars: ballFeeEnabled ? ballFeeDollars : '',
     };
     const res = court ? await updateCourt(court.id, input) : await createCourt(facilityId, input);
     setSubmitting(false);
@@ -298,6 +380,77 @@ function CourtFormModal({
             <ToggleRow label="Indoor" value={isIndoor} onChange={setIsIndoor} />
             <ToggleRow label="Has lights" value={hasLights} onChange={setHasLights} />
             <ToggleRow label="Walk-up (no reservation needed)" value={isWalkUp} onChange={setIsWalkUp} />
+            {adminOnlyEnabled ? <ToggleRow label="Admin only (only admins/sub-admins can book)" value={isAdminOnly} onChange={setIsAdminOnly} /> : null}
+            <ToggleRow label="Can be split into multiple courts" value={canSplit} onChange={setCanSplit} />
+
+            <Text style={styles.sectionTitle}>Fees</Text>
+            <ToggleRow label="Charge a court booking fee" value={requirePayment} onChange={setRequirePayment} />
+            {requirePayment ? (
+              <>
+                <View style={styles.chipsWrap}>
+                  {(['hourly', 'daily'] as const).map((m) => (
+                    <TouchableOpacity key={m} style={[styles.chip, billingMode === m && styles.chipSelected]} onPress={() => setBillingMode(m)} accessibilityRole="button" accessibilityLabel={m === 'hourly' ? 'Hourly billing' : 'Daily billing'}>
+                      <Text style={[styles.chipText, billingMode === m && styles.chipTextSelected]}>{m === 'hourly' ? 'Hourly' : 'Flat day rate'}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {billingMode === 'hourly' ? (
+                  <>
+                    <Text style={styles.label}>Booking fee per hour (USD)</Text>
+                    <Input value={bookingFeeDollars} onChangeText={(v) => setBookingFeeDollars(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="20.00" />
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.label}>Daily rate (USD)</Text>
+                    <Input value={dailyRateDollars} onChangeText={(v) => setDailyRateDollars(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="60.00" />
+                  </>
+                )}
+              </>
+            ) : null}
+            <ToggleRow label="Guest fee" value={guestFeeEnabled} onChange={setGuestFeeEnabled} />
+            {guestFeeEnabled ? (
+              <>
+                <Text style={styles.label}>Guest fee per guest (USD)</Text>
+                <Input value={guestFeeDollars} onChangeText={(v) => setGuestFeeDollars(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="10.00" />
+              </>
+            ) : null}
+            <ToggleRow label="Ball machine fee" value={ballFeeEnabled} onChange={setBallFeeEnabled} />
+            {ballFeeEnabled ? (
+              <>
+                <Text style={styles.label}>Ball machine hourly rate (USD)</Text>
+                <Input value={ballFeeDollars} onChangeText={(v) => setBallFeeDollars(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="15.00" />
+              </>
+            ) : null}
+
+            {court && waiversEnabled ? (
+              <>
+                <Text style={styles.sectionTitle}>Court waiver</Text>
+                {!waiverLoaded ? (
+                  <Text style={styles.emptyText}>Loading…</Text>
+                ) : (
+                  <>
+                    <ToggleRow label="Require members to accept a waiver before booking" value={waiverEnabled} onChange={setWaiverEnabled} />
+                    {waiverVersion?.versionNumber ? (
+                      <Text style={styles.emptyText}>
+                        Version {waiverVersion.versionNumber} published
+                        {waiverCounts ? ` · ${waiverCounts.accepted ?? 0} accepted, ${waiverCounts.notAccepted ?? 0} not yet` : ''}
+                      </Text>
+                    ) : null}
+                    {waiverEnabled ? (
+                      <Input value={waiverContent} onChangeText={setWaiverContent} placeholder="Paste your waiver text…" multiline style={{ minHeight: 120, textAlignVertical: 'top' }} />
+                    ) : null}
+                    <Button
+                      title={waiverEnabled ? 'Publish waiver version' : 'Remove waiver'}
+                      variant="secondary"
+                      onPress={() => void saveWaiver()}
+                      loading={waiverSaving}
+                      disabled={waiverSaving || (waiverEnabled && !waiverContent.trim()) || (!waiverEnabled && !waiverVersion)}
+                      style={{ marginTop: Spacing.sm }}
+                    />
+                  </>
+                )}
+              </>
+            ) : null}
 
             <Button
               title={court ? 'Save Changes' : 'Add Court'}
@@ -314,6 +467,95 @@ function CourtFormModal({
                 style={{ marginTop: Spacing.sm }}
               />
             ) : null}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function BulkAddModal({
+  facilityId,
+  nextNumber,
+  onClose,
+  onChanged,
+}: {
+  facilityId: string | null | undefined;
+  nextNumber: number;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [count, setCount] = useState('4');
+  const [startingNumber, setStartingNumber] = useState(String(nextNumber));
+  const [courtType, setCourtType] = useState('Tennis');
+  const [surfaceType, setSurfaceType] = useState('Hard');
+  const [isIndoor, setIsIndoor] = useState(false);
+  const [hasLights, setHasLights] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!facilityId) return;
+    const n = Number(count);
+    if (!n || n < 1 || n > 50) {
+      showAlert('Bulk add', 'Count must be between 1 and 50.');
+      return;
+    }
+    setSubmitting(true);
+    const res = await bulkAddCourts(facilityId, { count: n, startingNumber: Number(startingNumber) || 1, courtType, surfaceType, isIndoor, hasLights });
+    setSubmitting(false);
+    if (!res.success) {
+      showApiErrorAlert(res, 'Failed to create courts');
+      return;
+    }
+    if ((res.data as any)?.requiresPayment) {
+      showAlert('Payment required', 'Adding these courts requires a one-time platform fee. Complete this on the web at Admin > Courts.');
+      return;
+    }
+    await onChanged();
+    onClose();
+  }
+
+  return (
+    <Modal visible transparent animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined} onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>Bulk Add Courts</Text>
+            <TouchableOpacity onPress={onClose} accessibilityLabel="Close">
+              <Ionicons name="close" size={24} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled">
+            <Text style={styles.emptyText}>Create multiple courts with shared properties, numbered from the starting number.</Text>
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Text style={styles.label}>Number of courts</Text>
+                <Input value={count} onChangeText={(v) => setCount(v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" />
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>Starting number</Text>
+                <Input value={startingNumber} onChangeText={(v) => setStartingNumber(v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" />
+              </View>
+            </View>
+            <Text style={styles.label}>Type</Text>
+            <View style={styles.chipsWrap}>
+              {STANDARD_COURT_TYPE_VALUES.map((t) => (
+                <TouchableOpacity key={t} style={[styles.chip, courtType === t && styles.chipSelected]} onPress={() => setCourtType(t)}>
+                  <Text style={[styles.chipText, courtType === t && styles.chipTextSelected]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.label}>Surface</Text>
+            <View style={styles.chipsWrap}>
+              {SURFACE_TYPES.map((s) => (
+                <TouchableOpacity key={s} style={[styles.chip, surfaceType === s && styles.chipSelected]} onPress={() => setSurfaceType(s)}>
+                  <Text style={[styles.chipText, surfaceType === s && styles.chipTextSelected]}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <ToggleRow label="Indoor" value={isIndoor} onChange={setIsIndoor} />
+            <ToggleRow label="Has lights" value={hasLights} onChange={setHasLights} />
+            <Button title="Create courts" onPress={submit} loading={submitting} style={{ marginTop: Spacing.md }} />
           </ScrollView>
         </View>
       </View>
@@ -575,7 +817,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.xs,
   },
-  toggleLabel: { fontSize: FontSize.sm, color: Colors.text },
+  toggleLabel: { fontSize: FontSize.sm, color: Colors.text, flexShrink: 1, marginRight: Spacing.sm },
+  sectionTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginTop: Spacing.md, marginBottom: Spacing.xs },
   dayRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
   dayName: { width: 36, fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '700' },
   dayTimeInput: { flex: 1, paddingVertical: 6 },

@@ -1216,7 +1216,7 @@ export function CourtCalendarGrid({
                                       ? styles.bookingBlockBlocked
                                       : {
                                           backgroundColor: typeColors.bg,
-                                          borderLeftColor: typeColors.border,
+                                          borderColor: typeColors.border,
                                         },
                                     { height: span * ROW_HEIGHT - 2 },
                                   ]}
@@ -1455,14 +1455,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.error + '20',
   },
 
-  // Booking blocks — background/border color is set per booking type (see getBookingTypeRNColors)
+  // Booking blocks — same look as the web calendar block: type bg fill, 1px type border all
+  // round, rounded corners, semibold label. Colors per type come from getBookingTypeRNColors.
   bookingBlock: {
     position: 'absolute',
     top: 1,
     left: 2,
     right: 2,
-    borderRadius: BorderRadius.sm,
-    borderLeftWidth: 3,
+    borderRadius: BorderRadius.sm, // web: rounded-lg (8px)
+    borderWidth: 1,
     paddingHorizontal: 4,
     paddingVertical: 2,
     overflow: 'hidden',
@@ -1471,10 +1472,11 @@ const styles = StyleSheet.create({
   },
   bookingBlockBlocked: {
     backgroundColor: '#E5E7EB',
-    borderLeftColor: '#6B7280',
+    borderColor: '#D1D5DC',
+    opacity: 0.7,
   },
   bookingBlockText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
   },

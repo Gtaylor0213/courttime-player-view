@@ -15,6 +15,18 @@ function allowUnsignedWebhookPayloads(): boolean {
 }
 
 /**
+ * Stripe moved Invoice.subscription to invoice.parent.subscription_details.subscription
+ * under newer API versions (e.g. 2026-02-25.clover) — check both locations.
+ */
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const legacy = (invoice as any).subscription as string | Stripe.Subscription | null | undefined;
+  if (legacy) return typeof legacy === 'string' ? legacy : legacy.id;
+  const nested = invoice.parent?.subscription_details?.subscription;
+  if (!nested) return null;
+  return typeof nested === 'string' ? nested : nested.id;
+}
+
+/**
  * POST /api/webhooks/stripe
  * Stripe webhook endpoint — must receive raw body for signature verification.
  * This route is mounted BEFORE express.json() in server/index.ts.
@@ -143,7 +155,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
  * Updates billing period and records payment in history.
  */
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-  const subscriptionId = invoice.subscription as string | null;
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
   if (!subscriptionId) return;
 
   const periodStart = invoice.period_start ? new Date(invoice.period_start * 1000) : null;
@@ -213,7 +225,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
  * Marks subscription as past_due.
  */
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
-  const subscriptionId = invoice.subscription as string | null;
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
   if (!subscriptionId) return;
 
   console.log(`[WEBHOOK] invoice.payment_failed — sub ${subscriptionId}`);

@@ -97,6 +97,19 @@ describe('notification navigation', () => {
     expect(getNotificationHref({ type: 'unexpected' })).toBe('/(tabs)/community');
   });
 
+  it('routes payment, padel and split-payment notifications to their screens', () => {
+    expect(getNotificationHref({ type: 'payment' })).toBe('/payments');
+    expect(getNotificationHref({ type: 'padel_session_full' })).toBe('/padel');
+    expect(getNotificationHref({ type: 'split_payment_requested', bookingId: 'b1' })).toEqual({
+      pathname: '/(tabs)/book',
+      params: { bookingId: 'b1' },
+    });
+    expect(getNotificationHref({ type: 'booking_open_spot_claimed' })).toEqual({
+      pathname: '/(tabs)/book',
+      params: {},
+    });
+  });
+
   it('routes strike and lockout notifications to Profile', () => {
     expect(getNotificationHref({ type: 'strike_issued' })).toBe('/(tabs)/profile');
     expect(getNotificationHref({ type: 'account_lockout' })).toBe('/(tabs)/profile');

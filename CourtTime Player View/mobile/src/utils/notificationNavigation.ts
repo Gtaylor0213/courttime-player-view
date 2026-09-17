@@ -14,6 +14,10 @@ const BOOKING_PUSH_TYPES = new Set([
   'reservation_confirmed',
   'reservation_cancelled',
   'reservation_reminder',
+  // Split-payment and open-spot events refer to a booking on the calendar.
+  'split_payment_requested',
+  'split_payment_cancelled',
+  'booking_open_spot_claimed',
 ]);
 
 const PROFILE_PUSH_TYPES = new Set([
@@ -98,7 +102,11 @@ export function getNotificationHref(raw: NotificationData): Href {
   }
 
   if (type === 'payment') {
-    return '/(tabs)/profile';
+    return '/payments';
+  }
+
+  if (type === 'padel_session_full' || type.startsWith('padel_')) {
+    return '/padel';
   }
 
   if (COMMUNITY_PUSH_TYPES.has(type)) {

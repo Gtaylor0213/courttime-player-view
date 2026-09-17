@@ -8,6 +8,14 @@ export function courtBookingCheckoutUrls() {
   };
 }
 
+/** Paying one's own share of a split court fee; returns to the Book tab. */
+export function splitPaymentCheckoutUrls() {
+  return {
+    successUrl: `${SCHEME}://book?splitPaymentSuccess=1&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${SCHEME}://book?splitPaymentCancelled=1`,
+  };
+}
+
 export function bulletinSignupCheckoutUrls(postId: string) {
   return {
     successUrl: `${SCHEME}://community?signupSuccess=1&postId=${encodeURIComponent(postId)}&session_id={CHECKOUT_SESSION_ID}`,

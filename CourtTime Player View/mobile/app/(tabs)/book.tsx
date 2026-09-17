@@ -20,13 +20,14 @@ import {
   Switch,
 } from 'react-native';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniCalendar } from '../../src/components/MiniCalendar';
 import { CourtCalendarGrid } from '../../src/components/CourtCalendarGrid';
+import { ReservationSheet } from '../../src/components/ReservationSheet';
 import { ScheduleOverview } from '../../src/components/ScheduleOverview';
 import { TimePicker, PICKER_HEIGHT } from '../../src/components/TimePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -164,12 +165,14 @@ export default function BookCourtScreen() {
     });
   }, []);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const params = useLocalSearchParams<{
     facilityId?: string;
     bookingDate?: string;
     bookingId?: string;
     bookingPaymentSuccess?: string;
     bookingPaymentCancelled?: string;
+    splitPaymentSuccess?: string;
     session_id?: string;
   }>();
   const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate, refreshTermsStatus } = useAuth();
@@ -625,6 +628,15 @@ export default function BookCourtScreen() {
   }
 
   // ── Quick Reserve (autofill soonest available slot like web) ──
+  // Back from Stripe after paying a split share (see splitPaymentCheckoutUrls).
+  useEffect(() => {
+    if (!params.splitPaymentSuccess) return;
+    router.setParams({ splitPaymentSuccess: undefined, session_id: undefined } as never);
+    showAlert('Payment received', 'Your share of this reservation is paid.');
+    fetchCourts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.splitPaymentSuccess]);
+
   async function handleQuickReserve() {
     if (!facilityId || courts.length === 0) {
       showAlert('Quick Reserve', 'No courts are available to reserve right now.');
@@ -1212,46 +1224,8 @@ export default function BookCourtScreen() {
     };
     setSelectedCalendarBooking(mapped);
 
-    // The grid cell only carries what the day endpoint returns; fetch the full
-    // record (notes, type, exact times, booker) like web's reservation modal.
-    if (booking.id || booking.bookingId || booking.booking_id) {
-      void api.get(`/api/bookings/${bookingId}`).then((res) => {
-        const full = res.success ? ((res.data as any)?.booking ?? (res.data as any)?.data?.booking) : null;
-        if (!full) return;
-        setSelectedCalendarBooking((prev) =>
-          prev && prev.id === bookingId
-            ? {
-                ...prev,
-                userId: full.userId || prev.userId,
-                bookingDate: (full.bookingDate ? String(full.bookingDate).slice(0, 10) : prev.bookingDate) as any,
-                startTime: full.startTime || prev.startTime,
-                endTime: full.endTime || prev.endTime,
-                durationMinutes: full.durationMinutes || prev.durationMinutes,
-                status: full.status || prev.status,
-                bookingType: full.bookingType ?? prev.bookingType,
-                notes: full.notes ?? prev.notes,
-                courtName: full.courtName || prev.courtName,
-                userName: full.userName || prev.userName,
-                userEmail: full.userEmail || prev.userEmail,
-              }
-            : prev
-        );
-      });
-    }
   }, [facilityId, selectedDate]);
 
-  const handleCancelSelectedBooking = async () => {
-    if (!selectedCalendarBooking || !user) return;
-    const res = await api.delete(`/api/bookings/${selectedCalendarBooking.id}?userId=${user.id}`);
-    if (res.success) {
-      showAlert('Cancelled', 'Booking was cancelled successfully.');
-      setSelectedCalendarBooking(null);
-      fetchCourts();
-      fetchTimeSlots();
-    } else {
-      showApiErrorAlert(res, 'Could not cancel');
-    }
-  };
 
   return (
     <View style={styles.screenRoot} ref={screenRootRef} onLayout={onScreenRootLayout}>
@@ -1918,101 +1892,24 @@ export default function BookCourtScreen() {
       </Modal>
 
       {/* ── Calendar Booking Details ── */}
-      <Modal
+      <ReservationSheet
+        booking={selectedCalendarBooking}
         visible={selectedCalendarBooking !== null}
-        transparent
-        animationType="fade"
-        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
-        onRequestClose={() => setSelectedCalendarBooking(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Booking Details</Text>
-              <Pressable
-                onPress={() => setSelectedCalendarBooking(null)}
-                style={({ pressed }) => [styles.modalIconHit, pressed && styles.pressedOpacity]}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                <Ionicons name="close" size={24} color={Colors.textSecondary} />
-              </Pressable>
-            </View>
-            {selectedCalendarBooking && (
-              <>
-                <Text style={styles.summaryCourtName}>{selectedCalendarBooking.courtName}</Text>
-                <Text style={styles.summaryDate}>
-                  {new Date(String(selectedCalendarBooking.bookingDate)).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-                <Text style={[styles.summaryDate, { marginTop: 2 }]}>
-                  {formatTimeLabel(selectedCalendarBooking.startTime)} - {formatTimeLabel(selectedCalendarBooking.endTime)}
-                </Text>
-                <Text style={[styles.summaryDate, { marginTop: 2 }]}>
-                  Booked by: {selectedCalendarBooking.userName || 'Member'}
-                </Text>
-                {selectedCalendarBooking.bookingType ? (
-                  <Text style={[styles.summaryDate, { marginTop: 2 }]}>
-                    Type: {getBookingTypeLabel(selectedCalendarBooking.bookingType)}
-                  </Text>
-                ) : null}
-                {selectedCalendarBooking.notes ? (
-                  <Text style={[styles.summaryDate, { marginTop: 2 }]}>Notes: {selectedCalendarBooking.notes}</Text>
-                ) : null}
-
-                {user && (selectedCalendarBooking.userId === user.id || isAdmin) ? (
-                  <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-                    {selectedCalendarBooking.userId === user.id && Platform.OS !== 'web' ? (
-                      <Button
-                        title="Add to Calendar"
-                        variant="secondary"
-                        onPress={() => {
-                          void addBookingToCalendarWithFeedback(
-                            bookingWithDetailsToCalendarDetails(selectedCalendarBooking, {
-                              facilityName: currentFacilityName,
-                            }),
-                            { bookingConfirmed: false }
-                          );
-                        }}
-                      />
-                    ) : null}
-                    <Button
-                      title="Edit Booking"
-                      variant="secondary"
-                      onPress={async () => {
-                        const court = courts.find((c) => c.id === selectedCalendarBooking.courtId);
-                        if (!court) {
-                          showAlert('Error', 'Could not find this court to open booking details.');
-                          return;
-                        }
-                        setSelectedCalendarBooking(null);
-                        await handleCalendarGridSelection(
-                          court,
-                          selectedCalendarBooking.startTime,
-                          selectedCalendarBooking.endTime
-                        );
-                      }}
-                    />
-                    <Button
-                      title="Cancel Booking"
-                      variant="destructive"
-                      onPress={handleCancelSelectedBooking}
-                    />
-                  </View>
-                ) : (
-                  <Text style={[styles.violationMessage, { marginTop: Spacing.md }]}>
-                    You can only edit or cancel your own bookings.
-                  </Text>
-                )}
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setSelectedCalendarBooking(null)}
+        onChanged={() => {
+          fetchCourts();
+          fetchTimeSlots();
+        }}
+        onEdit={async (b) => {
+          const court = courts.find((c) => c.id === b.courtId);
+          if (!court) {
+            showAlert('Error', 'Could not find this court to open booking details.');
+            return;
+          }
+          setSelectedCalendarBooking(null);
+          await handleCalendarGridSelection(court, b.startTime, b.endTime);
+        }}
+      />
 
       <CourtWaiverAcceptanceModal {...waiverGate.modalProps} />
     </View>

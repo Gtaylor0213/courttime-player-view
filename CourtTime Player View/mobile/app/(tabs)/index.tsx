@@ -23,6 +23,8 @@ import { api } from '../../src/api/client';
 import { Colors, Gradients, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { EditBookingModal } from '../../src/components/EditBookingModal';
+import { ReservationSheet } from '../../src/components/ReservationSheet';
+import { OpenSpotsList } from '../../src/components/OpenSpotsList';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
@@ -45,6 +47,9 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [lockout, setLockout] = useState<{ isLockedOut: boolean; activeStrikes: number; threshold: number; lockoutEndsAt?: string } | null>(null);
   const [editingBooking, setEditingBooking] = useState<BookingWithDetails | null>(null);
+  const [detailsBooking, setDetailsBooking] = useState<BookingWithDetails | null>(null);
+  // Bumped on refresh so child lists refetch.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchData = useCallback(async () => {
     if (!user || !facilityId) return;
@@ -74,6 +79,7 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setRefreshKey((k) => k + 1);
     await fetchData();
     setRefreshing(false);
   }, [fetchData]);
@@ -231,6 +237,15 @@ export default function HomeScreen() {
             <Ionicons name="calendar" size={16} color={Colors.primary} />
           </View>
           <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
+          <TouchableOpacity
+            style={styles.seeAll}
+            onPress={() => router.push('/my-reservations')}
+            accessibilityRole="button"
+            accessibilityLabel="See all reservations"
+          >
+            <Text style={styles.seeAllText}>See all</Text>
+            <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
         {bookings.length === 0 ? (
           <EmptyState
@@ -278,6 +293,15 @@ export default function HomeScreen() {
                     ) : null}
                     <TouchableOpacity
                       style={styles.editButton}
+                      onPress={() => setDetailsBooking(booking)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Reservation details"
+                    >
+                      <Ionicons name="information-circle-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.editText}>Details</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.editButton}
                       onPress={() => setEditingBooking(booking)}
                     >
                       <Ionicons name="create-outline" size={16} color={Colors.primary} />
@@ -297,6 +321,9 @@ export default function HomeScreen() {
           ))
         )}
       </View>
+
+      {/* Open spots other members are advertising (web: "Open Matches") */}
+      <OpenSpotsList facilityId={facilityId ?? null} refreshKey={refreshKey} onClaimed={fetchData} />
 
       {/* Bulletin Board */}
       <View style={styles.section}>
@@ -334,6 +361,16 @@ export default function HomeScreen() {
         visible={editingBooking !== null}
         onClose={() => setEditingBooking(null)}
         onSaved={fetchData}
+      />
+      <ReservationSheet
+        booking={detailsBooking}
+        visible={detailsBooking !== null}
+        onClose={() => setDetailsBooking(null)}
+        onChanged={fetchData}
+        onEdit={(b) => {
+          setDetailsBooking(null);
+          setEditingBooking(b);
+        }}
       />
     </ScrollView>
   );
@@ -514,6 +551,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  seeAll: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 2 },
+  seeAllText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
   bookingCard: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.lg,

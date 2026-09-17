@@ -72,6 +72,36 @@ export const lessonsEndpoints = {
   upcoming: (facilityId: string) => api.get(`/api/lessons/${facilityId}`),
 };
 
+/**
+ * Reservation management (web's ReservationManagementModal): players on a
+ * reservation, open spots, split payment, and the post-play settlement view.
+ */
+export const reservationEndpoints = {
+  detail: (bookingId: string) => api.get(`/api/bookings/${bookingId}`),
+  /** `{ success, participants, settlementStatus }` */
+  participants: (bookingId: string) => api.get(`/api/bookings/${bookingId}/participants`),
+  addParticipant: (bookingId: string, userId: string) =>
+    api.post(`/api/bookings/${bookingId}/participants`, { userId }),
+  removeParticipant: (bookingId: string, userId: string) =>
+    api.delete(`/api/bookings/${bookingId}/participants/${userId}`),
+  /** Advertise (or stop advertising) open spots on the caller's own booking. */
+  setOpenToMembers: (bookingId: string, open: boolean, maxPlayers?: number) =>
+    api.post(`/api/bookings/${bookingId}/open-spot`, { open, maxPlayers }),
+  /** Bookings at the facility currently advertising an open spot. */
+  openSpots: (facilityId: string) => api.get(`/api/bookings/open?facilityId=${encodeURIComponent(facilityId)}`),
+  claimSpot: (bookingId: string) => api.post(`/api/bookings/${bookingId}/claim-spot`, {}),
+  /** `{ success, data: { bookingId, ownerId, status, paymentDeadlineAt, shares[] } }`; 400 when not split. */
+  splitPayment: (bookingId: string) => api.get(`/api/bookings/${bookingId}/split-payment`),
+  splitPaymentCheckout: (bookingId: string, successUrl: string, cancelUrl: string) =>
+    api.post(`/api/bookings/${bookingId}/split-payment/checkout`, { successUrl, cancelUrl }),
+  declineSplitPayment: (bookingId: string, reason?: string) =>
+    api.post(`/api/bookings/${bookingId}/split-payment/decline`, { reason }),
+  updateSplitParticipants: (bookingId: string, participantIds: string[]) =>
+    api.put(`/api/bookings/${bookingId}/split-payment/participants`, { participantIds }),
+  /** Staff preview + charge rows; 403 for members. */
+  settlement: (bookingId: string) => api.get(`/api/bookings/${bookingId}/settlement`),
+};
+
 export const levelGroupEndpoints = {
   /** The caller's own skill group and who else is in it. */
   mine: (facilityId: string) => api.get(`/api/player-level-groups/${facilityId}/me`),

@@ -45,6 +45,8 @@ interface SplitPaymentPickerProps {
   onEnabledChange: (enabled: boolean) => void;
   members: SplitPaymentMember[];
   onMembersChange: (members: SplitPaymentMember[]) => void;
+  /** Hide the enable switch — the caller already decided the fee is split (editing an existing roster). */
+  pickerOnly?: boolean;
 }
 
 export function SplitPaymentPicker({
@@ -54,6 +56,7 @@ export function SplitPaymentPicker({
   onEnabledChange,
   members,
   onMembersChange,
+  pickerOnly = false,
 }: SplitPaymentPickerProps) {
   const [memberSearch, setMemberSearch] = useState('');
   const [memberResults, setMemberResults] = useState<SplitPaymentMember[]>([]);
@@ -94,16 +97,18 @@ export function SplitPaymentPicker({
 
   return (
     <View style={styles.container}>
-      <View style={styles.toggleRow}>
-        <Text style={styles.label}>Split this court fee with members</Text>
-        <Switch
-          value={enabled}
-          onValueChange={onEnabledChange}
-          trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
-          thumbColor={enabled ? Colors.primary : Colors.textMuted}
-          accessibilityLabel="Split this court fee with members"
-        />
-      </View>
+      {!pickerOnly && (
+        <View style={styles.toggleRow}>
+          <Text style={styles.label}>Split this court fee with members</Text>
+          <Switch
+            value={enabled}
+            onValueChange={onEnabledChange}
+            trackColor={{ false: Colors.border, true: Colors.primary + '88' }}
+            thumbColor={enabled ? Colors.primary : Colors.textMuted}
+            accessibilityLabel="Split this court fee with members"
+          />
+        </View>
+      )}
 
       {enabled && (
         <>

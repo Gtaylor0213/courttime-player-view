@@ -133,19 +133,38 @@ const EMPTY_FORM: FormState = {
   signupFeeDollars: '',
 };
 
+export type LessonTypeOption = 'private_lesson' | 'group_clinic' | 'drill' | 'custom';
+export const LESSON_TYPE_OPTIONS: Array<{ value: LessonTypeOption; label: string }> = [
+  { value: 'private_lesson', label: 'Private Lesson' },
+  { value: 'group_clinic', label: 'Group Clinic' },
+  { value: 'drill', label: 'Drill' },
+  { value: 'custom', label: 'Custom…' },
+];
+/** Lessons reuse the bulletin categories so signups/payments behave identically (web lessonTypeToCategory). */
+export function lessonTypeToCategory(lessonType: LessonTypeOption): 'clinic' | 'drill' {
+  return lessonType === 'drill' ? 'drill' : 'clinic';
+}
+
 interface Props {
   visible: boolean;
   facilityId: string | null;
   onClose: () => void;
   /** Called after a post is created so the parent can reload its list. */
   onCreated: () => void;
+  /** 'bulletin' (default) or 'lesson' (Lessons admin: lesson type selector, posts tagged lesson_type). */
+  mode?: 'bulletin' | 'lesson';
 }
 
 /**
  * Build the POST /api/bulletin-board body from the form (same shape web sends).
  * Exported for tests.
  */
-export function buildBulletinPostBody(form: FormState, facilityId: string, authorId: string) {
+export function buildBulletinPostBody(
+  form: FormState,
+  facilityId: string,
+  authorId: string,
+  lesson?: { lessonType: LessonTypeOption; customLessonLabel: string }
+) {
   const isSignup = EVENT_SIGNUP_TYPES.has(form.type);
   const parsedMax = form.maxParticipants ? parseInt(form.maxParticipants, 10) : undefined;
   const expiresAfterEvent = form.expiresInDays === 'after_event';
@@ -159,6 +178,12 @@ export function buildBulletinPostBody(form: FormState, facilityId: string, autho
     content: form.description.trim(),
     category: form.type,
     isAdminPost: true,
+    ...(lesson
+      ? {
+          lessonType: lesson.lessonType,
+          ...(lesson.lessonType === 'custom' ? { lessonTypeLabel: lesson.customLessonLabel.trim() } : {}),
+        }
+      : {}),
     ...(expiresAfterEvent
       ? { expiresAfterEvent: true }
       : form.expiresInDays
@@ -216,8 +241,11 @@ export function validateBulletinPostForm(form: FormState): string | null {
   return null;
 }
 
-export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreated }: Props) {
+export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreated, mode = 'bulletin' }: Props) {
+  const isLessonMode = mode === 'lesson';
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
+  const [lessonType, setLessonType] = useState<LessonTypeOption>('group_clinic');
+  const [customLessonLabel, setCustomLessonLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [courts, setCourts] = useState<Court[]>([]);
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
@@ -234,7 +262,10 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
   // Reset on open, like web.
   useEffect(() => {
     if (!visible) return;
-    setForm({ ...EMPTY_FORM });
+    // Web: bulletin mode opens on 'drill', lesson mode on 'clinic'.
+    setForm({ ...EMPTY_FORM, type: isLessonMode ? 'clinic' : 'drill' });
+    setLessonType('group_clinic');
+    setCustomLessonLabel('');
     setShowEventCalendar(false);
     setShowEventTime(false);
     setShowEndCalendar(false);
@@ -261,8 +292,18 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
     };
   }, [visible, facilityId]);
 
+  // In lesson mode the category follows the lesson type.
+  useEffect(() => {
+    if (isLessonMode) setForm((prev) => ({ ...prev, type: lessonTypeToCategory(lessonType) }));
+  }, [isLessonMode, lessonType]);
+
   async function handleCreate() {
     if (!facilityId || submitting) return;
+    if (isLessonMode && lessonType === 'custom' && !customLessonLabel.trim()) {
+      hapticError();
+      showAlert('Lesson type', 'Enter a name for your custom lesson type.');
+      return;
+    }
     const problem = validateBulletinPostForm(form);
     if (problem) {
       hapticError();
@@ -271,7 +312,10 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
     }
     setSubmitting(true);
     // authorId is overwritten server-side from the session; sent for parity with web.
-    const res = await api.post('/api/bulletin-board', buildBulletinPostBody(form, facilityId, ''));
+    const res = await api.post(
+      '/api/bulletin-board',
+      buildBulletinPostBody(form, facilityId, '', isLessonMode ? { lessonType, customLessonLabel } : undefined)
+    );
     setSubmitting(false);
     if (res.success) {
       hapticSuccess();
@@ -297,7 +341,7 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
           <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel="Cancel">
             <Text style={styles.headerCancel}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Bulletin Post</Text>
+          <Text style={styles.headerTitle}>{isLessonMode ? 'Create Lesson' : 'Create Bulletin Post'}</Text>
           <TouchableOpacity
             onPress={handleCreate}
             disabled={!canSubmit}
@@ -306,7 +350,7 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
             accessibilityState={{ disabled: !canSubmit }}
           >
             <Text style={[styles.headerSave, !canSubmit && styles.headerSaveDisabled]}>
-              {submitting ? '...' : 'Create Post'}
+              {submitting ? '...' : isLessonMode ? 'Create Lesson' : 'Create Post'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -320,19 +364,37 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
             contentContainerStyle={styles.body}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Post Type */}
-            <Text style={styles.label}>Post Type *</Text>
-            <ChipRow
-              options={POST_TYPES}
-              value={form.type}
-              onChange={(value) =>
-                setForm((prev) => ({
-                  ...prev,
-                  type: value,
-                  recurrenceEnabled: RECURRING_ELIGIBLE_TYPES.has(value) ? prev.recurrenceEnabled : false,
-                }))
-              }
-            />
+            {/* Post Type / Lesson Type */}
+            {isLessonMode ? (
+              <>
+                <Text style={styles.label}>Lesson Type *</Text>
+                <ChipRow options={LESSON_TYPE_OPTIONS} value={lessonType} onChange={setLessonType} />
+                {lessonType === 'custom' ? (
+                  <Input
+                    style={[styles.input, { marginTop: Spacing.sm }]}
+                    value={customLessonLabel}
+                    onChangeText={setCustomLessonLabel}
+                    placeholder="Name this lesson type (e.g. Cardio Tennis)"
+                    maxLength={60}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>Post Type *</Text>
+                <ChipRow
+                  options={POST_TYPES}
+                  value={form.type}
+                  onChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      type: value,
+                      recurrenceEnabled: RECURRING_ELIGIBLE_TYPES.has(value) ? prev.recurrenceEnabled : false,
+                    }))
+                  }
+                />
+              </>
+            )}
 
             {/* Title */}
             <Text style={styles.label}>Title *</Text>
@@ -340,7 +402,7 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
               style={styles.input}
               value={form.title}
               onChangeText={(v) => set('title', v)}
-              placeholder="Enter post title"
+              placeholder={isLessonMode ? 'Enter lesson title' : 'Enter post title'}
             />
 
             {/* Description */}
@@ -349,7 +411,7 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
               style={[styles.input, styles.textArea]}
               value={form.description}
               onChangeText={(v) => set('description', v)}
-              placeholder="Enter post description"
+              placeholder={isLessonMode ? 'Enter lesson description' : 'Enter post description'}
               multiline
             />
 
@@ -524,7 +586,7 @@ export function BulletinPostCreateModal({ visible, facilityId, onClose, onCreate
                       <View style={styles.groupBox}>
                         <ToggleRow
                           title="Repeat Schedule"
-                          subtitle="Create repeating drill/clinic posts"
+                          subtitle={isLessonMode ? 'Create repeating lessons' : 'Create repeating drill/clinic posts'}
                           value={form.recurrenceEnabled}
                           onChange={(v) => set('recurrenceEnabled', v)}
                           inGroup

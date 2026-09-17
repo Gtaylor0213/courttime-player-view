@@ -47,6 +47,13 @@ const ADMIN_MENU_ITEMS = [
     description: 'Stripe Connect, payment items, lockouts, refunds, and club billing.',
   },
   {
+    key: 'lessons',
+    route: '/admin/lessons',
+    icon: 'school',
+    label: 'Lessons',
+    description: 'Create lessons and clinics, manage rosters.',
+  },
+  {
     key: 'communication',
     route: '/admin/communication',
     icon: 'megaphone',

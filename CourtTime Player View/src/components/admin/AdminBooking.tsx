@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { sortFacilitiesByName } from '../../../shared/utils/facilitySort';
 import { parseLocalDate } from '../../utils/dateUtils';
 import { confirmSkipRecurringConflicts } from '../../utils/recurringConflicts';
-import { expandWeeklyDates, normalizeWeekdays, WEEKDAY_NAMES } from '../../../shared/utils/recurrence';
+import { expandWeeklyDates, normalizeWeekdays, singleDateRule, WEEKDAY_NAMES } from '../../../shared/utils/recurrence';
 import { useCourtTypeFilter } from '../useCourtTypeFilter';
 import { courtTypeLabel, isPadelCourtType } from '../../../shared/constants/courtTypes';
 
@@ -95,7 +95,16 @@ export function AdminBooking() {
   const [recurringEndDate, setRecurringEndDate] = useState('');
 
   // State
-  const [facilityCourts, setFacilityCourts] = useState<Array<{ id: string; name: string; type: string; status?: string }>>([]);
+  const [facilityCourts, setFacilityCourts] = useState<Array<{
+    id: string;
+    name: string;
+    type: string;
+    status?: string;
+    requirePayment?: boolean;
+    billingMode?: string;
+    dailyRateCents?: number | null;
+    bookingAmountCents?: number | null;
+  }>>([]);
   const [existingBookings, setExistingBookings] = useState<any>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingFacilities, setIsLoadingFacilities] = useState(true);
@@ -546,6 +555,23 @@ export function AdminBooking() {
 
   // All selected courts (primary + additional), excluding any that have since
   // become unavailable (e.g. reserved by someone else after being selected).
+  /**
+   * Whether the selection can be booked as one group. A court that charges
+   * sends the booker to Stripe one reservation at a time, so those keep the
+   * sequential path.
+   */
+  const selectionTakesPayment = React.useCallback(
+    (courtIds: string[]) =>
+      courtIds.some((id) => {
+        const meta = facilityCourts.find((c) => c.id === id);
+        if (!meta?.requirePayment) return false;
+        return meta.billingMode === 'daily'
+          ? Boolean(meta.dailyRateCents)
+          : Boolean(meta.bookingAmountCents);
+      }),
+    [facilityCourts]
+  );
+
   const allSelectedCourts = React.useMemo(() => {
     const courts: Array<{ id: string; name: string }> = [];
     if (selectedCourtId) {
@@ -744,7 +770,13 @@ export function AdminBooking() {
         }))
       );
 
-      const isRecurringSeries = advancedBooking;
+      // Booking several courts at once is one decision, so it is grouped as a
+      // series too (one date, many courts) and can be retimed or re-courted as
+      // a unit afterwards, exactly like a recurring reservation.
+      const courtIds = allSelectedCourts.map((c) => c.id);
+      const isMultiCourtGroup =
+        !advancedBooking && courtIds.length > 1 && !selectionTakesPayment(courtIds);
+      const isRecurringSeries = advancedBooking || isMultiCourtGroup;
       const results = isRecurringSeries
         ? await (async () => {
             const seriesPayload = {
@@ -756,13 +788,23 @@ export function AdminBooking() {
               // The rule, not just its expansion: this is what the series edit
               // form on the calendar loads back.
               rule: {
-                courtIds: allSelectedCourts.map((c) => c.id),
-                weekdays: normalizeWeekdays(recurringDays),
-                startDate: selectedDate,
-                endDate: recurringEndDate,
-                startTime: startTime24,
-                endTime: endTime24,
-                durationMinutes: Math.round(durationMinutes),
+                ...(advancedBooking
+                  ? {
+                      courtIds,
+                      weekdays: normalizeWeekdays(recurringDays),
+                      startDate: selectedDate,
+                      endDate: recurringEndDate,
+                      startTime: startTime24,
+                      endTime: endTime24,
+                      durationMinutes: Math.round(durationMinutes)
+                    }
+                  : singleDateRule({
+                      courtIds,
+                      date: selectedDate,
+                      startTime: startTime24,
+                      endTime: endTime24,
+                      durationMinutes: Math.round(durationMinutes)
+                    })),
                 maxPlayers: bookingRequests.find((r) => r.maxPlayers != null)?.maxPlayers ?? null
               },
               instances: bookingRequests

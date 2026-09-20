@@ -28,7 +28,7 @@ import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
-import { expandWeeklyDates, normalizeWeekdays, WEEKDAY_NAMES } from '../../shared/utils/recurrence';
+import { expandWeeklyDates, normalizeWeekdays, singleDateRule, WEEKDAY_NAMES } from '../../shared/utils/recurrence';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { isPadelCourtType } from '../../shared/constants/courtTypes';
@@ -612,6 +612,15 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     });
   }, [facilityCourts, dragSelectedCourts, startTime, endTime, existingBookings]);
 
+  // Same latch as Quick Reserve: the picker hides on a second court or a
+  // repeat, but the state stayed on and the booking still went out as a split.
+  useEffect(() => {
+    if (selectedCourts.length !== 1 || advancedBooking) {
+      setSplitPayment(false);
+      setSplitMembers([]);
+    }
+  }, [selectedCourts.length, advancedBooking]);
+
   const generateRecurringDates = (): string[] => {
     if (!advancedBooking || recurringDays.length === 0 || !recurringEndDate) {
       return [date];
@@ -730,7 +739,12 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         }))
       );
 
-      const isRecurringSeries = advancedBooking;
+      // Several courts at once is one decision; group it as a series (one date,
+      // many courts) so it can be edited as a unit later. requiresSingleBooking
+      // above has already turned away anything that needs checkout.
+      const ruleCourtIds = selectedCourts.map((c) => c.courtId);
+      const isMultiCourtGroup = !advancedBooking && ruleCourtIds.length > 1;
+      const isRecurringSeries = advancedBooking || isMultiCourtGroup;
       const results = isRecurringSeries
         ? await (async () => {
             const seriesPayload = {
@@ -741,13 +755,23 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               walkInName: bookForWalkInName,
               // Stored on the series so it can be reopened in the edit form.
               rule: {
-                courtIds: selectedCourts.map((c) => c.courtId),
-                weekdays: normalizeWeekdays(recurringDays),
-                startDate: parseDateStr(date),
-                endDate: parseDateStr(recurringEndDate),
-                startTime: startTime24,
-                endTime: endTime24,
-                durationMinutes: durationMins,
+                ...(advancedBooking
+                  ? {
+                      courtIds: ruleCourtIds,
+                      weekdays: normalizeWeekdays(recurringDays),
+                      startDate: parseDateStr(date),
+                      endDate: parseDateStr(recurringEndDate),
+                      startTime: startTime24,
+                      endTime: endTime24,
+                      durationMinutes: durationMins
+                    }
+                  : singleDateRule({
+                      courtIds: ruleCourtIds,
+                      date: parseDateStr(date),
+                      startTime: startTime24,
+                      endTime: endTime24,
+                      durationMinutes: durationMins
+                    })),
                 maxPlayers: bookingRequests.find((r) => r.maxPlayers != null)?.maxPlayers ?? null
               },
               instances: bookingRequests.map(({ courtName, ...req }) => req)

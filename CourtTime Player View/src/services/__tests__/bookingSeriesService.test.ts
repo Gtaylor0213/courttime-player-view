@@ -469,6 +469,129 @@ describe('updateBookingSeries', () => {
   });
 });
 
+describe('multi-court group (one date, several courts)', () => {
+  const GROUP_DATE = '2099-09-21';
+  const groupRow = {
+    ...seriesRow,
+    courtIds: ['court-a', 'court-b', 'court-c'],
+    weekdays: [1],
+    startDate: GROUP_DATE,
+    endDate: GROUP_DATE,
+  };
+  const groupInstances = ['court-a', 'court-b', 'court-c'].map((courtId) => ({
+    id: `b-${courtId}`,
+    courtId,
+    bookingDate: GROUP_DATE,
+    startTime: '18:00:00',
+    endTime: '19:30:00',
+    durationMinutes: 90,
+    status: 'confirmed',
+    courtName: courtId,
+  }));
+
+  const groupRule = {
+    userId: OWNER,
+    courtIds: ['court-a', 'court-b', 'court-c'],
+    weekdays: [1],
+    startDate: GROUP_DATE,
+    endDate: GROUP_DATE,
+    startTime: '18:00:00',
+    endTime: '19:30:00',
+    durationMinutes: 90,
+  };
+
+  function mockGroupLoad() {
+    queryMock
+      .mockResolvedValueOnce({ rows: [groupRow] })
+      .mockResolvedValueOnce({ rows: groupInstances });
+  }
+
+  beforeEach(() => {
+    queryMock.mockReset();
+    clientQueryMock.mockReset();
+    validateBookingMock.mockReset();
+    isFacilityAdminMock.mockReset();
+    notifyCancelledMock.mockReset();
+    sendCancellationEmailMock.mockReset();
+    validateBookingMock.mockResolvedValue({ allowed: true, blockers: [], warnings: [] });
+    isFacilityAdminMock.mockResolvedValue(false);
+    notifyCancelledMock.mockResolvedValue('notif-1');
+    sendCancellationEmailMock.mockResolvedValue(true);
+  });
+
+  it('retimes every court at once without touching the date', async () => {
+    mockGroupLoad();
+    mockTransaction();
+    const result = await updateBookingSeries({
+      seriesId: SERIES_ID,
+      actorUserId: OWNER,
+      scope: 'all',
+      rule: { ...groupRule, startTime: '19:00:00', endTime: '20:30:00' },
+    });
+    expect(result.success).toBe(true);
+    expect(result.updated).toBe(3);
+    expect(result.created).toBe(0);
+    expect(result.cancelled).toBe(0);
+  });
+
+  it('dropping a court cancels only that court', async () => {
+    mockGroupLoad();
+    mockTransaction();
+    const result = await updateBookingSeries({
+      seriesId: SERIES_ID,
+      actorUserId: OWNER,
+      scope: 'all',
+      rule: { ...groupRule, courtIds: ['court-a', 'court-b'] },
+    });
+    expect(result.cancelled).toBe(1);
+    expect(result.created).toBe(0);
+  });
+
+  it('adding a court books just the new one', async () => {
+    mockGroupLoad();
+    mockTransaction();
+    const result = await updateBookingSeries({
+      seriesId: SERIES_ID,
+      actorUserId: OWNER,
+      scope: 'all',
+      rule: { ...groupRule, courtIds: [...groupRule.courtIds, 'court-d'] },
+    });
+    expect(result.created).toBe(1);
+    expect(result.cancelled).toBe(0);
+    expect(result.updated).toBe(0);
+  });
+
+  it('moving the group to another date moves every court with it', async () => {
+    mockGroupLoad();
+    mockTransaction();
+    const moved = '2099-09-28'; // also a Monday
+    const result = await updateBookingSeries({
+      seriesId: SERIES_ID,
+      actorUserId: OWNER,
+      scope: 'all',
+      rule: { ...groupRule, startDate: moved, endDate: moved },
+    });
+    // Every court's old date is cancelled and re-created on the new one.
+    expect(result.cancelled).toBe(3);
+    expect(result.created).toBe(3);
+  });
+
+  it('cancelling one court leaves the others booked', async () => {
+    mockGroupLoad();
+    clientQueryMock.mockResolvedValue({ rows: [], rowCount: 0 });
+    await cancelBookingSeries({
+      seriesId: SERIES_ID,
+      actorUserId: OWNER,
+      scope: 'instance',
+      bookingIds: ['b-court-b'],
+    });
+    const update = clientQueryMock.mock.calls.find(([sql]) =>
+      String(sql).includes("SET status = 'cancelled'")
+    );
+    expect(update?.[1][0]).toEqual(['b-court-b']);
+  });
+});
+
 describe('cancelBookingSeries', () => {
   beforeEach(() => {
     queryMock.mockReset();

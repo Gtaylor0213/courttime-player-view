@@ -22,7 +22,7 @@ import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
-import { expandWeeklyDates, normalizeWeekdays, WEEKDAY_NAMES } from '../../shared/utils/recurrence';
+import { expandWeeklyDates, normalizeWeekdays, singleDateRule, WEEKDAY_NAMES } from '../../shared/utils/recurrence';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { useCourtTypeFilter } from './useCourtTypeFilter';
@@ -528,6 +528,16 @@ export function QuickReservePopup({
     return courts;
   }, [selectedCourtId, selectedCourt, additionalCourtIds, availableCourts]);
 
+  // The split picker is hidden once a second court or a repeat is added, but
+  // hiding it left the state set, so the booking still went out as a split.
+  // Clear it with the condition that hides it.
+  React.useEffect(() => {
+    if (allSelectedCourts.length !== 1 || advancedBooking) {
+      setSplitPayment(false);
+      setSplitMembers([]);
+    }
+  }, [allSelectedCourts.length, advancedBooking]);
+
   const generateRecurringDates = (): string[] => {
     if (!advancedBooking || recurringDays.length === 0 || !recurringEndDate) {
       return [selectedDate];
@@ -657,7 +667,12 @@ export function QuickReservePopup({
         }))
       );
 
-      const isRecurringSeries = advancedBooking;
+      // Several courts at once is one decision; group it as a series (one date,
+      // many courts) so it can be edited as a unit later. A paid court or a
+      // split already forces a single court above, so this is always safe here.
+      const courtIds = allSelectedCourts.map((c) => c.id);
+      const isMultiCourtGroup = !advancedBooking && courtIds.length > 1;
+      const isRecurringSeries = advancedBooking || isMultiCourtGroup;
       const results = isRecurringSeries
         ? await (async () => {
             const seriesPayload = {
@@ -669,13 +684,23 @@ export function QuickReservePopup({
               // The rule itself, so the series can be edited later rather than
               // existing only as a pile of bookings.
               rule: {
-                courtIds: allSelectedCourts.map((c) => c.id),
-                weekdays: normalizeWeekdays(recurringDays),
-                startDate: selectedDate,
-                endDate: recurringEndDate,
-                startTime: startTime24,
-                endTime: endTime24,
-                durationMinutes: Math.round(durationMinutes),
+                ...(advancedBooking
+                  ? {
+                      courtIds,
+                      weekdays: normalizeWeekdays(recurringDays),
+                      startDate: selectedDate,
+                      endDate: recurringEndDate,
+                      startTime: startTime24,
+                      endTime: endTime24,
+                      durationMinutes: Math.round(durationMinutes)
+                    }
+                  : singleDateRule({
+                      courtIds,
+                      date: selectedDate,
+                      startTime: startTime24,
+                      endTime: endTime24,
+                      durationMinutes: Math.round(durationMinutes)
+                    })),
                 maxPlayers: bookingRequests.find((r) => r.maxPlayers != null)?.maxPlayers ?? null
               },
               instances: bookingRequests

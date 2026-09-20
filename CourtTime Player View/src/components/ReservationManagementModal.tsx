@@ -12,6 +12,7 @@ import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../../shared/constants/bookingTypes';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 import { SeriesEditDialog } from './SeriesEditDialog';
+import { isSingleDateRule } from '../../shared/utils/recurrence';
 import { SplitPaymentPicker } from './SplitPaymentPicker';
 import { toast } from 'sonner';
 import {
@@ -163,6 +164,8 @@ export function ReservationManagementModal({
     mode: 'edit' | 'cancel';
     scope: 'following' | 'all';
   } | null>(null);
+  /** 'group' = several courts on one date; 'recurring' = repeats over dates. */
+  const [seriesKind, setSeriesKind] = useState<'group' | 'recurring' | null>(null);
 
   const postPlayEnabled = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const editPastReservationsEnabled = enabledFeatures.includes(FEATURE_FLAGS.EDIT_PAST_RESERVATIONS);
@@ -338,6 +341,24 @@ export function ReservationManagementModal({
     }
   };
 
+  // Which kind of group this booking belongs to, so the prompts can say
+  // "court" or "date" rather than guessing.
+  useEffect(() => {
+    if (!isOpen || !reservation?.seriesId) {
+      setSeriesKind(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await bookingApi.getSeries(reservation.seriesId as string);
+      if (cancelled || !res.success || !res.series) return;
+      setSeriesKind(isSingleDateRule(res.series.rule) ? 'group' : 'recurring');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, reservation?.seriesId]);
+
   if (!reservation) return null;
 
   const isOwnReservation = user?.id === reservation.userId;
@@ -378,8 +399,10 @@ export function ReservationManagementModal({
     (!isPastReservation() || editPastReservationsEnabled) &&
     settlementStatus !== 'settled';
 
-  // A booking created as part of a recurring series can be edited as a series.
-  const isRecurring = !!reservation.seriesId;
+  // A booking made as part of a group -- a repeat, or several courts at once --
+  // can be edited as a group. Which of the two it is decides the wording.
+  const isGrouped = !!reservation.seriesId;
+  const isCourtGroup = seriesKind === 'group';
 
   const canAddToCalendar =
     isOwnReservation &&
@@ -809,14 +832,19 @@ export function ReservationManagementModal({
                 </Badge>
               </div>
 
-              {isRecurring && (
+              {isGrouped && (
                 <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3">
                   <Repeat className="h-4 w-4 text-blue-700 mt-0.5 shrink-0" />
                   <div className="text-sm text-blue-900">
-                    <p className="font-medium">Part of a recurring reservation</p>
+                    <p className="font-medium">
+                      {isCourtGroup
+                        ? 'Booked together with other courts'
+                        : 'Part of a recurring reservation'}
+                    </p>
                     <p className="text-blue-800">
-                      Modify or Cancel will ask whether to change this date only, this date
-                      onward, or the whole series.
+                      {isCourtGroup
+                        ? 'Modify or Cancel will ask whether to change this court only or every court booked with it.'
+                        : 'Modify or Cancel will ask whether to change this date only, this date onward, or the whole series.'}
                     </p>
                   </div>
                 </div>
@@ -1395,7 +1423,7 @@ export function ReservationManagementModal({
                     {(isOwnReservation || isFacilityAdmin) && (
                       <Button
                         variant="outline"
-                        onClick={() => (isRecurring ? setSeriesPrompt('edit') : setIsEditing(true))}
+                        onClick={() => (isGrouped ? setSeriesPrompt('edit') : setIsEditing(true))}
                         className="flex-1 sm:flex-none sm:min-w-[100px]"
                       >
                         <Edit2 className="h-4 w-4 mr-1" />
@@ -1404,7 +1432,7 @@ export function ReservationManagementModal({
                     )}
                     <Button
                       variant="destructive"
-                      onClick={() => (isRecurring ? setSeriesPrompt('cancel') : setShowCancelConfirm(true))}
+                      onClick={() => (isGrouped ? setSeriesPrompt('cancel') : setShowCancelConfirm(true))}
                       className="flex-1 sm:flex-none sm:min-w-[100px]"
                     >
                       Cancel
@@ -1454,10 +1482,13 @@ export function ReservationManagementModal({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Repeat className="h-5 w-5" />
-              {seriesPrompt === 'cancel' ? 'Cancel recurring reservation' : 'Edit recurring reservation'}
+              {seriesPrompt === 'cancel' ? 'Cancel' : 'Edit'}{' '}
+              {isCourtGroup ? 'grouped reservation' : 'recurring reservation'}
             </DialogTitle>
             <DialogDescription>
-              This reservation repeats. Choose how much of the series to
+              {isCourtGroup
+                ? 'This was booked across several courts at once. Choose how much of it to'
+                : 'This reservation repeats. Choose how much of the series to'}
               {seriesPrompt === 'cancel' ? ' cancel' : ' change'}.
             </DialogDescription>
           </DialogHeader>
@@ -1472,19 +1503,23 @@ export function ReservationManagementModal({
                 else setIsEditing(true);
               }}
             >
-              This reservation only
-              <span className="text-muted-foreground ml-1">— {formatDate(reservation.bookingDate)}</span>
+              {isCourtGroup ? 'This court only' : 'This reservation only'}
+              <span className="text-muted-foreground ml-1">
+                — {isCourtGroup ? reservation.courtName : formatDate(reservation.bookingDate)}
+              </span>
             </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => {
-                setSeriesEditor({ mode: seriesPrompt || 'edit', scope: 'following' });
-                setSeriesPrompt(null);
-              }}
-            >
-              This and all future dates
-            </Button>
+            {!isCourtGroup && (
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => {
+                  setSeriesEditor({ mode: seriesPrompt || 'edit', scope: 'following' });
+                  setSeriesPrompt(null);
+                }}
+              >
+                This and all future dates
+              </Button>
+            )}
             <Button
               variant="outline"
               className="w-full justify-start"
@@ -1493,7 +1528,7 @@ export function ReservationManagementModal({
                 setSeriesPrompt(null);
               }}
             >
-              Every date in the series
+              {isCourtGroup ? 'Every court booked with it' : 'Every date in the series'}
             </Button>
           </div>
           <DialogFooter>

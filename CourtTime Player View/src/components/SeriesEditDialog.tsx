@@ -27,8 +27,10 @@ import {
   WEEKDAY_NAMES,
   describeRecurrence,
   expandWeeklyDates,
+  isSingleDateRule,
   normalizeWeekdays,
   parseYmd,
+  weekdayOf,
 } from '../../shared/utils/recurrence';
 import { describeRecurringConflict } from '../utils/recurringConflicts';
 import { courtTypeLabel } from '../../shared/constants/courtTypes';
@@ -58,6 +60,15 @@ const SCOPE_LABELS: Record<BookingSeriesScope, string> = {
   instance: 'This reservation only',
   following: 'This and all future dates',
   all: 'Every date in the series',
+};
+
+/**
+ * A one-date group is several courts booked at once, so "future dates" is
+ * meaningless and "every date" reads wrong -- it is every court.
+ */
+const GROUP_SCOPE_LABELS: Partial<Record<BookingSeriesScope, string>> = {
+  instance: 'This court only',
+  all: 'All courts in this booking',
 };
 
 function toTimeInput(value: string): string {
@@ -221,18 +232,27 @@ export function SeriesEditDialog({
     return eh * 60 + em - (sh * 60 + sm);
   }, [startTime, endTime]);
 
-  /** Dates the edited rule produces, within the chosen scope. */
-  const previewDates = useMemo(() => {
-    if (scope === 'instance') return [startDate || focusDate];
-    const all = expandWeeklyDates(startDate, endDate, weekdays);
-    return scope === 'following' ? all.filter((d) => d >= focusDate) : all;
-  }, [scope, startDate, endDate, weekdays, focusDate]);
-
-
   const today = todayYmd();
+
+  // What kind of thing this is: a repeat, or several courts on one date.
+  // Declared before the memos that read it -- a `const` is in the temporal dead
+  // zone until this line, and a memo body runs during the same render.
+  const isGroup = series ? isSingleDateRule(series.rule) : false;
+  const scopeOptions: BookingSeriesScope[] = isGroup
+    ? ['instance', 'all']
+    : ['instance', 'following', 'all'];
+  const scopeLabel = (option: BookingSeriesScope) =>
+    (isGroup ? GROUP_SCOPE_LABELS[option] : undefined) ?? SCOPE_LABELS[option];
 
   const selectedBookingIds = focusBookingIds?.length ? focusBookingIds : [focusBookingId];
   const isMultiInstance = selectedBookingIds.length > 1;
+
+  /** Dates the edited rule produces, within the chosen scope. */
+  const previewDates = useMemo(() => {
+    if (scope === 'instance' || isGroup) return [startDate || focusDate];
+    const all = expandWeeklyDates(startDate, endDate, weekdays);
+    return scope === 'following' ? all.filter((d) => d >= focusDate) : all;
+  }, [scope, startDate, endDate, weekdays, focusDate, isGroup]);
 
   // Switching to "this reservation only" puts the clicked date in the date field,
   // so it can be moved to another day without touching the rest of the series.
@@ -266,7 +286,9 @@ export function SeriesEditDialog({
 
   const validate = (): string | null => {
     if (courtIds.length === 0) return 'Select at least one court';
-    if (scope !== 'instance' && weekdays.length === 0) return 'Select at least one day of the week';
+    if (!isGroup && scope !== 'instance' && weekdays.length === 0) {
+      return 'Select at least one day of the week';
+    }
     if (!startDate || !endDate) return 'Choose a start and end date';
     if (endDate < startDate) return 'The end date must be on or after the start date';
     if (!startTime || !endTime) return 'Choose a start and end time';
@@ -282,9 +304,12 @@ export function SeriesEditDialog({
     courtIds,
     // Instance edits carry the target date in startDate; the rule itself is not
     // rewritten server-side, so these values only describe the one occurrence.
-    weekdays: scope === 'instance' ? normalizeWeekdays([new Date(`${startDate || focusDate}T12:00:00`).getDay()]) : weekdays,
+    weekdays:
+      scope === 'instance' || isGroup
+        ? normalizeWeekdays([weekdayOf(startDate || focusDate)])
+        : weekdays,
     startDate: scope === 'following' ? (focusDate > startDate ? focusDate : startDate) : startDate,
-    endDate: scope === 'instance' ? startDate || focusDate : endDate,
+    endDate: scope === 'instance' || isGroup ? startDate || focusDate : endDate,
     startTime: toApiTime(startTime),
     endTime: toApiTime(endTime),
     durationMinutes,
@@ -375,15 +400,18 @@ export function SeriesEditDialog({
         onValueChange={(value) => setScope(value as BookingSeriesScope)}
         className="gap-2"
       >
-        {(Object.keys(SCOPE_LABELS) as BookingSeriesScope[]).map((option) => (
+        {scopeOptions.map((option) => (
           <div key={option} className="flex items-center gap-2">
             <RadioGroupItem value={option} id={`scope-${option}`} />
             <Label htmlFor={`scope-${option}`} className="font-normal cursor-pointer">
               {option === 'instance' && isMultiInstance
                 ? `The ${selectedBookingIds.length} selected dates only`
-                : SCOPE_LABELS[option]}
-              {option === 'instance' && !isMultiInstance && (
+                : scopeLabel(option)}
+              {option === 'instance' && !isMultiInstance && !isGroup && (
                 <span className="text-muted-foreground"> — {formatDateLabel(focusDate)}</span>
+              )}
+              {option === 'all' && isGroup && courtIds.length > 0 && (
+                <span className="text-muted-foreground"> — {courtIds.length} court(s)</span>
               )}
             </Label>
           </div>
@@ -428,7 +456,7 @@ export function SeriesEditDialog({
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Cancel recurring reservation</DialogTitle>
+            <DialogTitle>{isGroup ? 'Cancel grouped reservation' : 'Cancel recurring reservation'}</DialogTitle>
             <DialogDescription>
               {series ? describeRecurrence(series.rule) : 'Loading…'}
             </DialogDescription>
@@ -437,7 +465,11 @@ export function SeriesEditDialog({
             {scopeChooser}
             <p className="text-sm text-muted-foreground">
               {scope === 'instance'
-                ? 'One date will be cancelled.'
+                ? isGroup
+                  ? 'One court will be cancelled; the rest of the booking stays.'
+                  : 'One date will be cancelled.'
+                : isGroup
+                ? `All ${courtIds.length} court(s) in this booking will be cancelled.`
                 : `${previewDates.filter((d) => d >= today).length} upcoming date(s) will be cancelled. Past dates stay in the member's history.`}
             </p>
           </div>
@@ -464,7 +496,7 @@ export function SeriesEditDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarClock className="h-5 w-5" />
-            Edit recurring reservation
+            {isGroup ? 'Edit grouped reservation' : 'Edit recurring reservation'}
           </DialogTitle>
           <DialogDescription>
             {series ? describeRecurrence(series.rule) : 'Loading…'}
@@ -484,13 +516,24 @@ export function SeriesEditDialog({
               <p className="text-sm text-muted-foreground">
                 {isMultiInstance
                   ? `Only the ${selectedBookingIds.length} selected dates change. `
+                  : isGroup
+                  ? 'Only this one court changes. '
                   : `Only ${formatDateLabel(focusDate)} changes. `}
-                The series itself keeps its current courts, days and time.
+                {isGroup
+                  ? 'The other courts in this booking keep their current time.'
+                  : 'The series itself keeps its current courts, days and time.'}
               </p>
             )}
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Courts</Label>
+              <Label className="text-sm font-medium">
+                Courts
+                {isGroup && (
+                  <span className="font-normal text-muted-foreground">
+                    {' '}— unticking one cancels that court
+                  </span>
+                )}
+              </Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {courts.map((court) => (
                   <label key={court.id} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -504,7 +547,7 @@ export function SeriesEditDialog({
               </div>
             </div>
 
-            {scope !== 'instance' && (
+            {scope !== 'instance' && !isGroup && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Repeats on</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -524,7 +567,7 @@ export function SeriesEditDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="series-start-date" className="text-sm font-medium">
-                  {scope === 'instance' ? 'Date' : 'First date'}
+                  {scope === 'instance' || isGroup ? 'Date' : 'First date'}
                 </Label>
                 <Input
                   id="series-start-date"
@@ -536,7 +579,7 @@ export function SeriesEditDialog({
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
-              {scope !== 'instance' && (
+              {scope !== 'instance' && !isGroup && (
                 <div className="space-y-1">
                   <Label htmlFor="series-end-date" className="text-sm font-medium">
                     Last date
@@ -666,7 +709,7 @@ export function SeriesEditDialog({
               />
             </div>
 
-            {scope !== 'instance' && (
+            {scope !== 'instance' && !isGroup && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">

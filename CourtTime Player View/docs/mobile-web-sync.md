@@ -139,6 +139,8 @@ Everything else in the admin console (bookings and series, members, courts, faci
 - [ ] Reset password: valid + expired token (mobile validates first)
 - [ ] Recurring reservations: create a series, reopen it from the calendar, and change the courts, weekdays, date range, time, member and notes
 - [ ] Recurring scopes: "this date only", "this and later" (splits the series), "every date" — on edit, on cancel, and on a calendar drag
+- [ ] Multi-court booking ("book additional courts") is grouped: reopening one court offers "this court only" / "every court booked with it", and unticking a court in the editor cancels just that court
+- [ ] A paid court, guest fee, ball machine or split still books one court at a time (no grouping) and reaches Stripe
 - [ ] Recurring cancellation notifies and emails the member (it no longer deletes rows)
 - [ ] Admin recurring series: the Bookings list and the mobile admin tab drive the same series service
 - [ ] Flag on/off parity: a flagged feature shows on both clients for the same facility

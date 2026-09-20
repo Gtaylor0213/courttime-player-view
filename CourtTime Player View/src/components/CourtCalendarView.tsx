@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { isSingleDateRule } from '../../shared/utils/recurrence';
 import { Card, CardContent } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -277,6 +278,8 @@ export function CourtCalendarView() {
     booking: any;
     targetCourtId: string;
     targetStartTime: string;
+    series: any;
+    isGroup: boolean;
   } | null>(null);
 
   // Calendar display customization
@@ -1500,8 +1503,18 @@ export function CourtCalendarView() {
     targetStartTime: string
   ) => {
     if (booking?.seriesId) {
-      setSeriesDragPrompt({ booking, targetCourtId, targetStartTime });
-      return;
+      const res = await bookingApi.getSeries(booking.seriesId);
+      if (res.success && res.series) {
+        setSeriesDragPrompt({
+          booking,
+          targetCourtId,
+          targetStartTime,
+          series: res.series,
+          isGroup: isSingleDateRule(res.series.rule),
+        });
+        return;
+      }
+      // The group could not be read; moving just this booking is still correct.
     }
     await moveSingleReservation(booking, targetCourtId, targetStartTime);
   }, [moveSingleReservation]);
@@ -1512,15 +1525,10 @@ export function CourtCalendarView() {
   ) => {
     const prompt = seriesDragPrompt;
     if (!prompt) return;
-    const { booking, targetCourtId, targetStartTime } = prompt;
+    const { booking, targetCourtId, targetStartTime, series, isGroup } = prompt;
     setSeriesDragPrompt(null);
     try {
-      const res = await bookingApi.getSeries(booking.seriesId);
-      if (!res.success || !res.series) {
-        toast.error(res.error || 'Could not load this recurring reservation');
-        return;
-      }
-      const { rule } = res.series;
+      const { rule } = series;
       const durationMinutes = Number(booking.durationMinutes) || rule.durationMinutes;
       const startMin = calendarSlotToMinutes(targetStartTime);
       // Swap only the court that was dragged, so a multi-court series keeps the rest.
@@ -1543,20 +1551,22 @@ export function CourtCalendarView() {
       if (!update.success) {
         toast.error(
           update.conflicts?.length
-            ? 'Some dates in this series are already booked at that time. Nothing was moved — open the reservation to review them.'
-            : update.error || 'Failed to move the recurring reservation'
+            ? `Some ${isGroup ? 'courts' : 'dates'} are already booked at that time. Nothing was moved — open the reservation to review them.`
+            : update.error || 'Failed to move the reservation'
         );
         return;
       }
       toast.success(
-        scope === 'all'
+        isGroup
+          ? 'Every court in this booking was moved.'
+          : scope === 'all'
           ? 'Every date in the series was moved.'
           : 'This and all later dates were moved.'
       );
       await fetchBookings();
     } catch (error) {
-      console.error('Error moving recurring reservation:', error);
-      toast.error('Failed to move the recurring reservation.');
+      console.error('Error moving grouped reservation:', error);
+      toast.error('Failed to move the reservation.');
     }
   }, [seriesDragPrompt, fetchBookings]);
 
@@ -3577,9 +3587,13 @@ export function CourtCalendarView() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Move recurring reservation</DialogTitle>
+            <DialogTitle>
+              Move {seriesDragPrompt?.isGroup ? 'grouped' : 'recurring'} reservation
+            </DialogTitle>
             <DialogDescription>
-              This reservation repeats. Choose how much of the series to move.
+              {seriesDragPrompt?.isGroup
+                ? 'This was booked across several courts at once. Choose how much of it to move.'
+                : 'This reservation repeats. Choose how much of the series to move.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
@@ -3598,21 +3612,25 @@ export function CourtCalendarView() {
                 }
               }}
             >
-              This date only
+              {seriesDragPrompt?.isGroup ? 'This court only' : 'This date only'}
             </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => void applySeriesDragMove('following')}
-            >
-              This and all future dates
-            </Button>
+            {!seriesDragPrompt?.isGroup && (
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => void applySeriesDragMove('following')}
+              >
+                This and all future dates
+              </Button>
+            )}
             <Button
               variant="outline"
               className="w-full justify-start"
               onClick={() => void applySeriesDragMove('all')}
             >
-              Every date in the series
+              {seriesDragPrompt?.isGroup
+                ? 'Every court booked with it'
+                : 'Every date in the series'}
             </Button>
           </div>
           <DialogFooter>

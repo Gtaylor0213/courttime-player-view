@@ -7,6 +7,9 @@ import {
   toYmd,
   describeRecurrence,
   rulesEqual,
+  weekdayOf,
+  singleDateRule,
+  isSingleDateRule,
   type RecurrenceRule,
 } from '../recurrence';
 
@@ -94,6 +97,44 @@ describe('expandRecurrence', () => {
   });
 });
 
+describe('weekdayOf', () => {
+  it('reads the local weekday without a UTC shift', () => {
+    expect(weekdayOf('2026-09-21')).toBe(1); // Monday
+    expect(weekdayOf('2026-09-20')).toBe(0); // Sunday
+  });
+});
+
+describe('singleDateRule', () => {
+  const group = singleDateRule({
+    courtIds: ['court-a', 'court-b', 'court-c'],
+    date: '2026-09-22',
+    startTime: '18:00:00',
+    endTime: '19:00:00',
+    durationMinutes: 60,
+  });
+
+  it('pins the range to the one date and its weekday', () => {
+    expect(group.startDate).toBe('2026-09-22');
+    expect(group.endDate).toBe('2026-09-22');
+    expect(group.weekdays).toEqual([2]); // Tuesday
+  });
+
+  it('expands to one occurrence per court and no more', () => {
+    const out = expandRecurrence(group);
+    expect(out).toHaveLength(3);
+    expect(out.map((o) => o.bookingDate)).toEqual([
+      '2026-09-22',
+      '2026-09-22',
+      '2026-09-22',
+    ]);
+  });
+
+  it('is recognised as a single-date group', () => {
+    expect(isSingleDateRule(group)).toBe(true);
+    expect(isSingleDateRule(rule)).toBe(false);
+  });
+});
+
 describe('describeRecurrence', () => {
   it('summarizes days and range', () => {
     expect(describeRecurrence(rule)).toBe('Every Mon, Wed · Sep 21 to Oct 5');
@@ -101,6 +142,28 @@ describe('describeRecurrence', () => {
 
   it('collapses all seven days', () => {
     expect(describeRecurrence({ ...rule, weekdays: [0, 1, 2, 3, 4, 5, 6] })).toContain('Every day');
+  });
+
+  it('describes a multi-court group by its courts and date, not as a repeat', () => {
+    const group = singleDateRule({
+      courtIds: ['a', 'b', 'c'],
+      date: '2026-09-22',
+      startTime: '18:00:00',
+      endTime: '19:00:00',
+      durationMinutes: 60,
+    });
+    expect(describeRecurrence(group)).toBe('3 courts · Tue, Sep 22');
+  });
+
+  it('drops the court count when a one-date group holds a single court', () => {
+    const group = singleDateRule({
+      courtIds: ['a'],
+      date: '2026-09-22',
+      startTime: '18:00:00',
+      endTime: '19:00:00',
+      durationMinutes: 60,
+    });
+    expect(describeRecurrence(group)).toBe('Tue, Sep 22');
   });
 });
 

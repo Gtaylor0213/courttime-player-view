@@ -129,6 +129,45 @@ export function expandRecurrence(rule: RecurrenceRule): RecurrenceOccurrence[] {
   );
 }
 
+/** Weekday index (0=Sunday) of a local `YYYY-MM-DD` date. */
+export function weekdayOf(ymd: string): number {
+  const date = parseYmd(ymd);
+  return date ? date.getDay() : 0;
+}
+
+/**
+ * Rule for a booking group that does not repeat: one date, one or more courts.
+ *
+ * Booking several courts at once is the same kind of thing as a recurring
+ * reservation -- a set of bookings made as one decision -- so it is stored as a
+ * series too, and the same edit flow can retime or re-court all of them at
+ * once. `startDate === endDate` is what distinguishes the two.
+ */
+export function singleDateRule(input: {
+  courtIds: string[];
+  date: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+}): RecurrenceRule {
+  return {
+    courtIds: input.courtIds,
+    weekdays: [weekdayOf(input.date)],
+    startDate: input.date,
+    endDate: input.date,
+    startTime: input.startTime,
+    endTime: input.endTime,
+    durationMinutes: input.durationMinutes,
+  };
+}
+
+/** A group that covers a single date: several courts at once, not a repeat. */
+export function isSingleDateRule(
+  rule: Pick<RecurrenceRule, 'startDate' | 'endDate'>
+): boolean {
+  return !!rule.startDate && rule.startDate === rule.endDate;
+}
+
 /** Stable key for matching an occurrence to an existing booking row. */
 export function occurrenceKey(courtId: string, bookingDate: string): string {
   return `${bookingDate}|${courtId}`;
@@ -138,17 +177,31 @@ export function occurrenceKey(courtId: string, bookingDate: string): string {
  * Human summary of a rule, e.g. "Every Mon, Wed - Sep 22 to Dec 12".
  * Used on the calendar's recurring badge and in confirmation copy.
  */
-export function describeRecurrence(rule: Pick<RecurrenceRule, 'weekdays' | 'startDate' | 'endDate'>): string {
-  const days = normalizeWeekdays(rule.weekdays).map((d) => WEEKDAY_NAMES[d].slice(0, 3));
-  if (days.length === 0) return 'Recurring';
+export function describeRecurrence(
+  rule: Pick<RecurrenceRule, 'weekdays' | 'startDate' | 'endDate'> & { courtIds?: string[] }
+): string {
   const fmt = (ymd: string) => {
     const date = parseYmd(ymd);
     return date
-      ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
       : ymd;
   };
+
+  // A one-date group is several courts booked at once, not a repeat; calling it
+  // "Every Tue · Sep 22 to Sep 22" would be nonsense.
+  if (isSingleDateRule(rule)) {
+    const courts = rule.courtIds?.length ?? 0;
+    return courts > 1 ? `${courts} courts · ${fmt(rule.startDate)}` : fmt(rule.startDate);
+  }
+
+  const days = normalizeWeekdays(rule.weekdays).map((d) => WEEKDAY_NAMES[d].slice(0, 3));
+  if (days.length === 0) return 'Recurring';
+  const short = (ymd: string) => {
+    const date = parseYmd(ymd);
+    return date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ymd;
+  };
   const every = days.length === 7 ? 'Every day' : `Every ${days.join(', ')}`;
-  return `${every} · ${fmt(rule.startDate)} to ${fmt(rule.endDate)}`;
+  return `${every} · ${short(rule.startDate)} to ${short(rule.endDate)}`;
 }
 
 /** Whether two rules describe the same occurrences (ignoring court order). */

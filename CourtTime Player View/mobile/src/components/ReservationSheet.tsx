@@ -28,6 +28,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
 import { reservationEndpoints, bookingSeriesEndpoints } from '../api/endpoints';
+import { isSingleDateRule } from '../../../shared/utils/recurrence';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeatureFlags } from '../contexts/FeatureFlagContext';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
@@ -121,6 +122,8 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [split, setSplit] = useState<SplitPaymentSummary | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /** 'group' = several courts on one date; 'recurring' = repeats over dates. */
+  const [seriesKind, setSeriesKind] = useState<'group' | 'recurring' | null>(null);
 
   const [memberSearch, setMemberSearch] = useState('');
   const [memberResults, setMemberResults] = useState<Array<{ userId: string; fullName: string }>>([]);
@@ -392,6 +395,24 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
     }
   };
 
+  // Which kind of group this belongs to, so the prompt says "court" or "date".
+  useEffect(() => {
+    if (!visible || !detail?.seriesId) {
+      setSeriesKind(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const res = await bookingSeriesEndpoints.detail(detail.seriesId as string);
+      const series = (res as any)?.data?.series ?? (res as any)?.series;
+      if (cancelled || !res.success || !series) return;
+      setSeriesKind(isSingleDateRule(series.rule) ? 'group' : 'recurring');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, detail?.seriesId]);
+
   const cancelThisBookingOnly = async () => {
     if (!detail || !user) return;
     setBusy('cancel');
@@ -436,16 +457,30 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
     // A recurring reservation asks how far the cancellation reaches, matching
     // the web calendar rather than silently dropping only the one date.
     if (detail.seriesId) {
+      const isGroup = seriesKind === 'group';
       Alert.alert(
-        'Cancel recurring reservation',
-        'This reservation repeats. Choose how much of the series to cancel.',
+        isGroup ? 'Cancel grouped reservation' : 'Cancel recurring reservation',
+        isGroup
+          ? 'This was booked across several courts at once. Choose how much of it to cancel.'
+          : 'This reservation repeats. Choose how much of the series to cancel.',
         [
           { text: 'Keep it', style: 'cancel' },
-          { text: 'This date only', onPress: () => void cancelThisBookingOnly() },
-          { text: 'This and later dates', onPress: () => void cancelSeriesScope('following') },
           {
-            text: 'Every date',
-            style: 'destructive',
+            text: isGroup ? 'This court only' : 'This date only',
+            onPress: () => void cancelThisBookingOnly(),
+          },
+          // "Later dates" is meaningless when the group covers a single date.
+          ...(isGroup
+            ? []
+            : [
+                {
+                  text: 'This and later dates',
+                  onPress: () => void cancelSeriesScope('following'),
+                },
+              ]),
+          {
+            text: isGroup ? 'Every court' : 'Every date',
+            style: 'destructive' as const,
             onPress: () => void cancelSeriesScope('all'),
           },
         ]
@@ -499,10 +534,11 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
             {d.notes ? <Text style={styles.line}>Notes: {d.notes}</Text> : null}
             {d.seriesId ? (
               <View style={styles.recurringNote}>
-                <Ionicons name="repeat" size={16} color={Colors.primary} />
+                <Ionicons name={seriesKind === 'group' ? 'albums-outline' : 'repeat'} size={16} color={Colors.primary} />
                 <Text style={styles.recurringText}>
-                  Part of a recurring reservation — cancelling asks whether to drop this date,
-                  this date onward, or the whole series.
+                  {seriesKind === 'group'
+                    ? 'Booked together with other courts — cancelling asks whether to drop this court or every court booked with it.'
+                    : 'Part of a recurring reservation — cancelling asks whether to drop this date, this date onward, or the whole series.'}
                 </Text>
               </View>
             ) : null}

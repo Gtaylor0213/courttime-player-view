@@ -83,6 +83,12 @@ import {
 } from '../../src/components/SplitPaymentPicker';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import {
+  expandWeeklyDates,
+  normalizeWeekdays,
+  singleDateRule,
+  WEEKDAY_NAMES,
+} from '../../../shared/utils/recurrence';
+import {
   buildTimeSlotsFromAvailability,
   parseHHMMToMinutes,
   formatMinutesAsHHMM,
@@ -876,6 +882,17 @@ export default function BookCourtScreen() {
         facilityId,
         bookingType,
         notes: bookingNotes.trim() || undefined,
+        // The rule as chosen, so the editor reopens with the real repeat-until
+        // date rather than the last date that happened to be booked.
+        rule: {
+          courtIds: allCourtIds,
+          weekdays: normalizeWeekdays(recurringDays),
+          startDate: selectedDate,
+          endDate: recurringEndDate,
+          startTime,
+          endTime,
+          durationMinutes,
+        },
         instances,
       };
       let recurringRes = await api.post('/api/bookings/recurring-series', seriesPayload);
@@ -937,6 +954,77 @@ export default function BookCourtScreen() {
       } else {
         hapticError();
         showAlert('Booking Failed', recurringRes.error || 'Could not create recurring booking series.');
+      }
+      setBooking(false);
+      return;
+    }
+
+    // Booking several courts at once is one decision, so it is grouped as a
+    // series (one date, many courts) and can be retimed or re-courted as a unit
+    // afterwards. Anything needing checkout was turned away above.
+    if (allCourtIds.length > 1 && !needsPaidCheckout && !splitPayment) {
+      const durationMinutes = calcDuration(startTime, endTime);
+      const groupPayload = {
+        userId: user.id,
+        facilityId,
+        bookingType,
+        notes: bookingNotes.trim() || undefined,
+        rule: singleDateRule({
+          courtIds: allCourtIds,
+          date: selectedDate,
+          startTime,
+          endTime,
+          durationMinutes,
+        }),
+        instances: allCourtIds.map((courtId) => ({
+          courtId,
+          bookingDate: selectedDate,
+          startTime,
+          endTime,
+          durationMinutes,
+        })),
+      };
+
+      let groupRes = await api.post('/api/bookings/recurring-series', groupPayload);
+      if (!groupRes.success && groupRes.conflicts?.length) {
+        const lines = groupRes.conflicts
+          .map((c) => `• ${c.courtName} at ${formatTimeForToast(c.startTime)}`)
+          .join('\n');
+        const proceed = await new Promise<boolean>((resolve) => {
+          showAlert(
+            'Court Conflicts',
+            `These courts are already booked at that time:\n\n${lines}\n\nBook the remaining courts, or cancel and start over?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Book the rest', onPress: () => resolve(true) },
+            ]
+          );
+        });
+        if (!proceed) {
+          setBooking(false);
+          return;
+        }
+        groupRes = await api.post('/api/bookings/recurring-series', {
+          ...groupPayload,
+          skipConflicts: true,
+        });
+      }
+
+      if (groupRes.success) {
+        const groupData = (groupRes.data ?? {}) as { bookings?: unknown[] };
+        const created = groupData.bookings?.length ?? allCourtIds.length;
+        hapticSuccess();
+        setModalKind(null);
+        showAlert('Booked!', `Created ${created} booking${created === 1 ? '' : 's'}.`);
+        fetchTimeSlots();
+      } else if (groupRes.ruleViolations && groupRes.ruleViolations.length > 0) {
+        hapticError();
+        setViolations(groupRes.ruleViolations as RuleViolation[]);
+        setWarnings((groupRes.warnings || []) as RuleViolation[]);
+        setModalKind('violations');
+      } else {
+        hapticError();
+        showAlert('Booking Failed', groupRes.error || 'Could not book these courts.');
       }
       setBooking(false);
       return;
@@ -1151,27 +1239,11 @@ export default function BookCourtScreen() {
     year: 'numeric',
   });
 
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
   const generateRecurringDates = (): string[] => {
     if (!recurringBookingEnabled || recurringDays.length === 0 || !recurringEndDate) {
       return [selectedDate];
     }
-    const start = new Date(selectedDate + 'T00:00:00');
-    const end = new Date(recurringEndDate + 'T00:00:00');
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-      return [selectedDate];
-    }
-    const dates: string[] = [];
-    const cur = new Date(start);
-    while (cur <= end) {
-      if (recurringDays.includes(dayNames[cur.getDay()]!)) {
-        dates.push(
-          `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
-        );
-      }
-      cur.setDate(cur.getDate() + 1);
-    }
+    const dates = expandWeeklyDates(selectedDate, recurringEndDate, recurringDays);
     return dates.length > 0 ? dates : [selectedDate];
   };
 
@@ -1634,7 +1706,7 @@ export default function BookCourtScreen() {
                           <View style={styles.recurringOptionsWrap}>
                             <Text style={styles.recurringSectionLabel}>Days of week</Text>
                             <View style={styles.recurringDaysRow}>
-                              {dayNames.map((day) => (
+                              {WEEKDAY_NAMES.map((day) => (
                                 <TouchableOpacity
                                   key={day}
                                   style={[styles.weekChip, recurringDays.includes(day) && styles.weekChipSelected]}

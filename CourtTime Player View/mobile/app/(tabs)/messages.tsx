@@ -68,6 +68,12 @@ interface MemberItem {
   isFacilityAdmin?: boolean;
 }
 
+/** Modes the member picker runs in; see the `pickerMode` state below. */
+type PickerMode = 'direct' | 'several' | 'group' | 'add';
+
+/** One "send individually" batch is capped at 30 recipients (server: BULK_RECIPIENT_LIMIT). */
+const BULK_RECIPIENT_LIMIT = 30;
+
 function asRouteParam(value: string | string[] | undefined): string | undefined {
   const next = Array.isArray(value) ? value[0] : value;
   if (typeof next !== 'string') return undefined;
@@ -105,11 +111,12 @@ export default function MessagesScreen() {
   const messagesListRef = useRef<FlatList<MessageItem>>(null);
   const [threadLoadError, setThreadLoadError] = useState<string | null>(null);
 
-  // New message modal state. "direct" picks one member; "group" names a group
-  // and picks several (web's Create Group dialog). "add" reuses the same picker
-  // to add members to the open group.
+  // New message modal state. "direct" picks one member; "several" picks many and
+  // sends each their own private copy; "group" names a shared group and picks
+  // several (web's Create Group dialog). "add" reuses the same picker to add
+  // members to the open group.
   const [showNewMessage, setShowNewMessage] = useState(false);
-  const [pickerMode, setPickerMode] = useState<'direct' | 'group' | 'add'>('direct');
+  const [pickerMode, setPickerMode] = useState<PickerMode>('direct');
   const [members, setMembers] = useState<MemberItem[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -119,6 +126,9 @@ export default function MessagesScreen() {
   const [groupName, setGroupName] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
   const [savingGroup, setSavingGroup] = useState(false);
+  // "Several" mode composes its message inside the picker, not in a thread.
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [sendingBulk, setSendingBulk] = useState(false);
 
   // Group thread state: members (for sender names and the info sheet).
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
@@ -353,13 +363,14 @@ export default function MessagesScreen() {
     return () => clearTimeout(timer);
   }, [showNewMessage, memberSearch, fetchMembers]);
 
-  function openNewMessage(mode: 'direct' | 'group' | 'add' = 'direct') {
+  function openNewMessage(mode: PickerMode = 'direct') {
     setPickerMode(mode);
     setMemberSearch('');
     setMembers([]);
     setMemberLoadError(null);
     setLoadingMembers(true);
     setGroupName('');
+    setBulkMessage('');
     setSelectedMemberIds(new Set());
     setShowNewMessage(true);
   }
@@ -367,11 +378,51 @@ export default function MessagesScreen() {
   const toggleSelectedMember = (userId: string) => {
     setSelectedMemberIds((prev) => {
       const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else if (pickerMode === 'several' && next.size >= BULK_RECIPIENT_LIMIT) {
+        Alert.alert('Too many recipients', `You can message at most ${BULK_RECIPIENT_LIMIT} people at once.`);
+        return prev;
+      } else {
+        next.add(userId);
+      }
       return next;
     });
   };
+
+  /**
+   * Sends one message to each selected member as a separate 1:1 thread, so no
+   * recipient sees who else got it. Unlike a group, nothing shared is created.
+   */
+  async function handleSendToSeveral() {
+    if (!facilityId || selectedMemberIds.size === 0 || !bulkMessage.trim() || sendingBulk) return;
+
+    setSendingBulk(true);
+    const res = await api.post('/api/messages/bulk', {
+      facilityId,
+      recipientIds: Array.from(selectedMemberIds),
+      messageText: bulkMessage.trim(),
+    });
+    setSendingBulk(false);
+
+    if (!res.success) {
+      showApiErrorAlert(res, 'Could not send');
+      return;
+    }
+
+    const payload = res.data?.data || res.data;
+    const sentCount = payload?.sentCount ?? selectedMemberIds.size;
+    const failedCount = payload?.failedCount ?? 0;
+
+    setShowNewMessage(false);
+    setBulkMessage('');
+    setSelectedMemberIds(new Set());
+    await fetchConversations();
+
+    if (failedCount > 0) {
+      Alert.alert('Partly sent', `Sent to ${sentCount} of ${sentCount + failedCount} people.`);
+    }
+  }
 
   // ── Groups ──
   async function handleCreateGroup() {
@@ -1016,10 +1067,32 @@ export default function MessagesScreen() {
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>
-              {pickerMode === 'direct' ? 'New Message' : pickerMode === 'group' ? 'New Group' : 'Add Members'}
+              {pickerMode === 'direct'
+                ? 'New Message'
+                : pickerMode === 'several'
+                  ? 'Message Several'
+                  : pickerMode === 'group'
+                    ? 'New Group'
+                    : 'Add Members'}
             </Text>
             {pickerMode === 'direct' ? (
               <View style={{ width: 60 }} />
+            ) : pickerMode === 'several' ? (
+              <TouchableOpacity
+                onPress={() => void handleSendToSeveral()}
+                disabled={sendingBulk || selectedMemberIds.size === 0 || !bulkMessage.trim()}
+                accessibilityRole="button"
+                accessibilityLabel="Send to selected members"
+              >
+                <Text
+                  style={[
+                    styles.modalCancel,
+                    (sendingBulk || selectedMemberIds.size === 0 || !bulkMessage.trim()) && styles.disabledText,
+                  ]}
+                >
+                  {sendingBulk ? '...' : 'Send'}
+                </Text>
+              </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 onPress={() => void (pickerMode === 'group' ? handleCreateGroup() : handleAddGroupMembers())}
@@ -1042,6 +1115,47 @@ export default function MessagesScreen() {
             )}
           </View>
 
+          {/* One-vs-several toggle, the mobile stand-in for web's dialog tabs.
+              Groups and the add-members picker keep their own fixed mode. */}
+          {pickerMode === 'direct' || pickerMode === 'several' ? (
+            <View style={styles.modeToggle}>
+              {(['direct', 'several'] as const).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[styles.modeOption, pickerMode === mode && styles.modeOptionActive]}
+                  onPress={() => {
+                    setPickerMode(mode);
+                    setSelectedMemberIds(new Set());
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: pickerMode === mode }}
+                  accessibilityLabel={mode === 'direct' ? 'Message one person' : 'Message several people'}
+                >
+                  <Text style={[styles.modeOptionText, pickerMode === mode && styles.modeOptionTextActive]}>
+                    {mode === 'direct' ? 'One person' : 'Several people'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          {pickerMode === 'several' ? (
+            <>
+              <Text style={styles.modeHint}>
+                Everyone gets this in their own private chat — they won't see each other.
+              </Text>
+              <Input
+                style={styles.bulkMessageInput}
+                value={bulkMessage}
+                onChangeText={setBulkMessage}
+                placeholder="Write the message everyone will receive…"
+                accessibilityLabel="Message to send to everyone selected"
+                multiline
+                maxLength={2000}
+              />
+            </>
+          ) : null}
+
           {pickerMode === 'group' ? (
             <Input
               style={styles.groupNameInput}
@@ -1056,6 +1170,7 @@ export default function MessagesScreen() {
           {pickerMode !== 'direct' && selectedMemberIds.size > 0 ? (
             <Text style={styles.selectedCount}>
               {selectedMemberIds.size} selected
+              {pickerMode === 'several' ? ` of ${BULK_RECIPIENT_LIMIT} max` : ''}
             </Text>
           ) : null}
 
@@ -1221,6 +1336,46 @@ const styles = StyleSheet.create({
   groupNameInput: {
     marginHorizontal: Spacing.md,
     marginTop: Spacing.md,
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surface,
+    padding: 3,
+  },
+  modeOption: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: TouchTarget.min - 8,
+    borderRadius: BorderRadius.sm,
+  },
+  modeOptionActive: {
+    backgroundColor: Colors.card,
+  },
+  modeOptionText: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.medium,
+    color: Colors.textMuted,
+  },
+  modeOptionTextActive: {
+    color: Colors.text,
+    fontFamily: FontFamily.semiBold,
+  },
+  modeHint: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.regular,
+    color: Colors.textMuted,
+  },
+  bulkMessageInput: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    minHeight: 84,
+    textAlignVertical: 'top',
   },
   selectedCount: {
     marginHorizontal: Spacing.md,

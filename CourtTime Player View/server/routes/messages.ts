@@ -17,6 +17,12 @@ import {
   COURTTIME_TEAM_USER_ID,
   findOrCreateTeamConversation,
 } from '../../src/services/developerMessagingService';
+import {
+  DirectMessageError,
+  findOrCreateDirectConversation,
+  insertMessage,
+  sendDirectMessageToMany,
+} from '../../src/services/directMessageService';
 
 const router = express.Router();
 
@@ -40,6 +46,41 @@ async function hasFacilityAccess(facilityId: string, userId: string): Promise<bo
     [facilityId, userId]
   );
   return result.rows.length > 0;
+}
+
+/**
+ * Fire-and-forget "new message" notifications for one or more 1:1 threads.
+ * The sender's name is looked up once, so a bulk send costs one extra query
+ * rather than one per recipient. Failures are logged, never surfaced: the
+ * message itself is already stored by the time this runs.
+ */
+function notifyDirectRecipients(
+  senderId: string,
+  facilityId: string,
+  messageText: string,
+  targets: Array<{ recipientId: string; conversationId: string; messageId: string }>
+): void {
+  if (targets.length === 0) return;
+
+  void (async () => {
+    try {
+      const senderResult = await query(`SELECT full_name FROM users WHERE id = $1`, [senderId]);
+      const senderName = senderResult.rows[0]?.full_name || 'A facility member';
+
+      await Promise.all(
+        targets.map((target) =>
+          notificationService.notifyMessageReceived(target.recipientId, senderName, messageText, {
+            conversationId: target.conversationId,
+            facilityId,
+            messageId: target.messageId,
+            senderId,
+          })
+        )
+      );
+    } catch (notificationError) {
+      console.error('Error creating message notification:', notificationError);
+    }
+  })();
 }
 
 /**
@@ -725,6 +766,65 @@ router.get('/:conversationId', async (req, res) => {
 });
 
 /**
+ * POST /api/messages/bulk
+ * Send the same message to several members at once, each in their own private
+ * 1:1 thread — the recipients never see one another, which is what separates
+ * this from a group conversation.
+ *
+ * Body: { facilityId, recipientIds: string[], messageText }
+ */
+router.post('/bulk', async (req, res) => {
+  try {
+    const { facilityId, recipientIds, messageText } = req.body;
+    // The sender is always the authenticated caller, never a client-supplied id.
+    const senderId = req.user?.userId;
+    if (!senderId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    if (!facilityId) {
+      return res.status(400).json({ success: false, error: 'facilityId is required' });
+    }
+    if (!(await hasFacilityAccess(facilityId, senderId))) {
+      return res.status(403).json({ success: false, error: 'Not a member of this facility' });
+    }
+
+    const result = await sendDirectMessageToMany({
+      facilityId,
+      senderId,
+      recipientIds,
+      messageText,
+    });
+
+    notifyDirectRecipients(
+      senderId,
+      facilityId,
+      result.messageText,
+      result.sent.map((entry) => ({
+        recipientId: entry.recipientId,
+        conversationId: entry.conversationId,
+        messageId: entry.message.id,
+      }))
+    );
+
+    res.json({
+      success: true,
+      data: {
+        sentCount: result.sent.length,
+        failedCount: result.failed.length,
+        conversationIds: result.sent.map((entry) => entry.conversationId),
+        failed: result.failed,
+      },
+    });
+  } catch (error: any) {
+    if (error instanceof DirectMessageError) {
+      return res.status(error.status).json({ success: false, error: error.message });
+    }
+    console.error('Error sending bulk message:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/messages
  * Send a new message or create a conversation
  */
@@ -747,17 +847,7 @@ router.post('/', async (req, res) => {
         return res.status(403).json({ success: false, error: 'Cannot access this conversation' });
       }
 
-      const messageResult = await query(`
-        INSERT INTO messages (conversation_id, sender_id, message_text)
-        VALUES ($1, $2, $3)
-        RETURNING
-          id,
-          conversation_id as "conversationId",
-          sender_id as "senderId",
-          message_text as "messageText",
-          is_read as "isRead",
-          created_at as "createdAt"
-      `, [existingConversationId, senderId, messageText]);
+      const message = await insertMessage(existingConversationId, senderId, messageText);
 
       void (async () => {
         try {
@@ -787,11 +877,11 @@ router.post('/', async (req, res) => {
               notificationService.notifyMessageReceived(
                 recipientUserId,
                 displayName,
-                messageResult.rows[0].messageText,
+                message.messageText,
                 {
                   conversationId: existingConversationId,
                   facilityId: convFacilityId,
-                  messageId: messageResult.rows[0].id,
+                  messageId: message.id,
                   senderId,
                   isGroup: !!isGroup,
                 }
@@ -806,7 +896,7 @@ router.post('/', async (req, res) => {
       return res.json({
         success: true,
         data: {
-          message: messageResult.rows[0],
+          message,
           conversationId: existingConversationId
         }
       });
@@ -855,74 +945,21 @@ router.post('/', async (req, res) => {
         });
       }
 
-      // Find or create conversation
-      const existingConv = await query(`
-        SELECT id
-        FROM conversations
-        WHERE facility_id = $1
-          AND (
-            (participant1_id = $2 AND participant2_id = $3) OR
-            (participant1_id = $3 AND participant2_id = $2)
-          )
-      `, [facilityId, senderId, recipientId]);
-
-      if (existingConv.rows.length > 0) {
-        conversationId = existingConv.rows[0].id;
-      } else {
-        // Create new conversation
-        const newConv = await query(`
-          INSERT INTO conversations (participant1_id, participant2_id, facility_id)
-          VALUES ($1, $2, $3)
-          RETURNING id
-        `, [senderId, recipientId, facilityId]);
-        conversationId = newConv.rows[0].id;
-      }
+      conversationId = await findOrCreateDirectConversation(facilityId, senderId, recipientId);
     }
 
-    // Insert message
-    const messageResult = await query(`
-      INSERT INTO messages (conversation_id, sender_id, message_text)
-      VALUES ($1, $2, $3)
-      RETURNING
-        id,
-        conversation_id as "conversationId",
-        sender_id as "senderId",
-        message_text as "messageText",
-        is_read as "isRead",
-        created_at as "createdAt"
-    `, [conversationId, senderId, messageText]);
+    const message = await insertMessage(conversationId, senderId, messageText);
 
     if (recipientId !== senderId) {
-      void (async () => {
-        try {
-          const senderResult = await query(
-            `SELECT full_name FROM users WHERE id = $1`,
-            [senderId]
-          );
-
-          const senderName = senderResult.rows[0]?.full_name || 'A facility member';
-
-          await notificationService.notifyMessageReceived(
-            recipientId,
-            senderName,
-            messageResult.rows[0].messageText,
-            {
-              conversationId,
-              facilityId,
-              messageId: messageResult.rows[0].id,
-              senderId,
-            }
-          );
-        } catch (notificationError) {
-          console.error('Error creating message notification:', notificationError);
-        }
-      })();
+      notifyDirectRecipients(senderId, facilityId, message.messageText, [
+        { recipientId, conversationId, messageId: message.id },
+      ]);
     }
 
     res.json({
       success: true,
       data: {
-        message: messageResult.rows[0],
+        message,
         conversationId
       }
     });

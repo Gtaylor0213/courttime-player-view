@@ -1828,6 +1828,14 @@ export const messagesApi = {
     });
   },
 
+  // Send the same message to several members, each as its own 1:1 conversation
+  sendBulkMessage: async (facilityId: string, recipientIds: string[], messageText: string) => {
+    return apiRequest('/api/messages/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ facilityId, recipientIds, messageText }),
+    });
+  },
+
   // Send a message into an existing conversation (used for group conversations)
   sendToConversation: async (conversationId: string, messageText: string) => {
     return apiRequest('/api/messages', {

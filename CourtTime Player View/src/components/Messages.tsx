@@ -10,10 +10,20 @@ import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
 
 /** Groups are capped at 30 members, including the creator. */
 const GROUP_MEMBER_LIMIT = 30;
+
+/** One "send individually" batch is capped at 30 recipients (server: BULK_RECIPIENT_LIMIT). */
+const BULK_RECIPIENT_LIMIT = 30;
+
+/**
+ * New Chat dialog modes: one 1:1 thread, the same message to several people in
+ * separate 1:1 threads, or a shared group conversation.
+ */
+type NewChatMode = 'dm' | 'multi' | 'group';
 
 /** Vertical space the surrounding page chrome takes up, when nothing overrides it. */
 const DEFAULT_HEIGHT_OFFSET_PX = 160;
@@ -82,13 +92,17 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
 
   // New Chat Dialog
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
-  const [newChatMode, setNewChatMode] = useState<'dm' | 'group'>('dm');
+  const [newChatMode, setNewChatMode] = useState<NewChatMode>('dm');
   const [facilityMembers, setFacilityMembers] = useState<any[]>([]);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [memberLoadError, setMemberLoadError] = useState<string | null>(null);
   // Guards against a slower earlier search overwriting a newer one.
   const memberRequestId = useRef(0);
+
+  // Multi-recipient ("send individually") composer
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [sendingBulk, setSendingBulk] = useState(false);
 
   // New Group creation
   const [groupName, setGroupName] = useState('');
@@ -234,20 +248,25 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
     setMemberLoadError(null);
     setLoadingMembers(true);
     setGroupName('');
+    setBulkMessage('');
     setSelectedMemberIds(new Set());
   };
 
   const handleSelectMember = (member: any) => {
-    if (newChatMode === 'group') {
+    // Both multi-select modes toggle the same set; only the cap differs, since
+    // a group counts the creator as a member and a bulk send doesn't.
+    if (newChatMode !== 'dm') {
+      const limit = newChatMode === 'group' ? GROUP_MEMBER_LIMIT - 1 : BULK_RECIPIENT_LIMIT;
       setSelectedMemberIds(prev => {
         const next = new Set(prev);
         if (next.has(member.userId)) {
           next.delete(member.userId);
-        } else if (next.size + 1 < GROUP_MEMBER_LIMIT) {
-          // +1 accounts for the creator, who isn't in this set
+        } else if (next.size < limit) {
           next.add(member.userId);
-        } else {
+        } else if (newChatMode === 'group') {
           toast.error(`Groups are limited to ${GROUP_MEMBER_LIMIT} members`);
+        } else {
+          toast.error(`You can message at most ${BULK_RECIPIENT_LIMIT} people at once`);
         }
         return next;
       });
@@ -276,6 +295,58 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
     }
 
     setShowNewChatDialog(false);
+  };
+
+  /**
+   * Sends one message to every selected member as a separate 1:1 thread, so no
+   * recipient sees who else got it. Unlike a group, nothing shared is created.
+   */
+  const handleSendToMany = async () => {
+    if (selectedMemberIds.size === 0) {
+      toast.error('Select at least one recipient');
+      return;
+    }
+    if (!bulkMessage.trim()) {
+      toast.error('Enter a message to send');
+      return;
+    }
+
+    try {
+      setSendingBulk(true);
+      const recipientIds = Array.from(selectedMemberIds);
+      const response = await messagesApi.sendBulkMessage(facilityId, recipientIds, bulkMessage.trim());
+      const payload = response.data?.data || response.data;
+
+      if (!response.success) {
+        toast.error(response.error || 'Failed to send messages');
+        return;
+      }
+
+      const sentCount = payload?.sentCount ?? recipientIds.length;
+      const failedCount = payload?.failedCount ?? 0;
+      if (failedCount > 0) {
+        toast.warning(`Sent to ${sentCount} of ${sentCount + failedCount} people`);
+      } else {
+        toast.success(`Message sent to ${sentCount} ${sentCount === 1 ? 'person' : 'people'}`);
+      }
+
+      setShowNewChatDialog(false);
+      setBulkMessage('');
+      setSelectedMemberIds(new Set());
+      setNewConversationUser(null);
+      await loadConversations();
+
+      // One recipient behaves like a normal DM: drop the user into the thread.
+      const firstConversationId = payload?.conversationIds?.[0];
+      if (sentCount === 1 && firstConversationId) {
+        setSelectedConversation(firstConversationId);
+      }
+    } catch (error) {
+      console.error('Error sending message to multiple recipients:', error);
+      toast.error('Failed to send messages');
+    } finally {
+      setSendingBulk(false);
+    }
   };
 
   const handleCreateGroup = async () => {
@@ -878,20 +949,33 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-green-600" />
-              {newChatMode === 'group' ? 'Create Group' : 'Start New Conversation'}
+              {newChatMode === 'group'
+                ? 'Create Group'
+                : newChatMode === 'multi'
+                  ? 'Message Several People'
+                  : 'Start New Conversation'}
             </DialogTitle>
             <DialogDescription>
               {newChatMode === 'group'
                 ? `Name your group and add up to ${GROUP_MEMBER_LIMIT - 1} other members`
-                : 'Select a facility member or admin to start chatting'}
+                : newChatMode === 'multi'
+                  ? 'Everyone gets the message in their own private chat — they won\u2019t see each other'
+                  : 'Select a facility member or admin to start chatting'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <Tabs value={newChatMode} onValueChange={(v) => { setNewChatMode(v as 'dm' | 'group'); setSelectedMemberIds(new Set()); }}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="dm">Direct Message</TabsTrigger>
-                <TabsTrigger value="group">New Group</TabsTrigger>
+            <Tabs
+              value={newChatMode}
+              onValueChange={(v) => {
+                setNewChatMode(v as NewChatMode);
+                setSelectedMemberIds(new Set());
+              }}
+            >
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="dm">Direct</TabsTrigger>
+                <TabsTrigger value="multi">Several</TabsTrigger>
+                <TabsTrigger value="group">Group</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -921,8 +1005,14 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
               </p>
             )}
 
-            {/* Members List */}
-            <div className="max-h-96 overflow-y-auto space-y-1">
+            {newChatMode === 'multi' && (
+              <p className="text-xs text-gray-500">
+                {selectedMemberIds.size}/{BULK_RECIPIENT_LIMIT} recipients selected
+              </p>
+            )}
+
+            {/* Members List — shorter in "Several" mode, which adds a composer below */}
+            <div className={cn('overflow-y-auto space-y-1', newChatMode === 'multi' ? 'max-h-56' : 'max-h-96')}>
               {loadingMembers ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
@@ -954,7 +1044,7 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
                     onClick={() => handleSelectMember(member)}
                     className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
                   >
-                    {newChatMode === 'group' && (
+                    {newChatMode !== 'dm' && (
                       <Checkbox
                         checked={selectedMemberIds.has(member.userId)}
                         onCheckedChange={() => handleSelectMember(member)}
@@ -978,6 +1068,26 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
                 ))
               )}
             </div>
+
+            {newChatMode === 'multi' && (
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Write the message everyone will receive…"
+                  value={bulkMessage}
+                  onChange={(e) => setBulkMessage(e.target.value)}
+                  rows={3}
+                />
+                <Button
+                  className="w-full"
+                  onClick={handleSendToMany}
+                  disabled={sendingBulk || !bulkMessage.trim() || selectedMemberIds.size === 0}
+                >
+                  {sendingBulk
+                    ? 'Sending…'
+                    : `Send${selectedMemberIds.size > 0 ? ` to ${selectedMemberIds.size}` : ''}`}
+                </Button>
+              </div>
+            )}
 
             {newChatMode === 'group' && (
               <Button

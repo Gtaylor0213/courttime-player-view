@@ -6,6 +6,11 @@
 import express from 'express';
 import { query } from '../../src/database/connection';
 import { validateBooking } from '../../src/services/bookingService';
+import {
+  getBookingSeries,
+  updateBookingSeries,
+  cancelBookingSeries,
+} from '../../src/services/bookingSeriesService';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
@@ -1696,8 +1701,26 @@ router.patch('/bookings/:bookingId/status', async (req, res) => {
 });
 
 /**
+ * Recurring series endpoints.
+ *
+ * These predate the scoped series API on /api/bookings/series/:seriesId and are
+ * still what the admin Bookings list and the mobile admin tab call. They now
+ * delegate to the same service, so every surface shares one set of rules:
+ * edits are transactional, and removals are real cancellations (the member is
+ * notified and emailed) rather than the row deletes these used to do.
+ */
+
+/** Map a service result onto the {success, error} shape these callers expect. */
+function sendSeriesResult(res: express.Response, result: { success: boolean; error?: string; conflicts?: unknown[] }) {
+  if (!result.success) {
+    return res.status(Array.isArray(result.conflicts) && result.conflicts.length ? 409 : 400).json(result);
+  }
+  return res.json(result);
+}
+
+/**
  * PATCH /api/admin/booking-series/:seriesId
- * Edit all bookings in a recurring series (all-or-nothing)
+ * Retime every date in a recurring series (all-or-nothing).
  */
 router.patch('/booking-series/:seriesId', async (req, res) => {
   const { seriesId } = req.params;
@@ -1711,99 +1734,27 @@ router.patch('/booking-series/:seriesId', async (req, res) => {
   }
 
   try {
-    const bookingsResult = await query(
-      `SELECT
-         b.id,
-         b.court_id as "courtId",
-         b.user_id as "userId",
-         b.facility_id as "facilityId",
-         TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate"
-       FROM bookings b
-       WHERE b.series_id = $1
-         AND b.status != 'cancelled'
-       ORDER BY b.booking_date ASC`,
-      [seriesId]
-    );
-
-    if (bookingsResult.rows.length === 0) {
+    const series = await getBookingSeries(seriesId);
+    if (!series) {
       return res.status(404).json({ success: false, error: 'Series not found or empty' });
     }
 
-    const validationErrors: any[] = [];
-    for (const b of bookingsResult.rows) {
-      const validation = await validateBooking({
-        courtId: b.courtId,
-        userId: b.userId,
-        facilityId: b.facilityId,
-        bookingDate: b.bookingDate,
+    // Only the time changes here; the rest of the rule is carried through as-is.
+    const result = await updateBookingSeries({
+      seriesId,
+      actorUserId: (req as any).user?.userId,
+      scope: 'all',
+      rule: {
+        ...series.rule,
         startTime,
         endTime,
-        durationMinutes,
-        bookingType
-      });
-
-      if (!validation.allowed) {
-        validationErrors.push({
-          bookingId: b.id,
-          bookingDate: b.bookingDate,
-          violations: validation.blockers
-        });
-      }
-
-      const conflictCheck = await query(
-        `SELECT id
-         FROM bookings
-         WHERE court_id = $1
-           AND booking_date = $2
-           AND status != 'cancelled'
-           AND id != $3
-           AND (
-             (start_time <= $4 AND end_time > $4)
-             OR (start_time < $5 AND end_time >= $5)
-             OR (start_time >= $4 AND end_time <= $5)
-           )`,
-        [b.courtId, b.bookingDate, b.id, startTime, endTime]
-      );
-
-      if (conflictCheck.rows.length > 0) {
-        validationErrors.push({
-          bookingId: b.id,
-          bookingDate: b.bookingDate,
-          violations: [{ message: 'Time slot conflict with existing booking' }]
-        });
-      }
-    }
-
-    if (validationErrors.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Series edit failed validation; no bookings were changed.',
-        validationErrors
-      });
-    }
-
-    await query(
-      `UPDATE bookings
-       SET start_time = $1,
-           end_time = $2,
-           duration_minutes = $3,
-           booking_type = COALESCE($4, booking_type),
-           notes = $5,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE series_id = $6
-         AND status != 'cancelled'`,
-      [startTime, endTime, durationMinutes, bookingType || null, notes || null, seriesId]
-    );
-
-    await query(
-      `UPDATE booking_series
-       SET notes = COALESCE($1, notes),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
-      [notes || null, seriesId]
-    );
-
-    res.json({ success: true });
+        durationMinutes: Number(durationMinutes),
+        bookingType: bookingType ?? series.rule.bookingType,
+        notes: notes ?? series.rule.notes,
+      },
+      skipRulesValidation: true,
+    });
+    return sendSeriesResult(res, result);
   } catch (error: any) {
     console.error('Error updating booking series:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -1812,30 +1763,27 @@ router.patch('/booking-series/:seriesId', async (req, res) => {
 
 /**
  * DELETE /api/admin/booking-series/:seriesId
- * Cancel all bookings in a recurring series
+ * Cancel every remaining date in a recurring series.
  */
 router.delete('/booking-series/:seriesId', async (req, res) => {
-  const { seriesId } = req.params;
-
   try {
-    await query(`DELETE FROM bookings WHERE series_id = $1`, [seriesId]);
-
-    await query(
-      `DELETE FROM booking_series
-       WHERE id = $1`,
-      [seriesId]
-    );
-
-    res.json({ success: true });
+    const result = await cancelBookingSeries({
+      seriesId: req.params.seriesId,
+      actorUserId: (req as any).user?.userId,
+      scope: 'all',
+      reason: 'Recurring reservation cancelled by staff',
+      includePast: true,
+    });
+    return sendSeriesResult(res, result);
   } catch (error: any) {
-    console.error('Error deleting booking series:', error);
+    console.error('Error cancelling booking series:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 /**
  * PATCH /api/admin/booking-series/:seriesId/instances
- * Edit selected dates/instances in a recurring series
+ * Retime selected dates in a recurring series, leaving the rule alone.
  */
 router.patch('/booking-series/:seriesId/instances', async (req, res) => {
   const { seriesId } = req.params;
@@ -1849,78 +1797,39 @@ router.patch('/booking-series/:seriesId/instances', async (req, res) => {
   }
 
   try {
-    const bookingsResult = await query(
-      `SELECT
-         b.id,
-         b.court_id as "courtId",
-         b.user_id as "userId",
-         b.facility_id as "facilityId",
-         TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate"
-       FROM bookings b
-       WHERE b.series_id = $1
-         AND b.id = ANY($2::uuid[])
-         AND b.status != 'cancelled'`,
-      [seriesId, bookingIds]
-    );
-
-    if (bookingsResult.rows.length !== bookingIds.length) {
-      return res.status(400).json({
-        success: false,
-        error: 'One or more selected bookings are missing, cancelled, or not part of this series'
-      });
+    const series = await getBookingSeries(seriesId);
+    if (!series) {
+      return res.status(404).json({ success: false, error: 'Series not found or empty' });
     }
 
-    const validationErrors: any[] = [];
-    for (const b of bookingsResult.rows) {
-      const validation = await validateBooking({
-        courtId: b.courtId,
-        userId: b.userId,
-        facilityId: b.facilityId,
-        bookingDate: b.bookingDate,
+    const result = await updateBookingSeries({
+      seriesId,
+      actorUserId: (req as any).user?.userId,
+      scope: 'instance',
+      bookingIds,
+      rule: {
+        ...series.rule,
         startTime,
         endTime,
-        durationMinutes,
-        bookingType
-      });
-      if (!validation.allowed) {
-        validationErrors.push({ bookingId: b.id, bookingDate: b.bookingDate, violations: validation.blockers });
-      }
-    }
-
-    if (validationErrors.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'One or more selected instances failed validation',
-        validationErrors
-      });
-    }
-
-    await query(
-      `UPDATE bookings
-       SET start_time = $1,
-           end_time = $2,
-           duration_minutes = $3,
-           booking_type = COALESCE($4, booking_type),
-           notes = $5,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE series_id = $6
-         AND id = ANY($7::uuid[])`,
-      [startTime, endTime, durationMinutes, bookingType || null, notes || null, seriesId, bookingIds]
-    );
-
-    res.json({ success: true });
+        durationMinutes: Number(durationMinutes),
+        bookingType: bookingType ?? series.rule.bookingType,
+        notes: notes ?? series.rule.notes,
+      },
+      skipRulesValidation: true,
+      includePast: true,
+    });
+    return sendSeriesResult(res, result);
   } catch (error: any) {
-    console.error('Error editing selected series instances:', error);
+    console.error('Error updating selected series instances:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 /**
  * DELETE /api/admin/booking-series/:seriesId/instances
- * Cancel selected dates/instances in a recurring series
+ * Cancel selected dates in a recurring series.
  */
 router.delete('/booking-series/:seriesId/instances', async (req, res) => {
-  const { seriesId } = req.params;
   const { bookingIds } = req.body;
 
   if (!Array.isArray(bookingIds) || bookingIds.length === 0) {
@@ -1928,34 +1837,17 @@ router.delete('/booking-series/:seriesId/instances', async (req, res) => {
   }
 
   try {
-    const deleted = await query(
-      `DELETE FROM bookings b
-       WHERE series_id = $1
-         AND id = ANY($2::uuid[])`,
-      [seriesId, bookingIds]
-    );
-
-    if ((deleted.rowCount || 0) !== bookingIds.length) {
-      return res.status(400).json({
-        success: false,
-        error: 'One or more selected bookings were not found in this recurring series'
-      });
-    }
-
-    const remaining = await query(
-      `SELECT COUNT(*)::int as count
-       FROM bookings
-       WHERE series_id = $1`,
-      [seriesId]
-    );
-
-    if ((remaining.rows[0]?.count || 0) === 0) {
-      await query(`DELETE FROM booking_series WHERE id = $1`, [seriesId]);
-    }
-
-    res.json({ success: true });
+    const result = await cancelBookingSeries({
+      seriesId: req.params.seriesId,
+      actorUserId: (req as any).user?.userId,
+      scope: 'instance',
+      bookingIds,
+      reason: 'Recurring reservation date cancelled by staff',
+      includePast: true,
+    });
+    return sendSeriesResult(res, result);
   } catch (error: any) {
-    console.error('Error deleting selected series instances:', error);
+    console.error('Error cancelling selected series instances:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

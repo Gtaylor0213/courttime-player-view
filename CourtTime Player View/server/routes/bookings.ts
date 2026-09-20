@@ -16,6 +16,12 @@ import {
   claimOpenSpot
 } from '../../src/services/bookingService';
 import {
+  getBookingSeries,
+  canManageSeries,
+  updateBookingSeries,
+  cancelBookingSeries,
+} from '../../src/services/bookingSeriesService';
+import {
   acceptCourtWaiverForUser,
   getPendingCourtWaiversForUser,
 } from '../../src/services/courtWaiverService';
@@ -419,6 +425,7 @@ router.post('/', async (req, res, next) => {
       payAtFrontDesk,
       maxPlayers,
       walkInName,
+      seriesId,
     } = req.body;
 
     // Validation
@@ -449,6 +456,18 @@ router.post('/', async (req, res, next) => {
           success: false,
           error: 'View-only members cannot make bookings'
         });
+      }
+    }
+
+    // Editing one date of a recurring reservation re-creates the booking. Without
+    // carrying the series across, that date silently falls out of the series and
+    // can never be edited with it again. Only honored for a series the caller may
+    // actually manage, so a client cannot graft a booking onto someone else's.
+    let attachToSeriesId: string | undefined;
+    if (typeof seriesId === 'string' && seriesId) {
+      const targetSeries = await getBookingSeries(seriesId);
+      if (targetSeries && (await canManageSeries(targetSeries, callerUserId))) {
+        attachToSeriesId = seriesId;
       }
     }
 
@@ -493,6 +512,7 @@ router.post('/', async (req, res, next) => {
       successUrl: typeof successUrl === 'string' ? successUrl : undefined,
       cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
       excludeBookingId: typeof excludeBookingId === 'string' ? excludeBookingId : undefined,
+      seriesId: attachToSeriesId,
       payAtFrontDesk: payAtFrontDesk === true,
     });
 
@@ -693,7 +713,7 @@ router.post('/payment/confirm', async (req, res, next) => {
  */
 router.post('/recurring-series', async (req, res, next) => {
   try {
-    const { userId, facilityId, bookingType, notes, instances, skipConflicts, walkInName } = req.body;
+    const { userId, facilityId, bookingType, notes, instances, skipConflicts, walkInName, rule } = req.body;
     const callerUserId = req.user?.userId;
     if (!callerUserId) {
       return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -739,6 +759,7 @@ router.post('/recurring-series', async (req, res, next) => {
       notes,
       skipConflicts: skipConflicts === true,
       skipRulesValidation: isAdminCaller,
+      rule: rule && typeof rule === 'object' ? rule : undefined,
       instances
     });
 
@@ -748,6 +769,123 @@ router.post('/recurring-series', async (req, res, next) => {
     }
 
     res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/bookings/series/:seriesId
+ * The recurrence rule plus every instance, for the edit form to open with.
+ */
+router.get('/series/:seriesId', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const series = await getBookingSeries(req.params.seriesId);
+    if (!series) {
+      return res.status(404).json({ success: false, error: 'Recurring reservation not found' });
+    }
+    if (!(await canManageSeries(series, actorUserId))) {
+      return res.status(403).json({ success: false, error: 'Not authorized to view this recurring reservation' });
+    }
+    res.json({ success: true, series });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/bookings/series/:seriesId
+ * Edit a recurring reservation at instance / following / all scope. Every field
+ * the create form collects can change here, including the weekdays, the date
+ * range, the courts and who it is booked for.
+ */
+router.patch('/series/:seriesId', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const isAdminCaller = req.user?.userType === 'admin';
+    const { scope, fromDate, bookingIds, rule, excludeDates, skipConflicts, includePast } =
+      req.body || {};
+
+    if (!['instance', 'following', 'all'].includes(String(scope))) {
+      return res.status(400).json({
+        success: false,
+        error: "scope must be one of 'instance', 'following', or 'all'",
+      });
+    }
+    if (!rule || typeof rule !== 'object') {
+      return res.status(400).json({ success: false, error: 'rule is required' });
+    }
+
+    const result = await updateBookingSeries({
+      seriesId: req.params.seriesId,
+      actorUserId,
+      scope,
+      fromDate,
+      bookingIds,
+      rule: {
+        ...rule,
+        // An admin can move a series to another member; a player cannot hand
+        // their recurring court time to someone else.
+        userId: isAdminCaller ? rule.userId : actorUserId,
+      },
+      excludeDates: Array.isArray(excludeDates) ? excludeDates : undefined,
+      skipConflicts: skipConflicts === true,
+      skipRulesValidation: isAdminCaller,
+      // Rewriting dates that already happened is staff-only housekeeping.
+      includePast: isAdminCaller && includePast === true,
+    });
+
+    if (!result.success) {
+      // 409 lets the client offer "apply to the rest anyway", matching create.
+      return res.status(result.conflicts?.length ? 409 : 400).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/bookings/series/:seriesId
+ * Cancel a recurring reservation at instance / following / all scope.
+ */
+router.delete('/series/:seriesId', async (req, res, next) => {
+  try {
+    const actorUserId = req.user?.userId;
+    if (!actorUserId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const isAdminCaller = req.user?.userType === 'admin';
+    const { scope, fromDate, bookingIds, reason, includePast } = req.body || {};
+
+    if (!['instance', 'following', 'all'].includes(String(scope))) {
+      return res.status(400).json({
+        success: false,
+        error: "scope must be one of 'instance', 'following', or 'all'",
+      });
+    }
+
+    const result = await cancelBookingSeries({
+      seriesId: req.params.seriesId,
+      actorUserId,
+      scope,
+      fromDate,
+      bookingIds: Array.isArray(bookingIds) ? bookingIds : undefined,
+      reason,
+      includePast: isAdminCaller && includePast === true,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
   } catch (error) {
     next(error);
   }

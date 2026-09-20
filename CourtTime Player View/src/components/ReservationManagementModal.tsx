@@ -4,13 +4,14 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
-import { Calendar, CalendarPlus, MapPin, User, FileText, AlertCircle, Edit2, X, Users, DollarSign, KeyRound } from 'lucide-react';
+import { Calendar, CalendarPlus, MapPin, User, FileText, AlertCircle, Edit2, X, Users, DollarSign, KeyRound, Repeat } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { bookingApi, facilitiesApi, openSpotApi } from '../api/client';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../../shared/constants/bookingTypes';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
+import { SeriesEditDialog } from './SeriesEditDialog';
 import { SplitPaymentPicker } from './SplitPaymentPicker';
 import { toast } from 'sonner';
 import {
@@ -22,6 +23,8 @@ import {
 
 interface ReservationDetails {
   id: string;
+  /** Set when this booking is one date of a recurring series. */
+  seriesId?: string | null;
   courtId: string;
   userId: string;
   facilityId: string;
@@ -154,6 +157,12 @@ export function ReservationManagementModal({
   const [isCheckingConflict, setIsCheckingConflict] = useState(false);
   const [hasConflict, setHasConflict] = useState(false);
   const [showBallMachineCode, setShowBallMachineCode] = useState(false);
+  // Recurring reservations ask how far a change should reach before anything opens.
+  const [seriesPrompt, setSeriesPrompt] = useState<'edit' | 'cancel' | null>(null);
+  const [seriesEditor, setSeriesEditor] = useState<{
+    mode: 'edit' | 'cancel';
+    scope: 'following' | 'all';
+  } | null>(null);
 
   const postPlayEnabled = enabledFeatures.includes(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const editPastReservationsEnabled = enabledFeatures.includes(FEATURE_FLAGS.EDIT_PAST_RESERVATIONS);
@@ -368,6 +377,9 @@ export function ReservationManagementModal({
     reservation.status !== 'cancelled' &&
     (!isPastReservation() || editPastReservationsEnabled) &&
     settlementStatus !== 'settled';
+
+  // A booking created as part of a recurring series can be edited as a series.
+  const isRecurring = !!reservation.seriesId;
 
   const canAddToCalendar =
     isOwnReservation &&
@@ -685,6 +697,9 @@ export function ReservationManagementModal({
         bookingType: editBookingType || undefined,
         walkInName: reservation.walkInName || undefined,
         excludeBookingId: reservation.id,
+        // Keep this date in its recurring series; the re-create would otherwise
+        // orphan it and it could never be edited with the series again.
+        seriesId: reservation.seriesId || undefined,
       });
 
       if (!response.success) {
@@ -768,7 +783,10 @@ export function ReservationManagementModal({
             .join(' · ')}
         />
       )}
-      <Dialog open={isOpen && !showCancelConfirm && !showBallMachineCode} onOpenChange={onClose}>
+      <Dialog
+        open={isOpen && !showCancelConfirm && !showBallMachineCode && !seriesPrompt && !seriesEditor}
+        onOpenChange={onClose}
+      >
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -790,6 +808,19 @@ export function ReservationManagementModal({
                   {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
                 </Badge>
               </div>
+
+              {isRecurring && (
+                <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+                  <Repeat className="h-4 w-4 text-blue-700 mt-0.5 shrink-0" />
+                  <div className="text-sm text-blue-900">
+                    <p className="font-medium">Part of a recurring reservation</p>
+                    <p className="text-blue-800">
+                      Modify or Cancel will ask whether to change this date only, this date
+                      onward, or the whole series.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {splitPayment && (() => {
                 const shares = splitPayment.shares || [];
@@ -1364,7 +1395,7 @@ export function ReservationManagementModal({
                     {(isOwnReservation || isFacilityAdmin) && (
                       <Button
                         variant="outline"
-                        onClick={() => setIsEditing(true)}
+                        onClick={() => (isRecurring ? setSeriesPrompt('edit') : setIsEditing(true))}
                         className="flex-1 sm:flex-none sm:min-w-[100px]"
                       >
                         <Edit2 className="h-4 w-4 mr-1" />
@@ -1373,7 +1404,7 @@ export function ReservationManagementModal({
                     )}
                     <Button
                       variant="destructive"
-                      onClick={() => setShowCancelConfirm(true)}
+                      onClick={() => (isRecurring ? setSeriesPrompt('cancel') : setShowCancelConfirm(true))}
                       className="flex-1 sm:flex-none sm:min-w-[100px]"
                     >
                       Cancel
@@ -1416,6 +1447,81 @@ export function ReservationManagementModal({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Recurring reservations: how far should this change reach? */}
+      <Dialog open={!!seriesPrompt} onOpenChange={(open) => !open && setSeriesPrompt(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Repeat className="h-5 w-5" />
+              {seriesPrompt === 'cancel' ? 'Cancel recurring reservation' : 'Edit recurring reservation'}
+            </DialogTitle>
+            <DialogDescription>
+              This reservation repeats. Choose how much of the series to
+              {seriesPrompt === 'cancel' ? ' cancel' : ' change'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => {
+                const mode = seriesPrompt;
+                setSeriesPrompt(null);
+                if (mode === 'cancel') setShowCancelConfirm(true);
+                else setIsEditing(true);
+              }}
+            >
+              This reservation only
+              <span className="text-muted-foreground ml-1">— {formatDate(reservation.bookingDate)}</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => {
+                setSeriesEditor({ mode: seriesPrompt || 'edit', scope: 'following' });
+                setSeriesPrompt(null);
+              }}
+            >
+              This and all future dates
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => {
+                setSeriesEditor({ mode: seriesPrompt || 'edit', scope: 'all' });
+                setSeriesPrompt(null);
+              }}
+            >
+              Every date in the series
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSeriesPrompt(null)}>
+              Never mind
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {seriesEditor && reservation.seriesId && (
+        <SeriesEditDialog
+          isOpen
+          onClose={() => setSeriesEditor(null)}
+          seriesId={reservation.seriesId}
+          focusDate={reservation.bookingDate}
+          focusBookingId={reservation.id}
+          facilityId={reservation.facilityId}
+          reservationTypes={reservationTypeKeys.map((key) => ({ value: key, label: BOOKING_TYPES[key]?.label ?? key }))}
+          isFacilityAdmin={isFacilityAdmin}
+          mode={seriesEditor.mode}
+          initialScope={seriesEditor.scope}
+          onUpdated={() => {
+            onUpdate?.();
+            onClose();
+          }}
+        />
+      )}
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>

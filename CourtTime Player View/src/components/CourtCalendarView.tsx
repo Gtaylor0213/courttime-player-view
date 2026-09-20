@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Card, CardContent } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -271,6 +272,12 @@ export function CourtCalendarView() {
     isOpen: false,
     postId: null as string | null,
   });
+  // A dragged reservation that repeats: ask how far the move reaches.
+  const [seriesDragPrompt, setSeriesDragPrompt] = useState<{
+    booking: any;
+    targetCourtId: string;
+    targetStartTime: string;
+  } | null>(null);
 
   // Calendar display customization
   const [displayedCourtsCount, setDisplayedCourtsCount] = useState<number | null>(null);
@@ -1413,7 +1420,7 @@ export function CourtCalendarView() {
 
   /** Reassigns an existing reservation to a new court/time, keeping name/duration — mirrors
    * ReservationManagementModal's create-then-cancel (or update-in-place for unsettled) reschedule. */
-  const handleReservationDragDrop = useCallback(async (
+  const moveSingleReservation = useCallback(async (
     booking: any,
     targetCourtId: string,
     targetStartTime: string
@@ -1459,6 +1466,8 @@ export function CourtCalendarView() {
           bookingType: booking.bookingType || undefined,
           walkInName: booking.walkInName || undefined,
           excludeBookingId: booking.id,
+          // Dragging one date of a series must not knock it out of the series.
+          seriesId: booking.seriesId || undefined,
         });
 
         if (!response.success) {
@@ -1479,6 +1488,77 @@ export function CourtCalendarView() {
       toast.error('Failed to move reservation. Please try again.');
     }
   }, [courts, user, fetchBookings]);
+
+  /**
+   * A dragged reservation that repeats asks how far the move should reach before
+   * anything is written — dragging one Monday should not silently move every
+   * Monday, nor silently leave the rest of the series behind.
+   */
+  const handleReservationDragDrop = useCallback(async (
+    booking: any,
+    targetCourtId: string,
+    targetStartTime: string
+  ) => {
+    if (booking?.seriesId) {
+      setSeriesDragPrompt({ booking, targetCourtId, targetStartTime });
+      return;
+    }
+    await moveSingleReservation(booking, targetCourtId, targetStartTime);
+  }, [moveSingleReservation]);
+
+  /** Apply a dragged move to a whole series (or its tail) via the series rule. */
+  const applySeriesDragMove = useCallback(async (
+    scope: 'following' | 'all'
+  ) => {
+    const prompt = seriesDragPrompt;
+    if (!prompt) return;
+    const { booking, targetCourtId, targetStartTime } = prompt;
+    setSeriesDragPrompt(null);
+    try {
+      const res = await bookingApi.getSeries(booking.seriesId);
+      if (!res.success || !res.series) {
+        toast.error(res.error || 'Could not load this recurring reservation');
+        return;
+      }
+      const { rule } = res.series;
+      const durationMinutes = Number(booking.durationMinutes) || rule.durationMinutes;
+      const startMin = calendarSlotToMinutes(targetStartTime);
+      // Swap only the court that was dragged, so a multi-court series keeps the rest.
+      const courtIds = rule.courtIds.includes(targetCourtId)
+        ? rule.courtIds
+        : rule.courtIds.map((id) => (id === booking.courtId ? targetCourtId : id));
+
+      const update = await bookingApi.updateSeries(booking.seriesId, {
+        scope,
+        fromDate: scope === 'following' ? booking.bookingDate : undefined,
+        rule: {
+          ...rule,
+          courtIds,
+          startTime: minutesToApiTime(startMin),
+          endTime: minutesToApiTime(startMin + durationMinutes),
+          durationMinutes,
+        },
+      });
+
+      if (!update.success) {
+        toast.error(
+          update.conflicts?.length
+            ? 'Some dates in this series are already booked at that time. Nothing was moved — open the reservation to review them.'
+            : update.error || 'Failed to move the recurring reservation'
+        );
+        return;
+      }
+      toast.success(
+        scope === 'all'
+          ? 'Every date in the series was moved.'
+          : 'This and all later dates were moved.'
+      );
+      await fetchBookings();
+    } catch (error) {
+      console.error('Error moving recurring reservation:', error);
+      toast.error('Failed to move the recurring reservation.');
+    }
+  }, [seriesDragPrompt, fetchBookings]);
 
   const handleEmptySlotClick = (courtId: string, time: string, dragCells?: Set<string>) => {
     if (strikeLockout?.isLockedOut) {
@@ -3489,6 +3569,59 @@ export function CourtCalendarView() {
         onSignupChange={() => void fetchBookings()}
         returnPath="calendar"
       />
+
+      {/* Dragged a date of a recurring reservation: how far should the move go? */}
+      <Dialog
+        open={!!seriesDragPrompt}
+        onOpenChange={(open) => !open && setSeriesDragPrompt(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move recurring reservation</DialogTitle>
+            <DialogDescription>
+              This reservation repeats. Choose how much of the series to move.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => {
+                const prompt = seriesDragPrompt;
+                setSeriesDragPrompt(null);
+                if (prompt) {
+                  void moveSingleReservation(
+                    prompt.booking,
+                    prompt.targetCourtId,
+                    prompt.targetStartTime
+                  );
+                }
+              }}
+            >
+              This date only
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => void applySeriesDragMove('following')}
+            >
+              This and all future dates
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => void applySeriesDragMove('all')}
+            >
+              Every date in the series
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSeriesDragPrompt(null)}>
+              Leave it where it was
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

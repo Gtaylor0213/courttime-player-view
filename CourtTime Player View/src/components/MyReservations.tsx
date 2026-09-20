@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 
 interface Reservation {
   id: string;
+  /** Set when this booking is one date of a recurring series. */
+  seriesId?: string | null;
   courtId: string;
   userId: string;
   facilityId: string;

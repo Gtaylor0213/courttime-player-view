@@ -12,6 +12,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAppContext } from '../../contexts/AppContext';
 import { adminApi, bookingApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
+import { SeriesEditDialog } from '../SeriesEditDialog';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../../../shared/constants/bookingTypes';
 import { AdminBooking } from './AdminBooking';
 import { parseLocalDate } from '../../utils/dateUtils';
 
@@ -83,12 +85,8 @@ export function BookingManagement() {
   const [seriesEditMode, setSeriesEditMode] = useState<SeriesEditMode>('all');
   const [seriesEditSeriesId, setSeriesEditSeriesId] = useState<string | null>(null);
   const [seriesEditBookingIds, setSeriesEditBookingIds] = useState<string[]>([]);
-  const [seriesEditStartTime, setSeriesEditStartTime] = useState('');
-  const [seriesEditEndTime, setSeriesEditEndTime] = useState('');
-  const [seriesEditDurationMinutes, setSeriesEditDurationMinutes] = useState('60');
-  const [seriesEditBookingType, setSeriesEditBookingType] = useState('');
-  const [seriesEditNotes, setSeriesEditNotes] = useState('');
-  const [seriesEditSubmitting, setSeriesEditSubmitting] = useState(false);
+  // The clicked reservation, which anchors the editor's date and facility.
+  const [seriesEditSeed, setSeriesEditSeed] = useState<Booking | null>(null);
   const [collectingFrontDeskFeeId, setCollectingFrontDeskFeeId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -401,22 +399,18 @@ export function BookingManagement() {
     setSeriesEditMode(mode);
     setSeriesEditSeriesId(seriesId);
     setSeriesEditBookingIds(bookingIds);
-    setSeriesEditStartTime(seed.startTime || '');
-    setSeriesEditEndTime(seed.endTime || '');
-    setSeriesEditDurationMinutes(String(seed.durationMinutes || 60));
-    setSeriesEditBookingType(seed.bookingType || '');
-    setSeriesEditNotes(seed.notes || '');
+    setSeriesEditSeed(seed);
     setSeriesEditOpen(true);
   };
 
   const handleDeleteSeries = async (seriesId: string) => {
-    if (!confirm('Delete all reservations in this recurring series?')) return;
+    if (!confirm('Cancel every remaining date in this recurring reservation? The member is notified and emailed.')) return;
     const response = await adminApi.deleteBookingSeries(seriesId);
     if (response.success) {
-      toast.success('Recurring series deleted');
+      toast.success('Recurring reservation cancelled');
       await loadBookings();
     } else {
-      toast.error(response.error || 'Failed to delete recurring series');
+      toast.error(response.error || 'Failed to cancel recurring reservation');
     }
   };
 
@@ -430,14 +424,14 @@ export function BookingManagement() {
       toast.error('Select at least one date first');
       return;
     }
-    if (!confirm(`Delete ${bookingIds.length} selected date(s)?`)) return;
+    if (!confirm(`Cancel ${bookingIds.length} selected date(s)? The member is notified and emailed.`)) return;
     const response = await adminApi.deleteBookingSeriesInstances(seriesId, bookingIds);
     if (response.success) {
-      toast.success('Selected dates deleted');
+      toast.success('Selected dates cancelled');
       setSelectedSeriesDates((prev) => ({ ...prev, [seriesId]: [] }));
       await loadBookings();
     } else {
-      toast.error(response.error || 'Failed to delete selected dates');
+      toast.error(response.error || 'Failed to cancel selected dates');
     }
   };
 
@@ -448,47 +442,6 @@ export function BookingManagement() {
       return;
     }
     openSeriesEditDialog('selected', seriesId, seed, bookingIds);
-  };
-
-  const handleSubmitSeriesEdit = async () => {
-    if (!seriesEditSeriesId) return;
-    const parsedDuration = Number(seriesEditDurationMinutes);
-    if (!Number.isFinite(parsedDuration) || parsedDuration <= 0) {
-      toast.error('Duration must be a positive number');
-      return;
-    }
-
-    setSeriesEditSubmitting(true);
-    try {
-      const payload = {
-        startTime: seriesEditStartTime,
-        endTime: seriesEditEndTime,
-        durationMinutes: parsedDuration,
-        bookingType: seriesEditBookingType.trim() || undefined,
-        notes: seriesEditNotes.trim() || undefined
-      };
-
-      const response = seriesEditMode === 'all'
-        ? await adminApi.updateBookingSeries(seriesEditSeriesId, payload)
-        : await adminApi.updateBookingSeriesInstances(seriesEditSeriesId, {
-            bookingIds: seriesEditBookingIds,
-            ...payload
-          });
-
-      if (!response.success) {
-        toast.error(response.error || 'Failed to update recurring reservation');
-        return;
-      }
-
-      toast.success(seriesEditMode === 'all' ? 'Recurring series updated' : 'Selected dates updated');
-      if (seriesEditMode === 'selected') {
-        setSeriesSelection(seriesEditSeriesId, []);
-      }
-      setSeriesEditOpen(false);
-      await loadBookings();
-    } finally {
-      setSeriesEditSubmitting(false);
-    }
   };
 
   if (loading) {
@@ -943,46 +896,29 @@ export function BookingManagement() {
           </Tabs>
         </div>
       </div>
-      <Dialog open={seriesEditOpen} onOpenChange={setSeriesEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{seriesEditMode === 'all' ? 'Edit Entire Recurring Series' : 'Edit Selected Dates'}</DialogTitle>
-            <DialogDescription>
-              {seriesEditMode === 'all'
-                ? 'These changes will apply to every reservation in this recurring series.'
-                : `These changes will apply to ${seriesEditBookingIds.length} selected reservation date(s).`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="series-start">Start Time</Label>
-              <Input id="series-start" value={seriesEditStartTime} onChange={(e) => setSeriesEditStartTime(e.target.value)} placeholder="HH:MM:SS" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="series-end">End Time</Label>
-              <Input id="series-end" value={seriesEditEndTime} onChange={(e) => setSeriesEditEndTime(e.target.value)} placeholder="HH:MM:SS" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="series-duration">Duration (minutes)</Label>
-              <Input id="series-duration" type="number" min={1} value={seriesEditDurationMinutes} onChange={(e) => setSeriesEditDurationMinutes(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="series-type">Reservation Type (optional)</Label>
-              <Input id="series-type" value={seriesEditBookingType} onChange={(e) => setSeriesEditBookingType(e.target.value)} />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="series-notes">Notes (optional)</Label>
-              <Input id="series-notes" value={seriesEditNotes} onChange={(e) => setSeriesEditNotes(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSeriesEditOpen(false)} disabled={seriesEditSubmitting}>Cancel</Button>
-            <Button onClick={handleSubmitSeriesEdit} disabled={seriesEditSubmitting}>
-              {seriesEditSubmitting ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {seriesEditOpen && seriesEditSeriesId && seriesEditSeed && (
+        <SeriesEditDialog
+          isOpen
+          onClose={() => setSeriesEditOpen(false)}
+          seriesId={seriesEditSeriesId}
+          focusDate={seriesEditSeed.bookingDate}
+          focusBookingId={seriesEditSeed.id}
+          focusBookingIds={seriesEditMode === 'selected' ? seriesEditBookingIds : undefined}
+          facilityId={seriesEditSeed.facilityId || currentFacilityId || ''}
+          reservationTypes={RESERVATION_LABEL_TYPE_KEYS.map((key) => ({
+            value: key,
+            label: BOOKING_TYPES[key]?.label ?? key,
+          }))}
+          isFacilityAdmin
+          initialScope={seriesEditMode === 'selected' ? 'instance' : 'all'}
+          onUpdated={() => {
+            if (seriesEditMode === 'selected') {
+              setSeriesSelection(seriesEditSeriesId, []);
+            }
+            void loadBookings();
+          }}
+        />
+      )}
     </>
   );
 }

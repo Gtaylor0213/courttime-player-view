@@ -40,6 +40,59 @@ export interface RecurringSeriesConflict {
   endTime: string;
 }
 
+/** How far a series edit or cancellation reaches. */
+export type BookingSeriesScope = 'instance' | 'following' | 'all';
+
+/** Everything the create form collects -- and so everything the edit form offers. */
+export interface BookingSeriesRule {
+  userId: string;
+  courtIds: string[];
+  /** 0=Sunday..6=Saturday. */
+  weekdays: number[];
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  walkInName?: string | null;
+  bookingType?: string | null;
+  notes?: string | null;
+  maxPlayers?: number | null;
+}
+
+export interface BookingSeriesInstance {
+  id: string;
+  courtId: string;
+  courtName?: string;
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  status: string;
+}
+
+export interface BookingSeriesDetail {
+  id: string;
+  facilityId: string;
+  createdBy: string;
+  status: 'active' | 'cancelled';
+  rule: BookingSeriesRule;
+  ownerName?: string | null;
+  bookedByStaffId?: string | null;
+  instances: BookingSeriesInstance[];
+}
+
+export interface BookingSeriesWriteResult {
+  seriesId?: string;
+  /** Set when a 'following' edit split the series. */
+  newSeriesId?: string;
+  created?: number;
+  updated?: number;
+  cancelled?: number;
+  skippedPast?: number;
+  conflicts?: RecurringSeriesConflict[];
+}
+
 export interface TermsAttachment {
   id: string;
   fileName: string;
@@ -830,6 +883,12 @@ export const bookingApi = {
     }>;
     /** When editing, exclude the original booking from conflict checks */
     excludeBookingId?: string;
+    /**
+     * Keep a re-created booking attached to its recurring series. Editing one
+     * date replaces the row, and without this the date falls out of the series.
+     * The server only honors it for a series the caller can manage.
+     */
+    seriesId?: string | null;
     /** Active facility members sharing an equal pre-payment split. */
     splitParticipantIds?: string[];
     /** University Club Guest Fee: skip Stripe and defer the whole total to the front desk. */
@@ -911,12 +970,29 @@ export const bookingApi = {
     skipConflicts?: boolean;
     /** Admin-only: guest's actual name for a walk-in booking. */
     walkInName?: string;
+    /**
+     * What the person actually picked. Stored on the series so it can be
+     * loaded back into the edit form; without it only the individual bookings
+     * exist and there is nothing to edit.
+     */
+    rule?: {
+      courtIds: string[];
+      /** 0=Sunday..6=Saturday. */
+      weekdays: number[];
+      startDate: string;
+      endDate: string;
+      startTime: string;
+      endTime: string;
+      durationMinutes: number;
+      maxPlayers?: number | null;
+    };
     instances: Array<{
       courtId: string;
       bookingDate: string;
       startTime: string;
       endTime: string;
       durationMinutes: number;
+      maxPlayers?: number | null;
     }>;
   }): Promise<
     ApiResponse & {
@@ -946,6 +1022,59 @@ export const bookingApi = {
     }>(res.data);
     if (!inner || typeof inner !== 'object') return res;
     return { ...res, ...inner, success: res.success && inner.success !== false };
+  },
+
+  /** The recurrence rule and every instance, for the series edit form. */
+  getSeries: async (seriesId: string): Promise<ApiResponse & { series?: BookingSeriesDetail }> => {
+    const res = await apiRequest(`/api/bookings/series/${seriesId}`);
+    if (!res.success) return res;
+    const inner = unwrapApiPayload<{ series?: BookingSeriesDetail }>(res.data);
+    return { ...res, series: inner?.series ?? (res as any).series };
+  },
+
+  /**
+   * Edit a recurring reservation. `scope` decides how far the change reaches:
+   * one date, this date onward (which splits the series), or all of it.
+   */
+  updateSeries: async (
+    seriesId: string,
+    data: {
+      scope: BookingSeriesScope;
+      /** Required for 'following': the date the person clicked. */
+      fromDate?: string;
+      bookingIds?: string[];
+      rule: BookingSeriesRule;
+      /** Dates unchecked in the date list. */
+      excludeDates?: string[];
+      skipConflicts?: boolean;
+      includePast?: boolean;
+    }
+  ): Promise<ApiResponse & BookingSeriesWriteResult> => {
+    const res = await apiRequest(`/api/bookings/series/${seriesId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    // Flatten counts and conflicts up beside `success`, as createRecurringSeries does,
+    // so callers read one shape whether the edit succeeded or hit a 409.
+    const inner = unwrapApiPayload<BookingSeriesWriteResult & { success?: boolean }>(res.data);
+    if (!inner || typeof inner !== 'object') return res;
+    return { ...res, ...inner, success: res.success && inner.success !== false };
+  },
+
+  cancelSeries: async (
+    seriesId: string,
+    data: {
+      scope: BookingSeriesScope;
+      fromDate?: string;
+      bookingIds?: string[];
+      reason?: string;
+      includePast?: boolean;
+    }
+  ): Promise<ApiResponse & { cancelled?: number }> => {
+    return apiRequest(`/api/bookings/series/${seriesId}`, {
+      method: 'DELETE',
+      body: JSON.stringify(data),
+    });
   },
 
   cancel: async (bookingId: string, userId: string) => {

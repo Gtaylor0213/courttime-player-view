@@ -25,6 +25,7 @@ import {
   shouldUsePostPlaySettlement,
 } from './bookingSettlementService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { normalizeWeekdays } from '../../shared/utils/recurrence';
 import { isFeatureEnabled } from './featureFlagService';
 import { loadCourtPaymentSettings, computeBookingFeeTotalCents } from './courtPaymentSettings';
 
@@ -762,12 +763,31 @@ export interface RecurringSeriesRequest {
   skipConflicts?: boolean;
   /** Facility admins/staff always bypass booking rules, even when booking for someone else. */
   skipRulesValidation?: boolean;
+  /**
+   * The recurrence the person chose (courts, weekdays, range, time). Stored on
+   * booking_series so the series can be loaded back into an edit form -- without
+   * it there is nothing to edit but the individual bookings. Optional only so an
+   * older client that still posts bare instances keeps working; those series get
+   * their rule inferred from the instances below.
+   */
+  rule?: {
+    courtIds?: string[];
+    weekdays?: Array<number | string>;
+    startDate?: string;
+    endDate?: string;
+    startTime?: string;
+    endTime?: string;
+    durationMinutes?: number;
+    maxPlayers?: number | null;
+  };
   instances: Array<{
     courtId: string;
     bookingDate: string;
     startTime: string;
     endTime: string;
     durationMinutes: number;
+    /** Court capacity (4 on a padel court). */
+    maxPlayers?: number | null;
   }>;
 }
 
@@ -1614,6 +1634,42 @@ function describeSeriesConflict(c: RecurringSeriesConflict): string {
   return `${c.courtName} on ${day} at ${formatTime12h(c.startTime)}`;
 }
 
+/**
+ * Recover a weekly rule from a bare instance list, for clients that post
+ * instances without one. The dates a client expanded are the dates it meant,
+ * so the weekdays and range read straight back off them.
+ */
+function inferRuleFromInstances(
+  instances: RecurringSeriesRequest['instances']
+): {
+  courtIds: string[];
+  weekdays: number[];
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+} {
+  const dates = [...new Set(instances.map((i) => i.bookingDate))].sort();
+  const first = instances[0];
+  return {
+    courtIds: [...new Set(instances.map((i) => i.courtId))],
+    weekdays: [
+      ...new Set(
+        dates.map((d) => {
+          const [y, m, day] = d.split('-').map(Number);
+          return new Date(y, m - 1, day).getDay();
+        })
+      ),
+    ].sort((a, b) => a - b),
+    startDate: dates[0],
+    endDate: dates[dates.length - 1],
+    startTime: first?.startTime,
+    endTime: first?.endTime,
+    durationMinutes: first?.durationMinutes,
+  };
+}
+
 export type RecurringSeriesResult = BookingResult & {
   seriesId?: string;
   bookings?: Booking[];
@@ -1786,11 +1842,48 @@ async function createRecurringBookingSeriesCore(
         return { conflicts: conflictInstances, allConflicted: true };
       }
 
+      // An older client may post instances with no rule; derive one from them so
+      // every series is editable, however it was created.
+      const inferred = inferRuleFromInstances(payload.instances);
+      const rule = {
+        courtIds: payload.rule?.courtIds?.length ? payload.rule.courtIds : inferred.courtIds,
+        weekdays: normalizeWeekdays(
+          payload.rule?.weekdays?.length ? payload.rule.weekdays : inferred.weekdays
+        ),
+        startDate: payload.rule?.startDate || inferred.startDate,
+        endDate: payload.rule?.endDate || inferred.endDate,
+        startTime: payload.rule?.startTime || inferred.startTime,
+        endTime: payload.rule?.endTime || inferred.endTime,
+        durationMinutes: payload.rule?.durationMinutes ?? inferred.durationMinutes,
+        maxPlayers:
+          payload.rule?.maxPlayers ?? payload.instances.find((i) => i.maxPlayers != null)?.maxPlayers ?? null,
+      };
+
       const seriesResult = await client.query(
-        `INSERT INTO booking_series (facility_id, created_by, notes)
-         VALUES ($1, $2, $3)
+        `INSERT INTO booking_series (
+           facility_id, created_by, user_id, booked_by_staff_id, walk_in_name,
+           notes, court_ids, weekdays, start_date, end_date,
+           start_time, end_time, duration_minutes, booking_type, max_players, status
+         )
+         VALUES ($1,$2,$3,$4,$5,$6,$7::uuid[],$8::smallint[],$9,$10,$11,$12,$13,$14,$15,'active')
          RETURNING id`,
-        [payload.facilityId, payload.userId, payload.notes || null]
+        [
+          payload.facilityId,
+          payload.bookedByStaffId || payload.userId,
+          payload.userId,
+          payload.bookedByStaffId || null,
+          payload.walkInName || null,
+          payload.notes || null,
+          rule.courtIds,
+          rule.weekdays,
+          rule.startDate,
+          rule.endDate,
+          rule.startTime,
+          rule.endTime,
+          rule.durationMinutes,
+          payload.bookingType || null,
+          rule.maxPlayers,
+        ]
       );
 
       const seriesId = seriesResult.rows[0].id as string;
@@ -1801,9 +1894,10 @@ async function createRecurringBookingSeriesCore(
           `INSERT INTO bookings (
              series_id, court_id, user_id, facility_id, booking_date,
              start_time, end_time, duration_minutes, booking_type,
-             notes, status, is_prime_time, booked_by_staff_id, walk_in_name
+             notes, status, is_prime_time, booked_by_staff_id, walk_in_name,
+             max_players
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', false, $11, $12)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', false, $11, $12, $13)
            RETURNING
              id,
              series_id as "seriesId",
@@ -1833,7 +1927,8 @@ async function createRecurringBookingSeriesCore(
             payload.bookingType || null,
             payload.notes || null,
             payload.bookedByStaffId || null,
-            payload.walkInName || null
+            payload.walkInName || null,
+            instance.maxPlayers ?? rule.maxPlayers
           ]
         );
         rows.push(insert.rows[0]);

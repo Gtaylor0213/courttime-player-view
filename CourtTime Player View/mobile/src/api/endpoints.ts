@@ -105,6 +105,74 @@ export const reservationEndpoints = {
     api.put(`/api/bookings/${bookingId}/split-payment/participants`, { participantIds }),
 };
 
+/** How far a recurring-reservation edit or cancellation reaches. */
+export type BookingSeriesScope = 'instance' | 'following' | 'all';
+
+export interface BookingSeriesRule {
+  userId: string;
+  courtIds: string[];
+  /** 0=Sunday..6=Saturday. */
+  weekdays: number[];
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  walkInName?: string | null;
+  bookingType?: string | null;
+  notes?: string | null;
+  maxPlayers?: number | null;
+}
+
+export interface BookingSeriesDetail {
+  id: string;
+  facilityId: string;
+  createdBy: string;
+  status: 'active' | 'cancelled';
+  rule: BookingSeriesRule;
+  ownerName?: string | null;
+  instances: Array<{
+    id: string;
+    courtId: string;
+    courtName?: string;
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+    status: string;
+  }>;
+}
+
+/**
+ * Recurring reservations as a series (web's SeriesEditDialog). The scope
+ * decides how far a change reaches: one date, this date onward, or all of it.
+ */
+export const bookingSeriesEndpoints = {
+  detail: (seriesId: string) => api.get(`/api/bookings/series/${seriesId}`),
+  update: (
+    seriesId: string,
+    body: {
+      scope: BookingSeriesScope;
+      fromDate?: string;
+      bookingIds?: string[];
+      rule: BookingSeriesRule;
+      excludeDates?: string[];
+      skipConflicts?: boolean;
+      includePast?: boolean;
+    }
+  ) => api.patch(`/api/bookings/series/${seriesId}`, body),
+  cancel: (
+    seriesId: string,
+    body: {
+      scope: BookingSeriesScope;
+      fromDate?: string;
+      bookingIds?: string[];
+      reason?: string;
+      includePast?: boolean;
+    }
+  ) => api.delete(`/api/bookings/series/${seriesId}`, body),
+};
+
 export const levelGroupEndpoints = {
   /** The caller's own skill group and who else is in it. */
   mine: (facilityId: string) => api.get(`/api/player-level-groups/${facilityId}/me`),

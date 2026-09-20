@@ -178,16 +178,16 @@ function ReservationsTab({
     });
 
   const confirmDeleteSeries = (seriesId: string) =>
-    Alert.alert('Delete series', 'Delete all reservations in this recurring series?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert('Cancel series', 'Cancel every remaining date in this recurring reservation? The member is notified and emailed.', [
+      { text: 'Keep it', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'Cancel series',
         style: 'destructive',
         onPress: () => {
           void (async () => {
             const res = await deleteBookingSeries(seriesId);
             if (res.success) await loadBookings();
-            else showApiErrorAlert(res, 'Failed to delete recurring series');
+            else showApiErrorAlert(res, 'Failed to cancel recurring reservation');
           })();
         },
       },
@@ -199,10 +199,10 @@ function ReservationsTab({
       showAlert('Select dates', 'Select at least one date first.');
       return;
     }
-    Alert.alert('Delete selected dates', `Delete ${ids.length} selected date${ids.length === 1 ? '' : 's'}?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert('Cancel selected dates', `Cancel ${ids.length} selected date${ids.length === 1 ? '' : 's'}? The member is notified and emailed.`, [
+      { text: 'Keep them', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'Cancel dates',
         style: 'destructive',
         onPress: () => {
           void (async () => {
@@ -210,7 +210,7 @@ function ReservationsTab({
             if (res.success) {
               setSelectedSeriesDates((prev) => ({ ...prev, [seriesId]: [] }));
               await loadBookings();
-            } else showApiErrorAlert(res, 'Failed to delete selected dates');
+            } else showApiErrorAlert(res, 'Failed to cancel selected dates');
           })();
         },
       },
@@ -364,7 +364,7 @@ function ReservationsTab({
                       <Text style={styles.actionDefault}>Edit series</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionBtn} onPress={() => confirmDeleteSeries(group.seriesId)}>
-                      <Text style={styles.actionCancel}>Delete series</Text>
+                      <Text style={styles.actionCancel}>Cancel series</Text>
                     </TouchableOpacity>
                   </View>
                   {expanded ? (
@@ -377,7 +377,7 @@ function ReservationsTab({
                           <Text style={styles.actionDefault}>Edit selected</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.actionBtn} onPress={() => confirmDeleteSelected(group.seriesId)}>
-                          <Text style={styles.actionCancel}>Delete selected</Text>
+                          <Text style={styles.actionCancel}>Cancel selected</Text>
                         </TouchableOpacity>
                       </View>
                       {group.bookings.map((b) => {

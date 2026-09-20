@@ -22,6 +22,7 @@ import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
+import { expandWeeklyDates, normalizeWeekdays, WEEKDAY_NAMES } from '../../shared/utils/recurrence';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { useCourtTypeFilter } from './useCourtTypeFilter';
@@ -527,34 +528,11 @@ export function QuickReservePopup({
     return courts;
   }, [selectedCourtId, selectedCourt, additionalCourtIds, availableCourts]);
 
-  const getDayOfWeek = (date: Date): string => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[date.getDay()];
-  };
-
   const generateRecurringDates = (): string[] => {
     if (!advancedBooking || recurringDays.length === 0 || !recurringEndDate) {
       return [selectedDate];
     }
-
-    const dates: string[] = [];
-    const start = parseLocalDate(selectedDate);
-    const end = parseLocalDate(recurringEndDate);
-
-    let current = new Date(start);
-    while (current <= end) {
-      const dayName = getDayOfWeek(current);
-      if (recurringDays.includes(dayName)) {
-        // Use local date components to avoid timezone issues
-        const year = current.getFullYear();
-        const month = String(current.getMonth() + 1).padStart(2, '0');
-        const day = String(current.getDate()).padStart(2, '0');
-        dates.push(`${year}-${month}-${day}`);
-      }
-      current.setDate(current.getDate() + 1);
-    }
-
-    return dates;
+    return expandWeeklyDates(selectedDate, recurringEndDate, recurringDays);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -688,6 +666,18 @@ export function QuickReservePopup({
               bookingType: bookingType || undefined,
               notes: notes || undefined,
               walkInName: bookForWalkInName,
+              // The rule itself, so the series can be edited later rather than
+              // existing only as a pile of bookings.
+              rule: {
+                courtIds: allSelectedCourts.map((c) => c.id),
+                weekdays: normalizeWeekdays(recurringDays),
+                startDate: selectedDate,
+                endDate: recurringEndDate,
+                startTime: startTime24,
+                endTime: endTime24,
+                durationMinutes: Math.round(durationMinutes),
+                maxPlayers: bookingRequests.find((r) => r.maxPlayers != null)?.maxPlayers ?? null
+              },
               instances: bookingRequests
             };
             let res = await bookingApi.createRecurringSeries(seriesPayload);
@@ -1188,7 +1178,7 @@ export function QuickReservePopup({
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Select Days of the Week</Label>
                 <div className="grid grid-cols-4 gap-2">
-                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                  {WEEKDAY_NAMES.map((day) => (
                     <div key={day} className="flex items-center gap-2">
                       <Checkbox
                         id={`day-${day}`}

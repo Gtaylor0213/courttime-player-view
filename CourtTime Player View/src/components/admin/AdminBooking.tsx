@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { sortFacilitiesByName } from '../../../shared/utils/facilitySort';
 import { parseLocalDate } from '../../utils/dateUtils';
 import { confirmSkipRecurringConflicts } from '../../utils/recurringConflicts';
+import { expandWeeklyDates, normalizeWeekdays, WEEKDAY_NAMES } from '../../../shared/utils/recurrence';
 import { useCourtTypeFilter } from '../useCourtTypeFilter';
 import { courtTypeLabel, isPadelCourtType } from '../../../shared/constants/courtTypes';
 
@@ -558,34 +559,11 @@ export function AdminBooking() {
     return courts.filter(c => availabilityById.get(c.id) !== false);
   }, [selectedCourtId, selectedCourt, additionalCourtIds, availableCourts, courtsWithAvailability]);
 
-  const getDayOfWeek = (date: Date): string => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[date.getDay()];
-  };
-
   const generateRecurringDates = (): string[] => {
     if (!advancedBooking || recurringDays.length === 0 || !recurringEndDate) {
       return [selectedDate];
     }
-
-    const dates: string[] = [];
-    const start = parseLocalDate(selectedDate);
-    const end = parseLocalDate(recurringEndDate);
-
-    let current = new Date(start);
-    while (current <= end) {
-      const dayName = getDayOfWeek(current);
-      if (recurringDays.includes(dayName)) {
-        // Use local date components to avoid timezone issues
-        const year = current.getFullYear();
-        const month = String(current.getMonth() + 1).padStart(2, '0');
-        const day = String(current.getDate()).padStart(2, '0');
-        dates.push(`${year}-${month}-${day}`);
-      }
-      current.setDate(current.getDate() + 1);
-    }
-
-    return dates;
+    return expandWeeklyDates(selectedDate, recurringEndDate, recurringDays);
   };
 
   const calculateEndTime = (startTime: string, durationHours: string) => {
@@ -775,6 +753,18 @@ export function AdminBooking() {
               bookingType,
               notes: finalNotes || undefined,
               walkInName: isWalkIn ? walkInName : undefined,
+              // The rule, not just its expansion: this is what the series edit
+              // form on the calendar loads back.
+              rule: {
+                courtIds: allSelectedCourts.map((c) => c.id),
+                weekdays: normalizeWeekdays(recurringDays),
+                startDate: selectedDate,
+                endDate: recurringEndDate,
+                startTime: startTime24,
+                endTime: endTime24,
+                durationMinutes: Math.round(durationMinutes),
+                maxPlayers: bookingRequests.find((r) => r.maxPlayers != null)?.maxPlayers ?? null
+              },
               instances: bookingRequests
             };
             let res = await bookingApi.createRecurringSeries(seriesPayload);
@@ -1177,7 +1167,7 @@ export function AdminBooking() {
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Select Days of the Week</Label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                        {WEEKDAY_NAMES.map((day) => (
                           <div key={day} className="flex items-center gap-2">
                             <Checkbox
                               id={`day-${day}`}

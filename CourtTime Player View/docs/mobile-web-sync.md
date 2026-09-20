@@ -26,6 +26,7 @@ flowchart LR
 | Bulletin display | `shared/utils/bulletinPostDisplay.ts` |
 | Court availability | `shared/utils/courtAvailability.ts` |
 | Strike lockout | `shared/utils/strikeLockout.ts` |
+| Weekly recurrence | `shared/utils/recurrence.ts` |
 | API envelope | `shared/api/core.ts` |
 | Domain contracts | `shared/types/contracts.ts` |
 | Feature flag keys | `shared/constants/featureFlags.ts` |
@@ -136,7 +137,10 @@ Everything else in the admin console (bookings and series, members, courts, faci
 - [ ] Strike lockout banner on calendar/book/profile
 - [ ] Push pref off → no push (mobile)
 - [ ] Reset password: valid + expired token (mobile validates first)
-- [ ] Admin recurring series (mobile only)
+- [ ] Recurring reservations: create a series, reopen it from the calendar, and change the courts, weekdays, date range, time, member and notes
+- [ ] Recurring scopes: "this date only", "this and later" (splits the series), "every date" — on edit, on cancel, and on a calendar drag
+- [ ] Recurring cancellation notifies and emails the member (it no longer deletes rows)
+- [ ] Admin recurring series: the Bookings list and the mobile admin tab drive the same series service
 - [ ] Flag on/off parity: a flagged feature shows on both clients for the same facility
 - [ ] Multi-facility switch between a flag-on and a flag-off club mid-session
 - [ ] Mobile offline: cached flags survive; a never-fetched facility shows no flagged features

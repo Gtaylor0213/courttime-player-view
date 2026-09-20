@@ -27,7 +27,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
-import { reservationEndpoints } from '../api/endpoints';
+import { reservationEndpoints, bookingSeriesEndpoints } from '../api/endpoints';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeatureFlags } from '../contexts/FeatureFlagContext';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
@@ -392,29 +392,72 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
     }
   };
 
+  const cancelThisBookingOnly = async () => {
+    if (!detail || !user) return;
+    setBusy('cancel');
+    const res = await api.delete(`/api/bookings/${detail.id}?userId=${user.id}`);
+    setBusy(null);
+    if (res.success) {
+      hapticSuccess();
+      onChanged?.();
+      onClose();
+      showAlert('Cancelled', 'Booking was cancelled successfully.');
+    } else {
+      hapticError();
+      showApiErrorAlert(res, 'Could not cancel');
+    }
+  };
+
+  const cancelSeriesScope = async (scope: 'following' | 'all') => {
+    if (!detail?.seriesId) return;
+    setBusy('cancel');
+    const res = await bookingSeriesEndpoints.cancel(detail.seriesId, {
+      scope,
+      fromDate: scope === 'following' ? String(detail.bookingDate) : undefined,
+    });
+    setBusy(null);
+    if (res.success) {
+      hapticSuccess();
+      onChanged?.();
+      onClose();
+      const count = (res as any)?.data?.cancelled ?? (res as any)?.cancelled ?? 0;
+      showAlert(
+        'Cancelled',
+        count === 1 ? 'The reservation was cancelled.' : `${count} reservations were cancelled.`
+      );
+    } else {
+      hapticError();
+      showApiErrorAlert(res, 'Could not cancel');
+    }
+  };
+
   const handleCancelBooking = () => {
     if (!detail || !user) return;
+    // A recurring reservation asks how far the cancellation reaches, matching
+    // the web calendar rather than silently dropping only the one date.
+    if (detail.seriesId) {
+      Alert.alert(
+        'Cancel recurring reservation',
+        'This reservation repeats. Choose how much of the series to cancel.',
+        [
+          { text: 'Keep it', style: 'cancel' },
+          { text: 'This date only', onPress: () => void cancelThisBookingOnly() },
+          { text: 'This and later dates', onPress: () => void cancelSeriesScope('following') },
+          {
+            text: 'Every date',
+            style: 'destructive',
+            onPress: () => void cancelSeriesScope('all'),
+          },
+        ]
+      );
+      return;
+    }
     Alert.alert('Cancel booking', 'Cancel this reservation?', [
       { text: 'Keep', style: 'cancel' },
       {
         text: 'Cancel booking',
         style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            setBusy('cancel');
-            const res = await api.delete(`/api/bookings/${detail.id}?userId=${user.id}`);
-            setBusy(null);
-            if (res.success) {
-              hapticSuccess();
-              onChanged?.();
-              onClose();
-              showAlert('Cancelled', 'Booking was cancelled successfully.');
-            } else {
-              hapticError();
-              showApiErrorAlert(res, 'Could not cancel');
-            }
-          })();
-        },
+        onPress: () => void cancelThisBookingOnly(),
       },
     ]);
   };
@@ -454,6 +497,15 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
             <Text style={styles.line}>Reserved by: {d.userName || 'Member'}</Text>
             {d.bookingType ? <Text style={styles.line}>Type: {getBookingTypeLabel(d.bookingType)}</Text> : null}
             {d.notes ? <Text style={styles.line}>Notes: {d.notes}</Text> : null}
+            {d.seriesId ? (
+              <View style={styles.recurringNote}>
+                <Ionicons name="repeat" size={16} color={Colors.primary} />
+                <Text style={styles.recurringText}>
+                  Part of a recurring reservation — cancelling asks whether to drop this date,
+                  this date onward, or the whole series.
+                </Text>
+              </View>
+            ) : null}
             {isPostPlayBooking ? (
               <View style={styles.badgeRow}>
                 <Text style={styles.badgeLabel}>Payment</Text>
@@ -702,6 +754,13 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
+  recurringNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+  },
+  recurringText: { flex: 1, color: Colors.textSecondary, fontSize: 13, lineHeight: 18 },
   sheet: {
     backgroundColor: Colors.card,
     borderTopLeftRadius: BorderRadius.lg,

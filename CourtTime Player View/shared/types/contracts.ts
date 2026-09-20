@@ -60,6 +60,8 @@ export interface Court {
 
 export interface Booking {
   id: Id;
+  /** Set when this booking is one date of a recurring series. */
+  seriesId?: Id | null;
   courtId: Id;
   userId: Id;
   facilityId: Id;

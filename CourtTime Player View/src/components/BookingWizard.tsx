@@ -28,6 +28,7 @@ import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
+import { expandWeeklyDates, normalizeWeekdays, WEEKDAY_NAMES } from '../../shared/utils/recurrence';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { isPadelCourtType } from '../../shared/constants/courtTypes';
@@ -57,6 +58,18 @@ interface BookingWizardProps {
   facilityId: string;
   selectedSlots?: Array<{ court: string; courtId: string; time: string }>;
   onBookingCreated?: () => void;
+}
+
+/**
+ * The `date` prop arrives as `YYYY-MM-DD`, an ISO datetime, or a display
+ * string depending on which surface opened the wizard; normalize before it
+ * reaches anything that expects a plain local date.
+ */
+function parseDateStr(dateStr: string): string {
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) return dateStr;
+  if (dateStr.includes('T')) return dateStr.split('T')[0];
+  const parsed = new Date(dateStr + ' 12:00:00');
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
 }
 
 // Calendar grid cells are 30-minute slots; a drag selection's end time is the
@@ -599,29 +612,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     });
   }, [facilityCourts, dragSelectedCourts, startTime, endTime, existingBookings]);
 
-  const getDayOfWeek = (d: Date): string => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[d.getDay()];
-  };
-
   const generateRecurringDates = (): string[] => {
     if (!advancedBooking || recurringDays.length === 0 || !recurringEndDate) {
       return [date];
     }
-    const dates: string[] = [];
-    const start = parseLocalDate(date);
-    const end = parseLocalDate(recurringEndDate);
-    const current = new Date(start);
-    while (current <= end) {
-      if (recurringDays.includes(getDayOfWeek(current))) {
-        const y = current.getFullYear();
-        const mo = String(current.getMonth() + 1).padStart(2, '0');
-        const dd = String(current.getDate()).padStart(2, '0');
-        dates.push(`${y}-${mo}-${dd}`);
-      }
-      current.setDate(current.getDate() + 1);
-    }
-    return dates;
+    return expandWeeklyDates(parseDateStr(date), recurringEndDate, recurringDays);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -687,13 +682,6 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       const checkoutReturnUrls =
         typeof window !== 'undefined' ? courtBookingCheckoutUrls(window.location.origin) : undefined;
 
-      const parseDateStr = (dateStr: string): string => {
-        if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) return dateStr;
-        if (dateStr.includes('T')) return dateStr.split('T')[0];
-        const parsed = new Date(dateStr + ' 12:00:00');
-        return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
-      };
-
       const startTime24 = convertTo24Hour(startTime);
       const endTime24 = convertTo24Hour(endTime);
       const datesToBook = generateRecurringDates().map(d => parseDateStr(d));
@@ -751,6 +739,17 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               bookingType: bookingType || undefined,
               notes: notes || undefined,
               walkInName: bookForWalkInName,
+              // Stored on the series so it can be reopened in the edit form.
+              rule: {
+                courtIds: selectedCourts.map((c) => c.courtId),
+                weekdays: normalizeWeekdays(recurringDays),
+                startDate: parseDateStr(date),
+                endDate: parseDateStr(recurringEndDate),
+                startTime: startTime24,
+                endTime: endTime24,
+                durationMinutes: durationMins,
+                maxPlayers: bookingRequests.find((r) => r.maxPlayers != null)?.maxPlayers ?? null
+              },
               instances: bookingRequests.map(({ courtName, ...req }) => req)
             };
             let res = await bookingApi.createRecurringSeries(seriesPayload);
@@ -1112,7 +1111,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Select Days of the Week</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                  {WEEKDAY_NAMES.map((day) => (
                     <div key={day} className="flex items-center gap-2">
                       <Checkbox
                         id={`bw-day-${day}`}

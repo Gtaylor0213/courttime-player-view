@@ -90,7 +90,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const sessionId = session.id;
   const metadataType = session.metadata?.type;
 
-  if (metadataType === 'pro_shop') {
+  // Pro shop checkout now runs on the club's Connect account (connectWebhook);
+  // this still finalizes sessions created on the platform account before that.
+  if (metadataType === 'pro_shop' || metadataType === 'pro_shop_guest') {
     const { finalizeOrder } = await import('../../src/services/proShopService');
     await finalizeOrder(sessionId);
     console.log(`[WEBHOOK] pro_shop order finalized for session ${sessionId}`);

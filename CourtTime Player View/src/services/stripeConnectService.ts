@@ -2013,7 +2013,7 @@ export async function getClubPaymentHistory(clubId: string): Promise<ConnectPaym
             NULL::varchar AS payment_item_id,
             NULL::uuid AS bulletin_post_id,
             o.total_cents AS amount_cents,
-            GREATEST(0, ROUND(o.total_cents * $2::numeric / 100.0))::int AS platform_fee_cents,
+            o.platform_fee_cents,
             CASE
               WHEN o.status = 'refunded' THEN 'REFUNDED'
               WHEN o.status = 'paid' THEN 'PAID'
@@ -2043,7 +2043,7 @@ export async function getClubPaymentHistory(clubId: string): Promise<ConnectPaym
       WHERE o.facility_id = $1
         AND o.status IN ('paid', 'refunded')
         AND o.total_cents > 0`,
-    [clubId, platformFeePercent]
+    [clubId]
   ).catch(err => {
     console.error('[Payments] Pro shop history query failed:', err);
     return { rows: [] as any[] };

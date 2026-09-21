@@ -3,6 +3,7 @@ import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { facilityOperatingHoursScheduleFingerprint } from '../../shared/utils/operatingHours';
 import { replaceAllCourtOperatingConfigsForFacility } from './courtOperatingConfigSync';
 import { getAmountForCourts } from './subscriptionPricing';
+import { revenueEventsCte } from './facilityRevenueService';
 import * as bcrypt from 'bcrypt';
 
 const SALT_ROUNDS = 10;
@@ -87,11 +88,15 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const totalBookingResult = await query('SELECT COUNT(*) as count FROM bookings');
   const totalBookings = parseInt(totalBookingResult.rows[0]?.count || '0', 10);
 
-  const [activeSubResult, revenueResult, newUsersResult, newFacResult, attentionResult, facilitiesResult, recentFacilities, recentUsers, recentPayments, attentionSubs] =
+  const [activeSubResult, revenueResult, connectFeeResult, newUsersResult, newFacResult, attentionResult, facilitiesResult, recentFacilities, recentUsers, recentPayments, attentionSubs] =
     await Promise.all([
       query(`SELECT COUNT(*) as count FROM facility_subscriptions WHERE status IN ('active', 'trialing', 'waived')`),
       query(`SELECT COALESCE(SUM(amount_cents), 0)::int as total FROM payment_history
              WHERE status = 'succeeded' AND created_at >= date_trunc('month', CURRENT_DATE)`),
+      // CourtTime's share of club payments (Stripe Connect application fees)
+      query(`${revenueEventsCte(false)}
+             SELECT COALESCE(SUM(platform_fee_cents), 0)::int as total FROM revenue_events
+             WHERE paid_at >= date_trunc('month', CURRENT_DATE)`),
       query(`SELECT COUNT(*) as count FROM users WHERE created_at >= NOW() - interval '7 days'`),
       query(`SELECT COUNT(*) as count FROM facilities WHERE created_at >= NOW() - interval '7 days'`),
       query(`SELECT COUNT(*) as count FROM facility_subscriptions
@@ -152,7 +157,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     ]);
 
   const activeSubscriptions = parseInt(activeSubResult.rows[0]?.count || '0', 10);
-  const revenueThisMonthCents = parseInt(revenueResult.rows[0]?.total || '0', 10);
+  // CourtTime revenue: club subscription payments + Connect application fees
+  const revenueThisMonthCents =
+    parseInt(revenueResult.rows[0]?.total || '0', 10) +
+    parseInt(connectFeeResult.rows[0]?.total || '0', 10);
   const newUsersThisWeek = parseInt(newUsersResult.rows[0]?.count || '0', 10);
   const newFacilitiesThisWeek = parseInt(newFacResult.rows[0]?.count || '0', 10);
   const subscriptionsNeedingAttention = parseInt(attentionResult.rows[0]?.count || '0', 10);

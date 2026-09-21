@@ -6,6 +6,35 @@ function getBaseUrl(): string {
   return process.env.APP_BASE_URL || process.env.CLIENT_URL || 'http://localhost:5173';
 }
 
+/**
+ * Pro shop sales are the club's money: card payments run on the club's Stripe
+ * Connect account (a direct charge, like other member→club payments), and
+ * CourtTime takes its platform fee as the application fee. Cash sales never
+ * touch Stripe, so they carry no fee.
+ */
+async function getPlatformFeePercent(facilityId: string): Promise<number> {
+  const result = await query(`SELECT platform_fee_percent FROM facilities WHERE id = $1`, [
+    facilityId,
+  ]);
+  return Number(result.rows[0]?.platform_fee_percent ?? 0);
+}
+
+function platformFeeFor(amountCents: number, platformFeePercent: number): number {
+  return Math.max(0, Math.round((amountCents * platformFeePercent) / 100));
+}
+
+async function getClubStripeAccountId(facilityId: string): Promise<string> {
+  const result = await query(
+    `SELECT stripe_account_id, stripe_onboarded FROM facilities WHERE id = $1`,
+    [facilityId]
+  );
+  const row = result.rows[0];
+  if (!row?.stripe_account_id || !row.stripe_onboarded) {
+    throw new Error('This facility has not completed Stripe Connect setup');
+  }
+  return row.stripe_account_id;
+}
+
 // ── Products ───────────────────────────────────────────────
 
 export async function getActiveProducts(facilityId: string) {
@@ -135,15 +164,16 @@ export async function createCheckoutSession(
     lineItems.push({ product_id: item.product_id, quantity: item.quantity, price_cents: product.price_cents, name: product.name });
     totalCents += product.price_cents * item.quantity;
   }
+  const platformFeeCents = platformFeeFor(totalCents, await getPlatformFeePercent(facilityId));
 
   const client = await getClient();
   try {
     await client.query('BEGIN');
 
     const orderResult = await client.query(
-      `INSERT INTO pro_shop_orders (facility_id, user_id, status, total_cents)
-       VALUES ($1, $2, 'pending', $3) RETURNING id`,
-      [facilityId, userId, totalCents]
+      `INSERT INTO pro_shop_orders (facility_id, user_id, status, total_cents, platform_fee_cents)
+       VALUES ($1, $2, 'pending', $3, $4) RETURNING id`,
+      [facilityId, userId, totalCents, platformFeeCents]
     );
     const orderId = orderResult.rows[0].id;
 
@@ -166,20 +196,29 @@ export async function createCheckoutSession(
       return { url: null, orderId, devMode: true };
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: lineItems.map(i => ({
-        price_data: {
-          currency: 'usd',
-          product_data: { name: i.name },
-          unit_amount: i.price_cents,
+    const stripeAccountId = await getClubStripeAccountId(facilityId);
+    const metadata = { type: 'pro_shop', order_id: orderId, facility_id: facilityId };
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: 'payment',
+        line_items: lineItems.map(i => ({
+          price_data: {
+            currency: 'usd',
+            product_data: { name: i.name },
+            unit_amount: i.price_cents,
+          },
+          quantity: i.quantity,
+        })),
+        metadata,
+        payment_intent_data: {
+          application_fee_amount: platformFeeCents > 0 ? platformFeeCents : undefined,
+          metadata,
         },
-        quantity: i.quantity,
-      })),
-      metadata: { type: 'pro_shop', order_id: orderId, facility_id: facilityId },
-      success_url: `${getBaseUrl()}/shop?order=success`,
-      cancel_url: `${getBaseUrl()}/shop`,
-    });
+        success_url: `${getBaseUrl()}/shop?order=success`,
+        cancel_url: `${getBaseUrl()}/shop`,
+      },
+      { stripeAccount: stripeAccountId }
+    );
 
     await client.query(
       `UPDATE pro_shop_orders SET stripe_checkout_session_id = $1, updated_at = NOW() WHERE id = $2`,
@@ -223,6 +262,7 @@ export async function createGuestCheckoutSession(
     lineItems.push({ product_id: item.product_id, quantity: item.quantity, price_cents: product.price_cents, name: product.name });
     totalCents += product.price_cents * item.quantity;
   }
+  const platformFeeCents = platformFeeFor(totalCents, await getPlatformFeePercent(facilityId));
 
   const client = await getClient();
   try {
@@ -230,9 +270,9 @@ export async function createGuestCheckoutSession(
 
     const orderResult = await client.query(
       `INSERT INTO pro_shop_orders
-         (facility_id, user_id, guest_name, guest_email, charged_by, status, total_cents)
-       VALUES ($1, NULL, $2, $3, $4, 'pending', $5) RETURNING id`,
-      [facilityId, guestName, guestEmail ?? null, adminId, totalCents]
+         (facility_id, user_id, guest_name, guest_email, charged_by, status, total_cents, platform_fee_cents)
+       VALUES ($1, NULL, $2, $3, $4, 'pending', $5, $6) RETURNING id`,
+      [facilityId, guestName, guestEmail ?? null, adminId, totalCents, platformFeeCents]
     );
     const orderId = orderResult.rows[0].id;
 
@@ -254,6 +294,8 @@ export async function createGuestCheckoutSession(
       return { url: null, orderId, devMode: true };
     }
 
+    const stripeAccountId = await getClubStripeAccountId(facilityId);
+    const metadata = { type: 'pro_shop_guest', order_id: orderId, facility_id: facilityId };
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'payment',
       line_items: lineItems.map(i => ({
@@ -264,7 +306,11 @@ export async function createGuestCheckoutSession(
         },
         quantity: i.quantity,
       })),
-      metadata: { type: 'pro_shop_guest', order_id: orderId, facility_id: facilityId },
+      metadata,
+      payment_intent_data: {
+        application_fee_amount: platformFeeCents > 0 ? platformFeeCents : undefined,
+        metadata,
+      },
       success_url: `${getBaseUrl()}/shop?order=success`,
       cancel_url: `${getBaseUrl()}/shop`,
     };
@@ -273,7 +319,9 @@ export async function createGuestCheckoutSession(
       sessionParams.customer_email = guestEmail;
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams);
+    const session = await stripe.checkout.sessions.create(sessionParams, {
+      stripeAccount: stripeAccountId,
+    });
 
     await client.query(
       `UPDATE pro_shop_orders SET stripe_checkout_session_id = $1, updated_at = NOW() WHERE id = $2`,
@@ -290,23 +338,30 @@ export async function createGuestCheckoutSession(
   }
 }
 
-export async function finalizeOrder(sessionId: string): Promise<void> {
-  const orderResult = await query(
-    `SELECT id FROM pro_shop_orders WHERE stripe_checkout_session_id = $1`,
-    [sessionId]
-  );
-  if (orderResult.rows.length === 0) return;
-
-  const orderId = orderResult.rows[0].id;
-
+export async function finalizeOrder(
+  sessionId: string,
+  paymentIntentId: string | null = null
+): Promise<void> {
   const client = await getClient();
   try {
     await client.query('BEGIN');
 
-    await client.query(
-      `UPDATE pro_shop_orders SET status = 'paid', updated_at = NOW() WHERE id = $1`,
-      [orderId]
+    // Only the first delivery of a session flips the order to paid, so webhook
+    // retries (or both webhooks firing) don't decrement stock twice.
+    const updated = await client.query(
+      `UPDATE pro_shop_orders
+         SET status = 'paid',
+             stripe_payment_intent_id = COALESCE($2, stripe_payment_intent_id),
+             updated_at = NOW()
+       WHERE stripe_checkout_session_id = $1 AND status = 'pending'
+       RETURNING id`,
+      [sessionId, paymentIntentId]
     );
+    if (updated.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    const orderId = updated.rows[0].id;
 
     // Decrement stock for products with finite quantity
     const items = await client.query(
@@ -631,7 +686,7 @@ export async function chargeImmediately(
 ) {
   const memberResult = await query(
     `SELECT fm.stripe_customer_id, fm.stripe_default_payment_method_id,
-            f.stripe_account_id, f.stripe_onboarded
+            f.stripe_account_id, f.stripe_onboarded, f.platform_fee_percent
      FROM facility_memberships fm
      JOIN facilities f ON f.id = $1
      WHERE fm.facility_id = $1 AND fm.user_id = $2 AND fm.status = 'active'`,
@@ -649,6 +704,7 @@ export async function chargeImmediately(
   const productMap = new Map(productsResult.rows.map((p: any) => [p.id, p]));
   const lineItems = items.map(i => ({ ...(productMap.get(i.product_id) as any), quantity: i.quantity }));
   const totalCents = lineItems.reduce((s: number, i: any) => s + i.price_cents * i.quantity, 0);
+  const platformFeeCents = platformFeeFor(totalCents, Number(m.platform_fee_percent ?? 0));
 
   const stripe = getStripe();
   let piId: string;
@@ -671,6 +727,7 @@ export async function chargeImmediately(
         payment_method: m.stripe_default_payment_method_id,
         off_session: true,
         confirm: true,
+        application_fee_amount: platformFeeCents > 0 ? platformFeeCents : undefined,
         description: `Pro Shop – ${desc}`,
         metadata: { type: 'pro_shop_admin_charge', facility_id: facilityId, assigned_by: adminId },
       },
@@ -683,9 +740,10 @@ export async function chargeImmediately(
   try {
     await client.query('BEGIN');
     const orderResult = await client.query(
-      `INSERT INTO pro_shop_orders (facility_id, user_id, stripe_payment_intent_id, charged_by, status, total_cents)
-       VALUES ($1, $2, $3, $4, 'paid', $5) RETURNING id`,
-      [facilityId, userId, piId, adminId, totalCents]
+      `INSERT INTO pro_shop_orders
+         (facility_id, user_id, stripe_payment_intent_id, charged_by, status, total_cents, platform_fee_cents)
+       VALUES ($1, $2, $3, $4, 'paid', $5, $6) RETURNING id`,
+      [facilityId, userId, piId, adminId, totalCents, platformFeeCents]
     );
     const orderId = orderResult.rows[0].id;
     for (const item of lineItems) {
@@ -719,7 +777,7 @@ export async function billMemberTab(facilityId: string, userId: string) {
 
   const memberResult = await query(
     `SELECT fm.stripe_customer_id, fm.stripe_default_payment_method_id,
-            f.stripe_account_id, f.stripe_onboarded
+            f.stripe_account_id, f.stripe_onboarded, f.platform_fee_percent
      FROM facility_memberships fm
      JOIN facilities f ON f.id = $1
      WHERE fm.facility_id = $1 AND fm.user_id = $2 AND fm.status = 'active'`,
@@ -729,6 +787,7 @@ export async function billMemberTab(facilityId: string, userId: string) {
   const m = memberResult.rows[0];
 
   const totalCents = Number(tab.unbilled_cents);
+  const platformFeeCents = platformFeeFor(totalCents, Number(m.platform_fee_percent ?? 0));
   const items = (tab.items ?? []) as any[];
   const desc = items.map(i => `${i.product_name} ×${i.quantity}`).join(', ');
 
@@ -752,6 +811,7 @@ export async function billMemberTab(facilityId: string, userId: string) {
         payment_method: m.stripe_default_payment_method_id,
         off_session: true,
         confirm: true,
+        application_fee_amount: platformFeeCents > 0 ? platformFeeCents : undefined,
         description: `Pro Shop Tab – ${desc}`,
         metadata: { type: 'pro_shop_tab_billing', facility_id: facilityId, user_id: userId },
       },
@@ -764,9 +824,10 @@ export async function billMemberTab(facilityId: string, userId: string) {
   try {
     await client.query('BEGIN');
     const orderResult = await client.query(
-      `INSERT INTO pro_shop_orders (facility_id, user_id, stripe_payment_intent_id, status, total_cents)
-       VALUES ($1, $2, $3, 'paid', $4) RETURNING id`,
-      [facilityId, userId, piId, totalCents]
+      `INSERT INTO pro_shop_orders
+         (facility_id, user_id, stripe_payment_intent_id, status, total_cents, platform_fee_cents)
+       VALUES ($1, $2, $3, 'paid', $4, $5) RETURNING id`,
+      [facilityId, userId, piId, totalCents, platformFeeCents]
     );
     const orderId = orderResult.rows[0].id;
 

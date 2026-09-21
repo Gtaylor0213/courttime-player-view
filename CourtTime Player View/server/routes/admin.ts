@@ -431,7 +431,6 @@ router.get('/dashboard/:facilityId', async (req, res) => {
             courtBooking: revenueBreakdown.courtBooking,
             bulletinSignup: revenueBreakdown.bulletinSignup,
             paymentItem: revenueBreakdown.paymentItem,
-            platformSubscription: revenueBreakdown.platformSubscription,
           },
         },
         recentActivity: recentActivityResult.rows

@@ -11,6 +11,7 @@
 import express from 'express';
 import Stripe from 'stripe';
 import { markCheckoutSessionPaid } from '../../src/services/stripeConnectService';
+import { finalizeOrder } from '../../src/services/proShopService';
 import { query } from '../../src/database/connection';
 import { getStripe, allowUnsignedWebhookPayloads } from '../../src/services/stripeClient';
 
@@ -51,9 +52,19 @@ router.post(
 
     try {
       switch (event.type) {
-        case 'checkout.session.completed':
-          await markCheckoutSessionPaid(event.data.object as Stripe.Checkout.Session);
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const type = session.metadata?.type;
+          if (type === 'pro_shop' || type === 'pro_shop_guest') {
+            await finalizeOrder(
+              session.id,
+              typeof session.payment_intent === 'string' ? session.payment_intent : null
+            );
+          } else {
+            await markCheckoutSessionPaid(session);
+          }
           break;
+        }
         case 'payment_intent.payment_failed': {
           const intent = event.data.object as Stripe.PaymentIntent;
           const updated = await query(

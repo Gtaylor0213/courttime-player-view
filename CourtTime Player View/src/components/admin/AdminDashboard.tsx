@@ -23,7 +23,6 @@ interface DashboardStats {
     courtBooking: number;
     bulletinSignup: number;
     paymentItem: number;
-    platformSubscription: number;
   };
 }
 

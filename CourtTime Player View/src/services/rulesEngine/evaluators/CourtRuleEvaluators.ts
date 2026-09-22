@@ -21,12 +21,12 @@ import {
   timeRangesOverlap,
   getTimeWindow,
   formatDate,
-  combineDateAndTime,
   addDays,
   matchesRecurrenceRule
 } from '../utils/timeUtils';
 import { isTierEligibleForPrimeTime } from '../utils/primeTimeUtils';
 import { isTennisCourtType, isPickleballCourtType } from '../../../../shared/constants/courtTypes';
+import { blackoutMinutesOnDate } from '../../../../shared/utils/blackoutSlots';
 
 /**
  * CRT-001: Peak-Hours Schedule
@@ -304,8 +304,9 @@ const CRT006: RuleEvaluator = {
 
   async evaluate(context: RuleContext, config: any): Promise<RuleResult> {
     const bookingDate = new Date(context.request.bookingDate);
-    const bookingStart = combineDateAndTime(context.request.bookingDate, context.request.startTime);
-    const bookingEnd = combineDateAndTime(context.request.bookingDate, context.request.endTime);
+    const bookingStartMin = timeToMinutes(context.request.startTime);
+    let bookingEndMin = timeToMinutes(context.request.endTime);
+    if (bookingEndMin <= bookingStartMin) bookingEndMin = 24 * 60; // ends at midnight
 
     for (const blackout of context.blackouts) {
       // Check if blackout applies to this court
@@ -313,8 +314,14 @@ const CRT006: RuleEvaluator = {
         continue;
       }
 
-      // Check for direct date overlap
-      if (blackout.startDatetime <= bookingEnd && blackout.endDatetime >= bookingStart) {
+      // Overlap with the blackout's window on the booking date (a multi-day blackout
+      // repeats its start–end times each day — same rule the calendars draw).
+      const window = blackoutMinutesOnDate(
+        new Date(blackout.startDatetime),
+        new Date(blackout.endDatetime),
+        context.request.bookingDate
+      );
+      if (window && window.startMin < bookingEndMin && window.endMin > bookingStartMin) {
         const reason = blackout.visibility === 'visible' ? blackout.title : 'scheduled maintenance';
         return {
           ruleCode: 'CRT-006',

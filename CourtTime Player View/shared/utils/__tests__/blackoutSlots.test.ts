@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blackoutsToBlockedRanges, parseBlackoutDatetime } from '../blackoutSlots';
+import { blackoutMinutesOnDate, blackoutsToBlockedRanges, describeBlackout, parseBlackoutDatetime } from '../blackoutSlots';
 
 describe('parseBlackoutDatetime', () => {
   it('treats a bare datetime as local wall time', () => {
@@ -33,7 +33,7 @@ describe('blackoutsToBlockedRanges', () => {
       courts
     );
     expect(ranges).toEqual([
-      { blackoutId: 'b2', courtId: 'c2', startTime: '00:00:00', endTime: '24:00:00', label: 'maintenance' },
+      { blackoutId: 'b2', courtId: 'c2', startTime: '00:00:00', endTime: '24:00:00', label: 'Maintenance', reason: '' },
     ]);
   });
 
@@ -48,5 +48,68 @@ describe('blackoutsToBlockedRanges', () => {
         courts
       )
     ).toEqual([]);
+  });
+});
+
+describe('describeBlackout', () => {
+  it('uses the title as the name and the description as the reason', () => {
+    expect(describeBlackout({ title: 'Resurfacing', blackout_type: 'maintenance', description: 'New acrylic coat' }))
+      .toEqual({ name: 'Resurfacing', reason: 'New acrylic coat' });
+  });
+  it('falls back to the type as the reason when there is no description', () => {
+    expect(describeBlackout({ title: 'Club Championship', blackout_type: 'tournament' }))
+      .toEqual({ name: 'Club Championship', reason: 'Tournament' });
+  });
+  it('never shows "Custom" as a reason', () => {
+    expect(describeBlackout({ title: 'Begins Oct 1st', blackout_type: 'custom' }))
+      .toEqual({ name: 'Begins Oct 1st', reason: '' });
+    expect(describeBlackout({ blackout_type: 'custom' })).toEqual({ name: 'Blackout', reason: '' });
+  });
+  it('names an untitled blackout after its type', () => {
+    expect(describeBlackout({ blackout_type: 'weather', description: 'Courts flooded' }))
+      .toEqual({ name: 'Weather', reason: 'Courts flooded' });
+    expect(describeBlackout({})).toEqual({ name: 'Blackout', reason: '' });
+  });
+});
+
+describe('blackoutMinutesOnDate', () => {
+  const at = (s: string) => parseBlackoutDatetime(s)!;
+
+  it('repeats a multi-day blackout\'s start–end times on every day', () => {
+    const start = at('2026-09-22T08:00:00');
+    const end = at('2026-09-30T22:00:00');
+    for (const day of ['2026-09-22', '2026-09-25', '2026-09-30']) {
+      expect(blackoutMinutesOnDate(start, end, day)).toEqual({ startMin: 8 * 60, endMin: 22 * 60 });
+    }
+    expect(blackoutMinutesOnDate(start, end, '2026-09-21')).toBeNull();
+    expect(blackoutMinutesOnDate(start, end, '2026-10-01')).toBeNull();
+  });
+
+  it('treats an overnight range as one continuous closure', () => {
+    const start = at('2026-09-22T20:00:00');
+    const end = at('2026-09-24T06:00:00');
+    expect(blackoutMinutesOnDate(start, end, '2026-09-22')).toEqual({ startMin: 20 * 60, endMin: 24 * 60 });
+    expect(blackoutMinutesOnDate(start, end, '2026-09-23')).toEqual({ startMin: 0, endMin: 24 * 60 });
+    expect(blackoutMinutesOnDate(start, end, '2026-09-24')).toEqual({ startMin: 0, endMin: 6 * 60 });
+  });
+
+  it('treats midnight-to-midnight as whole days', () => {
+    const start = at('2026-09-22T00:00:00');
+    const end = at('2026-09-24T00:00:00');
+    expect(blackoutMinutesOnDate(start, end, '2026-09-23')).toEqual({ startMin: 0, endMin: 24 * 60 });
+    expect(blackoutMinutesOnDate(start, end, '2026-09-24')).toBeNull();
+  });
+});
+
+describe('blackoutsToBlockedRanges daily window', () => {
+  it('blocks 8am–10pm on a middle day of a multi-day blackout', () => {
+    const ranges = blackoutsToBlockedRanges(
+      [{ id: 'b9', court_id: null, title: 'Begins Oct 1st', blackout_type: 'custom', start_datetime: '2026-09-22T08:00:00', end_datetime: '2026-09-30T22:00:00' }],
+      '2026-09-25',
+      ['c1']
+    );
+    expect(ranges).toEqual([
+      { blackoutId: 'b9', courtId: 'c1', startTime: '08:00:00', endTime: '22:00:00', label: 'Begins Oct 1st', reason: '' },
+    ]);
   });
 });

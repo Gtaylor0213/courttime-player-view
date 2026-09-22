@@ -30,6 +30,8 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TIME_LABEL_WIDTH = 46;
 const ROW_HEIGHT = 48;
+/** Blackout block text (web: text-red-900). */
+const BLACKOUT_TEXT = '#7F1D1D';
 import { DEFAULT_BOOKING_DURATION_MINUTES, getBookingTypeLabel, getBookingTypeRNColors } from '../../../shared/constants/bookingTypes';
 import { blackoutsToBlockedRanges } from '../../../shared/utils/blackoutSlots';
 import { isPeakSlot } from '../../../shared/utils/courtTypeFilter';
@@ -66,8 +68,11 @@ interface Booking {
   endTime: string;
   userName?: string;
   bookingType?: string;
-  /** Shown instead of "Blocked" for a maintenance blackout (its title). */
+  /** Shown instead of "Blocked" for a maintenance blackout (its name). */
   blockedLabel?: string;
+  /** A blackout's reason (description, or its type when titled). */
+  blackoutReason?: string;
+  isBlackout?: boolean;
 }
 
 interface CourtAvailability {
@@ -497,6 +502,8 @@ export function CourtCalendarGrid({
         userName: range.label,
         bookingType: 'blocked',
         blockedLabel: range.label,
+        blackoutReason: range.reason,
+        isBlackout: true,
       });
       bookingsByCourtId.set(range.courtId, existing);
     }
@@ -1121,7 +1128,9 @@ export function CourtCalendarGrid({
                         const cellDisabled = isBlockedSlot || (past && !booked);
                         const accessibilityLabel = booked
                           ? isBlockedSlot
-                            ? `${court.name} at ${fullTimeLabel}. Unavailable because a related court is booked.`
+                            ? booked.isBlackout
+                              ? `${court.name} at ${fullTimeLabel}. Blacked out: ${booked.blockedLabel || 'Blackout'}${booked.blackoutReason ? `, ${booked.blackoutReason}` : ''}.`
+                              : `${court.name} at ${fullTimeLabel}. Unavailable because a related court is booked.`
                             : `${court.name} at ${fullTimeLabel}. Booked ${bookingStart?.bookingType || booked.bookingType || 'reservation'} from ${formatFullTime(booked.startTime)} to ${formatFullTime(booked.endTime)}.`
                           : past
                             ? `${court.name} at ${fullTimeLabel}. Past time slot.`
@@ -1252,12 +1261,16 @@ export function CourtCalendarGrid({
                           >
                             {bookingStart && (() => {
                               const isBlockedBooking = bookingStart.bookingType === 'blocked';
+                              const isBlackoutBooking = !!bookingStart.isBlackout;
                               const typeColors = getBookingTypeRNColors(bookingStart.bookingType);
+                              const mutedColor = isBlackoutBooking ? BLACKOUT_TEXT : Colors.textMuted;
                               return (
                                 <View
                                   style={[
                                     styles.bookingBlock,
-                                    isBlockedBooking
+                                    isBlackoutBooking
+                                      ? styles.bookingBlockBlackout
+                                      : isBlockedBooking
                                       ? styles.bookingBlockBlocked
                                       : {
                                           backgroundColor: typeColors.bg,
@@ -1270,16 +1283,24 @@ export function CourtCalendarGrid({
                                   <Text
                                     style={[
                                       styles.bookingBlockText,
-                                      { color: isBlockedBooking ? Colors.textMuted : typeColors.text },
+                                      { color: isBlockedBooking ? mutedColor : typeColors.text },
                                     ]}
                                     numberOfLines={1}
                                   >
                                     {isBlockedBooking ? bookingStart.blockedLabel || 'Blocked' : getBookingTypeLabel(bookingStart.bookingType)}
                                   </Text>
+                                  {isBlackoutBooking && !!bookingStart.blackoutReason && (
+                                    <Text
+                                      style={[styles.bookingBlockTime, { color: mutedColor }]}
+                                      numberOfLines={span > 2 ? 2 : 1}
+                                    >
+                                      {bookingStart.blackoutReason}
+                                    </Text>
+                                  )}
                                   <Text
                                     style={[
                                       styles.bookingBlockTime,
-                                      { color: isBlockedBooking ? Colors.textMuted : typeColors.text },
+                                      { color: isBlockedBooking ? mutedColor : typeColors.text },
                                     ]}
                                     numberOfLines={1}
                                   >
@@ -1518,6 +1539,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Blackouts read like a booking (full opacity, name + reason) in a red "closed" tint (web: bg-red-50 / border-red-300).
+  bookingBlockBlackout: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
   },
   bookingBlockBlocked: {
     backgroundColor: '#E5E7EB',

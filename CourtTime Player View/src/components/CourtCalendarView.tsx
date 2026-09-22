@@ -21,6 +21,7 @@ import { StrikeLockoutAlerts } from './StrikeLockoutAlerts';
 import type { StrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { parseLocalDate } from '../utils/dateUtils';
+import { blackoutsToBlockedRanges } from '../../shared/utils/blackoutSlots';
 import { toast } from 'sonner';
 import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Grid3X3, Info, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
@@ -90,6 +91,15 @@ function minutesToApiTime(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+}
+
+/** "9:30 AM" from minutes-since-midnight (1440 reads as midnight). */
+function formatMinutesAs12h(totalMinutes: number): string {
+  const hours24 = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
 // Helper to get current time components in a given timezone
@@ -616,7 +626,7 @@ export function CourtCalendarView() {
       };
 
       // Helper to add blackout slots for a court across a time range
-      const addBlackoutSlots = (courtId: string, startHour: number, startMin: number, endHour: number, endMin: number, title: string) => {
+      const addBlackoutSlots = (courtId: string, startHour: number, startMin: number, endHour: number, endMin: number, name: string, reason: string) => {
         if (!transformedBookings[courtId]) {
           transformedBookings[courtId] = {};
         }
@@ -631,7 +641,9 @@ export function CourtCalendarView() {
 
           if (!transformedBookings[courtId][slotTime]) {
             transformedBookings[courtId][slotTime] = {
-              player: title || 'Blackout',
+              player: name,
+              reason,
+              isBlackout: true,
               duration: '',
               type: 'blocked',
               isFirstSlot: isFirst,
@@ -647,34 +659,13 @@ export function CourtCalendarView() {
         }
       };
 
-      // Process blackouts
+      // Process blackouts (per-day window + court targeting shared with mobile)
       const blackouts = blackoutResponse?.success ? (blackoutResponse.data?.blackouts || []) : [];
-      blackouts.forEach((b: any) => {
-        const bStart = parseLocalDate(b.start_datetime);
-        const bEnd = parseLocalDate(b.end_datetime);
-        // Clamp to the selected date's boundaries (0:00 - 23:59)
-        const dayStart = new Date(selectedDate); dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(selectedDate); dayEnd.setHours(23, 59, 59, 999);
-        const effectiveStart = bStart < dayStart ? dayStart : bStart;
-        const effectiveEnd = bEnd > dayEnd ? dayEnd : bEnd;
-        const startH = effectiveStart.getHours();
-        const startM = Math.floor(effectiveStart.getMinutes() / 15) * 15;
-        const endH = effectiveEnd.getHours();
-        const endM = Math.ceil(effectiveEnd.getMinutes() / 15) * 15;
-
-        const label = b.title || b.blackout_type || 'Blackout';
-
-        if (b.court_id) {
-          // Court-specific blackout
-          if (courtIdToName[b.court_id]) {
-            addBlackoutSlots(b.court_id, startH, startM, endH, endM, label);
-          }
-        } else {
-          // Facility-wide blackout — apply to all courts
-          allFacilityCourts.forEach((c: any) => {
-            addBlackoutSlots(c.id, startH, startM, endH, endM, label);
-          });
-        }
+      const blackoutRanges = blackoutsToBlockedRanges(blackouts, dateStr, allFacilityCourts.map((c: any) => c.id));
+      blackoutRanges.forEach((range) => {
+        const [startH, startM] = range.startTime.split(':').map(Number);
+        const [endH, endM] = range.endTime.split(':').map(Number);
+        addBlackoutSlots(range.courtId, startH, startM, endH, endM, range.label, range.reason);
       });
 
       if (response.success && response.data?.bookings) {
@@ -1296,8 +1287,11 @@ export function CourtCalendarView() {
           if (startIdx === -1) {
             // Booking starts at a non-30-min boundary (e.g. :15/:45) — compute from exact startTime
             const startMins = parseApiTimeToMinutes(booking.startTime);
-            if (startMins === null || startMins < dayStartMinutes) return;
-            startIdx = Math.floor((startMins - dayStartMinutes) / 30);
+            if (startMins === null) return;
+            // A blackout that began before the visible day (e.g. an all-day closure) is
+            // clamped to the top of the grid; a booking there is outside the grid entirely.
+            if (startMins < dayStartMinutes && !booking.isBlackout) return;
+            startIdx = Math.max(0, Math.floor((startMins - dayStartMinutes) / 30));
           }
           const slotCountFromData = Number(booking.slotCount);
           // slotCount stored in 15-min units; convert to 30-min units for overlay sizing
@@ -2756,14 +2750,18 @@ export function CourtCalendarView() {
       {bookingOverlays.map((overlay, idx) => {
         const { booking } = overlay;
         const isBlocked = booking.type === 'blocked';
+        const isBlackout = !!booking.isBlackout;
         const parseMinutes = (timeValue?: string): number | null => {
           if (!timeValue || typeof timeValue !== 'string') return null;
           const [h, m] = timeValue.split(':').map(Number);
           if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
           return h * 60 + m;
         };
-        const bookingStartMinutes = parseMinutes(booking.startTime);
-        const bookingEndMinutes = parseMinutes(booking.endTime);
+        const rawStartMinutes = parseMinutes(booking.startTime);
+        const rawEndMinutes = parseMinutes(booking.endTime);
+        // Keep blocks inside the visible grid (an all-day blackout runs 0:00–24:00).
+        const bookingStartMinutes = rawStartMinutes === null ? null : Math.max(rawStartMinutes, dayStartMinutes);
+        const bookingEndMinutes = rawEndMinutes === null ? null : Math.min(rawEndMinutes, dayEndMinutes + 30);
         const dayStartMinutesForOverlay = dayStartMinutes;
         const hasExactRange = bookingStartMinutes !== null
           && bookingEndMinutes !== null
@@ -2778,13 +2776,20 @@ export function CourtCalendarView() {
           : overlay.slotCount * effectiveSubSlotHeight - 4;
         // Guarantee a legible minimum so very short (e.g. 30-min) bookings don't render illegibly small.
         const height = Math.max(rawHeight, effectiveSubSlotHeight * 0.85);
-        const colorClass = isBlocked
+        const colorClass = isBlackout
+          ? 'bg-red-50 text-red-900 border-red-300'
+          : isBlocked
           ? 'bg-gray-200 text-gray-500 border-gray-300'
           : booking.bookingType
             ? getBookingTypeBadgeColor(booking.bookingType)
             : 'bg-blue-50 text-blue-900 border-blue-200';
 
-        const tooltipText = isBlocked
+        const blackoutTimeRange = isBlackout && rawStartMinutes !== null && rawEndMinutes !== null
+          ? `${formatMinutesAs12h(rawStartMinutes)} – ${formatMinutesAs12h(rawEndMinutes)}`
+          : '';
+        const tooltipText = isBlackout
+          ? ['Blackout', booking.player, booking.reason, blackoutTimeRange].filter(Boolean).join(' · ')
+          : isBlocked
           ? `Blocked${booking.player ? ` — ${booking.player}` : ''}`
           : [
               booking.player,
@@ -2797,7 +2802,9 @@ export function CourtCalendarView() {
         // duration+category row, then notes — each only rendered if the remaining height allows it.
         // A row is only granted a 2nd line when the text is actually estimated to need it, so short
         // names/types don't waste budget that lower-priority rows could otherwise use.
-        const typeLabel = !isBlocked && booking.bookingType ? getBookingTypeLabel(booking.bookingType) : null;
+        const typeLabel = isBlackout
+          ? booking.reason || null
+          : !isBlocked && booking.bookingType ? getBookingTypeLabel(booking.bookingType) : null;
         const contentWidth = Math.max(width - 12, 0);
         const nameCharsPerLine = Math.max(1, Math.floor(contentWidth / 6.4));
         const typeCharsPerLine = Math.max(1, Math.floor(contentWidth / 5.6));
@@ -2835,7 +2842,7 @@ export function CourtCalendarView() {
             key={`booking-${booking.bookingId || idx}`}
             title={tooltipText}
             data-reservation-drag-id={isDraggable ? booking.bookingId : undefined}
-            className={`absolute rounded-lg border ${isBlocked ? '' : 'cursor-pointer'} ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isBlocked ? 'opacity-70' : ''} ${isBeingDragged ? 'opacity-30' : ''} transition-shadow pointer-events-auto overflow-hidden ${isMobile && !calendarTouchLocked && !reservationDragState.isDragging ? 'calendar-booking-pan-x' : ''} ${colorClass}`}
+            className={`absolute rounded-lg border ${isBlocked ? '' : 'cursor-pointer'} ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isBlocked && !isBlackout ? 'opacity-70' : ''} ${isBeingDragged ? 'opacity-30' : ''} transition-shadow pointer-events-auto overflow-hidden ${isMobile && !calendarTouchLocked && !reservationDragState.isDragging ? 'calendar-booking-pan-x' : ''} ${colorClass}`}
             style={{
               top,
               left,
@@ -2861,7 +2868,7 @@ export function CourtCalendarView() {
               )}
               {showDurationRow && (
                 <div className="flex items-center gap-1 min-w-0 mt-0.5">
-                  <span className="text-[9px] opacity-75 shrink-0 truncate">{booking.duration}</span>
+                  <span className="text-[9px] opacity-75 shrink-0 truncate">{isBlackout ? blackoutTimeRange : booking.duration}</span>
                   {showCategoryBadge && (
                     <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-white/50 truncate min-w-0">
                       {typeLabel}

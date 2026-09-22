@@ -370,7 +370,7 @@ export function CourtCalendarGrid({
       api.get(`/api/bookings/facility/${facilityId}?date=${selectedDate}`),
       api.get(`/api/court-config/facility/${facilityId}?date=${selectedDate}`),
       api.get(`/api/facilities/${facilityId}`),
-      api.get(`/api/court-config/facility/${facilityId}/blackouts?startDate=${selectedDate}&endDate=${selectedDate}`),
+      api.get(`/api/court-config/facility/${facilityId}/blackouts?startDate=${selectedDate}&endDate=${selectedDate}&includeExpired=true`),
     ]);
 
     console.log('[book-grid] day endpoints response', {

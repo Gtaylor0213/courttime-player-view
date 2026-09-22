@@ -417,6 +417,22 @@ router.put('/:courtId/schedule/:dayOfWeek', async (req, res, next) => {
 // ============================================
 
 /**
+ * Blackout datetimes are TIMESTAMP (no zone) holding facility wall-clock time.
+ * pg reads them as server-local Dates, and JSON would send those as UTC instants,
+ * so a UTC server turned 8:00 AM into 4:00 AM in an Eastern browser. Send the
+ * wall clock as-is ("2026-09-22T08:00:00") instead.
+ */
+function wallClock(value: unknown): unknown {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return value;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+}
+
+function serializeBlackout<T extends Record<string, any>>(row: T): T {
+  return { ...row, start_datetime: wallClock(row.start_datetime), end_datetime: wallClock(row.end_datetime) };
+}
+
+/**
  * GET /api/court-config/:courtId/blackouts
  * Get blackouts for a court
  */
@@ -427,7 +443,7 @@ router.get('/:courtId/blackouts', async (req, res, next) => {
 
     let sql = `
       SELECT * FROM court_blackouts
-      WHERE (court_id = $1 OR court_id IS NULL)
+      WHERE (court_id = $1 OR (court_id IS NULL AND facility_id = (SELECT facility_id FROM courts WHERE id = $1)))
     `;
     const params: any[] = [courtId];
 
@@ -451,7 +467,7 @@ router.get('/:courtId/blackouts', async (req, res, next) => {
 
     res.json({
       success: true,
-      blackouts: result.rows
+      blackouts: result.rows.map(serializeBlackout)
     });
   } catch (error) {
     next(error);
@@ -495,7 +511,7 @@ router.get('/facility/:facilityId/blackouts', async (req, res, next) => {
 
     res.json({
       success: true,
-      blackouts: result.rows
+      blackouts: result.rows.map(serializeBlackout)
     });
   } catch (error) {
     next(error);
@@ -547,7 +563,7 @@ router.post('/blackouts', async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      blackout: result.rows[0]
+      blackout: serializeBlackout(result.rows[0])
     });
   } catch (error) {
     next(error);
@@ -608,7 +624,7 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
 
     res.json({
       success: true,
-      blackout: result.rows[0]
+      blackout: serializeBlackout(result.rows[0])
     });
   } catch (error) {
     next(error);
@@ -764,7 +780,7 @@ router.get('/:courtId/availability', async (req, res, next) => {
     // Get blackouts for this date
     const blackoutResult = await query(
       `SELECT * FROM court_blackouts
-       WHERE (court_id = $1 OR court_id IS NULL)
+       WHERE (court_id = $1 OR (court_id IS NULL AND facility_id = (SELECT facility_id FROM courts WHERE id = $1)))
          AND start_datetime::date <= $2::date
          AND end_datetime::date >= $2::date`,
       [courtId, date]
@@ -796,7 +812,7 @@ router.get('/:courtId/availability', async (req, res, next) => {
         end: config.prime_time_end
       } : null,
       slotDuration: 30,
-      blackouts: blackoutResult.rows,
+      blackouts: blackoutResult.rows.map(serializeBlackout),
       existingBookings: bookingsResult.rows
     });
   } catch (error) {

@@ -499,6 +499,7 @@ export function CourtCalendarView() {
         courtConfigApi.getFacilityBlackouts(selectedFacility, {
           startDate: dateStr,
           endDate: dateStr,
+          includeExpired: true, // the day bounds the query; past days show their blackouts too
         }),
         courtConfigApi.getFacilityDayOperating(selectedFacility, dateStr),
       ]);

@@ -209,6 +209,9 @@ export function SupportDashboard({ onNavigate }: SupportDashboardProps) {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-gray-900">{item.title}</p>
                         <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                        {item.clubName && (
+                          <p className="text-[10px] text-gray-400 truncate">{item.clubName}</p>
+                        )}
                       </div>
                       <span className="text-[10px] text-gray-400 shrink-0">{timeAgo(item.timestamp)}</span>
                     </button>

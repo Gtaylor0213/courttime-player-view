@@ -28,6 +28,7 @@ export interface RecentActivityItem {
   timestamp: string;
   facilityId?: string;
   userId?: string;
+  clubName?: string;
 }
 
 export interface DashboardStats {
@@ -135,7 +136,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       `),
       query(`SELECT f.id, f.name, f.created_at FROM facilities f
              WHERE f.created_at >= NOW() - interval '14 days' ORDER BY f.created_at DESC LIMIT 10`),
-      query(`SELECT u.id, u.full_name, u.email, u.created_at FROM users u
+      query(`SELECT u.id, u.full_name, u.email, u.created_at, f.name as club_name
+             FROM users u
+             LEFT JOIN LATERAL (
+               SELECT fm.facility_id
+               FROM facility_memberships fm
+               WHERE fm.user_id = u.id
+               ORDER BY fm.created_at ASC
+               LIMIT 1
+             ) fm ON true
+             LEFT JOIN facilities f ON f.id = fm.facility_id
              WHERE u.created_at >= NOW() - interval '14 days' ORDER BY u.created_at DESC LIMIT 10`),
       query(`SELECT ph.id, ph.facility_id, ph.amount_cents, ph.status, ph.created_at, f.name as facility_name
              FROM payment_history ph JOIN facilities f ON ph.facility_id = f.id
@@ -215,6 +225,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       description: `${r.full_name} (${r.email})`,
       timestamp: r.created_at,
       userId: r.id,
+      clubName: r.club_name || undefined,
     })),
     ...recentPayments.rows.map((r: any) => ({
       id: `pay-${r.id}`,

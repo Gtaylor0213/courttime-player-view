@@ -145,6 +145,8 @@ export interface TeamConversationSummary {
   lastMessageText: string | null;
   lastMessageSenderId: string | null;
   lastMessageSentAt: string | null;
+  /** Read state of CourtTime Team's most recent message; null if we've never sent one. */
+  lastTeamMessageIsRead: boolean | null;
   unreadCount: number;
 }
 
@@ -180,6 +182,10 @@ export async function listTeamConversations(): Promise<TeamConversationSummary[]
          SELECT m.created_at FROM messages m
          WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1
        ) as "lastMessageSentAt",
+       (
+         SELECT m.is_read FROM messages m
+         WHERE m.conversation_id = c.id AND m.sender_id = $1 ORDER BY m.created_at DESC LIMIT 1
+       ) as "lastTeamMessageIsRead",
        (
          SELECT COUNT(*) FROM messages m
          WHERE m.conversation_id = c.id AND m.sender_id != $1 AND m.is_read = false

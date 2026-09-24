@@ -40,6 +40,7 @@ interface ConversationSummary {
   lastMessageText: string | null;
   lastMessageSenderId: string | null;
   lastMessageSentAt: string | null;
+  lastTeamMessageIsRead: boolean | null;
   unreadCount: number;
 }
 
@@ -492,7 +493,17 @@ function InboxTab({ conversations, setConversations }: InboxTabProps) {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm truncate">{c.playerName}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium text-sm truncate">{c.playerName}</span>
+                        {c.lastTeamMessageIsRead !== null && (
+                          <span
+                            className={`text-xs shrink-0 ${c.lastTeamMessageIsRead ? 'text-green-600' : 'text-gray-400'}`}
+                            title="Whether they've opened your most recent message"
+                          >
+                            {c.lastTeamMessageIsRead ? 'Opened' : 'Not opened'}
+                          </span>
+                        )}
+                      </div>
                       {c.lastMessageSentAt && (
                         <span className="text-xs text-gray-500 shrink-0 ml-2">
                           {formatMessageTime(c.lastMessageSentAt)}

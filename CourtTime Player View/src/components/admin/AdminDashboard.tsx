@@ -10,6 +10,7 @@ import { Badge } from '../ui/badge';
 import { adminApi, unwrapApiPayload } from '../../api/client';
 import { useAppContext } from '../../contexts/AppContext';
 import { toast } from 'sonner';
+import { parseLocalDate } from '../../utils/dateUtils';
 
 interface DashboardStats {
   totalBookings: number;
@@ -275,7 +276,7 @@ export function AdminDashboard() {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 

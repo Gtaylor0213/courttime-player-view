@@ -384,7 +384,7 @@ router.get('/dashboard/:facilityId', async (req, res) => {
     const recentActivityResult = await query(`
       SELECT
         b.id,
-        b.booking_date as "bookingDate",
+        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
         b.start_time as "startTime",
         b.end_time as "endTime",
         u.full_name as "userName",
@@ -1532,7 +1532,7 @@ router.get('/bookings/:facilityId', async (req, res) => {
         b.court_id as "courtId",
         b.user_id as "userId",
         b.facility_id as "facilityId",
-        b.booking_date as "bookingDate",
+        TO_CHAR(b.booking_date, 'YYYY-MM-DD') as "bookingDate",
         b.start_time as "startTime",
         b.end_time as "endTime",
         b.duration_minutes as "durationMinutes",
@@ -1650,7 +1650,7 @@ router.patch('/bookings/:bookingId/status', async (req, res) => {
         }
         const updated = await query(
           `SELECT id, court_id as "courtId", user_id as "userId", facility_id as "facilityId",
-                  booking_date as "bookingDate", start_time as "startTime", end_time as "endTime",
+                  TO_CHAR(booking_date, 'YYYY-MM-DD') as "bookingDate", start_time as "startTime", end_time as "endTime",
                   status, updated_at as "updatedAt"
              FROM bookings WHERE id = $1`,
           [bookingId]
@@ -1670,7 +1670,7 @@ router.patch('/bookings/:bookingId/status', async (req, res) => {
         court_id as "courtId",
         user_id as "userId",
         facility_id as "facilityId",
-        booking_date as "bookingDate",
+        TO_CHAR(booking_date, 'YYYY-MM-DD') as "bookingDate",
         start_time as "startTime",
         end_time as "endTime",
         status,

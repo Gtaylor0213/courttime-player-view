@@ -26,6 +26,7 @@ import { expandWeeklyDates, normalizeWeekdays, singleDateRule, WEEKDAY_NAMES } f
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { useCourtTypeFilter } from './useCourtTypeFilter';
+import { useBookingWindow } from './useBookingWindow';
 import { courtTypeLabel, isPadelCourtType } from '../../shared/constants/courtTypes';
 import {
   bookingWithDetailsToCalendarDetails,
@@ -256,6 +257,8 @@ export function QuickReservePopup({
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
+  const { bookingWindow, blockedMessageFor } = useBookingWindow(isOpen ? selectedFacility : undefined);
+  const lastBookableYmd = bookingWindow?.lastBookableYmd ?? undefined;
   const [splitPayment, setSplitPayment] = useState(false);
   const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
 
@@ -569,6 +572,14 @@ export function QuickReservePopup({
 
     if (!user?.id) {
       alert('You must be logged in to make a reservation');
+      return;
+    }
+
+    const bookingWindowMessage =
+      blockedMessageFor(selectedDate) ??
+      (advancedBooking && recurringEndDate ? blockedMessageFor(recurringEndDate) : null);
+    if (bookingWindowMessage) {
+      alert(bookingWindowMessage);
       return;
     }
 
@@ -1055,6 +1066,7 @@ export function QuickReservePopup({
                 const now = new Date();
                 return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
               })()}
+              max={lastBookableYmd}
               required
               className="flex-1"
             />
@@ -1229,6 +1241,7 @@ export function QuickReservePopup({
                   value={recurringEndDate}
                   onChange={(e) => setRecurringEndDate(e.target.value)}
                   min={selectedDate}
+                  max={lastBookableYmd}
                   className="w-full"
                 />
               </div>

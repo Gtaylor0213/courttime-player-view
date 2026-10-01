@@ -184,7 +184,8 @@ export function FacilityRulesTab(props: Props) {
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3">
           <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-green-800">
-            Define how far in advance members are allowed to reserve a court.
+            Define how far in advance members are allowed to reserve a court. Today counts as day 1,
+            so a limit of 7 lets members book today through 6 days from now.
           </p>
         </div>
         <div className="space-y-2">
@@ -195,7 +196,7 @@ export function FacilityRulesTab(props: Props) {
             value={facilityData.bookingRules.daysInAdvance}
             onChange={(value) => handleBookingRulesChange('daysInAdvance', value)}
             disabled={!isEditing}
-            min="0"
+            min="1"
           />
         </div>
       </CardContent>

@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../../shared/constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
+import { useBookingWindow } from './useBookingWindow';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
 import { expandWeeklyDates, normalizeWeekdays, singleDateRule, WEEKDAY_NAMES } from '../../shared/utils/recurrence';
 import { courtBookingCheckoutUrls } from '../../shared/utils/courtBookingCheckoutUrls';
@@ -164,6 +165,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
+  const { bookingWindow, blockedMessageFor } = useBookingWindow(isOpen ? facilityId : undefined);
   const [splitPayment, setSplitPayment] = useState(false);
   const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
   const [bookForMode, setBookForMode] = useState<BookForMode>('self');
@@ -651,6 +653,11 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
       }
       if (!recurringEndDate) {
         showToast('error', 'Error', 'Please select an end date for recurring bookings.');
+        return;
+      }
+      const recurringWindowMessage = blockedMessageFor(parseDateStr(recurringEndDate));
+      if (recurringWindowMessage) {
+        showToast('error', 'Error', recurringWindowMessage);
         return;
       }
     }
@@ -1160,6 +1167,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                   value={recurringEndDate}
                   onChange={(e) => setRecurringEndDate(e.target.value)}
                   min={date}
+                  max={bookingWindow?.lastBookableYmd ?? undefined}
                   className="w-full"
                 />
               </div>

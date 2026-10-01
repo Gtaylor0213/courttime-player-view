@@ -37,6 +37,7 @@ import {
 import { isTennisCourtType, isPickleballCourtType } from '../../../shared/constants/courtTypes';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import { isFeatureEnabled } from '../featureFlagService';
+import { advanceWindowViolation, resolveMaxDaysAheadForMember } from './advanceWindow';
 
 // Import evaluators
 import { accountEvaluators } from './evaluators/AccountRuleEvaluators';
@@ -230,6 +231,32 @@ export class RulesEngine {
         };
       }
 
+      // Days-in-advance is checked first and, if violated, short-circuits every other rule —
+      // those rules may evaluate differently once the date is back in range, so only the
+      // days-in-advance error should surface. ACC-005 wins; booking_rules JSON is the fallback.
+      const facilityHasAdvanceRule = context.facility.rules.some((r) => r.ruleCode === 'ACC-005');
+      const advanceBlocker = advanceWindowViolation({
+        ruleCode: facilityHasAdvanceRule ? 'ACC-005' : 'SIMPLE-ADVANCE',
+        ruleName: facilityHasAdvanceRule ? 'Advance Booking Window' : 'Days in Advance',
+        maxDaysAhead: resolveMaxDaysAheadForMember({
+          facilityRules: context.facility.rules,
+          simplified: context.facility.simplifiedBookingRules,
+          tier: context.user.tier,
+          courtId: context.court.id,
+        }),
+        facilityTodayYmd: getTodayYmdInTimeZone(context.facility.timezone || 'America/New_York'),
+        bookingYmd: context.request.bookingDate,
+      });
+      if (advanceBlocker) {
+        return {
+          allowed: false,
+          results: [advanceBlocker],
+          blockers: [advanceBlocker],
+          warnings: [],
+          isPrimeTime: context.isPrimeTime
+        };
+      }
+
       // Use legacy simplified rules only as a fallback when no configured
       // rules-engine entries exist for this facility.
       const hasConfiguredEngineRules = Array.isArray(context.facility.rules) && context.facility.rules.length > 0;
@@ -240,23 +267,6 @@ export class RulesEngine {
 
       // Get applicable rules for this facility/court/tier
       const rules = this.getApplicableRules(context);
-
-      // Days-in-advance (ACC-005) is checked first and, if violated, short-circuits every other
-      // rule below — those other rules may evaluate differently once the date is back in range,
-      // so only the days-in-advance error should surface.
-      const advanceRule = rules.find(r => r.ruleCode === 'ACC-005');
-      if (advanceRule) {
-        const advanceResult = await this.evaluateRule(advanceRule, context);
-        if (advanceResult && !advanceResult.passed) {
-          return {
-            allowed: false,
-            results: [advanceResult],
-            blockers: [advanceResult],
-            warnings: [],
-            isPrimeTime: context.isPrimeTime
-          };
-        }
-      }
 
       const results: RuleResult[] = [];
 
@@ -632,34 +642,6 @@ export class RulesEngine {
     if (!config) return null;
 
     const blockers: RuleResult[] = [];
-    const tz = context.facility.timezone || 'America/New_York';
-    const facilityTodayYmd = getTodayYmdInTimeZone(tz);
-
-    if (config.daysInAdvance?.enabled) {
-      const maxDaysAhead = Number(config.daysInAdvance.limit);
-      if (Number.isFinite(maxDaysAhead) && maxDaysAhead > 0) {
-        const daysAhead = diffCalendarDaysYmd(facilityTodayYmd, context.request.bookingDate);
-        if (daysAhead >= maxDaysAhead) {
-          const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead - 1);
-          // Short-circuit here: other rules may evaluate differently once the date is back in
-          // range, so only the days-in-advance error should surface.
-          const advanceBlocker: RuleResult = {
-            ruleCode: 'SIMPLE-ADVANCE',
-            ruleName: 'Days in Advance',
-            passed: false,
-            severity: 'error',
-            message: `You can book up to ${maxDaysAhead} days in advance. Latest bookable date: ${lastBookableYmd}.`
-          };
-          return {
-            allowed: false,
-            results: [advanceBlocker],
-            blockers: [advanceBlocker],
-            warnings: [],
-            isPrimeTime: context.isPrimeTime
-          };
-        }
-      }
-    }
 
     if (config.maxReservationDuration?.enabled) {
       let maxDuration = Number(config.maxReservationDuration.limit) || 0;

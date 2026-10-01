@@ -137,7 +137,7 @@ export const RULE_METADATA: RuleMeta[] = [
   {
     code: 'ACC-005',
     name: 'Advance Booking Window',
-    description: 'How far in advance members can book courts.',
+    description: 'How far in advance members can book courts. Today counts as day 1, so 7 allows today through 6 days out.',
     category: 'account',
     fields: [
       { key: 'max_days_ahead', label: 'Max Days Ahead', type: 'number', min: 1, max: 365, suffix: 'days' },

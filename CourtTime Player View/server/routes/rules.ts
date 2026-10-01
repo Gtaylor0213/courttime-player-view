@@ -8,6 +8,8 @@ import { getPool } from '../../src/database/connection';
 import { ensureFacilityAdmin } from '../middleware/facilityAdmin';
 import { isFeatureEnabled, setFeatureFlag } from '../../src/services/featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { mirrorAcc005IntoBookingRules } from '../../src/services/advanceRuleSync';
+import { getMemberBookingWindow } from '../../src/services/rulesEngine/RuleContext';
 
 const router = express.Router();
 
@@ -29,9 +31,39 @@ function isHiddenRuleCode(ruleCode: string): boolean {
   return HIDDEN_RULE_CODES.includes(ruleCode as (typeof HIDDEN_RULE_CODES)[number]);
 }
 
+/**
+ * ACC-005 needs a whole number of days from 1 to 365. A blank/0 value used to slip through
+ * (e.g. an emptied mobile field becomes 0) and the engine then treated it as a 365-day cap.
+ */
+function ruleConfigError(ruleCode: string, ruleConfig: any): string | null {
+  if (ruleCode !== 'ACC-005' || !ruleConfig) return null;
+  const n = Number(ruleConfig.max_days_ahead);
+  return Number.isInteger(n) && n >= 1 && n <= 365
+    ? null
+    : 'Days in advance must be a whole number from 1 to 365';
+}
+
 function isAllowedRuleCode(ruleCode: string): boolean {
   return ALLOWED_RULE_CODES.includes(ruleCode as (typeof ALLOWED_RULE_CODES)[number]);
 }
+
+/**
+ * GET /api/rules/booking-window/:facilityId
+ * The days-in-advance window enforced for the signed-in member, so the booking calendars
+ * can stop players from picking dates the rules engine would reject.
+ */
+router.get('/booking-window/:facilityId', async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const window = await getMemberBookingWindow(userId, req.params.facilityId);
+    res.json({ success: true, ...window });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * GET /api/rules/definitions
@@ -229,6 +261,11 @@ router.post('/facility/:facilityId', async (req, res, next) => {
       });
     }
 
+    const configError = isEnabled === false ? null : ruleConfigError(ruleCode, ruleConfig);
+    if (configError) {
+      return res.status(400).json({ success: false, error: configError });
+    }
+
     // Get rule definition ID
     const defResult = await getDbPool().query(
       `SELECT id FROM booking_rule_definitions WHERE rule_code = $1 AND rule_code = ANY($2::text[])`,
@@ -257,6 +294,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
          WHERE facility_id = $1 AND rule_definition_id = $2`,
         [facilityId, ruleDefinitionId]
       );
+      if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
       return res.json({
         success: true,
         rule: null,
@@ -315,6 +353,8 @@ router.post('/facility/:facilityId', async (req, res, next) => {
       [result.rows[0].id]
     );
 
+    if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
+
     res.json({
       success: true,
       rule: fullResult.rows[0]
@@ -346,6 +386,11 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
       priority
     } = req.body;
 
+    const configError = isEnabled === false ? null : ruleConfigError(ruleCode, ruleConfig);
+    if (configError) {
+      return res.status(400).json({ success: false, error: configError });
+    }
+
     // Get rule definition ID
     const defResult = await getDbPool().query(
       `SELECT id FROM booking_rule_definitions WHERE rule_code = $1 AND rule_code = ANY($2::text[])`,
@@ -367,6 +412,7 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
          WHERE facility_id = $1 AND rule_definition_id = $2`,
         [facilityId, ruleDefinitionId]
       );
+      if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
       return res.json({
         success: true,
         rule: null,
@@ -395,16 +441,35 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
       ]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Rule configuration not found for this facility'
-      });
+    let rule = result.rows[0];
+    if (!rule) {
+      // Turning on a rule the facility hasn't configured yet (e.g. the mobile admin toggle):
+      // create it rather than 404, using the definition default when no config was sent.
+      const inserted = await getDbPool().query(
+        `INSERT INTO facility_rule_configs (
+          facility_id, rule_definition_id, rule_config, is_enabled,
+          applies_to_court_ids, applies_to_tier_ids, priority
+        )
+        SELECT $1, brd.id, COALESCE($2::jsonb, brd.default_config, '{}'::jsonb), true, $3::uuid[], $4::uuid[], COALESCE($5::int, 100)
+        FROM booking_rule_definitions brd WHERE brd.id = $6
+        RETURNING *`,
+        [
+          facilityId,
+          ruleConfig ? JSON.stringify(ruleConfig) : null,
+          appliesToCourtIds || null,
+          appliesToTierIds || null,
+          priority ?? null,
+          ruleDefinitionId
+        ]
+      );
+      rule = inserted.rows[0];
     }
+
+    if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
 
     res.json({
       success: true,
-      rule: result.rows[0]
+      rule
     });
   } catch (error) {
     next(error);
@@ -453,6 +518,8 @@ router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
       });
     }
 
+    if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
+
     res.json({
       success: true,
       message: 'Rule configuration removed. Rule will use default settings.'
@@ -477,6 +544,13 @@ router.post('/facility/:facilityId/bulk', async (req, res, next) => {
         success: false,
         error: 'rules must be an array'
       });
+    }
+
+    for (const rule of rules) {
+      const configError = rule?.isEnabled === false ? null : ruleConfigError(rule?.ruleCode, rule?.ruleConfig);
+      if (configError) {
+        return res.status(400).json({ success: false, error: configError });
+      }
     }
 
     const client = await getDbPool().connect();
@@ -545,6 +619,7 @@ router.post('/facility/:facilityId/bulk', async (req, res, next) => {
       }
 
       await client.query('COMMIT');
+      await mirrorAcc005IntoBookingRules(facilityId);
 
       res.json({
         success: true,
@@ -596,6 +671,7 @@ router.post('/facility/:facilityId/enable-all', async (req, res, next) => {
       }
 
       await client.query('COMMIT');
+      await mirrorAcc005IntoBookingRules(facilityId);
 
       res.json({
         success: true,
@@ -626,6 +702,7 @@ router.post('/facility/:facilityId/disable-all', async (req, res, next) => {
        WHERE facility_id = $1`,
       [facilityId]
     );
+    await mirrorAcc005IntoBookingRules(facilityId);
 
     res.json({
       success: true,

@@ -20,13 +20,12 @@ import {
   timeRangesOverlap,
   getDayOfWeek,
   getTodayYmdInTimeZone,
-  diffCalendarDaysYmd,
-  addCalendarDaysYmd,
   coerceDayOfWeekList,
   combineDateAndTime,
 } from '../utils/timeUtils';
 import { resolveWeeklyIndividualFromBookingRules } from '../RuleContext';
 import { countPrimeTimeBookings } from '../utils/primeTimeUtils';
+import { resolveMaxDaysAhead, advanceWindowViolation } from '../advanceWindow';
 
 function bookingMatchesPeakSlot(
   booking: { bookingDate: string; startTime: string; endTime: string; courtId: string; status: string },
@@ -244,39 +243,18 @@ const ACC005: RuleEvaluator = {
   category: 'account',
 
   async evaluate(context: RuleContext, config: ACC005Config): Promise<RuleResult> {
-    const cfgRaw = Number(config.max_days_ahead);
-    const facilityCap =
-      Number.isFinite(cfgRaw) && cfgRaw > 0 ? Math.floor(cfgRaw) : 365;
-    const tierRaw = context.user.tier?.advanceBookingDays;
-    const tierN = tierRaw != null && tierRaw !== '' ? Number(tierRaw) : NaN;
-    const maxDaysAhead =
-      Number.isFinite(tierN) && tierN > 0
-        ? Math.min(facilityCap, Math.floor(tierN))
-        : facilityCap;
-
-    const tz = context.facility.timezone || 'America/New_York';
-    const facilityTodayYmd = getTodayYmdInTimeZone(tz);
-    const bookingYmd = context.request.bookingDate;
-    const daysAhead = diffCalendarDaysYmd(facilityTodayYmd, bookingYmd);
-
-    if (daysAhead >= maxDaysAhead) {
-      const lastBookableYmd = addCalendarDaysYmd(facilityTodayYmd, maxDaysAhead - 1);
-
-      return {
-        ruleCode: 'ACC-005',
-        ruleName: 'Advance Booking Window',
-        passed: false,
-        severity: 'error',
-        message: `You can book up to ${maxDaysAhead} days in advance. Latest bookable date: ${lastBookableYmd}.`,
-        details: {
-          maxDaysAhead,
-          requestedDaysAhead: daysAhead,
-          lastBookableDate: lastBookableYmd,
-          // Legacy DB templates still use this key; same calendar day as lastBookableYmd.
-          earliestAllowedDate: lastBookableYmd
-        }
-      };
-    }
+    const maxDaysAhead = resolveMaxDaysAhead({
+      acc005Rule: { ruleConfig: config as unknown as Record<string, unknown> },
+      tierAdvanceBookingDays: context.user.tier?.advanceBookingDays,
+    });
+    const violation = advanceWindowViolation({
+      ruleCode: 'ACC-005',
+      ruleName: 'Advance Booking Window',
+      maxDaysAhead,
+      facilityTodayYmd: getTodayYmdInTimeZone(context.facility.timezone || 'America/New_York'),
+      bookingYmd: context.request.bookingDate,
+    });
+    if (violation) return violation;
 
     return { ruleCode: 'ACC-005', ruleName: 'Advance Booking Window', passed: true, severity: 'error' };
   }

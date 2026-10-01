@@ -10,6 +10,7 @@ import { facilitiesApi, facilityLocationsApi, courtConfigApi } from '../api/clie
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { safeDisplayText } from '../../shared/utils/safeDisplayText';
 import { getMaxBookingDurationDisplay } from '../../shared/utils/clubInfoRules';
+import { describeBookingWindow } from '../../shared/utils/bookingWindow';
 import {
   courtScheduleRowsToOperatingHoursMap,
   groupOperatingHoursForCompactDisplay,
@@ -641,7 +642,7 @@ export function ClubInfo() {
                     {(facility.bookingRules?.advanceBookingDaysUnlimited === false && renderRuleValue(facility.bookingRules?.advanceBookingDays)) && (
                       <div className="flex items-start gap-2">
                         <span className="font-medium text-gray-700 min-w-[180px]">Book up to:</span>
-                        <span className="text-gray-600">{renderRuleValue(facility.bookingRules.advanceBookingDays)} days in advance</span>
+                        <span className="text-gray-600">{describeBookingWindow(renderRuleValue(facility.bookingRules.advanceBookingDays))}</span>
                       </div>
                     )}
                     {maxBookingDurationDisplay && (

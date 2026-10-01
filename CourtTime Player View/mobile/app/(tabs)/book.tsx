@@ -71,6 +71,12 @@ import {
 } from '../../../shared/constants/bookingTypes';
 import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/utils/strikeLockout';
 import { StrikeLockoutBanner } from '../../src/components/StrikeLockoutBanner';
+import { BookingWindowBanner } from '../../src/components/BookingWindowBanner';
+import {
+  bookingWindowBlockedMessage,
+  isBeyondBookingWindow,
+  type BookingWindowInfo,
+} from '../../../shared/utils/bookingWindow';
 import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
 import { ballMachineEndpoints } from '../../src/api/endpoints';
 import {
@@ -201,6 +207,29 @@ export default function BookCourtScreen() {
   const [showQuickReserve, setShowQuickReserve] = useState(false);
   const [selectedDate, setSelectedDate] = useState(selectedBookDate || getTodayString());
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
+  // Days-in-advance window the server enforces for this member (refetched per day for midnight rollover).
+  const [bookingWindow, setBookingWindow] = useState<BookingWindowInfo | null>(null);
+  useEffect(() => {
+    if (!facilityId) {
+      setBookingWindow(null);
+      return;
+    }
+    let cancelled = false;
+    void api.get(`/api/rules/booking-window/${facilityId}`).then((res) => {
+      if (cancelled) return;
+      const data = res.success ? (res.data as BookingWindowInfo | undefined) : undefined;
+      setBookingWindow(data ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityId, selectedDate]);
+  const bookingWindowMessage =
+    bookingWindow?.maxDaysAhead != null &&
+    bookingWindow.lastBookableYmd &&
+    isBeyondBookingWindow(selectedDate, bookingWindow.lastBookableYmd)
+      ? bookingWindowBlockedMessage(bookingWindow.maxDaysAhead, bookingWindow.lastBookableYmd)
+      : null;
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [strikeLockout, setStrikeLockout] = useState<StrikeLockoutStatus | null>(null);
@@ -569,6 +598,10 @@ export default function BookCourtScreen() {
   // ── Handle calendar grid booking selection ──
   /** Load slot list for this court before opening the modal so TimePickers include the dragged range. */
   async function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
+    if (bookingWindowMessage) {
+      showAlert('Not open yet', bookingWindowMessage);
+      return;
+    }
     try {
       const start5 = startTime.slice(0, 5);
       const end5 = endTime.slice(0, 5);
@@ -757,6 +790,11 @@ export default function BookCourtScreen() {
 
     if (!facilityId) {
       showAlert('Booking failed', 'No club selected. Please pick a club from the header and try again.');
+      hapticError();
+      return;
+    }
+    if (bookingWindowMessage) {
+      showAlert('Not open yet', bookingWindowMessage);
       hapticError();
       return;
     }
@@ -1318,6 +1356,7 @@ export default function BookCourtScreen() {
       >
       <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
       <StrikeLockoutBanner status={strikeLockout} />
+      <BookingWindowBanner message={bookingWindowMessage} />
       {!facilityId && (
         <View style={styles.noFacility}>
           <Ionicons name="warning-outline" size={20} color={Colors.warning} />

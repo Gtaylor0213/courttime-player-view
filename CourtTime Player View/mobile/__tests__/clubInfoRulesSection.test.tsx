@@ -123,7 +123,7 @@ describe('Club Info booking rules section', () => {
     const text = allText(await render());
     expect(text).toContain('Booking Rules & Policies');
     expect(text).toContain('Book up to:');
-    expect(text).toContain('14 days in advance');
+    expect(text).toContain('14 days in advance (today counts as day 1)');
     expect(text).toContain('Max booking duration:');
     expect(text).toContain('2 hours');
   });
@@ -178,6 +178,6 @@ describe('Club Info booking rules section', () => {
   it('parses booking rules delivered as a JSON string', async () => {
     mockFacility({ bookingRules: JSON.stringify(BOOKING_RULES) });
     const text = allText(await render());
-    expect(text).toContain('14 days in advance');
+    expect(text).toContain('14 days in advance (today counts as day 1)');
   });
 });

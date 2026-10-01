@@ -24,8 +24,15 @@ import {
   AccountStrike,
   BookingCancellation
 } from './types';
-import { coerceDayOfWeekList, getDayOfWeek, timeRangesOverlap } from './utils/timeUtils';
+import {
+  coerceDayOfWeekList,
+  getDayOfWeek,
+  getTodayYmdInTimeZone,
+  timeRangesOverlap,
+} from './utils/timeUtils';
 import { normalizeAddress } from './utils/householdUtils';
+import { resolveMaxDaysAheadForMember } from './advanceWindow';
+import { getLastBookableYmd, type BookingWindowInfo } from '../../../shared/utils/bookingWindow';
 
 function coerceRuleConfigRecord(config: unknown): Record<string, unknown> {
   if (config == null) return {};
@@ -1146,6 +1153,31 @@ export function getPeakHoursSlotsForEnforcement(facility: {
     return fromRaw as NonNullable<SimplifiedBookingRules['peakHoursSlots']>;
   }
   return null;
+}
+
+/**
+ * The days-in-advance window the engine will enforce for this member, so calendars can
+ * show it up front. Admins and sub-admins bypass booking rules, so they get no limit.
+ */
+export async function getMemberBookingWindow(userId: string, facilityId: string): Promise<BookingWindowInfo> {
+  const [facility, user] = await Promise.all([
+    fetchFacilityWithRules(facilityId),
+    fetchUserWithTier(userId, facilityId),
+  ]);
+  const todayYmd = getTodayYmdInTimeZone(facility.timezone || 'America/New_York');
+  const maxDaysAhead =
+    user.isFacilityAdmin || user.isSubAdmin
+      ? null
+      : resolveMaxDaysAheadForMember({
+          facilityRules: facility.rules,
+          simplified: facility.simplifiedBookingRules,
+          tier: user.tier,
+        });
+  return {
+    maxDaysAhead,
+    todayYmd,
+    lastBookableYmd: maxDaysAhead == null ? null : getLastBookableYmd(todayYmd, maxDaysAhead),
+  };
 }
 
 /**

@@ -666,6 +666,14 @@ const performSave = async (options?: { closeEditor?: boolean; toastMessage?: str
   const closeEditor = options?.closeEditor ?? true;
   const toastMessage = options?.toastMessage;
 
+  if (facilityData.bookingRules.daysInAdvanceEnabled) {
+    const days = Number(String(facilityData.bookingRules.daysInAdvance ?? '').trim());
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      toast.error('Enter a days-in-advance value from 1 to 365, or turn that rule off.');
+      return;
+    }
+  }
+
   try {
     setSaving(true);
     const { facilityImage: _facilityImage, ...serializableFacility } = facilityData;
@@ -1635,7 +1643,7 @@ const syncBookingRulesToEngine = async (rulesSnapshot?: FacilityData['bookingRul
           raw === undefined || raw === null || String(raw).trim() === ''
             ? NaN
             : parseInt(String(raw).trim(), 10);
-        const limit = Number.isFinite(parsed) && parsed > 0 ? parsed : 7;
+        const limit = Number.isFinite(parsed) && parsed > 0 ? parsed : 14; // matches server default
         ruleConfigs.push({
           ruleCode: 'ACC-005',
           isEnabled: advanceEnabled,

@@ -32,6 +32,7 @@ import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { courtTypeLabel } from '../../shared/constants/courtTypes';
 import { useCourtTypeFilter } from './useCourtTypeFilter';
+import { useBookingWindow } from './useBookingWindow';
 import { fetchBookingCalendarDetails, offerAddBookingToCalendar } from '../utils/bookingCalendar';
 import {
   BULLETIN_ACTIVITY_BOOKING_TYPES,
@@ -153,6 +154,10 @@ export function CourtCalendarView() {
   const selectedFacility = selectedFacilityId;
   const weekMonthViewEnabled = enabledFeatures.includes('week_month_view');
   const isAdmin = user?.userType === 'admin';
+  const selectedDateYmd = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+  // Refetch per selected day so the window follows the facility's midnight rollover.
+  const { blockedMessageFor: bookingWindowBlockedMessageFor } = useBookingWindow(selectedFacility, selectedDateYmd);
+  const bookingWindowMessage = bookingWindowBlockedMessageFor(selectedDateYmd);
   const dragReassignEnabled = isAdmin && enabledFeatures.includes(FEATURE_FLAGS.DRAG_RESCHEDULE_RESERVATIONS);
   const needsMemberNumber =
     user?.userType === 'player' &&
@@ -1568,6 +1573,10 @@ export function CourtCalendarView() {
   const handleEmptySlotClick = (courtId: string, time: string, dragCells?: Set<string>) => {
     if (strikeLockout?.isLockedOut) {
       toast.error('Your account is locked due to strikes. You cannot book courts until the lockout ends.');
+      return;
+    }
+    if (bookingWindowMessage) {
+      toast.error(bookingWindowMessage);
       return;
     }
 
@@ -3389,6 +3398,12 @@ export function CourtCalendarView() {
 
         {/* Calendar Grid Container */}
         <div className="flex-1 min-h-0 flex flex-col px-4 py-2">
+        {calendarViewMode === 'court' && bookingWindowMessage && (
+          <div className="mb-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <Info className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>This date isn't open for booking yet. {bookingWindowMessage}</span>
+          </div>
+        )}
         {calendarViewMode !== 'court' ? (
           <WeekMonthCalendarView
             facilityId={selectedFacility}

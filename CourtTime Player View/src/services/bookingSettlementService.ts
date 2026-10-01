@@ -3,6 +3,8 @@ import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { isFeatureEnabled } from './featureFlagService';
 import { courtBookingNeedsPayment, loadCourtPaymentSettings, computeCourtFeeCents } from './courtPaymentSettings';
 import { getStripe } from './stripeClient';
+import { getMemberBookingWindow } from './rulesEngine/RuleContext';
+import { bookingWindowBlockedMessage, isBeyondBookingWindow } from '../../shared/utils/bookingWindow';
 
 export type SettlementStatus =
   | 'not_applicable'
@@ -665,6 +667,21 @@ export async function updateUnsettledBooking(params: {
         success: false,
         error: 'Only unsettled post-play reservations can be moved in place',
       };
+    }
+
+    // Moving a reservation must not let a member skip the days-in-advance window.
+    if (!meta.isAdmin) {
+      const bookingWindow = await getMemberBookingWindow(params.actorUserId, meta.facilityId);
+      if (
+        bookingWindow.maxDaysAhead != null &&
+        bookingWindow.lastBookableYmd &&
+        isBeyondBookingWindow(params.bookingDate, bookingWindow.lastBookableYmd)
+      ) {
+        return {
+          success: false,
+          error: bookingWindowBlockedMessage(bookingWindow.maxDaysAhead, bookingWindow.lastBookableYmd),
+        };
+      }
     }
 
     const updated = await transaction(async (client) => {

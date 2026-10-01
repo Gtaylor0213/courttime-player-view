@@ -14,6 +14,7 @@ import {
   type ApiResponse as SharedApiResponse,
 } from '../../shared/api/core';
 import { isSessionAuthError } from '../../shared/utils/sessionAuth';
+import type { BookingWindowInfo } from '../../shared/utils/bookingWindow';
 
 export {
   unwrapApiPayload,
@@ -1602,6 +1603,11 @@ export const rulesApi = {
 
   getEffectiveRules: async (facilityId: string) => {
     return apiRequest(`/api/rules/facility/${facilityId}/effective`);
+  },
+
+  /** Days-in-advance window enforced for the signed-in member (null limit = no limit). */
+  getBookingWindow: async (facilityId: string) => {
+    return apiRequest<BookingWindowInfo & { success: boolean }>(`/api/rules/booking-window/${facilityId}`);
   },
 
   configureRule: async (facilityId: string, data: {

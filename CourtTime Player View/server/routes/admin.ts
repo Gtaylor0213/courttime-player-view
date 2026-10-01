@@ -54,6 +54,11 @@ import {
 } from '../../src/services/facilityRevenueService';
 import { facilityOperatingHoursScheduleFingerprint } from '../../shared/utils/operatingHours';
 import {
+  applyAdvanceRuleToBookingRules,
+  normalizeAdvanceDays,
+  upsertAcc005Rule,
+} from '../../src/services/advanceRuleSync';
+import {
   isFacilityAdminUser,
   facilityIdForCourt,
   facilityIdForBooking,
@@ -315,6 +320,14 @@ function normalizeBookingRulesPayload(bookingRules: any): any {
     merged.maxReservationDurationTennisMinutes = String(Math.round(mrdByType.tennisMinutes) || 0);
     merged.maxReservationDurationPickleballMinutes = String(Math.round(mrdByType.pickleballMinutes) || 0);
   }
+
+  // Mirror days in advance into every key Club Info / web admin / the engine fallback read, and
+  // keep a usable limit so an enabled rule with a blank box doesn't diverge between stores.
+  applyAdvanceRuleToBookingRules(
+    merged,
+    !!merged.daysInAdvance?.enabled,
+    normalizeAdvanceDays(merged.daysInAdvance?.limit)
+  );
 
   delete merged.adminRestrictions;
 
@@ -676,6 +689,14 @@ router.patch('/facilities/:facilityId', async (req, res) => {
             );
           }
         }
+
+        // Keep ACC-005 (days in advance) in sync server-side too, so enforcement can't lag
+        // Club Info if the client's follow-up rules sync fails.
+        await upsertAcc005Rule(
+          facilityId,
+          !!normalizedBookingRules.daysInAdvance?.enabled,
+          normalizeAdvanceDays(normalizedBookingRules.daysInAdvance?.limit)
+        );
 
         // Keep ACC-002 (weekly + daily caps) in sync from normalized booking rules so enforcement matches admin saves
         // even if the client bulk rules API is skipped or fails.

@@ -11,6 +11,7 @@
  */
 
 import { safeDisplayText } from './safeDisplayText';
+import { describeBookingWindow } from './bookingWindow';
 
 /** Booking rules arrive as loosely-typed JSON from the facility record. */
 export type BookingRulesLike = Record<string, unknown> | null | undefined;
@@ -156,7 +157,7 @@ export function getClubInfoRuleRows(rules: BookingRulesLike): ClubInfoRuleRow[] 
 
   const advanceDays = ruleValue(bookingRules.advanceBookingDays);
   if (bookingRules.advanceBookingDaysUnlimited === false && advanceDays) {
-    rows.push({ label: 'Book up to', value: `${advanceDays} days in advance` });
+    rows.push({ label: 'Book up to', value: describeBookingWindow(advanceDays) });
   }
 
   const duration = getMaxBookingDurationDisplay(bookingRules);

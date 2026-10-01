@@ -8,6 +8,7 @@ vi.mock('../../../database/connection', () => ({
 
 import {
   advanceWindowViolation,
+  getFacilityNowYmdHour,
   resolveMaxDaysAhead,
   resolveMaxDaysAheadForMember,
 } from '../advanceWindow';
@@ -64,19 +65,51 @@ describe('resolveMaxDaysAheadForMember', () => {
   });
 });
 
-describe('advanceWindowViolation', () => {
-  const base = { ruleCode: 'ACC-005', ruleName: 'Advance Booking Window', facilityTodayYmd: '2026-10-01' };
+describe('getFacilityNowYmdHour', () => {
+  it('reads the facility wall clock, not the server clock', () => {
+    // 2026-10-01 21:20 UTC = 5:20 PM in New York
+    expect(getFacilityNowYmdHour('America/New_York', new Date('2026-10-01T21:20:00Z'))).toEqual({
+      ymd: '2026-10-01',
+      hour: 17,
+    });
+    // 03:30 UTC Oct 2 = 11:30 PM Oct 1 in New York
+    expect(getFacilityNowYmdHour('America/New_York', new Date('2026-10-02T03:30:00Z'))).toEqual({
+      ymd: '2026-10-01',
+      hour: 23,
+    });
+  });
+});
 
-  it('allows the last day of the window and blocks the day after', () => {
-    expect(advanceWindowViolation({ ...base, maxDaysAhead: 7, bookingYmd: '2026-10-07' })).toBeNull();
-    const blocked = advanceWindowViolation({ ...base, maxDaysAhead: 7, bookingYmd: '2026-10-08' });
+describe('advanceWindowViolation', () => {
+  // 5:20 PM in New York on Oct 1 → cutoff Oct 8 at 5:00 PM (on the hour)
+  const now = new Date('2026-10-01T21:20:00Z');
+  const base = {
+    ruleCode: 'ACC-005',
+    ruleName: 'Advance Booking Window',
+    timeZone: 'America/New_York',
+    now,
+  };
+
+  it('allows reservations ending by the cutoff and blocks ones ending after it', () => {
+    expect(
+      advanceWindowViolation({ ...base, maxDaysAhead: 7, bookingYmd: '2026-10-08', startTime: '16:00:00', endTime: '17:00:00' })
+    ).toBeNull();
+    const blocked = advanceWindowViolation({
+      ...base,
+      maxDaysAhead: 7,
+      bookingYmd: '2026-10-08',
+      startTime: '16:30:00',
+      endTime: '17:30:00',
+    });
     expect(blocked?.passed).toBe(false);
-    expect(blocked?.message).toContain('latest date you can book right now is Wed, Oct 7');
-    expect(blocked?.details).not.toHaveProperty('earliestAllowedDate');
+    expect(blocked?.message).toContain('must end by Thu, Oct 8 at 5:00 PM');
+    expect(blocked?.details?.cutoffLabel).toBe('Thu, Oct 8 at 5:00 PM');
   });
 
   it('never blocks when there is no limit', () => {
-    expect(advanceWindowViolation({ ...base, maxDaysAhead: null, bookingYmd: '2027-01-01' })).toBeNull();
+    expect(
+      advanceWindowViolation({ ...base, maxDaysAhead: null, bookingYmd: '2027-01-01', startTime: '08:00', endTime: '09:00' })
+    ).toBeNull();
   });
 });
 
@@ -85,24 +118,24 @@ describe('ACC-005 evaluator', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    // 2026-10-01 10:00 in New York
-    vi.setSystemTime(new Date('2026-10-01T14:00:00Z'));
+    // 2026-10-01 5:20 PM in New York
+    vi.setSystemTime(new Date('2026-10-01T21:20:00Z'));
   });
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  const ctx = (bookingDate: string) =>
+  const ctx = (bookingDate: string, startTime: string, endTime: string) =>
     ({
       facility: { timezone: 'America/New_York' },
       user: {},
-      request: { bookingDate },
+      request: { bookingDate, startTime, endTime },
     }) as unknown as RuleContext;
 
-  it('passes on the last bookable day and fails the next day', async () => {
-    expect((await evaluator.evaluate(ctx('2026-10-07'), { max_days_ahead: 7 })).passed).toBe(true);
-    const result = await evaluator.evaluate(ctx('2026-10-08'), { max_days_ahead: 7 });
+  it('opens the eighth day up to the current hour', async () => {
+    expect((await evaluator.evaluate(ctx('2026-10-08', '15:00:00', '17:00:00'), { max_days_ahead: 7 })).passed).toBe(true);
+    const result = await evaluator.evaluate(ctx('2026-10-08', '17:00:00', '18:00:00'), { max_days_ahead: 7 });
     expect(result.passed).toBe(false);
-    expect(result.details?.lastBookableLabel).toBe('Wed, Oct 7');
+    expect(result.details?.cutoffLabel).toBe('Thu, Oct 8 at 5:00 PM');
   });
 });

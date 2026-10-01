@@ -163,7 +163,7 @@ describe('getClubInfoRuleRows', () => {
         noOverlappingReservations: true,
       })
     ).toEqual([
-      { label: 'Book up to', value: '14 days in advance (today counts as day 1)' },
+      { label: 'Book up to', value: '14 days in advance, opening hour by hour' },
       { label: 'Max booking duration', value: '2 hours' },
       { label: 'Max bookings per week', value: '3' },
       { label: 'Overlapping bookings', value: 'Not allowed' },

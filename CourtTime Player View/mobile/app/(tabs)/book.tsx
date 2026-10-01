@@ -74,7 +74,10 @@ import { StrikeLockoutBanner } from '../../src/components/StrikeLockoutBanner';
 import { BookingWindowBanner } from '../../src/components/BookingWindowBanner';
 import {
   bookingWindowBlockedMessage,
-  isBeyondBookingWindow,
+  cutoffFromWindowInfo,
+  endsAfterBookingCutoff,
+  formatHourLabel,
+  isDateFullyLockedByCutoff,
   type BookingWindowInfo,
 } from '../../../shared/utils/bookingWindow';
 import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
@@ -207,8 +210,17 @@ export default function BookCourtScreen() {
   const [showQuickReserve, setShowQuickReserve] = useState(false);
   const [selectedDate, setSelectedDate] = useState(selectedBookDate || getTodayString());
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
-  // Days-in-advance window the server enforces for this member (refetched per day for midnight rollover).
+  // Days-in-advance window the server enforces for this member. The cutoff rolls forward
+  // on the hour, so refetch at each top of the hour as well as per selected day.
   const [bookingWindow, setBookingWindow] = useState<BookingWindowInfo | null>(null);
+  const [bookingWindowHourTick, setBookingWindowHourTick] = useState(0);
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setBookingWindowHourTick((t) => t + 1),
+      3600000 - (Date.now() % 3600000) + 2000
+    );
+    return () => clearTimeout(timer);
+  }, [bookingWindowHourTick]);
   useEffect(() => {
     if (!facilityId) {
       setBookingWindow(null);
@@ -223,13 +235,30 @@ export default function BookCourtScreen() {
     return () => {
       cancelled = true;
     };
-  }, [facilityId, selectedDate]);
-  const bookingWindowMessage =
-    bookingWindow?.maxDaysAhead != null &&
-    bookingWindow.lastBookableYmd &&
-    isBeyondBookingWindow(selectedDate, bookingWindow.lastBookableYmd)
-      ? bookingWindowBlockedMessage(bookingWindow.maxDaysAhead, bookingWindow.lastBookableYmd)
+  }, [facilityId, selectedDate, bookingWindowHourTick]);
+  const bookingCutoff = cutoffFromWindowInfo(bookingWindow);
+  const bookingCutoffMessage =
+    bookingCutoff && bookingWindow?.maxDaysAhead != null
+      ? bookingWindowBlockedMessage(bookingWindow.maxDaysAhead, bookingCutoff)
       : null;
+  const selectedDateFullyLocked = isDateFullyLockedByCutoff(selectedDate, bookingCutoff);
+  const bookingWindowNotice = !bookingCutoff
+    ? null
+    : selectedDateFullyLocked
+      ? `This date isn't open for booking yet. ${bookingCutoffMessage}`
+      : selectedDate === bookingCutoff.cutoffYmd
+        ? `Times on this day open hour by hour. Right now reservations must end by ${formatHourLabel(bookingCutoff.cutoffTime)}; later times unlock each hour.`
+        : null;
+  /** Grid rows starting at or after this time aren't open yet. */
+  const gridLockedFromTime = !bookingCutoff
+    ? null
+    : selectedDateFullyLocked
+      ? '00:00'
+      : selectedDate === bookingCutoff.cutoffYmd
+        ? bookingCutoff.cutoffTime
+        : null;
+  const endsAfterCutoff = (startTime: string, endTime: string) =>
+    endsAfterBookingCutoff(selectedDate, startTime, endTime, bookingCutoff);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [strikeLockout, setStrikeLockout] = useState<StrikeLockoutStatus | null>(null);
@@ -598,8 +627,8 @@ export default function BookCourtScreen() {
   // ── Handle calendar grid booking selection ──
   /** Load slot list for this court before opening the modal so TimePickers include the dragged range. */
   async function handleCalendarGridSelection(court: Court, startTime: string, endTime: string) {
-    if (bookingWindowMessage) {
-      showAlert('Not open yet', bookingWindowMessage);
+    if (bookingCutoffMessage && endsAfterCutoff(startTime, endTime)) {
+      showAlert('Not open yet', bookingCutoffMessage);
       return;
     }
     try {
@@ -793,11 +822,6 @@ export default function BookCourtScreen() {
       hapticError();
       return;
     }
-    if (bookingWindowMessage) {
-      showAlert('Not open yet', bookingWindowMessage);
-      hapticError();
-      return;
-    }
     if (!user) {
       showAlert('Booking failed', 'Your session expired. Please log in again.');
       hapticError();
@@ -810,6 +834,11 @@ export default function BookCourtScreen() {
     }
     if (!modalStartTime || !modalEndTime) {
       showAlert('Booking failed', 'Please pick a start and end time.');
+      hapticError();
+      return;
+    }
+    if (bookingCutoffMessage && endsAfterCutoff(modalStartTime, modalEndTime)) {
+      showAlert('Not open yet', bookingCutoffMessage);
       hapticError();
       return;
     }
@@ -1356,7 +1385,7 @@ export default function BookCourtScreen() {
       >
       <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />
       <StrikeLockoutBanner status={strikeLockout} />
-      <BookingWindowBanner message={bookingWindowMessage} />
+      <BookingWindowBanner message={bookingWindowNotice} />
       {!facilityId && (
         <View style={styles.noFacility}>
           <Ionicons name="warning-outline" size={20} color={Colors.warning} />
@@ -1545,6 +1574,7 @@ export default function BookCourtScreen() {
               onBookedSlotPress={onBookedSlotPress}
               onInteractionLockChange={onCalendarInteractionLock}
               onRequestToday={onRequestTodayForGrid}
+              lockedFromTime={gridLockedFromTime}
             />
           )}
         </>

@@ -257,8 +257,8 @@ export function QuickReservePopup({
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
-  const { bookingWindow, blockedMessageFor } = useBookingWindow(isOpen ? selectedFacility : undefined);
-  const lastBookableYmd = bookingWindow?.lastBookableYmd ?? undefined;
+  const { blockedMessageFor, lastOpenYmd } = useBookingWindow(isOpen ? selectedFacility : undefined);
+  const lastBookableYmd = lastOpenYmd ?? undefined;
   const [splitPayment, setSplitPayment] = useState(false);
   const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
 
@@ -575,9 +575,12 @@ export function QuickReservePopup({
       return;
     }
 
+    const windowStart = `${formatMinutesAsHHMM(slotLabelToMinutes(selectedTime))}:00`;
+    const windowEnd = `${formatMinutesAsHHMM(slotLabelToMinutes(selectedEndTime))}:00`;
     const bookingWindowMessage =
-      blockedMessageFor(selectedDate) ??
-      (advancedBooking && recurringEndDate ? blockedMessageFor(recurringEndDate) : null);
+      generateRecurringDates()
+        .map((d) => blockedMessageFor(d, windowStart, windowEnd))
+        .find((m) => m) ?? null;
     if (bookingWindowMessage) {
       alert(bookingWindowMessage);
       return;

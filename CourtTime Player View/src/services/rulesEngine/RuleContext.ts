@@ -27,12 +27,11 @@ import {
 import {
   coerceDayOfWeekList,
   getDayOfWeek,
-  getTodayYmdInTimeZone,
   timeRangesOverlap,
 } from './utils/timeUtils';
 import { normalizeAddress } from './utils/householdUtils';
-import { resolveMaxDaysAheadForMember } from './advanceWindow';
-import { getLastBookableYmd, type BookingWindowInfo } from '../../../shared/utils/bookingWindow';
+import { getFacilityBookingCutoff, getFacilityNowYmdHour, resolveMaxDaysAheadForMember } from './advanceWindow';
+import type { BookingWindowInfo } from '../../../shared/utils/bookingWindow';
 
 function coerceRuleConfigRecord(config: unknown): Record<string, unknown> {
   if (config == null) return {};
@@ -1164,7 +1163,7 @@ export async function getMemberBookingWindow(userId: string, facilityId: string)
     fetchFacilityWithRules(facilityId),
     fetchUserWithTier(userId, facilityId),
   ]);
-  const todayYmd = getTodayYmdInTimeZone(facility.timezone || 'America/New_York');
+  const timeZone = facility.timezone || 'America/New_York';
   const maxDaysAhead =
     user.isFacilityAdmin || user.isSubAdmin
       ? null
@@ -1173,10 +1172,12 @@ export async function getMemberBookingWindow(userId: string, facilityId: string)
           simplified: facility.simplifiedBookingRules,
           tier: user.tier,
         });
+  const cutoff = getFacilityBookingCutoff(timeZone, maxDaysAhead);
   return {
     maxDaysAhead,
-    todayYmd,
-    lastBookableYmd: maxDaysAhead == null ? null : getLastBookableYmd(todayYmd, maxDaysAhead),
+    todayYmd: getFacilityNowYmdHour(timeZone).ymd,
+    cutoffYmd: cutoff?.cutoffYmd ?? null,
+    cutoffTime: cutoff?.cutoffTime ?? null,
   };
 }
 

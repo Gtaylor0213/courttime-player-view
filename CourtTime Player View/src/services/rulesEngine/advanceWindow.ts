@@ -6,9 +6,10 @@
 import type { FacilityRuleConfig, RuleResult, SimplifiedBookingRules } from './types';
 import {
   bookingWindowBlockedMessage,
-  getLastBookableYmd,
-  isBeyondBookingWindow,
-  formatBookableDateLabel,
+  computeBookingCutoff,
+  endsAfterBookingCutoff,
+  formatCutoffLabel,
+  type BookingCutoff,
 } from '../../../shared/utils/bookingWindow';
 
 function positiveInt(v: unknown): number | null {
@@ -73,28 +74,60 @@ export function resolveMaxDaysAheadForMember(args: {
   });
 }
 
-/** Failing RuleResult when bookingYmd is past the window, otherwise null. */
+/** Facility wall-clock date and hour (0–23) right now. */
+export function getFacilityNowYmdHour(timeZone: string, instant: Date = new Date()): { ymd: string; hour: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(instant);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '0';
+  return {
+    ymd: `${get('year')}-${get('month').padStart(2, '0')}-${get('day').padStart(2, '0')}`,
+    hour: Number(get('hour')) % 24,
+  };
+}
+
+/** Booking cutoff for a facility right now, or null when there is no limit. */
+export function getFacilityBookingCutoff(
+  timeZone: string,
+  maxDaysAhead: number | null,
+  instant: Date = new Date()
+): BookingCutoff | null {
+  if (maxDaysAhead == null) return null;
+  const now = getFacilityNowYmdHour(timeZone, instant);
+  return computeBookingCutoff(now.ymd, now.hour, maxDaysAhead);
+}
+
+/** Failing RuleResult when the reservation runs past the hourly cutoff, otherwise null. */
 export function advanceWindowViolation(args: {
   ruleCode: string;
   ruleName: string;
   maxDaysAhead: number | null;
-  facilityTodayYmd: string;
+  timeZone: string;
   bookingYmd: string;
+  startTime: string;
+  endTime: string;
+  now?: Date;
 }): RuleResult | null {
-  if (args.maxDaysAhead == null) return null;
-  const lastBookableYmd = getLastBookableYmd(args.facilityTodayYmd, args.maxDaysAhead);
-  if (!isBeyondBookingWindow(args.bookingYmd, lastBookableYmd)) return null;
+  const cutoff = getFacilityBookingCutoff(args.timeZone, args.maxDaysAhead, args.now);
+  if (!cutoff || args.maxDaysAhead == null) return null;
+  if (!endsAfterBookingCutoff(args.bookingYmd, args.startTime, args.endTime, cutoff)) return null;
 
   return {
     ruleCode: args.ruleCode,
     ruleName: args.ruleName,
     passed: false,
     severity: 'error',
-    message: bookingWindowBlockedMessage(args.maxDaysAhead, lastBookableYmd),
+    message: bookingWindowBlockedMessage(args.maxDaysAhead, cutoff),
     details: {
       maxDaysAhead: args.maxDaysAhead,
-      lastBookableDate: lastBookableYmd,
-      lastBookableLabel: formatBookableDateLabel(lastBookableYmd),
+      cutoffDate: cutoff.cutoffYmd,
+      cutoffTime: cutoff.cutoffTime,
+      cutoffLabel: formatCutoffLabel(cutoff),
     },
   };
 }

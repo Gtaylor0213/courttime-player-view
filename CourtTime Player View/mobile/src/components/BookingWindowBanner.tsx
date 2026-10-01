@@ -2,13 +2,13 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize } from '../constants/theme';
 
-/** Shown on the Book tab when the selected date is past the club's days-in-advance window. */
+/** Book tab notice when the selected date is fully or partly past the days-in-advance cutoff. */
 export function BookingWindowBanner({ message }: { message: string | null }) {
   if (!message) return null;
   return (
     <View style={styles.banner} accessibilityRole="alert">
       <Ionicons name="information-circle" size={18} color={Colors.warning} />
-      <Text style={styles.text}>This date isn't open for booking yet. {message}</Text>
+      <Text style={styles.text}>{message}</Text>
     </View>
   );
 }

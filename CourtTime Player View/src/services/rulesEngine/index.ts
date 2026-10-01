@@ -30,7 +30,6 @@ import {
   coerceDayOfWeekList,
   formatDate,
   getDayOfWeek,
-  getTodayYmdInTimeZone,
   minutesBetween,
   timeRangesOverlap
 } from './utils/timeUtils';
@@ -244,8 +243,10 @@ export class RulesEngine {
           tier: context.user.tier,
           courtId: context.court.id,
         }),
-        facilityTodayYmd: getTodayYmdInTimeZone(context.facility.timezone || 'America/New_York'),
+        timeZone: context.facility.timezone || 'America/New_York',
         bookingYmd: context.request.bookingDate,
+        startTime: context.request.startTime,
+        endTime: context.request.endTime,
       });
       if (advanceBlocker) {
         return {

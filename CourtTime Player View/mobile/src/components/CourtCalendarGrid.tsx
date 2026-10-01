@@ -203,6 +203,8 @@ interface Props {
   onInteractionLockChange?: (locked: boolean) => void;
   /** When "Now" is tapped while another day is selected, parent should switch to today; then the grid auto-scrolls after load. */
   onRequestToday?: () => void;
+  /** "HH:MM": rows starting at or after this aren't open yet (hourly days-in-advance cutoff). */
+  lockedFromTime?: string | null;
 }
 
 interface GridLoadError {
@@ -227,6 +229,7 @@ export function CourtCalendarGrid({
   onBookedSlotPress,
   onInteractionLockChange,
   onRequestToday,
+  lockedFromTime = null,
 }: Props) {
   const [courtData, setCourtData] = useState<CourtAvailability[]>([]);
   /** Must match facility slot duration so row times align with booking modal / API. */
@@ -664,6 +667,14 @@ export function CourtCalendarGrid({
     return nowMinutes >= rowMinutes + slotStepMinutes;
   };
 
+  // Rows past the days-in-advance cutoff: nothing starting there can end in time.
+  const isNotYetOpen = (rowIndex: number): boolean => {
+    if (!lockedFromTime) return false;
+    const rowMinutes = parseTimeToMinutesSafe(timeRows[rowIndex] ?? '');
+    const lockMinutes = parseTimeToMinutesSafe(lockedFromTime);
+    return rowMinutes !== null && lockMinutes !== null && rowMinutes >= lockMinutes;
+  };
+
   const scrollToCurrentTime = useCallback((options?: { fromUserTap?: boolean; reliable?: boolean }) => {
     if (loading || !scrollRef.current) return;
     if (timeRows.length === 0) return;
@@ -828,7 +839,7 @@ export function CourtCalendarGrid({
     pageX: number,
     pageY: number
   ) => {
-    if (isPast(rowIndex) || isBooked(targetPageIndex, courtIndex, rowIndex)) return;
+    if (isPast(rowIndex) || isNotYetOpen(rowIndex) || isBooked(targetPageIndex, courtIndex, rowIndex)) return;
 
     // Do not lock parent/inner scrolling yet — wait until movement confirms
     // a vertical drag selection. This keeps horizontal court paging responsive.
@@ -1106,7 +1117,10 @@ export function CourtCalendarGrid({
                 ]}
               >
                 {timeRows.map((time, rowIndex) => {
-                  const past = isPast(rowIndex);
+                  const actuallyPast = isPast(rowIndex);
+                  const notYetOpen = !actuallyPast && isNotYetOpen(rowIndex);
+                  // Not-yet-open rows look and behave like past rows (greyed, not bookable).
+                  const past = actuallyPast || notYetOpen;
 
                   return (
                     <View key={`${renderPageIndex}-${time}`} style={styles.row}>
@@ -1132,6 +1146,8 @@ export function CourtCalendarGrid({
                               ? `${court.name} at ${fullTimeLabel}. Blacked out: ${booked.blockedLabel || 'Blackout'}${booked.blackoutReason ? `, ${booked.blackoutReason}` : ''}.`
                               : `${court.name} at ${fullTimeLabel}. Unavailable because a related court is booked.`
                             : `${court.name} at ${fullTimeLabel}. Booked ${bookingStart?.bookingType || booked.bookingType || 'reservation'} from ${formatFullTime(booked.startTime)} to ${formatFullTime(booked.endTime)}.`
+                          : notYetOpen
+                            ? `${court.name} at ${fullTimeLabel}. Not open for booking yet.`
                           : past
                             ? `${court.name} at ${fullTimeLabel}. Past time slot.`
                             : `${court.name} at ${fullTimeLabel}. Available to book.`;
@@ -1139,6 +1155,8 @@ export function CourtCalendarGrid({
                           ? isBlockedSlot
                             ? 'This slot is unavailable.'
                             : 'Double tap to view booking details.'
+                          : notYetOpen
+                            ? 'This time opens for booking later, hour by hour.'
                           : past
                             ? 'Past time slots cannot be booked.'
                             : 'Double tap to book this time or long press and drag to select a longer booking.';

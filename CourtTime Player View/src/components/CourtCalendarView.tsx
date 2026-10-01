@@ -156,8 +156,24 @@ export function CourtCalendarView() {
   const isAdmin = user?.userType === 'admin';
   const selectedDateYmd = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
   // Refetch per selected day so the window follows the facility's midnight rollover.
-  const { blockedMessageFor: bookingWindowBlockedMessageFor } = useBookingWindow(selectedFacility, selectedDateYmd);
-  const bookingWindowMessage = bookingWindowBlockedMessageFor(selectedDateYmd);
+  const {
+    cutoffMessage: bookingWindowCutoffMessage,
+    isSlotLocked: isBookingWindowSlotLocked,
+    dayNoticeFor: bookingWindowDayNoticeFor,
+  } = useBookingWindow(selectedFacility, selectedDateYmd);
+  const bookingWindowNotice = bookingWindowDayNoticeFor(selectedDateYmd);
+  /** True when a grid slot ("5:00 PM") starts at or after the hourly days-in-advance cutoff. */
+  const isCutoffLocked = (timeSlot: string): boolean => {
+    const [clock, period] = timeSlot.split(' ');
+    let [hours, minutes] = clock.split(':').map(Number);
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    const hhmm = `${String(hours).padStart(2, '0')}:${String(minutes || 0).padStart(2, '0')}`;
+    return isBookingWindowSlotLocked(selectedDateYmd, hhmm);
+  };
+  // Touch listeners read this through a ref so they aren't re-registered every render.
+  const isCutoffLockedRef = useRef(isCutoffLocked);
+  isCutoffLockedRef.current = isCutoffLocked;
   const dragReassignEnabled = isAdmin && enabledFeatures.includes(FEATURE_FLAGS.DRAG_RESCHEDULE_RESERVATIONS);
   const needsMemberNumber =
     user?.userType === 'player' &&
@@ -1575,8 +1591,11 @@ export function CourtCalendarView() {
       toast.error('Your account is locked due to strikes. You cannot book courts until the lockout ends.');
       return;
     }
-    if (bookingWindowMessage) {
-      toast.error(bookingWindowMessage);
+    const lockedByCutoff = dragCells && dragCells.size > 0
+      ? Array.from(dragCells).some((cellId) => isCutoffLocked(cellId.split('|')[1] ?? ''))
+      : isCutoffLocked(time);
+    if (lockedByCutoff && bookingWindowCutoffMessage) {
+      toast.error(bookingWindowCutoffMessage);
       return;
     }
 
@@ -2109,7 +2128,7 @@ export function CourtCalendarView() {
       const courtObj = courts.find((c) => c.id === courtId);
       if (courtObj?.isWalkUp) return;
       if (isCourtSlotOutsideOperatingHours(courtId, time)) return;
-      if (isPastTime(time)) return;
+      if (isPastTime(time) || isCutoffLockedRef.current(time)) return;
       const slotBooking = bookings[courtId as keyof typeof bookings]?.[time];
       const blocked = slotBooking?.type === 'blocked';
       if (blocked) return;
@@ -2642,7 +2661,8 @@ export function CourtCalendarView() {
     return courts.map((court, courtIndex) => {
       const topBooking = bookings[court.id as keyof typeof bookings]?.[topTime];
       const topBlocked = topBooking?.type === 'blocked';
-      const topPast = isPastTime(topTime);
+      const topCutoffLocked = !topBooking && isCutoffLocked(topTime);
+      const topPast = isPastTime(topTime) || topCutoffLocked;
       const topSelected = dragState.selectedCells.has(`${court.id}|${topTime}`);
       const topPrime = isPrimeTimeSlot(court.id, topTime);
       const isWalkUpCourt = court.isWalkUp === true;
@@ -2679,6 +2699,7 @@ export function CourtCalendarView() {
               if (dragJustFinishedRef.current) return;
               if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
               if (court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) return;
+              if (topCutoffLocked && bookingWindowCutoffMessage) return toast.error(bookingWindowCutoffMessage);
               if (topBlocked || (topPast && !topBooking)) return;
               if (topBooking) handleBookingClick(topBooking);
               else handleEmptySlotClick(court.id, topTime);
@@ -3398,10 +3419,10 @@ export function CourtCalendarView() {
 
         {/* Calendar Grid Container */}
         <div className="flex-1 min-h-0 flex flex-col px-4 py-2">
-        {calendarViewMode === 'court' && bookingWindowMessage && (
+        {calendarViewMode === 'court' && bookingWindowNotice && (
           <div className="mb-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             <Info className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>This date isn't open for booking yet. {bookingWindowMessage}</span>
+            <span>{bookingWindowNotice}</span>
           </div>
         )}
         {calendarViewMode !== 'court' ? (

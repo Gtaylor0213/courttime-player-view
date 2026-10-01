@@ -19,7 +19,6 @@ import {
   formatDate,
   timeRangesOverlap,
   getDayOfWeek,
-  getTodayYmdInTimeZone,
   coerceDayOfWeekList,
   combineDateAndTime,
 } from '../utils/timeUtils';
@@ -251,8 +250,10 @@ const ACC005: RuleEvaluator = {
       ruleCode: 'ACC-005',
       ruleName: 'Advance Booking Window',
       maxDaysAhead,
-      facilityTodayYmd: getTodayYmdInTimeZone(context.facility.timezone || 'America/New_York'),
+      timeZone: context.facility.timezone || 'America/New_York',
       bookingYmd: context.request.bookingDate,
+      startTime: context.request.startTime,
+      endTime: context.request.endTime,
     });
     if (violation) return violation;
 

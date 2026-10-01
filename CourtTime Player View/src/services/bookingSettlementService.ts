@@ -4,7 +4,11 @@ import { isFeatureEnabled } from './featureFlagService';
 import { courtBookingNeedsPayment, loadCourtPaymentSettings, computeCourtFeeCents } from './courtPaymentSettings';
 import { getStripe } from './stripeClient';
 import { getMemberBookingWindow } from './rulesEngine/RuleContext';
-import { bookingWindowBlockedMessage, isBeyondBookingWindow } from '../../shared/utils/bookingWindow';
+import {
+  bookingWindowBlockedMessage,
+  cutoffFromWindowInfo,
+  endsAfterBookingCutoff,
+} from '../../shared/utils/bookingWindow';
 
 export type SettlementStatus =
   | 'not_applicable'
@@ -672,14 +676,15 @@ export async function updateUnsettledBooking(params: {
     // Moving a reservation must not let a member skip the days-in-advance window.
     if (!meta.isAdmin) {
       const bookingWindow = await getMemberBookingWindow(params.actorUserId, meta.facilityId);
+      const cutoff = cutoffFromWindowInfo(bookingWindow);
       if (
+        cutoff &&
         bookingWindow.maxDaysAhead != null &&
-        bookingWindow.lastBookableYmd &&
-        isBeyondBookingWindow(params.bookingDate, bookingWindow.lastBookableYmd)
+        endsAfterBookingCutoff(params.bookingDate, params.startTime, params.endTime, cutoff)
       ) {
         return {
           success: false,
-          error: bookingWindowBlockedMessage(bookingWindow.maxDaysAhead, bookingWindow.lastBookableYmd),
+          error: bookingWindowBlockedMessage(bookingWindow.maxDaysAhead, cutoff),
         };
       }
     }

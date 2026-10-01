@@ -165,7 +165,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const [advancedBooking, setAdvancedBooking] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
-  const { bookingWindow, blockedMessageFor } = useBookingWindow(isOpen ? facilityId : undefined);
+  const { blockedMessageFor, lastOpenYmd } = useBookingWindow(isOpen ? facilityId : undefined);
   const [splitPayment, setSplitPayment] = useState(false);
   const [splitMembers, setSplitMembers] = useState<Array<{ userId: string; fullName: string }>>([]);
   const [bookForMode, setBookForMode] = useState<BookForMode>('self');
@@ -655,11 +655,16 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         showToast('error', 'Error', 'Please select an end date for recurring bookings.');
         return;
       }
-      const recurringWindowMessage = blockedMessageFor(parseDateStr(recurringEndDate));
-      if (recurringWindowMessage) {
-        showToast('error', 'Error', recurringWindowMessage);
-        return;
-      }
+    }
+
+    // Every reservation (each recurring date too) must end by the hourly days-in-advance cutoff.
+    const windowMessage =
+      generateRecurringDates()
+        .map((d) => blockedMessageFor(parseDateStr(d), convertTo24Hour(startTime), convertTo24Hour(endTime)))
+        .find((m) => m) ?? null;
+    if (windowMessage) {
+      showToast('error', 'Error', windowMessage);
+      return;
     }
 
     if (deerLakeReservationTypes && !bookingType) {
@@ -1167,7 +1172,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
                   value={recurringEndDate}
                   onChange={(e) => setRecurringEndDate(e.target.value)}
                   min={date}
-                  max={bookingWindow?.lastBookableYmd ?? undefined}
+                  max={lastOpenYmd ?? undefined}
                   className="w-full"
                 />
               </div>

@@ -41,6 +41,12 @@ async function isApplied(client, filename) {
   return result.rows.length > 0;
 }
 
+// Arbitrary constant; serializes runners so two instances starting together
+// can't both apply the same file. It must be the transaction-scoped lock:
+// DATABASE_URL goes through a transaction pooler, where a session-level
+// pg_advisory_lock is taken on one backend and never released.
+const MIGRATION_LOCK_KEY = 727002;
+
 async function runMigration(client, migrationFile) {
   console.log(`\n📂 Reading migration file: ${migrationFile}`);
   const migrationPath = path.join(MIGRATIONS_DIR, migrationFile);
@@ -51,6 +57,12 @@ async function runMigration(client, migrationFile) {
 
   await client.query('BEGIN');
   try {
+    await client.query('SELECT pg_advisory_xact_lock($1)', [MIGRATION_LOCK_KEY]);
+    if (await isApplied(client, migrationFile)) {
+      await client.query('ROLLBACK');
+      console.log(`⏭️  ${migrationFile} was applied by another runner - skipping.`);
+      return;
+    }
     await client.query(sql);
     await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [migrationFile]);
     await client.query('COMMIT');
@@ -64,20 +76,7 @@ async function runMigration(client, migrationFile) {
   }
 }
 
-// Arbitrary constant; serializes runners so two instances starting together
-// can't both apply the same file.
-const MIGRATION_LOCK_KEY = 727001;
-
 async function runPending(client) {
-  await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
-  try {
-    await applyPending(client);
-  } finally {
-    await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]);
-  }
-}
-
-async function applyPending(client) {
   const files = fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
   let ranCount = 0;
 

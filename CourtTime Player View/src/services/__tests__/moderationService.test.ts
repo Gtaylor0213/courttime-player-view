@@ -19,6 +19,8 @@ import {
   blockUser,
   createContentReport,
   getUsersBlockedEitherWay,
+  listContentReports,
+  resolveContentReport,
 } from '../moderationService';
 
 const ME = '11111111-1111-4111-8111-111111111111';
@@ -166,5 +168,82 @@ describe('createContentReport', () => {
     expect(id).toBe('report-existing');
     await flush();
     expect(sendContentReportEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('listContentReports', () => {
+  it("limits a club admin's queue to that club's public posts", async () => {
+    queryMock.mockResolvedValue({ rows: [] });
+    await listContentReports({ facilityId: 'club-1' });
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(sql).toContain("cr.status = 'open'");
+    expect(sql).toContain('cr.facility_id = $1');
+    expect(params).toEqual(['club-1', ['bulletin_post', 'hitting_partner_post']]);
+  });
+
+  it('gives the CourtTime team everything', async () => {
+    queryMock.mockResolvedValue({ rows: [] });
+    await listContentReports({ status: 'closed' });
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(sql).toContain("cr.status <> 'open'");
+    expect(sql).not.toContain('cr.facility_id = $1');
+    expect(params).toEqual([]);
+  });
+});
+
+describe('resolveContentReport', () => {
+  const REPORT = '55555555-5555-4555-8555-555555555555';
+
+  function mockReport(row: Record<string, unknown> | null) {
+    queryMock.mockImplementation((sql: string) =>
+      sql.includes('FROM content_reports') ? { rows: row ? [row] : [] } : { rows: [], rowCount: 1 }
+    );
+  }
+
+  it('rejects unknown actions and reports', async () => {
+    await expect(
+      resolveContentReport({ reportId: REPORT, action: 'ban', resolvedBy: ADMIN })
+    ).rejects.toBeInstanceOf(ModerationError);
+    mockReport(null);
+    await expect(
+      resolveContentReport({ reportId: REPORT, action: 'dismiss', resolvedBy: ADMIN })
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("hides private-message reports and other clubs' reports from a club admin", async () => {
+    mockReport({ content_type: 'message', content_id: CONTENT, facility_id: 'club-1', status: 'open' });
+    await expect(
+      resolveContentReport({ reportId: REPORT, action: 'remove', resolvedBy: ADMIN, restrictToFacilityId: 'club-1' })
+    ).rejects.toMatchObject({ status: 404 });
+
+    mockReport({ content_type: 'hitting_partner_post', content_id: CONTENT, facility_id: 'club-2', status: 'open' });
+    await expect(
+      resolveContentReport({ reportId: REPORT, action: 'remove', resolvedBy: ADMIN, restrictToFacilityId: 'club-1' })
+    ).rejects.toMatchObject({ status: 404 });
+    expect(callsWith('UPDATE')).toHaveLength(0);
+    expect(callsWith('DELETE')).toHaveLength(0);
+  });
+
+  it('removes the content and closes every open report about it', async () => {
+    mockReport({ content_type: 'hitting_partner_post', content_id: CONTENT, facility_id: 'club-1', status: 'open' });
+    await resolveContentReport({ reportId: REPORT, action: 'remove', resolvedBy: ADMIN, restrictToFacilityId: 'club-1' });
+    expect(callsWith('UPDATE hitting_partner_posts')[0][1]).toEqual([CONTENT]);
+    expect(callsWith('UPDATE content_reports')[0][1]).toEqual([
+      'resolved', ADMIN, 'Content removed', 'hitting_partner_post', CONTENT,
+    ]);
+  });
+
+  it('dismisses without touching the content', async () => {
+    mockReport({ content_type: 'message', content_id: CONTENT, facility_id: 'club-1', status: 'open' });
+    await resolveContentReport({ reportId: REPORT, action: 'dismiss', resolvedBy: null });
+    expect(callsWith('DELETE FROM messages')).toHaveLength(0);
+    expect(callsWith('UPDATE content_reports')[0][1][0]).toBe('dismissed');
+  });
+
+  it('does nothing for a report that is already closed', async () => {
+    mockReport({ content_type: 'message', content_id: CONTENT, facility_id: 'club-1', status: 'resolved' });
+    await resolveContentReport({ reportId: REPORT, action: 'remove', resolvedBy: null });
+    expect(callsWith('DELETE FROM messages')).toHaveLength(0);
+    expect(callsWith('UPDATE content_reports')).toHaveLength(0);
   });
 });

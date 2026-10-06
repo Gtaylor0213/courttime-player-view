@@ -2516,6 +2516,26 @@ export const proShopApi = {
     apiRequest(`/api/pro-shop/my-card/${facilityId}`),
 };
 
+/** Blocking members and reporting offensive content. */
+export const moderationApi = {
+  listBlocked: () => apiRequest('/api/moderation/blocks'),
+  block: (userId: string) =>
+    apiRequest('/api/moderation/blocks', { method: 'POST', body: JSON.stringify({ userId }) }),
+  unblock: (userId: string) => apiRequest(`/api/moderation/blocks/${userId}`, { method: 'DELETE' }),
+  report: (body: {
+    contentType: 'message' | 'bulletin_post' | 'hitting_partner_post' | 'user';
+    contentId: string;
+    reason: 'spam' | 'harassment' | 'inappropriate' | 'other';
+    details?: string;
+    facilityId?: string | null;
+  }) => apiRequest('/api/moderation/reports', { method: 'POST', body: JSON.stringify(body) }),
+  // Club admin review queue
+  listFacilityReports: (facilityId: string, status: 'open' | 'closed' = 'open') =>
+    apiRequest(`/api/moderation/reports/facility/${facilityId}?status=${status}`),
+  resolveReport: (reportId: string, action: 'remove' | 'dismiss') =>
+    apiRequest(`/api/moderation/reports/${reportId}/resolve`, { method: 'POST', body: JSON.stringify({ action }) }),
+};
+
 export const reportingApi = {
   getTransactions: (
     facilityId: string,

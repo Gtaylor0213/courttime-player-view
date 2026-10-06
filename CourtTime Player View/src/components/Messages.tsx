@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Search, MessageCircle, Users, X, Plus, UserPlus, ChevronLeft, Trash2, Settings, LogOut } from 'lucide-react';
+import { Send, Search, MessageCircle, Users, X, Plus, UserPlus, ChevronLeft, Trash2, Settings, LogOut, Flag } from 'lucide-react';
+import { ModerationDialog, type ModerationTarget } from './ModerationDialog';
 import { cn } from './ui/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { messagesApi } from '../api/client';
@@ -76,6 +77,8 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
   const panelHeight = `calc(100dvh - ${heightOffsetPx ?? DEFAULT_HEIGHT_OFFSET_PX}px)`;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  /** The message or member the report / block dialog is open for. */
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -840,6 +843,23 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
                     <Settings className="h-4 w-4" />
                   </Button>
                 )}
+                {selectedConv && !selectedConv.isGroup && selectedConv.otherUser?.id && selectedConv.otherUser.id !== user?.id && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setModerationTarget({
+                      contentType: 'user',
+                      contentId: selectedConv.otherUser!.id,
+                      userId: selectedConv.otherUser!.id,
+                      userName: selectedConv.otherUser?.name || 'this member',
+                      facilityId,
+                    })}
+                    aria-label="Report or block this member"
+                    title="Report or block"
+                  >
+                    <Flag className="h-4 w-4" />
+                  </Button>
+                )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -905,6 +925,25 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
                           {formatMessageTime(message.createdAt)}
                         </p>
                       </div>
+                      {!isMine && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-gray-400 hover:text-red-600 hover:bg-red-50 md:self-end"
+                          onClick={() => setModerationTarget({
+                            contentType: 'message',
+                            contentId: message.id,
+                            userId: message.senderId,
+                            userName: senderName || selectedConv?.otherUser?.name || 'this member',
+                            facilityId,
+                          })}
+                          aria-label="Report message or block sender"
+                          title="Report or block"
+                        >
+                          <Flag className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   );
                 })
@@ -1260,6 +1299,20 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
           </div>
         </DialogContent>
       </Dialog>
+
+      <ModerationDialog
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onBlocked={() => {
+          // A blocked member's direct thread is gone; in a group only their messages are.
+          if (selectedConv?.isGroup && selectedConversation) {
+            loadMessages(selectedConversation);
+          } else {
+            setSelectedConversation(null);
+            loadConversations();
+          }
+        }}
+      />
     </div>
   );
 }

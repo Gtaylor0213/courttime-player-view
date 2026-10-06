@@ -25,3 +25,24 @@ export const moderationApi = {
     facilityId?: string | null;
   }) => api.post('/api/moderation/reports', body),
 };
+
+// ── Club admin review queue ──
+
+export interface ContentReport {
+  id: string;
+  contentType: ReportContentType;
+  reason: ReportReason;
+  details: string | null;
+  contentSnapshot: string | null;
+  status: 'open' | 'resolved' | 'dismissed';
+  createdAt: string;
+  reporterName: string | null;
+  reportedUserName: string | null;
+}
+
+export const moderationAdminApi = {
+  list: (facilityId: string, status: 'open' | 'closed') =>
+    api.get<{ reports: ContentReport[] }>(`/api/moderation/reports/facility/${facilityId}?status=${status}`),
+  resolve: (reportId: string, action: 'remove' | 'dismiss') =>
+    api.post(`/api/moderation/reports/${reportId}/resolve`, { action }),
+};

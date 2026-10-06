@@ -105,6 +105,10 @@ export function getNotificationHref(raw: NotificationData): Href {
     return '/payments';
   }
 
+  if (type === 'content_report') {
+    return '/admin/content-reports';
+  }
+
   if (type === 'padel_session_full' || type.startsWith('padel_')) {
     return '/padel';
   }

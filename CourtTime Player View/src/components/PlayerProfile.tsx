@@ -12,6 +12,7 @@ import { ReservationManagementModal } from './ReservationManagementModal';
 import { Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, LogOut, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
+import { BlockedMembersCard } from './BlockedMembersCard';
 import { useAuth } from '../contexts/AuthContext';
 import { playerProfileApi, facilitiesApi, strikesApi, membersApi, usersApi, userPreferencesApi } from '../api/client';
 import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
@@ -1312,6 +1313,8 @@ export function PlayerProfile() {
                   />
                 </CardContent>
               </Card>
+
+              <BlockedMembersCard />
 
               {/* Delete Account */}
               <Card className="border-red-200">

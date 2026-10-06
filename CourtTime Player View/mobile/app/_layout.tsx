@@ -178,6 +178,7 @@ function RootLayoutNav() {
         <Stack.Screen name="admin/lessons" options={{ title: 'Lessons' }} />
         <Stack.Screen name="admin/facility" options={{ title: 'Facility Settings' }} />
         <Stack.Screen name="admin/households" options={{ title: 'Households' }} />
+        <Stack.Screen name="admin/content-reports" options={{ title: 'Content Reports' }} />
         <Stack.Screen name="admin/reports" options={{ title: 'Reports' }} />
         <Stack.Screen name="admin/ball-machine" options={{ title: 'Ball Machine' }} />
         <Stack.Screen name="admin/booking-rules" options={{ title: 'Booking Rules' }} />

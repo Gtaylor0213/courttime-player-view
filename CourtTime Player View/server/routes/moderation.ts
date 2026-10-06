@@ -8,9 +8,13 @@ import {
   ModerationError,
   blockUser,
   createContentReport,
+  facilityIdForReport,
   listBlockedUsers,
+  listContentReports,
+  resolveContentReport,
   unblockUser,
 } from '../../src/services/moderationService';
+import { isFacilityAdminUser } from '../middleware/facilityAdmin';
 
 const router = express.Router();
 
@@ -78,6 +82,50 @@ router.post('/reports', async (req, res) => {
     res.status(201).json({ success: true, data: { reportId } });
   } catch (error) {
     handleError(res, error, 'create report');
+  }
+});
+
+/**
+ * GET /api/moderation/reports/facility/:facilityId?status=open|closed
+ * A club admin's review queue: reported bulletin and hitting-partner posts at
+ * their club. Reported private messages go to the CourtTime team instead.
+ */
+router.get('/reports/facility/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    if (!(await isFacilityAdminUser(facilityId, req.user!.userId))) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const reports = await listContentReports({
+      facilityId,
+      status: req.query.status === 'closed' ? 'closed' : 'open',
+    });
+    res.json({ success: true, data: { reports } });
+  } catch (error) {
+    handleError(res, error, 'list reports');
+  }
+});
+
+/**
+ * POST /api/moderation/reports/:reportId/resolve
+ * Body: { action: 'remove' | 'dismiss' }
+ */
+router.post('/reports/:reportId/resolve', async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const facilityId = await facilityIdForReport(reportId);
+    if (!facilityId || !(await isFacilityAdminUser(facilityId, req.user!.userId))) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    await resolveContentReport({
+      reportId,
+      action: req.body?.action,
+      resolvedBy: req.user!.userId,
+      restrictToFacilityId: facilityId,
+    });
+    res.json({ success: true });
+  } catch (error) {
+    handleError(res, error, 'resolve report');
   }
 });
 

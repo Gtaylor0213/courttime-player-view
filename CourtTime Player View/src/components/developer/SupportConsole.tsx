@@ -11,6 +11,7 @@ import { SupportCourtManagement } from './SupportCourtManagement';
 import { SupportSubscriptionManagement } from './SupportSubscriptionManagement';
 import { SupportPromoCodes } from './SupportPromoCodes';
 import { DeveloperMessaging } from './DeveloperMessaging';
+import { SupportContentReports } from './SupportContentReports';
 
 export type SupportView =
   | 'dashboard'
@@ -21,7 +22,8 @@ export type SupportView =
   | 'courts'
   | 'subscriptions'
   | 'promos'
-  | 'messages';
+  | 'messages'
+  | 'content-reports';
 
 export function SupportConsole() {
   const [authenticated, setAuthenticated] = useState(isSupportAuthenticated());
@@ -91,6 +93,8 @@ export function SupportConsole() {
             onSelectFacility={(id) => setSelectedFacilityId(id)}
           />
         );
+      case 'content-reports':
+        return <SupportContentReports />;
       case 'promos':
         return <SupportPromoCodes />;
       case 'messages':

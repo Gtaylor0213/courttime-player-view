@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus, ShoppingBag, ShoppingCart, DollarSign, BarChart2, CalendarDays, GraduationCap, Target, Trophy } from 'lucide-react';
+import { User, LogOut, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, LayoutDashboard, UserSearch, BookOpen, UserCog, MessageSquare, MessageCircle, Mail, X, CreditCard, Plus, ShoppingBag, ShoppingCart, DollarSign, BarChart2, CalendarDays, GraduationCap, Target, Trophy, Flag } from 'lucide-react';
 import logoImage from '../assets/courttime-logo.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
@@ -475,6 +475,12 @@ export function UnifiedSidebar({
                   icon={Mail}
                   label="Communication"
                   isActive={currentPage === 'communication'}
+                />
+                <SidebarButton
+                  onClick={() => handleNav('/admin/content-reports')}
+                  icon={Flag}
+                  label="Content Reports"
+                  isActive={currentPage === 'content-reports'}
                 />
                 <SidebarButton
                   onClick={() => handleNav('/bulletin-board')}

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
-import { Search, Users, Plus, Building, Edit, Trash2, AlertCircle, MessageCircle } from 'lucide-react';
+import { Search, Users, Plus, Building, Edit, Trash2, AlertCircle, MessageCircle, Flag } from 'lucide-react';
+import { ModerationDialog, type ModerationTarget } from './ModerationDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { hittingPartnerApi, playerProfileApi, facilitiesApi } from '../api/client';
 import { Button } from './ui/button';
@@ -19,6 +20,8 @@ import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
 export function FindHittingPartner() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  /** The post the report / block dialog is open for. */
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<any[]>([]);
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
@@ -472,6 +475,23 @@ export function FindHittingPartner() {
                                   Message
                                 </Button>
                               )}
+                              {!isMyPost && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setModerationTarget({
+                                    contentType: 'hitting_partner_post',
+                                    contentId: post.id,
+                                    userId: post.userId,
+                                    userName: post.userName,
+                                    facilityId: post.facilityId,
+                                  })}
+                                  aria-label={`Report or block ${post.userName}`}
+                                  title="Report or block"
+                                >
+                                  <Flag className="h-4 w-4" />
+                                </Button>
+                              )}
                               {isMyPost && (
                                 <>
                                   <Button
@@ -632,6 +652,12 @@ export function FindHittingPartner() {
             </DialogContent>
           </Dialog>
         </div>
+
+      <ModerationDialog
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onBlocked={() => loadData()}
+      />
     </>
   );
 }

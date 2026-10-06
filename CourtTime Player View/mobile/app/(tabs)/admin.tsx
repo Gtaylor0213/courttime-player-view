@@ -116,6 +116,13 @@ const ADMIN_MENU_ITEMS = [
     label: 'Communication',
     description: 'Send an email blast or post a facility announcement.',
   },
+  {
+    key: 'content-reports',
+    route: '/admin/content-reports',
+    icon: 'flag',
+    label: 'Content Reports',
+    description: 'Review posts members have flagged as offensive.',
+  },
 ] as const;
 
 export default function AdminScreen() {

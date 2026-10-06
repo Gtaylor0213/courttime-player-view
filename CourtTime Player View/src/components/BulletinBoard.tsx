@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
-import { Calendar, Users, MapPin, Tag, Pin, AlertCircle, Plus, Trash2, DollarSign } from 'lucide-react';
+import { Calendar, Users, MapPin, Tag, Pin, AlertCircle, Plus, Trash2, DollarSign, Flag } from 'lucide-react';
+import { ModerationDialog, type ModerationTarget } from './ModerationDialog';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -108,6 +109,8 @@ export function BulletinBoard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { selectedFacilityId } = useAppContext();
+  /** The post the report / block dialog is open for. */
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<BulletinPost[]>([]);
   const [memberFacilities, setMemberFacilities] = useState<any[]>([]);
@@ -755,6 +758,25 @@ export function BulletinBoard() {
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               )}
+                              {post.authorId !== user?.id && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setModerationTarget({
+                                      contentType: 'bulletin_post',
+                                      contentId: post.id,
+                                      userId: post.authorId,
+                                      userName: post.authorName || 'this member',
+                                      facilityId: post.facilityId,
+                                    });
+                                  }}
+                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                  title="Report or block"
+                                  aria-label="Report this post or block its author"
+                                >
+                                  <Flag className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <span className="text-xs text-gray-400" title={post.createdAt ? `Posted ${new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : undefined}>
                                 {formatBulletinPostProminentDate(post, 'short')}
                               </span>
@@ -1018,6 +1040,12 @@ export function BulletinBoard() {
           sharePostTarget ? isAdminOfFacility(sharePostTarget.facilityId) : false
         }
         onClose={() => setSharePostTarget(null)}
+      />
+
+      <ModerationDialog
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onBlocked={() => { void loadData(); }}
       />
     </>
   );

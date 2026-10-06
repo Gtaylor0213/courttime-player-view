@@ -301,7 +301,7 @@ async function alertOnNewReport(
             'Post reported',
             `A member reported a ${report.contentType === 'bulletin_post' ? 'bulletin board' : 'hitting partner'} post as ${report.reason}. Please review it.`,
             'content_report',
-            { actionUrl: '/bulletin-board', pushData: { facilityId: report.facilityId as string } }
+            { actionUrl: '/admin/content-reports', pushData: { facilityId: report.facilityId as string } }
           )
         )
       );
@@ -309,4 +309,150 @@ async function alertOnNewReport(
   } catch (error) {
     console.error('[Moderation] Failed to send report alerts for', reportId, error);
   }
+}
+
+// ── Review queue ────────────────────────────────────────────────────────────
+
+/** What a club admin may review: posts on their club's public boards. */
+const PUBLIC_POST_TYPES: ReportContentType[] = ['bulletin_post', 'hitting_partner_post'];
+
+export interface ContentReport {
+  id: string;
+  contentType: ReportContentType;
+  contentId: string;
+  reason: ReportReason;
+  details: string | null;
+  contentSnapshot: string | null;
+  status: 'open' | 'resolved' | 'dismissed';
+  createdAt: string;
+  resolvedAt: string | null;
+  facilityId: string | null;
+  facilityName: string | null;
+  reporterName: string | null;
+  reportedUserId: string | null;
+  reportedUserName: string | null;
+}
+
+export interface ListReportsOptions {
+  /**
+   * Set for a club admin's queue: only that club's public posts. Private
+   * messages and member reports are reviewed by the CourtTime team alone.
+   * Omit for the CourtTime team's queue, which holds everything.
+   */
+  facilityId?: string;
+  status?: 'open' | 'closed';
+}
+
+export async function listContentReports(options: ListReportsOptions = {}): Promise<ContentReport[]> {
+  const conditions = [options.status === 'closed' ? `cr.status <> 'open'` : `cr.status = 'open'`];
+  const params: any[] = [];
+  if (options.facilityId) {
+    params.push(options.facilityId, PUBLIC_POST_TYPES);
+    conditions.push(`cr.facility_id = $1`, `cr.content_type = ANY($2::text[])`);
+  }
+
+  const result = await query(
+    `SELECT cr.id,
+            cr.content_type AS "contentType",
+            cr.content_id AS "contentId",
+            cr.reason,
+            cr.details,
+            cr.content_snapshot AS "contentSnapshot",
+            cr.status,
+            cr.created_at AS "createdAt",
+            cr.resolved_at AS "resolvedAt",
+            cr.facility_id AS "facilityId",
+            f.name AS "facilityName",
+            reporter.full_name AS "reporterName",
+            cr.reported_user_id AS "reportedUserId",
+            reported.full_name AS "reportedUserName"
+       FROM content_reports cr
+       LEFT JOIN facilities f ON f.id = cr.facility_id
+       LEFT JOIN users reporter ON reporter.id = cr.reporter_id
+       LEFT JOIN users reported ON reported.id = cr.reported_user_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY cr.created_at DESC
+      LIMIT 200`,
+    params
+  );
+  return result.rows;
+}
+
+export type ReportResolution = 'remove' | 'dismiss';
+
+export interface ResolveReportOptions {
+  reportId: string;
+  /** `remove` takes the reported content down; `dismiss` closes the report with no action. */
+  action: unknown;
+  /** The admin acting, or null for the CourtTime team's console. */
+  resolvedBy: string | null;
+  /** When set, the report must be a public post at this club (a club admin's reach). */
+  restrictToFacilityId?: string;
+}
+
+async function removeReportedContent(contentType: ReportContentType, contentId: string): Promise<void> {
+  if (contentType === 'bulletin_post') {
+    // Reuses the normal admin delete so a linked court booking is released too.
+    const { deleteBulletinPost } = await import('./bulletinBoardService');
+    await deleteBulletinPost(contentId, '', true);
+  } else if (contentType === 'hitting_partner_post') {
+    await query(`UPDATE hitting_partner_posts SET status = 'deleted' WHERE id = $1`, [contentId]);
+  } else if (contentType === 'message') {
+    await query(`DELETE FROM messages WHERE id = $1`, [contentId]);
+  }
+  // `user` reports have no single piece of content; handling the member
+  // (warning, strike, removal) happens through the member tools.
+}
+
+/**
+ * Closes a report. Every other open report about the same content closes with
+ * it, so three members reporting one post is one decision, not three.
+ */
+export async function resolveContentReport(options: ResolveReportOptions): Promise<void> {
+  const { reportId, resolvedBy, restrictToFacilityId } = options;
+  if (options.action !== 'remove' && options.action !== 'dismiss') {
+    throw new ModerationError('Invalid action');
+  }
+  const action: ReportResolution = options.action;
+  if (!UUID_PATTERN.test(reportId)) {
+    throw new ModerationError('Report not found', 404);
+  }
+
+  const found = await query(
+    `SELECT content_type, content_id, facility_id, status FROM content_reports WHERE id = $1`,
+    [reportId]
+  );
+  const report = found.rows[0];
+  if (!report) throw new ModerationError('Report not found', 404);
+  if (
+    restrictToFacilityId &&
+    (report.facility_id !== restrictToFacilityId || !PUBLIC_POST_TYPES.includes(report.content_type))
+  ) {
+    throw new ModerationError('Report not found', 404);
+  }
+  if (report.status !== 'open') return;
+
+  if (action === 'remove') {
+    await removeReportedContent(report.content_type, report.content_id);
+  }
+
+  await query(
+    `UPDATE content_reports
+        SET status = $1, resolved_by = $2, resolved_at = CURRENT_TIMESTAMP, resolution_note = $3
+      WHERE content_type = $4 AND content_id = $5 AND status = 'open'`,
+    [
+      action === 'remove' ? 'resolved' : 'dismissed',
+      resolvedBy,
+      action === 'remove' ? 'Content removed' : 'No action needed',
+      report.content_type,
+      report.content_id,
+    ]
+  );
+}
+
+/** Facility a report belongs to, for the admin permission check. */
+export async function facilityIdForReport(reportId: string): Promise<string | null> {
+  if (!UUID_PATTERN.test(reportId)) return null;
+  const result = await query(`SELECT facility_id FROM content_reports WHERE id = $1`, [reportId]);
+  return result.rows[0]?.facility_id ?? null;
 }

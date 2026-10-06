@@ -48,6 +48,7 @@ import BallMachine from './components/BallMachine';
 import BallMachineAdmin from './components/admin/BallMachineAdmin';
 import AnnualFeesAdmin from './components/admin/AnnualFeesAdmin';
 import AdminReports from './components/admin/AdminReports';
+import { AdminContentReports } from './components/admin/AdminContentReports';
 
 // Support Console
 import { SupportConsole } from './components/developer/SupportConsole';
@@ -111,6 +112,7 @@ export default function App() {
               <Route path="/admin/pro-shop" element={<ProShopAdmin />} />
               <Route path="/admin/annual-fees" element={<AnnualFeesAdmin />} />
               <Route path="/admin/reports" element={<AdminReports />} />
+              <Route path="/admin/content-reports" element={<AdminContentReports />} />
               <Route path="/shop" element={<ProShop />} />
               <Route path="/lessons" element={<Lessons />} />
               <Route path="/admin/lessons" element={<LessonsAdmin />} />

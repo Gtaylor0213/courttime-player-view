@@ -15,6 +15,7 @@ function getCurrentPage(pathname: string): string {
   if (pathname.startsWith('/admin/members')) return 'member-management';
   if (pathname.startsWith('/admin/households')) return 'household-management';
   if (pathname.startsWith('/admin/communication')) return 'communication';
+  if (pathname.startsWith('/admin/content-reports')) return 'content-reports';
   if (pathname.startsWith('/admin/member-payments')) return 'member-payments';
   if (pathname.startsWith('/admin/pro-shop')) return 'pro-shop-admin';
   if (pathname.startsWith('/admin/lessons')) return 'lessons-admin';

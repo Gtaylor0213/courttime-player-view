@@ -37,6 +37,7 @@ import {
   replyToTeamConversation,
   BroadcastFilters,
 } from '../../src/services/developerMessagingService';
+import { ModerationError, listContentReports, resolveContentReport } from '../../src/services/moderationService';
 
 const router = express.Router();
 
@@ -553,6 +554,37 @@ router.post('/messages/conversations/:conversationId/reply', async (req, res) =>
   } catch (error: any) {
     console.error('[Support] Reply error:', error);
     res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// ── Content reports (App Store Guideline 1.2) ──────────────
+// The CourtTime team's queue: every report, including private messages that
+// club admins never see.
+
+router.get('/content-reports', async (req, res) => {
+  try {
+    const reports = await listContentReports({ status: req.query.status === 'closed' ? 'closed' : 'open' });
+    res.json({ success: true, data: reports });
+  } catch (error: any) {
+    console.error('[Support] List content reports error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/content-reports/:reportId/resolve', async (req, res) => {
+  try {
+    await resolveContentReport({
+      reportId: req.params.reportId,
+      action: req.body?.action,
+      resolvedBy: null,
+    });
+    res.json({ success: true });
+  } catch (error: any) {
+    if (error instanceof ModerationError) {
+      return res.status(error.status).json({ success: false, error: error.message });
+    }
+    console.error('[Support] Resolve content report error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

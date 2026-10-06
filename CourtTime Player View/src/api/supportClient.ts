@@ -444,3 +444,24 @@ export async function replyToTeamConversation(conversationId: string, messageTex
     return { success: false, error: 'Failed to send reply' };
   }
 }
+
+// ── Content reports ────────────────────────────────────────
+
+export async function getContentReports(status: 'open' | 'closed' = 'open') {
+  try {
+    return await supportFetch(`/content-reports?status=${status}`);
+  } catch {
+    return { success: false, error: 'Failed to fetch content reports' };
+  }
+}
+
+export async function resolveContentReport(reportId: string, action: 'remove' | 'dismiss') {
+  try {
+    return await supportFetch(`/content-reports/${reportId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to update content report' };
+  }
+}

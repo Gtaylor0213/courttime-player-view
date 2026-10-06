@@ -98,6 +98,9 @@ export default function MessagesScreen() {
 
   // Conversation list state
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  /** Latest list, readable from async callbacks without a state updater. */
+  const conversationsRef = useRef<ConversationItem[]>(conversations);
+  conversationsRef.current = conversations;
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
@@ -228,13 +231,14 @@ export default function MessagesScreen() {
 
     // Mark as read
     if (user) {
-      setConversations(prev => {
-        const next = prev.map(convo =>
-          convo.id === conversationId ? { ...convo, unreadCount: 0 } : convo
-        );
-        syncUnreadState(next);
-        return next;
-      });
+      // Sync the badge outside the updater: updaters run during render, where
+      // setting another component's state is not allowed.
+      const next = conversationsRef.current.map(convo =>
+        convo.id === conversationId ? { ...convo, unreadCount: 0 } : convo
+      );
+      conversationsRef.current = next;
+      setConversations(next);
+      syncUnreadState(next);
       api.patch(`/api/messages/${conversationId}/read`, { userId: user.id });
     }
   }, [fetchWithCache, syncUnreadState, user]);

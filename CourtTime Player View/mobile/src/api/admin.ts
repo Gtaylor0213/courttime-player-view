@@ -271,7 +271,10 @@ export interface AdminCourtRow {
   isWalkUp: boolean;
   status: 'available' | 'maintenance' | 'closed' | string;
   isAdminOnly?: boolean;
-  canSplit?: boolean;
+  /** Set on the halves of a split court. */
+  parentCourtId?: string | null;
+  isSplitCourt?: boolean;
+  splitConfiguration?: unknown;
   requirePayment?: boolean;
   bookingAmountCents?: number | null;
   billingMode?: 'hourly' | 'daily' | string | null;
@@ -295,7 +298,9 @@ export interface CreateCourtInput {
   hasLights: boolean;
   isWalkUp: boolean;
   isAdminOnly?: boolean;
+  /** Send `false` to remove a split, or `true` together with splitConfig. Omit to leave the split alone. */
   canSplit?: boolean;
+  splitConfig?: { splitNames: string[]; splitType: 'Tennis' | 'Pickleball' };
   requirePayment?: boolean;
   bookingFeeDollars?: string;
   billingMode?: 'hourly' | 'daily';
@@ -318,6 +323,22 @@ export function updateCourt(courtId: string, updates: Partial<CreateCourtInput &
     `/api/admin/courts/${courtId}`,
     updates
   );
+}
+
+/** Web's bulk edit and "Set fees for all": the same change applied to every listed court. Omitted keys are left alone. */
+export interface BulkCourtUpdates {
+  surfaceType?: string;
+  courtType?: string;
+  isIndoor?: boolean;
+  hasLights?: boolean;
+  status?: string;
+  requirePayment?: boolean;
+  bookingAmountCents?: number | null;
+  guestFeeCents?: number | null;
+  ballMachineFeeCents?: number | null;
+}
+export function bulkUpdateCourts(courtIds: string[], updates: BulkCourtUpdates) {
+  return api.patch<{ success: boolean; data: { updatedCount: number } }>(`/api/admin/courts/bulk-update`, { courtIds, updates });
 }
 
 export function deleteCourt(courtId: string) {
@@ -369,6 +390,7 @@ export function createBlackout(input: {
   facilityId: string;
   blackoutType: string;
   title: string;
+  description?: string;
   startDatetime: string;
   endDatetime: string;
 }) {
@@ -376,6 +398,13 @@ export function createBlackout(input: {
     `/api/court-config/blackouts`,
     input
   );
+}
+
+export function updateBlackout(
+  blackoutId: string,
+  input: { courtId?: string | null; blackoutType: string; title: string; description: string; startDatetime: string; endDatetime: string }
+) {
+  return api.put<{ success: boolean; blackout: AdminBlackoutRow }>(`/api/court-config/blackouts/${blackoutId}`, input);
 }
 
 export function deleteBlackout(blackoutId: string) {
@@ -531,6 +560,8 @@ export interface AdminFacilityDetails {
   logoUrl?: string | null;
   primaryContact?: FacilityContact | null;
   secondaryContacts?: FacilityContact[] | null;
+  /** Per-day { open, close, closed }; changing it rewrites every court's schedule. */
+  operatingHours?: Record<string, { open: string; close: string; closed: boolean }>;
 }
 export function getFacilityDetails(facilityId: string) {
   return api.get(`/api/facilities/${facilityId}`);

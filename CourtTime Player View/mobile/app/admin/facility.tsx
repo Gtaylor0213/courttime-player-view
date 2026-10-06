@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, RefreshControl, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,6 +28,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
+import { HOURS_DAYS, readFacilityHours, validateFacilityHours, type DayHours, type FacilityHours, type HoursDay } from '../../src/utils/facilityHours';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Facility');
@@ -51,6 +52,10 @@ export default function AdminFacilityScreen() {
   const [locations, setLocations] = useState<FacilityLocationRow[]>([]);
   const [editingLocation, setEditingLocation] = useState<{ id: string | null; data: Omit<FacilityLocationRow, 'id'> } | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
+  // Operating hours (web Facility Management > Details). Only sent when edited: a change
+  // rewrites every court's schedule on the server.
+  const [hours, setHours] = useState<FacilityHours | null>(null);
+  const [hoursDirty, setHoursDirty] = useState(false);
 
   const load = useCallback(async () => {
     if (!facilityId) return;
@@ -74,6 +79,8 @@ export default function AdminFacilityScreen() {
         primaryContact: f.primaryContact ?? (f.contactName ? { name: f.contactName } : { name: '', email: '', phone: '' }),
         secondaryContacts: Array.isArray(f.secondaryContacts) ? f.secondaryContacts : [],
       });
+      setHours(readFacilityHours(f.operatingHours));
+      setHoursDirty(false);
     } else {
       showApiErrorAlert(facRes, 'Could not load facility');
     }
@@ -90,6 +97,11 @@ export default function AdminFacilityScreen() {
     await load();
     setRefreshing(false);
   }, [load]);
+
+  const setDayHours = (day: HoursDay, patch: Partial<DayHours>) => {
+    setHours((prev) => (prev ? { ...prev, [day]: { ...prev[day], ...patch } } : prev));
+    setHoursDirty(true);
+  };
 
   const set = <K extends keyof AdminFacilityDetails>(key: K, value: AdminFacilityDetails[K]) =>
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -114,8 +126,16 @@ export default function AdminFacilityScreen() {
       showAlert('Facility', 'Facility name is required.');
       return;
     }
+    if (hoursDirty && hours) {
+      const invalid = validateFacilityHours(hours);
+      if (invalid) {
+        showAlert('Operating hours', invalid);
+        return;
+      }
+    }
     setSaving(true);
     const res = await updateFacilityDetails(facilityId, {
+      ...(hoursDirty && hours ? { operatingHours: hours } : {}),
       name: form.name.trim(),
       type: form.type || undefined,
       description: form.description ?? '',
@@ -273,6 +293,32 @@ export default function AdminFacilityScreen() {
         </View>
       </Card>
 
+      {hours ? (
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Operating hours</Text>
+          <Text style={styles.hint}>Times are 24-hour (HH:MM). Changing these hours updates every court's schedule.</Text>
+          {HOURS_DAYS.map((day) => {
+            const h = hours[day];
+            const label = day.charAt(0).toUpperCase() + day.slice(1);
+            return (
+              <View key={day} style={styles.hoursRow}>
+                <Text style={styles.hoursDay}>{label.slice(0, 3)}</Text>
+                <Switch value={!h.closed} onValueChange={(open) => setDayHours(day, { closed: !open })} trackColor={{ true: Colors.primary, false: Colors.border }} accessibilityLabel={`${label} open`} />
+                {h.closed ? (
+                  <Text style={styles.hoursClosed}>Closed</Text>
+                ) : (
+                  <>
+                    <Input value={h.open} onChangeText={(v) => setDayHours(day, { open: v })} placeholder="08:00" style={styles.hoursInput} accessibilityLabel={`${label} opening time`} />
+                    <Text style={styles.hoursDash}>–</Text>
+                    <Input value={h.close} onChangeText={(v) => setDayHours(day, { close: v })} placeholder="20:00" style={styles.hoursInput} accessibilityLabel={`${label} closing time`} />
+                  </>
+                )}
+              </View>
+            );
+          })}
+        </Card>
+      ) : null}
+
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Contacts</Text>
         <Text style={styles.label}>Primary contact</Text>
@@ -352,6 +398,12 @@ const styles = StyleSheet.create({
   link: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
   remove: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.error },
   row: { flexDirection: 'row', gap: Spacing.sm },
+  hint: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  hoursRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs, borderTopWidth: 1, borderTopColor: Colors.borderLight, marginTop: Spacing.xs },
+  hoursDay: { width: 40, fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  hoursInput: { flex: 1, paddingVertical: 8, textAlign: 'center' },
+  hoursDash: { color: Colors.textMuted },
+  hoursClosed: { flex: 1, fontSize: FontSize.sm, color: Colors.textMuted },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   col: { flex: 2 },
   colSm: { flex: 1 },

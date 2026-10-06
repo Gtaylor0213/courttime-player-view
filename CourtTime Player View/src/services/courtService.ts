@@ -168,6 +168,30 @@ export async function createCourtsBulk(
   });
 }
 
+/** Child courts are stored as "Court <split name>" (see createSplitCourt). */
+const splitChildName = (splitName: string) => `Court ${splitName.trim()}`;
+const sameCourtName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * Work out how to make a parent court's split halves match the wanted names without
+ * recreating the ones that already exist. Deleting a court deletes its bookings, so a
+ * half that is still wanted must be kept, never dropped and re-added.
+ */
+export function planSplitCourtChanges(
+  existingChildren: Array<{ id: string; name: string }>,
+  wantedSplitNames: string[]
+): { keepIds: string[]; removeIds: string[]; addSplitNames: string[] } {
+  const wanted = wantedSplitNames.map(splitChildName);
+  const isWanted = (child: { name: string }) => wanted.some((name) => sameCourtName(name, child.name));
+  return {
+    keepIds: existingChildren.filter(isWanted).map((c) => c.id),
+    removeIds: existingChildren.filter((c) => !isWanted(c)).map((c) => c.id),
+    addSplitNames: wantedSplitNames.filter(
+      (splitName) => !existingChildren.some((c) => sameCourtName(c.name, splitChildName(splitName)))
+    ),
+  };
+}
+
 /**
  * Create split courts (e.g., Tennis Court 3 splits into Pickleball 3a and 3b)
  */

@@ -210,6 +210,7 @@ export default function AdminProShopScreen() {
                   {form.imageData ? <Image source={{ uri: form.imageData }} style={styles.image} /> : <Ionicons name="camera-outline" size={28} color={Colors.textMuted} />}
                   <Text style={styles.muted}>{form.imageData ? 'Tap to change photo' : 'Add photo'}</Text>
                 </TouchableOpacity>
+                {form.imageData ? <Button title="Remove photo" variant="secondary" onPress={() => setForm({ ...form, imageData: null })} style={{ alignSelf: 'flex-start', marginBottom: Spacing.xs }} /> : null}
                 <Input value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} placeholder="Name" />
                 <Input value={form.description} onChangeText={(v) => setForm({ ...form, description: v })} placeholder="Description" multiline style={{ marginTop: Spacing.xs }} />
                 <View style={styles.chips}>

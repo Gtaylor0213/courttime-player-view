@@ -17,6 +17,7 @@ import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailL
 import { buildSetupInviteCtaHtml } from '../../src/services/memberSetupInviteService';
 import {
   createSplitCourt,
+  planSplitCourtChanges,
   deleteCourt,
   updateCourtsBulk,
   assertPaidCourtConfig,
@@ -1060,10 +1061,36 @@ router.patch('/courts/:courtId', async (req, res) => {
     const splitConfiguration = shouldSplit
       ? JSON.stringify({ splitInto: normalizedSplitNames, splitType })
       : null;
-    const updateSplitFields = canSplit !== undefined || splitConfig !== undefined;
+    // Only an explicit instruction changes the split: on with names, or off. "On" without names
+    // (a client that has the toggle but not the names) says nothing about the halves, and used to
+    // delete them — along with every booking on them, since bookings cascade with their court.
+    const updateSplitFields = shouldSplit || canSplit === false;
 
+    let splitPlan: ReturnType<typeof planSplitCourtChanges> | null = null;
     if (updateSplitFields) {
-      await query(`DELETE FROM courts WHERE parent_court_id = $1`, [courtId]);
+      const children = await query<{ id: string; name: string }>(
+        `SELECT id, name FROM courts WHERE parent_court_id = $1`,
+        [courtId]
+      );
+      // Halves that are still wanted are kept as they are, so their bookings survive the save.
+      splitPlan = planSplitCourtChanges(children.rows, shouldSplit ? normalizedSplitNames : []);
+      if (splitPlan.removeIds.length > 0) {
+        const booked = await query<{ name: string; count: string }>(
+          `SELECT c.name, COUNT(*) AS count
+           FROM bookings b JOIN courts c ON c.id = b.court_id
+           WHERE b.court_id = ANY($1::uuid[]) AND b.status <> 'cancelled' AND b.booking_date >= CURRENT_DATE - INTERVAL '1 day'
+           GROUP BY c.name ORDER BY c.name`,
+          [splitPlan.removeIds]
+        );
+        if (booked.rows.length > 0) {
+          const detail = booked.rows.map((r) => `${r.name} (${r.count})`).join(', ');
+          return res.status(409).json({
+            success: false,
+            error: `These split courts still have upcoming reservations: ${detail}. Cancel or move them before removing the split.`,
+          });
+        }
+        await query(`DELETE FROM courts WHERE id = ANY($1::uuid[])`, [splitPlan.removeIds]);
+      }
     }
 
     const result = await query(`
@@ -1152,12 +1179,22 @@ router.patch('/courts/:courtId', async (req, res) => {
       });
     }
 
-    if (updateSplitFields && shouldSplit) {
-      await createSplitCourt(courtId, {
-        splitNames: normalizedSplitNames,
-        splitType,
-        surfaceType,
-      });
+    if (splitPlan && shouldSplit) {
+      if (splitPlan.keepIds.length > 0) {
+        await query(`UPDATE courts SET court_type = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2::uuid[]) AND court_type IS DISTINCT FROM $1`, [
+          splitType,
+          splitPlan.keepIds,
+        ]);
+      }
+      if (splitPlan.addSplitNames.length > 0) {
+        await createSplitCourt(courtId, {
+          splitNames: splitPlan.addSplitNames,
+          splitType,
+          surfaceType,
+        });
+        // createSplitCourt records only the names it was given; restore the full list.
+        await query(`UPDATE courts SET split_configuration = $1 WHERE id = $2`, [splitConfiguration, courtId]);
+      }
     }
 
     if (rawStatus !== undefined) {

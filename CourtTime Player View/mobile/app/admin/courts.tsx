@@ -1,7 +1,9 @@
 /**
  * Admin Courts & Facility: court CRUD, per-court schedule, and maintenance blackouts.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { parseSplitNames, readCourtSplit } from '../../src/utils/courtSplit';
+import { formatLocalDate, parseLocalDate } from '../../src/utils/dateUtils';
 import {
   Modal,
   Platform,
@@ -24,6 +26,9 @@ import {
   updateCourtSchedule,
   getFacilityBlackouts,
   createBlackout,
+  updateBlackout,
+  bulkUpdateCourts,
+  type BulkCourtUpdates,
   deleteBlackout,
   getCourtWaiver,
   publishCourtWaiver,
@@ -48,6 +53,32 @@ import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 export const ErrorBoundary = createRouteErrorBoundary('Admin Courts');
 
 const SURFACE_TYPES = ['Hard', 'Clay', 'Grass', 'Synthetic'];
+/** Same blackout types the web offers. */
+const BLACKOUT_TYPES = [
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'event', label: 'Event' },
+  { value: 'tournament', label: 'Tournament' },
+  { value: 'holiday', label: 'Holiday' },
+  { value: 'weather', label: 'Weather' },
+  { value: 'custom', label: 'Custom' },
+];
+/** Blackout times are club wall-clock values: read them as written, never shifted by the phone's timezone. */
+function splitLocalDatetime(value: string): { date: string; time: string } {
+  const d = parseLocalDate(value);
+  if (Number.isNaN(d.getTime())) return { date: todayYmd(), time: '12:00' };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return { date: formatLocalDate(d), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+}
+function formatBlackoutWhen(value: string): string {
+  const d = parseLocalDate(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+/** Same three statuses the web court form offers. */
+const COURT_STATUSES = [
+  { value: 'available', label: 'Available' },
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'closed', label: 'Closed' },
+];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function todayYmd() {
@@ -62,8 +93,10 @@ export default function AdminCourtsScreen() {
   const [blackouts, setBlackouts] = useState<AdminBlackoutRow[]>([]);
   const [editingCourt, setEditingCourt] = useState<AdminCourtRow | 'new' | null>(null);
   const [scheduleCourt, setScheduleCourt] = useState<AdminCourtRow | null>(null);
-  const [addingBlackout, setAddingBlackout] = useState(false);
+  /** 'new' to add, a row to edit. */
+  const [blackoutForm, setBlackoutForm] = useState<AdminBlackoutRow | 'new' | null>(null);
   const [bulkAdding, setBulkAdding] = useState(false);
+  const [bulkEditing, setBulkEditing] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!facilityId) return;
@@ -102,6 +135,9 @@ export default function AdminCourtsScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.cardTitle}>Courts ({courts.length})</Text>
           <View style={{ flexDirection: 'row', gap: Spacing.md, alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setBulkEditing(true)} accessibilityRole="button" accessibilityLabel="Edit several courts or set fees for all">
+              <Ionicons name="options-outline" size={22} color={Colors.primary} />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setBulkAdding(true)} accessibilityRole="button" accessibilityLabel="Bulk add courts">
               <Ionicons name="copy-outline" size={22} color={Colors.primary} />
             </TouchableOpacity>
@@ -133,8 +169,8 @@ export default function AdminCourtsScreen() {
 
       <Card style={styles.card}>
         <View style={styles.headerRow}>
-          <Text style={styles.cardTitle}>Maintenance blackouts</Text>
-          <TouchableOpacity onPress={() => setAddingBlackout(true)} accessibilityLabel="Add blackout">
+          <Text style={styles.cardTitle}>Blackouts</Text>
+          <TouchableOpacity onPress={() => setBlackoutForm('new')} accessibilityLabel="Add blackout">
             <Ionicons name="add-circle" size={26} color={Colors.primary} />
           </TouchableOpacity>
         </View>
@@ -146,10 +182,14 @@ export default function AdminCourtsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.courtName}>{b.title}</Text>
                 <Text style={styles.courtMeta}>
-                  {b.court_name || 'All courts'} • {new Date(b.start_datetime).toLocaleString()} –{' '}
-                  {new Date(b.end_datetime).toLocaleString()}
+                  {b.blackout_type || 'maintenance'} • {b.court_name || 'All courts'} • {formatBlackoutWhen(b.start_datetime)} –{' '}
+                  {formatBlackoutWhen(b.end_datetime)}
                 </Text>
+                {b.description ? <Text style={styles.blackoutDescription}>{b.description}</Text> : null}
               </View>
+              <TouchableOpacity onPress={() => setBlackoutForm(b)} accessibilityRole="button" accessibilityLabel={`Edit ${b.title}`} hitSlop={8}>
+                <Ionicons name="create-outline" size={20} color={Colors.primary} />
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() =>
                   showAlert('Delete blackout?', `Remove "${b.title}"?`, [
@@ -173,6 +213,7 @@ export default function AdminCourtsScreen() {
         <CourtFormModal
           facilityId={facilityId}
           court={editingCourt === 'new' ? null : editingCourt}
+          allCourts={courts}
           onClose={() => setEditingCourt(null)}
           onChanged={loadData}
         />
@@ -182,15 +223,18 @@ export default function AdminCourtsScreen() {
         <ScheduleModal court={scheduleCourt} onClose={() => setScheduleCourt(null)} />
       ) : null}
 
+      {bulkEditing ? <BulkEditCourtsModal courts={courts} onClose={() => setBulkEditing(false)} onChanged={loadData} /> : null}
+
       {bulkAdding ? (
         <BulkAddModal facilityId={facilityId} nextNumber={courts.reduce((m, c) => Math.max(m, Number(c.courtNumber) || 0), 0) + 1} onClose={() => setBulkAdding(false)} onChanged={loadData} />
       ) : null}
 
-      {addingBlackout ? (
+      {blackoutForm ? (
         <BlackoutFormModal
           facilityId={facilityId}
           courts={courts}
-          onClose={() => setAddingBlackout(false)}
+          blackout={blackoutForm === 'new' ? null : blackoutForm}
+          onClose={() => setBlackoutForm(null)}
           onChanged={loadData}
         />
       ) : null}
@@ -201,11 +245,13 @@ export default function AdminCourtsScreen() {
 function CourtFormModal({
   facilityId,
   court,
+  allCourts,
   onClose,
   onChanged,
 }: {
   facilityId: string | null | undefined;
   court: AdminCourtRow | null;
+  allCourts: AdminCourtRow[];
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
@@ -220,7 +266,13 @@ function CourtFormModal({
   const adminOnlyEnabled = isFeatureEnabled(FEATURE_FLAGS.ADMIN_ONLY_COURTS);
   const waiversEnabled = isFeatureEnabled(FEATURE_FLAGS.COURT_WAIVERS);
   const [isAdminOnly, setIsAdminOnly] = useState(court?.isAdminOnly || false);
-  const [canSplit, setCanSplit] = useState(court?.canSplit || false);
+  // Split (web FacilityCourtFormBody). A half of a split court cannot itself be split.
+  const isSplitHalf = !!court?.parentCourtId;
+  const initialSplit = useMemo(() => readCourtSplit(court, allCourts), [court, allCourts]);
+  const [canSplit, setCanSplit] = useState(initialSplit.canSplit);
+  const [splitNamesText, setSplitNamesText] = useState(initialSplit.splitNames.join(', '));
+  const [splitType, setSplitType] = useState<'Tennis' | 'Pickleball'>(initialSplit.splitType);
+  const [status, setStatus] = useState(COURT_STATUSES.some((s) => s.value === court?.status) ? (court?.status as string) : 'available');
   // Fees (web PaidCourtBookingFields): hourly or daily court fee, guest fee, ball machine fee.
   const dollars = (cents?: number | null) => (cents != null && cents > 0 ? (cents / 100).toFixed(2) : '');
   const [requirePayment, setRequirePayment] = useState(court?.requirePayment || false);
@@ -274,6 +326,15 @@ function CourtFormModal({
       showAlert('Court fee', billingMode === 'daily' ? 'Enter a valid daily rate.' : 'Enter a valid hourly booking fee.');
       return;
     }
+    const splitNames = parseSplitNames(splitNamesText);
+    if (!isSplitHalf && canSplit && splitNames.length === 0) {
+      showAlert('Split courts', 'Enter the split court names (for example "3a, 3b"), or turn the split off.');
+      return;
+    }
+    const splitChanged =
+      !isSplitHalf &&
+      (canSplit !== initialSplit.canSplit ||
+        (canSplit && (splitNames.join('|') !== initialSplit.splitNames.join('|') || splitType !== initialSplit.splitType)));
     setSubmitting(true);
     const input = {
       name: name.trim(),
@@ -284,7 +345,10 @@ function CourtFormModal({
       hasLights,
       isWalkUp,
       isAdminOnly,
-      canSplit,
+      // Split and status are only sent when the admin changed them. Existing halves are sent
+      // back by name, so the server keeps them (and their reservations).
+      ...(!splitChanged ? {} : canSplit ? { canSplit: true, splitConfig: { splitNames, splitType } } : { canSplit: false }),
+      ...(court && status !== court.status ? { status } : {}),
       requirePayment,
       billingMode,
       bookingFeeDollars: requirePayment && billingMode === 'hourly' ? bookingFeeDollars : '',
@@ -381,7 +445,34 @@ function CourtFormModal({
             <ToggleRow label="Has lights" value={hasLights} onChange={setHasLights} />
             <ToggleRow label="Walk-up (no reservation needed)" value={isWalkUp} onChange={setIsWalkUp} />
             {adminOnlyEnabled ? <ToggleRow label="Admin only (only admins/sub-admins can book)" value={isAdminOnly} onChange={setIsAdminOnly} /> : null}
-            <ToggleRow label="Can be split into multiple courts" value={canSplit} onChange={setCanSplit} />
+            {!isSplitHalf ? <ToggleRow label="Can be split into multiple courts" value={canSplit} onChange={setCanSplit} /> : null}
+            {!isSplitHalf && canSplit ? (
+              <>
+                <Text style={styles.label}>Split names (comma-separated)</Text>
+                <Input value={splitNamesText} onChangeText={setSplitNamesText} placeholder="3a, 3b" autoCapitalize="none" accessibilityLabel="Split court names" />
+                <Text style={styles.label}>Split type</Text>
+                <View style={styles.chipsWrap}>
+                  {(['Tennis', 'Pickleball'] as const).map((t) => (
+                    <TouchableOpacity key={t} style={[styles.chip, splitType === t && styles.chipSelected]} onPress={() => setSplitType(t)} accessibilityRole="button" accessibilityState={{ selected: splitType === t }}>
+                      <Text style={[styles.chipText, splitType === t && styles.chipTextSelected]}>{t}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {court ? (
+              <>
+                <Text style={styles.label}>Status</Text>
+                <View style={styles.chipsWrap}>
+                  {COURT_STATUSES.map((s) => (
+                    <TouchableOpacity key={s.value} style={[styles.chip, status === s.value && styles.chipSelected]} onPress={() => setStatus(s.value)} accessibilityRole="button" accessibilityState={{ selected: status === s.value }}>
+                      <Text style={[styles.chipText, status === s.value && styles.chipTextSelected]}>{s.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            ) : null}
 
             <Text style={styles.sectionTitle}>Fees</Text>
             <ToggleRow label="Charge a court booking fee" value={requirePayment} onChange={setRequirePayment} />
@@ -666,38 +757,228 @@ function ScheduleModal({ court, onClose }: { court: AdminCourtRow; onClose: () =
   );
 }
 
+/** Dollars text → positive cents, or null when blank/invalid. */
+function feeCents(dollars: string): number | null {
+  const n = Math.round(parseFloat(dollars) * 100);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Web's bulk edit and "Set Fees for All Courts": pick courts, then change shared
+ * properties (only the ones chosen) or replace their fee settings.
+ */
+function BulkEditCourtsModal({ courts, onClose, onChanged }: { courts: AdminCourtRow[]; onClose: () => void; onChanged: () => Promise<void> }) {
+  const [mode, setMode] = useState<'properties' | 'fees'>('properties');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(courts.map((c) => c.id)));
+  // Properties: '' means "leave as is".
+  const [courtType, setCourtType] = useState('');
+  const [surfaceType, setSurfaceType] = useState('');
+  const [status, setStatus] = useState('');
+  const [indoor, setIndoor] = useState<'' | 'true' | 'false'>('');
+  const [lights, setLights] = useState<'' | 'true' | 'false'>('');
+  // Fees: applying replaces the fee settings on the selected courts.
+  const [requirePayment, setRequirePayment] = useState(false);
+  const [bookingFeeDollars, setBookingFeeDollars] = useState('');
+  const [guestFeeEnabled, setGuestFeeEnabled] = useState(false);
+  const [guestFeeDollars, setGuestFeeDollars] = useState('');
+  const [ballFeeEnabled, setBallFeeEnabled] = useState(false);
+  const [ballFeeDollars, setBallFeeDollars] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  async function apply() {
+    const courtIds = courts.filter((c) => selected.has(c.id)).map((c) => c.id);
+    if (courtIds.length === 0) {
+      showAlert('Courts', 'Select at least one court.');
+      return;
+    }
+    let updates: BulkCourtUpdates;
+    if (mode === 'properties') {
+      updates = {};
+      if (courtType) updates.courtType = courtType;
+      if (surfaceType) updates.surfaceType = surfaceType;
+      if (status) updates.status = status;
+      if (indoor) updates.isIndoor = indoor === 'true';
+      if (lights) updates.hasLights = lights === 'true';
+      if (Object.keys(updates).length === 0) {
+        showAlert('Courts', 'Select at least one property to change.');
+        return;
+      }
+    } else {
+      const bookingAmountCents = feeCents(bookingFeeDollars);
+      const guestFeeCents = feeCents(guestFeeDollars);
+      const ballMachineFeeCents = feeCents(ballFeeDollars);
+      if (requirePayment && !bookingAmountCents) return showAlert('Fees', 'Enter an hourly rate when paid court booking is enabled.');
+      if (guestFeeEnabled && !guestFeeCents) return showAlert('Fees', 'Enter a valid guest fee amount.');
+      if (ballFeeEnabled && !ballMachineFeeCents) return showAlert('Fees', 'Enter a valid ball machine hourly rate.');
+      updates = {
+        requirePayment,
+        bookingAmountCents: requirePayment ? bookingAmountCents : null,
+        guestFeeCents: guestFeeEnabled ? guestFeeCents : null,
+        ballMachineFeeCents: ballFeeEnabled ? ballMachineFeeCents : null,
+      };
+    }
+    setSubmitting(true);
+    const res = await bulkUpdateCourts(courtIds, updates);
+    setSubmitting(false);
+    if (!res.success) {
+      showApiErrorAlert(res, mode === 'fees' ? 'Failed to apply fees' : 'Failed to update courts');
+      return;
+    }
+    await onChanged();
+    onClose();
+  }
+
+  const choice = (label: string, value: string, current: string, set: (v: any) => void) => (
+    <TouchableOpacity key={label} style={[styles.chip, current === value && styles.chipSelected]} onPress={() => set(value)} accessibilityRole="button" accessibilityState={{ selected: current === value }}>
+      <Text style={[styles.chipText, current === value && styles.chipTextSelected]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <Modal visible transparent animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined} onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>Edit Several Courts</Text>
+            <TouchableOpacity onPress={onClose} accessibilityLabel="Close">
+              <Ionicons name="close" size={24} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled">
+            <View style={styles.chipsWrap}>
+              {choice('Properties', 'properties', mode, setMode)}
+              {choice('Set fees', 'fees', mode, setMode)}
+            </View>
+
+            <Text style={styles.label}>Courts ({selected.size} of {courts.length})</Text>
+            <View style={styles.chipsWrap}>
+              <TouchableOpacity style={styles.chip} onPress={() => setSelected(selected.size === courts.length ? new Set() : new Set(courts.map((c) => c.id)))} accessibilityRole="button">
+                <Text style={styles.chipText}>{selected.size === courts.length ? 'Clear all' : 'Select all'}</Text>
+              </TouchableOpacity>
+              {courts.map((c) => (
+                <TouchableOpacity key={c.id} style={[styles.chip, selected.has(c.id) && styles.chipSelected]} onPress={() => toggle(c.id)} accessibilityRole="checkbox" accessibilityState={{ checked: selected.has(c.id) }}>
+                  <Text style={[styles.chipText, selected.has(c.id) && styles.chipTextSelected]}>{c.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {mode === 'properties' ? (
+              <>
+                <Text style={styles.emptyText}>Only the properties you pick are changed.</Text>
+                <Text style={styles.label}>Court type</Text>
+                <View style={styles.chipsWrap}>
+                  {choice('No change', '', courtType, setCourtType)}
+                  {STANDARD_COURT_TYPE_VALUES.map((t) => choice(t, t, courtType, setCourtType))}
+                </View>
+                <Text style={styles.label}>Surface</Text>
+                <View style={styles.chipsWrap}>
+                  {choice('No change', '', surfaceType, setSurfaceType)}
+                  {SURFACE_TYPES.map((t) => choice(t, t, surfaceType, setSurfaceType))}
+                </View>
+                <Text style={styles.label}>Status</Text>
+                <View style={styles.chipsWrap}>
+                  {choice('No change', '', status, setStatus)}
+                  {COURT_STATUSES.map((t) => choice(t.label, t.value, status, setStatus))}
+                </View>
+                <Text style={styles.label}>Indoor</Text>
+                <View style={styles.chipsWrap}>
+                  {choice('No change', '', indoor, setIndoor)}
+                  {choice('Indoor', 'true', indoor, setIndoor)}
+                  {choice('Outdoor', 'false', indoor, setIndoor)}
+                </View>
+                <Text style={styles.label}>Lights</Text>
+                <View style={styles.chipsWrap}>
+                  {choice('No change', '', lights, setLights)}
+                  {choice('Has lights', 'true', lights, setLights)}
+                  {choice('No lights', 'false', lights, setLights)}
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyText}>Applying replaces the current fee settings on the selected courts.</Text>
+                <ToggleRow label="Charge a court booking fee" value={requirePayment} onChange={setRequirePayment} />
+                {requirePayment ? (
+                  <>
+                    <Text style={styles.label}>Hourly rate ($)</Text>
+                    <Input value={bookingFeeDollars} onChangeText={(v) => setBookingFeeDollars(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="20.00" />
+                  </>
+                ) : null}
+                <ToggleRow label="Charge a guest fee" value={guestFeeEnabled} onChange={setGuestFeeEnabled} />
+                {guestFeeEnabled ? <Input value={guestFeeDollars} onChangeText={(v) => setGuestFeeDollars(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="10.00" accessibilityLabel="Guest fee in dollars" /> : null}
+                <ToggleRow label="Charge a ball machine hourly fee" value={ballFeeEnabled} onChange={setBallFeeEnabled} />
+                {ballFeeEnabled ? <Input value={ballFeeDollars} onChangeText={(v) => setBallFeeDollars(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="15.00" accessibilityLabel="Ball machine hourly fee in dollars" /> : null}
+              </>
+            )}
+            <Button title={mode === 'fees' ? 'Apply Fees' : 'Apply Changes'} onPress={() => void apply()} loading={submitting} style={{ marginTop: Spacing.md }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function BlackoutFormModal({
   facilityId,
   courts,
+  blackout,
   onClose,
   onChanged,
 }: {
   facilityId: string | null | undefined;
   courts: AdminCourtRow[];
+  /** The blackout being edited, or null to add one. */
+  blackout: AdminBlackoutRow | null;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
-  const [courtId, setCourtId] = useState<string | null>(null);
-  const [title, setTitle] = useState('Maintenance Block');
-  const [date, setDate] = useState(todayYmd());
-  const [start, setStart] = useState('12:00');
-  const [end, setEnd] = useState('13:00');
+  const initialStart = blackout ? splitLocalDatetime(blackout.start_datetime) : { date: todayYmd(), time: '12:00' };
+  const initialEnd = blackout ? splitLocalDatetime(blackout.end_datetime) : { date: todayYmd(), time: '13:00' };
+  const [courtId, setCourtId] = useState<string | null>(blackout?.court_id ?? null);
+  const [blackoutType, setBlackoutType] = useState(blackout?.blackout_type || 'maintenance');
+  const [title, setTitle] = useState(blackout?.title ?? '');
+  const [description, setDescription] = useState(blackout?.description ?? '');
+  const [startDate, setStartDate] = useState(initialStart.date);
+  const [start, setStart] = useState(initialStart.time);
+  const [endDate, setEndDate] = useState(initialEnd.date);
+  const [end, setEnd] = useState(initialEnd.time);
   const [submitting, setSubmitting] = useState(false);
 
   async function submit() {
     if (!facilityId) return;
+    const dateOk = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+    const timeOk = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+    if (!dateOk(startDate) || !dateOk(endDate) || !timeOk(start) || !timeOk(end)) {
+      showAlert('Blackout', 'Enter dates as YYYY-MM-DD and times as HH:MM (24-hour).');
+      return;
+    }
+    const startDatetime = `${startDate}T${start}:00`;
+    const endDatetime = `${endDate}T${end}:00`;
+    if (endDatetime <= startDatetime) {
+      showAlert('Blackout', 'The end must be after the start.');
+      return;
+    }
+    const fields = {
+      blackoutType,
+      title: title.trim() || BLACKOUT_TYPES.find((t) => t.value === blackoutType)?.label || 'Blackout',
+      description: description.trim(),
+      startDatetime,
+      endDatetime,
+    };
     setSubmitting(true);
-    const res = await createBlackout({
-      courtId,
-      facilityId,
-      blackoutType: 'maintenance',
-      title: title.trim() || 'Maintenance Block',
-      startDatetime: `${date}T${start}:00`,
-      endDatetime: `${date}T${end}:00`,
-    });
+    const res = blackout
+      ? await updateBlackout(blackout.id, { ...fields, courtId })
+      : await createBlackout({ ...fields, courtId, facilityId });
     setSubmitting(false);
     if (!res.success) {
-      showApiErrorAlert(res, 'Could not add blackout');
+      showApiErrorAlert(res, blackout ? 'Could not update blackout' : 'Could not add blackout');
       return;
     }
     await onChanged();
@@ -715,12 +996,26 @@ function BlackoutFormModal({
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Add Maintenance Block</Text>
+            <Text style={styles.sheetTitle}>{blackout ? 'Edit Blackout' : 'Add Blackout'}</Text>
             <TouchableOpacity onPress={onClose} accessibilityLabel="Close">
               <Ionicons name="close" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <ScrollView keyboardShouldPersistTaps="handled">
+            <Text style={styles.label}>Type</Text>
+            <View style={styles.chipsWrap}>
+              {BLACKOUT_TYPES.map((t) => (
+                <TouchableOpacity
+                  key={t.value}
+                  style={[styles.chip, blackoutType === t.value && styles.chipSelected]}
+                  onPress={() => setBlackoutType(t.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: blackoutType === t.value }}
+                >
+                  <Text style={[styles.chipText, blackoutType === t.value && styles.chipTextSelected]}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <Text style={styles.label}>Court</Text>
             <View style={styles.chipsWrap}>
               <TouchableOpacity
@@ -740,20 +1035,30 @@ function BlackoutFormModal({
               ))}
             </View>
             <Text style={styles.label}>Title</Text>
-            <Input value={title} onChangeText={setTitle} />
-            <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
-            <Input value={date} onChangeText={setDate} />
+            <Input value={title} onChangeText={setTitle} placeholder="e.g. Court resurfacing" />
+            <Text style={styles.label}>Description (optional)</Text>
+            <Input value={description} onChangeText={setDescription} multiline placeholder="Shown to members on the calendar" />
             <View style={styles.row}>
               <View style={styles.col}>
-                <Text style={styles.label}>Start</Text>
-                <Input value={start} onChangeText={setStart} />
+                <Text style={styles.label}>Start date (YYYY-MM-DD)</Text>
+                <Input value={startDate} onChangeText={setStartDate} autoCapitalize="none" accessibilityLabel="Start date" />
               </View>
               <View style={styles.col}>
-                <Text style={styles.label}>End</Text>
-                <Input value={end} onChangeText={setEnd} />
+                <Text style={styles.label}>Start time (HH:MM)</Text>
+                <Input value={start} onChangeText={setStart} accessibilityLabel="Start time" />
               </View>
             </View>
-            <Button title="Save Block" onPress={submit} loading={submitting} style={{ marginTop: Spacing.md }} />
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Text style={styles.label}>End date (YYYY-MM-DD)</Text>
+                <Input value={endDate} onChangeText={setEndDate} autoCapitalize="none" accessibilityLabel="End date" />
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>End time (HH:MM)</Text>
+                <Input value={end} onChangeText={setEnd} accessibilityLabel="End time" />
+              </View>
+            </View>
+            <Button title={blackout ? 'Save Changes' : 'Save Blackout'} onPress={submit} loading={submitting} style={{ marginTop: Spacing.md }} />
           </ScrollView>
         </View>
       </View>
@@ -778,6 +1083,7 @@ const styles = StyleSheet.create({
   courtName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
   courtMeta: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2, textTransform: 'capitalize' },
   scheduleBtn: { padding: Spacing.xs },
+  blackoutDescription: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   blackoutRow: {
     flexDirection: 'row',
     alignItems: 'center',

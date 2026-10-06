@@ -214,6 +214,8 @@ interface Props {
   onRequestToday?: () => void;
   /** "HH:MM": rows starting at or after this aren't open yet (hourly days-in-advance cutoff). */
   lockedFromTime?: string | null;
+  /** Change this to reload the day's bookings in place (no skeleton, scroll position kept). */
+  refreshKey?: number;
 }
 
 interface GridLoadError {
@@ -239,6 +241,7 @@ export function CourtCalendarGrid({
   onInteractionLockChange,
   onRequestToday,
   lockedFromTime = null,
+  refreshKey = 0,
 }: Props) {
   const [courtData, setCourtData] = useState<CourtAvailability[]>([]);
   /** Must match facility slot duration so row times align with booking modal / API. */
@@ -611,6 +614,12 @@ export function CourtCalendarGrid({
   useEffect(() => {
     void fetchAvailability();
   }, [fetchAvailability]);
+
+  // Parent just made, changed or cancelled a booking: show it without waiting for the next poll.
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    void fetchAvailability({ background: true });
+  }, [refreshKey]);
 
   useEffect(() => {
     return () => {

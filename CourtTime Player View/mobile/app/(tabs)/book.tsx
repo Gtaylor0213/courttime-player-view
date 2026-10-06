@@ -560,6 +560,13 @@ export default function BookCourtScreen() {
     fetchTimeSlots();
   }, [fetchTimeSlots]);
 
+  /** Bumped after a booking is made, changed or cancelled so the day grid reloads in place. */
+  const [gridRefreshKey, setGridRefreshKey] = useState(0);
+  const refreshBookedSlots = useCallback(() => {
+    setGridRefreshKey((k) => k + 1);
+    void fetchTimeSlots();
+  }, [fetchTimeSlots]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchCourts();
@@ -1033,7 +1040,7 @@ export default function BookCourtScreen() {
               ? ` (${skippedCount} conflicting date${skippedCount === 1 ? '' : 's'} skipped).`
               : ` (${recurringDates.length} date${recurringDates.length === 1 ? '' : 's'}${allCourtIds.length > 1 ? ` x ${allCourtIds.length} courts` : ''}).`)
         );
-        fetchTimeSlots();
+        refreshBookedSlots();
       } else if (recurringRes.ruleViolations && recurringRes.ruleViolations.length > 0) {
         hapticError();
         setViolations(recurringRes.ruleViolations as RuleViolation[]);
@@ -1104,7 +1111,7 @@ export default function BookCourtScreen() {
         hapticSuccess();
         setModalKind(null);
         showAlert('Booked!', `Created ${created} booking${created === 1 ? '' : 's'}.`);
-        fetchTimeSlots();
+        refreshBookedSlots();
       } else if (groupRes.ruleViolations && groupRes.ruleViolations.length > 0) {
         hapticError();
         setViolations(groupRes.ruleViolations as RuleViolation[]);
@@ -1233,7 +1240,7 @@ export default function BookCourtScreen() {
             }
           : null
       );
-      fetchTimeSlots();
+      refreshBookedSlots();
     } else if (firstViolations) {
       hapticError();
       setViolations(firstViolations);
@@ -1288,7 +1295,7 @@ export default function BookCourtScreen() {
             .join('\n'),
         }
       );
-      fetchTimeSlots();
+      refreshBookedSlots();
     } else {
       showAlert('Override Failed', res.error || 'Could not complete booking.');
     }
@@ -1598,6 +1605,7 @@ export default function BookCourtScreen() {
               onInteractionLockChange={onCalendarInteractionLock}
               onRequestToday={onRequestTodayForGrid}
               lockedFromTime={gridLockedFromTime}
+              refreshKey={gridRefreshKey}
             />
           )}
         </>
@@ -2096,8 +2104,7 @@ export default function BookCourtScreen() {
         visible={selectedCalendarBooking !== null}
         onClose={() => setSelectedCalendarBooking(null)}
         onChanged={() => {
-          fetchCourts();
-          fetchTimeSlots();
+          refreshBookedSlots();
         }}
         onEdit={(b) => {
           // Change court, date or time (web's Edit Reservation; recreate-then-cancel like Home).
@@ -2110,8 +2117,7 @@ export default function BookCourtScreen() {
         visible={editingBooking !== null}
         onClose={() => setEditingBooking(null)}
         onSaved={() => {
-          fetchCourts();
-          fetchTimeSlots();
+          refreshBookedSlots();
         }}
       />
       <QuickReserveSheet

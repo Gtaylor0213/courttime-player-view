@@ -69,6 +69,15 @@
     ],
     "runtimeVersion": {
       "policy": "fingerprint"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7ca94b1b-5354-470a-9275-e6ab67c1de01"
+      }
+    },
+    "owner": "reidbissell23s-team",
+    "updates": {
+      "url": "https://u.expo.dev/7ca94b1b-5354-470a-9275-e6ab67c1de01"
     }
   }
 }

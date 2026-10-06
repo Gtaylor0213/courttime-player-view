@@ -32,7 +32,7 @@ module.exports = ({ config }) => {
   const appEnv =
     buildProfile === 'production'
       ? 'production'
-      : buildProfile === 'preview'
+      : buildProfile === 'preview' || buildProfile === 'simulator'
         ? 'preview'
         : 'development';
 

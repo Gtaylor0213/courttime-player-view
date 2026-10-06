@@ -249,6 +249,36 @@ async function seed() {
   );
   console.log('  ✓ 2 bulletin posts');
 
+  // ── Hitting-partner posts from club-mates ──
+  // Gives the reviewer other members' posts to message, report and block
+  // (App Store Guideline 1.2 is checked against content like this).
+  await query(`DELETE FROM hitting_partner_posts WHERE facility_id = $1`, [FACILITY_ID]);
+  const partnerPosts = [
+    {
+      userId: extraIds[1],
+      skill: 'Intermediate',
+      availability: 'Weekday evenings after 6pm',
+      playStyle: ['Singles', 'Match Play'],
+      description: 'Looking for a regular singles partner around 3.5. Happy to drill or play sets.',
+    },
+    {
+      userId: extraIds[2],
+      skill: 'Beginner',
+      availability: 'Saturday and Sunday mornings',
+      playStyle: ['Doubles', 'Social'],
+      description: 'New to the club and keen to find a friendly doubles group for weekend mornings.',
+    },
+  ];
+  for (const post of partnerPosts) {
+    await query(
+      `INSERT INTO hitting_partner_posts
+         (user_id, facility_id, skill_level, availability, play_style, description, expires_at, status)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP + INTERVAL '60 days', 'active')`,
+      [post.userId, FACILITY_ID, post.skill, post.availability, post.playStyle, post.description]
+    );
+  }
+  console.log(`  ✓ ${partnerPosts.length} hitting-partner posts`);
+
   console.log(`
 ────────────────────────────────────────────────
   App Review credentials — paste into the notes

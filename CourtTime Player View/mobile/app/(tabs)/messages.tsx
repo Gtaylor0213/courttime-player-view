@@ -31,6 +31,7 @@ import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundar
 import { CachedImage } from '../../src/components/CachedImage';
 import { useMessageUnread } from '../../src/contexts/MessageUnreadContext';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
+import { ModerationSheet, type ModerationTarget } from '../../src/components/ModerationSheet';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import { userFacingApiMessage } from '../../src/utils/apiUserMessages';
 import {
@@ -111,6 +112,8 @@ export default function MessagesScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  /** The message or member the report / block sheet is open for. */
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
   const messagesListRef = useRef<FlatList<MessageItem>>(null);
   const [threadLoadError, setThreadLoadError] = useState<string | null>(null);
 
@@ -719,9 +722,28 @@ export default function MessagesScreen() {
             {formatDate(item.createdAt)}
           </Text>
         </View>
+        {!isMe && (
+          <TouchableOpacity
+            style={styles.reportMessageBtn}
+            onPress={() =>
+              setModerationTarget({
+                contentType: 'message',
+                contentId: item.id,
+                userId: item.senderId,
+                userName: senderName,
+                facilityId,
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Report or block ${senderName}`}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="flag-outline" size={16} color={Colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
     );
-  }, [activeConversation?.otherUser?.name, activeConversation?.isGroup, memberNameById, confirmDeleteMessage, deletingMessageId, user?.id]);
+  }, [activeConversation?.otherUser?.name, activeConversation?.isGroup, memberNameById, confirmDeleteMessage, deletingMessageId, user?.id, facilityId]);
 
   // ── RENDER: Message Thread View ──
   if (activeConversation) {
@@ -776,6 +798,23 @@ export default function MessagesScreen() {
               accessibilityLabel="Group info"
             >
               <Ionicons name="information-circle-outline" size={24} color={Colors.primary} />
+            </TouchableOpacity>
+          ) : activeConversation.otherUser?.id && activeConversation.otherUser.id !== user?.id ? (
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() =>
+                setModerationTarget({
+                  contentType: 'user',
+                  contentId: activeConversation.otherUser!.id,
+                  userId: activeConversation.otherUser!.id,
+                  userName: activeConversation.otherUser?.name || 'this member',
+                  facilityId,
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Report or block this member"
+            >
+              <Ionicons name="flag-outline" size={22} color={Colors.textSecondary} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -832,6 +871,16 @@ export default function MessagesScreen() {
             style={styles.sendButton}
           />
         </View>
+
+        <ModerationSheet
+          target={moderationTarget}
+          onClose={() => setModerationTarget(null)}
+          onBlocked={() => {
+            // A blocked member's direct thread is gone; in a group only their messages are.
+            if (activeConversation.isGroup && activeConversation.id) void fetchMessages(activeConversation.id);
+            else leaveThread();
+          }}
+        />
 
         {/* Group info: members, rename, add/remove, leave, delete (web's "Manage this group") */}
         <Modal
@@ -1536,6 +1585,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 56,
     alignItems: 'center',
+  },
+  reportMessageBtn: {
+    paddingHorizontal: Spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 32,
   },
   deleteMessageBtnText: {
     fontSize: FontSize.xs,

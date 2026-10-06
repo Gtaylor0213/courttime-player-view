@@ -428,6 +428,42 @@ export async function sendMembershipRequestAdminEmail(
   return sendEmail(adminEmail, `New membership request — ${facilityName}`, fullHtml, adminUserId, 'membership_request');
 }
 
+/** Where member reports of offensive content are sent for review. */
+const MODERATION_EMAIL = process.env.MODERATION_EMAIL || 'reidbissell@courttimeapp.com';
+
+/**
+ * Tell the CourtTime team a member reported content, so it can be reviewed
+ * and acted on promptly (App Store Guideline 1.2).
+ */
+export async function sendContentReportEmail(report: {
+  reportId: string;
+  contentType: string;
+  reason: string;
+  details?: string | null;
+  contentSnapshot?: string | null;
+  reporterName: string;
+  reporterEmail: string;
+  reportedUserName?: string | null;
+  reportedUserId?: string | null;
+  facilityName?: string | null;
+}): Promise<EmailSendResult> {
+  const row = (label: string, value?: string | null) =>
+    value ? `<p style="color: #374151; margin: 4px 0;"><strong>${label}:</strong> ${escapeHtml(value)}</p>` : '';
+  const bodyContent = `
+    <p style="color: #374151; margin-top: 0;">A member reported content on CourtTime. Review it and respond within 24 hours.</p>
+    ${row('Type', report.contentType.replace(/_/g, ' '))}
+    ${row('Reason', report.reason)}
+    ${row('Reported member', report.reportedUserName ? `${report.reportedUserName} (${report.reportedUserId ?? 'unknown id'})` : report.reportedUserId)}
+    ${row('Reported by', `${report.reporterName} (${report.reporterEmail})`)}
+    ${row('Facility', report.facilityName)}
+    ${row('Reporter notes', report.details)}
+    ${report.contentSnapshot ? `<p style="color: #374151; margin: 12px 0 4px;"><strong>Reported content:</strong></p><blockquote style="margin: 0; padding: 12px; background: #f3f4f6; border-radius: 8px; color: #111827; white-space: pre-wrap;">${escapeHtml(report.contentSnapshot)}</blockquote>` : ''}
+    <p style="color: #6b7280; font-size: 13px; margin-top: 24px;">Report ID: ${escapeHtml(report.reportId)}</p>
+  `;
+  const fullHtml = wrapInEmailLayout(bodyContent, 'CourtTime');
+  return sendEmail(MODERATION_EMAIL, `Content report: ${report.reason} (${report.contentType.replace(/_/g, ' ')})`, fullHtml);
+}
+
 /**
  * Email a bulletin board post to someone (member/admin share).
  */

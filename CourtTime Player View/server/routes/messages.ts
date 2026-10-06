@@ -22,7 +22,10 @@ import {
   findOrCreateDirectConversation,
   insertMessage,
   sendDirectMessageToMany,
+  BLOCKED_MESSAGE_ERROR,
 } from '../../src/services/directMessageService';
+import { isBlockedEitherWay } from '../../src/services/moderationService';
+import { OBJECTIONABLE_CONTENT_MESSAGE, containsObjectionableLanguage } from '../../shared/utils/contentFilter';
 
 const router = express.Router();
 
@@ -159,7 +162,8 @@ router.get('/directory/:facilityId', async (req, res) => {
 
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
     const params: any[] = [facilityId, callerId];
-    let sql = `${DIRECTORY_QUERY} AND u.id <> $2`;
+    let sql = `${DIRECTORY_QUERY} AND u.id <> $2
+      AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_id = $2 AND ub.blocked_id = u.id)`;
 
     if (search) {
       params.push(`%${search}%`);
@@ -565,6 +569,12 @@ router.get('/conversations/:facilityId/:userId', async (req, res) => {
       WHERE (c.facility_id = $2 OR c.facility_id IS NULL)
         AND c.is_group = false
         AND (c.participant1_id = $1 OR c.participant2_id = $1)
+        -- A thread with someone the caller blocked is hidden from their list.
+        AND NOT EXISTS (
+          SELECT 1 FROM user_blocks ub
+           WHERE ub.blocker_id = $1
+             AND ub.blocked_id IN (c.participant1_id, c.participant2_id)
+        )
       ORDER BY "lastMessageSentAt" DESC NULLS LAST
     `, [userId, facilityId]);
 
@@ -747,8 +757,13 @@ router.get('/:conversationId', async (req, res) => {
         created_at as "createdAt"
       FROM messages
       WHERE conversation_id = $1
+        -- In a group, messages from members the caller blocked are hidden.
+        AND NOT EXISTS (
+          SELECT 1 FROM user_blocks ub
+           WHERE ub.blocker_id = $2 AND ub.blocked_id = messages.sender_id
+        )
       ORDER BY created_at ASC
-    `, [conversationId]);
+    `, [conversationId, callerId]);
 
     res.json({
       success: true,
@@ -846,6 +861,20 @@ router.post('/', async (req, res) => {
       if (!(await isConversationParticipant(existingConversationId, senderId))) {
         return res.status(403).json({ success: false, error: 'Cannot access this conversation' });
       }
+      if (containsObjectionableLanguage(messageText)) {
+        return res.status(400).json({ success: false, error: OBJECTIONABLE_CONTENT_MESSAGE });
+      }
+
+      // A direct thread is closed once either member has blocked the other.
+      const dm = await query(
+        `SELECT CASE WHEN participant1_id = $2 THEN participant2_id ELSE participant1_id END as "otherUserId"
+           FROM conversations WHERE id = $1 AND is_group = false`,
+        [existingConversationId, senderId]
+      );
+      const dmOtherUserId = dm.rows[0]?.otherUserId;
+      if (dmOtherUserId && (await isBlockedEitherWay(senderId, dmOtherUserId))) {
+        return res.status(403).json({ success: false, error: BLOCKED_MESSAGE_ERROR });
+      }
 
       const message = await insertMessage(existingConversationId, senderId, messageText);
 
@@ -859,7 +888,13 @@ router.post('/', async (req, res) => {
 
           const recipients = isGroup
             ? (await query(
-                `SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2`,
+                // Members who blocked the sender don't see the message, so don't notify them.
+                `SELECT user_id FROM conversation_participants
+                  WHERE conversation_id = $1 AND user_id != $2
+                    AND NOT EXISTS (
+                      SELECT 1 FROM user_blocks ub
+                       WHERE ub.blocker_id = conversation_participants.user_id AND ub.blocked_id = $2
+                    )`,
                 [existingConversationId, senderId]
               )).rows.map((r: any) => r.user_id)
             : (await query(
@@ -922,6 +957,13 @@ router.post('/', async (req, res) => {
     // has its own facility-agnostic find-or-create rather than the
     // facility-scoped lookup used for everyone else.
     const isTeamConversation = senderId === COURTTIME_TEAM_USER_ID || recipientId === COURTTIME_TEAM_USER_ID;
+
+    if (containsObjectionableLanguage(messageText)) {
+      return res.status(400).json({ success: false, error: OBJECTIONABLE_CONTENT_MESSAGE });
+    }
+    if (!isTeamConversation && (await isBlockedEitherWay(senderId, recipientId))) {
+      return res.status(403).json({ success: false, error: BLOCKED_MESSAGE_ERROR });
+    }
 
     let conversationId: string;
 

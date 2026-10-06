@@ -155,6 +155,7 @@ function RootLayoutNav() {
         {/* Top-level screens get the default Stack header with a back button. */}
         <Stack.Screen name="club-info" />
         <Stack.Screen name="notification-settings" />
+        <Stack.Screen name="blocked-users" options={{ title: 'Blocked Members' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="my-reservations" options={{ title: 'My Reservations' }} />
         <Stack.Screen name="payments" options={{ title: 'Payments' }} />

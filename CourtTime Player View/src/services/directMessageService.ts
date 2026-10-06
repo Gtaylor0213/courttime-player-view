@@ -8,6 +8,11 @@
  */
 
 import { query } from '../database/connection';
+import { OBJECTIONABLE_CONTENT_MESSAGE, containsObjectionableLanguage } from '../../shared/utils/contentFilter';
+import { getUsersBlockedEitherWay } from './moderationService';
+
+/** Shown to either side once one member has blocked the other. Deliberately doesn't say who blocked whom. */
+export const BLOCKED_MESSAGE_ERROR = "You can't send messages to this member.";
 
 /**
  * Cap on recipients for one bulk send. Matches GROUP_MEMBER_LIMIT so the two
@@ -113,6 +118,9 @@ export function validateMessageText(rawText: unknown): string {
   if (typeof rawText !== 'string' || !rawText.trim()) {
     throw new DirectMessageError('messageText is required');
   }
+  if (containsObjectionableLanguage(rawText)) {
+    throw new DirectMessageError(OBJECTIONABLE_CONTENT_MESSAGE);
+  }
   return rawText.trim();
 }
 
@@ -167,8 +175,13 @@ export async function sendDirectMessageToMany(
 
   const sent: SendToManyResult['sent'] = [];
   const failed: SendToManyResult['failed'] = [];
+  const blocked = await getUsersBlockedEitherWay(senderId, recipientIds);
 
   for (const recipientId of recipientIds) {
+    if (blocked.has(recipientId)) {
+      failed.push({ recipientId, error: BLOCKED_MESSAGE_ERROR });
+      continue;
+    }
     try {
       const conversationId = await findOrCreateDirectConversation(facilityId, senderId, recipientId);
       const message = await insertMessage(conversationId, senderId, messageText);

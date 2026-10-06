@@ -7,6 +7,8 @@ import {
   deleteHittingPartnerPost,
   getUserHittingPartnerPosts
 } from '../../src/services/hittingPartnerService';
+import { getBlockedUserIds } from '../../src/services/moderationService';
+import { OBJECTIONABLE_CONTENT_MESSAGE, anyObjectionable } from '../../shared/utils/contentFilter';
 
 const router = express.Router();
 
@@ -16,7 +18,8 @@ const router = express.Router();
  */
 router.get('/', async (req, res, next) => {
   try {
-    const posts = await getAllHittingPartnerPosts();
+    const blocked = await getBlockedUserIds(req.user!.userId);
+    const posts = (await getAllHittingPartnerPosts()).filter((post) => !blocked.has(post.userId));
 
     res.json({
       success: true,
@@ -34,7 +37,9 @@ router.get('/', async (req, res, next) => {
 router.get('/facility/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
-    const posts = await getFacilityHittingPartnerPosts(facilityId);
+    // Posts from members the caller has blocked are hidden from them.
+    const blocked = await getBlockedUserIds(req.user!.userId);
+    const posts = (await getFacilityHittingPartnerPosts(facilityId)).filter((post) => !blocked.has(post.userId));
 
     res.json({
       success: true,
@@ -78,6 +83,10 @@ router.post('/', async (req, res, next) => {
       });
     }
 
+    if (anyObjectionable(postData.description, postData.availability)) {
+      return res.status(400).json({ success: false, error: OBJECTIONABLE_CONTENT_MESSAGE });
+    }
+
     const postId = await createHittingPartnerPost(postData);
 
     res.status(201).json({
@@ -104,6 +113,10 @@ router.patch('/:postId', async (req, res, next) => {
         success: false,
         error: 'userId is required'
       });
+    }
+
+    if (anyObjectionable(updates.description, updates.availability)) {
+      return res.status(400).json({ success: false, error: OBJECTIONABLE_CONTENT_MESSAGE });
     }
 
     const success = await updateHittingPartnerPost(postId, userId, updates);

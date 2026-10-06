@@ -64,6 +64,7 @@ import proShopRoutes from './routes/proShop';
 import annualFeesRoutes from './routes/annualFees';
 import reportingRoutes from './routes/reporting';
 import pickleRoutes from './routes/pickle';
+import moderationRoutes from './routes/moderation';
 import { requireAuth, requireNotPaymentLocked } from './middleware/auth';
 
 const app = express();
@@ -216,6 +217,8 @@ app.use('/api/player-profile', requireAuth, playerProfileRoutes);
 app.use('/api/notifications', requireAuth, notificationRoutes);
 app.use('/api/user-preferences', requireAuth, userPreferencesRoutes);
 app.use('/api/facility-locations', requireAuth, facilityLocationsRoutes);
+// Blocking and reporting stay available to payment-locked members.
+app.use('/api/moderation', requireAuth, moderationRoutes);
 
 // Player-action routes — blocked when account has a payment lockout
 app.use('/api/hitting-partner', requireAuth, requireNotPaymentLocked, hittingPartnerRoutes);

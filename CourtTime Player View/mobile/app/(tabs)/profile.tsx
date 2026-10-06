@@ -32,6 +32,7 @@ import { FacilityLockoutRow } from '../../src/components/StrikeLockoutBanner';
 import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/utils/strikeLockout';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { htmlToDisplayText } from '../../src/utils/htmlToText';
+import { openLegalLink, PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
 
 export const ErrorBoundary = createRouteErrorBoundary('Profile');
 
@@ -1042,6 +1043,22 @@ export default function ProfileScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.settingsRow}
+          onPress={() => router.push('/blocked-users')}
+          accessibilityRole="button"
+          accessibilityLabel="Open blocked members"
+        >
+          <View style={styles.settingsIconBox}>
+            <Ionicons name="ban-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingsRowTitle}>Blocked members</Text>
+            <Text style={styles.settingsRowDescription}>Members whose messages and posts you have hidden</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+        </TouchableOpacity>
+        {PLATFORM_BILLING_IN_APP ? (
+        <TouchableOpacity
+          style={styles.settingsRow}
           onPress={() => router.push('/auth/register-facility')}
           accessibilityRole="button"
           accessibilityLabel="Register a new facility"
@@ -1056,6 +1073,57 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+        </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {/* Legal & support — the privacy policy must be reachable in-app (App Store 5.1.1) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Legal & Support</Text>
+        <TouchableOpacity
+          style={styles.settingsRow}
+          onPress={() => void openLegalLink('privacy')}
+          accessibilityRole="link"
+          accessibilityLabel="Privacy Policy"
+        >
+          <View style={styles.settingsIconBox}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingsRowTitle}>Privacy Policy</Text>
+            <Text style={styles.settingsRowDescription}>What we collect and how it is used</Text>
+          </View>
+          <Ionicons name="open-outline" size={18} color={Colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.settingsRow}
+          onPress={() => void openLegalLink('terms')}
+          accessibilityRole="link"
+          accessibilityLabel="Terms of Service"
+        >
+          <View style={styles.settingsIconBox}>
+            <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingsRowTitle}>Terms of Service</Text>
+            <Text style={styles.settingsRowDescription}>The rules for using CourtTime</Text>
+          </View>
+          <Ionicons name="open-outline" size={18} color={Colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.settingsRow}
+          onPress={() => void openLegalLink('support')}
+          accessibilityRole="link"
+          accessibilityLabel="Help & Support"
+        >
+          <View style={styles.settingsIconBox}>
+            <Ionicons name="help-circle-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingsRowTitle}>Help & Support</Text>
+            <Text style={styles.settingsRowDescription}>Get help or contact us</Text>
+          </View>
+          <Ionicons name="open-outline" size={18} color={Colors.textMuted} />
         </TouchableOpacity>
       </View>
 

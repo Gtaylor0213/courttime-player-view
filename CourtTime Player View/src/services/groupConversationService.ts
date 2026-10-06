@@ -8,6 +8,7 @@
  */
 
 import { query } from '../database/connection';
+import { OBJECTIONABLE_CONTENT_MESSAGE, containsObjectionableLanguage } from '../../shared/utils/contentFilter';
 
 /** Cap on group conversation size, including the creator. */
 export const GROUP_MEMBER_LIMIT = 30;
@@ -28,6 +29,9 @@ export function validateGroupName(rawName: unknown): string {
   const name = rawName.trim();
   if (name.length > 100) {
     throw new GroupConversationError('Group name must be 100 characters or fewer');
+  }
+  if (containsObjectionableLanguage(name)) {
+    throw new GroupConversationError(OBJECTIONABLE_CONTENT_MESSAGE);
   }
   return name;
 }

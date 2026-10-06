@@ -48,6 +48,7 @@ import { Input } from '../../src/components/Input';
 import { BulletinPostCreateModal } from '../../src/components/BulletinPostCreateModal';
 import { Skeleton } from '../../src/components/Skeleton';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
+import { ModerationSheet, type ModerationTarget } from '../../src/components/ModerationSheet';
 import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import {
   isPartnerPostFormValid,
@@ -161,6 +162,8 @@ export default function CommunityScreen() {
   // Hitting partner state
   const [posts, setPosts] = useState<HittingPartnerPostWithUser[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  /** The post the report / block sheet is open for. */
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
   const [showPostModal, setShowPostModal] = useState(false);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
 
@@ -590,7 +593,24 @@ export default function CommunityScreen() {
                   <Ionicons name="trash-outline" size={18} color={Colors.error} />
                 </TouchableOpacity>
               </View>
-            ) : null}
+            ) : (
+              <TouchableOpacity
+                onPress={() =>
+                  setModerationTarget({
+                    contentType: 'hitting_partner_post',
+                    contentId: post.id,
+                    userId: post.userId,
+                    userName: post.userName,
+                    facilityId,
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Report or block ${post.userName}`}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="flag-outline" size={18} color={Colors.textMuted} />
+              </TouchableOpacity>
+            )}
           </View>
           <Text style={styles.postDescription}>{post.description}</Text>
           <View style={styles.postMeta}>
@@ -631,7 +651,7 @@ export default function CommunityScreen() {
         </Card>
       );
     },
-    [user?.id, savedPartnerIds, sharePartnerPost, toggleSavePartner, openEditPost, handleDeletePost, handleMessagePlayer]
+    [user?.id, facilityId, savedPartnerIds, sharePartnerPost, toggleSavePartner, openEditPost, handleDeletePost, handleMessagePlayer]
   );
 
   const bulletinHeader = useMemo(
@@ -703,6 +723,24 @@ export default function CommunityScreen() {
             {post.authorId === user?.id || isAdmin ? (
               <TouchableOpacity onPress={() => handleDeleteBulletin(post.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="trash-outline" size={16} color={Colors.error} />
+              </TouchableOpacity>
+            ) : null}
+            {post.authorId !== user?.id ? (
+              <TouchableOpacity
+                onPress={() =>
+                  setModerationTarget({
+                    contentType: 'bulletin_post',
+                    contentId: post.id,
+                    userId: post.authorId,
+                    userName: post.authorName || 'this member',
+                    facilityId,
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Report this post or block its author"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="flag-outline" size={16} color={Colors.textMuted} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -872,7 +910,7 @@ export default function CommunityScreen() {
         </View>
       </Card>
     ),
-    [user?.id, isAdmin, signupBusyId, signUp, cancelSignup, togglePin, adminRemoveSignup]
+    [user?.id, facilityId, isAdmin, signupBusyId, signUp, cancelSignup, togglePin, adminRemoveSignup]
   );
 
   const partnerEmpty = useMemo(
@@ -1146,6 +1184,15 @@ export default function CommunityScreen() {
         facilityId={facilityId ?? null}
         onClose={() => setShowCreateBulletin(false)}
         onCreated={fetchBulletins}
+      />
+
+      <ModerationSheet
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onBlocked={() => {
+          void fetchPartners();
+          void fetchBulletins();
+        }}
       />
     </View>
   );

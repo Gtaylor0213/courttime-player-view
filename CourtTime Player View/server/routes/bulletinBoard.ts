@@ -20,6 +20,8 @@ import {
 } from '../../shared/utils/bulletinPostDisplay';
 import { delay } from '../../shared/utils/delay';
 import { hasActiveFacilityAdminRecord } from '../middleware/facilityAdmin';
+import { getBlockedUserIds } from '../../src/services/moderationService';
+import { OBJECTIONABLE_CONTENT_MESSAGE, anyObjectionable } from '../../shared/utils/contentFilter';
 
 const router = express.Router();
 const signupEnabledCategories = new Set(['event', 'drill', 'social', 'clinic', 'tournament']);
@@ -67,7 +69,12 @@ router.get('/post/:postId', async (req, res, next) => {
 router.get('/:facilityId', async (req, res, next) => {
   try {
     const { facilityId } = req.params;
-    const posts = await getFacilityBulletinPosts(facilityId, req.user?.userId);
+    // Posts from members the caller has blocked are hidden from them. Official
+    // club posts stay visible: they carry announcements and event sign-ups.
+    const blocked = req.user?.userId ? await getBlockedUserIds(req.user.userId) : new Set<string>();
+    const posts = (await getFacilityBulletinPosts(facilityId, req.user?.userId)).filter(
+      (post) => post.isAdminPost || !blocked.has(post.authorId)
+    );
 
     res.json({
       success: true,
@@ -117,6 +124,10 @@ router.post('/', async (req, res, next) => {
         success: false,
         error: 'Missing required fields: facilityId, authorId, title, content, category'
       });
+    }
+
+    if (anyObjectionable(postData.title, postData.content)) {
+      return res.status(400).json({ success: false, error: OBJECTIONABLE_CONTENT_MESSAGE });
     }
 
     if (signupEnabledCategories.has(postData.category)) {
@@ -479,6 +490,10 @@ router.patch('/:postId', async (req, res, next) => {
         success: false,
         error: 'authorId is required'
       });
+    }
+
+    if (anyObjectionable(updates.title, updates.content)) {
+      return res.status(400).json({ success: false, error: OBJECTIONABLE_CONTENT_MESSAGE });
     }
 
     const success = await updateBulletinPost(postId, authorId, updates);

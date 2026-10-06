@@ -29,11 +29,13 @@ function mockHappyPath() {
     if (sql.includes('FROM facility_memberships')) {
       return { rows: params[1].map((userId: string) => ({ user_id: userId })) };
     }
+    if (sql.includes('FROM user_blocks')) return { rows: [] };
     if (sql.includes('FROM conversations')) return { rows: [] };
     if (sql.includes('INSERT INTO conversations')) return { rows: [{ id: `conv-${params[1]}` }] };
     if (sql.includes('INSERT INTO messages')) {
       return { rows: [{ id: `msg-${params[0]}`, conversationId: params[0], messageText: params[2] }] };
     }
+    if (sql.includes('FROM user_blocks')) return { rows: [] };
     throw new Error(`Unexpected query: ${sql}`);
   });
 }
@@ -140,6 +142,7 @@ describe('directMessageService', () => {
         if (sql.includes('INSERT INTO messages')) {
           return { rows: [{ id: 'msg-1', conversationId: params[0], messageText: params[2] }] };
         }
+        if (sql.includes('FROM user_blocks')) return { rows: [] };
         throw new Error(`Unexpected query: ${sql}`);
       });
 
@@ -163,6 +166,7 @@ describe('directMessageService', () => {
         if (sql.includes('INSERT INTO messages')) {
           return { rows: [{ id: 'msg-1', conversationId: params[0], messageText: params[2] }] };
         }
+        if (sql.includes('FROM user_blocks')) return { rows: [] };
         throw new Error(`Unexpected query: ${sql}`);
       });
 

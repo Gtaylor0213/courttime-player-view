@@ -62,7 +62,7 @@
     "server": "node scripts/start-server.js",
     "server:direct": "tsx server/index.ts",
     "build": "vite build",
-    "start": "NODE_ENV=production tsx server/index.ts",
+    "start": "node scripts/run-migration.js --on-deploy && NODE_ENV=production tsx server/index.ts",
     "db:setup": "node scripts/setup-database.js",
     "db:check": "node scripts/check-database.js",
     "db:migrate": "node scripts/run-migration.js",

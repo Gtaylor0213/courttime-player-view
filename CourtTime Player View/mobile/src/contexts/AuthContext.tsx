@@ -69,7 +69,6 @@ interface RegisterData {
 const AuthContext = createContext<AuthContextType | null>(null);
 const FACILITY_STORAGE_KEY = 'selectedFacilityId';
 const LEGACY_FACILITY_STORAGE_KEY = 'courttime_facility';
-const BOOK_DATE_STORAGE_KEY = 'selectedBookDate';
 
 async function saveFacilityId(id: string): Promise<void> {
   if (Platform.OS === 'web') {
@@ -96,21 +95,6 @@ function getTodayString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-async function loadBookDate(): Promise<string> {
-  if (Platform.OS === 'web') {
-    return localStorage.getItem(BOOK_DATE_STORAGE_KEY) || getTodayString();
-  }
-  return (await SecureStore.getItemAsync(BOOK_DATE_STORAGE_KEY)) || getTodayString();
-}
-
-async function saveBookDate(date: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    localStorage.setItem(BOOK_DATE_STORAGE_KEY, date);
-    return;
-  }
-  await SecureStore.setItemAsync(BOOK_DATE_STORAGE_KEY, date);
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -127,10 +111,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Check for existing session on app launch
   useEffect(() => {
     checkAuth();
-  }, []);
-
-  useEffect(() => {
-    loadBookDate().then(setSelectedBookDateState).catch(() => setSelectedBookDateState(getTodayString()));
   }, []);
 
   // Register push notifications when user changes.
@@ -370,7 +350,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function handleSetSelectedBookDate(date: string) {
     setSelectedBookDateState(date);
-    saveBookDate(date);
   }
 
   // Self-heal stored facility id when it no longer matches loaded facilities (e.g. stale SecureStore).

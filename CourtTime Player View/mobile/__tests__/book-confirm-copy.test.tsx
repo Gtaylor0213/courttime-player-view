@@ -6,6 +6,13 @@ import { TouchableOpacity, Text, Modal, Pressable } from 'react-native';
 import BookCourtScreen from '../app/(tabs)/book';
 import { api, paymentApi } from '../src/api/client';
 
+// No navigator is mounted here, so run the screen's focus effect on mount.
+jest.mock('expo-router', () => {
+  const actual = jest.requireActual('expo-router') as Record<string, unknown>;
+  const { useEffect } = require('react');
+  return { ...actual, useFocusEffect: (effect: () => void) => useEffect(effect, [effect]) };
+});
+
 jest.mock('expo-calendar', () => ({
   requestCalendarPermissionsAsync: jest.fn(),
   getDefaultCalendarAsync: jest.fn(),

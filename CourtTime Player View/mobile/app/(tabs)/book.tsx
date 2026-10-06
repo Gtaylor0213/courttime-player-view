@@ -20,7 +20,7 @@ import {
   Switch,
 } from 'react-native';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { hapticSuccess, hapticError } from '../../src/utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -355,6 +355,7 @@ export default function BookCourtScreen() {
       setSelectedBookDate(bdate);
       setSelectedDate(bdate);
       setSelectedCourt(null);
+      router.setParams({ bookingDate: undefined });
     }
   }, [params.facilityId, params.bookingDate, facilityList, setFacilityId, setSelectedBookDate]);
 
@@ -364,6 +365,23 @@ export default function BookCourtScreen() {
       setSelectedCourt(null);
     }
   }, [selectedBookDate]);
+
+  // Opening the Book tab always lands on today, not the day last viewed. A
+  // deep link carrying its own bookingDate (push notification) still wins; the
+  // effect above consumes and clears that param, so it only wins once.
+  const deepLinkBookingDateRef = useRef<string | undefined>(undefined);
+  deepLinkBookingDateRef.current = paramString(params.bookingDate);
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+  useFocusEffect(
+    useCallback(() => {
+      if (deepLinkBookingDateRef.current) return;
+      const today = getTodayString();
+      if (selectedDateRef.current === today) return;
+      setSelectedDate(today);
+      setSelectedCourt(null);
+    }, [])
+  );
 
   useEffect(() => {
     if (!user?.id) return;

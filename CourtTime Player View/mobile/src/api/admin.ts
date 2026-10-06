@@ -126,7 +126,8 @@ export interface SeriesEditPayload {
   notes?: string;
 }
 
-export function updateBookingSeries(seriesId: string, data: SeriesEditPayload) {
+/** `courtIds` replaces the courts the whole series books. */
+export function updateBookingSeries(seriesId: string, data: SeriesEditPayload & { courtIds?: string[] }) {
   return api.patch(`/api/admin/booking-series/${seriesId}`, data);
 }
 
@@ -134,7 +135,11 @@ export function deleteBookingSeries(seriesId: string) {
   return api.delete(`/api/admin/booking-series/${seriesId}`);
 }
 
-export function updateBookingSeriesInstances(seriesId: string, data: SeriesEditPayload & { bookingIds: string[] }) {
+/** `courtChanges` adds or drops courts on just the selected dates. */
+export function updateBookingSeriesInstances(
+  seriesId: string,
+  data: SeriesEditPayload & { bookingIds: string[]; courtChanges?: { add: string[]; remove: string[] } }
+) {
   return api.patch(`/api/admin/booking-series/${seriesId}/instances`, data);
 }
 

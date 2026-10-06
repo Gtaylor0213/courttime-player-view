@@ -324,7 +324,7 @@ describe('updateBookingSeries', () => {
     expect(result.updated).toBe(3);
 
     const truncate = clientQueryMock.mock.calls.find(
-      ([sql]) => String(sql).includes('UPDATE booking_series SET end_date')
+      ([sql]) => String(sql).includes('SET end_date = GREATEST(start_date')
     );
     expect(truncate?.[1]).toEqual([SERIES_ID, '2099-09-27']);
 
@@ -332,6 +332,24 @@ describe('updateBookingSeries', () => {
       String(sql).includes('SET series_id = $1')
     );
     expect(reassign?.[1]).toEqual(['series-2', SERIES_ID, '2099-09-28']);
+  });
+
+  it("'following' from the first date edits the series in place instead of splitting it", async () => {
+    mockSeriesLoad();
+    mockTransaction();
+    const result = await updateBookingSeries({
+      seriesId: SERIES_ID,
+      actorUserId: OWNER,
+      scope: 'following',
+      fromDate: DATES[0],
+      rule: { ...baseRule, courtIds: ['court-a', 'court-b'] },
+    });
+    expect(result.success).toBe(true);
+    expect(result.newSeriesId).toBeUndefined();
+    expect(result.created).toBe(DATES.length);
+    const sqls = clientQueryMock.mock.calls.map(([sql]) => String(sql));
+    expect(sqls.some((sql) => sql.includes('INSERT INTO booking_series'))).toBe(false);
+    expect(sqls.some((sql) => sql.includes('UPDATE booking_series\n           SET user_id'))).toBe(true);
   });
 
   describe("'instance' scope", () => {
@@ -576,6 +594,87 @@ describe('multi-court group (one date, several courts)', () => {
     expect(result.created).toBe(3);
   });
 
+  describe('court changes on one date', () => {
+    const sqlCalls = (fragment: string) =>
+      clientQueryMock.mock.calls.filter(([sql]) => String(sql).includes(fragment));
+
+    it('adds a court without touching the ones already booked', async () => {
+      mockGroupLoad();
+      mockTransaction();
+      const result = await updateBookingSeries({
+        seriesId: SERIES_ID,
+        actorUserId: OWNER,
+        scope: 'instance',
+        bookingIds: ['b-court-a'],
+        rule: groupRule,
+        courtChanges: { add: ['court-d'], remove: [] },
+      });
+      expect(result).toMatchObject({ success: true, created: 1, cancelled: 0, updated: 1 });
+      const insert = sqlCalls('INSERT INTO bookings')[0];
+      expect(insert[1]).toEqual(expect.arrayContaining(['court-d', GROUP_DATE]));
+    });
+
+    it('removes a court the clicked booking is not on', async () => {
+      mockGroupLoad();
+      mockTransaction();
+      const result = await updateBookingSeries({
+        seriesId: SERIES_ID,
+        actorUserId: OWNER,
+        scope: 'instance',
+        bookingIds: ['b-court-a'],
+        rule: groupRule,
+        courtChanges: { add: [], remove: ['court-b'] },
+      });
+      expect(result).toMatchObject({ success: true, created: 0, cancelled: 1, updated: 1 });
+      expect(sqlCalls("SET status = 'cancelled'")[0][1]).toEqual([['b-court-b']]);
+    });
+
+    it('cancels the clicked booking when its own court is removed', async () => {
+      mockGroupLoad();
+      mockTransaction();
+      const result = await updateBookingSeries({
+        seriesId: SERIES_ID,
+        actorUserId: OWNER,
+        scope: 'instance',
+        bookingIds: ['b-court-a'],
+        rule: groupRule,
+        courtChanges: { add: [], remove: ['court-a'] },
+      });
+      expect(result).toMatchObject({ success: true, cancelled: 1, updated: 0 });
+      expect(sqlCalls("SET status = 'cancelled'")[0][1]).toEqual([['b-court-a']]);
+    });
+
+    it('swapping courts moves the clicked booking instead of cancelling it', async () => {
+      mockGroupLoad();
+      mockTransaction();
+      const result = await updateBookingSeries({
+        seriesId: SERIES_ID,
+        actorUserId: OWNER,
+        scope: 'instance',
+        bookingIds: ['b-court-a'],
+        rule: groupRule,
+        courtChanges: { add: ['court-d'], remove: ['court-a'] },
+      });
+      expect(result).toMatchObject({ success: true, created: 0, cancelled: 0, updated: 1 });
+      const reshape = sqlCalls('UPDATE bookings\n           SET court_id')[0];
+      expect(reshape[1].slice(0, 2)).toEqual(['b-court-a', 'court-d']);
+    });
+
+    it('never rewrites the rule', async () => {
+      mockGroupLoad();
+      mockTransaction();
+      await updateBookingSeries({
+        seriesId: SERIES_ID,
+        actorUserId: OWNER,
+        scope: 'instance',
+        bookingIds: ['b-court-a'],
+        rule: groupRule,
+        courtChanges: { add: ['court-d'], remove: ['court-b'] },
+      });
+      expect(sqlCalls('UPDATE booking_series\n           SET user_id')).toHaveLength(0);
+    });
+  });
+
   it('cancelling one court leaves the others booked', async () => {
     mockGroupLoad();
     clientQueryMock.mockResolvedValue({ rows: [], rowCount: 0 });
@@ -675,7 +774,7 @@ describe('cancelBookingSeries', () => {
     expect(update?.[1][0]).toEqual(['b-2099-09-30', 'b-2099-10-05']);
 
     const truncate = clientQueryMock.mock.calls.find(([sql]) =>
-      String(sql).includes('UPDATE booking_series SET end_date')
+      String(sql).includes('SET end_date = GREATEST(start_date')
     );
     expect(truncate?.[1]).toEqual([SERIES_ID, '2099-09-29']);
   });

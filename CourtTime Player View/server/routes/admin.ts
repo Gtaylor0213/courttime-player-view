@@ -10,6 +10,7 @@ import {
   getBookingSeries,
   updateBookingSeries,
   cancelBookingSeries,
+  parseCourtChanges,
 } from '../../src/services/bookingSeriesService';
 import { sendAnnouncementEmail } from '../../src/services/emailService';
 import { notificationService } from '../../src/services/notificationService';
@@ -1777,11 +1778,13 @@ function sendSeriesResult(res: express.Response, result: { success: boolean; err
 
 /**
  * PATCH /api/admin/booking-series/:seriesId
- * Retime every date in a recurring series (all-or-nothing).
+ * Retime every date in a recurring series (all-or-nothing). `courtIds`, when
+ * sent, replaces the courts the series books: added courts get the upcoming
+ * dates, dropped courts have theirs cancelled.
  */
 router.patch('/booking-series/:seriesId', async (req, res) => {
   const { seriesId } = req.params;
-  const { startTime, endTime, durationMinutes, bookingType, notes } = req.body;
+  const { startTime, endTime, durationMinutes, bookingType, notes, courtIds } = req.body;
 
   if (!startTime || !endTime || !durationMinutes) {
     return res.status(400).json({
@@ -1796,13 +1799,14 @@ router.patch('/booking-series/:seriesId', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Series not found or empty' });
     }
 
-    // Only the time changes here; the rest of the rule is carried through as-is.
+    // Only the time and courts change here; the rest of the rule is carried through as-is.
     const result = await updateBookingSeries({
       seriesId,
       actorUserId: (req as any).user?.userId,
       scope: 'all',
       rule: {
         ...series.rule,
+        courtIds: Array.isArray(courtIds) ? courtIds.map(String) : series.rule.courtIds,
         startTime,
         endTime,
         durationMinutes: Number(durationMinutes),
@@ -1841,10 +1845,11 @@ router.delete('/booking-series/:seriesId', async (req, res) => {
 /**
  * PATCH /api/admin/booking-series/:seriesId/instances
  * Retime selected dates in a recurring series, leaving the rule alone.
+ * `courtChanges` ({ add, remove }) adds or drops courts on just those dates.
  */
 router.patch('/booking-series/:seriesId/instances', async (req, res) => {
   const { seriesId } = req.params;
-  const { bookingIds, startTime, endTime, durationMinutes, bookingType, notes } = req.body;
+  const { bookingIds, startTime, endTime, durationMinutes, bookingType, notes, courtChanges } = req.body;
 
   if (!Array.isArray(bookingIds) || bookingIds.length === 0) {
     return res.status(400).json({ success: false, error: 'bookingIds is required' });
@@ -1872,6 +1877,7 @@ router.patch('/booking-series/:seriesId/instances', async (req, res) => {
         bookingType: bookingType ?? series.rule.bookingType,
         notes: notes ?? series.rule.notes,
       },
+      courtChanges: parseCourtChanges(courtChanges),
       skipRulesValidation: true,
       includePast: true,
     });

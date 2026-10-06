@@ -216,3 +216,40 @@ export function rulesEqual(a: RecurrenceRule, b: RecurrenceRule): boolean {
     [...new Set(a.courtIds)].sort().join(',') === [...new Set(b.courtIds)].sort().join(',')
   );
 }
+
+/** Courts ticked or unticked for chosen dates only, leaving the rule alone. */
+export interface CourtChanges {
+  add: string[];
+  remove: string[];
+}
+
+/**
+ * Courts the series has live bookings on for the dates the given bookings fall
+ * on. A date that drifted from the rule (a court added or dropped for one week)
+ * reports what is actually booked, which is what a one-date edit must open with.
+ */
+export function courtIdsOnBookingDates(
+  instances: ReadonlyArray<{ id: string; courtId: string; bookingDate: string; status: string }>,
+  bookingIds: ReadonlyArray<string>
+): string[] {
+  const wanted = new Set(bookingIds);
+  const dates = new Set(instances.filter((i) => wanted.has(i.id)).map((i) => i.bookingDate));
+  const courts = new Set<string>();
+  for (const instance of instances) {
+    if (instance.status !== 'cancelled' && dates.has(instance.bookingDate)) {
+      courts.add(instance.courtId);
+    }
+  }
+  return [...courts];
+}
+
+/** What ticking and unticking courts changed, relative to what was booked. */
+export function diffCourtIds(
+  before: ReadonlyArray<string>,
+  after: ReadonlyArray<string>
+): CourtChanges {
+  return {
+    add: [...new Set(after.filter((id) => !before.includes(id)))],
+    remove: [...new Set(before.filter((id) => !after.includes(id)))],
+  };
+}

@@ -157,6 +157,8 @@ export const bookingSeriesEndpoints = {
       bookingIds?: string[];
       rule: BookingSeriesRule;
       excludeDates?: string[];
+      /** 'instance' only: courts added to or dropped from just the selected dates. */
+      courtChanges?: { add: string[]; remove: string[] };
       skipConflicts?: boolean;
       includePast?: boolean;
     }

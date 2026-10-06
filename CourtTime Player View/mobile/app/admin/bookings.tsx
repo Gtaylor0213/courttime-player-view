@@ -19,7 +19,9 @@ import {
   type AdminCourtRow,
   type SeriesEditPayload,
 } from '../../src/api/admin';
+import { bookingSeriesEndpoints } from '../../src/api/endpoints';
 import { groupBookingsBySeries, minutesBetween } from '../../src/utils/adminBookings';
+import { courtIdsOnBookingDates, diffCourtIds } from '../../../shared/utils/recurrence';
 import { generateWeeklyDates, WEEKDAY_NAMES } from '../../src/utils/recurringDates';
 import { buildTimeSlotsFromAvailability, type CourtAvailabilityData } from '../../../shared/utils/courtAvailability';
 import { Card } from '../../src/components/Card';
@@ -125,6 +127,9 @@ function ReservationsTab({
     durationMinutes: string;
     bookingType: string;
     notes: string;
+    courtIds: string[];
+    /** Courts booked when the form opened; null until the series has loaded. */
+    baseCourtIds: string[] | null;
   } | null>(null);
   const [seriesSubmitting, setSeriesSubmitting] = useState(false);
 
@@ -165,7 +170,7 @@ function ReservationsTab({
       return { ...prev, [seriesId]: existing.includes(bookingId) ? existing.filter((id) => id !== bookingId) : [...existing, bookingId] };
     });
 
-  const openSeriesEdit = (mode: 'all' | 'selected', seriesId: string, seed: AdminBookingRow, bookingIds: string[] = []) =>
+  const openSeriesEdit = (mode: 'all' | 'selected', seriesId: string, seed: AdminBookingRow, bookingIds: string[] = []) => {
     setSeriesEdit({
       mode,
       seriesId,
@@ -175,7 +180,23 @@ function ReservationsTab({
       durationMinutes: String(seed.durationMinutes || minutesBetween(seed.startTime, seed.endTime) || 60),
       bookingType: seed.bookingType || '',
       notes: seed.notes || '',
+      courtIds: [],
+      baseCourtIds: null,
     });
+    // The list rows only know their own court; the series knows all of them.
+    void (async () => {
+      const res = await bookingSeriesEndpoints.detail(seriesId);
+      const series = (res as any)?.data?.series ?? (res as any)?.series;
+      if (!res.success || !series) return;
+      const base: string[] =
+        mode === 'all' ? series.rule.courtIds : courtIdsOnBookingDates(series.instances, bookingIds);
+      setSeriesEdit((prev) =>
+        prev && prev.seriesId === seriesId && prev.baseCourtIds === null
+          ? { ...prev, courtIds: base, baseCourtIds: base }
+          : prev
+      );
+    })();
+  };
 
   const confirmDeleteSeries = (seriesId: string) =>
     Alert.alert('Cancel series', 'Cancel every remaining date in this recurring reservation? The member is notified and emailed.', [
@@ -224,6 +245,10 @@ function ReservationsTab({
       showAlert('Duration', 'Duration must be a positive number.');
       return;
     }
+    if (seriesEdit.baseCourtIds && seriesEdit.courtIds.length === 0) {
+      showAlert('Courts', 'Select at least one court, or cancel the dates instead.');
+      return;
+    }
     const withSeconds = (t: string) => (t.length === 5 ? `${t}:00` : t);
     const payload: SeriesEditPayload = {
       startTime: withSeconds(seriesEdit.startTime.trim()),
@@ -236,8 +261,17 @@ function ReservationsTab({
     setSeriesSubmitting(true);
     const res =
       seriesEdit.mode === 'all'
-        ? await updateBookingSeries(seriesEdit.seriesId, payload)
-        : await updateBookingSeriesInstances(seriesEdit.seriesId, { bookingIds: seriesEdit.bookingIds, ...payload });
+        ? await updateBookingSeries(seriesEdit.seriesId, {
+            ...payload,
+            courtIds: seriesEdit.baseCourtIds ? seriesEdit.courtIds : undefined,
+          })
+        : await updateBookingSeriesInstances(seriesEdit.seriesId, {
+            bookingIds: seriesEdit.bookingIds,
+            ...payload,
+            courtChanges: seriesEdit.baseCourtIds
+              ? diffCourtIds(seriesEdit.baseCourtIds, seriesEdit.courtIds)
+              : undefined,
+          });
     setSeriesSubmitting(false);
     if (!res.success) {
       showApiErrorAlert(res, 'Failed to update recurring reservation');
@@ -456,6 +490,35 @@ function ReservationsTab({
             <ScrollView contentContainerStyle={{ padding: Spacing.md }} keyboardShouldPersistTaps="handled">
               {seriesEdit.mode === 'selected' ? (
                 <Text style={styles.emptyText}>Applies to {seriesEdit.bookingIds.length} selected date{seriesEdit.bookingIds.length === 1 ? '' : 's'}.</Text>
+              ) : null}
+              {seriesEdit.baseCourtIds ? (
+                <>
+                  <Text style={styles.label}>
+                    Courts — {seriesEdit.mode === 'all' ? 'tap to add or remove one for every upcoming date' : 'tap to add or remove one on the selected dates'}
+                  </Text>
+                  <View style={styles.chipsWrap}>
+                    {courts.map((c) => {
+                      const on = seriesEdit.courtIds.includes(c.id);
+                      return (
+                        <TouchableOpacity
+                          key={c.id}
+                          style={[styles.chip, on && styles.chipSelected]}
+                          onPress={() =>
+                            setSeriesEdit({
+                              ...seriesEdit,
+                              courtIds: on ? seriesEdit.courtIds.filter((id) => id !== c.id) : [...seriesEdit.courtIds, c.id],
+                            })
+                          }
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={`${c.name}${on ? ', selected' : ''}`}
+                        >
+                          <Text style={[styles.chipText, on && styles.chipTextSelected]}>{c.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
               ) : null}
               <Text style={styles.label}>Start time (HH:MM)</Text>
               <Input value={seriesEdit.startTime} onChangeText={(v) => setSeriesEdit({ ...seriesEdit, startTime: v })} placeholder="18:00" autoCapitalize="none" />

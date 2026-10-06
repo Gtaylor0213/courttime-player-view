@@ -20,6 +20,7 @@ import {
   canManageSeries,
   updateBookingSeries,
   cancelBookingSeries,
+  parseCourtChanges,
 } from '../../src/services/bookingSeriesService';
 import {
   acceptCourtWaiverForUser,
@@ -810,7 +811,7 @@ router.patch('/series/:seriesId', async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'Authentication required' });
     }
     const isAdminCaller = req.user?.userType === 'admin';
-    const { scope, fromDate, bookingIds, rule, excludeDates, skipConflicts, includePast } =
+    const { scope, fromDate, bookingIds, rule, excludeDates, courtChanges, skipConflicts, includePast } =
       req.body || {};
 
     if (!['instance', 'following', 'all'].includes(String(scope))) {
@@ -836,6 +837,7 @@ router.patch('/series/:seriesId', async (req, res, next) => {
         userId: isAdminCaller ? rule.userId : actorUserId,
       },
       excludeDates: Array.isArray(excludeDates) ? excludeDates : undefined,
+      courtChanges: parseCourtChanges(courtChanges),
       skipConflicts: skipConflicts === true,
       skipRulesValidation: isAdminCaller,
       // Rewriting dates that already happened is staff-only housekeeping.

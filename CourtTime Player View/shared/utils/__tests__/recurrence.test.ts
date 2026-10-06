@@ -10,6 +10,8 @@ import {
   weekdayOf,
   singleDateRule,
   isSingleDateRule,
+  courtIdsOnBookingDates,
+  diffCourtIds,
   type RecurrenceRule,
 } from '../recurrence';
 
@@ -174,5 +176,35 @@ describe('rulesEqual', () => {
 
   it('notices a changed time', () => {
     expect(rulesEqual(rule, { ...rule, startTime: '19:00:00' })).toBe(false);
+  });
+});
+
+describe('one-date court changes', () => {
+  const instances = [
+    { id: 'm-a', courtId: 'court-a', bookingDate: '2026-09-21', status: 'confirmed' },
+    { id: 'm-b', courtId: 'court-b', bookingDate: '2026-09-21', status: 'cancelled' },
+    { id: 'm-c', courtId: 'court-c', bookingDate: '2026-09-21', status: 'confirmed' },
+    { id: 'w-a', courtId: 'court-a', bookingDate: '2026-09-23', status: 'confirmed' },
+    { id: 'w-b', courtId: 'court-b', bookingDate: '2026-09-23', status: 'confirmed' },
+  ];
+
+  it('reports the courts actually booked on the chosen date, not the rule', () => {
+    expect(courtIdsOnBookingDates(instances, ['m-a'])).toEqual(['court-a', 'court-c']);
+  });
+
+  it('covers every chosen date', () => {
+    expect(courtIdsOnBookingDates(instances, ['m-a', 'w-a']).sort()).toEqual([
+      'court-a',
+      'court-b',
+      'court-c',
+    ]);
+  });
+
+  it('diffs ticked and unticked courts', () => {
+    expect(diffCourtIds(['court-a', 'court-b'], ['court-b', 'court-c'])).toEqual({
+      add: ['court-c'],
+      remove: ['court-a'],
+    });
+    expect(diffCourtIds(['court-a'], ['court-a'])).toEqual({ add: [], remove: [] });
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,9 @@ import type {
 } from '../api/client';
 import {
   WEEKDAY_NAMES,
+  courtIdsOnBookingDates,
   describeRecurrence,
+  diffCourtIds,
   expandWeeklyDates,
   isSingleDateRule,
   normalizeWeekdays,
@@ -254,11 +256,31 @@ export function SeriesEditDialog({
     return scope === 'following' ? all.filter((d) => d >= focusDate) : all;
   }, [scope, startDate, endDate, weekdays, focusDate, isGroup]);
 
-  // Switching to "this reservation only" puts the clicked date in the date field,
-  // so it can be moved to another day without touching the rest of the series.
+  // What is actually booked on the chosen date(s) -- which can differ from the
+  // rule once a court has been added or dropped for a single week.
+  const selectedKey = selectedBookingIds.join(',');
+  const instanceCourtIds = useMemo(
+    () => (series ? courtIdsOnBookingDates(series.instances, selectedKey.split(',')) : []),
+    [series, selectedKey]
+  );
+  const instanceDate =
+    series?.instances.find((i) => i.id === selectedBookingIds[0])?.bookingDate || focusDate;
+
+  // Switching to "this reservation only" puts the chosen date and its courts in
+  // the form, so that one date can be moved or have a court added or dropped
+  // without touching the rest of the series. Switching back restores the rule.
+  const previousScope = useRef<BookingSeriesScope | null>(null);
   useEffect(() => {
-    if (scope === 'instance' && !isMultiInstance) setStartDate(focusDate);
-  }, [scope, isMultiInstance, focusDate]);
+    if (!series) return;
+    if (scope === 'instance') {
+      if (!isMultiInstance) setStartDate(instanceDate);
+      if (instanceCourtIds.length > 0) setCourtIds(instanceCourtIds);
+    } else if (previousScope.current === 'instance') {
+      setStartDate(series.rule.startDate);
+      setCourtIds(series.rule.courtIds);
+    }
+    previousScope.current = scope;
+  }, [scope, series, isMultiInstance, instanceDate, instanceCourtIds]);
 
   const toggleWeekday = (index: number) =>
     setWeekdays((prev) =>
@@ -332,6 +354,8 @@ export function SeriesEditDialog({
         fromDate: scope === 'following' ? focusDate : undefined,
         bookingIds: scope === 'instance' ? selectedBookingIds : undefined,
         rule: buildRule(),
+        courtChanges:
+          scope === 'instance' ? diffCourtIds(instanceCourtIds, courtIds) : undefined,
         excludeDates: excludedDates,
         skipConflicts,
         includePast: isFacilityAdmin ? includePast : undefined,
@@ -528,10 +552,17 @@ export function SeriesEditDialog({
             <div className="space-y-2">
               <Label className="text-sm font-medium">
                 Courts
-                {isGroup && (
+                {isGroup ? (
                   <span className="font-normal text-muted-foreground">
                     {' '}— unticking one cancels that court
                   </span>
+                ) : (
+                  scope === 'instance' && (
+                    <span className="font-normal text-muted-foreground">
+                      {' '}— tick to add a court {isMultiInstance ? 'on these dates' : 'on this date'},
+                      untick to cancel one
+                    </span>
+                  )
                 )}
               </Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

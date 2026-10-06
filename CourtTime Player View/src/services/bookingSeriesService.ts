@@ -28,6 +28,8 @@ import {
   normalizeWeekdays,
   parseYmd,
   toYmd,
+  type CourtChanges,
+  type RecurrenceOccurrence,
   type RecurrenceRule,
 } from '../../shared/utils/recurrence';
 import {
@@ -246,34 +248,74 @@ async function slotIsFree(
  * One selected date may also move to another date (the person picked a new one
  * in the form); several selected dates each keep their own date, since a single
  * target date cannot describe all of them.
+ *
+ * `courtChanges` adds or drops courts on just those dates: an added court gets
+ * a new booking, a dropped one is cancelled. A selected booking whose court was
+ * dropped moves onto an added court when there is one, so swapping courts keeps
+ * the booking rather than cancelling and re-creating it.
  */
 function planForInstances(
   instances: SeriesDetail['instances'],
   bookingIds: string[],
-  rule: SeriesRule
+  rule: SeriesRule,
+  courtChanges?: CourtChanges
 ): ReconcilePlan {
   const wanted = new Set(bookingIds);
-  const selected = instances.filter((i) => wanted.has(i.id) && i.status !== 'cancelled');
+  const live = instances.filter((i) => i.status !== 'cancelled');
+  const selected = live.filter((i) => wanted.has(i.id));
   const singleDate = selected.length === 1 ? rule.startDate : null;
+  const plan: ReconcilePlan = { keep: [], reshape: [], create: [], cancel: [], untouchedPast: [] };
 
-  return {
-    keep: [],
-    reshape: selected.map((booking) => ({
+  const occurrence = (courtId: string, bookingDate: string): RecurrenceOccurrence => ({
+    courtId,
+    bookingDate,
+    startTime: rule.startTime,
+    endTime: rule.endTime,
+    durationMinutes: rule.durationMinutes,
+  });
+
+  if (!courtChanges) {
+    plan.reshape = selected.map((booking) => ({
       booking,
-      to: {
-        // Keep the booking on its own court when that court is still in the
-        // selection, so editing several dates at once does not pile them up.
-        courtId: rule.courtIds.includes(booking.courtId) ? booking.courtId : rule.courtIds[0],
-        bookingDate: singleDate || booking.bookingDate,
-        startTime: rule.startTime,
-        endTime: rule.endTime,
-        durationMinutes: rule.durationMinutes,
-      },
-    })),
-    create: [],
-    cancel: [],
-    untouchedPast: [],
-  };
+      // Keep the booking on its own court when that court is still in the
+      // selection, so editing several dates at once does not pile them up.
+      to: occurrence(
+        rule.courtIds.includes(booking.courtId) ? booking.courtId : rule.courtIds[0],
+        singleDate || booking.bookingDate
+      ),
+    }));
+    return plan;
+  }
+
+  const remove = new Set(courtChanges.remove);
+  for (const date of [...new Set(selected.map((s) => s.bookingDate))]) {
+    const onDate = live.filter((i) => i.bookingDate === date);
+    const targetDate = singleDate || date;
+    const staying = new Set(onDate.filter((i) => !remove.has(i.courtId)).map((i) => i.courtId));
+    const toAdd = [...new Set(courtChanges.add)].filter((courtId) => !staying.has(courtId));
+
+    for (const booking of onDate) {
+      const isSelected = wanted.has(booking.id);
+      if (!remove.has(booking.courtId)) {
+        if (isSelected) plan.reshape.push({ booking, to: occurrence(booking.courtId, targetDate) });
+        continue;
+      }
+      const moveTo = isSelected ? toAdd.shift() : undefined;
+      if (moveTo) plan.reshape.push({ booking, to: occurrence(moveTo, targetDate) });
+      else plan.cancel.push(booking);
+    }
+    for (const courtId of toAdd) plan.create.push(occurrence(courtId, targetDate));
+  }
+  return plan;
+}
+
+/** Request-body `courtChanges` -> clean id lists, or undefined when none were sent. */
+export function parseCourtChanges(value: unknown): CourtChanges | undefined {
+  const ids = (list: unknown) =>
+    Array.isArray(list) ? [...new Set(list.filter((id): id is string => typeof id === 'string' && !!id))] : [];
+  const raw = (value ?? {}) as { add?: unknown; remove?: unknown };
+  const changes = { add: ids(raw.add), remove: ids(raw.remove) };
+  return changes.add.length || changes.remove.length ? changes : undefined;
 }
 
 export interface UpdateSeriesInput {
@@ -287,6 +329,8 @@ export interface UpdateSeriesInput {
   rule: SeriesRule;
   /** Dates unchecked in the date list. */
   excludeDates?: string[];
+  /** 'instance' only: courts added to or dropped from just the selected dates. */
+  courtChanges?: CourtChanges;
   /** Apply to the non-conflicting dates and skip the rest. */
   skipConflicts?: boolean;
   /** Staff bypass booking rules, as they do everywhere else. */
@@ -336,6 +380,11 @@ export async function updateBookingSeries(
   if (input.scope === 'instance' && !input.bookingIds?.length) {
     return { success: false, error: 'Select at least one date to edit' };
   }
+  // "This and later" from the first date is the whole series: with nothing
+  // earlier to keep, the rule is edited in place instead of split in two.
+  const splitsSeries =
+    !!fromDate &&
+    series.instances.some((i) => i.status !== 'cancelled' && i.bookingDate < fromDate);
 
   // Editing single dates is not a rule change: the chosen bookings are reshaped
   // and the series rule is left exactly as it was, so those dates simply drift
@@ -343,7 +392,7 @@ export async function updateBookingSeries(
   // and cancel every date it did not cover.
   const plan: ReconcilePlan =
     input.scope === 'instance'
-      ? planForInstances(series.instances, input.bookingIds || [], rule)
+      ? planForInstances(series.instances, input.bookingIds || [], rule, input.courtChanges)
       : reconcileSeries({
           instances: series.instances,
           rule,
@@ -353,7 +402,7 @@ export async function updateBookingSeries(
           includePast: input.includePast,
         });
 
-  if (input.scope === 'instance' && plan.reshape.length === 0) {
+  if (input.scope === 'instance' && plan.reshape.length === 0 && plan.cancel.length === 0) {
     return { success: false, error: 'Those dates are not part of this recurring reservation' };
   }
 
@@ -399,6 +448,8 @@ export async function updateBookingSeries(
       const allCourtIds = [
         ...new Set([
           ...rule.courtIds,
+          ...plan.create.map((c) => c.courtId),
+          ...plan.reshape.map((r) => r.to.courtId),
           ...series.instances.map((i) => i.courtId),
         ]),
       ].sort();
@@ -499,7 +550,7 @@ export async function updateBookingSeries(
       // 'following' splits the series so the earlier dates keep their own rule.
       let targetSeriesId = series.id;
       let newSeriesId: string | undefined;
-      if (input.scope === 'following' && fromDate) {
+      if (splitsSeries && fromDate) {
         const tail = await client.query(
           `INSERT INTO booking_series (
              facility_id, created_by, user_id, booked_by_staff_id, walk_in_name,
@@ -538,7 +589,8 @@ export async function updateBookingSeries(
           [newSeriesId, series.id, fromDate]
         );
         await client.query(
-          `UPDATE booking_series SET end_date = $2, updated_at = CURRENT_TIMESTAMP
+          `UPDATE booking_series
+           SET end_date = GREATEST(start_date, $2::date), updated_at = CURRENT_TIMESTAMP
            WHERE id = $1`,
           [series.id, dayBefore(fromDate)]
         );
@@ -580,7 +632,8 @@ export async function updateBookingSeries(
           [
             targetSeriesId,
             occ.courtId,
-            rule.userId,
+            // A one-date edit never changes who the series belongs to.
+            input.scope === 'instance' ? series.rule.userId : rule.userId,
             series.facilityId,
             occ.bookingDate,
             occ.startTime,
@@ -692,7 +745,9 @@ export async function cancelBookingSeries(
         // The rule stops where the cancellation starts, so the remaining dates
         // keep describing themselves correctly.
         await client.query(
-          `UPDATE booking_series SET end_date = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+          `UPDATE booking_series
+           SET end_date = GREATEST(start_date, $2::date), updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1`,
           [series.id, dayBefore(input.fromDate)]
         );
       }

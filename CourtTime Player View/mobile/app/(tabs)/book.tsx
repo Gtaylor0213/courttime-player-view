@@ -1517,7 +1517,8 @@ export default function BookCourtScreen() {
         />
       ) : facilityId ? (
         <>
-          {weekMonthViewEnabled && (
+          {/* View and court-type chips fold away with the rest of the booking tools (More / Less). */}
+          {topInfoExpanded && weekMonthViewEnabled && (
             <View style={styles.calendarViewSwitch}>
               {(['day', 'overview'] as const).map((viewMode) => (
                 <TouchableOpacity
@@ -1544,7 +1545,7 @@ export default function BookCourtScreen() {
             </View>
           )}
 
-          {courtTypes.length > 1 && !(weekMonthViewEnabled && calendarViewMode === 'overview') ? (
+          {topInfoExpanded && courtTypes.length > 1 && !(weekMonthViewEnabled && calendarViewMode === 'overview') ? (
             <View style={styles.courtTypeRow}>
               <TouchableOpacity
                 style={[styles.calendarViewChip, courtTypeFilter === null && styles.typeChipSelected]}

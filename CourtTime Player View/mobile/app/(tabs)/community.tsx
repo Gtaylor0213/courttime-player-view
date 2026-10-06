@@ -190,12 +190,19 @@ export default function CommunityScreen() {
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [loadingBulletins, setLoadingBulletins] = useState(false);
 
+  // Skeleton only for a first load. Once there is a list, reloads (after posting,
+  // signing up, switching tabs) update it in place instead of blanking the page.
+  const showPartnersSkeleton = loadingPartners && !refreshing && posts.length === 0;
+  const showBulletinSkeleton = loadingBulletins && !refreshing && bulletins.length === 0;
+
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
 
   // ── Fetch data ──
-  const fetchPartners = useCallback(async () => {
+  // `background` (polling) refreshes the list in place: showing the skeleton
+  // on every poll blanked the page and lost the scroll position.
+  const fetchPartners = useCallback(async (options?: { background?: boolean }) => {
     if (!facilityId) return;
-    setLoadingPartners(true);
+    if (!options?.background) setLoadingPartners(true);
     try {
       const res = await api.get(`/api/hitting-partner/facility/${facilityId}`);
       if (res.success && res.data) {
@@ -206,9 +213,9 @@ export default function CommunityScreen() {
     }
   }, [facilityId]);
 
-  const fetchBulletins = useCallback(async () => {
+  const fetchBulletins = useCallback(async (options?: { background?: boolean }) => {
     if (!facilityId) return;
-    setLoadingBulletins(true);
+    if (!options?.background) setLoadingBulletins(true);
     try {
       const res = await api.get(`/api/bulletin-board/${facilityId}`);
       if (res.success && res.data) {
@@ -226,6 +233,12 @@ export default function CommunityScreen() {
     }
   }, [params.tab]);
 
+  // Switching clubs: drop the old club's lists so the skeleton shows rather than stale posts.
+  useEffect(() => {
+    setPosts([]);
+    setBulletins([]);
+  }, [facilityId]);
+
   useEffect(() => {
     if (activeTab === 'partners') fetchPartners();
     else fetchBulletins();
@@ -234,9 +247,9 @@ export default function CommunityScreen() {
   useEffect(() => {
     const stopPolling = createPollingTransport(ACTIVE_FEED_POLL_MS).subscribe(() => {
       if (activeTab === 'partners') {
-        fetchPartners();
+        fetchPartners({ background: true });
       } else if (activeTab === 'bulletin') {
-        fetchBulletins();
+        fetchBulletins({ background: true });
       }
     });
     return stopPolling;
@@ -933,12 +946,12 @@ export default function CommunityScreen() {
         </View>
       </View>
 
-      {activeTab === 'partners' && loadingPartners && !refreshing ? (
+      {activeTab === 'partners' && showPartnersSkeleton ? (
         <View style={styles.tabList}>
           <CommunityListSkeleton />
         </View>
       ) : null}
-      {activeTab === 'partners' && !(loadingPartners && !refreshing) ? (
+      {activeTab === 'partners' && !showPartnersSkeleton ? (
         <FlatList
           style={styles.tabList}
           data={filteredPosts}
@@ -952,12 +965,12 @@ export default function CommunityScreen() {
         />
       ) : null}
 
-      {activeTab === 'bulletin' && loadingBulletins && !refreshing ? (
+      {activeTab === 'bulletin' && showBulletinSkeleton ? (
         <View style={styles.tabList}>
           <CommunityListSkeleton />
         </View>
       ) : null}
-      {activeTab === 'bulletin' && !(loadingBulletins && !refreshing) ? (
+      {activeTab === 'bulletin' && !showBulletinSkeleton ? (
         <FlatList
           style={styles.tabList}
           data={focusPostId ? filteredBulletins.filter((p) => p.id === focusPostId) : filteredBulletins}

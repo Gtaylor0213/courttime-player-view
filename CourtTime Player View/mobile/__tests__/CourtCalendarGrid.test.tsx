@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import { Text } from 'react-native';
 import { CourtCalendarGrid } from '../src/components/CourtCalendarGrid';
 import { api } from '../src/api/client';
@@ -106,5 +106,92 @@ describe('CourtCalendarGrid', () => {
     expect(toMinutes(endTime) - toMinutes(startTime)).toBe(120);
 
     getSpy.mockRestore();
+  });
+
+  /**
+   * Touch handling on a free cell: a quick tap books, a touch that travels is a
+   * scroll, and a hold arms drag-select so the drag extends the booking.
+   */
+  describe('cell touches', () => {
+    const touch = (pageY: number) => ({ nativeEvent: { pageX: 100, pageY, locationY: 10 } });
+
+    async function renderFutureDay(onBookingSelected: (c: unknown, s: string, e: string) => void) {
+      jest.spyOn(api, 'get').mockImplementation((endpoint: string) => {
+        if (endpoint.startsWith('/api/bookings/facility/')) {
+          return Promise.resolve({ success: true, data: { bookings: [] } });
+        }
+        if (endpoint.startsWith('/api/court-config/facility/')) {
+          return Promise.resolve({
+            success: true,
+            data: { courtConfigs: [{ courtId: 'court-1', isOpen: true, openTime: '06:00', closeTime: '22:00' }] },
+          });
+        }
+        return Promise.resolve({ success: false, error: 'Unexpected endpoint' });
+      });
+      let tree: renderer.ReactTestRenderer;
+      await act(async () => {
+        tree = renderer.create(
+          <CourtCalendarGrid
+            courts={[{ id: 'court-1', name: 'Court 1' }] as any}
+            selectedDate="2099-01-05"
+            facilityId="facility-1"
+            onBookingSelected={onBookingSelected}
+          />
+        );
+        await Promise.resolve();
+      });
+      const cell = tree!.root.findAll(
+        (n: any) => typeof n.props?.onTouchStart === 'function' && typeof n.props?.onAccessibilityAction === 'function'
+      )[0];
+      return cell.props as any;
+    }
+
+    afterEach(() => {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    it('books the slot on a quick tap', async () => {
+      const onBookingSelected = jest.fn();
+      const cell = await renderFutureDay(onBookingSelected);
+      await act(async () => {
+        cell.onTouchStart(touch(200));
+        cell.onTouchEnd(touch(200));
+      });
+      expect(onBookingSelected).toHaveBeenCalledTimes(1);
+      expect((onBookingSelected.mock.calls[0] as unknown[])[1]).toBe('06:00:00');
+    });
+
+    it('does not book when the finger travels (a scroll) or the touch is cancelled', async () => {
+      const onBookingSelected = jest.fn();
+      const cell = await renderFutureDay(onBookingSelected);
+      await act(async () => {
+        cell.onTouchStart(touch(200));
+        cell.onTouchMove(touch(230));
+        cell.onTouchEnd(touch(230));
+        cell.onTouchStart(touch(200));
+        cell.onTouchCancel(touch(200));
+      });
+      expect(onBookingSelected).not.toHaveBeenCalled();
+    });
+
+    it('extends the booking when held then dragged down the column', async () => {
+      const onBookingSelected = jest.fn();
+      const cell = await renderFutureDay(onBookingSelected);
+      jest.useFakeTimers();
+      await act(async () => {
+        cell.onTouchStart(touch(200));
+        jest.advanceTimersByTime(250);
+      });
+      await act(async () => {
+        // 10px into the first 48px row, +100px lands in the third row: 06:00 to 07:30.
+        cell.onTouchMove(touch(300));
+        cell.onTouchEnd(touch(300));
+      });
+      expect(onBookingSelected).toHaveBeenCalledTimes(1);
+      const [, startTime, endTime] = onBookingSelected.mock.calls[0] as [unknown, string, string];
+      expect(startTime).toBe('06:00:00');
+      expect(endTime).toBe('07:30:00');
+    });
   });
 });

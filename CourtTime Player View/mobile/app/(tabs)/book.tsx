@@ -268,7 +268,10 @@ export default function BookCourtScreen() {
   const [topInfoExpanded, setTopInfoExpanded] = useState(false);
   /** When the day grid has a finger down, disable the outer Book ScrollView so it does not steal vertical drags. */
   const [calendarScrollLocked, setCalendarScrollLocked] = useState(false);
+  const bookScrollRef = useRef<ScrollView>(null);
   const onCalendarInteractionLock = useCallback((locked: boolean) => {
+    // Native prop first: waiting on this screen's re-render lets the page scroll steal the drag.
+    (bookScrollRef.current as any)?.setNativeProps?.({ scrollEnabled: !locked });
     setCalendarScrollLocked(locked);
   }, []);
 
@@ -1396,6 +1399,7 @@ export default function BookCourtScreen() {
   return (
     <View style={styles.screenRoot} ref={screenRootRef} onLayout={onScreenRootLayout}>
       <ScrollView
+        ref={bookScrollRef}
         style={styles.container}
         scrollEnabled={!calendarScrollLocked}
         nestedScrollEnabled

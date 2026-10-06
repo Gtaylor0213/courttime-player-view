@@ -1,11 +1,14 @@
 /**
  * CourtCalendarGrid
- * Visual calendar grid showing 3 courts at a time with long-press-and-drag booking.
- * Swipe horizontally to page through courts in groups of 3.
+ * Day grid: one column per court, one row per slot. Tap a slot to book it, or
+ * press and hold then drag down the column for a longer booking. Scrolls
+ * vertically through the day and sideways through the courts as one strip,
+ * with the time column and court headers pinned.
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
+  Animated,
   View,
   Text,
   StyleSheet,
@@ -25,6 +28,7 @@ import { createPollingTransport } from '../../../shared/api/sync';
 import { getOperatingHoursForDay, isTruthyClosed } from '../../../shared/utils/operatingHours';
 import { userFacingApiMessage, type ApiFailureShape } from '../utils/apiUserMessages';
 import { formatCourtCalendarSubtitle } from '../../../shared/utils/courtNaming';
+import { hapticLight } from '../utils/haptics';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -37,9 +41,15 @@ import { blackoutsToBlockedRanges } from '../../../shared/utils/blackoutSlots';
 import { isPeakSlot } from '../../../shared/utils/courtTypeFilter';
 
 const DEFAULT_SLOT_MINUTES = 30;
-const COURTS_PER_PAGE = 4;
+/** Court columns that fit across the screen; more courts scroll sideways. */
+const COURTS_VISIBLE = 4;
 const ACTIVE_DAY_POLL_MS = 5000;
+/** Hold this long without moving and the touch becomes a drag-select instead of a scroll. */
 const DRAG_ARM_DELAY_MS = 180;
+/** Finger travel that turns a touch into a scroll (before the hold arms) rather than a tap. */
+const TOUCH_SLOP_PX = 8;
+/** A touch landing this soon after scroll movement is the one stopping the scroll, not a tap. */
+const SCROLL_SETTLE_MS = 150;
 const BOOKED_SLOT_TAP_MAX_MOVEMENT_PX = 8;
 
 /** Normalize YYYY-M-D vs YYYY-MM-DD so "today" checks match Book / MiniCalendar. */
@@ -187,8 +197,7 @@ function bookingsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: str
 }
 
 interface DragSelection {
-  pageIndex: number;
-  courtIndex: number; // index within current page
+  courtIndex: number; // index into `courts`
   startRow: number;
   endRow: number;
 }
@@ -235,7 +244,8 @@ export function CourtCalendarGrid({
   /** Must match facility slot duration so row times align with booking modal / API. */
   const [slotStepMinutes, setSlotStepMinutes] = useState(DEFAULT_SLOT_MINUTES);
   const [loading, setLoading] = useState(true);
-  const [pageIndex, setPageIndex] = useState(0);
+  /** Index of the left-most court column on screen, for the "Courts 1-4 of 8" label. */
+  const [firstVisibleCourt, setFirstVisibleCourt] = useState(0);
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
   /** Disables inner + parent scroll while a cell gesture is active (refs alone do not re-render scrollEnabled). */
   const [touchCaptureActive, setTouchCaptureActive] = useState(false);
@@ -243,26 +253,46 @@ export function CourtCalendarGrid({
   const [loadError, setLoadError] = useState<GridLoadError | null>(null);
   /** Same payload as dragSelection, updated synchronously — RN can fire parent onTouchEnd before state from onTouchStart commits. */
   const dragSelectionRef = useRef<DragSelection | null>(null);
-  const dragStartRef = useRef<{ pageX: number; pageY: number; startRow: number } | null>(null);
+  /** The touch in progress on a free cell. `moved` means it turned into a scroll, so it can no longer tap or arm. */
+  const touchRef = useRef<{
+    pageX: number;
+    pageY: number;
+    /** Where in the start cell the finger landed, so rows flip as the finger crosses cell edges. */
+    offsetY: number;
+    courtIndex: number;
+    startRow: number;
+    startedAt: number;
+    moved: boolean;
+  } | null>(null);
   const bookedTouchStartRef = useRef<{
     pageX: number;
     pageY: number;
     bookingId: string | undefined;
     courtId: string;
   } | null>(null);
-  /** When true, current touch intent is horizontal page swipe, so cell tap/drag should be ignored. */
-  const horizontalSwipeRef = useRef(false);
-  /** Drag select only starts after a short hold so vertical swipes still scroll naturally. */
+  /** Drag select only starts after a short hold so swipes still scroll naturally. */
   const dragArmedRef = useRef(false);
   const dragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isDragging = useRef(false);
-  const dragMoved = useRef(false);
+  const scrollLockedRef = useRef(false);
+  const lastScrollAtRef = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
+  const courtScrollRef = useRef<ScrollView>(null);
+  /** Horizontal offset of the court strip; drives the pinned header row natively so it never lags. */
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const headerTranslateX = useMemo(() => Animated.multiply(scrollX, -1), [scrollX]);
+  const onCourtStripScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+        useNativeDriver: true,
+        listener: () => {
+          lastScrollAtRef.current = Date.now();
+        },
+      }),
+    [scrollX]
+  );
   const fetchRequestIdRef = useRef(0);
   const selectedYmd = useMemo(() => normalizeYmd(selectedDate) ?? selectedDate, [selectedDate]);
 
-  const totalPages = Math.ceil(courts.length / COURTS_PER_PAGE);
-  const pageCourts = courts.slice(pageIndex * COURTS_PER_PAGE, (pageIndex + 1) * COURTS_PER_PAGE);
   const openCourtData = useMemo(() => courtData.filter((d) => d.isOpen), [courtData]);
 
   /** Facility + per-court bounds so the grid never ends before published operating hours (courts can lag by one slot). */
@@ -314,7 +344,19 @@ export function CourtCalendarGrid({
   const COURT_COLUMN_GUTTER = 0;
   const courtTrackWidth = SCREEN_WIDTH - TIME_LABEL_WIDTH;
   const courtColumnWidth =
-    (courtTrackWidth - COURT_COLUMN_GUTTER * (COURTS_PER_PAGE - 1)) / COURTS_PER_PAGE;
+    (courtTrackWidth - COURT_COLUMN_GUTTER * (COURTS_VISIBLE - 1)) / COURTS_VISIBLE;
+  /** Blank columns that square off the grid when the club has fewer courts than fit. */
+  const fillerColumnCount = Math.max(0, COURTS_VISIBLE - courts.length);
+  const courtStripWidth = (courts.length + fillerColumnCount) * courtColumnWidth;
+  const canScrollCourts = courts.length > COURTS_VISIBLE;
+
+  // The strip remounts at x=0 whenever the grid reloads or the court list changes.
+  const courtIdsKey = useMemo(() => courts.map((c) => c.id).join(','), [courts]);
+  useEffect(() => {
+    scrollX.setValue(0);
+    setFirstVisibleCourt(0);
+    courtScrollRef.current?.scrollTo?.({ x: 0, animated: false });
+  }, [loading, courtIdsKey, scrollX]);
 
   useEffect(() => {
     console.log('[book-grid] selectedDate prop', selectedDate);
@@ -572,6 +614,7 @@ export function CourtCalendarGrid({
 
   useEffect(() => {
     return () => {
+      if (dragArmTimerRef.current) clearTimeout(dragArmTimerRef.current);
       onInteractionLockChange?.(false);
     };
   }, [onInteractionLockChange]);
@@ -634,9 +677,8 @@ export function CourtCalendarGrid({
   }, [selectedYmd, timeRows, slotStepMinutes]);
 
   // Check if a time row is booked for a court
-  const isBooked = (targetPageIndex: number, courtIndex: number, rowIndex: number): Booking | null => {
-    const globalCourtIndex = targetPageIndex * COURTS_PER_PAGE + courtIndex;
-    const data = courtData[globalCourtIndex];
+  const isBooked = (courtIndex: number, rowIndex: number): Booking | null => {
+    const data = courtData[courtIndex];
     if (!data) return null;
     const rowTime = timeRows[rowIndex];
     if (!rowTime) return null;
@@ -675,6 +717,22 @@ export function CourtCalendarGrid({
     return rowMinutes !== null && lockMinutes !== null && rowMinutes >= lockMinutes;
   };
 
+  /**
+   * Freeze / release every ScrollView around the grid for a drag-select. Native props go first:
+   * the state round-trip re-renders the whole grid, long enough for a ScrollView to steal the drag.
+   */
+  const setScrollLocked = useCallback(
+    (locked: boolean) => {
+      if (scrollLockedRef.current === locked) return;
+      scrollLockedRef.current = locked;
+      (scrollRef.current as any)?.setNativeProps?.({ scrollEnabled: !locked });
+      (courtScrollRef.current as any)?.setNativeProps?.({ scrollEnabled: !locked && canScrollCourts });
+      setTouchCaptureActive(locked);
+      onInteractionLockChange?.(locked);
+    },
+    [canScrollCourts, onInteractionLockChange]
+  );
+
   const scrollToCurrentTime = useCallback((options?: { fromUserTap?: boolean; reliable?: boolean }) => {
     if (loading || !scrollRef.current) return;
     if (timeRows.length === 0) return;
@@ -687,10 +745,10 @@ export function CourtCalendarGrid({
         dragArmTimerRef.current = null;
       }
       dragArmedRef.current = false;
+      touchRef.current = null;
       dragSelectionRef.current = null;
       setDragSelection(null);
-      setTouchCaptureActive(false);
-      onInteractionLockChange?.(false);
+      setScrollLocked(false);
     }
 
     const rowIsPast = (rowIndex: number): boolean => {
@@ -756,7 +814,7 @@ export function CourtCalendarGrid({
     currentTimeIndicatorY,
     gridViewportHeight,
     gridContentHeight,
-    onInteractionLockChange,
+    setScrollLocked,
   ]);
 
   const handleNowPress = useCallback(() => {
@@ -778,7 +836,7 @@ export function CourtCalendarGrid({
       });
     });
     return () => task.cancel();
-  }, [loading, scrollToCurrentTime, timeRows.length, pageIndex, selectedYmd]);
+  }, [loading, scrollToCurrentTime, timeRows.length, selectedYmd]);
 
   // Get the row end time (next slot or closing)
   const getRowEndTime = useCallback(
@@ -799,14 +857,9 @@ export function CourtCalendarGrid({
     const startRow = Math.min(sel.startRow, sel.endRow);
     const endRow = Math.max(sel.startRow, sel.endRow);
     for (let r = startRow; r <= endRow; r++) {
-      if (isBooked(sel.pageIndex, sel.courtIndex, r)) return true;
+      if (isBooked(sel.courtIndex, r)) return true;
     }
     return false;
-  };
-
-  const releaseInteractionLocks = () => {
-    setTouchCaptureActive(false);
-    onInteractionLockChange?.(false);
   };
 
   const handleBookedTouchStart = (court: Court, booking: Booking, pageX: number, pageY: number) => {
@@ -831,94 +884,133 @@ export function CourtCalendarGrid({
     onBookedSlotPress?.(court, booking);
   };
 
-  // Handle touch events for tap + drag selection
+  const clearDragArmTimer = () => {
+    if (dragArmTimerRef.current) {
+      clearTimeout(dragArmTimerRef.current);
+      dragArmTimerRef.current = null;
+    }
+  };
+
+  /**
+   * Touch on a free cell. Three outcomes:
+   *  - lifts quickly without moving: a tap, books that slot;
+   *  - moves before the hold arms: a scroll, the ScrollViews take it;
+   *  - held still for DRAG_ARM_DELAY_MS: scrolling freezes and dragging extends the selection.
+   */
   const handleTouchStart = (
-    targetPageIndex: number,
     courtIndex: number,
     rowIndex: number,
     pageX: number,
-    pageY: number
+    pageY: number,
+    locationY: number
   ) => {
-    if (isPast(rowIndex) || isNotYetOpen(rowIndex) || isBooked(targetPageIndex, courtIndex, rowIndex)) return;
-
-    // Do not lock parent/inner scrolling yet — wait until movement confirms
-    // a vertical drag selection. This keeps horizontal court paging responsive.
-    dragStartRef.current = { pageX, pageY, startRow: rowIndex };
-    dragMoved.current = false;
-    isDragging.current = false;
-    horizontalSwipeRef.current = false;
+    clearDragArmTimer();
     dragArmedRef.current = false;
-    if (dragArmTimerRef.current) clearTimeout(dragArmTimerRef.current);
+    touchRef.current = null;
+    if (isPast(rowIndex) || isNotYetOpen(rowIndex) || isBooked(courtIndex, rowIndex)) return;
+
+    const now = Date.now();
+    const stoppingScroll = now - lastScrollAtRef.current < SCROLL_SETTLE_MS;
+    touchRef.current = {
+      pageX,
+      pageY,
+      offsetY: Math.max(0, Math.min(ROW_HEIGHT - 1, Number.isFinite(locationY) ? locationY : ROW_HEIGHT / 2)),
+      courtIndex,
+      startRow: rowIndex,
+      startedAt: now,
+      moved: stoppingScroll,
+    };
+    if (stoppingScroll) return;
+
     dragArmTimerRef.current = setTimeout(() => {
-      // User held long enough: arm drag selection now.
+      dragArmTimerRef.current = null;
+      const touch = touchRef.current;
+      if (!touch || touch.moved || lastScrollAtRef.current > touch.startedAt) return;
+      // Freeze scrolling now, while the finger is still, so the first drag pixel is ours.
       dragArmedRef.current = true;
-      const nextSel: DragSelection = {
-        pageIndex: targetPageIndex,
-        courtIndex,
-        startRow: rowIndex,
-        endRow: rowIndex,
-      };
+      setScrollLocked(true);
+      hapticLight();
+      const nextSel: DragSelection = { courtIndex, startRow: rowIndex, endRow: rowIndex };
       dragSelectionRef.current = nextSel;
       setDragSelection(nextSel);
     }, DRAG_ARM_DELAY_MS);
   };
 
-  const handleTouchEnd = () => {
-    try {
-      if (dragArmTimerRef.current) {
-        clearTimeout(dragArmTimerRef.current);
-        dragArmTimerRef.current = null;
-      }
-      if (horizontalSwipeRef.current) return;
-      const sel = dragSelectionRef.current;
-      if (!sel || !dragArmedRef.current) return;
-      dragSelectionRef.current = null;
+  const handleTouchMove = (pageX: number, pageY: number) => {
+    const touch = touchRef.current;
+    if (!touch) return;
+    const deltaX = pageX - touch.pageX;
+    const deltaY = pageY - touch.pageY;
 
-      if (isDragging.current && !selectionHasConflict(sel)) {
-        const startRow = Math.min(sel.startRow, sel.endRow);
-        const endRow = Math.max(sel.startRow, sel.endRow);
-        openSelectedRange(sel.pageIndex, sel.courtIndex, startRow, endRow);
-      } else if (!dragMoved.current) {
-        // Treat as single-tap selection when finger did not move enough to drag.
-        openSelectedRange(sel.pageIndex, sel.courtIndex, sel.startRow, sel.startRow);
+    if (!dragArmedRef.current) {
+      if (Math.abs(deltaX) > TOUCH_SLOP_PX || Math.abs(deltaY) > TOUCH_SLOP_PX) {
+        touch.moved = true;
+        clearDragArmTimer();
       }
-    } finally {
-      dragStartRef.current = null;
-      dragMoved.current = false;
-      isDragging.current = false;
-      horizontalSwipeRef.current = false;
-      dragArmedRef.current = false;
-      bookedTouchStartRef.current = null;
-      setDragSelection(null);
-      releaseInteractionLocks();
+      return;
+    }
+
+    const cur = dragSelectionRef.current;
+    if (!cur) return;
+    const rowOffset = Math.floor((touch.offsetY + deltaY) / ROW_HEIGHT);
+    const nextRow = Math.max(0, Math.min(timeRows.length - 1, touch.startRow + rowOffset));
+    if (nextRow !== cur.endRow) {
+      const nextSel = { ...cur, endRow: nextRow };
+      dragSelectionRef.current = nextSel;
+      setDragSelection(nextSel);
     }
   };
 
-  const isSelected = (targetPageIndex: number, courtIndex: number, rowIndex: number): boolean => {
+  /** `commit` is false when the system cancelled the touch (a ScrollView took it): never book from that. */
+  const handleTouchEnd = (commit = true) => {
+    clearDragArmTimer();
+    const touch = touchRef.current;
+    const sel = dragSelectionRef.current;
+    const armed = dragArmedRef.current;
+    touchRef.current = null;
+    dragSelectionRef.current = null;
+    dragArmedRef.current = false;
+    bookedTouchStartRef.current = null;
+    if (armed || sel) setDragSelection(null);
+    setScrollLocked(false);
+    if (!commit || !touch) return;
+
+    if (armed && sel) {
+      if (!selectionHasConflict(sel)) {
+        openSelectedRange(sel.courtIndex, Math.min(sel.startRow, sel.endRow), Math.max(sel.startRow, sel.endRow));
+      }
+      return;
+    }
+    // Quick tap: finger never travelled and nothing scrolled underneath it.
+    if (!touch.moved && lastScrollAtRef.current <= touch.startedAt) {
+      openSelectedRange(touch.courtIndex, touch.startRow, touch.startRow);
+    }
+  };
+
+  const isSelected = (courtIndex: number, rowIndex: number): boolean => {
     if (!dragSelection || courtIndex !== dragSelection.courtIndex) return false;
-    if (targetPageIndex !== dragSelection.pageIndex) return false;
     const startRow = Math.min(dragSelection.startRow, dragSelection.endRow);
     const endRow = Math.max(dragSelection.startRow, dragSelection.endRow);
     return rowIndex >= startRow && rowIndex <= endRow;
   };
 
   // Booking block: find first row of a booking to render the label
-  const isBookingStart = (targetPageIndex: number, courtIndex: number, rowIndex: number): Booking | null => {
-    const booking = isBooked(targetPageIndex, courtIndex, rowIndex);
+  const isBookingStart = (courtIndex: number, rowIndex: number): Booking | null => {
+    const booking = isBooked(courtIndex, rowIndex);
     if (!booking) return null;
     // Check if previous row is same booking
     if (rowIndex > 0) {
-      const prevBooking = isBooked(targetPageIndex, courtIndex, rowIndex - 1);
+      const prevBooking = isBooked(courtIndex, rowIndex - 1);
       if (prevBooking && prevBooking.startTime === booking.startTime) return null;
     }
     return booking;
   };
 
   // Get booking block height (number of rows)
-  const getBookingRowSpan = (targetPageIndex: number, courtIndex: number, rowIndex: number, booking: Booking): number => {
+  const getBookingRowSpan = (courtIndex: number, rowIndex: number, booking: Booking): number => {
     let span = 1;
     for (let r = rowIndex + 1; r < timeRows.length; r++) {
-      const b = isBooked(targetPageIndex, courtIndex, r);
+      const b = isBooked(courtIndex, r);
       if (b && b.startTime === booking.startTime) span++;
       else break;
     }
@@ -926,9 +1018,8 @@ export function CourtCalendarGrid({
   };
 
   const openSelectedRange = useCallback(
-    (targetPageIndex: number, courtIndex: number, startRow: number, endRow: number) => {
-      const globalCourtIndex = targetPageIndex * COURTS_PER_PAGE + courtIndex;
-      const court = courts[globalCourtIndex];
+    (courtIndex: number, startRow: number, endRow: number) => {
+      const court = courts[courtIndex];
       if (!court) return;
 
       const resolvedStartRow = Math.min(startRow, endRow);
@@ -1000,12 +1091,19 @@ export function CourtCalendarGrid({
     );
   }
 
+  const lastVisibleCourt = Math.min(firstVisibleCourt + COURTS_VISIBLE, courts.length);
+  const syncFirstVisibleCourt = (offsetX: number) => {
+    const maxFirst = Math.max(0, courts.length - COURTS_VISIBLE);
+    setFirstVisibleCourt(Math.max(0, Math.min(maxFirst, Math.round(offsetX / courtColumnWidth))));
+  };
+
   return (
     <View style={styles.container}>
-      {/* Page indicator */}
+      {/* Which courts are on screen */}
       <View style={styles.pageIndicator}>
         <Text style={styles.pageText}>
-          Courts {pageIndex * COURTS_PER_PAGE + 1}-{Math.min((pageIndex + 1) * COURTS_PER_PAGE, courts.length)} of {courts.length}
+          Courts {firstVisibleCourt + 1}-{lastVisibleCourt} of {courts.length}
+          {canScrollCourts ? '  ·  swipe for more' : ''}
         </Text>
         <View style={styles.pageIndicatorRight}>
           <TouchableOpacity
@@ -1016,54 +1114,47 @@ export function CourtCalendarGrid({
           >
             <Text style={styles.nowButtonText}>Now</Text>
           </TouchableOpacity>
-          {totalPages > 1 && (
-            <View style={styles.pageDots}>
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <View
-                  key={i}
-                  style={[styles.dot, i === pageIndex && styles.dotActive]}
-                />
-              ))}
-            </View>
-          )}
         </View>
       </View>
 
-      {/* Court headers (sticky) */}
+      {/* Court headers: pinned above the grid, slid sideways in step with the court strip */}
       <View style={styles.headerRow}>
         <View style={[styles.timeLabel, styles.timeLabelHeaderSpacer]} />
-        {pageCourts.map((court, courtIndex) => (
-          <View
-            key={court.id}
-            style={[
-              styles.courtHeader,
-              { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
-              courtIndex > 0 && styles.courtColumnDividerLeft,
-            ]}
+        <View style={styles.headerClip}>
+          <Animated.View
+            style={[styles.headerStrip, { width: courtStripWidth, transform: [{ translateX: headerTranslateX }] }]}
           >
-            <Text style={styles.courtHeaderText} numberOfLines={1}>{court.name}</Text>
-            <Text style={styles.courtHeaderMeta}>
-              {formatCourtCalendarSubtitle({
-                typeLabel: court.courtType || 'Tennis',
-                surfaceType: court.surfaceType,
-                isWalkUp: court.isWalkUp,
-              })}
-            </Text>
-          </View>
-        ))}
-        {Array.from({ length: Math.max(0, COURTS_PER_PAGE - pageCourts.length) }).map((_, idx) => {
-          const courtIndex = pageCourts.length + idx;
-          return (
-            <View
-              key={`header-empty-${idx}`}
-              style={[
-                styles.courtHeader,
-                { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
-                courtIndex > 0 && styles.courtColumnDividerLeft,
-              ]}
-            />
-          );
-        })}
+            {courts.map((court, courtIndex) => (
+              <View
+                key={court.id}
+                style={[
+                  styles.courtHeader,
+                  { width: courtColumnWidth, marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0 },
+                  courtIndex > 0 && styles.courtColumnDividerLeft,
+                ]}
+              >
+                <Text style={styles.courtHeaderText} numberOfLines={1}>{court.name}</Text>
+                <Text style={styles.courtHeaderMeta}>
+                  {formatCourtCalendarSubtitle({
+                    typeLabel: court.courtType || 'Tennis',
+                    surfaceType: court.surfaceType,
+                    isWalkUp: court.isWalkUp,
+                  })}
+                </Text>
+              </View>
+            ))}
+            {Array.from({ length: fillerColumnCount }).map((_, idx) => (
+              <View
+                key={`header-empty-${idx}`}
+                style={[
+                  styles.courtHeader,
+                  { width: courtColumnWidth, marginLeft: COURT_COLUMN_GUTTER },
+                  courts.length + idx > 0 && styles.courtColumnDividerLeft,
+                ]}
+              />
+            ))}
+          </Animated.View>
+        </View>
       </View>
 
       {/* Fixed-height wrapper: iOS nested ScrollView must not grow to full content or scrollTo does nothing */}
@@ -1075,47 +1166,49 @@ export function CourtCalendarGrid({
           onContentSizeChange={() =>
             scrollToCurrentTime(selectedYmd === localTodayYmd() ? { reliable: true } : undefined)
           }
-          onTouchEnd={handleTouchEnd}
-          onTouchCancel={handleTouchEnd}
+          onScroll={() => {
+            lastScrollAtRef.current = Date.now();
+          }}
+          scrollEventThrottle={16}
+          onTouchEnd={() => handleTouchEnd()}
+          onTouchCancel={() => handleTouchEnd(false)}
+          // No rubber-banding: at the first/last row the drag carries on into the page's own scroll.
+          bounces={false}
+          overScrollMode="never"
           nestedScrollEnabled
           scrollEnabled={!touchCaptureActive}
           removeClippedSubviews={false}
         >
-        {/* Horizontal swipe wrapper — explicit height so vertical contentSize matches row math */}
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          style={{ height: gridContentHeight }}
-          contentContainerStyle={{ minHeight: gridContentHeight }}
-          onMomentumScrollEnd={(e) => {
-            const nextPage = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-            setPageIndex(Math.max(0, Math.min(totalPages - 1, nextPage)));
-          }}
-          nestedScrollEnabled
-          scrollEnabled={!touchCaptureActive}
-        >
-          <View
-            style={{
-              width: totalPages * SCREEN_WIDTH,
-              height: gridContentHeight,
-              position: 'relative',
-            }}
-          >
-          {Array.from({ length: totalPages }).map((_, renderPageIndex) => {
-            const renderPageCourts = courts.slice(
-              renderPageIndex * COURTS_PER_PAGE,
-              (renderPageIndex + 1) * COURTS_PER_PAGE
-            );
+          <View style={[styles.gridBody, { height: gridContentHeight }]}>
+            {/* Time column: scrolls with the rows, stays put when the courts slide sideways */}
+            <View>
+              {timeRows.map((time, rowIndex) => {
+                const past = isPast(rowIndex) || isNotYetOpen(rowIndex);
+                return (
+                  <View key={time} style={[styles.timeLabel, styles.timeLabelGrid, styles.timeLabelRow]}>
+                    <Text style={[styles.timeLabelText, past && styles.pastText]}>{formatTimeLabel(time)}</Text>
+                  </View>
+                );
+              })}
+            </View>
 
-            return (
-              <View
-                key={`page-${renderPageIndex}`}
-                style={[
-                  styles.pageContent,
-                  { position: 'absolute', left: renderPageIndex * SCREEN_WIDTH, top: 0 },
-                ]}
-              >
+            {/* Court strip: every court side by side, snapping column by column */}
+            <Animated.ScrollView
+              ref={courtScrollRef as any}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={[styles.courtStripScroll, { height: gridContentHeight }]}
+              snapToInterval={courtColumnWidth}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              onScroll={onCourtStripScroll}
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={(e: any) => syncFirstVisibleCourt(e.nativeEvent.contentOffset.x)}
+              onScrollEndDrag={(e: any) => syncFirstVisibleCourt(e.nativeEvent.contentOffset.x)}
+              nestedScrollEnabled
+              scrollEnabled={!touchCaptureActive && canScrollCourts}
+            >
+              <View style={{ width: courtStripWidth, height: gridContentHeight }}>
                 {timeRows.map((time, rowIndex) => {
                   const actuallyPast = isPast(rowIndex);
                   const notYetOpen = !actuallyPast && isNotYetOpen(rowIndex);
@@ -1123,21 +1216,13 @@ export function CourtCalendarGrid({
                   const past = actuallyPast || notYetOpen;
 
                   return (
-                    <View key={`${renderPageIndex}-${time}`} style={styles.row}>
-                      {/* Time label */}
-                      <View style={[styles.timeLabel, styles.timeLabelGrid]}>
-                        <Text style={[styles.timeLabelText, past && styles.pastText]}>
-                          {formatTimeLabel(time)}
-                        </Text>
-                      </View>
-
-                      {/* Court cells */}
-                      {renderPageCourts.map((court, courtIndex) => {
-                        const booked = isBooked(renderPageIndex, courtIndex, rowIndex);
+                    <View key={time} style={styles.row}>
+                      {courts.map((court, courtIndex) => {
+                        const booked = isBooked(courtIndex, rowIndex);
                         const isBlockedSlot = booked?.bookingType === 'blocked';
-                        const selected = isSelected(renderPageIndex, courtIndex, rowIndex);
-                        const bookingStart = isBookingStart(renderPageIndex, courtIndex, rowIndex);
-                        const span = bookingStart ? getBookingRowSpan(renderPageIndex, courtIndex, rowIndex, bookingStart) : 0;
+                        const selected = isSelected(courtIndex, rowIndex);
+                        const bookingStart = isBookingStart(courtIndex, rowIndex);
+                        const span = bookingStart ? getBookingRowSpan(courtIndex, rowIndex, bookingStart) : 0;
                         const fullTimeLabel = formatFullTime(time + ':00');
                         const cellDisabled = isBlockedSlot || (past && !booked);
                         const accessibilityLabel = booked
@@ -1195,7 +1280,7 @@ export function CourtCalendarGrid({
                                 openBookedSlotDetails(court, booked);
                                 return;
                               }
-                              openSelectedRange(renderPageIndex, courtIndex, rowIndex, rowIndex);
+                              openSelectedRange(courtIndex, rowIndex, rowIndex);
                             }}
                             onTouchStart={(e) => {
                               if (booked) {
@@ -1205,13 +1290,14 @@ export function CourtCalendarGrid({
                                 return;
                               }
                               handleTouchStart(
-                                renderPageIndex,
                                 courtIndex,
                                 rowIndex,
                                 e.nativeEvent.pageX,
-                                e.nativeEvent.pageY
+                                e.nativeEvent.pageY,
+                                e.nativeEvent.locationY
                               );
                             }}
+                            onTouchMove={(e) => handleTouchMove(e.nativeEvent.pageX, e.nativeEvent.pageY)}
                             onTouchEnd={(e) => {
                               if (booked) {
                                 if (booked.bookingType === 'blocked') return;
@@ -1220,62 +1306,7 @@ export function CourtCalendarGrid({
                               }
                               handleTouchEnd();
                             }}
-                            onTouchCancel={() => {
-                              bookedTouchStartRef.current = null;
-                              handleTouchEnd();
-                            }}
-                            onTouchMove={(e) => {
-                              const cur = dragSelectionRef.current;
-                              if (!cur || !dragStartRef.current) return;
-                              if (renderPageIndex !== cur.pageIndex || courtIndex !== cur.courtIndex) return;
-
-                              const deltaX = e.nativeEvent.pageX - dragStartRef.current.pageX;
-                              const deltaY = e.nativeEvent.pageY - dragStartRef.current.pageY;
-                              const absX = Math.abs(deltaX);
-                              const absY = Math.abs(deltaY);
-
-                              // Before drag is armed, movement should behave like normal scroll/swipe.
-                              if (!dragArmedRef.current) {
-                                if (absX > 8 || absY > 8) {
-                                  if (dragArmTimerRef.current) {
-                                    clearTimeout(dragArmTimerRef.current);
-                                    dragArmTimerRef.current = null;
-                                  }
-                                }
-                                return;
-                              }
-
-                              // Let horizontal intent page through courts smoothly.
-                              if (absX > 10 && absX > absY + 2) {
-                                horizontalSwipeRef.current = true;
-                                dragSelectionRef.current = null;
-                                setDragSelection(null);
-                                releaseInteractionLocks();
-                                return;
-                              }
-
-                              const rowOffset = Math.round(deltaY / ROW_HEIGHT);
-                              const nextRow = Math.max(
-                                0,
-                                Math.min(timeRows.length - 1, dragStartRef.current.startRow + rowOffset)
-                              );
-
-                              if (Math.abs(deltaY) > 8) {
-                                if (!touchCaptureActive) {
-                                  setTouchCaptureActive(true);
-                                  onInteractionLockChange?.(true);
-                                }
-                                isDragging.current = true;
-                                dragMoved.current = true;
-                              }
-
-                              if (!isDragging.current) return;
-                              if (nextRow !== cur.endRow) {
-                                const nextSel = { ...cur, endRow: nextRow };
-                                dragSelectionRef.current = nextSel;
-                                setDragSelection(nextSel);
-                              }
-                            }}
+                            onTouchCancel={() => handleTouchEnd(false)}
                           >
                             {bookingStart && (() => {
                               const isBlockedBooking = bookingStart.bookingType === 'blocked';
@@ -1331,52 +1362,38 @@ export function CourtCalendarGrid({
                         );
                       })}
 
-                      {Array.from({ length: Math.max(0, COURTS_PER_PAGE - renderPageCourts.length) }).map((_, idx) => {
-                        const courtIndex = renderPageCourts.length + idx;
-                        return (
-                          <View
-                            key={`empty-cell-${renderPageIndex}-${rowIndex}-${idx}`}
-                            style={[
-                              styles.cell,
-                              {
-                                width: courtColumnWidth,
-                                marginLeft: courtIndex > 0 ? COURT_COLUMN_GUTTER : 0,
-                              },
-                              courtIndex > 0 && styles.courtColumnDividerLeft,
-                            ]}
-                          />
-                        );
-                      })}
+                      {Array.from({ length: fillerColumnCount }).map((_, idx) => (
+                        <View
+                          key={`empty-cell-${rowIndex}-${idx}`}
+                          style={[
+                            styles.cell,
+                            { width: courtColumnWidth, marginLeft: COURT_COLUMN_GUTTER },
+                            courts.length + idx > 0 && styles.courtColumnDividerLeft,
+                          ]}
+                        />
+                      ))}
                     </View>
                   );
                 })}
+                {currentTimeIndicatorY !== null && (
+                  <View
+                    pointerEvents="none"
+                    style={[styles.currentTimeLineWrap, { top: currentTimeIndicatorY, width: courtStripWidth }]}
+                  >
+                    <View style={styles.currentTimeDot} />
+                    <View style={styles.currentTimeLine} />
+                  </View>
+                )}
               </View>
-            );
-          })}
-          {currentTimeIndicatorY !== null && (
-            <View
-              pointerEvents="none"
-              style={[
-                styles.currentTimeLineWrap,
-                {
-                  top: currentTimeIndicatorY,
-                  width: totalPages * SCREEN_WIDTH - TIME_LABEL_WIDTH,
-                },
-              ]}
-            >
-              <View style={styles.currentTimeDot} />
-              <View style={styles.currentTimeLine} />
-            </View>
-          )}
+            </Animated.ScrollView>
           </View>
-        </ScrollView>
         </ScrollView>
       </View>
 
       {/* Drag hint */}
       {!dragSelection && (
         <View style={styles.hint}>
-          <Text style={styles.hintText}>Long press and drag to select a time slot</Text>
+          <Text style={styles.hintText}>Tap a time to book, or press and hold then drag for a longer slot</Text>
         </View>
       )}
 
@@ -1384,7 +1401,7 @@ export function CourtCalendarGrid({
       {dragSelection && !selectionHasConflict(dragSelection) && (
         <View style={styles.selectionPreview}>
           <Text style={styles.selectionPreviewText}>
-            {courts[dragSelection.pageIndex * COURTS_PER_PAGE + dragSelection.courtIndex]?.name} · {formatFullTime(timeRows[Math.min(dragSelection.startRow, dragSelection.endRow)] + ':00')} – {formatFullTime(getRowEndTime(Math.max(dragSelection.startRow, dragSelection.endRow)) + ':00')}
+            {courts[dragSelection.courtIndex]?.name} · {formatFullTime(timeRows[Math.min(dragSelection.startRow, dragSelection.endRow)] + ':00')} – {formatFullTime(getRowEndTime(Math.max(dragSelection.startRow, dragSelection.endRow)) + ':00')}
           </Text>
         </View>
       )}
@@ -1425,10 +1442,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  pageDots: {
-    flexDirection: 'row',
-    gap: 6,
-  },
   nowButton: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
@@ -1442,15 +1455,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#DC2626',
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.border,
-  },
-  dotActive: {
-    backgroundColor: Colors.primary,
-  },
 
   // Header
   headerRow: {
@@ -1458,6 +1462,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderBottomWidth: 2,
     borderBottomColor: Colors.primary,
+  },
+  headerClip: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  headerStrip: {
+    flexDirection: 'row',
   },
   courtHeader: {
     paddingVertical: Spacing.sm,
@@ -1495,6 +1506,18 @@ const styles = StyleSheet.create({
   },
   gridScrollFill: {
     flex: 1,
+  },
+  gridBody: {
+    flexDirection: 'row',
+  },
+  courtStripScroll: {
+    flex: 1,
+  },
+  /** Matches `row` so time labels line up with their cells. */
+  timeLabelRow: {
+    height: ROW_HEIGHT,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   row: {
     flexDirection: 'row',
@@ -1605,13 +1628,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
-  pageContent: {
-    width: SCREEN_WIDTH,
-    position: 'relative',
-  },
   currentTimeLineWrap: {
     position: 'absolute',
-    left: TIME_LABEL_WIDTH,
+    left: 0,
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 5,

@@ -8,7 +8,7 @@ import { getPool } from '../../src/database/connection';
 import { ensureFacilityAdmin } from '../middleware/facilityAdmin';
 import { isFeatureEnabled, setFeatureFlag } from '../../src/services/featureFlagService';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
-import { mirrorAcc005IntoBookingRules } from '../../src/services/advanceRuleSync';
+import { mirrorEngineRulesIntoBookingRules } from '../../src/services/advanceRuleSync';
 import { getMemberBookingWindow } from '../../src/services/rulesEngine/RuleContext';
 
 const router = express.Router();
@@ -294,7 +294,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
          WHERE facility_id = $1 AND rule_definition_id = $2`,
         [facilityId, ruleDefinitionId]
       );
-      if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
+      await mirrorEngineRulesIntoBookingRules(facilityId, [ruleCode]);
       return res.json({
         success: true,
         rule: null,
@@ -353,7 +353,7 @@ router.post('/facility/:facilityId', async (req, res, next) => {
       [result.rows[0].id]
     );
 
-    if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
+    await mirrorEngineRulesIntoBookingRules(facilityId, [ruleCode]);
 
     res.json({
       success: true,
@@ -412,7 +412,7 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
          WHERE facility_id = $1 AND rule_definition_id = $2`,
         [facilityId, ruleDefinitionId]
       );
-      if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
+      await mirrorEngineRulesIntoBookingRules(facilityId, [ruleCode]);
       return res.json({
         success: true,
         rule: null,
@@ -465,7 +465,7 @@ router.put('/facility/:facilityId/:ruleCode', async (req, res, next) => {
       rule = inserted.rows[0];
     }
 
-    if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
+    await mirrorEngineRulesIntoBookingRules(facilityId, [ruleCode]);
 
     res.json({
       success: true,
@@ -518,7 +518,7 @@ router.delete('/facility/:facilityId/:ruleCode', async (req, res, next) => {
       });
     }
 
-    if (ruleCode === 'ACC-005') await mirrorAcc005IntoBookingRules(facilityId);
+    await mirrorEngineRulesIntoBookingRules(facilityId, [ruleCode]);
 
     res.json({
       success: true,
@@ -619,7 +619,9 @@ router.post('/facility/:facilityId/bulk', async (req, res, next) => {
       }
 
       await client.query('COMMIT');
-      await mirrorAcc005IntoBookingRules(facilityId);
+      // Web admin's save: it has just written booking_rules itself, so only days in advance
+      // (whose limit this route validates) is copied back.
+      await mirrorEngineRulesIntoBookingRules(facilityId, ['ACC-005']);
 
       res.json({
         success: true,
@@ -671,7 +673,7 @@ router.post('/facility/:facilityId/enable-all', async (req, res, next) => {
       }
 
       await client.query('COMMIT');
-      await mirrorAcc005IntoBookingRules(facilityId);
+      await mirrorEngineRulesIntoBookingRules(facilityId);
 
       res.json({
         success: true,
@@ -702,7 +704,7 @@ router.post('/facility/:facilityId/disable-all', async (req, res, next) => {
        WHERE facility_id = $1`,
       [facilityId]
     );
-    await mirrorAcc005IntoBookingRules(facilityId);
+    await mirrorEngineRulesIntoBookingRules(facilityId);
 
     res.json({
       success: true,

@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { openLegalLink, PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
 
 export const ErrorBoundary = createRouteErrorBoundary('Register');
 
@@ -168,6 +169,18 @@ export default function RegisterScreen() {
               </Text>
             </TouchableOpacity>
 
+            <Text style={styles.legalText}>
+              By creating an account you agree to our{' '}
+              <Text style={styles.legalLink} accessibilityRole="link" onPress={() => void openLegalLink('terms')}>
+                Terms of Service
+              </Text>{' '}
+              and{' '}
+              <Text style={styles.legalLink} accessibilityRole="link" onPress={() => void openLegalLink('privacy')}>
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+
             <View style={styles.footer}>
               <Text style={styles.footerText}>Already have an account? </Text>
               <Link href="/auth/login" style={styles.link}>
@@ -175,9 +188,11 @@ export default function RegisterScreen() {
               </Link>
             </View>
 
-            <Link href="/auth/register-facility" style={styles.facilityLink}>
-              <Text style={styles.facilityLinkText}>Register your facility instead</Text>
-            </Link>
+            {PLATFORM_BILLING_IN_APP ? (
+              <Link href="/auth/register-facility" style={styles.facilityLink}>
+                <Text style={styles.facilityLinkText}>Register your facility instead</Text>
+              </Link>
+            ) : null}
           </View>
           </View>
         </ScrollView>
@@ -292,6 +307,17 @@ const styles = StyleSheet.create({
   linkText: {
     color: Colors.primary,
     fontSize: FontSize.sm,
+    fontWeight: '600',
+  },
+  legalText: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    textAlign: 'center',
+    marginTop: Spacing.md,
+    lineHeight: 18,
+  },
+  legalLink: {
+    color: Colors.primary,
     fontWeight: '600',
   },
   facilityLink: {

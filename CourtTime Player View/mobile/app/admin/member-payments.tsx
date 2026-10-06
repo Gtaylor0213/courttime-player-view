@@ -53,6 +53,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
+import { PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Member Payments');
@@ -451,10 +452,12 @@ export default function AdminMemberPaymentsScreen() {
               </View>
             ) : null}
             <View style={styles.actions}>
-              {subscription.status === 'custom_pending' || subscription.status === 'past_due' || subscription.status === 'unpaid' ? (
+              {PLATFORM_BILLING_IN_APP && (subscription.status === 'custom_pending' || subscription.status === 'past_due' || subscription.status === 'unpaid') ? (
                 <Button title="Pay annual subscription" onPress={() => void paySubscription()} loading={busyId === 'pay'} disabled={busyId !== null} />
               ) : null}
-              <Button title="Manage subscription" variant="secondary" onPress={() => void openPortal()} loading={busyId === 'portal'} disabled={busyId !== null} />
+              {PLATFORM_BILLING_IN_APP ? (
+                <Button title="Manage subscription" variant="secondary" onPress={() => void openPortal()} loading={busyId === 'portal'} disabled={busyId !== null} />
+              ) : null}
               {subActive && !subscription.cancelAtPeriodEnd ? (
                 <Button title="Cancel subscription" variant="destructive" onPress={confirmCancelSubscription} loading={busyId === 'cancel'} disabled={busyId !== null} />
               ) : null}

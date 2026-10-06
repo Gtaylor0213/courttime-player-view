@@ -23,6 +23,7 @@ import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundar
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { openLegalLink, PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
 
 export const ErrorBoundary = createRouteErrorBoundary('Login');
 
@@ -146,11 +147,23 @@ export default function LoginScreen() {
                   title="Create Player Account"
                   onPress={() => router.push('/auth/register')}
                 />
-                <Button
-                  variant="secondary"
-                  title="Register a Facility"
-                  onPress={() => router.push('/auth/register-facility')}
-                />
+                {PLATFORM_BILLING_IN_APP ? (
+                  <Button
+                    variant="secondary"
+                    title="Register a Facility"
+                    onPress={() => router.push('/auth/register-facility')}
+                  />
+                ) : null}
+
+                <Text style={styles.legalText}>
+                  <Text style={styles.legalLink} accessibilityRole="link" onPress={() => void openLegalLink('privacy')}>
+                    Privacy Policy
+                  </Text>
+                  {'  ·  '}
+                  <Text style={styles.legalLink} accessibilityRole="link" onPress={() => void openLegalLink('terms')}>
+                    Terms of Service
+                  </Text>
+                </Text>
               </View>
             </Card>
           </ScrollView>
@@ -243,6 +256,15 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: Spacing.md,
+  },
+  legalText: {
+    fontSize: FontSize.xs,
+    textAlign: 'center',
+    marginTop: Spacing.md,
+  },
+  legalLink: {
+    color: Colors.textSecondary,
+    fontWeight: '600',
   },
   errorBox: {
     backgroundColor: Colors.error + '12',

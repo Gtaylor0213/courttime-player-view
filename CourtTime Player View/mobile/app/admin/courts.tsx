@@ -50,6 +50,7 @@ import { Button } from '../../src/components/Button';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
+import { PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Courts');
 
@@ -366,7 +367,9 @@ function CourtFormModal({
     if ((res.data as any)?.requiresPayment) {
       showAlert(
         'Payment required',
-        'Adding this court requires a one-time platform fee. Complete this on the web at Admin > Courts.'
+        PLATFORM_BILLING_IN_APP
+          ? 'Adding this court requires a one-time platform fee. Complete this on the web at Admin > Courts.'
+          : 'Adding this court requires a one-time platform fee, which cannot be paid in this app.'
       );
       return;
     }
@@ -600,7 +603,12 @@ function BulkAddModal({
       return;
     }
     if ((res.data as any)?.requiresPayment) {
-      showAlert('Payment required', 'Adding these courts requires a one-time platform fee. Complete this on the web at Admin > Courts.');
+      showAlert(
+        'Payment required',
+        PLATFORM_BILLING_IN_APP
+          ? 'Adding these courts requires a one-time platform fee. Complete this on the web at Admin > Courts.'
+          : 'Adding these courts requires a one-time platform fee, which cannot be paid in this app.'
+      );
       return;
     }
     await onChanged();

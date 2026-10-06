@@ -14,7 +14,7 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.courttime.player",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -33,11 +33,18 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "CourtTime needs access to your photos to set a profile picture."
+          "photosPermission": "CourtTime needs access to your photos to set a profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       [

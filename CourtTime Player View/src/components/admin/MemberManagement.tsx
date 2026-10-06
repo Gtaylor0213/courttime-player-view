@@ -16,6 +16,7 @@ import { LockMemberPaymentDialog, type LockMemberTarget } from './LockMemberPaym
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { isSessionAuthError } from '../../../shared/utils/sessionAuth';
+import { filterAndSortMembers, memberAddressText, MEMBER_SORT_OPTIONS, type MemberSortKey } from '../../../shared/utils/memberListFilter';
 import { useAppContext } from '../../contexts/AppContext';
 import { HouseholdManagement } from './HouseholdManagement';
 import { AddressWhitelistPanel } from './AddressWhitelistPanel';
@@ -56,6 +57,11 @@ export function MemberManagement() {
     const status = searchParams.get('status');
     return status === 'pending' ? 'pending' : 'all';
   });
+  const [filterLastName, setFilterLastName] = useState('');
+  const [filterAddress, setFilterAddress] = useState('');
+  const [filterJoinedFrom, setFilterJoinedFrom] = useState('');
+  const [filterJoinedTo, setFilterJoinedTo] = useState('');
+  const [sortBy, setSortBy] = useState<MemberSortKey>('default');
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -410,23 +416,29 @@ export function MemberManagement() {
     }
   };
 
-  const filteredMembers = members.filter(member => {
-    const term = searchTerm.trim().toLowerCase();
-    const searchableText = [
-      member.fullName,
-      member.email,
-      member.streetAddress,
-      member.city,
-      member.state,
-      member.zipCode,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-    const matchesSearch = !term || searchableText.includes(term);
-    const matchesStatus = filterStatus === 'all' || member.status === filterStatus;
-    return matchesSearch && matchesStatus;
+  const filteredMembers = filterAndSortMembers(members, {
+    search: searchTerm,
+    status: filterStatus,
+    lastName: filterLastName,
+    address: filterAddress,
+    joinedFrom: filterJoinedFrom,
+    joinedTo: filterJoinedTo,
+    sort: sortBy,
   });
+
+  const hasActiveFilters =
+    !!searchTerm || filterStatus !== 'all' || !!filterLastName || !!filterAddress ||
+    !!filterJoinedFrom || !!filterJoinedTo || sortBy !== 'default';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setFilterLastName('');
+    setFilterAddress('');
+    setFilterJoinedFrom('');
+    setFilterJoinedTo('');
+    setSortBy('default');
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -481,10 +493,17 @@ export function MemberManagement() {
           {/* Filters */}
           <Card className="mb-6">
             <CardHeader className="pb-4">
-              <CardTitle className="text-lg">Filter Members</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-lg">Filter Members</CardTitle>
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="search" className="text-sm">Search</Label>
                   <div className="relative">
@@ -510,6 +529,57 @@ export function MemberManagement() {
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="suspended">Suspended</SelectItem>
                       <SelectItem value="expired">Expired</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filterLastName" className="text-sm">Last Name</Label>
+                  <Input
+                    id="filterLastName"
+                    placeholder="Starts with..."
+                    value={filterLastName}
+                    onChange={(e) => setFilterLastName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filterAddress" className="text-sm">Address</Label>
+                  <Input
+                    id="filterAddress"
+                    placeholder="Street, city, or zip..."
+                    value={filterAddress}
+                    onChange={(e) => setFilterAddress(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filterJoinedFrom" className="text-sm">Joined From</Label>
+                  <Input
+                    id="filterJoinedFrom"
+                    type="date"
+                    value={filterJoinedFrom}
+                    max={filterJoinedTo || undefined}
+                    onChange={(e) => setFilterJoinedFrom(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filterJoinedTo" className="text-sm">Joined To</Label>
+                  <Input
+                    id="filterJoinedTo"
+                    type="date"
+                    value={filterJoinedTo}
+                    min={filterJoinedFrom || undefined}
+                    onChange={(e) => setFilterJoinedTo(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sortBy" className="text-sm">Sort By</Label>
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as MemberSortKey)}>
+                    <SelectTrigger id="sortBy">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MEMBER_SORT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -581,6 +651,9 @@ export function MemberManagement() {
                               <div className="text-xs text-gray-500 truncate">{member.email}</div>
                             </div>
                             <div className="hidden md:flex items-center gap-6 text-xs text-gray-600">
+                              <span className="hidden lg:block w-44 truncate" title={memberAddressText(member)}>
+                                {member.streetAddress || '—'}
+                              </span>
                               <span className="w-20 text-center">{member.skillLevel || '—'}</span>
                               <span className="w-20 text-center">
                                 {new Date(member.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}

@@ -32,6 +32,12 @@ import {
 import { parseAdminLockoutMembers } from '../../src/utils/adminPaymentLockout';
 import { AdminPaymentLockoutCard } from '../../src/components/AdminPaymentLockoutCard';
 import { isStripeConnectReadyFromResponse } from '../../../shared/api/core';
+import {
+  filterAndSortMembers,
+  memberAddressText,
+  MEMBER_SORT_OPTIONS,
+  type MemberSortKey,
+} from '../../../shared/utils/memberListFilter';
 import { api } from '../../src/api/client';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
@@ -65,6 +71,12 @@ export default function AdminMembersScreen() {
   const [stripeConnected, setStripeConnected] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'suspended' | 'expired'>('all');
+  const [lastNameFilter, setLastNameFilter] = useState('');
+  const [addressFilter, setAddressFilter] = useState('');
+  const [joinedFrom, setJoinedFrom] = useState('');
+  const [joinedTo, setJoinedTo] = useState('');
+  const [sortBy, setSortBy] = useState<MemberSortKey>('default');
+  const [showFilters, setShowFilters] = useState(false);
   const [selected, setSelected] = useState<AdminMemberRow | null>(null);
 
   const loadData = useCallback(async () => {
@@ -92,12 +104,26 @@ export default function AdminMembersScreen() {
   }, [loadData]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const list = members
-      .filter((m) => statusFilter === 'all' || m.status === statusFilter)
-      .filter((m) => !q || m.fullName.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
+    const list = filterAndSortMembers(members, {
+      search,
+      status: statusFilter,
+      lastName: lastNameFilter,
+      address: addressFilter,
+      joinedFrom,
+      joinedTo,
+      sort: sortBy,
+    });
     return list.slice(0, 60);
-  }, [members, search, statusFilter]);
+  }, [members, search, statusFilter, lastNameFilter, addressFilter, joinedFrom, joinedTo, sortBy]);
+  const extraFilterCount =
+    [lastNameFilter, addressFilter, joinedFrom, joinedTo].filter((v) => v.trim()).length + (sortBy !== 'default' ? 1 : 0);
+  const clearExtraFilters = () => {
+    setLastNameFilter('');
+    setAddressFilter('');
+    setJoinedFrom('');
+    setJoinedTo('');
+    setSortBy('default');
+  };
   const lockoutMembers = useMemo(() => parseAdminLockoutMembers(members), [members]);
 
   // Keep the modal's member fresh after any change (e.g. after a role toggle).
@@ -115,7 +141,7 @@ export default function AdminMembersScreen() {
     >
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Members ({members.length})</Text>
-        <Input value={search} onChangeText={setSearch} placeholder="Search name or email" />
+        <Input value={search} onChangeText={setSearch} placeholder="Search name, email, or address" />
         <View style={[styles.chipsWrap, { marginVertical: Spacing.sm }]}>
           {(['all', 'active', 'pending', 'suspended', 'expired'] as const).map((s) => (
             <TouchableOpacity
@@ -130,6 +156,58 @@ export default function AdminMembersScreen() {
             </TouchableOpacity>
           ))}
         </View>
+        <View style={styles.filterToggleRow}>
+          <TouchableOpacity
+            onPress={() => setShowFilters((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showFilters }}
+            style={styles.filterToggle}
+          >
+            <Ionicons name="options-outline" size={16} color={Colors.primary} />
+            <Text style={styles.filterToggleText}>
+              Filter & sort{extraFilterCount ? ` (${extraFilterCount})` : ''}
+            </Text>
+            <Ionicons name={showFilters ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.primary} />
+          </TouchableOpacity>
+          {extraFilterCount ? (
+            <TouchableOpacity onPress={clearExtraFilters} accessibilityRole="button">
+              <Text style={styles.actionCancel}>Clear</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {showFilters ? (
+          <View style={{ marginBottom: Spacing.sm }}>
+            <Text style={styles.label}>Last name</Text>
+            <Input value={lastNameFilter} onChangeText={setLastNameFilter} placeholder="Starts with" autoCorrect={false} />
+            <Text style={styles.label}>Address</Text>
+            <Input value={addressFilter} onChangeText={setAddressFilter} placeholder="Street, city, or zip" autoCorrect={false} />
+            <View style={styles.dateRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Joined from</Text>
+                <Input value={joinedFrom} onChangeText={setJoinedFrom} placeholder="YYYY-MM-DD" autoCapitalize="none" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Joined to</Text>
+                <Input value={joinedTo} onChangeText={setJoinedTo} placeholder="YYYY-MM-DD" autoCapitalize="none" />
+              </View>
+            </View>
+            <Text style={styles.label}>Sort by</Text>
+            <View style={styles.chipsWrap}>
+              {MEMBER_SORT_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.chip, sortBy === option.value && styles.chipSelected]}
+                  onPress={() => setSortBy(option.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sortBy === option.value }}
+                  accessibilityLabel={`Sort by ${option.label}`}
+                >
+                  <Text style={[styles.chipText, sortBy === option.value && styles.chipTextSelected]}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ) : null}
         {filtered.length === 0 ? (
           <Text style={styles.emptyText}>No members match your search.</Text>
         ) : (
@@ -138,6 +216,13 @@ export default function AdminMembersScreen() {
               <View style={styles.memberMain}>
                 <Text style={styles.memberName}>{m.fullName}</Text>
                 <Text style={styles.memberEmail}>{m.email}</Text>
+                {memberAddressText(m) || m.startDate ? (
+                  <Text style={styles.memberEmail} numberOfLines={1}>
+                    {[memberAddressText(m), m.startDate ? `Joined ${formatJoined(m.startDate)}` : '']
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                ) : null}
                 <View style={styles.badgeRow}>
                   <StatusBadge status={m.status} />
                   {m.isFacilityAdmin ? <Badge label="Admin" color={Colors.primary} /> : null}
@@ -167,6 +252,12 @@ export default function AdminMembersScreen() {
       />
     </ScrollView>
   );
+}
+
+function formatJoined(startDate: string) {
+  const [y, m, d] = startDate.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return startDate;
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -434,6 +525,10 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.borderLight,
   },
   memberMain: { flex: 1 },
+  filterToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
+  filterToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
+  filterToggleText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
+  dateRow: { flexDirection: 'row', gap: Spacing.sm },
   memberName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
   memberEmail: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 1 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },

@@ -154,6 +154,12 @@ export interface AdminMemberRow {
   email: string;
   fullName: string;
   phone?: string | null;
+  streetAddress?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  /** Membership start date, `YYYY-MM-DD`. */
+  startDate?: string | null;
   membershipType?: string | null;
   status: 'active' | 'pending' | 'suspended' | 'expired' | string;
   isFacilityAdmin: boolean;

@@ -376,6 +376,9 @@ export interface AdminBlackoutRow {
   id: string;
   court_id: string | null;
   court_name?: string | null;
+  /** Two or more chosen courts (court_id is then null), with their names. */
+  court_ids?: string[] | null;
+  court_names?: string[] | null;
   facility_id: string;
   blackout_type: string;
   title: string;
@@ -391,7 +394,8 @@ export function getFacilityBlackouts(facilityId: string) {
 }
 
 export function createBlackout(input: {
-  courtId?: string | null;
+  /** The courts to close; empty means every court. */
+  courtIds: string[];
   facilityId: string;
   blackoutType: string;
   title: string;
@@ -407,7 +411,7 @@ export function createBlackout(input: {
 
 export function updateBlackout(
   blackoutId: string,
-  input: { courtId?: string | null; blackoutType: string; title: string; description: string; startDatetime: string; endDatetime: string }
+  input: { courtIds: string[]; blackoutType: string; title: string; description: string; startDatetime: string; endDatetime: string }
 ) {
   return api.put<{ success: boolean; blackout: AdminBlackoutRow }>(`/api/court-config/blackouts/${blackoutId}`, input);
 }

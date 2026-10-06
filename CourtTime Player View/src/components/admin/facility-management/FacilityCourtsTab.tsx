@@ -11,16 +11,25 @@ import {
   Plus,
   Trash2,
   DollarSign,
+  ChevronDown,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { TabsContent } from '../../ui/tabs';
 import { Badge } from '../../ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../ui/dropdown-menu';
 import { CourtScheduleEditor } from '../CourtScheduleEditor';
 import { SetFeesForAllPanel } from '../SetFeesForAllPanel';
 import { FacilityCourtFormBody } from './FacilityCourtFormBody';
 import type { UseFacilityManagementReturn } from './useFacilityManagement';
 import { parseLocalDate, toDatetimeLocalInput } from '../../../utils/dateUtils';
 import { formatGroupedOperatingHoursSummary } from '../../../../shared/utils/operatingHours';
+import { blackoutCourtIds, blackoutCourtsLabel } from '../../../../shared/utils/blackoutSlots';
 
 type Props = UseFacilityManagementReturn;
 
@@ -41,6 +50,7 @@ export function FacilityCourtsTab(props: Props) {
 
   const [feesAllMode, setFeesAllMode] = useState(false);
   const activeCourts = courts.filter((c) => c.status !== 'closed');
+  const blackoutCourtIdsSelected: string[] = editingBlackout?.courtIds || [];
 
   return (
 <TabsContent value="courts" className="space-y-6">
@@ -309,19 +319,50 @@ export function FacilityCourtsTab(props: Props) {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Court</Label>
-              <Select
-                value={editingBlackout.courtId || 'all'}
-                onValueChange={(val: string) => setEditingBlackout({ ...editingBlackout, courtId: val === 'all' ? null : val })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Courts</SelectItem>
+              <Label>Courts</Label>
+              {/* No court ticked means every court, including ones added later. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="border-input flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-input-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                  >
+                    <span className="truncate">
+                      {blackoutCourtIdsSelected.length === 0
+                        ? 'All Courts'
+                        : courts.filter(c => blackoutCourtIdsSelected.includes(c.id)).map(c => c.name).join(', ')}
+                    </span>
+                    <ChevronDown className="size-4 shrink-0 opacity-50" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto min-w-[var(--radix-dropdown-menu-trigger-width)]">
+                  <DropdownMenuCheckboxItem
+                    checked={blackoutCourtIdsSelected.length === 0}
+                    onSelect={(e: Event) => e.preventDefault()}
+                    onCheckedChange={() => setEditingBlackout({ ...editingBlackout, courtIds: [] })}
+                  >
+                    All Courts
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
                   {courts.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    <DropdownMenuCheckboxItem
+                      key={c.id}
+                      checked={blackoutCourtIdsSelected.includes(c.id)}
+                      // Stay open so several courts can be ticked in one go.
+                      onSelect={(e: Event) => e.preventDefault()}
+                      onCheckedChange={(checked: boolean) => setEditingBlackout({
+                        ...editingBlackout,
+                        // Kept in court-list order so the saved names read the same way.
+                        courtIds: courts
+                          .map(court => court.id)
+                          .filter(id => (id === c.id ? checked === true : blackoutCourtIdsSelected.includes(id))),
+                      })}
+                    >
+                      {c.name}
+                    </DropdownMenuCheckboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
@@ -375,7 +416,7 @@ export function FacilityCourtsTab(props: Props) {
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{b.title || 'Untitled'}</span>
                   <Badge variant="outline">{b.blackout_type || 'maintenance'}</Badge>
-                  {b.court_name && <Badge variant="secondary">{b.court_name}</Badge>}
+                  <Badge variant="secondary">{blackoutCourtsLabel(b)}</Badge>
                 </div>
                 <p className="text-sm text-gray-500">
                   {parseLocalDate(b.start_datetime).toLocaleString()} — {parseLocalDate(b.end_datetime).toLocaleString()}
@@ -384,7 +425,7 @@ export function FacilityCourtsTab(props: Props) {
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditingBlackout({
                   id: b.id,
-                  courtId: b.court_id,
+                  courtIds: blackoutCourtIds(b),
                   blackoutType: b.blackout_type,
                   title: b.title,
                   description: b.description,

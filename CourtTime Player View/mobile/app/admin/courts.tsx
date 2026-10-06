@@ -40,6 +40,7 @@ import {
   type AdminBlackoutRow,
 } from '../../src/api/admin';
 import { STANDARD_COURT_TYPE_VALUES } from '../../../shared/constants/courtTypes';
+import { blackoutCourtIds, blackoutCourtsLabel } from '../../../shared/utils/blackoutSlots';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
 import { htmlToDisplayText } from '../../src/utils/htmlToText';
@@ -182,7 +183,7 @@ export default function AdminCourtsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.courtName}>{b.title}</Text>
                 <Text style={styles.courtMeta}>
-                  {b.blackout_type || 'maintenance'} • {b.court_name || 'All courts'} • {formatBlackoutWhen(b.start_datetime)} –{' '}
+                  {b.blackout_type || 'maintenance'} • {blackoutCourtsLabel(b)} • {formatBlackoutWhen(b.start_datetime)} –{' '}
                   {formatBlackoutWhen(b.end_datetime)}
                 </Text>
                 {b.description ? <Text style={styles.blackoutDescription}>{b.description}</Text> : null}
@@ -941,7 +942,11 @@ function BlackoutFormModal({
 }) {
   const initialStart = blackout ? splitLocalDatetime(blackout.start_datetime) : { date: todayYmd(), time: '12:00' };
   const initialEnd = blackout ? splitLocalDatetime(blackout.end_datetime) : { date: todayYmd(), time: '13:00' };
-  const [courtId, setCourtId] = useState<string | null>(blackout?.court_id ?? null);
+  /** Empty means every court, including ones added later. */
+  const [courtIds, setCourtIds] = useState<string[]>(blackout ? blackoutCourtIds(blackout) : []);
+  const toggleCourt = (id: string) =>
+    // Kept in court-list order so the saved names read the same way.
+    setCourtIds((prev) => courts.map((c) => c.id).filter((cid) => (cid === id ? !prev.includes(id) : prev.includes(cid))));
   const [blackoutType, setBlackoutType] = useState(blackout?.blackout_type || 'maintenance');
   const [title, setTitle] = useState(blackout?.title ?? '');
   const [description, setDescription] = useState(blackout?.description ?? '');
@@ -974,8 +979,8 @@ function BlackoutFormModal({
     };
     setSubmitting(true);
     const res = blackout
-      ? await updateBlackout(blackout.id, { ...fields, courtId })
-      : await createBlackout({ ...fields, courtId, facilityId });
+      ? await updateBlackout(blackout.id, { ...fields, courtIds })
+      : await createBlackout({ ...fields, courtIds, facilityId });
     setSubmitting(false);
     if (!res.success) {
       showApiErrorAlert(res, blackout ? 'Could not update blackout' : 'Could not add blackout');
@@ -1016,21 +1021,25 @@ function BlackoutFormModal({
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.label}>Court</Text>
+            <Text style={styles.label}>Courts</Text>
             <View style={styles.chipsWrap}>
               <TouchableOpacity
-                style={[styles.chip, courtId === null && styles.chipSelected]}
-                onPress={() => setCourtId(null)}
+                style={[styles.chip, courtIds.length === 0 && styles.chipSelected]}
+                onPress={() => setCourtIds([])}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: courtIds.length === 0 }}
               >
-                <Text style={[styles.chipText, courtId === null && styles.chipTextSelected]}>All courts</Text>
+                <Text style={[styles.chipText, courtIds.length === 0 && styles.chipTextSelected]}>All courts</Text>
               </TouchableOpacity>
               {courts.map((c) => (
                 <TouchableOpacity
                   key={c.id}
-                  style={[styles.chip, courtId === c.id && styles.chipSelected]}
-                  onPress={() => setCourtId(c.id)}
+                  style={[styles.chip, courtIds.includes(c.id) && styles.chipSelected]}
+                  onPress={() => toggleCourt(c.id)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: courtIds.includes(c.id) }}
                 >
-                  <Text style={[styles.chipText, courtId === c.id && styles.chipTextSelected]}>{c.name}</Text>
+                  <Text style={[styles.chipText, courtIds.includes(c.id) && styles.chipTextSelected]}>{c.name}</Text>
                 </TouchableOpacity>
               ))}
             </View>

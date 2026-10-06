@@ -151,7 +151,8 @@ export interface CourtAllowedActivity {
 
 export interface CourtBlackout {
   id: string;
-  courtId?: string;          // null = all courts
+  courtId?: string;          // one court; null with no courtIds = all courts
+  courtIds?: string[] | null; // two or more chosen courts
   facilityId: string;
   blackoutType: 'maintenance' | 'event' | 'tournament' | 'holiday' | 'weather' | 'custom';
   title: string;

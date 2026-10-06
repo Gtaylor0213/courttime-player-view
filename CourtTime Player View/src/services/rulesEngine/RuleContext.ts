@@ -1770,6 +1770,7 @@ async function fetchCourtBlackouts(
     `SELECT
       id,
       court_id as "courtId",
+      court_ids as "courtIds",
       facility_id as "facilityId",
       blackout_type as "blackoutType",
       title,
@@ -1782,7 +1783,7 @@ async function fetchCourtBlackouts(
     FROM court_blackouts
     WHERE facility_id = $1
       AND is_active = true
-      AND (court_id IS NULL OR court_id = $2)
+      AND (court_id = $2 OR $2::uuid = ANY(court_ids) OR (court_id IS NULL AND court_ids IS NULL))
       AND (
         (DATE(start_datetime) <= $3 AND DATE(end_datetime) >= $3)
         OR recurrence_rule IS NOT NULL

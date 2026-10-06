@@ -1556,7 +1556,7 @@ const loadBlackouts = async () => {
 
 const handleAddBlackout = () => {
   setEditingBlackout({
-    courtId: null,
+    courtIds: [],
     blackoutType: 'maintenance',
     title: '',
     description: '',

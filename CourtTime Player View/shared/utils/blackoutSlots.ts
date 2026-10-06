@@ -3,13 +3,31 @@
  *
  * Used by the web and mobile calendars and the availability helpers. The
  * day's window comes from `blackoutMinutesOnDate`, snapped outward to 15-minute
- * edges, and a blackout with no court applies to every court.
+ * edges. A blackout covers its chosen courts, its one court, or, naming
+ * neither, every court.
  */
+
+/** The courts a blackout names: several, one, or none (meaning every court). */
+export function blackoutCourtIds(b: BlackoutRow): string[] {
+  const many = b.court_ids ?? b.courtIds;
+  if (many?.length) return many;
+  const one = b.court_id ?? b.courtId;
+  return one ? [one] : [];
+}
+
+/** "All courts", or the names of the courts a blackout covers, for the admin lists. */
+export function blackoutCourtsLabel(b: BlackoutRow & { court_name?: string | null; court_names?: string[] | null }): string {
+  if (b.court_names?.length) return b.court_names.join(', ');
+  return b.court_name || 'All courts';
+}
 
 export interface BlackoutRow {
   id?: string;
   court_id?: string | null;
   courtId?: string | null;
+  /** Two or more chosen courts; when set it takes the place of the single court. */
+  court_ids?: string[] | null;
+  courtIds?: string[] | null;
   title?: string | null;
   description?: string | null;
   blackout_type?: string | null;
@@ -128,14 +146,14 @@ export function blackoutsToBlockedRanges(
     const startTime = `${pad(Math.floor(startMin / 60))}:${pad(startMin % 60)}:00`;
     const endTime = `${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}:00`;
     const { name: label, reason } = describeBlackout(b);
-    const targetCourtId = b.court_id ?? b.courtId ?? null;
+    const named = blackoutCourtIds(b);
     // courtIds ['*'] means the caller already scoped the rows to one court
     // (the per-court availability endpoint), so every row applies.
     const anyCourt = courtIds.length === 1 && courtIds[0] === '*';
     const targets = anyCourt
-      ? [targetCourtId ?? '*']
-      : targetCourtId
-        ? courtIds.includes(targetCourtId) ? [targetCourtId] : []
+      ? [named.length === 1 ? named[0]! : '*']
+      : named.length
+        ? named.filter((id) => courtIds.includes(id))
         : courtIds;
     const blackoutId = b.id || `blackout-${index}`;
     for (const courtId of targets) out.push({ blackoutId, courtId, startTime, endTime, label, reason });

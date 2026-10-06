@@ -433,6 +433,48 @@ function serializeBlackout<T extends Record<string, any>>(row: T): T {
 }
 
 /**
+ * Rows covering court $1: it's the blackout's one court, among its chosen courts,
+ * or the blackout names no court and so covers the whole facility.
+ */
+const BLACKOUT_COVERS_COURT_SQL = `(
+        court_id = $1
+        OR $1::uuid = ANY(court_ids)
+        OR (court_id IS NULL AND court_ids IS NULL AND facility_id = (SELECT facility_id FROM courts WHERE id = $1))
+      )`;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The courts a blackout request targets, as the two columns that store them:
+ * none → every court (both NULL), one → court_id, several → court_ids.
+ * `courtIds` wins over the older single `courtId`. Returns undefined when the
+ * request names neither (an update leaves the courts alone), or an error when
+ * a court isn't one of the facility's.
+ */
+async function resolveBlackoutCourts(
+  body: Record<string, any>,
+  facilityId: string
+): Promise<{ courtId: string | null; courtIds: string[] | null } | { error: string } | undefined> {
+  let ids: unknown[];
+  if (Array.isArray(body.courtIds)) ids = body.courtIds;
+  else if ('courtId' in body) ids = body.courtId ? [body.courtId] : [];
+  else return undefined;
+
+  const unique = [...new Set(ids.map((id) => String(id)))];
+  if (unique.some((id) => !UUID_RE.test(id))) return { error: 'Invalid court' };
+  if (unique.length > 0) {
+    const owned = await query(
+      `SELECT id FROM courts WHERE facility_id = $1 AND id = ANY($2::uuid[])`,
+      [facilityId, unique]
+    );
+    if (owned.rows.length !== unique.length) return { error: 'Court does not belong to this facility' };
+  }
+  if (unique.length === 0) return { courtId: null, courtIds: null };
+  if (unique.length === 1) return { courtId: unique[0]!, courtIds: null };
+  return { courtId: null, courtIds: unique };
+}
+
+/**
  * GET /api/court-config/:courtId/blackouts
  * Get blackouts for a court
  */
@@ -443,7 +485,7 @@ router.get('/:courtId/blackouts', async (req, res, next) => {
 
     let sql = `
       SELECT * FROM court_blackouts
-      WHERE (court_id = $1 OR (court_id IS NULL AND facility_id = (SELECT facility_id FROM courts WHERE id = $1)))
+      WHERE ${BLACKOUT_COVERS_COURT_SQL}
     `;
     const params: any[] = [courtId];
 
@@ -484,7 +526,9 @@ router.get('/facility/:facilityId/blackouts', async (req, res, next) => {
     const { startDate, endDate, includeExpired } = req.query;
 
     let sql = `
-      SELECT cb.*, c.name as court_name
+      SELECT cb.*, c.name as court_name,
+        (SELECT array_agg(mc.name ORDER BY array_position(cb.court_ids, mc.id))
+           FROM courts mc WHERE mc.id = ANY(cb.court_ids)) as court_names
       FROM court_blackouts cb
       LEFT JOIN courts c ON cb.court_id = c.id
       WHERE cb.facility_id = $1
@@ -525,7 +569,6 @@ router.get('/facility/:facilityId/blackouts', async (req, res, next) => {
 router.post('/blackouts', async (req, res, next) => {
   try {
     const {
-      courtId,
       facilityId,
       blackoutType,
       title,
@@ -545,17 +588,20 @@ router.post('/blackouts', async (req, res, next) => {
 
     if (!(await ensureFacilityAdmin(facilityId, req.user?.userId, res))) return;
 
+    const courts = (await resolveBlackoutCourts(req.body, facilityId)) ?? { courtId: null, courtIds: null };
+    if ('error' in courts) return res.status(400).json({ success: false, error: courts.error });
+
     const normalizedStart = normalizeLocalDatetimeForStorage(startDatetime);
     const normalizedEnd = normalizeLocalDatetimeForStorage(endDatetime);
 
     const result = await query(
       `INSERT INTO court_blackouts (
-        court_id, facility_id, blackout_type, title, description,
+        court_id, court_ids, facility_id, blackout_type, title, description,
         start_datetime, end_datetime, recurrence_rule, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`,
       [
-        courtId, facilityId, blackoutType || 'maintenance',
+        courts.courtId, courts.courtIds, facilityId, blackoutType || 'maintenance',
         title, description, normalizedStart, normalizedEnd,
         recurrenceRule, createdBy
       ]
@@ -578,7 +624,6 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
   try {
     const { blackoutId } = req.params;
     const {
-      courtId,
       blackoutType,
       title,
       description,
@@ -591,9 +636,15 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
     if (!blackoutFacilityId) return res.status(404).json({ success: false, error: 'Blackout not found' });
     if (!(await ensureFacilityAdmin(blackoutFacilityId, req.user?.userId, res))) return;
 
+    // Courts are set outright when the request names them, so a blackout can go
+    // back to "all courts" (NULL); COALESCE could never clear the column.
+    const courts = await resolveBlackoutCourts(req.body, blackoutFacilityId);
+    if (courts && 'error' in courts) return res.status(400).json({ success: false, error: courts.error });
+
     const result = await query(
       `UPDATE court_blackouts SET
-        court_id = COALESCE($1, court_id),
+        court_id = CASE WHEN $9 THEN $1::uuid ELSE court_id END,
+        court_ids = CASE WHEN $9 THEN $10::uuid[] ELSE court_ids END,
         blackout_type = COALESCE($2, blackout_type),
         title = COALESCE($3, title),
         description = COALESCE($4, description),
@@ -604,7 +655,7 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
       WHERE id = $8
       RETURNING *`,
       [
-        courtId,
+        courts?.courtId ?? null,
         blackoutType,
         title,
         description,
@@ -612,6 +663,8 @@ router.put('/blackouts/:blackoutId', async (req, res, next) => {
         endDatetime != null ? normalizeLocalDatetimeForStorage(endDatetime) : null,
         recurrenceRule,
         blackoutId,
+        !!courts,
+        courts?.courtIds ?? null,
       ]
     );
 
@@ -780,7 +833,7 @@ router.get('/:courtId/availability', async (req, res, next) => {
     // Get blackouts for this date
     const blackoutResult = await query(
       `SELECT * FROM court_blackouts
-       WHERE (court_id = $1 OR (court_id IS NULL AND facility_id = (SELECT facility_id FROM courts WHERE id = $1)))
+       WHERE ${BLACKOUT_COVERS_COURT_SQL}
          AND start_datetime::date <= $2::date
          AND end_datetime::date >= $2::date`,
       [courtId, date]

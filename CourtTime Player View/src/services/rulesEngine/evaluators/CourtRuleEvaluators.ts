@@ -310,7 +310,9 @@ const CRT006: RuleEvaluator = {
 
     for (const blackout of context.blackouts) {
       // Check if blackout applies to this court
-      if (blackout.courtId && blackout.courtId !== context.court.id) {
+      if (blackout.courtIds?.length) {
+        if (!blackout.courtIds.includes(context.court.id)) continue;
+      } else if (blackout.courtId && blackout.courtId !== context.court.id) {
         continue;
       }
 

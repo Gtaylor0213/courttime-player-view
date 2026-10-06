@@ -1554,7 +1554,8 @@ export const courtConfigApi = {
   },
 
   createBlackout: async (data: {
-    courtId?: string | null;
+    /** The courts to close; empty or omitted means every court. */
+    courtIds?: string[];
     facilityId: string;
     blackoutType?: string;
     title?: string;
@@ -1571,7 +1572,7 @@ export const courtConfigApi = {
   },
 
   updateBlackout: async (blackoutId: string, data: {
-    courtId?: string | null;
+    courtIds?: string[];
     blackoutType?: string;
     title?: string;
     description?: string;

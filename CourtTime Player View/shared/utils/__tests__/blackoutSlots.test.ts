@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blackoutMinutesOnDate, blackoutsToBlockedRanges, describeBlackout, parseBlackoutDatetime } from '../blackoutSlots';
+import { blackoutCourtIds, blackoutCourtsLabel, blackoutMinutesOnDate, blackoutsToBlockedRanges, describeBlackout, parseBlackoutDatetime } from '../blackoutSlots';
 
 describe('parseBlackoutDatetime', () => {
   it('treats a bare datetime as local wall time', () => {
@@ -48,6 +48,37 @@ describe('blackoutsToBlockedRanges', () => {
         courts
       )
     ).toEqual([]);
+  });
+
+  it('applies a blackout on chosen courts to just those courts', () => {
+    const ranges = blackoutsToBlockedRanges(
+      [{ id: 'b3', court_id: null, court_ids: ['c1', 'c3', 'gone'], start_datetime: '2026-09-17T09:00:00', end_datetime: '2026-09-17T10:00:00' }],
+      '2026-09-17',
+      ['c1', 'c2', 'c3']
+    );
+    expect(ranges.map((r) => r.courtId)).toEqual(['c1', 'c3']);
+  });
+
+  it('blocks once when the rows are already scoped to one court', () => {
+    const ranges = blackoutsToBlockedRanges(
+      [{ id: 'b4', court_ids: ['c1', 'c3'], start_datetime: '2026-09-17T09:00:00', end_datetime: '2026-09-17T10:00:00' }],
+      '2026-09-17',
+      ['*']
+    );
+    expect(ranges).toHaveLength(1);
+  });
+});
+
+describe('blackoutCourtIds / blackoutCourtsLabel', () => {
+  it('reads several courts, one court, or none', () => {
+    expect(blackoutCourtIds({ court_id: null, court_ids: ['c1', 'c2'] })).toEqual(['c1', 'c2']);
+    expect(blackoutCourtIds({ court_id: 'c1', court_ids: null })).toEqual(['c1']);
+    expect(blackoutCourtIds({ court_id: null })).toEqual([]);
+  });
+  it('names the courts, or says all courts', () => {
+    expect(blackoutCourtsLabel({ court_names: ['Court 1', 'Court 3'] })).toBe('Court 1, Court 3');
+    expect(blackoutCourtsLabel({ court_name: 'Court 2' })).toBe('Court 2');
+    expect(blackoutCourtsLabel({})).toBe('All courts');
   });
 });
 

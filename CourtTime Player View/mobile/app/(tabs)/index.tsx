@@ -595,10 +595,9 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
   },
+  // Stacked: the time on its own line, the actions on a full-width row below.
+  // Side by side, four actions overflowed the card.
   bookingFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginTop: 2,
   },
   bookingTime: {
@@ -608,8 +607,13 @@ const styles = StyleSheet.create({
   bookingActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.sm,
-    justifyContent: 'flex-end',
+    columnGap: Spacing.sm,
+    rowGap: Spacing.sm,
+    justifyContent: 'space-between',
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
   },
   calendarButton: {
     flexDirection: 'row',

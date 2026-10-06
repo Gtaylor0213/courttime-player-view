@@ -76,6 +76,13 @@ export function QuickReserveSheet({ visible, courts, onClose, onPickSlot, onQuic
     if (visible) setDate(days[0]!.value);
   }, [visible, days]);
 
+  // Only the first court lists its times up front; the rest open on tap.
+  // Holds the member's own open/close taps, cleared when the list changes.
+  const [expandedOverrides, setExpandedOverrides] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setExpandedOverrides({});
+  }, [visible, courtType]);
+
   return (
     <Modal visible={visible} transparent animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined} onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -96,9 +103,9 @@ export function QuickReserveSheet({ visible, courts, onClose, onPickSlot, onQuic
             style={styles.quickButton}
           />
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={styles.chipScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow} style={styles.chipScroll}>
             {days.map((d) => (
-              <Chip key={d.value} label={d.label} selected={date === d.value} onPress={() => setDate(d.value)} />
+              <Chip key={d.value} label={d.label} selected={date === d.value} onPress={() => setDate(d.value)} large />
             ))}
           </ScrollView>
           {courtTypes.length > 1 ? (
@@ -116,18 +123,29 @@ export function QuickReserveSheet({ visible, courts, onClose, onPickSlot, onQuic
             ) : visibleCourts.length === 0 ? (
               <Text style={styles.empty}>No courts available matching your filters.</Text>
             ) : (
-              visibleCourts.map((court) => {
+              visibleCourts.map((court, index) => {
                 const slots = slotsByCourt[court.id] ?? [];
                 const windows = openStartWindows(slots);
+                const expanded = expandedOverrides[court.id] ?? index === 0;
                 return (
                   <View key={court.id} style={styles.courtCard}>
-                    <View style={styles.courtHeader}>
+                    <TouchableOpacity
+                      style={styles.courtHeader}
+                      onPress={() => setExpandedOverrides((prev) => ({ ...prev, [court.id]: !expanded }))}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded }}
+                      accessibilityLabel={`${expanded ? 'Hide' : 'Show'} times for ${court.name}`}
+                      hitSlop={8}
+                    >
                       <Text style={styles.courtName}>{court.name}</Text>
-                      <Text style={styles.courtMeta}>
-                        {slots.length === 0 ? 'Closed' : `${windows.length}/${slots.length} slots open`}
-                      </Text>
-                    </View>
-                    {windows.length === 0 ? (
+                      <View style={styles.courtHeaderRight}>
+                        <Text style={styles.courtMeta}>
+                          {slots.length === 0 ? 'Closed' : `${windows.length}/${slots.length} slots open`}
+                        </Text>
+                        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textMuted} />
+                      </View>
+                    </TouchableOpacity>
+                    {!expanded ? null : windows.length === 0 ? (
                       <Text style={styles.courtEmpty}>{slots.length === 0 ? 'Not open on this day.' : 'Fully booked.'}</Text>
                     ) : (
                       <View style={styles.slotRow}>
@@ -155,10 +173,10 @@ export function QuickReserveSheet({ visible, courts, onClose, onPickSlot, onQuic
   );
 }
 
-function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+function Chip({ label, selected, onPress, large = false }: { label: string; selected: boolean; onPress: () => void; large?: boolean }) {
   return (
-    <TouchableOpacity style={[styles.chip, selected && styles.chipSelected]} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={label}>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    <TouchableOpacity style={[styles.chip, large && styles.chipLarge, selected && styles.chipSelected]} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={label}>
+      <Text style={[styles.chipText, large && styles.chipTextLarge, selected && styles.chipTextSelected]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -169,11 +187,15 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, paddingBottom: Spacing.sm },
   title: { fontSize: FontSize.xl, fontFamily: FontFamily.bold, fontWeight: '700', color: Colors.text },
   quickButton: { marginHorizontal: Spacing.lg, marginBottom: Spacing.sm },
-  chipScroll: { flexGrow: 0 },
+  // flexShrink: 0 — otherwise a long court list squeezes the day row down to nothing.
+  chipScroll: { flexGrow: 0, flexShrink: 0 },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xs },
   chip: { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  chipLarge: { paddingHorizontal: Spacing.lg, paddingVertical: 10 },
   chipSelected: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
   chipText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  chipTextLarge: { fontSize: FontSize.sm },
   chipTextSelected: { color: Colors.primary },
   // flexShrink, not flex: 1 — content-sized sheet with a maxHeight (see EditBookingModal).
   scroll: { flexGrow: 0, flexShrink: 1 },
@@ -181,6 +203,7 @@ const styles = StyleSheet.create({
   empty: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center', paddingVertical: Spacing.lg },
   courtCard: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.md, gap: Spacing.sm },
   courtHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
+  courtHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   courtName: { fontSize: FontSize.md, fontFamily: FontFamily.bold, fontWeight: '600', color: Colors.text },
   courtMeta: { fontSize: FontSize.xs, color: Colors.textMuted },
   courtEmpty: { fontSize: FontSize.xs, color: Colors.textMuted },

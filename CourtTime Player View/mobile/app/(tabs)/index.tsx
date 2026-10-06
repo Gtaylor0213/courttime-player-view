@@ -30,6 +30,7 @@ import { useOfflineApi } from '../../src/hooks/useOfflineApi';
 import type { BookingWithDetails, BulletinPostWithAuthor } from '../../src/types/database';
 import { formatBulletinPostProminentDate } from '../../../shared/utils/bulletinPostDisplay';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
+import { parseLocalDate } from '../../src/utils/dateUtils';
 import {
   addBookingToCalendarWithFeedback,
   bookingWithDetailsToCalendarDetails,
@@ -84,8 +85,9 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [fetchData]);
 
+  // Booking dates are plain YYYY-MM-DD: parse as local, or US timezones show the day before.
   const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString('en-US', {
+    return (typeof date === 'string' ? parseLocalDate(date) : date).toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -267,6 +269,12 @@ export default function HomeScreen() {
               <Text style={styles.bookingDate}>
                 {formatDate(booking.bookingDate)}
               </Text>
+              {/* This list spans every club the member belongs to; the calendar shows one. */}
+              {facilities.length > 1 && booking.facilityName ? (
+                <Text style={styles.bookingFacility} numberOfLines={1}>
+                  {booking.facilityName}
+                </Text>
+              ) : null}
               <View style={styles.bookingFooter}>
                 <Text style={styles.bookingTime}>
                   {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
@@ -597,6 +605,12 @@ const styles = StyleSheet.create({
   },
   // Stacked: the time on its own line, the actions on a full-width row below.
   // Side by side, four actions overflowed the card.
+  bookingFacility: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
   bookingFooter: {
     marginTop: 2,
   },

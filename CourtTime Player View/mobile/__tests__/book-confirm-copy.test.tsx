@@ -13,7 +13,7 @@ jest.mock('expo-router', () => {
   return { ...actual, useFocusEffect: (effect: () => void) => useEffect(effect, [effect]) };
 });
 
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   requestCalendarPermissionsAsync: jest.fn(),
   getDefaultCalendarAsync: jest.fn(),
   getCalendarsAsync: jest.fn(),

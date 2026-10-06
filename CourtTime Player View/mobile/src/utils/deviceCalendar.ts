@@ -1,5 +1,7 @@
 import { Platform } from 'react-native';
-import * as Calendar from 'expo-calendar';
+// The function-style API lives in `expo-calendar/legacy`: the same names imported from
+// `expo-calendar` now throw at runtime, and the new object API is not available in Expo Go.
+import * as Calendar from 'expo-calendar/legacy';
 
 type CalendarAddResultReason =
   | 'unsupported'

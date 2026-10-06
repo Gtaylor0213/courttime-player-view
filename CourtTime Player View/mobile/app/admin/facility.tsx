@@ -127,7 +127,8 @@ export default function AdminFacilityScreen() {
       phone: form.phone ?? '',
       email: form.email ?? '',
       timezone: form.timezone ?? undefined,
-      logoUrl: form.logoUrl || undefined,
+      // '' (not undefined) so removing the logo is actually sent; the server keeps the old one otherwise.
+      logoUrl: form.logoUrl ?? '',
       primaryContact: form.primaryContact ?? undefined,
       secondaryContacts: (form.secondaryContacts ?? []).filter((c) => (c.name || c.email || c.phone)),
     });

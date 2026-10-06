@@ -230,7 +230,8 @@ function ReservationsTab({
       endTime: withSeconds(seriesEdit.endTime.trim()),
       durationMinutes: duration,
       bookingType: seriesEdit.bookingType.trim() || undefined,
-      notes: seriesEdit.notes.trim() || undefined,
+      // '' (not undefined) so clearing the notes is actually sent; the server keeps the old ones otherwise.
+      notes: seriesEdit.notes.trim(),
     };
     setSeriesSubmitting(true);
     const res =

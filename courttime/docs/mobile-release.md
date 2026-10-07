@@ -58,6 +58,8 @@ The DSN is public by design — it identifies where to send events and is embedd
 eas secret:create --name SENTRY_AUTH_TOKEN --value <token> --scope project
 ```
 
+Until Sentry is set up, `eas.json` sets `SENTRY_DISABLE_AUTO_UPLOAD=true` on the preview and production profiles. Without it the build fails at the very end with `An organization ID or slug is required`, because the Sentry build step tries to upload debug files to an account that does not exist yet. Once the four values above are in place (as EAS environment variables, since `mobile/.env` is not uploaded to the builder), remove that line from both profiles so crash reports get readable stack traces.
+
 Leave `sendDefaultPii` off in `src/utils/sentry.ts` — see `appstore/PRIVACY_DECLARATIONS.md` for why the privacy labels depend on it.
 
 ---

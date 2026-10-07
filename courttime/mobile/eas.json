@@ -17,6 +17,9 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "simulator": {
@@ -32,7 +35,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_PRODUCTION_API_URL": "https://www.courttimeapp.com"
+        "EXPO_PUBLIC_PRODUCTION_API_URL": "https://www.courttimeapp.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   },

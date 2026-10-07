@@ -15,7 +15,7 @@ Fill in your own name, phone number and `reidbissell@courttimeapp.com`.
 
 ## Notes
 
-Paste everything in the block below into the **Notes** field (limit 4,000 characters; this is about 2,900).
+Paste everything in the block below into the **Notes** field (limit 4,000 characters; this is about 3,200).
 
 ```
 CourtTime is a court-booking app for members of tennis, pickleball and swim/tennis clubs. Each club runs its own courts and members; a person uses the app as a member of their club.

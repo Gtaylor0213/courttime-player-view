@@ -191,7 +191,7 @@ Two notes on this one:
 - **Club Info:** add the booking-rules section, General Rules rendering, and the tennis/pickleball max-duration split that web gained in `a603537` / `c3f6971` / `84d61a0`.
 - **Community / bulletin:** signup withdrawal, minimum-participant messaging and cancellation notices, parity check on share behavior.
 - **Calendar:** week/month overview (`week_month_view`, default ON).
-- **Systematic drift sweep:** walk `git log 9bf2fd2..HEAD -- "CourtTime Player View/src"` and triage every player-visible commit as *ported / intentionally web-only / needs porting*. Record the verdicts in `docs/mobile-web-sync.md` so the next sync starts from a known line rather than a 240-commit diff.
+- **Systematic drift sweep:** walk `git log 9bf2fd2..HEAD -- "courttime/src"` and triage every player-visible commit as *ported / intentionally web-only / needs porting*. Record the verdicts in `docs/mobile-web-sync.md` so the next sync starts from a known line rather than a 240-commit diff.
 
 ### Phase 3 — Build the missing flagged features ✅ *(complete)*
 

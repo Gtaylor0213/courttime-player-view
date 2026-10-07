@@ -6,7 +6,7 @@ set -e
 SOURCE="${1:?Usage: $0 <source-log-file> [line-count] [output-basename]}"
 N="${2:-50}"
 NAME="${3:-metro}"
-DEST_DIR="$(git rev-parse --show-toplevel)/CourtTime Player View/design-review/repro"
+DEST_DIR="$(git rev-parse --show-toplevel)/courttime/design-review/repro"
 mkdir -p "$DEST_DIR"
 OUT="$DEST_DIR/$NAME.log"
 tail -n "$N" "$SOURCE" >"$OUT"

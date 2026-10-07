@@ -34,7 +34,7 @@ lerna-debug.log*
 .vite
 
 # Design review repro artifacts (screenshots, Metro dumps)
-CourtTime Player View/design-review/repro/
+courttime/design-review/repro/
 design-review/repro/
 
 # Node compile cache / scratch

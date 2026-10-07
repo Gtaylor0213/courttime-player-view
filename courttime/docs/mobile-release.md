@@ -2,7 +2,7 @@
 
 Everything needed to get a CourtTime build onto TestFlight, Play internal testing, and then the stores. Follow it top to bottom the first time; after that, only "Ship a build" and "Ship an OTA fix" matter.
 
-All commands run from `CourtTime Player View/mobile`.
+All commands run from `courttime/mobile`.
 
 ---
 
@@ -103,7 +103,7 @@ eas update --branch production --message "Fix booking confirmation copy"
 - [ ] Confirm `/privacy`, `/terms`, `/support`, `/delete-account` all load on the live site
 - [ ] Trigger a test crash and confirm it reaches Sentry
 - [ ] Walk the deletion flow end to end on a real device — reviewers do
-- [ ] **Refresh the reviewer demo account** — `npm run seed:review` from `CourtTime Player View`. Re-run it before *every* submission so the demo bookings stay in the future; a reviewer who opens the app to an empty calendar is the same problem as no account at all.
+- [ ] **Refresh the reviewer demo account** — `npm run seed:review` from `courttime`. Re-run it before *every* submission so the demo bookings stay in the future; a reviewer who opens the app to an empty calendar is the same problem as no account at all.
   - Credentials to paste into App Review notes: `appreview@courttimeapp.com` / `CourtTimeReview1!`
   - It builds an isolated **CourtTime Demo Club**, never a membership at a real club — a reviewer placed in a live club would see your members' real names, reservations and messages
   - `npm run seed:review -- --remove` tears it down

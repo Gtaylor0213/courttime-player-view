@@ -7,7 +7,7 @@ on:
 
 defaults:
   run:
-    working-directory: "CourtTime Player View"
+    working-directory: courttime
 
 jobs:
   web:

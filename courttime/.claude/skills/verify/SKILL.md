@@ -8,7 +8,7 @@ description: How to run and drive this project's API server for verification.
 ## Launch the API server
 
 ```bash
-cd "CourtTime Player View"
+cd courttime
 PORT=3199 npx tsx server/index.ts   # picks up .env automatically (dotenv)
 ```
 

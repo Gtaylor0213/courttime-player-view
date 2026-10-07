@@ -182,6 +182,41 @@ async function seed() {
     // A past booking, so the reviewer's history is not empty.
     { userId: reviewerId, court: 0, day: -6, start: '18:00', end: '20:00', type: 'match' },
   ];
+
+  // Club-mates' bookings across today and the next two days, so the court
+  // calendar looks like an active club (and in store screenshots). Gaps are
+  // left on every court so the reviewer can still book. A slot that would
+  // overlap one of the bookings above is skipped.
+  const dailyPattern = [
+    { court: 0, start: '08:00', end: '09:30', type: 'match', who: 0 },
+    { court: 0, start: '10:00', end: '11:30', type: 'lesson', who: 1 },
+    { court: 0, start: '16:00', end: '18:00', type: 'league_match', who: 2 },
+    { court: 1, start: '09:00', end: '10:30', type: 'group_lesson', who: 2 },
+    { court: 1, start: '12:00', end: '13:30', type: 'match', who: 0 },
+    { court: 1, start: '18:00', end: '19:30', type: 'match', who: 1 },
+    { court: 2, start: '08:30', end: '10:00', type: 'ball_machine', who: 1 },
+    { court: 2, start: '13:00', end: '14:30', type: 'match', who: 2 },
+    { court: 2, start: '17:00', end: '18:30', type: 'lesson', who: 0 },
+    { court: 3, start: '09:30', end: '10:30', type: 'match', who: 0 },
+    { court: 3, start: '11:00', end: '12:00', type: 'match', who: 1 },
+    { court: 3, start: '17:30', end: '18:30', type: 'match', who: 2 },
+  ];
+  const overlaps = (a: { start: string; end: string }, b: { start: string; end: string }) =>
+    a.start < b.end && b.start < a.end;
+  for (const day of [0, 1, 2]) {
+    for (const slot of dailyPattern) {
+      const taken = bookings.some((b) => b.day === day && b.court === slot.court && overlaps(b, slot));
+      if (taken) continue;
+      bookings.push({
+        userId: extraIds[slot.who]!,
+        court: slot.court,
+        day,
+        start: slot.start,
+        end: slot.end,
+        type: slot.type,
+      });
+    }
+  }
   for (const b of bookings) {
     const [sh, sm] = b.start.split(':').map(Number);
     const [eh, em] = b.end.split(':').map(Number);
@@ -203,7 +238,7 @@ async function seed() {
       ]
     );
   }
-  console.log(`  ✓ ${bookings.length} bookings (5 upcoming, 1 past)`);
+  console.log(`  ✓ ${bookings.length} bookings (${bookings.filter((b) => b.day >= 0).length} upcoming, 1 past)`);
 
   // ── A conversation, so Messages is not empty ──
   const convo = await query(

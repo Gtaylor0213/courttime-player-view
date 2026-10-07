@@ -171,11 +171,17 @@ async function seed() {
   );
   console.log(`  ✓ ${1 + extraIds.length} members (1 reviewer, ${extraIds.length} club-mates)`);
 
+  // The demo's story happens "on Saturday" (the seeded messages and the clinic
+  // both say so), so anchor those to the next Saturday at least three days
+  // out, clear of the daily bookings below.
+  const daysUntilSaturday = (6 - new Date().getDay() + 7) % 7;
+  const saturday = daysUntilSaturday >= 3 ? daysUntilSaturday : daysUntilSaturday + 7;
+
   // ── Bookings: re-dated on every run so the demo is never stale ──
   await query(`DELETE FROM bookings WHERE facility_id = $1`, [FACILITY_ID]);
   const bookings = [
     { userId: reviewerId, court: 0, day: 2, start: '18:00', end: '20:00', type: 'match' },
-    { userId: reviewerId, court: 2, day: 5, start: '09:00', end: '11:00', type: 'lesson' },
+    { userId: reviewerId, court: 2, day: saturday, start: '09:00', end: '11:00', type: 'match' },
     { userId: extraIds[0]!, court: 1, day: 1, start: '17:00', end: '19:00', type: 'match' },
     { userId: extraIds[1]!, court: 1, day: 2, start: '08:00', end: '09:30', type: 'match' },
     { userId: extraIds[2]!, court: 3, day: 3, start: '12:00', end: '13:00', type: 'match' },
@@ -272,8 +278,12 @@ async function seed() {
                                  min_participants, is_admin_post)
      VALUES ($1, $2, 'Saturday Morning Clinic',
              'Doubles strategy and net play. All levels welcome — bring water.',
-             'clinic', $3::date + TIME '09:00', $4, 8, 4, true)`,
-    [FACILITY_ID, extraIds[0], ymd(5), courtIds[2]]
+             'clinic',
+             (($3::date + TIME '09:00') AT TIME ZONE 'America/New_York') AT TIME ZONE 'UTC',
+             $4, 8, 4, true)`,
+    // drill_start_at is stored in UTC, so 9:00 AM club time is converted above.
+    // Court 2, because the reviewer has Court 3 booked at the same hour.
+    [FACILITY_ID, extraIds[0], ymd(saturday), courtIds[1]]
   );
   await query(
     `INSERT INTO bulletin_posts (facility_id, author_id, title, content, category, is_admin_post, is_pinned)

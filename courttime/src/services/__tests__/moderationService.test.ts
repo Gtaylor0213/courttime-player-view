@@ -49,6 +49,11 @@ describe('blockUser', () => {
     expect(queryMock).not.toHaveBeenCalled();
   });
 
+  it('refuses to block the CourtTime Team account', async () => {
+    await expect(blockUser(ME, '00000000-0000-0000-0000-000000000001')).rejects.toThrow(/cannot be blocked/);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
   it('404s for an unknown member', async () => {
     queryMock.mockResolvedValue({ rows: [] });
     await expect(blockUser(ME, OTHER)).rejects.toMatchObject({ status: 404 });

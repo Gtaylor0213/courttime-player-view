@@ -9,6 +9,7 @@
 import { query } from '../database/connection';
 import { notificationService } from './notificationService';
 import { sendContentReportEmail } from './emailService';
+import { COURTTIME_TEAM_USER_ID } from '../../shared/constants/courttimeTeam';
 
 export class ModerationError extends Error {
   constructor(message: string, public status: number = 400) {
@@ -73,6 +74,11 @@ export async function blockUser(blockerId: string, blockedId: unknown): Promise<
   }
   if (blockedId === blockerId) {
     throw new ModerationError('You cannot block yourself');
+  }
+  // Service announcements and support replies come from this account, so a
+  // block would silently cut a member off from them. It can still be reported.
+  if (blockedId === COURTTIME_TEAM_USER_ID) {
+    throw new ModerationError('The CourtTime Team account cannot be blocked');
   }
   const target = await query(`SELECT 1 FROM users WHERE id = $1`, [blockedId]);
   if (target.rows.length === 0) {

@@ -52,7 +52,7 @@ interface ConversationMessage {
   createdAt: string;
 }
 
-const COURTTIME_TEAM_USER_ID = '00000000-0000-0000-0000-000000000001';
+import { COURTTIME_TEAM_USER_ID } from '../../../shared/constants/courttimeTeam';
 
 function formatMessageTime(timestamp: string) {
   const date = new Date(timestamp);

@@ -3,7 +3,9 @@ import { delay } from '../../shared/utils/delay';
 
 // Seeded in migration 083_seed_courttime_team_user.sql. Used as the sender
 // identity for every message sent from the /developer broadcast panel.
-export const COURTTIME_TEAM_USER_ID = '00000000-0000-0000-0000-000000000001';
+import { COURTTIME_TEAM_USER_ID } from '../../shared/constants/courttimeTeam';
+
+export { COURTTIME_TEAM_USER_ID };
 
 export type BroadcastAudience = 'all' | 'facility' | 'specific';
 export type BroadcastRecipientType = 'player' | 'admin';

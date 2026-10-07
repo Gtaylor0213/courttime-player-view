@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Ban } from 'lucide-react';
 import { toast } from 'sonner';
 import { moderationApi } from '../api/client';
+import { COURTTIME_TEAM_USER_ID } from '../../shared/constants/courttimeTeam';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Textarea } from './ui/textarea';
@@ -55,6 +56,8 @@ export function ModerationDialog({ target, onClose, onBlocked }: ModerationDialo
   }, [target?.contentType, target?.contentId]);
 
   if (!target) return null;
+  // The official account can be reported but not blocked (the server refuses too).
+  const canBlock = target.userId !== COURTTIME_TEAM_USER_ID;
 
   const submitReport = async () => {
     if (!reason) return;
@@ -132,6 +135,7 @@ export function ModerationDialog({ target, onClose, onBlocked }: ModerationDialo
           {busy === 'report' ? 'Sending…' : 'Send report'}
         </Button>
 
+        {canBlock && (
         <div className="border-t pt-3">
           <button
             type="button"
@@ -148,6 +152,7 @@ export function ModerationDialog({ target, onClose, onBlocked }: ModerationDialo
             </span>
           </button>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

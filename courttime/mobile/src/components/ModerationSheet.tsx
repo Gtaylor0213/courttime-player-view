@@ -21,6 +21,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { moderationApi, type ReportContentType, type ReportReason } from '../api/moderation';
 import { showAlert, showApiErrorAlert } from '../utils/alert';
+import { COURTTIME_TEAM_USER_ID } from '../../../shared/constants/courttimeTeam';
 import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
 import { Button } from './Button';
 
@@ -68,6 +69,8 @@ export function ModerationSheet({ target, onClose, onBlocked }: ModerationSheetP
 
   if (!target) return null;
   const firstName = target.userName.trim().split(' ')[0] || 'this member';
+  // The official account can be reported but not blocked (the server refuses too).
+  const canBlock = target.userId !== COURTTIME_TEAM_USER_ID;
 
   async function submitReport() {
     if (!target || !reason) return;
@@ -87,7 +90,9 @@ export function ModerationSheet({ target, onClose, onBlocked }: ModerationSheetP
     onClose();
     showAlert(
       'Report sent',
-      `Thanks for letting us know. We review reports within 24 hours and remove content that breaks our rules. You can also block ${firstName} so you no longer see their messages or posts.`
+      canBlock
+        ? `Thanks for letting us know. We review reports within 24 hours and remove content that breaks our rules. You can also block ${firstName} so you no longer see their messages or posts.`
+        : 'Thanks for letting us know. We review reports within 24 hours and remove content that breaks our rules.'
     );
   }
 
@@ -179,23 +184,27 @@ export function ModerationSheet({ target, onClose, onBlocked }: ModerationSheetP
               disabled={!reason || busy !== null}
             />
 
-            <View style={styles.divider} />
+            {canBlock ? (
+              <>
+              <View style={styles.divider} />
 
-            <TouchableOpacity
-              style={styles.blockRow}
-              onPress={confirmBlock}
-              disabled={busy !== null}
-              accessibilityRole="button"
-              accessibilityLabel={`Block ${target.userName}`}
-            >
-              <Ionicons name="ban-outline" size={20} color={Colors.destructive} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.blockTitle}>Block {target.userName}</Text>
-                <Text style={styles.blockDescription}>
-                  Hide their messages and posts and stop them messaging you
-                </Text>
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.blockRow}
+                onPress={confirmBlock}
+                disabled={busy !== null}
+                accessibilityRole="button"
+                accessibilityLabel={`Block ${target.userName}`}
+              >
+                <Ionicons name="ban-outline" size={20} color={Colors.destructive} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.blockTitle}>Block {target.userName}</Text>
+                  <Text style={styles.blockDescription}>
+                    Hide their messages and posts and stop them messaging you
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              </>
+            ) : null}
           </ScrollView>
         </View>
       </KeyboardAvoidingView>

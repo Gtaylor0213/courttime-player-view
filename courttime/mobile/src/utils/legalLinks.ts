@@ -22,9 +22,10 @@ export async function openLegalLink(key: keyof typeof LEGAL_URLS): Promise<void>
 /**
  * Whether the app may sell CourtTime's own platform billing (the facility
  * subscription, per-court platform fees, facility registration with payment).
- * These are digital services, which App Store Guideline 3.1.1 requires to go
- * through in-app purchase, so the iOS app shows their status but never starts
+ * These are digital services. App Store Guideline 3.1.1 and Google Play's
+ * Payments policy both require digital purchases to go through the store's
+ * own billing, so the iOS and Android apps show their status but never start
  * a purchase. Member payments to a club (court fees, dues, pro shop) are
  * real-world services and are unaffected.
  */
-export const PLATFORM_BILLING_IN_APP = Platform.OS !== 'ios';
+export const PLATFORM_BILLING_IN_APP = Platform.OS === 'web';

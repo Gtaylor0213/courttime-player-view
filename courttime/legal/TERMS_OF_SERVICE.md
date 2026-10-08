@@ -3,7 +3,7 @@
 **Effective date:** September 15, 2026
 **Last updated:** September 15, 2026
 
-These Terms of Service ("**Terms**") form a legal agreement between you and CourtTimeApp LLC ("**CourtTime**," "**we**," "**us**") and govern your use of the CourtTime mobile app and the website at courttimeapp.com (together, the "**Service**").
+These Terms of Service ("**Terms**") form a legal agreement between you and CourtTime Limited Liability Company ("**CourtTime**," "**we**," "**us**") and govern your use of the CourtTime mobile app and the website at courttimeapp.com (together, the "**Service**").
 
 **By creating an account or using the Service you agree to these Terms.** If you do not agree, do not use the Service.
 
@@ -98,7 +98,7 @@ Facility-specific Terms & Conditions are between you and that facility. CourtTim
 
 ## 10. Intellectual Property
 
-- The Service, including all software, design, text, graphics, and trademarks, is owned by CourtTimeApp LLC or its licensors and is protected by copyright and other intellectual property laws.
+- The Service, including all software, design, text, graphics, and trademarks, is owned by CourtTime Limited Liability Company or its licensors and is protected by copyright and other intellectual property laws.
 - Subject to your compliance with these Terms, we grant you a limited, non-exclusive, non-transferable, revocable license to use the Service for personal, non-commercial use.
 - Content you submit (profile photos, bios, messages, bulletin posts) remains yours. By submitting content, you grant CourtTime a worldwide, non-exclusive, royalty-free license to host, display, and distribute that content as needed to operate the Service.
 - You may not copy, modify, distribute, sell, or lease any part of the Service without our written permission.
@@ -145,7 +145,7 @@ Some jurisdictions do not allow the exclusion or limitation of certain damages, 
 
 ## 14. Indemnification
 
-You agree to indemnify and hold harmless CourtTimeApp LLC and its affiliates from any claims, damages, losses, or expenses (including reasonable attorneys' fees) arising out of:
+You agree to indemnify and hold harmless CourtTime Limited Liability Company and its affiliates from any claims, damages, losses, or expenses (including reasonable attorneys' fees) arising out of:
 
 - Your use of the Service.
 - Your violation of these Terms.
@@ -175,4 +175,4 @@ We may update these Terms from time to time. When we make material changes, we w
 Questions about these Terms?
 
 **Email:** reidbissell@courttimeapp.com
-**Mail:** CourtTimeApp LLC, 4239 Allenhurst Dr, Norcross, GA 30092
+**Mail:** CourtTime Limited Liability Company, 4239 Allenhurst Dr, Norcross, GA 30092

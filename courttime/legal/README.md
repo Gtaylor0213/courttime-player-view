@@ -17,7 +17,7 @@
 Search every file for these tokens and replace:
 
 - `Georgia` — the U.S. state whose laws govern your contract (likely the state where CourtTime is incorporated or operates from)
-- `CourtTimeApp LLC` — your legal entity name (e.g. "CourtTime, LLC" or "CourtTime, Inc.")
+- `CourtTime Limited Liability Company` — your legal entity name (e.g. "CourtTime, LLC" or "CourtTime, Inc.")
 - `4239 Allenhurst Dr, Norcross, GA 30092` — physical mailing address for legal notices
 - `September 15, 2026` — the date the policy/terms take effect
 - `reidbissell@courttimeapp.com` — replace with your real support email if different

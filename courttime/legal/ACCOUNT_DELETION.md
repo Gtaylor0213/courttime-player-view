@@ -89,4 +89,4 @@ If you change your mind, you can sign up again at any time using the same email 
 ## Questions
 
 **Email:** reidbissell@courttimeapp.com
-**Mail:** CourtTimeApp LLC, 4239 Allenhurst Dr, Norcross, GA 30092
+**Mail:** CourtTime Limited Liability Company, 4239 Allenhurst Dr, Norcross, GA 30092

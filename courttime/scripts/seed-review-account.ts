@@ -36,6 +36,15 @@ const REVIEWER_EMAIL = 'appreview@courttimeapp.com';
 const REVIEWER_PASSWORD = 'CourtTimeReview1!';
 const REVIEWER_NAME = 'Alex Reviewer';
 
+/**
+ * A second reviewer login that administers the demo club, so store reviewers
+ * can reach the club-admin screens too. Google Play asks for sign-in details
+ * that give "full access to all the features" of the app.
+ */
+const ADMIN_EMAIL = 'appreview-admin@courttimeapp.com';
+const ADMIN_PASSWORD = 'CourtTimeAdmin1!';
+const ADMIN_NAME = 'Casey Manager';
+
 /** Fictional club-mates, so the reviewer sees a populated club. */
 const EXTRAS = [
   { email: 'demo.jordan@courttimeapp.com', name: 'Jordan Ellis', skill: '4.0' },
@@ -51,14 +60,20 @@ function ymd(daysFromToday: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-async function upsertUser(email: string, fullName: string, password: string): Promise<string> {
+async function upsertUser(
+  email: string,
+  fullName: string,
+  password: string,
+  userType: 'player' | 'admin' = 'player'
+): Promise<string> {
   const hash = await bcrypt.hash(password, SALT_ROUNDS);
   const result = await query(
     `INSERT INTO users (email, password_hash, full_name, first_name, last_name, user_type)
-     VALUES ($1, $2, $3, $4, $5, 'player')
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (email) DO UPDATE
        SET password_hash = EXCLUDED.password_hash,
            full_name = EXCLUDED.full_name,
+           user_type = EXCLUDED.user_type,
            deleted_at = NULL
      RETURNING id`,
     [
@@ -67,6 +82,7 @@ async function upsertUser(email: string, fullName: string, password: string): Pr
       fullName,
       fullName.split(' ')[0] ?? fullName,
       fullName.split(' ').slice(1).join(' ') || null,
+      userType,
     ]
   );
   return result.rows[0].id as string;
@@ -170,6 +186,29 @@ async function seed() {
     [reviewerId]
   );
   console.log(`  ✓ ${1 + extraIds.length} members (1 reviewer, ${extraIds.length} club-mates)`);
+
+  // ── Club admin login for reviewers ──
+  const adminId = await upsertUser(ADMIN_EMAIL, ADMIN_NAME, ADMIN_PASSWORD, 'admin');
+  await query(
+    `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date, is_facility_admin)
+     VALUES ($1, $2, 'Full', 'active', CURRENT_DATE, true)
+     ON CONFLICT (user_id, facility_id) DO UPDATE
+       SET status = 'active', end_date = NULL, is_facility_admin = true`,
+    [adminId, FACILITY_ID]
+  );
+  await query(
+    `INSERT INTO facility_admins (user_id, facility_id, status, invitation_accepted_at)
+     VALUES ($1, $2, 'active', CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id, facility_id) DO UPDATE SET status = 'active'`,
+    [adminId, FACILITY_ID]
+  );
+  await query(
+    `INSERT INTO player_profiles (user_id, skill_level, bio)
+     VALUES ($1, '4.0', 'Manager of the CourtTime Demo Club.')
+     ON CONFLICT (user_id) DO UPDATE SET skill_level = EXCLUDED.skill_level`,
+    [adminId]
+  );
+  console.log('  ✓ 1 club admin');
 
   // The demo's story happens "on Saturday" (the seeded messages and the clinic
   // both say so), so anchor those to the next Saturday at least three days
@@ -328,8 +367,13 @@ async function seed() {
 ────────────────────────────────────────────────
   App Review credentials — paste into the notes
 ────────────────────────────────────────────────
+  Member login
   Email:    ${REVIEWER_EMAIL}
   Password: ${REVIEWER_PASSWORD}
+
+  Club admin login
+  Email:    ${ADMIN_EMAIL}
+  Password: ${ADMIN_PASSWORD}
   Club:     ${FACILITY_NAME}
 
   Re-run before each submission so the bookings
@@ -343,7 +387,7 @@ async function remove() {
   // Facility-scoped rows cascade from facilities; the demo users do not, so
   // they are removed by email.
   await query(`DELETE FROM facilities WHERE id = $1`, [FACILITY_ID]);
-  const emails = [REVIEWER_EMAIL, ...EXTRAS.map((e) => e.email)];
+  const emails = [REVIEWER_EMAIL, ADMIN_EMAIL, ...EXTRAS.map((e) => e.email)];
   const result = await query(`DELETE FROM users WHERE email = ANY($1::text[]) RETURNING id`, [emails]);
   console.log(`  ✓ facility removed, ${result.rowCount} demo accounts removed\n`);
 }

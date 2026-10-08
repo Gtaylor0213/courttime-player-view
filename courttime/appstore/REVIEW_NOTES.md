@@ -9,6 +9,15 @@ What to enter in **App Store Connect → App Review Information**. Run `npm run 
 | User name | `appreview@courttimeapp.com` |
 | Password | `CourtTimeReview1!` |
 
+App Store Connect has one sign-in slot, so the member account goes there. A second account administers the demo club and is given in the notes below:
+
+| | Club admin account |
+|---|---|
+| User name | `appreview-admin@courttimeapp.com` |
+| Password | `CourtTimeAdmin1!` |
+
+For **Google Play**, enter both under App content → Sign in details.
+
 ## Contact information
 
 Fill in your own name, phone number and `reidbissell@courttimeapp.com`.
@@ -22,6 +31,9 @@ CourtTime is a court-booking app for members of tennis, pickleball and swim/tenn
 
 DEMO ACCOUNT
 The account above is a member of "CourtTime Demo Club", a fictional club created for review. It has courts, upcoming bookings, other (fictional) members, a message conversation, bulletin posts and hitting-partner posts. No real member data is visible. A brand-new account has no club until a club admin approves it, which is why a demo account is provided.
+
+CLUB ADMIN ACCOUNT
+Club staff use the same app. To see the Admin tab (members, courts, bookings, reported posts), sign in as appreview-admin@courttimeapp.com with password CourtTimeAdmin1!
 
 WHAT TO TRY
 - Book tab: tap an empty slot on the court calendar and confirm to make a booking. Cancel it from Home or More > My Reservations.

@@ -104,6 +104,11 @@ function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + (minutes || 0);
+}
+
 export function ReservationManagementModal({
   isOpen,
   onClose,
@@ -150,7 +155,7 @@ export function ReservationManagementModal({
   // Edit form state
   const [editDate, setEditDate] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
-  const [editDuration, setEditDuration] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
   const [editCourt, setEditCourt] = useState('');
   const [editBookingType, setEditBookingType] = useState('');
   const [editNotes, setEditNotes] = useState('');
@@ -239,7 +244,7 @@ export function ReservationManagementModal({
     if (reservation && isEditing) {
       setEditDate(reservation.bookingDate);
       setEditStartTime(reservation.startTime);
-      setEditDuration((reservation.durationMinutes / 60).toString());
+      setEditEndTime(reservation.endTime);
       setEditCourt(reservation.courtId);
       setEditBookingType(reservation.bookingType || '');
       setEditNotes(reservation.notes || '');
@@ -249,11 +254,11 @@ export function ReservationManagementModal({
 
   // Check for conflicts whenever edit values change; cancel stale in-flight requests
   useEffect(() => {
-    if (!isEditing || !editDate || !editStartTime || !editDuration || !editCourt) return;
+    if (!isEditing || !editDate || !editStartTime || !editEndTime || !editCourt) return;
     const controller = new AbortController();
     checkForConflicts(controller.signal);
     return () => controller.abort();
-  }, [editDate, editStartTime, editDuration, editCourt, isEditing]);
+  }, [editDate, editStartTime, editEndTime, editCourt, isEditing]);
 
   useEffect(() => {
     if (!reservation || !memberSearch.trim() || memberSearch.trim().length < 2) {
@@ -306,16 +311,12 @@ export function ReservationManagementModal({
   };
 
   const checkForConflicts = async (signal?: AbortSignal) => {
-    if (!editDate || !editStartTime || !editDuration || !editCourt) return;
+    if (!editDate || !editStartTime || !editEndTime || !editCourt) return;
+    if (timeToMinutes(editEndTime) <= timeToMinutes(editStartTime)) return;
 
     setIsCheckingConflict(true);
     try {
-      const durationMinutes = Math.round(parseFloat(editDuration) * 60);
-      const [startHours, startMinutes] = editStartTime.split(':').map(Number);
-      const totalMinutes = startHours * 60 + startMinutes + durationMinutes;
-      const endHours = Math.floor(totalMinutes / 60);
-      const endMinutes = totalMinutes % 60;
-      const endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}:00`;
+      const endTime = editEndTime;
 
       const response = await bookingApi.getByCourt(editCourt, editDate);
 
@@ -660,14 +661,15 @@ export function ReservationManagementModal({
       return;
     }
 
+    const durationMinutes = timeToMinutes(editEndTime) - timeToMinutes(editStartTime);
+    if (!editEndTime || durationMinutes <= 0) {
+      toast.error('The end time must be after the start time');
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const durationMinutes = Math.round(parseFloat(editDuration) * 60);
-      const [startHours, startMinutes] = editStartTime.split(':').map(Number);
-      const totalMinutes = startHours * 60 + startMinutes + durationMinutes;
-      const endHours = Math.floor(totalMinutes / 60);
-      const endMinutes = totalMinutes % 60;
-      const endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}:00`;
+      const endTime = editEndTime;
 
       if (settlementStatus === 'unsettled') {
         const response = await bookingApi.updateUnsettled(reservation.id, {
@@ -791,6 +793,22 @@ export function ReservationManagementModal({
   };
 
   const timeSlots = generateTimeSlots();
+  // End times run one slot past the last start, and only those after the chosen start.
+  const lastEndTime = '22:00:00';
+  const endTimeSlots = [...timeSlots, { value: lastEndTime, label: formatTime(lastEndTime) }].filter(
+    (slot) => timeToMinutes(slot.value) > timeToMinutes(editStartTime)
+  );
+
+  // Moving the start keeps the reservation's length, so the end follows it.
+  const handleStartTimeChange = (next: string) => {
+    const length = timeToMinutes(editEndTime) - timeToMinutes(editStartTime);
+    setEditStartTime(next);
+    if (!editEndTime || length <= 0) return;
+    const shifted = Math.min(timeToMinutes(next) + length, timeToMinutes(lastEndTime));
+    const hh = Math.floor(shifted / 60).toString().padStart(2, '0');
+    const mm = (shifted % 60).toString().padStart(2, '0');
+    setEditEndTime(`${hh}:${mm}:00`);
+  };
   const showRosterSection = postPlayEnabled || isPostPlayBooking;
 
   return (
@@ -1284,7 +1302,7 @@ export function ReservationManagementModal({
               {/* Start Time Selection */}
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">Start Time</label>
-                <Select value={editStartTime} onValueChange={setEditStartTime}>
+                <Select value={editStartTime} onValueChange={handleStartTimeChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select time" />
                   </SelectTrigger>
@@ -1298,24 +1316,19 @@ export function ReservationManagementModal({
                 </Select>
               </div>
 
-              {/* Duration Selection */}
+              {/* End Time Selection */}
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Duration</label>
-                <Select value={editDuration} onValueChange={setEditDuration}>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">End Time</label>
+                <Select value={editEndTime} onValueChange={setEditEndTime}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select duration" />
+                    <SelectValue placeholder="Select time" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0.25">15 minutes</SelectItem>
-                    <SelectItem value="0.5">30 minutes</SelectItem>
-                    <SelectItem value="0.75">45 minutes</SelectItem>
-                    <SelectItem value="1">1 hour</SelectItem>
-                    <SelectItem value="1.25">1 hour 15 minutes</SelectItem>
-                    <SelectItem value="1.5">1 hour 30 minutes</SelectItem>
-                    <SelectItem value="1.75">1 hour 45 minutes</SelectItem>
-                    <SelectItem value="2">2 hours</SelectItem>
-                    <SelectItem value="2.5">2 hours 30 minutes</SelectItem>
-                    <SelectItem value="3">3 hours</SelectItem>
+                  <SelectContent className="max-h-[200px]">
+                    {endTimeSlots.map((slot) => (
+                      <SelectItem key={slot.value} value={slot.value}>
+                        {slot.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1364,7 +1377,7 @@ export function ReservationManagementModal({
                 </div>
               )}
 
-              {!hasConflict && !isCheckingConflict && editDate && editStartTime && editDuration && editCourt && (
+              {!hasConflict && !isCheckingConflict && editDate && editStartTime && editEndTime && editCourt && (
                 <div className="bg-green-50 border border-green-200 rounded-md p-3 flex items-start gap-2">
                   <Calendar className="h-4 w-4 text-green-600 mt-0.5" />
                   <p className="text-sm text-green-800">Time slot is available!</p>

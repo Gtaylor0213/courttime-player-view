@@ -4,7 +4,9 @@ What to enter in **App Store Connect → App Privacy** and **Play Console → Da
 
 Derived from what the code actually does, not from intent. Both stores reject listings whose declarations contradict the app's behavior, and a declaration that contradicts `legal/PRIVACY_POLICY.md` is worse than either alone. If you change what the app collects, change this file and the policy in the same commit.
 
-**Verified against the app on 15 Sep 2026.** Re-check before each submission.
+**Verified against the app on 8 Oct 2026** (previously 15 Sep 2026). Re-check before each submission.
+
+Changed in the October check: reports and blocks added under User Content, the photo row and permission string widened to cover club admins, crash data made conditional on Sentry being switched on, and a note on the push token.
 
 ---
 
@@ -40,14 +42,17 @@ For each type: collected, **linked to the user's identity**, **not** used for tr
 ### User Content
 | Data | Linked | Purpose | Why the app has it |
 |---|---|---|---|
-| Photos or Videos | Yes | App Functionality | Profile picture only, chosen by the member from their library |
+| Photos or Videos | Yes | App Functionality | A profile picture chosen by the member from their library. Club admins can also choose a club logo and pro-shop product photos. |
 | Customer Support | Yes | App Functionality | Support correspondence |
-| Other User Content | Yes | App Functionality | Messages between members, bulletin board posts, hitting-partner posts, booking notes, profile bio |
+| Other User Content | Yes | App Functionality | Messages between members, bulletin board posts, hitting-partner posts, booking notes, profile bio. Also reports a member files about a message, post or member (the reason, their note, and a copy of the reported text) and the list of members they have blocked. |
 
 ### Identifiers
 | Data | Linked | Purpose | Why the app has it |
 |---|---|---|---|
-| User ID | Yes | App Functionality | Account identifier; also the push-notification token tied to the account |
+| User ID | Yes | App Functionality | Account identifier |
+| Device ID | Yes | App Functionality | The push-notification token, stored against the account so notifications reach the member's phone |
+
+> **Device ID is a judgment call.** Apple's form describes Device ID as a device-level identifier, and a push token fits that description, so it is declared here. Some apps list the push token under User ID only. Declaring both is the cautious answer and matches the privacy policy, which calls the token "a device-specific identifier".
 
 ### Purchases
 | Data | Linked | Purpose | Why the app has it |
@@ -57,6 +62,9 @@ For each type: collected, **linked to the user's identity**, **not** used for tr
 > Declare **Purchases**, not **Financial Info** — the app records *that* a purchase happened and its amount. The payment instrument is handled entirely by Stripe's hosted checkout.
 
 ### Diagnostics
+
+> **Only declare this section if Sentry is switched on in the build you submit.** As of 8 Oct 2026 it is not: no Sentry DSN is configured, so `mobile/src/utils/sentry.ts` never starts Sentry and the app sends no crash or performance data. If you submit in that state, leave Diagnostics undeclared. If you connect Sentry first, declare the two rows below.
+
 | Data | Linked | Purpose | Why the app has it |
 |---|---|---|---|
 | Crash Data | **No** | App Functionality | Sentry crash reports |
@@ -107,17 +115,18 @@ Every runtime permission, the string the member sees, and when it appears. Apple
 
 | Permission | String | Shown when |
 |---|---|---|
-| Photo library | "CourtTime needs access to your photos to set a profile picture." | Member taps to change their profile picture |
+| Photo library | "CourtTime needs access to your photos so you can choose a profile picture, or a club logo or product photo if you manage a club." | Member taps to change their profile picture; a club admin taps to choose a club logo or product photo |
 | Calendar | "CourtTime can add your confirmed bookings to your calendar when you choose Add to Calendar." | Member taps **Add to Calendar** after booking |
 | Reminders | "CourtTime can add booking reminders to your calendar when you choose Add to Calendar." | Same action |
 | Notifications | System default | After sign-in, to enable booking reminders and club announcements |
 
-All four are specific about what is accessed and why, and none is requested at launch — each follows a member action that explains it. No changes needed.
+All four are specific about what is accessed and why. Photos, calendar and reminders each follow a member action that explains them; the notification prompt appears after sign-in. The build requests nothing else: the camera, microphone and Face ID strings that the image-picker and secure-store plugins add by default are switched off in `mobile/app.json`, because the app uses none of them.
 
 ---
 
 ## Before you submit
 
+- [ ] Decide whether Sentry is on in this build, and declare Diagnostics only if it is
 - [ ] Confirm `sendDefaultPii` is still `false` in `mobile/src/utils/sentry.ts`
 - [ ] Confirm the four legal pages load: `/privacy`, `/terms`, `/support`, `/delete-account`
 - [ ] Enter the privacy policy URL in both consoles: `https://courttimeapp.com/privacy`

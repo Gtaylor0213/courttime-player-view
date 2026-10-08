@@ -42,7 +42,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "CourtTime needs access to your photos to set a profile picture.",
+          "photosPermission": "CourtTime needs access to your photos so you can choose a profile picture, or a club logo or product photo if you manage a club.",
           "cameraPermission": false,
           "microphonePermission": false
         }

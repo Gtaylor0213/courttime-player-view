@@ -18,6 +18,7 @@ By using the Service you agree to the collection and use of information in accor
 - **Booking information** — courts you reserve, dates and times, booking type, optional notes.
 - **Messages** — the text content of messages you send to other facility members through the in-app messaging feature.
 - **Bulletin board content** — posts, sign-ups for drills or events, and waitlist entries.
+- **Reports and blocks** — if you report a message, post or member, we record your report, the reason and any note you add, and a copy of the reported content so it can be reviewed. If you block a member, we record that so their messages and posts stay hidden from you. The member you report or block is not told who did it.
 - **Membership requests** — facilities you request to join and your membership status with each.
 - **Terms acceptance records** — when you accept facility-specific Terms & Conditions, we record the version you accepted, the timestamp, and your IP address.
 - **Purchase records** — where your club charges for something (court fees, guest fees, ball machine rentals or passes, event and drill sign-ups, pro shop orders), we record what you bought, the amount, and whether it was paid. **We never receive or store your card details**: payment is completed on Stripe's own checkout page.

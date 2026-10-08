@@ -22,9 +22,8 @@ If you want a tagline appended to the name (Apple allows this in the **Subtitle*
 Pick one:
 
 - **Book courts, find partners, and stay on top of your tennis & pickleball game.** (78 chars)
-- **Reserve courts in seconds. Find hitting partners. Never miss a reminder.** (72 chars)
 - **Court reservations and community for tennis & pickleball club members.** (70 chars)
-- **Skip the phone calls — reserve courts, message partners, get reminders.** (71 chars)
+- **Skip the phone calls — reserve courts and message partners at your club.** (72 chars)
 
 Recommendation: **first one** — covers both sports and three core benefits.
 
@@ -40,44 +39,46 @@ Use this for time-sensitive callouts later (new features, seasonal events). For 
 
 ## Full description (4000 char limit — both stores accept up to ~4000)
 
-> Lead with the benefit, then the differentiator, then the feature list. Around 1,800 chars below — leaves room to grow if you want to add testimonials, club logos, or specific features.
+> Lead with the benefit, then the differentiator, then the feature list. Around 2,000 chars below.
+>
+> **Checked against the app on 8 Oct 2026.** Every claim below is something the reviewer can see in the demo club. Apple rejects listings that describe features the app does not have (Guideline 2.3.1), so re-check this if features change. Removed in that check: booking reminders before a reservation (the app has the setting but nothing sends them yet), filtering partners by USTA rating or play style (only skill level exists), "cancel without fees" and "any time before it starts" (clubs set their own cancellation rules), and unverifiable lines such as "why members love CourtTime".
 
 ```
 CourtTime is the fastest way to reserve a court at your tennis or pickleball club.
 
-Tired of calling the front desk to find out which courts are open? CourtTime shows real-time availability for every court at your facility, lets you book in two taps, and reminds you before your reservation. Whether you're playing a league match, scheduling a lesson, or grabbing the next open hour, CourtTime puts your club's court schedule in your pocket.
+Tired of calling the front desk to find out which courts are open? CourtTime shows live availability for every court at your facility and lets you book in a couple of taps. Whether you're playing a league match, scheduling a lesson, or grabbing the next open hour, CourtTime puts your club's court schedule in your pocket.
 
-WHY MEMBERS LOVE COURTTIME
+WHAT YOU CAN DO
 
-• See open courts at a glance — no more phone tag.
-• Book the next available 1-hour slot with one tap.
-• Cancel or change your reservation any time before it starts.
-• Get a heads-up notification before your court time begins.
-• Never lose a slot to a no-show again — open spots show up the moment they free up.
+• See every court's schedule at a glance — no more phone tag.
+• Tap an open time to book it, or use Quick Reserve to grab the next open hour today.
+• Edit or cancel a reservation from your phone, within your club's rules.
+• Get notified when a booking is confirmed, changed or cancelled.
+• Add a booking to your phone's calendar in one tap.
 
 FIND HITTING PARTNERS
 
-Looking for a doubles partner or someone at your level? Post what you're looking for, browse other members' posts, and start a conversation directly in the app. Filter by skill level, USTA rating, or play style.
+Looking for a doubles partner or someone at your level? Post what you're looking for, browse other members' posts by skill level, and start a conversation directly in the app.
 
 DRILLS, EVENTS, AND ANNOUNCEMENTS
 
-Your facility's bulletin board is built right in. RSVP for drills and clinics, join waitlists when they fill up, and never miss a tournament announcement. Some drills have gender-restricted sign-ups — your profile preferences are honored automatically.
+Your facility's bulletin board is built right in. Sign up for drills and clinics, join the waitlist when they fill up, and see club announcements as they are posted.
+
+MESSAGES
+
+Message other members of your club one-to-one or in groups. You can report a message or post and block a member at any time.
 
 MULTI-CLUB SUPPORT
 
-Member at more than one facility? Switch between clubs from the header without re-signing in. All your bookings, messages, and announcements are scoped to whichever club you're viewing.
-
-BUILT FOR PLAYERS, NOT JUST ADMINS
-
-CourtTime was built with input from real club members. The Quick Book section surfaces the soonest open slots so you can grab a court without scrolling. Edit a reservation in seconds. Cancel without fees up until your start time. Notification preferences let you silence the categories you don't care about.
+Member at more than one facility? Switch between clubs from the header without signing in again. Your bookings, messages, and announcements follow whichever club you're viewing.
 
 SECURE AND PRIVATE
 
-Your bookings, messages, and profile are visible only to members of the same facility. We never sell your data and never run third-party advertising trackers. Read our full privacy policy at courttimeapp.com/privacy.
+Your bookings, messages, and profile are visible only to members of your facility. We never sell your data and never run third-party advertising trackers. Read our full privacy policy at courttimeapp.com/privacy.
 
 GETTING STARTED
 
-CourtTime is free for members of participating facilities. Your facility administrator will invite you, or you can request membership directly from the app. If your club doesn't use CourtTime yet, ask them to check it out at courttimeapp.com.
+The CourtTime app is free to download and use. Your facility administrator will invite you, or you can request membership from the app. Some clubs charge their own fees for courts, clinics or dues, which are set by the club. If your club doesn't use CourtTime yet, ask them to check it out at courttimeapp.com.
 
 QUESTIONS?
 
@@ -107,7 +108,7 @@ If you want to drop something to make room for `racket`, `match`, or `pro`, the 
 | **Primary category** | Sports |
 | **Secondary category (App Store)** | Lifestyle |
 | **Tags / Genre (Play Store)** | Sports → Tennis (closest match) |
-| **Content rating** | 4+ (App Store) / Everyone (Play Store) |
+| **Content rating** | Set by each store's questionnaire. Answer **yes** to user-generated content and member-to-member messaging; with those, Apple's rating is likely to come out above 4+. |
 
 ---
 
@@ -140,7 +141,7 @@ If you want to drop something to make room for `racket`, `match`, or `pro`, the 
 - **Support URL:** `https://courttimeapp.com/support`
 - **Marketing URL:** `https://courttimeapp.com/about`
 - **Category:** Sports / Lifestyle
-- **Age rating:** complete the questionnaire (you'll likely land at 4+)
+- **Age rating:** complete the questionnaire honestly. The app has messaging between members and member posts, so answer yes to those questions; do not expect 4+.
 
 ### Google Play Console (when you create the app)
 
@@ -152,7 +153,7 @@ If you want to drop something to make room for `racket`, `match`, or `pro`, the 
 - **Phone screenshots:** 2–8 (16:9 or 9:16)
 - **Category:** Sports
 - **Tags:** Tennis (best match)
-- **Content rating:** complete the IARC questionnaire — should land at "Everyone"
+- **Content rating:** complete the IARC questionnaire, answering yes to user-to-user communication and user-generated content
 - **Data Safety form:** required, takes ~30 min — declares what data you collect (cross-reference your Privacy Policy)
 - **Privacy Policy URL:** `https://courttimeapp.com/privacy`
 
@@ -160,9 +161,9 @@ If you want to drop something to make room for `racket`, `match`, or `pro`, the 
 
 ## Things to prep before you submit (not copy, but called out so you don't get rejected)
 
-- A **demo account** for Apple's reviewer to log into. They will not approve an app that requires login without working credentials. Create a `apple-reviewer@courttimeapp.com` test player at one of your facilities and put the password in the **App Review Information** field. Don't use your real account.
-- Real **screenshots** that show actual data, not placeholder text. Reviewers reject apps with empty states or `Lorem ipsum`.
-- A working **`/delete-account`** flow inside the app (we have this on web — confirm the mobile profile screen exposes it before submitting).
+- The **demo account** and the text for the review notes are in [`REVIEW_NOTES.md`](./REVIEW_NOTES.md). Run `npm run seed:review` shortly before submitting so the demo club's bookings are in the future.
+- **Screenshots** are in [`screenshots/ios-6.9/`](./screenshots/ios-6.9/) (five, 1320 × 2868, no transparency).
+- **Account deletion** is in the app under Profile → Delete Account. Test it once on a real device before submitting, then re-run the seed to restore the demo account.
 - The **Render production environment** must be online and reachable when reviewers test. Don't submit during a deploy or migration.
 
 ---

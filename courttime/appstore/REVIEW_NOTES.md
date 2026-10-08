@@ -48,7 +48,7 @@ PRIVACY
 Privacy Policy and Terms of Service are linked on the sign-in screen, the sign-up screen and under Profile > Legal & Support. The app does not track users and contains no advertising or analytics SDKs.
 
 PERMISSIONS
-Photos: only when a member chooses a profile picture (club admins can also choose a club logo or product photo). Calendar and Reminders: only when a member taps "Calendar" on a booking to add it to their calendar. Notifications: optional alerts for booking changes and new messages; the app works fully without them.
+Photos: only when a member chooses a profile picture (club admins can also choose a club logo or product photo). Calendar and Reminders: only when a member taps "Calendar" on a booking to add it to their calendar. Notifications: optional booking reminders (about an hour before a booking), booking changes and new messages; the app works fully without them.
 ```
 
 ## Before pasting

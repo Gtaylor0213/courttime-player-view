@@ -13,6 +13,7 @@ import { testConnection, closePool, getClient } from '../src/database/connection
 import { processBulletinMinParticipantCancellations } from '../src/services/bulletinBoardService';
 import { expireSplitCourtReservations } from '../src/services/splitCourtPaymentService';
 import { sweepPadelDropIns } from '../src/services/padelSocialService';
+import { sendDueBookingReminders } from '../src/services/bookingReminderService';
 
 /** Load `.env`, then fill gaps from `.env.development`, then override with `.env.local`. */
 function loadProjectEnv() {
@@ -369,6 +370,13 @@ async function startServer() {
     const padelDropInSweepInterval = setInterval(() => {
       sweepPadelDropIns().catch((error) => console.error('Padel drop-in sweep failed:', error));
     }, 60 * 1000);
+    const bookingReminderInterval = setInterval(() => {
+      sendDueBookingReminders()
+        .then((sent) => {
+          if (sent > 0) console.log(`🔔 Booking reminders sent: ${sent}`);
+        })
+        .catch((error) => console.error('Booking reminder sweep failed:', error));
+    }, 60 * 1000);
 
     // Handle server errors
     server.on('error', (error: any) => {
@@ -395,6 +403,7 @@ async function startServer() {
         clearInterval(bulletinCancellationInterval);
         clearInterval(splitPaymentExpiryInterval);
         clearInterval(padelDropInSweepInterval);
+        clearInterval(bookingReminderInterval);
 
         try {
           await closePool();

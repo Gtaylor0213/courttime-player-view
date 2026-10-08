@@ -449,13 +449,14 @@ export const notificationService = {
   async notifyBookingReminder(
     userId: string,
     facilityName: string,
+    /** A court name, or a phrase such as "3 courts" when several start together. */
     courtName: string,
-    startTime: Date,
-    hoursUntil: number,
+    /** Start time as the member reads it at the club, e.g. "6:00 PM". */
+    startTimeLabel: string,
     pushContext?: BookingPushContext
   ): Promise<string> {
-    const title = 'Court Session Starting Soon';
-    const message = `Your ${courtName} session at ${facilityName} starts in ${hoursUntil} hour${hoursUntil !== 1 ? 's' : ''}.`;
+    const title = 'Court time starting soon';
+    const message = `Your booking for ${courtName} at ${facilityName} starts at ${startTimeLabel}.`;
 
     return this.createNotification(
       userId,

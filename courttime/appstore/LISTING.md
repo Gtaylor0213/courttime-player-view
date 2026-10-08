@@ -41,7 +41,7 @@ Use this for time-sensitive callouts later (new features, seasonal events). For 
 
 > Lead with the benefit, then the differentiator, then the feature list. Around 2,000 chars below.
 >
-> **Checked against the app on 8 Oct 2026.** Every claim below is something the reviewer can see in the demo club. Apple rejects listings that describe features the app does not have (Guideline 2.3.1), so re-check this if features change. Removed in that check: booking reminders before a reservation (the app has the setting but nothing sends them yet), filtering partners by USTA rating or play style (only skill level exists), "cancel without fees" and "any time before it starts" (clubs set their own cancellation rules), and unverifiable lines such as "why members love CourtTime".
+> **Checked against the app on 8 Oct 2026.** Every claim below is something the reviewer can see in the demo club. Apple rejects listings that describe features the app does not have (Guideline 2.3.1), so re-check this if features change. Removed in that check: filtering partners by USTA rating or play style (only skill level exists), "cancel without fees" and "any time before it starts" (clubs set their own cancellation rules), and unverifiable lines such as "why members love CourtTime". Booking reminders were also removed and then restored once the server began sending them (about an hour before a booking; see `src/services/bookingReminderService.ts`).
 
 ```
 CourtTime is the fastest way to reserve a court at your tennis or pickleball club.
@@ -53,6 +53,7 @@ WHAT YOU CAN DO
 • See every court's schedule at a glance — no more phone tag.
 • Tap an open time to book it, or use Quick Reserve to grab the next open hour today.
 • Edit or cancel a reservation from your phone, within your club's rules.
+• Get a reminder about an hour before your court time.
 • Get notified when a booking is confirmed, changed or cancelled.
 • Add a booking to your phone's calendar in one tap.
 

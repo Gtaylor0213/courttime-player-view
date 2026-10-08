@@ -26,7 +26,8 @@
         "backgroundColor": "#1a5f2a"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.courttime.player"
+      "package": "com.courttime.player",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"

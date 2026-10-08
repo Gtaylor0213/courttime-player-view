@@ -41,7 +41,15 @@ eas credentials
 
 For Play submissions, create a service account in the Google Cloud console, grant it release permissions in Play Console, download the JSON, and save it as `mobile/play-service-account.json`. **That file is gitignored and must stay that way** — it can publish to your Play listing.
 
-### 4. Sentry
+### 4. Android push notifications (Firebase)
+
+Android delivers push through Firebase Cloud Messaging. Without this the Android app runs normally but never receives a push: registration fails quietly and only the in-app bell shows notifications. iOS does not need it.
+
+- Firebase project `courttime-2b262` (console.firebase.google.com), created **with Google Analytics off**. Leave it off: Analytics would add the advertising ID and analytics collection, contradicting the Play Console's Advertising ID and Data safety answers.
+- `mobile/google-services.json` identifies the app to Firebase. It is committed and referenced by `android.googleServicesFile` in `app.json`; it holds no secret.
+- The **FCM V1 service account key** (Firebase → Project settings → Service accounts → Generate new private key) lets Expo's push service send to the app. **It is a secret**: upload it with `eas credentials` (Android → Google Service Account → Push Notifications (FCM V1)) and never commit it.
+
+### 5. Sentry
 
 Create the project at sentry.io, then put these in `mobile/.env` (gitignored):
 

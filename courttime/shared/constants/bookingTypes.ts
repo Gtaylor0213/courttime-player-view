@@ -155,6 +155,12 @@ export const BOOKING_TYPES = {
     bgColor: 'bg-yellow-300',
     rn: { bg: '#ffdf20', border: '#f0b100', text: '#733e0a' },
   },
+  open_play: {
+    label: 'Open Play',
+    color: 'bg-emerald-700 text-emerald-50 border-emerald-800',
+    bgColor: 'bg-emerald-700',
+    rn: { bg: '#007a55', border: '#006045', text: '#ecfdf5' },
+  },
   maintenance: {
     label: 'Maintenance',
     color: 'bg-red-800 text-red-50 border-red-900',
@@ -206,6 +212,7 @@ export const DEER_LAKE_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
   'flex_pickleball',
   'team_pickleball_lesson',
   'private_pickleball_lesson',
+  'open_play',
   'maintenance',
 ] as const;
 

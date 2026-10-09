@@ -583,18 +583,29 @@ export function CourtCalendarView() {
           ? endTotalMinutes
           : startTotalMinutes + (Number.isFinite(fallbackDurationMinutes) ? fallbackDurationMinutes : 15);
         const slotsToFill = Math.max(1, Math.ceil((resolvedEndMinutes - startTotalMinutes) / 15));
+        const slotTimeAt = (totalMinutes: number) => {
+          const slotHours = Math.floor(totalMinutes / 60);
+          const actualMinutes = totalMinutes % 60;
+          const period = slotHours >= 12 ? 'PM' : 'AM';
+          const displayHour = slotHours > 12 ? slotHours - 12 : slotHours === 0 ? 12 : slotHours;
+          return `${displayHour}:${actualMinutes.toString().padStart(2, '0')} ${period}`;
+        };
+
+        // A reservation on a blacked-out court stays on the calendar, greyed out on top of the blackout.
+        let underBlackout = false;
+        for (let m = startTotalMinutes; !isBlocked && !underBlackout && m < resolvedEndMinutes; m += 15) {
+          underBlackout = !!transformedBookings[targetCourtId][slotTimeAt(m)]?.isBlackout;
+        }
 
         let slotStartTotalMinutes = startTotalMinutes;
         while (slotStartTotalMinutes < resolvedEndMinutes) {
-          const slotHours = Math.floor(slotStartTotalMinutes / 60);
-          const actualMinutes = slotStartTotalMinutes % 60;
-          const period = slotHours >= 12 ? 'PM' : 'AM';
-          const displayHour = slotHours > 12 ? slotHours - 12 : slotHours === 0 ? 12 : slotHours;
-          const slotTime = `${displayHour}:${actualMinutes.toString().padStart(2, '0')} ${period}`;
+          const slotTime = slotTimeAt(slotStartTotalMinutes);
           const slotIndex = Math.floor((slotStartTotalMinutes - startTotalMinutes) / 15);
+          const existingSlot = transformedBookings[targetCourtId][slotTime];
 
-          // Don't overwrite real bookings with blocked entries
-          if (transformedBookings[targetCourtId][slotTime]) {
+          // Don't overwrite real bookings with blocked entries. A blackout keeps its
+          // slot too, and carries the reservation it covers.
+          if (existingSlot && !(underBlackout && existingSlot.isBlackout && !existingSlot.coveredReservation)) {
             slotStartTotalMinutes += 15;
             continue;
           }
@@ -616,10 +627,11 @@ export function CourtCalendarView() {
               booking.notes
                 ? String(booking.notes)
                 : booking.walkInName || booking.userName || 'Reserved';
-            transformedBookings[targetCourtId][slotTime] = {
+            const reservationSlot = {
               player: activityLabel,
               duration: `${booking.durationMinutes}min`,
               type: 'reservation',
+              underBlackout,
               bookingId: booking.id,
               userId: booking.userId,
               startTime: booking.startTime,
@@ -642,6 +654,11 @@ export function CourtCalendarView() {
                 facilityName: facilityForBookings?.name
               }
             };
+            if (existingSlot) {
+              existingSlot.coveredReservation = reservationSlot;
+            } else {
+              transformedBookings[targetCourtId][slotTime] = reservationSlot;
+            }
           }
           slotStartTotalMinutes += 15;
         }
@@ -1303,7 +1320,7 @@ export function CourtCalendarView() {
       const courtBookings = bookings[court.id];
       if (!courtBookings) return;
 
-      Object.entries(courtBookings).forEach(([time, booking]: [string, any]) => {
+      const addOverlay = (time: string, booking: any) => {
         if (booking?.isFirstSlot) {
           let startIdx = allTimeSlots.indexOf(time);
           if (startIdx === -1) {
@@ -1329,6 +1346,12 @@ export function CourtCalendarView() {
             booking,
           });
         }
+      };
+
+      Object.entries(courtBookings).forEach(([time, booking]: [string, any]) => {
+        addOverlay(time, booking);
+        // A blackout slot can carry the reservation it covers; that gets its own block.
+        addOverlay(time, booking?.coveredReservation);
       });
     });
 
@@ -2782,6 +2805,8 @@ export function CourtCalendarView() {
         const { booking } = overlay;
         const isBlocked = booking.type === 'blocked';
         const isBlackout = !!booking.isBlackout;
+        // A reservation on a blacked-out court: greyed out, inset so the blackout shows around it.
+        const isUnderBlackout = !!booking.underBlackout;
         const parseMinutes = (timeValue?: string): number | null => {
           if (!timeValue || typeof timeValue !== 'string') return null;
           const [h, m] = timeValue.split(':').map(Number);
@@ -2800,8 +2825,8 @@ export function CourtCalendarView() {
         const top = hasExactRange
           ? (isMobile ? 0 : measuredHeaderHeight) + ((bookingStartMinutes - dayStartMinutesForOverlay) / 30) * effectiveSubSlotHeight + 2
           : (isMobile ? 0 : measuredHeaderHeight) + overlay.startSlotIndex * effectiveSubSlotHeight + 2;
-        const left = timeColOffset + overlay.courtIndex * effectiveCourtWidth + 4;
-        const width = effectiveCourtWidth - 8;
+        const left = timeColOffset + overlay.courtIndex * effectiveCourtWidth + (isUnderBlackout ? 8 : 4);
+        const width = effectiveCourtWidth - (isUnderBlackout ? 16 : 8);
         const rawHeight = hasExactRange
           ? (((bookingEndMinutes - bookingStartMinutes) / 30) * effectiveSubSlotHeight) - 4
           : overlay.slotCount * effectiveSubSlotHeight - 4;
@@ -2809,7 +2834,7 @@ export function CourtCalendarView() {
         const height = Math.max(rawHeight, effectiveSubSlotHeight * 0.85);
         const colorClass = isBlackout
           ? 'bg-red-50 text-red-900 border-red-300'
-          : isBlocked
+          : isBlocked || isUnderBlackout
           ? 'bg-gray-200 text-gray-500 border-gray-300'
           : booking.bookingType
             ? getBookingTypeBadgeColor(booking.bookingType)
@@ -2827,6 +2852,7 @@ export function CourtCalendarView() {
               booking.duration,
               booking.startTime && booking.endTime ? `${booking.startTime.slice(0,5)}–${booking.endTime.slice(0,5)}` : '',
               booking.bookedByStaffName ? `Booked by ${booking.bookedByStaffName}` : '',
+              isUnderBlackout ? 'Court blacked out' : '',
             ].filter(Boolean).join(' · ');
 
         // Vertical-space budget: name gets priority, then the full service/type line, then the
@@ -2881,7 +2907,8 @@ export function CourtCalendarView() {
               height,
               transform: 'none',
               filter: 'none',
-              boxShadow: isBlocked
+              zIndex: isUnderBlackout ? 1 : undefined,
+              boxShadow: isBlocked || isUnderBlackout
                 ? 'none'
                 : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
             }}

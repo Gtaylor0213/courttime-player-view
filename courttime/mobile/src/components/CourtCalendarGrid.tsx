@@ -83,6 +83,8 @@ interface Booking {
   /** A blackout's reason (description, or its type when titled). */
   blackoutReason?: string;
   isBlackout?: boolean;
+  /** A reservation on a blacked-out court: drawn greyed out on top of the blackout. */
+  underBlackout?: boolean;
 }
 
 interface CourtAvailability {
@@ -541,7 +543,13 @@ export function CourtCalendarGrid({
       : [];
     for (const range of blackoutsToBlockedRanges(blackoutList, selectedDate, courts.map((c: any) => c.id))) {
       const existing = bookingsByCourtId.get(range.courtId) || [];
-      existing.push({
+      // The blackout takes the slots (it goes first); a reservation it covers stays visible, greyed out.
+      existing.forEach((b) => {
+        if (b.bookingType !== 'blocked' && bookingsOverlap(b.startTime, b.endTime, range.startTime, range.endTime)) {
+          b.underBlackout = true;
+        }
+      });
+      existing.unshift({
         id: `${range.blackoutId}-blackout-${range.courtId}`,
         courtId: range.courtId,
         bookingDate: selectedDate,
@@ -1003,6 +1011,20 @@ export function CourtCalendarGrid({
     return rowIndex >= startRow && rowIndex <= endRow;
   };
 
+  // A reservation on a blacked-out court, for the rows it covers
+  const reservationUnderBlackout = (courtIndex: number, rowIndex: number): Booking | null => {
+    const rowMinutes = parseTimeToMinutesSafe(timeRows[rowIndex]);
+    if (rowMinutes === null) return null;
+    for (const b of courtData[courtIndex]?.bookings ?? []) {
+      if (!b.underBlackout) continue;
+      const bStart = parseTimeToMinutesSafe(b.startTime);
+      const bEnd = parseTimeToMinutesSafe(b.endTime);
+      if (bStart === null || bEnd === null) continue;
+      if (rowMinutes >= bStart && rowMinutes < bEnd) return b;
+    }
+    return null;
+  };
+
   // Booking block: find first row of a booking to render the label
   const isBookingStart = (courtIndex: number, rowIndex: number): Booking | null => {
     const booking = isBooked(courtIndex, rowIndex);
@@ -1224,14 +1246,32 @@ export function CourtCalendarGrid({
                   // Not-yet-open rows look and behave like past rows (greyed, not bookable).
                   const past = actuallyPast || notYetOpen;
 
+                  // A greyed-out reservation that starts above its blackout still draws over it.
+                  const startsCoveredReservation = courts.some((_, courtIndex) => {
+                    const covered = reservationUnderBlackout(courtIndex, rowIndex);
+                    return !!covered && (rowIndex === 0 || reservationUnderBlackout(courtIndex, rowIndex - 1) !== covered);
+                  });
+
                   return (
-                    <View key={time} style={styles.row}>
+                    <View key={time} style={[styles.row, startsCoveredReservation && styles.rowAboveBlackout]}>
                       {courts.map((court, courtIndex) => {
-                        const booked = isBooked(courtIndex, rowIndex);
+                        // On a blacked-out court the reservation still answers taps; the blackout draws underneath.
+                        const coveredReservation = reservationUnderBlackout(courtIndex, rowIndex);
+                        const booked = coveredReservation ?? isBooked(courtIndex, rowIndex);
                         const isBlockedSlot = booked?.bookingType === 'blocked';
                         const selected = isSelected(courtIndex, rowIndex);
-                        const bookingStart = isBookingStart(courtIndex, rowIndex);
+                        const slotStart = isBookingStart(courtIndex, rowIndex);
+                        const bookingStart = slotStart?.underBlackout ? null : slotStart;
                         const span = bookingStart ? getBookingRowSpan(courtIndex, rowIndex, bookingStart) : 0;
+                        const coveredStart =
+                          coveredReservation &&
+                          (rowIndex === 0 || reservationUnderBlackout(courtIndex, rowIndex - 1) !== coveredReservation)
+                            ? coveredReservation
+                            : null;
+                        let coveredSpan = coveredStart ? 1 : 0;
+                        while (coveredStart && reservationUnderBlackout(courtIndex, rowIndex + coveredSpan) === coveredStart) {
+                          coveredSpan++;
+                        }
                         const fullTimeLabel = formatFullTime(time + ':00');
                         const cellDisabled = isBlockedSlot || (past && !booked);
                         const accessibilityLabel = booked
@@ -1239,7 +1279,7 @@ export function CourtCalendarGrid({
                             ? booked.isBlackout
                               ? `${court.name} at ${fullTimeLabel}. Blacked out: ${booked.blockedLabel || 'Blackout'}${booked.blackoutReason ? `, ${booked.blackoutReason}` : ''}.`
                               : `${court.name} at ${fullTimeLabel}. Unavailable because a related court is booked.`
-                            : `${court.name} at ${fullTimeLabel}. Booked ${bookingStart?.bookingType || booked.bookingType || 'reservation'} from ${formatFullTime(booked.startTime)} to ${formatFullTime(booked.endTime)}.`
+                            : `${court.name} at ${fullTimeLabel}. Booked ${bookingStart?.bookingType || booked.bookingType || 'reservation'} from ${formatFullTime(booked.startTime)} to ${formatFullTime(booked.endTime)}.${coveredReservation ? ' Court blacked out.' : ''}`
                           : notYetOpen
                             ? `${court.name} at ${fullTimeLabel}. Not open for booking yet.`
                           : past
@@ -1367,6 +1407,23 @@ export function CourtCalendarGrid({
                                 </View>
                               );
                             })()}
+                            {coveredStart && (
+                              <View
+                                style={[
+                                  styles.bookingBlock,
+                                  styles.bookingBlockUnderBlackout,
+                                  { height: coveredSpan * ROW_HEIGHT - 2 },
+                                ]}
+                                accessible={false}
+                              >
+                                <Text style={[styles.bookingBlockText, { color: Colors.textMuted }]} numberOfLines={1}>
+                                  {getBookingTypeLabel(coveredStart.bookingType)}
+                                </Text>
+                                <Text style={[styles.bookingBlockTime, { color: Colors.textMuted }]} numberOfLines={1}>
+                                  {formatFullTime(coveredStart.startTime)} - {formatFullTime(coveredStart.endTime)}
+                                </Text>
+                              </View>
+                            )}
                           </View>
                         );
                       })}
@@ -1534,6 +1591,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  rowAboveBlackout: {
+    zIndex: 1,
+  },
   timeLabel: {
     width: TIME_LABEL_WIDTH,
     justifyContent: 'center',
@@ -1599,6 +1659,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
     borderColor: '#D1D5DC',
     opacity: 0.7,
+  },
+  // A reservation on a blacked-out court: greyed out, inset so the blackout shows around it.
+  bookingBlockUnderBlackout: {
+    left: 6,
+    right: 6,
+    backgroundColor: '#E5E7EB',
+    borderColor: '#D1D5DC',
   },
   bookingBlockText: {
     fontSize: 11,

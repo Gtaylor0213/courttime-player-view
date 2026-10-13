@@ -237,6 +237,11 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     mockCourtOverrides = null;
     mockBallMachines = [];
     tree = undefined;
+    // The screen always lands on today, and the mocked court closes at 21:00.
+    // On the real clock, a run after closing (CI is UTC) has no open slots, so
+    // the booking modal never opens. Pin the morning; tests may override.
+    jest.useFakeTimers({ advanceTimers: true });
+    jest.setSystemTime(new Date('2026-05-04T07:00:00'));
     createBookingSpy = jest
       .spyOn(paymentApi.bookings, 'create')
       .mockResolvedValue({ success: true, data: {} });

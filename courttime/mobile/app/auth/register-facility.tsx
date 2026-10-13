@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepBadgeText: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
   },

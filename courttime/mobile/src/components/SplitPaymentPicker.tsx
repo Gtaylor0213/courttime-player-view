@@ -193,7 +193,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   hint: {
@@ -204,7 +203,6 @@ const styles = StyleSheet.create({
   capNotice: {
     fontSize: FontSize.xs,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   resultRow: {

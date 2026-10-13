@@ -333,7 +333,7 @@ function DateField({
         <Text style={[styles.dateText, !value && styles.placeholder]}>{value || 'Any'}</Text>
         {value ? (
           <TouchableOpacity onPress={onClear} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Clear ${label} date`}>
-            <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+            <Ionicons name="close-circle-outline" size={16} color={Colors.textMuted} />
           </TouchableOpacity>
         ) : (
           <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.textMuted} />
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
   tab: { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: BorderRadius.sm },
   tabActive: { backgroundColor: Colors.primary },
-  tabText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  tabText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   tabTextActive: { color: Colors.textInverse },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   searchInput: {
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     gap: Spacing.xs,
   },
-  filterLabel: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary, marginTop: Spacing.xs },
+  filterLabel: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary, marginTop: Spacing.xs },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
   chip: {
     paddingHorizontal: Spacing.sm,
@@ -401,8 +401,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   chipSelected: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
-  chipText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary },
+  chipText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
+  chipTextSelected: { color: Colors.primaryDark },
   dateRow: { flexDirection: 'row', gap: Spacing.sm },
   dateField: { flex: 1 },
   dateButton: {
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   },
   dateText: { flex: 1, fontSize: FontSize.sm, color: Colors.text },
   placeholder: { color: Colors.textMuted },
-  clearText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary, marginTop: Spacing.xs },
+  clearText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.primary, marginTop: Spacing.xs },
   count: { fontSize: FontSize.xs, color: Colors.textMuted },
   card: {
     flexDirection: 'row',
@@ -432,10 +432,10 @@ const styles = StyleSheet.create({
   },
   cardMain: { flex: 1, minWidth: 0, gap: 2 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, flexWrap: 'wrap' },
-  court: { fontSize: FontSize.md, fontFamily: FontFamily.bold, fontWeight: '600', color: Colors.text },
+  court: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
   facility: { fontSize: FontSize.xs, color: Colors.textMuted, flexShrink: 1 },
   meta: { fontSize: FontSize.sm, color: Colors.textSecondary },
   notes: { fontSize: FontSize.xs, color: Colors.textMuted },
   statusBadge: { borderWidth: 1, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
-  statusText: { fontSize: FontSize.xs, fontWeight: '600' },
+  statusText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold },
 });

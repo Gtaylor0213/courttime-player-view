@@ -14,7 +14,7 @@ import { Card } from '../../src/components/Card';
 import { EmptyState } from '../../src/components/EmptyState';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Content Reports');
 
@@ -162,12 +162,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   tabActive: { backgroundColor: Colors.primary },
-  tabText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  tabText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   tabTextActive: { color: Colors.textInverse },
   card: { marginBottom: Spacing.md },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
-  typeBadge: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
-  reasonBadge: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.destructive },
+  typeBadge: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
+  reasonBadge: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.destructive },
   meta: { fontSize: FontSize.sm, color: Colors.textSecondary },
   snapshot: {
     fontSize: FontSize.md,

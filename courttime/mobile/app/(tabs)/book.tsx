@@ -44,7 +44,7 @@ import {
   openStripeCheckout,
   scaleHourlyFeeCents,
 } from '../../src/utils/payments';
-import { Colors, Gradients, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../../src/constants/theme';
+import { Colors, Gradients, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily, Shadows } from '../../src/constants/theme';
 import type { Court } from '../../src/types/database';
 import { sortCourtsForDisplay } from '../../../shared/utils/courtDisplayOrder';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
@@ -1434,6 +1434,7 @@ export default function BookCourtScreen() {
         <View style={styles.dayNavRow}>
           <TouchableOpacity
             style={styles.dayArrow}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={() => stepDate(-1)}
             accessibilityRole="button"
             accessibilityLabel="Previous day"
@@ -1442,11 +1443,12 @@ export default function BookCourtScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.datePill}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={() => setCalendarExpanded(v => !v)}
             accessibilityRole="button"
             accessibilityLabel={`Selected date ${selectedDateLabel}. Tap to ${calendarExpanded ? 'collapse' : 'expand'} calendar.`}
           >
-            <Ionicons name="calendar" size={14} color={Colors.primary} />
+            <Ionicons name="calendar-outline" size={14} color={Colors.primary} />
             <Text style={styles.datePillText}>{selectedDateLabel}</Text>
             <Ionicons
               name={calendarExpanded ? 'chevron-up' : 'chevron-down'}
@@ -1456,6 +1458,7 @@ export default function BookCourtScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.dayArrow}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={() => stepDate(1)}
             accessibilityRole="button"
             accessibilityLabel="Next day"
@@ -1474,6 +1477,7 @@ export default function BookCourtScreen() {
           </Text>
           <TouchableOpacity
             style={styles.compactToolsToggle}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={() => setTopInfoExpanded((value) => !value)}
             accessibilityRole="button"
             accessibilityLabel={`${topInfoExpanded ? 'Hide' : 'Show'} booking tools`}
@@ -1495,7 +1499,7 @@ export default function BookCourtScreen() {
               onPress={() => setShowQuickReserve(true)}
               disabled={!facilityId}
               loading={quickReserving}
-              leftIcon={<Ionicons name="flash" size={14} color={Colors.textInverse} />}
+              leftIcon={<Ionicons name="flash-outline" size={14} color={Colors.textInverse} />}
               style={styles.quickReserveButton}
             />
           </View>
@@ -2059,7 +2063,7 @@ export default function BookCourtScreen() {
             <ScrollView style={{ maxHeight: 250 }}>
               {violations.map((v, i) => (
                 <View key={i} style={styles.violationCard}>
-                  <Ionicons name="alert-circle" size={20} color={Colors.error} />
+                  <Ionicons name="alert-circle-outline" size={20} color={Colors.error} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.violationRuleName}>{v.ruleName}</Text>
                     <Text style={styles.violationMessage}>{v.message}</Text>
@@ -2071,7 +2075,7 @@ export default function BookCourtScreen() {
                   <Text style={[styles.violationSubtitle, { marginTop: Spacing.md }]}>Warnings:</Text>
                   {warnings.map((w, i) => (
                     <View key={`w-${i}`} style={[styles.violationCard, { borderLeftColor: Colors.warning }]}>
-                      <Ionicons name="warning" size={20} color={Colors.warning} />
+                      <Ionicons name="warning-outline" size={20} color={Colors.warning} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.violationRuleName}>{w.ruleName}</Text>
                         <Text style={styles.violationMessage}>{w.message}</Text>
@@ -2188,11 +2192,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.primary + '22',
-    shadowColor: Colors.primaryDark,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 4,
+    ...Shadows.sm,
   },
   dayNavRow: {
     flexDirection: 'row',
@@ -2228,7 +2228,7 @@ const styles = StyleSheet.create({
   datePillText: {
     flex: 1,
     fontSize: FontSize.xs,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
     textAlign: 'center',
   },
@@ -2345,7 +2345,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: FontSize.xl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   modalSummary: {
@@ -2356,7 +2356,7 @@ const styles = StyleSheet.create({
   },
   summaryCourtName: {
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   summaryDate: {
@@ -2366,7 +2366,7 @@ const styles = StyleSheet.create({
   },
   modalLabel: {
     fontSize: FontSize.xs,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -2399,7 +2399,7 @@ const styles = StyleSheet.create({
   recurringSectionLabel: {
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   recurringDaysRow: {
     flexDirection: 'row',
@@ -2423,10 +2423,10 @@ const styles = StyleSheet.create({
   weekChipText: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   weekChipTextSelected: {
-    color: Colors.primary,
+    color: Colors.primaryDark,
   },
   recurringSummaryBox: {
     backgroundColor: Colors.primary + '10',
@@ -2442,8 +2442,8 @@ const styles = StyleSheet.create({
   },
   recurringSummaryTextStrong: {
     fontSize: FontSize.xs,
-    color: Colors.primary,
-    fontWeight: '700',
+    color: Colors.primaryDark,
+    fontFamily: FontFamily.bold,
   },
   typeChip: {
     paddingHorizontal: Spacing.md,
@@ -2462,8 +2462,8 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   typeChipTextSelected: {
-    color: Colors.primary,
-    fontWeight: '600',
+    color: Colors.primaryDark,
+    fontFamily: FontFamily.semiBold,
   },
   courtTypeRow: {
     flexDirection: 'row',
@@ -2541,7 +2541,7 @@ const styles = StyleSheet.create({
   timePickerDividerText: {
     fontSize: FontSize.sm,
     color: Colors.textMuted,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   durationBadge: {
     flexDirection: 'row',
@@ -2556,8 +2556,8 @@ const styles = StyleSheet.create({
   },
   durationText: {
     fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: '600',
+    color: Colors.primaryDark,
+    fontFamily: FontFamily.semiBold,
   },
   confirmButton: {
     alignSelf: 'stretch',
@@ -2581,7 +2581,7 @@ const styles = StyleSheet.create({
   },
   violationRuleName: {
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   violationMessage: {

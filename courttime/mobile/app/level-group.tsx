@@ -841,7 +841,6 @@ const styles = StyleSheet.create({
   groupName: {
     fontSize: FontSize.lg,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.text,
     flexShrink: 1,
   },
@@ -851,18 +850,18 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.surface,
   },
-  badgeText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  badgeText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   badgeSm: {
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.surface,
   },
-  badgeSmText: { fontSize: 10, fontWeight: '600', color: Colors.textSecondary },
+  badgeSmText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
 
   emptyInline: { alignItems: 'center', paddingVertical: Spacing.lg, gap: Spacing.xs },
   emptyInlineText: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  emptyTitle: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  emptyTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   emptyDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
 
   memberRow: {
@@ -882,9 +881,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: Colors.primary, fontFamily: FontFamily.bold, fontWeight: '700', fontSize: FontSize.xs },
+  avatarText: { color: Colors.primaryDark, fontFamily: FontFamily.bold, fontSize: FontSize.xs },
   memberText: { flex: 1, minWidth: 0 },
-  memberName: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, fontWeight: '600', color: Colors.text },
+  memberName: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
   memberSkill: { fontSize: FontSize.xs, color: Colors.textSecondary },
   iconButton: {
     width: TouchTarget.min,
@@ -921,7 +920,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     minHeight: TouchTarget.min,
   },
-  primaryButtonText: { color: Colors.textInverse, fontWeight: '700', fontSize: FontSize.sm },
+  primaryButtonText: { color: Colors.textInverse, fontFamily: FontFamily.bold, fontSize: FontSize.sm },
   outlineButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -933,8 +932,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: Colors.card,
   },
-  outlineButtonText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.text },
-  linkText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  outlineButtonText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.text },
+  linkText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   buttonDisabled: { opacity: 0.4 },
 
   selectionBar: {
@@ -949,7 +948,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
-  selectionText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text, flex: 1 },
+  selectionText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text, flex: 1 },
 
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   rankBubble: {
@@ -960,9 +959,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rankText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  rankText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   groupNameButton: { flex: 1, minWidth: 0 },
-  groupTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, fontWeight: '700', color: Colors.text, flexShrink: 1 },
+  groupTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, flexShrink: 1 },
   groupTools: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -973,7 +972,7 @@ const styles = StyleSheet.create({
   },
   visibilityWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
   toolButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: 6 },
-  toolButtonText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.primary },
+  toolButtonText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.primary },
   groupBody: { gap: 6 },
   dropHint: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center', paddingVertical: Spacing.md },
 
@@ -989,7 +988,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
   },
   playerRowSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '10' },
-  playerName: { flex: 1, minWidth: 0, fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  playerName: { flex: 1, minWidth: 0, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
 
   sheetOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   sheet: {
@@ -1000,7 +999,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
     gap: 2,
   },
-  sheetTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
+  sheetTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: Spacing.sm },
   sheetSection: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: Spacing.sm, marginBottom: 2 },
   sheetOption: {
     flexDirection: 'row',

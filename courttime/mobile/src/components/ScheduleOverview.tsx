@@ -364,7 +364,6 @@ const styles = StyleSheet.create({
   modeChipTextActive: {
     color: Colors.textInverse,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
   },
   navRow: {
     flexDirection: 'row',
@@ -375,7 +374,6 @@ const styles = StyleSheet.create({
   navTitle: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.text,
   },
   loading: {
@@ -405,7 +403,6 @@ const styles = StyleSheet.create({
   agendaDayLabel: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   agendaCount: {
@@ -458,6 +455,5 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.primary,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
   },
 });

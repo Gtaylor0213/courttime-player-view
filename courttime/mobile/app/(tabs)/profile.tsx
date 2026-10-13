@@ -25,7 +25,7 @@ import { useRouter } from 'expo-router';
 import { showAlert } from '../../src/utils/alert';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import type { PlayerProfile } from '../../src/types/database';
 import { CachedImage } from '../../src/components/CachedImage';
 import { FacilityLockoutRow } from '../../src/components/StrikeLockoutBanner';
@@ -710,7 +710,7 @@ export default function ProfileScreen() {
             <View style={{ padding: Spacing.lg, alignItems: 'center' }}>
               <Text style={{ color: Colors.textMuted, fontSize: FontSize.sm }}>You're not a member of any facility yet.</Text>
               <TouchableOpacity onPress={() => setShowFindFacility(true)} style={{ marginTop: Spacing.sm }} accessibilityRole="button" accessibilityLabel="Request a facility to join">
-                <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' }}>Request a facility</Text>
+                <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold }}>Request a facility</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -719,10 +719,10 @@ export default function ProfileScreen() {
             {facilities.map((fac, idx) => (
               <View key={fac.id} style={[styles.detailRow, idx === facilities.length - 1 && { borderBottomWidth: 0 }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: Colors.text }}>{fac.name}</Text>
+                  <Text style={{ fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text }}>{fac.name}</Text>
                 </View>
                 <TouchableOpacity onPress={() => handleLeaveFacility(fac.id, fac.name)} accessibilityRole="button" accessibilityLabel={`Leave ${fac.name}`}>
-                  <Text style={{ color: Colors.error, fontSize: FontSize.xs, fontWeight: '600' }}>Leave</Text>
+                  <Text style={{ color: Colors.error, fontSize: FontSize.xs, fontFamily: FontFamily.semiBold }}>Leave</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -732,7 +732,7 @@ export default function ProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel="Request a facility to join"
             >
-              <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' }}>Request a facility</Text>
+              <Text style={{ color: Colors.primary, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold }}>Request a facility</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -768,7 +768,7 @@ export default function ProfileScreen() {
               renderItem={({ item }) => (
                 <View style={{ backgroundColor: Colors.card, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1, marginRight: Spacing.md }}>
-                    <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: Colors.text }}>{item.name}</Text>
+                    <Text style={{ fontSize: FontSize.md, fontFamily: FontFamily.semiBold, color: Colors.text }}>{item.name}</Text>
                     {item.city && item.state && (
                       <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 }}>{item.city}, {item.state}</Text>
                     )}
@@ -780,7 +780,7 @@ export default function ProfileScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Request to join ${item.name}`}
                   >
-                    <Text style={{ color: Colors.textInverse, fontSize: FontSize.xs, fontWeight: '600' }}>
+                    <Text style={{ color: Colors.textInverse, fontSize: FontSize.xs, fontFamily: FontFamily.semiBold }}>
                       {requestingJoin === item.id ? 'Sending...' : 'Request to Join'}
                     </Text>
                   </TouchableOpacity>
@@ -819,7 +819,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={{ padding: Spacing.md, flex: 1 }}>
-            <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: Colors.text }}>
+            <Text style={{ fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text }}>
               {joinFacilityDraft?.name}
             </Text>
             {joinTerms && (
@@ -888,7 +888,7 @@ export default function ProfileScreen() {
                 style={{
                   width: 22,
                   height: 22,
-                  borderRadius: 6,
+                  borderRadius: BorderRadius.sm,
                   borderWidth: 2,
                   borderColor: termsAccepted ? Colors.primary : Colors.border,
                   backgroundColor: termsAccepted ? Colors.primary : Colors.card,
@@ -919,7 +919,7 @@ export default function ProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel={joinFacilityDraft ? `Accept terms and request to join ${joinFacilityDraft.name}` : 'Accept terms and request to join'}
             >
-              <Text style={{ color: Colors.textInverse, fontSize: FontSize.sm, fontWeight: '700' }}>
+              <Text style={{ color: Colors.textInverse, fontSize: FontSize.sm, fontFamily: FontFamily.bold }}>
                 {joinFacilityDraft && requestingJoin === joinFacilityDraft.id ? 'Sending...' : 'Accept & Request to Join'}
               </Text>
             </TouchableOpacity>
@@ -954,8 +954,8 @@ export default function ProfileScreen() {
             {strikes.map((strike: any, idx: number) => (
               <View key={strike.id || idx} style={[styles.detailRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-                  <Ionicons name="alert-circle" size={16} color={Colors.error} />
-                  <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: Colors.text }}>
+                  <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
+                  <Text style={{ fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text }}>
                     {strike.strike_type || strike.strikeType || 'Violation'}
                   </Text>
                 </View>
@@ -1190,11 +1190,11 @@ const styles = StyleSheet.create({
   avatarText: {
     color: Colors.textInverse,
     fontSize: FontSize.xxl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
   },
   name: {
     fontSize: FontSize.xl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginBottom: Spacing.xs,
   },
@@ -1210,9 +1210,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   skillText: {
-    color: Colors.primary,
+    color: Colors.primaryDark,
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   editButton: {
     marginTop: Spacing.md,
@@ -1224,7 +1224,7 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: Colors.textInverse,
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   statsRow: {
     flexDirection: 'row',
@@ -1238,7 +1238,7 @@ const styles = StyleSheet.create({
   },
   statNumber: {
     fontSize: FontSize.xl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.primary,
   },
   statLabel: {
@@ -1255,7 +1255,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginBottom: Spacing.sm,
   },
@@ -1283,7 +1283,7 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: FontSize.sm,
     color: Colors.text,
-    fontWeight: '500',
+    fontFamily: FontFamily.medium,
     flexShrink: 1,
     textAlign: 'right',
     marginLeft: Spacing.md,
@@ -1318,7 +1318,7 @@ const styles = StyleSheet.create({
   },
   settingsRowTitle: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   settingsRowDescription: {
@@ -1333,7 +1333,7 @@ const styles = StyleSheet.create({
   deleteAccountText: {
     fontSize: FontSize.md,
     color: Colors.error,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   deleteAccountHint: {
     fontSize: FontSize.xs,
@@ -1352,7 +1352,7 @@ const styles = StyleSheet.create({
   logoutText: {
     color: Colors.error,
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   // ── Edit Mode ──
   editHeader: {
@@ -1367,7 +1367,7 @@ const styles = StyleSheet.create({
   },
   editTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   cancelText: {
@@ -1377,7 +1377,7 @@ const styles = StyleSheet.create({
   saveText: {
     fontSize: FontSize.md,
     color: Colors.primary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   editAvatarSection: {
     alignItems: 'center',
@@ -1387,7 +1387,7 @@ const styles = StyleSheet.create({
   changePhotoText: {
     color: Colors.primary,
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     marginTop: Spacing.sm,
   },
   formSection: {
@@ -1395,7 +1395,7 @@ const styles = StyleSheet.create({
   },
   formSectionTitle: {
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginBottom: Spacing.md,
     textTransform: 'uppercase',
@@ -1415,7 +1415,7 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: FontFamily.medium,
     marginBottom: Spacing.xs,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -1471,7 +1471,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   chipTextSelected: {
-    color: Colors.primary,
-    fontWeight: '600',
+    color: Colors.primaryDark,
+    fontFamily: FontFamily.semiBold,
   },
 });

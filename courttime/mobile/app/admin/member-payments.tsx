@@ -54,7 +54,7 @@ import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 import { PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Member Payments');
 
@@ -531,33 +531,33 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.xs },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: Spacing.xs },
   muted: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 4 },
   warn: { fontSize: FontSize.xs, color: Colors.warning, marginTop: 4 },
   empty: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: Spacing.sm },
-  link: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
+  link: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.primary },
   badge: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
   badgeOk: { backgroundColor: Colors.success + '15', borderColor: Colors.success },
   badgeText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  badgeOkText: { color: Colors.success, fontWeight: '600' },
+  badgeOkText: { color: Colors.success, fontFamily: FontFamily.semiBold },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingVertical: Spacing.sm, marginTop: Spacing.xs },
   rowMain: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  rowTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   rowMeta: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.sm, paddingVertical: 4 },
   k: { fontSize: FontSize.xs, color: Colors.textSecondary, flexShrink: 1 },
-  v: { fontSize: FontSize.sm, color: Colors.text, fontWeight: '600', textAlign: 'right', flexShrink: 1 },
+  v: { fontSize: FontSize.sm, color: Colors.text, fontFamily: FontFamily.semiBold, textAlign: 'right', flexShrink: 1 },
   actions: { gap: Spacing.sm, marginTop: Spacing.sm },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6, marginTop: Spacing.sm },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6, marginTop: Spacing.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
   chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 6, backgroundColor: Colors.surface },
   chipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
   chipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary, fontWeight: '700' },
+  chipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   multiline: { minHeight: 70, textAlignVertical: 'top' },
   modal: { flex: 1, backgroundColor: Colors.background },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
   modalCancel: { color: Colors.textSecondary, fontSize: FontSize.md },
-  modalTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
-  modalSave: { color: Colors.primary, fontSize: FontSize.md, fontWeight: '700' },
+  modalTitle: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text },
+  modalSave: { color: Colors.primary, fontSize: FontSize.md, fontFamily: FontFamily.bold },
 });

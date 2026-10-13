@@ -75,7 +75,6 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   rowDescription: {

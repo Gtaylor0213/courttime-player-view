@@ -201,7 +201,7 @@ export default function ClubInfoScreen() {
   if (authLoading || loading) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
+        <Stack.Screen options={{ title: 'Club Info' }} />
         <View style={styles.loadingWrap}>
           <CardSkeleton count={4} />
         </View>
@@ -212,7 +212,7 @@ export default function ClubInfoScreen() {
   if (!resolvedFacilityId) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
+        <Stack.Screen options={{ title: 'Club Info' }} />
         <EmptyState
           icon="business-outline"
           title="You're not a member of a club yet"
@@ -227,7 +227,7 @@ export default function ClubInfoScreen() {
   if (!facility) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Club Info', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
+        <Stack.Screen options={{ title: 'Club Info' }} />
         <EmptyState
           icon={notFound ? 'search-outline' : 'alert-circle-outline'}
           title={notFound ? 'No facility found' : 'Could not load club info'}
@@ -262,7 +262,7 @@ export default function ClubInfoScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: facility.name, headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.textInverse }} />
+      <Stack.Screen options={{ title: facility.name }} />
       <ScrollView
         style={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
@@ -510,7 +510,6 @@ const styles = StyleSheet.create({
   ruleLabel: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   ruleValue: {
@@ -532,7 +531,6 @@ const styles = StyleSheet.create({
   peakHeading: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   peakDetail: {

@@ -24,7 +24,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Club Policies');
 
@@ -356,15 +356,15 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: 'row', gap: Spacing.xs, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
   tabChip: { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
   tabChipSelected: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
-  tabText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
-  tabTextSelected: { color: Colors.primary },
+  tabText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
+  tabTextSelected: { color: Colors.primaryDark },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl * 2 },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
-  name: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
+  name: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   muted: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6 },
-  link: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600', marginTop: Spacing.xs },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6 },
+  link: { fontSize: FontSize.sm, color: Colors.primary, fontFamily: FontFamily.semiBold, marginTop: Spacing.xs },
   preview: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 4, lineHeight: 18 },
   editor: { minHeight: 220, textAlignVertical: 'top' },
   bulkEditor: { minHeight: 120, textAlignVertical: 'top' },

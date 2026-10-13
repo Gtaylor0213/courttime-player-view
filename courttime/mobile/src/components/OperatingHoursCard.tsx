@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors, Spacing, FontSize } from '../constants/theme';
+import { Colors, Spacing, FontSize, FontFamily, BorderRadius } from '../constants/theme';
 import {
   OPERATING_DAYS_MONDAY_FIRST,
   getTodayHoursMessage,
@@ -51,7 +51,7 @@ export function OperatingHoursCard({ operatingHours, timezone }: OperatingHoursC
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: BorderRadius.xl,
     overflow: 'hidden',
   },
   todayHoursText: {
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
     width: 40,
   },

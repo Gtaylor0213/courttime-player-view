@@ -12,7 +12,7 @@ import { setToken } from '../../src/api/client';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
-import { Colors, FontSize, Spacing } from '../../src/constants/theme';
+import { Colors, FontSize, Spacing, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Register Facility Complete');
@@ -85,7 +85,7 @@ export default function RegisterFacilityCompleteScreen() {
 
           {phase === 'success' ? (
             <>
-              <Ionicons name="checkmark-circle" size={52} color={Colors.success} style={styles.icon} />
+              <Ionicons name="checkmark-circle-outline" size={52} color={Colors.success} style={styles.icon} />
               <Text style={styles.title}>Facility registered</Text>
               <Text style={styles.subtitle}>Opening your admin dashboard…</Text>
             </>
@@ -93,7 +93,7 @@ export default function RegisterFacilityCompleteScreen() {
 
           {phase === 'error' ? (
             <>
-              <Ionicons name="alert-circle" size={52} color={Colors.error} style={styles.icon} />
+              <Ionicons name="alert-circle-outline" size={52} color={Colors.error} style={styles.icon} />
               <Text style={styles.title}>Could not finish sign-in</Text>
               <Text style={styles.subtitle}>{errorMessage}</Text>
               <Button
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     textAlign: 'center',
     marginBottom: Spacing.sm,

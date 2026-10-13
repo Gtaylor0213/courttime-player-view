@@ -16,7 +16,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Ball Machine');
 
@@ -336,10 +336,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl * 2 },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.xs },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: Spacing.xs },
   muted: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 4, marginTop: Spacing.xs },
-  name: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 4, marginTop: Spacing.xs },
+  name: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
   row: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
   actions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 6, backgroundColor: Colors.surface },
   chipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
   chipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary, fontWeight: '700' },
+  chipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   holder: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingVertical: Spacing.sm },
-  revoke: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.error },
+  revoke: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.error },
 });

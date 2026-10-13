@@ -246,6 +246,7 @@ export default function ProShopScreen() {
                 <View style={styles.qtyRow}>
                   <TouchableOpacity
                     style={styles.qtyButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     onPress={() => adjust(product, -1)}
                     disabled={qty === 0}
                     accessibilityRole="button"
@@ -260,6 +261,7 @@ export default function ProShopScreen() {
                   <Text style={styles.qtyValue}>{qty}</Text>
                   <TouchableOpacity
                     style={styles.qtyButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     onPress={() => adjust(product, 1)}
                     accessibilityRole="button"
                     accessibilityLabel={`Add one ${product.name}`}
@@ -341,14 +343,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   description: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   price: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.primary,
     marginTop: 4,
   },
@@ -363,9 +363,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary + '10', borderWidth: 1, borderColor: Colors.primary + '44',
     borderRadius: BorderRadius.md, padding: Spacing.md,
   },
-  noticeTitle: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  noticeTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   noticeText: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  noticeLink: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
+  noticeLink: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.primary },
   lowStock: { fontSize: FontSize.xs, color: Colors.warning, marginTop: 2 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   qtyButton: {
@@ -387,7 +387,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.text,
   },
   orderRow: {
@@ -420,7 +419,6 @@ const styles = StyleSheet.create({
   basketTotal: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.text,
   },
   checkoutButton: {
@@ -432,7 +430,6 @@ const styles = StyleSheet.create({
   checkoutText: {
     color: Colors.textInverse,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     fontSize: FontSize.sm,
   },
 });

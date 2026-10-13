@@ -20,7 +20,7 @@ import {
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily, Palette } from '../constants/theme';
 import type { Court } from '../types/database';
 import { BookingSkeleton } from './LoadingSkeleton';
 import { EmptyState } from './EmptyState';
@@ -35,7 +35,7 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TIME_LABEL_WIDTH = 46;
 const ROW_HEIGHT = 48;
 /** Blackout block text (web: text-red-900). */
-const BLACKOUT_TEXT = '#7F1D1D';
+const BLACKOUT_TEXT = Palette.red900;
 import { DEFAULT_BOOKING_DURATION_MINUTES, getBookingTypeLabel, getBookingTypeRNColors } from '../../../shared/constants/bookingTypes';
 import { blackoutsToBlockedRanges } from '../../../shared/utils/blackoutSlots';
 import { isPeakSlot } from '../../../shared/utils/courtTypeFilter';
@@ -1501,7 +1501,7 @@ const styles = StyleSheet.create({
   pageText: {
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   pageIndicatorRight: {
     flexDirection: 'row',
@@ -1513,13 +1513,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    borderColor: '#DC2626',
-    backgroundColor: '#FEE2E2',
+    borderColor: Palette.red600,
+    backgroundColor: Palette.red100,
   },
   nowButtonText: {
     fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: '#DC2626',
+    fontFamily: FontFamily.bold,
+    color: Palette.red700,
   },
 
   // Header
@@ -1557,7 +1557,7 @@ const styles = StyleSheet.create({
   },
   courtHeaderText: {
     fontSize: FontSize.xs,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   courtHeaderMeta: {
@@ -1603,7 +1603,7 @@ const styles = StyleSheet.create({
   timeLabelText: {
     fontSize: 11,
     color: Colors.textSecondary,
-    fontWeight: '500',
+    fontFamily: FontFamily.medium,
     textAlign: 'center',
   },
   pastText: {
@@ -1615,18 +1615,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Past slots (web: bg-gray-100)
   cellPast: {
-    backgroundColor: Colors.borderLight + '80',
+    backgroundColor: Colors.borderLight,
   },
   // Peak hours (web: bg-purple-50)
   cellPeak: {
-    backgroundColor: '#FAF5FF',
+    backgroundColor: Palette.purple50,
   },
   cellBooked: {
     backgroundColor: 'transparent',
   },
   cellBlocked: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: Palette.gray200,
   },
   cellSelected: {
     backgroundColor: Colors.primary + '25',
@@ -1652,24 +1653,24 @@ const styles = StyleSheet.create({
   },
   // Blackouts read like a booking (full opacity, name + reason) in a red "closed" tint (web: bg-red-50 / border-red-300).
   bookingBlockBlackout: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FCA5A5',
+    backgroundColor: Palette.red50,
+    borderColor: Palette.red300,
   },
   bookingBlockBlocked: {
-    backgroundColor: '#E5E7EB',
-    borderColor: '#D1D5DC',
+    backgroundColor: Palette.gray200,
+    borderColor: Palette.gray300,
     opacity: 0.7,
   },
   // A reservation on a blacked-out court: greyed out, inset so the blackout shows around it.
   bookingBlockUnderBlackout: {
     left: 6,
     right: 6,
-    backgroundColor: '#E5E7EB',
-    borderColor: '#D1D5DC',
+    backgroundColor: Palette.gray200,
+    borderColor: Palette.gray300,
   },
   bookingBlockText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     textAlign: 'center',
   },
   bookingBlockTime: {
@@ -1701,8 +1702,8 @@ const styles = StyleSheet.create({
   },
   selectionPreviewText: {
     fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: '600',
+    color: Colors.primaryDark,
+    fontFamily: FontFamily.semiBold,
   },
   currentTimeLineWrap: {
     position: 'absolute',
@@ -1716,13 +1717,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#DC2626',
+    backgroundColor: Palette.red600,
     marginLeft: 2,
     marginRight: 4,
   },
   currentTimeLine: {
     flex: 1,
     height: 2,
-    backgroundColor: '#DC2626',
+    backgroundColor: Palette.red600,
   },
 });

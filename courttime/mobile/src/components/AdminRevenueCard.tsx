@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
 import {
   type AdminRevenueData,
   REVENUE_BREAKDOWN_ROWS,
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
   cardSubtitle: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   loadingRow: {
     flexDirection: 'row',
@@ -137,8 +137,8 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: FontSize.sm, color: Colors.textSecondary },
   errorText: { fontSize: FontSize.sm, color: Colors.error },
   totalAmount: {
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: FontSize.title,
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginBottom: Spacing.md,
   },
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   breakdownLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  breakdownValue: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  breakdownValue: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   toggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     marginTop: Spacing.xs,
   },
-  toggleText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '700' },
+  toggleText: { fontSize: FontSize.sm, color: Colors.primary, fontFamily: FontFamily.bold },
   transactions: {
     marginTop: Spacing.sm,
     borderTopWidth: 1,
@@ -183,9 +183,9 @@ const styles = StyleSheet.create({
   },
   txMain: { flex: 1, paddingRight: Spacing.sm },
   txMeta: { alignItems: 'flex-end' },
-  txTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  txTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
   txMember: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  txAmount: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.primary },
+  txAmount: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.primary },
   txDate: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   emptyText: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center', paddingVertical: Spacing.sm },
 });

@@ -29,7 +29,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily, Palette } from '../../src/constants/theme';
 import {
   buildBookingRulesPayload,
   formatTime12,
@@ -46,7 +46,7 @@ import {
 export const ErrorBoundary = createRouteErrorBoundary('Admin Booking Rules');
 
 /** Web's rule switches are emerald-600 when on. */
-const SWITCH_ON = '#059669';
+const SWITCH_ON = Colors.primary;
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const HALF_HOUR_TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 const MAX_ACCOUNTS_DESCRIPTION =
@@ -120,7 +120,7 @@ function HoursInput({ minutes, onChangeMinutes, disabled, label }: { minutes: st
 function InfoBox({ text }: { text: string }) {
   return (
     <View style={styles.info}>
-      <Ionicons name="information-circle-outline" size={20} color="#16A34A" />
+      <Ionicons name="information-circle-outline" size={20} color={Colors.primaryLight} />
       <Text style={styles.infoText}>{text}</Text>
     </View>
   );
@@ -602,14 +602,14 @@ const styles = StyleSheet.create({
   cardBody: { marginTop: Spacing.md, gap: Spacing.md },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 },
-  cardTitle: { fontSize: FontSize.lg, fontWeight: '600', color: Colors.text, flexShrink: 1 },
+  cardTitle: { fontSize: FontSize.lg, fontFamily: FontFamily.semiBold, color: Colors.text, flexShrink: 1 },
   cardDescription: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 4 },
-  subheading: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
-  info: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', borderRadius: BorderRadius.md, padding: Spacing.sm },
-  infoText: { flex: 1, fontSize: FontSize.sm, color: '#166534' },
+  subheading: { fontSize: FontSize.md, fontFamily: FontFamily.semiBold, color: Colors.text },
+  info: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Palette.green50, borderWidth: 1, borderColor: Palette.green200, borderRadius: BorderRadius.md, padding: Spacing.sm },
+  infoText: { flex: 1, fontSize: FontSize.sm, color: Palette.green800 },
   field: { gap: Spacing.xs },
-  label: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
-  labelSmall: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.text },
+  label: { fontSize: FontSize.sm, fontFamily: FontFamily.medium, color: Colors.text },
+  labelSmall: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.text },
   caption: { fontSize: FontSize.xs, color: Colors.textMuted },
   toggleInput: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   numberInput: { width: 84, paddingVertical: 8, textAlign: 'left' },
@@ -623,8 +623,8 @@ const styles = StyleSheet.create({
   segment: { flexDirection: 'row', borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, overflow: 'hidden' },
   segmentOption: { flex: 1, paddingVertical: Spacing.sm, alignItems: 'center', backgroundColor: Colors.card },
   segmentSelected: { backgroundColor: Colors.primary + '15' },
-  segmentText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
-  segmentTextSelected: { color: Colors.primary },
+  segmentText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
+  segmentTextSelected: { color: Colors.primaryDark },
   dimmed: { opacity: 0.6 },
   slot: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.sm, gap: Spacing.sm },
   slotTimes: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.sm },

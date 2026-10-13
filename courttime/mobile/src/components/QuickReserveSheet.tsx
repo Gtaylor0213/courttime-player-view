@@ -98,7 +98,7 @@ export function QuickReserveSheet({ visible, courts, onClose, onPickSlot, onQuic
             title={quickBooking ? 'Finding a court…' : 'Book next open hour today'}
             onPress={onQuickBook}
             loading={quickBooking}
-            leftIcon={<Ionicons name="flash" size={14} color={Colors.textInverse} />}
+            leftIcon={<Ionicons name="flash-outline" size={14} color={Colors.textInverse} />}
             accessibilityLabel="Book the next open hour today"
             style={styles.quickButton}
           />
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   sheet: { backgroundColor: Colors.card, borderTopLeftRadius: BorderRadius.lg, borderTopRightRadius: BorderRadius.lg, maxHeight: '90%', paddingBottom: Spacing.lg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, paddingBottom: Spacing.sm },
-  title: { fontSize: FontSize.xl, fontFamily: FontFamily.bold, fontWeight: '700', color: Colors.text },
+  title: { fontSize: FontSize.xl, fontFamily: FontFamily.bold, color: Colors.text },
   quickButton: { marginHorizontal: Spacing.lg, marginBottom: Spacing.sm },
   // flexShrink: 0 — otherwise a long court list squeezes the day row down to nothing.
   chipScroll: { flexGrow: 0, flexShrink: 0 },
@@ -194,9 +194,9 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
   chipLarge: { paddingHorizontal: Spacing.lg, paddingVertical: 10 },
   chipSelected: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
-  chipText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  chipText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   chipTextLarge: { fontSize: FontSize.sm },
-  chipTextSelected: { color: Colors.primary },
+  chipTextSelected: { color: Colors.primaryDark },
   // flexShrink, not flex: 1 — content-sized sheet with a maxHeight (see EditBookingModal).
   scroll: { flexGrow: 0, flexShrink: 1 },
   scrollContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.sm },
@@ -204,10 +204,10 @@ const styles = StyleSheet.create({
   courtCard: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.md, gap: Spacing.sm },
   courtHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
   courtHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  courtName: { fontSize: FontSize.md, fontFamily: FontFamily.bold, fontWeight: '600', color: Colors.text },
+  courtName: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
   courtMeta: { fontSize: FontSize.xs, color: Colors.textMuted },
   courtEmpty: { fontSize: FontSize.xs, color: Colors.textMuted },
   slotRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   slot: { paddingHorizontal: Spacing.sm, paddingVertical: 6, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.primary + '55', backgroundColor: Colors.primary + '10' },
-  slotText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.primary },
+  slotText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.primaryDark },
 });

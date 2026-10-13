@@ -5,7 +5,7 @@
 
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily, Shadows } from '../constants/theme';
 import { Button } from './Button';
 
 interface EmptyStateProps {
@@ -20,7 +20,7 @@ export function EmptyState({ icon, title, description, actionLabel, onAction }: 
   return (
     <View style={styles.container}>
       <View style={styles.iconRing}>
-        <Ionicons name={icon} size={40} color={Colors.primary} />
+        <Ionicons name={icon} size={32} color={Colors.primaryLight} />
       </View>
       <Text style={styles.title}>{title}</Text>
       {description && <Text style={styles.description}>{description}</Text>}
@@ -41,31 +41,27 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
+    borderColor: Colors.border,
+    ...Shadows.sm,
   },
   iconRing: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: Colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xs,
   },
   title: {
-    fontSize: FontSize.xl,
-    fontFamily: FontFamily.bold,
+    fontSize: FontSize.lg,
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
     textAlign: 'center',
   },
   description: {
     fontSize: FontSize.sm,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     fontFamily: FontFamily.regular,
     textAlign: 'center',
     lineHeight: 22,

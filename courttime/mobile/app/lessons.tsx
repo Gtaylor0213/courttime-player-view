@@ -249,7 +249,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.text,
   },
   typeBadge: {
@@ -273,7 +272,6 @@ const styles = StyleSheet.create({
   price: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.primary,
   },
   free: { fontSize: FontSize.sm, color: Colors.textMuted },
@@ -285,8 +283,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
   },
-  buttonText: { color: Colors.textInverse, fontFamily: FontFamily.bold, fontWeight: '700', fontSize: FontSize.sm },
+  buttonText: { color: Colors.textInverse, fontFamily: FontFamily.bold, fontSize: FontSize.sm },
   buttonCancel: { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.border, paddingVertical: 6 },
-  buttonCancelText: { color: Colors.textSecondary, fontWeight: '600', fontSize: FontSize.xs },
+  buttonCancelText: { color: Colors.textSecondary, fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
   blocked: { fontSize: FontSize.xs, color: Colors.textMuted, flexShrink: 1, textAlign: 'right' },
 });

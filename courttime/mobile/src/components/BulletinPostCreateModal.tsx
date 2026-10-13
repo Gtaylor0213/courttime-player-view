@@ -28,7 +28,7 @@ import { EVENT_SIGNUP_TYPES } from '../../../shared/utils/bulletinPostDisplay';
 import { parseDollarsToCents } from '../../../shared/utils/money';
 import { Input } from './Input';
 import { MiniCalendar } from './MiniCalendar';
-import { Colors, Spacing, FontSize, BorderRadius, TouchTarget } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, FontFamily } from '../constants/theme';
 import type { Court } from '../types/database';
 
 export type BulletinPostType = 'announcement' | 'event' | 'clinic' | 'tournament' | 'social' | 'drill';
@@ -770,13 +770,13 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerCancel: { color: Colors.textSecondary, fontSize: FontSize.md },
-  headerTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
-  headerSave: { color: Colors.primary, fontSize: FontSize.md, fontWeight: '700' },
+  headerTitle: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text },
+  headerSave: { color: Colors.primary, fontSize: FontSize.md, fontFamily: FontFamily.bold },
   headerSaveDisabled: { opacity: 0.5 },
   body: { padding: Spacing.md },
   label: {
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.medium,
     color: Colors.text,
     marginBottom: Spacing.xs,
     marginTop: Spacing.md,
@@ -807,8 +807,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipSelected: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
-  chipText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600' },
-  chipTextSelected: { color: Colors.primary },
+  chipText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.semiBold },
+  chipTextSelected: { color: Colors.primaryDark },
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -819,8 +819,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     padding: Spacing.md,
   },
-  pickerText: { flex: 1, fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
-  placeholder: { color: Colors.textMuted, fontWeight: '400' },
+  pickerText: { flex: 1, fontSize: FontSize.md, fontFamily: FontFamily.semiBold, color: Colors.text },
+  placeholder: { color: Colors.textMuted, fontFamily: FontFamily.regular },
   timeBox: {
     borderWidth: 1,
     borderColor: Colors.border,
@@ -829,7 +829,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     backgroundColor: Colors.card,
   },
-  timeBoxLabel: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textMuted, marginBottom: Spacing.xs, marginTop: Spacing.xs },
+  timeBoxLabel: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textMuted, marginBottom: Spacing.xs, marginTop: Spacing.xs },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
   },
   toggleRowInGroup: { borderWidth: 0, padding: 0, marginTop: 0, backgroundColor: 'transparent' },
-  toggleTitle: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  toggleTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   toggleSubtitle: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   groupBox: {
     borderWidth: 1,

@@ -24,7 +24,7 @@ import { Link, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../src/api/client';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Setup Invite');
@@ -188,13 +188,13 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xl * 2 },
   header: { alignItems: 'center', marginVertical: Spacing.xl },
-  logo: { fontSize: 32, fontWeight: '800', color: Colors.primary },
+  logo: { fontSize: FontSize.title, fontFamily: FontFamily.bold, color: Colors.primary },
   subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, marginTop: Spacing.xs, textAlign: 'center' },
   formCard: { backgroundColor: Colors.card, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.border, padding: Spacing.lg },
   form: { gap: Spacing.xs },
   intro: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.sm },
-  bold: { fontWeight: '700', color: Colors.text },
-  label: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary, marginTop: Spacing.sm, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.3 },
+  bold: { fontFamily: FontFamily.bold, color: Colors.text },
+  label: { fontSize: FontSize.xs, fontFamily: FontFamily.medium, color: Colors.textSecondary, marginTop: Spacing.sm, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.3 },
   input: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: 12, fontSize: FontSize.md, color: Colors.text, backgroundColor: Colors.surface },
   inputLocked: { color: Colors.textMuted },
   hint: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
@@ -202,9 +202,9 @@ const styles = StyleSheet.create({
   halfField: { flex: 1 },
   button: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: Spacing.md, alignItems: 'center', marginTop: Spacing.lg },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: Colors.textInverse, fontSize: FontSize.md, fontWeight: '700' },
+  buttonText: { color: Colors.textInverse, fontSize: FontSize.md, fontFamily: FontFamily.bold },
   errorBox: { backgroundColor: Colors.error + '12', borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
   errorText: { color: Colors.error, fontSize: FontSize.sm },
   link: { alignSelf: 'center', marginTop: Spacing.md },
-  linkText: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' },
+  linkText: { color: Colors.primary, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold },
 });

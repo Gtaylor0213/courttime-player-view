@@ -32,7 +32,7 @@ import {
 import { showAlert } from '../src/utils/alert';
 import { Button } from '../src/components/Button';
 import { Card } from '../src/components/Card';
-import { Colors, FontSize, Spacing, BorderRadius } from '../src/constants/theme';
+import { Colors, FontSize, Spacing, BorderRadius, FontFamily, Palette } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Payments');
@@ -57,11 +57,11 @@ function listFromResponse<T>(data: unknown): T[] {
 function PaymentStatusBadge({ status }: { status: ConnectPayment['status'] }) {
   const colors =
     status === 'PAID'
-      ? { bg: '#dcfce7', text: '#166534' }
+      ? { bg: Palette.green100, text: Palette.green800 }
       : status === 'PENDING'
-        ? { bg: '#fef9c3', text: '#854d0e' }
+        ? { bg: Palette.yellow100, text: Palette.yellow800 }
         : status === 'FAILED'
-          ? { bg: '#fee2e2', text: '#991b1b' }
+          ? { bg: Palette.red100, text: Palette.red800 }
           : { bg: Colors.surface, text: Colors.textMuted };
   return (
     <View style={[styles.statusBadge, { backgroundColor: colors.bg }]}>
@@ -342,35 +342,35 @@ const styles = StyleSheet.create({
   section: { marginBottom: Spacing.lg },
   sectionTitle: {
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginBottom: Spacing.sm,
   },
   itemCard: { marginBottom: Spacing.sm },
   itemRow: { flexDirection: 'row', gap: Spacing.md, alignItems: 'flex-start' },
   itemInfo: { flex: 1 },
-  itemName: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
+  itemName: { fontSize: FontSize.md, fontFamily: FontFamily.semiBold, color: Colors.text },
   itemDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 4 },
   recurring: { fontSize: FontSize.xs, color: Colors.primary, marginTop: 4 },
   itemActions: { alignItems: 'flex-end', gap: Spacing.sm },
-  itemPrice: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
+  itemPrice: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text },
   payBtn: { minWidth: 100 },
   historyRow: { marginBottom: Spacing.sm },
   historyMain: { flex: 1 },
   historyEnd: { alignItems: 'flex-end', gap: 4 },
-  historyItem: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  historyItem: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   historyDate: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  historyAmount: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  historyAmount: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   statusBadge: {
     borderRadius: BorderRadius.full,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  statusBadgeText: { fontSize: 10, fontWeight: '600', textTransform: 'capitalize' },
-  emptyTitle: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text, marginBottom: 4 },
+  statusBadgeText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, textTransform: 'capitalize' },
+  emptyTitle: { fontSize: FontSize.md, fontFamily: FontFamily.semiBold, color: Colors.text, marginBottom: 4 },
   emptyDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
   errorBox: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: Palette.red50,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.md,

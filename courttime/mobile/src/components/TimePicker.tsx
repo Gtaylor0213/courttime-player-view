@@ -14,7 +14,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
 
 const ITEM_HEIGHT = 44;
 const VISIBLE_ITEMS = 5;
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: FontSize.xs,
-    fontWeight: '600',
+    fontFamily: FontFamily.medium,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -151,8 +151,8 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   itemTextSelected: {
-    color: Colors.primary,
-    fontWeight: '700',
+    color: Colors.primaryDark,
+    fontFamily: FontFamily.bold,
     fontSize: FontSize.xl,
   },
 });

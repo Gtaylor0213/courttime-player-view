@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily, Shadows } from '../constants/theme';
 import { CachedImage } from './CachedImage';
 
 interface Props {
@@ -83,6 +83,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
     <>
       <TouchableOpacity
         style={[styles.button, { maxWidth: chipMaxWidth }]}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`Current club ${facilityName}. Tap to switch.`}
@@ -212,7 +213,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: Colors.chromeChipBg,
   },
   titleFlex: {
     // Content-sized (no flexGrow) so the name measures to its text width inside the centered chip,
@@ -249,15 +250,11 @@ const styles = StyleSheet.create({
     maxHeight: 400,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    ...Shadows.md,
   },
   dropdownTitle: {
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
@@ -297,7 +294,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionTextSelected: {
-    color: Colors.primary,
-    fontWeight: '600',
+    color: Colors.primaryDark,
+    fontFamily: FontFamily.semiBold,
   },
 });

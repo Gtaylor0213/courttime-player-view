@@ -6,7 +6,7 @@ import {
   strikeLockoutMessage,
   strikeWarningMessage,
 } from '../../../shared/utils/strikeLockout';
-import { Colors, Spacing, FontSize } from '../constants/theme';
+import { Colors, Spacing, FontSize, FontFamily, Palette, BorderRadius } from '../constants/theme';
 
 interface StrikeLockoutBannerProps {
   status: StrikeLockoutStatus | null;
@@ -18,7 +18,7 @@ export function StrikeLockoutBanner({ status }: StrikeLockoutBannerProps) {
   if (status.isLockedOut) {
     return (
       <View style={styles.lockoutBanner}>
-        <Ionicons name="lock-closed" size={20} color={Colors.error} />
+        <Ionicons name="lock-closed-outline" size={20} color={Colors.error} />
         <View style={{ flex: 1 }}>
           <Text style={styles.lockoutTitle}>Account Locked</Text>
           <Text style={styles.lockoutMessage}>{strikeLockoutMessage(status)}</Text>
@@ -30,7 +30,7 @@ export function StrikeLockoutBanner({ status }: StrikeLockoutBannerProps) {
   if (status.activeStrikes > 0) {
     return (
       <View style={styles.strikeWarning}>
-        <Ionicons name="warning" size={18} color={Colors.warning} />
+        <Ionicons name="warning-outline" size={18} color={Colors.warning} />
         <Text style={styles.strikeWarningText}>{strikeWarningMessage(status)}</Text>
       </View>
     );
@@ -74,13 +74,13 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
     padding: Spacing.md,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 8,
+    backgroundColor: Palette.red50,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: Palette.red200,
   },
-  lockoutTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.error },
-  lockoutMessage: { fontSize: FontSize.sm, color: '#7F1D1D', marginTop: 2 },
+  lockoutTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.error },
+  lockoutMessage: { fontSize: FontSize.sm, color: Palette.red800, marginTop: 2 },
   strikeWarning: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -88,19 +88,19 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
     padding: Spacing.md,
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
+    backgroundColor: Palette.amber50,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: Palette.amber200,
   },
-  strikeWarningText: { flex: 1, fontSize: FontSize.sm, color: '#92400E' },
+  strikeWarningText: { flex: 1, fontSize: FontSize.sm, color: Palette.amber900 },
   facilityRow: {
     paddingVertical: Spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  facilityRowLocked: { backgroundColor: '#FEF2F2' },
-  facilityName: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  facilityRowLocked: { backgroundColor: Palette.red50 },
+  facilityName: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   facilityLocked: { fontSize: FontSize.xs, color: Colors.error, marginTop: 2 },
   facilityWarning: { fontSize: FontSize.xs, color: Colors.warning, marginTop: 2 },
   facilityOk: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },

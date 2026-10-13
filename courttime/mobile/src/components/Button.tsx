@@ -7,7 +7,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Colors, BorderRadius, Spacing, FontSize, FontFamily, TouchTarget } from '../constants/theme';
+import { Colors, BorderRadius, Spacing, FontSize, FontFamily, Shadows, TouchTarget } from '../constants/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'warning';
 
@@ -80,20 +80,21 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
+    // Taller than the web button (h-9): 44px+ touch target on a phone.
     minHeight: TouchTarget.min,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md, // web: rounded-md
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Shadows.sm, // web: shadow-sm
   },
   primary: {
     backgroundColor: Colors.primary,
   },
+  // web: bg-secondary text-secondary-foreground, no border
   secondary: {
     backgroundColor: Colors.secondary,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   destructive: {
     backgroundColor: Colors.destructive,
@@ -107,22 +108,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.sm,
   },
+  // web: hover:bg-primary/90
   pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.99 }],
+    opacity: 0.9,
   },
+  // web: disabled:opacity-50
   disabled: {
-    opacity: 0.55,
+    opacity: 0.5,
   },
   text: {
     fontSize: FontSize.md,
-    fontFamily: FontFamily.semiBold,
+    fontFamily: FontFamily.medium, // web: font-medium
   },
   primaryText: {
     color: Colors.textInverse,
   },
   secondaryText: {
-    color: Colors.text,
+    color: Colors.secondaryForeground,
   },
   warningText: {
     color: Colors.textInverse,

@@ -20,7 +20,7 @@ import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { showApiErrorAlert } from '../src/utils/alert';
 import { api } from '../src/api/client';
-import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 import { useAuth } from '../src/contexts/AuthContext';
 
@@ -127,8 +127,6 @@ export default function NotificationSettingsScreen() {
         <Stack.Screen
           options={{
             title: 'Notifications',
-            headerStyle: { backgroundColor: Colors.primary },
-            headerTintColor: Colors.textInverse,
           }}
         />
         <View style={styles.loadingBox}>
@@ -143,8 +141,6 @@ export default function NotificationSettingsScreen() {
       <Stack.Screen
         options={{
           title: 'Notifications',
-          headerStyle: { backgroundColor: Colors.primary },
-          headerTintColor: Colors.textInverse,
         }}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -283,7 +279,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: FontSize.xs,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -326,7 +322,7 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   rowDescription: {

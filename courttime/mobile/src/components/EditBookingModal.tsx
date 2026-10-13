@@ -27,7 +27,7 @@ import { api, paymentApi } from '../api/client';
 import { courtBookingCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
 import { MiniCalendar } from './MiniCalendar';
 import { TimePicker } from './TimePicker';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
 import { useFeatureFlags } from '../contexts/FeatureFlagContext';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import {
@@ -392,7 +392,7 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
                 <Text style={styles.violationsTitle}>Cannot save — booking violates facility rules:</Text>
                 {violations.map((v, i) => (
                   <View key={i} style={styles.violationRow}>
-                    <Ionicons name="alert-circle" size={16} color={Colors.error} />
+                    <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.violationName}>{v.ruleName}</Text>
                       <Text style={styles.violationMsg}>{v.message}</Text>
@@ -455,9 +455,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  title: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text },
+  title: { fontSize: FontSize.xl, fontFamily: FontFamily.bold, color: Colors.text },
   label: {
-    fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary,
+    fontSize: FontSize.xs, fontFamily: FontFamily.medium, color: Colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: Spacing.sm,
   },
   dateRow: {
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface, borderRadius: BorderRadius.md,
     padding: Spacing.md, marginBottom: Spacing.md,
   },
-  dateText: { flex: 1, fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
+  dateText: { flex: 1, fontSize: FontSize.md, fontFamily: FontFamily.semiBold, color: Colors.text },
   courtChip: {
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full, backgroundColor: Colors.surface,
@@ -473,10 +473,10 @@ const styles = StyleSheet.create({
   },
   courtChipSelected: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
   courtChipText: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  courtChipTextSelected: { color: Colors.primary, fontWeight: '600' },
+  courtChipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.semiBold },
   timePickerRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.md },
   timeDivider: { paddingTop: Spacing.xl + Spacing.sm, paddingHorizontal: Spacing.sm },
-  timeDividerText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '600' },
+  timeDividerText: { fontSize: FontSize.sm, color: Colors.textMuted, fontFamily: FontFamily.semiBold },
   unavailable: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     backgroundColor: Colors.warning + '12', padding: Spacing.md,
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   },
   typeChipTextSelected: {
     color: Colors.textInverse,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   violationsBox: {
     backgroundColor: Colors.error + '08', borderRadius: BorderRadius.md,
@@ -515,11 +515,11 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3, borderLeftColor: Colors.error,
   },
   violationsTitle: {
-    fontSize: FontSize.sm, fontWeight: '700', color: Colors.error,
+    fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.error,
     marginBottom: Spacing.sm,
   },
   violationRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
-  violationName: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  violationName: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   violationMsg: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
   violationsFooter: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: Spacing.xs },
   saveButton: {
@@ -527,5 +527,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md, alignItems: 'center',
   },
   saveButtonDisabled: { opacity: 0.5 },
-  saveButtonText: { color: Colors.textInverse, fontSize: FontSize.md, fontWeight: '700' },
+  saveButtonText: { color: Colors.textInverse, fontSize: FontSize.md, fontFamily: FontFamily.bold },
 });

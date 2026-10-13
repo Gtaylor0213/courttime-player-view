@@ -16,7 +16,7 @@ import {
 import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily, Shadows } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { openLegalLink, PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
 
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     fontSize: FontSize.xxl,
-    fontWeight: '800',
+    fontFamily: FontFamily.bold,
     color: Colors.primary,
     marginBottom: Spacing.xs,
   },
@@ -236,11 +236,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    ...Shadows.sm,
   },
   form: {
     gap: Spacing.md,
@@ -254,7 +250,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.medium,
     color: Colors.text,
     marginTop: Spacing.xs,
   },
@@ -281,7 +277,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: Colors.textInverse,
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
   },
   errorBox: {
     backgroundColor: Colors.error + '12',
@@ -307,7 +303,7 @@ const styles = StyleSheet.create({
   linkText: {
     color: Colors.primary,
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   legalText: {
     color: Colors.textMuted,
@@ -318,7 +314,7 @@ const styles = StyleSheet.create({
   },
   legalLink: {
     color: Colors.primary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   facilityLink: {
     alignSelf: 'center',
@@ -327,6 +323,6 @@ const styles = StyleSheet.create({
   facilityLinkText: {
     color: Colors.textSecondary,
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
 });

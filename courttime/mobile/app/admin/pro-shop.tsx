@@ -18,7 +18,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Pro Shop');
 
@@ -383,15 +383,15 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: 'row', gap: Spacing.xs, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
   tabChip: { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
   tabChipSelected: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
-  tabText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
-  tabTextSelected: { color: Colors.primary },
+  tabText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
+  tabTextSelected: { color: Colors.primaryDark },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl * 2 },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.xs },
-  name: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: Spacing.xs },
+  name: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   muted: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6 },
-  link: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6 },
+  link: { fontSize: FontSize.sm, color: Colors.primary, fontFamily: FontFamily.semiBold },
   empty: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center', paddingVertical: Spacing.lg },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm, paddingVertical: 4 },
@@ -399,12 +399,12 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 6, backgroundColor: Colors.surface },
   chipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
   chipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary, fontWeight: '700' },
+  chipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   imageBox: { alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.sm, marginBottom: Spacing.sm },
   image: { width: 96, height: 96, borderRadius: BorderRadius.md },
   thumb: { width: 44, height: 44, borderRadius: BorderRadius.sm },
   thumbEmpty: { backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  qty: { minWidth: 20, textAlign: 'center', fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  qty: { minWidth: 20, textAlign: 'center', fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
   memberRow: { paddingVertical: Spacing.xs, borderTopWidth: 1, borderTopColor: Colors.borderLight },
 });

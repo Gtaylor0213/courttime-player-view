@@ -112,7 +112,7 @@ export function MemberNumberGate() {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     padding: Spacing.lg,
   },
@@ -125,7 +125,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.xl,
     fontFamily: FontFamily.bold,
-    fontWeight: '800',
     color: Colors.text,
   },
   subtitle: {
@@ -136,7 +135,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
     marginTop: Spacing.xs,
   },

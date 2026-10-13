@@ -9,7 +9,7 @@ import { sendEmailBlast } from '../../src/api/admin';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 
@@ -148,9 +148,9 @@ export default function AdminCommunicationScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: 4 },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: 4 },
   cardSubtitle: { fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: Spacing.sm },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6, marginTop: Spacing.xs },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6, marginTop: Spacing.xs },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.sm },
   chip: {
     borderWidth: 1,
@@ -162,6 +162,6 @@ const styles = StyleSheet.create({
   },
   chipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
   chipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary, fontWeight: '700' },
+  chipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   multiline: { minHeight: 88, textAlignVertical: 'top', marginBottom: Spacing.sm },
 });

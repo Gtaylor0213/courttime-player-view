@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: FontSize.sm,
-    fontFamily: FontFamily.semiBold,
+    fontFamily: FontFamily.medium,
     color: Colors.text,
     marginTop: Spacing.xs,
   },
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   },
   legalLink: {
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   errorBox: {
     backgroundColor: Colors.error + '12',

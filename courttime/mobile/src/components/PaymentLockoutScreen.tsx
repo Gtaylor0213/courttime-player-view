@@ -6,7 +6,7 @@ import { lockoutCheckoutUrls } from '../../../shared/utils/mobileCheckoutUrls';
 import { extractCheckoutUrl, formatCentsAsUsd, openStripeCheckout } from '../utils/payments';
 import { unwrapApiPayload } from '../../../shared/api/core';
 import { Button } from './Button';
-import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
+import { Colors, FontSize, Spacing, BorderRadius, FontFamily, Palette } from '../constants/theme';
 import type { PaymentLockoutInfo } from '../paymentLockout/events';
 
 interface PaymentLockoutScreenProps {
@@ -64,7 +64,7 @@ export function PaymentLockoutScreen({ lockout }: PaymentLockoutScreenProps) {
     <View style={styles.container}>
       <View style={styles.card}>
         <View style={styles.iconWrap}>
-          <Ionicons name="lock-closed" size={40} color={Colors.error} />
+          <Ionicons name="lock-closed-outline" size={40} color={Colors.error} />
         </View>
         <Text style={styles.title}>Account Payment Required</Text>
         {lockout.facilityName ? (
@@ -122,14 +122,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconWrap: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: Palette.red100,
     borderRadius: 999,
     padding: Spacing.md,
     marginBottom: Spacing.md,
   },
   title: {
     fontSize: FontSize.xl,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     textAlign: 'center',
     marginBottom: Spacing.sm,
@@ -141,25 +141,25 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: Spacing.md,
   },
-  bold: { fontWeight: '600', color: Colors.text },
+  bold: { fontFamily: FontFamily.semiBold, color: Colors.text },
   amountBox: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: Palette.red50,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: Palette.red200,
     padding: Spacing.md,
     width: '100%',
     alignItems: 'center',
     marginBottom: Spacing.md,
   },
   amount: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: FontSize.title,
+    fontFamily: FontFamily.bold,
     color: Colors.error,
   },
   amountDesc: {
     fontSize: FontSize.sm,
-    color: '#b91c1c',
+    color: Palette.red800,
     marginTop: Spacing.xs,
     textAlign: 'center',
   },

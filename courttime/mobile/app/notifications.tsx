@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   list: { padding: Spacing.md, gap: Spacing.sm },
   emptyWrap: { flexGrow: 1, justifyContent: 'center' },
-  markAll: { color: Colors.primary, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, fontWeight: '600' },
+  markAll: { color: Colors.primary, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   icon: { marginTop: 1 },
   body: { flex: 1, minWidth: 0, gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
-  title: { flex: 1, fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  title: { flex: 1, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   titleUnread: { color: Colors.text },
   time: { fontSize: FontSize.xs, color: Colors.textMuted },
   message: { fontSize: FontSize.sm, color: Colors.textSecondary },

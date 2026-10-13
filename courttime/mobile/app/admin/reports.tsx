@@ -14,7 +14,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Reports');
 
@@ -160,23 +160,23 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6, marginTop: Spacing.xs },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: Spacing.sm },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6, marginTop: Spacing.xs },
   row: { flexDirection: 'row', gap: Spacing.sm },
   col: { flex: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
   chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 6, backgroundColor: Colors.surface },
   chipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
   chipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary, fontWeight: '700' },
+  chipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   muted: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   k: { fontSize: FontSize.sm, color: Colors.text },
-  v: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  v: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   total: { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: Spacing.xs, paddingTop: Spacing.sm },
-  kTotal: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
-  vTotal: { fontSize: FontSize.md, fontWeight: '700', color: Colors.primary },
+  kTotal: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
+  vTotal: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.primary },
   txn: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center', borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingVertical: Spacing.sm },
-  txnTitle: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
-  txnAmount: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  txnTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
+  txnAmount: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
 });

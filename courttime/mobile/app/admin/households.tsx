@@ -14,7 +14,7 @@ import { Input } from '../../src/components/Input';
 import { EmptyState } from '../../src/components/EmptyState';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showApiErrorAlert } from '../../src/utils/alert';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Households');
 
@@ -92,16 +92,16 @@ export default function AdminHouseholdsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl, gap: Spacing.sm },
-  summary: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  summary: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
   hint: { fontSize: FontSize.xs, color: Colors.textSecondary },
   card: { padding: Spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  address: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  address: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
   meta: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   members: { marginTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: Spacing.sm, gap: Spacing.sm },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.primary + '20', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.primary },
-  memberName: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  avatarText: { fontSize: FontSize.xs, fontFamily: FontFamily.bold, color: Colors.primaryDark },
+  memberName: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   _r: { borderRadius: BorderRadius.md },
 });

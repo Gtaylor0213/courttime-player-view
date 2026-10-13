@@ -34,7 +34,7 @@ import {
   isPaidBulletinSignup,
   openStripeCheckout,
 } from '../../src/utils/payments';
-import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, Motion } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, TouchTarget, Motion, FontFamily } from '../../src/constants/theme';
 import type { HittingPartnerPostWithUser } from '../../src/types/database';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { EmptyState } from '../../src/components/EmptyState';
@@ -529,7 +529,7 @@ export default function CommunityScreen() {
     () => (
       <View style={styles.listHeaderBlock}>
         <TouchableOpacity style={styles.createButton} onPress={openCreatePost}>
-          <Ionicons name="add-circle" size={20} color={Colors.textInverse} />
+          <Ionicons name="add-circle-outline" size={20} color={Colors.textInverse} />
           <Text style={styles.createButtonText}>Post Looking for Partner</Text>
         </TouchableOpacity>
         <View style={styles.searchBar}>
@@ -542,7 +542,7 @@ export default function CommunityScreen() {
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+              <Ionicons name="close-circle-outline" size={18} color={Colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -667,7 +667,7 @@ export default function CommunityScreen() {
         ) : null}
         {isAdmin ? (
           <TouchableOpacity style={styles.createButton} onPress={() => setShowCreateBulletin(true)}>
-            <Ionicons name="add-circle" size={20} color={Colors.textInverse} />
+            <Ionicons name="add-circle-outline" size={20} color={Colors.textInverse} />
             <Text style={styles.createButtonText}>Create Post</Text>
           </TouchableOpacity>
         ) : null}
@@ -694,7 +694,7 @@ export default function CommunityScreen() {
       <Card style={styles.listCardSpacing} padded>
         {post.isPinned ? (
           <View style={styles.pinnedBadge}>
-            <Ionicons name="pin" size={12} color={Colors.warning} />
+            <Ionicons name="pin-outline" size={12} color={Colors.warning} />
             <Text style={styles.pinnedText}>Pinned</Text>
           </View>
         ) : null}
@@ -833,7 +833,7 @@ export default function CommunityScreen() {
             ) : null}
             {post.currentUserSignupStatus === 'confirmed' ? (
               <View style={styles.drillStatusBadge}>
-                <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                <Ionicons name="checkmark-circle-outline" size={16} color={Colors.success} />
                 <Text style={[styles.drillStatusText, { color: Colors.success }]}>You're signed up</Text>
               </View>
             ) : null}
@@ -960,11 +960,11 @@ export default function CommunityScreen() {
         <View style={styles.segmentPill} onLayout={e => setTabBarWidth(e.nativeEvent.layout.width)}>
           <View style={styles.segmentRow}>
             <TouchableOpacity style={styles.segmentTab} onPress={() => selectTab('partners')}>
-              <Ionicons name="tennisball" size={14} color={activeTab === 'partners' ? Colors.primary : Colors.textMuted} />
+              <Ionicons name="tennisball-outline" size={14} color={activeTab === 'partners' ? Colors.primary : Colors.textMuted} />
               <Text style={[styles.segmentTabText, activeTab === 'partners' && styles.segmentTabTextActive]}>Partners</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.segmentTab} onPress={() => selectTab('bulletin')}>
-              <Ionicons name="megaphone" size={14} color={activeTab === 'bulletin' ? Colors.primary : Colors.textMuted} />
+              <Ionicons name="megaphone-outline" size={14} color={activeTab === 'bulletin' ? Colors.primary : Colors.textMuted} />
               <Text style={[styles.segmentTabText, activeTab === 'bulletin' && styles.segmentTabTextActive]}>Bulletin</Text>
             </TouchableOpacity>
           </View>
@@ -1224,8 +1224,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     minHeight: TouchTarget.min - 8,
   },
-  segmentTabText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textMuted },
-  segmentTabTextActive: { color: Colors.primary },
+  segmentTabText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textMuted },
+  segmentTabTextActive: { color: Colors.primaryDark },
   underlineTrack: {
     height: 2,
     backgroundColor: Colors.borderLight,
@@ -1262,7 +1262,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
-  filterChipNewText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  filterChipNewText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   filterChipNewTextActive: { color: Colors.textInverse },
 
   skeletonList: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, gap: Spacing.sm },
@@ -1271,7 +1271,7 @@ const styles = StyleSheet.create({
 
   // Create Button
   createButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: 12, minHeight: TouchTarget.min, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
-  createButtonText: { color: Colors.textInverse, fontSize: FontSize.md, fontWeight: '600' },
+  createButtonText: { color: Colors.textInverse, fontSize: FontSize.md, fontFamily: FontFamily.semiBold },
 
   // Search & Filters
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.border, gap: Spacing.sm },
@@ -1279,26 +1279,26 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', gap: Spacing.sm },
   bulletinHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   rosterBox: { marginTop: Spacing.xs, borderWidth: 1, borderColor: Colors.borderLight, borderRadius: BorderRadius.sm, padding: Spacing.sm, gap: 4 },
-  rosterTitle: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  rosterTitle: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   rosterEmpty: { fontSize: FontSize.xs, color: Colors.textMuted },
   rosterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
   rosterName: { fontSize: FontSize.sm, color: Colors.text, flexShrink: 1 },
-  rosterRemove: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.error },
+  rosterRemove: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.error },
   focusBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.primary + '10', borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
   focusBannerText: { fontSize: FontSize.sm, color: Colors.text },
-  focusBannerLink: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
+  focusBannerLink: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.primary },
   filterChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minHeight: TouchTarget.min, borderRadius: BorderRadius.full, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, justifyContent: 'center' },
   filterChipActive: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
-  filterChipText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600' },
-  filterChipTextActive: { color: Colors.primary },
+  filterChipText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.semiBold },
+  filterChipTextActive: { color: Colors.primaryDark },
 
   // Partner Posts
   postHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, marginBottom: Spacing.sm },
   postHeaderText: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.sm },
   avatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: Colors.textInverse, fontSize: FontSize.sm, fontWeight: '700' },
-  postAuthor: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text, flexShrink: 1 },
+  avatarText: { color: Colors.textInverse, fontSize: FontSize.sm, fontFamily: FontFamily.bold },
+  postAuthor: { fontSize: FontSize.md, fontFamily: FontFamily.semiBold, color: Colors.text, flexShrink: 1 },
   skillPill: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
@@ -1307,7 +1307,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  skillPillInner: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary, textTransform: 'capitalize' },
+  skillPillInner: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary, textTransform: 'capitalize' },
   ownerActions: { flexDirection: 'row', gap: Spacing.sm },
   postDescription: { fontSize: FontSize.sm, color: Colors.text, lineHeight: 22, marginBottom: Spacing.sm },
   postMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
@@ -1317,19 +1317,19 @@ const styles = StyleSheet.create({
   postDate: { fontSize: FontSize.xs, color: Colors.textMuted },
   actionRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg },
   iconAction: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  iconActionLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '500' },
+  iconActionLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium },
 
   // Bulletin Board
   bulletinCard: { backgroundColor: Colors.card, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
   bulletinHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
   categoryBadge: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.full },
-  categoryText: { fontSize: FontSize.xs, fontWeight: '600' },
+  categoryText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold },
   pinnedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.xs },
-  pinnedText: { fontSize: FontSize.xs, color: Colors.warning, fontWeight: '600' },
-  bulletinTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.xs },
+  pinnedText: { fontSize: FontSize.xs, color: Colors.warning, fontFamily: FontFamily.semiBold },
+  bulletinTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: Spacing.xs },
   bulletinContent: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 22, marginBottom: Spacing.sm },
   bulletinEventRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  bulletinEventText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '500' },
+  bulletinEventText: { fontSize: FontSize.xs, color: Colors.primary, fontFamily: FontFamily.medium },
   bulletinFooterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1349,24 +1349,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
   },
   shareModeChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '12' },
-  shareModeChipText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
-  shareModeChipTextActive: { color: Colors.primary },
+  shareModeChipText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
+  shareModeChipTextActive: { color: Colors.primaryDark },
   shareAllHint: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md, lineHeight: 20 },
 
   // Drill signups
   drillStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.sm },
-  drillStatusText: { fontSize: FontSize.sm, fontWeight: '600' },
+  drillStatusText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold },
   drillButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: 10, minHeight: TouchTarget.min, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm },
-  drillButtonText: { color: Colors.textInverse, fontSize: FontSize.sm, fontWeight: '700' },
+  drillButtonText: { color: Colors.textInverse, fontSize: FontSize.sm, fontFamily: FontFamily.bold },
   drillButtonCancel: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.error },
-  drillButtonCancelText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: '700' },
+  drillButtonCancelText: { color: Colors.error, fontSize: FontSize.sm, fontFamily: FontFamily.bold },
   drillBlockedBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surface, padding: Spacing.sm, borderRadius: BorderRadius.sm, marginTop: Spacing.sm },
   drillBlockedText: { flex: 1, fontSize: FontSize.xs, color: Colors.textMuted },
 
   // Notifications
   notifHeaderSpacer: { height: Spacing.xs },
   markAllRead: { alignSelf: 'flex-end', marginBottom: Spacing.sm, marginHorizontal: Spacing.md },
-  markAllReadText: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' },
+  markAllReadText: { color: Colors.primary, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold },
   notifCardInner: {
     flexDirection: 'row',
     padding: Spacing.md,
@@ -1376,11 +1376,11 @@ const styles = StyleSheet.create({
   notifUnread: { backgroundColor: Colors.primary + '08', borderLeftWidth: 3, borderLeftColor: Colors.primary },
   notifBody: { flex: 1, minWidth: 0 },
   notifIcon: { marginTop: 2 },
-  notifTitle: { fontSize: FontSize.sm, fontWeight: '500', color: Colors.text },
-  notifTitleUnread: { fontWeight: '700' },
+  notifTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.medium, color: Colors.text },
+  notifTitleUnread: { fontFamily: FontFamily.bold },
   notifMessage: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2, lineHeight: 20 },
   notifReservation: { backgroundColor: Colors.surface, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 2, marginTop: 4, alignSelf: 'flex-start' },
-  notifReservationText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '500' },
+  notifReservationText: { fontSize: FontSize.xs, color: Colors.primary, fontFamily: FontFamily.medium },
   notifTime: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 4 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary, marginTop: 6 },
 
@@ -1397,12 +1397,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   modalCancel: { color: Colors.textSecondary, fontSize: FontSize.md },
-  modalTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
-  modalSave: { color: Colors.primary, fontSize: FontSize.md, fontWeight: '700' },
-  modalPostCta: { color: Colors.primary, fontSize: FontSize.md, fontWeight: '700' },
+  modalTitle: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text },
+  modalSave: { color: Colors.primary, fontSize: FontSize.md, fontFamily: FontFamily.bold },
+  modalPostCta: { color: Colors.primary, fontSize: FontSize.md, fontFamily: FontFamily.bold },
   modalPostCtaDisabled: { color: Colors.textMuted },
   modalBody: { flex: 1, padding: Spacing.md },
-  formLabel: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text, marginBottom: Spacing.xs, marginTop: Spacing.md },
+  formLabel: { fontSize: FontSize.sm, fontFamily: FontFamily.medium, color: Colors.text, marginBottom: Spacing.xs, marginTop: Spacing.md },
   formInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: 12, fontSize: FontSize.md, color: Colors.text, backgroundColor: Colors.surface },
   formTextArea: { height: 100, textAlignVertical: 'top' },
   fieldHint: { fontSize: FontSize.xs, color: Colors.error, marginTop: Spacing.xs },

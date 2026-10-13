@@ -210,7 +210,7 @@ export default function BallMachineScreen() {
           <Text style={styles.sectionTitle}>Your passes</Text>
           {activePasses.map((pass) => (
             <View key={pass.id} style={styles.passCard}>
-              <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+              <Ionicons name="checkmark-circle-outline" size={18} color={Colors.primary} />
               <View style={styles.passText}>
                 <Text style={styles.passScope}>{passScopeLabel(pass.machineId, machines)}</Text>
                 <Text style={styles.passMeta}>Active until {formatExpiry(pass.expiresAt)}</Text>
@@ -311,7 +311,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.text,
   },
   sectionHint: { fontSize: FontSize.xs, color: Colors.textSecondary },
@@ -327,7 +326,6 @@ const styles = StyleSheet.create({
   machineName: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   machineFee: { fontSize: FontSize.xs, color: Colors.textSecondary },
@@ -345,7 +343,6 @@ const styles = StyleSheet.create({
   passScope: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   passMeta: { fontSize: FontSize.xs, color: Colors.textSecondary },
@@ -357,9 +354,8 @@ const styles = StyleSheet.create({
   },
   codeLabel: { fontSize: FontSize.xs, color: Colors.textMuted },
   codeValue: {
-    fontSize: 28,
+    fontSize: FontSize.title,
     fontFamily: FontFamily.bold,
-    fontWeight: '800',
     color: Colors.primary,
     letterSpacing: 4,
   },
@@ -370,7 +366,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     paddingVertical: Spacing.xs,
   },
-  codeButtonText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
+  codeButtonText: { fontSize: FontSize.sm, color: Colors.primary, fontFamily: FontFamily.semiBold },
   noCode: { fontSize: FontSize.xs, color: Colors.textMuted },
   productRow: {
     flexDirection: 'row',
@@ -385,14 +381,12 @@ const styles = StyleSheet.create({
   productTitle: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
-    fontWeight: '600',
     color: Colors.text,
   },
   productScope: { fontSize: FontSize.xs, color: Colors.textSecondary },
   productPrice: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.primary,
   },
 });

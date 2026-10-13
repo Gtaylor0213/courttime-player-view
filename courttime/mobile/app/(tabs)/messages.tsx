@@ -767,7 +767,7 @@ export default function MessagesScreen() {
           <View style={styles.threadHeaderInfo}>
             <View style={[styles.avatarSmall, activeConversation.isGroup && styles.avatarGroup]}>
               {activeConversation.isGroup ? (
-                <Ionicons name="people" size={18} color={Colors.textInverse} />
+                <Ionicons name="people-outline" size={18} color={Colors.textInverse} />
               ) : activeConversation.otherUser?.profileImageUrl ? (
                 <CachedImage uri={activeConversation.otherUser.profileImageUrl} style={styles.avatarImageSmall} />
               ) : (
@@ -1074,7 +1074,7 @@ export default function MessagesScreen() {
           >
             <View style={[styles.avatar, item.isGroup && styles.avatarGroup]}>
               {item.isGroup ? (
-                <Ionicons name="people" size={22} color={Colors.textInverse} />
+                <Ionicons name="people-outline" size={22} color={Colors.textInverse} />
               ) : item.otherUser?.profileImageUrl ? (
                 <CachedImage uri={item.otherUser.profileImageUrl} style={styles.avatarImage} />
               ) : (
@@ -1514,7 +1514,7 @@ const styles = StyleSheet.create({
   },
   unreadText: {
     color: Colors.textInverse,
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontFamily: FontFamily.bold,
   },
 
@@ -1621,7 +1621,7 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
   },
   messageTime: {
-    fontSize: 10,
+    fontSize: FontSize.xs,
     fontFamily: FontFamily.regular,
     color: Colors.textMuted,
     marginTop: 4,

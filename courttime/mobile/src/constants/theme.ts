@@ -1,12 +1,30 @@
 /**
  * CourtTime Design Tokens
  * Shared colors and spacing for consistent UI
+ *
+ * Every visual value comes from shared/constants/designTokens.ts, which is a
+ * checked copy of the website's values. Add a colour there, not here.
  */
-import { Appearance } from 'react-native';
+import {
+  fontSize,
+  headerGradient,
+  motion,
+  palette,
+  radius,
+  shadow,
+  webTokens,
+} from '../../../shared/constants/designTokens';
+
+/**
+ * The website's Tailwind palette, for tints the semantic `Colors` don't name
+ * (alert backgrounds, status badges). Use it as the site does: `Palette.red50`
+ * where the site writes `bg-red-50`.
+ */
+export const Palette = palette;
 
 /** Top header + bottom tab bar: matches the web sidebar header's `from-green-700 to-green-800` gradient. */
 const Chrome = {
-  chromeBackground: '#016630',
+  chromeBackground: palette.green800,
   chromeBorder: 'rgba(255,255,255,0.12)',
   chromeText: '#FFFFFF',
   chromeTextMuted: 'rgba(255,255,255,0.65)',
@@ -15,86 +33,52 @@ const Chrome = {
   chromeChipBorder: 'rgba(255,255,255,0.22)',
 };
 
-const LightColors = {
+/**
+ * Light only, like the website (its `.dark` tokens are never switched on).
+ */
+export const Colors = {
   ...Chrome,
-  // Exact match for web `--primary: oklch(0.55 0.22 150)`
-  primary: '#00910F',
-  primaryLight: '#00BB13',
-  primaryDark: '#00790D',
-  secondary: '#E4F0EA',
-  accent: '#D4EAD9',
+  // green-700, not the web `--primary` (#00910f): that one is 4.15:1 on white
+  // and fails WCAG AA for button labels and links. green-700 is 4.95:1.
+  primary: palette.green700,
+  primaryLight: palette.green600,
+  primaryDark: palette.green800,
+  secondary: webTokens.secondary,
+  secondaryForeground: webTokens.secondaryForeground,
+  accent: webTokens.accent,
 
-  // Exact match for web `--background: #ffffff`
-  background: '#FFFFFF',
-  surface: '#EEF4F0',
-  card: '#FFFFFF',
+  background: webTokens.background,
+  surface: palette.gray50,
+  card: webTokens.card,
 
-  text: '#0C1628',
-  textSecondary: '#2D3D36',
-  textMuted: '#5C6A63',
+  text: webTokens.foreground,
+  textSecondary: palette.gray600,
+  textMuted: webTokens.mutedForeground,
   textInverse: '#FFFFFF',
 
-  border: '#D5DED8',
-  borderLight: '#E8EFE9',
-  inputBackground: '#F2F6F3',
+  // Solid stand-in for the web `--border: rgba(0,0,0,0.1)`; screens append
+  // alpha suffixes to these, which only works on a hex value.
+  border: palette.gray200,
+  borderLight: palette.gray100,
+  inputBackground: webTokens.inputBackground,
 
-  success: '#00910F',
-  error: '#D4183D',
-  warning: '#B7791F',
-  info: '#0EA5E9',
-  destructive: '#D4183D',
-  ring: '#00910F',
-  overlay: 'rgba(15, 23, 42, 0.5)',
-  purple: '#A855F7',
-  cyan: '#0EA5E9',
+  success: palette.green700,
+  error: webTokens.destructive,
+  warning: palette.amber700,
+  info: palette.blue700,
+  destructive: webTokens.destructive,
+  ring: palette.green600,
+  overlay: 'rgba(0, 0, 0, 0.5)',
+  purple: palette.purple600,
+  cyan: palette.cyan700,
 
-  courtAvailable: '#00910F',
-  courtMaintenance: '#B7791F',
-  courtClosed: '#D4183D',
-  shadow: 'rgba(15, 23, 42, 0.08)',
+  courtAvailable: palette.green700,
+  courtMaintenance: palette.amber700,
+  courtClosed: webTokens.destructive,
+  shadow: `rgba(0, 0, 0, ${shadow.sm.opacity})`,
   /** Android notification channel LED accent (legacy brand green) */
   androidNotificationLed: '#1a5f2a',
 };
-
-const DarkColors: typeof LightColors = {
-  ...Chrome,
-  primary: '#7FD4A8',
-  primaryLight: '#9AE4BC',
-  primaryDark: '#5FB88A',
-  secondary: '#24302C',
-  accent: '#2A3833',
-
-  background: '#121816',
-  surface: '#1A211E',
-  card: '#1E2623',
-
-  text: '#F4FAF7',
-  textSecondary: '#CDD8D3',
-  textMuted: '#9DAAA4',
-  textInverse: '#121816',
-
-  border: '#35403B',
-  borderLight: '#28332F',
-  inputBackground: '#252E2A',
-
-  success: '#7FD4A8',
-  error: '#F1637D',
-  warning: '#E4B15A',
-  info: '#38BDF8',
-  destructive: '#F1637D',
-  ring: '#7FD4A8',
-  overlay: 'rgba(0, 0, 0, 0.55)',
-  purple: '#C084FC',
-  cyan: '#38BDF8',
-
-  courtAvailable: '#7FD4A8',
-  courtMaintenance: '#E4B15A',
-  courtClosed: '#F1637D',
-  shadow: 'rgba(0, 0, 0, 0.35)',
-  androidNotificationLed: '#1a5f2a',
-};
-
-export const Colors = Appearance.getColorScheme() === 'dark' ? DarkColors : LightColors;
 
 export const Spacing = {
   xs: 4,
@@ -106,20 +90,20 @@ export const Spacing = {
 };
 
 export const FontSize = {
-  xs: 12,
-  sm: 14,
-  md: 16,
-  lg: 18,
-  xl: 20,
-  xxl: 24,
-  title: 32,
+  xs: fontSize.xs,
+  sm: fontSize.sm,
+  md: fontSize.base,
+  lg: fontSize.lg,
+  xl: fontSize.xl,
+  xxl: fontSize['2xl'],
+  title: fontSize['3xl'],
 };
 
 export const BorderRadius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 22,
+  sm: radius.sm,
+  md: radius.md,
+  lg: radius.lg,
+  xl: radius.xl,
   full: 999,
 };
 
@@ -131,18 +115,45 @@ export const FontFamily = {
 };
 
 export const Motion = {
-  quick: 150,
-  standard: 200,
+  quick: motion.fastMs,
+  standard: motion.standardMs,
 };
 
 export const TouchTarget = {
   min: 48,
 };
 
+/** The web `shadow-sm` / `shadow-md` / `shadow-lg`, as React Native style props. */
+export const Shadows = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: shadow.sm.x, height: shadow.sm.y },
+    shadowOpacity: shadow.sm.opacity,
+    shadowRadius: shadow.sm.blur,
+    elevation: 1,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: shadow.md.x, height: shadow.md.y },
+    shadowOpacity: shadow.md.opacity,
+    shadowRadius: shadow.md.blur,
+    elevation: 3,
+  },
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: shadow.lg.x, height: shadow.lg.y },
+    shadowOpacity: shadow.lg.opacity,
+    shadowRadius: shadow.lg.blur,
+    elevation: 6,
+  },
+} as const;
+
 /** `expo-linear-gradient` color stops — obvious, saturated bands (not subtle token tweaks). */
 export const Gradients = {
-  homeHero: ['#031910', '#0F4D36', '#1A7A55', '#2EB87E'] as const,
+  /** Home welcome card — the site's header green (web: `from-green-700 to-green-800`). */
+  homeHero: headerGradient,
   /** Header + bottom tab bar — matches the web sidebar header's `from-green-700 to-green-800`. */
-  chrome: ['#008236', '#016630'] as const,
-  bookCalendar: ['#DCF5E8', '#F7FDF9', '#FFFFFF'] as const,
+  chrome: headerGradient,
+  /** Book screen backdrop — web `bg-green-50` fading to the page white. */
+  bookCalendar: [palette.green50, '#FFFFFF', '#FFFFFF'] as const,
 } as const;

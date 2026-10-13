@@ -47,7 +47,7 @@ import { htmlToDisplayText } from '../../src/utils/htmlToText';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 import { PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
@@ -144,7 +144,7 @@ export default function AdminCourtsScreen() {
               <Ionicons name="copy-outline" size={22} color={Colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setEditingCourt('new')} accessibilityLabel="Add court">
-              <Ionicons name="add-circle" size={26} color={Colors.primary} />
+              <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -173,7 +173,7 @@ export default function AdminCourtsScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.cardTitle}>Blackouts</Text>
           <TouchableOpacity onPress={() => setBlackoutForm('new')} accessibilityLabel="Add blackout">
-            <Ionicons name="add-circle" size={26} color={Colors.primary} />
+            <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
           </TouchableOpacity>
         </View>
         {blackouts.length === 0 ? (
@@ -1087,7 +1087,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
   emptyText: { fontSize: FontSize.sm, color: Colors.textMuted },
   courtRow: {
     flexDirection: 'row',
@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.borderLight,
   },
   courtMain: { flex: 1 },
-  courtName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  courtName: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
   courtMeta: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2, textTransform: 'capitalize' },
   scheduleBtn: { padding: Spacing.xs },
   blackoutDescription: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
@@ -1109,17 +1109,17 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.borderLight,
     gap: Spacing.sm,
   },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: Colors.card,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
     padding: Spacing.md,
     maxHeight: '88%',
   },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
-  sheetTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6, marginTop: Spacing.xs },
+  sheetTitle: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6, marginTop: Spacing.xs },
   row: { flexDirection: 'row', gap: Spacing.sm },
   col: { flex: 1 },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.sm },
@@ -1133,7 +1133,7 @@ const styles = StyleSheet.create({
   },
   chipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
   chipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary, fontWeight: '700' },
+  chipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   toggleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1141,9 +1141,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
   },
   toggleLabel: { fontSize: FontSize.sm, color: Colors.text, flexShrink: 1, marginRight: Spacing.sm },
-  sectionTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginTop: Spacing.md, marginBottom: Spacing.xs },
+  sectionTitle: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text, marginTop: Spacing.md, marginBottom: Spacing.xs },
   dayRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
-  dayName: { width: 36, fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '700' },
+  dayName: { width: 36, fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.bold },
   dayTimeInput: { flex: 1, paddingVertical: 6 },
   dayDash: { color: Colors.textMuted },
 });

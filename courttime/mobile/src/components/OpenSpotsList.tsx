@@ -86,7 +86,7 @@ export function OpenSpotsList({ facilityId, refreshKey = 0, onClaimed, title = '
       {title ? (
         <View style={styles.headerRow}>
           <View style={styles.iconBadge}>
-            <Ionicons name="people" size={16} color={Colors.primary} />
+            <Ionicons name="people-outline" size={16} color={Colors.primary} />
           </View>
           <Text style={styles.title}>{title}</Text>
         </View>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, fontWeight: '700', color: Colors.text },
+  title: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   cardText: { flex: 1, minWidth: 0, gap: 2 },
-  court: { fontSize: FontSize.md, fontFamily: FontFamily.bold, fontWeight: '600', color: Colors.text },
+  court: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
   meta: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  hostTag: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textMuted },
+  hostTag: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textMuted },
 });

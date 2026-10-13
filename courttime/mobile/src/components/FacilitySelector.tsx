@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius, FontFamily, TouchTarget } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily, TouchTarget, Shadows } from '../constants/theme';
 import { CachedImage } from './CachedImage';
 
 export function FacilitySelector() {
@@ -111,11 +111,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     gap: Spacing.sm,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    ...Shadows.sm,
   },
   selectorText: {
     flex: 1,
@@ -126,7 +122,7 @@ const styles = StyleSheet.create({
   logo: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: BorderRadius.lg,
     backgroundColor: Colors.borderLight,
   },
   overlay: {
@@ -142,11 +138,7 @@ const styles = StyleSheet.create({
     maxHeight: 400,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    ...Shadows.md,
   },
   dropdownTitle: {
     fontSize: FontSize.md,
@@ -191,7 +183,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionTextSelected: {
-    color: Colors.primary,
+    color: Colors.primaryDark,
     fontFamily: FontFamily.semiBold,
   },
 });

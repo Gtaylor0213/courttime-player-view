@@ -29,7 +29,7 @@ import { Button } from '../../src/components/Button';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 import { HOURS_DAYS, readFacilityHours, validateFacilityHours, type DayHours, type FacilityHours, type HoursDay } from '../../src/utils/facilityHours';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Facility');
 
@@ -348,7 +348,7 @@ export default function AdminFacilityScreen() {
         <View style={styles.rowBetween}>
           <Text style={styles.cardTitle}>Additional locations</Text>
           <TouchableOpacity onPress={() => setEditingLocation({ id: null, data: { ...EMPTY_LOCATION } })} accessibilityRole="button" accessibilityLabel="Add location">
-            <Ionicons name="add-circle" size={26} color={Colors.primary} />
+            <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
           </TouchableOpacity>
         </View>
         {locations.length === 0 && !editingLocation ? <Text style={styles.muted}>No additional locations.</Text> : null}
@@ -392,15 +392,15 @@ export default function AdminFacilityScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.xs },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6, marginTop: Spacing.sm },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: Spacing.xs },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6, marginTop: Spacing.sm },
   muted: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  link: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
-  remove: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.error },
+  link: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.primary },
+  remove: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.error },
   row: { flexDirection: 'row', gap: Spacing.sm },
   hint: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   hoursRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs, borderTopWidth: 1, borderTopColor: Colors.borderLight, marginTop: Spacing.xs },
-  hoursDay: { width: 40, fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  hoursDay: { width: 40, fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   hoursInput: { flex: 1, paddingVertical: 8, textAlign: 'center' },
   hoursDash: { color: Colors.textMuted },
   hoursClosed: { flex: 1, fontSize: FontSize.sm, color: Colors.textMuted },
@@ -411,12 +411,12 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 6, backgroundColor: Colors.surface },
   chipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
   chipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary, fontWeight: '700' },
+  chipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   multiline: { minHeight: 80, textAlignVertical: 'top' },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   logo: { width: 84, height: 84, borderRadius: BorderRadius.md, backgroundColor: Colors.surface },
   logoEmpty: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
   contactBox: { borderWidth: 1, borderColor: Colors.borderLight, borderRadius: BorderRadius.md, padding: Spacing.sm, marginTop: Spacing.sm },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight },
-  locName: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  locName: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
 });

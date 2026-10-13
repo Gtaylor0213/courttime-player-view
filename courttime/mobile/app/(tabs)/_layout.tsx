@@ -10,7 +10,7 @@ import { Tabs, useNavigation, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontFamily, FontSize, Gradients, Spacing, TouchTarget } from '../../src/constants/theme';
+import { Colors, FontFamily, FontSize, Gradients, Shadows, Spacing, TouchTarget } from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { NotificationBell } from '../../src/components/NotificationBell';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
@@ -135,7 +135,7 @@ function TabsShell() {
         name="book"
         options={{
           title: 'Book',
-          tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" size={size} color={color} />,
           headerTitle: () => <HeaderFacilitySelector fallbackTitle="Book a Court" />,
         }}
       />
@@ -151,7 +151,7 @@ function TabsShell() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
           headerTitle: () => <HeaderFacilitySelector fallbackTitle="CourtTime" />,
         }}
       />
@@ -161,7 +161,7 @@ function TabsShell() {
           title: 'Messages',
           tabBarIcon: ({ color, size }) => (
             <View style={styles.tabIconWrap}>
-              <Ionicons name="chatbubbles" size={size} color={color} />
+              <Ionicons name="chatbubbles-outline" size={size} color={color} />
               {hasUnreadMessages ? <View style={styles.messagesUnreadDot} /> : null}
             </View>
           ),
@@ -173,7 +173,7 @@ function TabsShell() {
         options={{
           title: 'More',
           href: showMore ? undefined : null,
-          tabBarIcon: ({ color, size }) => <Ionicons name="apps" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="apps-outline" size={size} color={color} />,
           headerTitle: () => <HeaderFacilitySelector fallbackTitle="More" />,
         }}
       />
@@ -181,7 +181,7 @@ function TabsShell() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
           headerTitle: 'My Profile',
         }}
       />
@@ -190,7 +190,7 @@ function TabsShell() {
         options={{
           title: 'Admin',
           href: isAdmin ? undefined : null,
-          tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark-outline" size={size} color={color} />,
           headerTitle: 'Admin',
         }}
       />
@@ -213,17 +213,15 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.chromeChipBorder,
-    shadowColor: '#000',
-    shadowOpacity: 0.28,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: -8 },
-    elevation: 20,
+    // web shadow-md, cast upward
+    ...Shadows.md,
+    shadowOffset: { width: 0, height: -Shadows.md.shadowOffset.height },
+    elevation: 12,
   },
+  // 11px: one step under the web's smallest text so six tab labels still fit a small phone.
   tabLabel: {
-    fontSize: 10,
-    fontFamily: FontFamily.semiBold,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    fontSize: 11,
+    fontFamily: FontFamily.medium,
   },
   tabIconWrap: {
     minWidth: 28,
@@ -246,15 +244,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.chromeBorder,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    ...Shadows.md, // web header: shadow-md
   },
   headerTitle: {
     color: Colors.chromeText,
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.semiBold,
     fontSize: FontSize.md,
   },
   headerTitleContainer: {

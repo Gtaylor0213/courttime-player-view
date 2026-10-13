@@ -20,7 +20,7 @@ import { showAlert } from '../../src/utils/alert';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { Colors, Gradients, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
+import { Colors, Gradients, Spacing, FontSize, BorderRadius, FontFamily, Shadows } from '../../src/constants/theme';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { EditBookingModal } from '../../src/components/EditBookingModal';
 import { ReservationSheet } from '../../src/components/ReservationSheet';
@@ -152,7 +152,7 @@ export default function HomeScreen() {
       {/* Lockout Banner */}
       {lockout?.isLockedOut && (
         <View style={styles.lockoutBanner}>
-          <Ionicons name="lock-closed" size={20} color={Colors.error} />
+          <Ionicons name="lock-closed-outline" size={20} color={Colors.error} />
           <View style={{ flex: 1 }}>
             <Text style={styles.lockoutTitle}>Account Locked</Text>
             <Text style={styles.lockoutMessage}>
@@ -168,7 +168,7 @@ export default function HomeScreen() {
       {/* Strike Warning (not locked out but has strikes) */}
       {lockout && !lockout.isLockedOut && lockout.activeStrikes > 0 && (
         <View style={styles.strikeWarning}>
-          <Ionicons name="warning" size={18} color={Colors.warning} />
+          <Ionicons name="warning-outline" size={18} color={Colors.warning} />
           <Text style={styles.strikeWarningText}>
             You have {lockout.activeStrikes} of {lockout.threshold} strikes. Additional violations may result in a lockout.
           </Text>
@@ -185,7 +185,7 @@ export default function HomeScreen() {
           accessibilityLabel="Book a court"
         >
           <View style={[styles.actionIconWrap, styles.actionIconWrapPrimary]}>
-            <Ionicons name="calendar" size={32} color={Colors.primary} />
+            <Ionicons name="calendar-outline" size={32} color={Colors.primary} />
           </View>
           <Text style={styles.actionLabel}>Book a Court</Text>
         </TouchableOpacity>
@@ -199,7 +199,7 @@ export default function HomeScreen() {
             accessibilityLabel="Open club information"
           >
             <View style={styles.actionIconWrap}>
-              <Ionicons name="information-circle" size={32} color={Colors.primary} />
+              <Ionicons name="information-circle-outline" size={32} color={Colors.primary} />
             </View>
             <Text style={styles.actionLabel}>Club Info</Text>
           </TouchableOpacity>
@@ -226,7 +226,7 @@ export default function HomeScreen() {
           accessibilityLabel="Open bulletin board"
         >
           <View style={styles.actionIconWrap}>
-            <Ionicons name="megaphone" size={32} color={Colors.primary} />
+            <Ionicons name="megaphone-outline" size={32} color={Colors.primary} />
           </View>
           <Text style={styles.actionLabel}>Bulletin Board</Text>
         </TouchableOpacity>
@@ -236,7 +236,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
           <View style={styles.sectionIconBadge}>
-            <Ionicons name="calendar" size={16} color={Colors.primary} />
+            <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
           </View>
           <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
           <TouchableOpacity
@@ -337,7 +337,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
           <View style={styles.sectionIconBadge}>
-            <Ionicons name="megaphone" size={16} color={Colors.primary} />
+            <Ionicons name="megaphone-outline" size={16} color={Colors.primary} />
           </View>
           <Text style={styles.sectionTitle}>Bulletin Board</Text>
         </View>
@@ -394,11 +394,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    elevation: 10,
+    ...Shadows.lg,
   },
   welcome: {
     paddingHorizontal: Spacing.lg,
@@ -411,7 +407,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: Colors.chromeChipBg,
     top: -70,
     right: -60,
   },
@@ -420,14 +416,14 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(143,255,212,0.25)',
+    backgroundColor: Colors.chromeChipBg,
     bottom: -20,
     left: -30,
   },
   greetingEyebrow: {
     fontSize: FontSize.xs,
     fontFamily: FontFamily.semiBold,
-    color: 'rgba(255,255,255,0.72)',
+    color: Colors.chromeTextMuted,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: Spacing.xs,
@@ -443,7 +439,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     fontSize: FontSize.sm,
     fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.88)',
+    color: Colors.chromeText,
     lineHeight: 20,
   },
   lockoutBanner: {
@@ -460,7 +456,7 @@ const styles = StyleSheet.create({
   },
   lockoutTitle: {
     fontSize: FontSize.sm,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.error,
   },
   lockoutMessage: {
@@ -506,11 +502,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 3,
+    ...Shadows.sm,
   },
   actionCardFull: {
     flexBasis: '100%',
@@ -519,7 +511,7 @@ const styles = StyleSheet.create({
   actionIconWrap: {
     width: 56,
     height: 56,
-    borderRadius: 18,
+    borderRadius: BorderRadius.xl,
     backgroundColor: Colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -554,13 +546,13 @@ const styles = StyleSheet.create({
   sectionIconBadge: {
     width: 32,
     height: 32,
-    borderRadius: 10,
+    borderRadius: BorderRadius.lg,
     backgroundColor: Colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   seeAll: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 2 },
-  seeAllText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
+  seeAllText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.primary },
   bookingCard: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.lg,
@@ -570,11 +562,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderLight,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    ...Shadows.sm,
   },
   bookingHeader: {
     flexDirection: 'row',
@@ -584,7 +572,7 @@ const styles = StyleSheet.create({
   },
   bookingCourt: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
   },
   statusBadge: {
@@ -595,8 +583,8 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: FontSize.xs,
-    color: Colors.primary,
-    fontWeight: '600',
+    color: Colors.primaryDark,
+    fontFamily: FontFamily.semiBold,
     textTransform: 'capitalize',
   },
   bookingDate: {
@@ -608,7 +596,7 @@ const styles = StyleSheet.create({
   bookingFacility: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     marginTop: 2,
   },
   bookingFooter: {
@@ -637,7 +625,7 @@ const styles = StyleSheet.create({
   calendarText: {
     fontSize: FontSize.xs,
     color: Colors.primary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   editButton: {
     flexDirection: 'row',
@@ -647,7 +635,7 @@ const styles = StyleSheet.create({
   editText: {
     fontSize: FontSize.xs,
     color: Colors.primary,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   cancelButton: {
     flexDirection: 'row',
@@ -657,7 +645,7 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: FontSize.xs,
     color: Colors.error,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
   },
   bulletinCard: {
     backgroundColor: Colors.card,
@@ -666,15 +654,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
+    ...Shadows.sm,
   },
   bulletinTitle: {
     fontSize: FontSize.md,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.text,
     marginBottom: Spacing.xs,
   },

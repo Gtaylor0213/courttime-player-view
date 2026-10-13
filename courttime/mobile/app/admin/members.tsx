@@ -42,7 +42,7 @@ import { api } from '../../src/api/client';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 
@@ -514,7 +514,7 @@ function MemberDetailModal({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   card: { marginBottom: Spacing.md, padding: Spacing.md },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: Spacing.sm },
   emptyText: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: Spacing.sm },
   memberRow: {
     flexDirection: 'row',
@@ -527,9 +527,9 @@ const styles = StyleSheet.create({
   memberMain: { flex: 1 },
   filterToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
   filterToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
-  filterToggleText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
+  filterToggleText: { fontSize: FontSize.sm, color: Colors.primary, fontFamily: FontFamily.semiBold },
   dateRow: { flexDirection: 'row', gap: Spacing.sm },
-  memberName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  memberName: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
   memberEmail: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 1 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   badge: {
@@ -538,27 +538,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  badgeText: { fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  badgeText: { fontSize: FontSize.xs, fontFamily: FontFamily.bold, textTransform: 'capitalize' },
+  overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: Colors.card,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
     padding: Spacing.md,
     maxHeight: '88%',
   },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
-  sheetTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
+  sheetTitle: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text },
   sheetDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.sm },
   memberNumberRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
   sectionLabel: {
     fontSize: FontSize.sm,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     marginTop: Spacing.md,
     marginBottom: Spacing.xs,
   },
-  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6, marginTop: Spacing.xs },
+  label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6, marginTop: Spacing.xs },
   actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.xs },
   gridBtn: { flexGrow: 1 },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.sm },
@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
   },
   chipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
   chipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  chipTextSelected: { color: Colors.primary, fontWeight: '700' },
+  chipTextSelected: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   strikeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
   },
-  strikeType: { fontSize: FontSize.sm, color: Colors.text, textTransform: 'capitalize', fontWeight: '600' },
+  strikeType: { fontSize: FontSize.sm, color: Colors.text, textTransform: 'capitalize', fontFamily: FontFamily.semiBold },
   strikeReason: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  actionCancel: { fontSize: FontSize.xs, color: Colors.error, fontWeight: '700' },
+  actionCancel: { fontSize: FontSize.xs, color: Colors.error, fontFamily: FontFamily.bold },
 });

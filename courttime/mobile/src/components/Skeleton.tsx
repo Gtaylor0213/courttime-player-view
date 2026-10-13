@@ -51,6 +51,6 @@ export function Skeleton({
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: Colors.borderLight,
+    backgroundColor: Colors.border,
   },
 });

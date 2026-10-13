@@ -19,7 +19,7 @@ import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundar
 import { showApiErrorAlert } from '../../src/utils/alert';
 import { formatBulletinPostProminentDate, getLessonPostTypeLabel } from '../../../shared/utils/bulletinPostDisplay';
 import { formatCentsAsUsd } from '../../src/utils/payments';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Lessons');
 
@@ -130,7 +130,7 @@ export default function AdminLessonsScreen() {
           title: 'Lessons',
           headerRight: () => (
             <TouchableOpacity onPress={() => setShowCreate(true)} accessibilityRole="button" accessibilityLabel="Create lesson" hitSlop={8}>
-              <Ionicons name="add-circle" size={26} color={Colors.primary} />
+              <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
             </TouchableOpacity>
           ),
         }}
@@ -219,18 +219,18 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: 'row', padding: Spacing.md, paddingBottom: 0, gap: Spacing.sm },
   tab: { flex: 1, alignItems: 'center', paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
   tabActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
-  tabText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: '600' },
-  tabTextActive: { color: Colors.primary, fontWeight: '700' },
+  tabText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontFamily: FontFamily.semiBold },
+  tabTextActive: { color: Colors.primaryDark, fontFamily: FontFamily.bold },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl, gap: Spacing.sm },
   card: { padding: Spacing.md },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  title: { flex: 1, fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  title: { flex: 1, fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
   typeBadge: { fontSize: FontSize.xs, color: Colors.primary, backgroundColor: Colors.surface, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 2, overflow: 'hidden' },
   meta: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 4 },
   roster: { marginTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: Spacing.sm, gap: 4 },
-  rosterTitle: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  rosterTitle: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   rosterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm, paddingVertical: 4 },
   rosterName: { fontSize: FontSize.sm, color: Colors.text, flexShrink: 1 },
-  remove: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.error },
+  remove: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.error },
   empty: { fontSize: FontSize.xs, color: Colors.textMuted },
 });

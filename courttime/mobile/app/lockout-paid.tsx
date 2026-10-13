@@ -11,7 +11,7 @@ import { unwrapApiPayload } from '../../shared/api/core';
 import { usePaymentLockout } from '../src/contexts/PaymentLockoutContext';
 import { Button } from '../src/components/Button';
 import { Card } from '../src/components/Card';
-import { Colors, FontSize, Spacing } from '../src/constants/theme';
+import { Colors, FontSize, Spacing, FontFamily } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Lockout Paid');
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   icon: { marginBottom: Spacing.md },
   title: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     textAlign: 'center',
     marginBottom: Spacing.sm,

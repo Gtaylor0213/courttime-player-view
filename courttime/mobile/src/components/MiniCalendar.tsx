@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
+import { Colors, FontSize, Spacing, BorderRadius, FontFamily } from '../constants/theme';
 
 const CELL_GAP = 4;
 
@@ -89,11 +89,11 @@ export function MiniCalendar({ selectedDate, onSelectDate, minDate }: MiniCalend
     <View style={styles.container}>
       {/* Month navigation */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={prevMonth} style={styles.arrow}>
+        <TouchableOpacity onPress={prevMonth} style={styles.arrow} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-back" size={20} color={Colors.primary} />
         </TouchableOpacity>
         <Text style={styles.monthLabel}>{monthLabel}</Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.arrow}>
+        <TouchableOpacity onPress={nextMonth} style={styles.arrow} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
         </TouchableOpacity>
       </View>
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     fontSize: FontSize.md,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
   },
   row: {
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontSize: FontSize.sm,
-    fontWeight: '600',
+    fontFamily: FontFamily.semiBold,
     color: Colors.textMuted,
     paddingBottom: 4,
     textAlign: 'center',
@@ -209,11 +209,11 @@ const styles = StyleSheet.create({
   },
   dayTextSelected: {
     color: Colors.textInverse,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
   },
   dayTextToday: {
     color: Colors.primary,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
   },
   dayTextDisabled: {
     color: Colors.textMuted + '60',

@@ -9,7 +9,7 @@ import { Stack } from 'expo-router';
 import { moderationApi, type BlockedUser } from '../src/api/moderation';
 import { showApiErrorAlert } from '../src/utils/alert';
 import { unwrapApiPayload } from '../../shared/api/core';
-import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../src/constants/theme';
 import { EmptyState } from '../src/components/EmptyState';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 
@@ -114,5 +114,5 @@ const styles = StyleSheet.create({
   },
   name: { flex: 1, fontSize: FontSize.md, color: Colors.text },
   unblockButton: { minHeight: 44, minWidth: 72, alignItems: 'center', justifyContent: 'center' },
-  unblockText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
+  unblockText: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.primary },
 });

@@ -46,5 +46,5 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.chromeBackground,
   },
-  badgeText: { color: '#fff', fontSize: 9, fontFamily: FontFamily.bold, fontWeight: '700' },
+  badgeText: { color: Colors.textInverse, fontSize: 9, fontFamily: FontFamily.bold },
 });

@@ -241,7 +241,7 @@ export function CourtWaiverAcceptanceModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -255,7 +255,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.xl,
     fontFamily: FontFamily.bold,
-    fontWeight: '800',
     color: Colors.text,
   },
   subtitle: {
@@ -265,7 +264,6 @@ const styles = StyleSheet.create({
   },
   courtName: {
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
     color: Colors.text,
   },
   contentBox: {

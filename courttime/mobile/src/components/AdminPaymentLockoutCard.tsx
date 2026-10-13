@@ -14,7 +14,7 @@ import { api } from '../api/client';
 import { Card } from './Card';
 import { Input } from './Input';
 import { Button } from './Button';
-import { Colors, Spacing, FontSize, BorderRadius } from '../constants/theme';
+import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
 import { showAlert } from '../utils/alert';
 import {
   type AdminLockoutMember,
@@ -294,7 +294,7 @@ export function AdminPaymentLockoutCard({
                     onPress={() => void submitLock()}
                     loading={submitting}
                     disabled={submitting}
-                    leftIcon={<Ionicons name="lock-closed" size={16} color="#fff" />}
+                    leftIcon={<Ionicons name="lock-closed-outline" size={16} color={Colors.textInverse} />}
                     style={styles.sheetBtn}
                   />
                 </View>
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text },
   cardSubtitle: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   stripeWarning: {
     flexDirection: 'row',
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: FontFamily.medium,
     marginBottom: 6,
     marginTop: Spacing.xs,
   },
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
   memberMain: { flex: 1, paddingRight: Spacing.sm },
-  memberName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  memberName: { fontSize: FontSize.sm, fontFamily: FontFamily.bold, color: Colors.text },
   memberEmail: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   badge: {
     alignSelf: 'flex-start',
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  badgeText: { fontSize: 10, fontWeight: '600', color: Colors.error },
+  badgeText: { fontSize: FontSize.xs, fontFamily: FontFamily.semiBold, color: Colors.error },
   lockBtn: {
     width: 40,
     height: 40,
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -409,9 +409,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: Spacing.sm,
   },
-  sheetTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text, flex: 1 },
+  sheetTitle: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text, flex: 1 },
   sheetDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
-  sheetDescBold: { fontWeight: '700', color: Colors.text },
+  sheetDescBold: { fontFamily: FontFamily.bold, color: Colors.text },
   sheetActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
   sheetBtn: { flex: 1 },
 });

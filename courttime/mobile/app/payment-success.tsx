@@ -11,7 +11,7 @@ import type { ConnectPayment } from '../src/api/payments';
 import { formatCentsAsUsd } from '../src/utils/payments';
 import { Button } from '../src/components/Button';
 import { Card } from '../src/components/Card';
-import { Colors, FontSize, Spacing } from '../src/constants/theme';
+import { Colors, FontSize, Spacing, FontFamily } from '../src/constants/theme';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
 
 export const ErrorBoundary = createRouteErrorBoundary('Payment Success');
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   icon: { marginBottom: Spacing.md },
   title: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: Colors.text,
     textAlign: 'center',
     marginBottom: Spacing.sm,
@@ -149,6 +149,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   rowLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
-  rowValue: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  rowValue: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.text },
   btn: { width: '100%', marginTop: Spacing.sm },
 });

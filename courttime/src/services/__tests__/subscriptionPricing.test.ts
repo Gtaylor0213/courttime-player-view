@@ -86,10 +86,19 @@ describe('subscriptionPricing', () => {
     });
   });
 
+  describe('held facilities', () => {
+    it('keeps The University Club at $550 whatever its court count', () => {
+      expect(getAmountForCourts(8, 'the-university-club-sports-complex')).toBe(55000);
+      expect(getAmountForCourts(12, 'the-university-club-sports-complex')).toBe(55000);
+      expect(getAmountForCourts(8)).toBe(8 * PER_COURT_CENTS);
+    });
+  });
+
   describe('uncapped facilities', () => {
     it('identifies known uncapped facility ids and rejects others', () => {
       expect(isUncappedFacility(UNCAPPED_FACILITY_ID)).toBe(true);
       expect(isUncappedFacility('fields-club-amberfield')).toBe(true);
+      expect(isUncappedFacility('medlock-bridge-hoa-tennis-pickleball')).toBe(true);
       expect(isUncappedFacility('some-other-facility')).toBe(false);
       expect(isUncappedFacility(undefined)).toBe(false);
     });

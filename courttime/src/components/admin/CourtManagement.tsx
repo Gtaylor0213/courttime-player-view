@@ -68,6 +68,7 @@ interface Court extends PaidCourtFormFields {
   isWalkUp: boolean;
   isAdminOnly: boolean;
   status: 'available' | 'maintenance' | 'closed';
+  parentCourtId?: string | null;
   enableGuestFee?: boolean;
   guestFeeCents?: number | null;
   guestFeeDollars?: string;
@@ -295,11 +296,13 @@ export function CourtManagement() {
 
   // --- Court Limit ---
   const activeCourts = courts.filter(c => c.status !== 'closed');
+  // Split halves (courts with a parent) don't count as extra courts for billing.
+  const billableCourtCount = activeCourts.filter(c => !c.parentCourtId).length;
   const atSubscriptionCap =
-    !isUncappedFacility(currentFacilityId) && activeCourts.length >= MAX_COURTS_AT_LIST_PRICE;
-  const belowMinCourtsCovered = activeCourts.length < MIN_COURTS_COVERED;
+    !isUncappedFacility(currentFacilityId) && billableCourtCount >= MAX_COURTS_AT_LIST_PRICE;
+  const belowMinCourtsCovered = billableCourtCount < MIN_COURTS_COVERED;
   const courtsToAddForPromo = bulkAddMode ? bulkAddForm.count : 1;
-  const courtAddPromo = useCourtAddPromo(activeCourts.length, courtsToAddForPromo, currentFacilityId);
+  const courtAddPromo = useCourtAddPromo(billableCourtCount, courtsToAddForPromo, currentFacilityId);
 
   // --- Single Add/Edit ---
 

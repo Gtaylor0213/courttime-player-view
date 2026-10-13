@@ -14,17 +14,32 @@ export const MIN_COURTS_COVERED = MIN_SUBSCRIPTION_CENTS / PER_COURT_CENTS; // 4
  * (still subject to the $200 minimum) with no ceiling. Set by business request,
  * not derivable from court count or plan.
  */
-const UNCAPPED_FACILITY_IDS = new Set(['fields-club-amberfield', 'st-marlo-tennis-pickleball']);
+const UNCAPPED_FACILITY_IDS = new Set([
+  'fields-club-amberfield',
+  'st-marlo-tennis-pickleball',
+  'medlock-bridge-hoa-tennis-pickleball',
+]);
 
 export function isUncappedFacility(facilityId?: string | null): boolean {
   return !!facilityId && UNCAPPED_FACILITY_IDS.has(facilityId);
 }
 
 /**
+ * Facilities whose annual amount is held at a fixed figure regardless of court
+ * count. Set by business request: The University Club stays at $550 even though
+ * split halves no longer count toward its billable courts.
+ */
+const HELD_ANNUAL_AMOUNT_CENTS: Record<string, number> = {
+  'the-university-club-sports-complex': 55000,
+};
+
+/**
  * Annual subscription amount in cents: $50/court, min $200, max $550
- * (no max for facilities in UNCAPPED_FACILITY_IDS).
+ * (no max for facilities in UNCAPPED_FACILITY_IDS; fixed for facilities in
+ * HELD_ANNUAL_AMOUNT_CENTS).
  */
 export function getAmountForCourts(courtCount: number, facilityId?: string | null): number {
+  if (facilityId && facilityId in HELD_ANNUAL_AMOUNT_CENTS) return HELD_ANNUAL_AMOUNT_CENTS[facilityId];
   const raw = courtCount * PER_COURT_CENTS;
   const floored = Math.max(MIN_SUBSCRIPTION_CENTS, raw);
   return isUncappedFacility(facilityId) ? floored : Math.min(MAX_SUBSCRIPTION_CENTS, floored);

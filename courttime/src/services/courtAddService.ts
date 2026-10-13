@@ -64,11 +64,12 @@ export type BulkCourtAddPayload = {
 
 export type CourtAddPayload = SingleCourtAddPayload | BulkCourtAddPayload;
 
+/** Billable courts: split halves (rows with a parent court) don't count as extra courts. */
 export async function getActiveCourtCount(facilityId: string): Promise<number> {
   const result = await query(
     `SELECT COUNT(*)::int AS count
      FROM courts
-     WHERE facility_id = $1 AND status != 'closed'`,
+     WHERE facility_id = $1 AND status != 'closed' AND parent_court_id IS NULL`,
     [facilityId]
   );
   return result.rows[0]?.count ?? 0;

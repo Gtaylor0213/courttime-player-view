@@ -784,9 +784,10 @@ async function getActiveCourtCountForFacility(
   facilityId: string,
   client?: PoolClient
 ): Promise<number> {
+  // Split halves (rows with a parent court) don't count as extra courts.
   const sql = `SELECT COUNT(*)::int AS count
      FROM courts
-     WHERE facility_id = $1 AND status != 'closed'`;
+     WHERE facility_id = $1 AND status != 'closed' AND parent_court_id IS NULL`;
   const result = client
     ? await client.query(sql, [facilityId])
     : await query(sql, [facilityId]);

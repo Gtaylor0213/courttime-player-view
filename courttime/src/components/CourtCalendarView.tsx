@@ -365,7 +365,7 @@ export function CourtCalendarView() {
 
       try {
         setLoadingFacilities(true);
-        const facilitiesData: Array<{ id: string; name: string; type: string; status?: string; courts: Array<{ id: string; name: string; type: string; typeLabel: string; surfaceType?: string; parentCourtId?: string | null; isSplitCourt?: boolean; isWalkUp?: boolean }>; operatingHours?: any; timezone?: string }> = [];
+        const facilitiesData: Array<{ id: string; name: string; type: string; status?: string; courts: Array<{ id: string; name: string; type: string; typeLabel: string; courtNumber?: number; surfaceType?: string; parentCourtId?: string | null; isSplitCourt?: boolean; isWalkUp?: boolean }>; operatingHours?: any; timezone?: string }> = [];
 
         for (const facilityId of allFacilityIds) {
           // Fetch facility details
@@ -434,6 +434,7 @@ export function CourtCalendarView() {
                   name: court.name,
                   type: court.type,
                   typeLabel: String(court.courtType ?? '').trim() || court.type,
+                  courtNumber: court.courtNumber,
                   surfaceType: court.surfaceType,
                   parentCourtId: court.parentCourtId,
                   isSplitCourt: court.isSplitCourt,

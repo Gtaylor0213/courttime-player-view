@@ -99,9 +99,10 @@ function shouldGroupNonPickleballThenPickleball(courts: CourtSortable[]): boolea
 function baseNumber(c: CourtSortable, byId: Map<string, CourtSortable>): number {
   const pid = parentId(c);
   if (pid) {
+    // A split child always sorts with its parent, even when the parent has no
+    // usable number (e.g. "Stadium") and the child's own name ends in one.
     const parent = byId.get(pid);
-    const pn = parent && getNumericCourtNumber(parent);
-    if (pn !== undefined) return pn;
+    if (parent && !parentId(parent)) return baseNumber(parent, byId);
   }
   const parsed = c.name ? parseTrailingCourtName(c.name) : null;
   if (parsed) return parsed.base;
@@ -128,7 +129,8 @@ function sortKey(
     baseNumber(c, byId),
     variantTier(c),
     nameSuffixForSort(c),
-    String(c.id),
+    // Name before id so siblings without a letter suffix ("Stadium 1", "Stadium 2") stay in order.
+    `${String(c.name || '').toLowerCase()}\u0000${String(c.id)}`,
   ];
 }
 
@@ -140,7 +142,7 @@ function compareKeys(
     if (a[i] < b[i]) return -1;
     if (a[i] > b[i]) return 1;
   }
-  return a[3].localeCompare(b[3]);
+  return a[3].localeCompare(b[3], undefined, { numeric: true });
 }
 
 /** Non-mutating sort for any court-like objects returned from APIs or UI state. */

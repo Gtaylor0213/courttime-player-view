@@ -156,7 +156,7 @@ export const BOOKING_TYPES = {
     rn: { bg: '#ffdf20', border: '#f0b100', text: '#733e0a' },
   },
   open_play: {
-    label: 'Open Play',
+    label: 'Open Clinic',
     color: 'bg-emerald-700 text-emerald-50 border-emerald-800',
     bgColor: 'bg-emerald-700',
     rn: { bg: '#007a55', border: '#006045', text: '#ecfdf5' },

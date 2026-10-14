@@ -104,8 +104,11 @@ Global answers:
 | Photos and videos | Photos | App functionality (profile picture) |
 | Messages | Other in-app messages | App functionality |
 | Financial info | Purchase history | App functionality |
-| App activity | Other actions (reservations, sign-ups) | App functionality |
-| App info and performance | Crash logs, Diagnostics | App functionality |
+| App activity | Other user-generated content (posts, bio, reports), Other actions (reservations, sign-ups) | App functionality |
+| Device or other IDs | Push token | App functionality |
+| App info and performance | Crash logs, Diagnostics — **only if Sentry is on in the submitted build** (see Diagnostics above) | App functionality |
+
+The exact answer for every Play Console field, in the order the console asks, is in [`PLAY_CONSOLE.md`](./PLAY_CONSOLE.md).
 
 ---
 

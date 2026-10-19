@@ -20,7 +20,7 @@ import {
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api/client';
-import { Colors, Spacing, FontSize, BorderRadius, FontFamily, Palette } from '../constants/theme';
+import { ChromeMaxFontScale, Colors, Spacing, FontSize, BorderRadius, FontFamily, Palette } from '../constants/theme';
 import type { Court } from '../types/database';
 import { BookingSkeleton } from './LoadingSkeleton';
 import { EmptyState } from './EmptyState';
@@ -1217,7 +1217,16 @@ export function CourtCalendarGrid({
                 const past = isPast(rowIndex) || isNotYetOpen(rowIndex);
                 return (
                   <View key={time} style={[styles.timeLabel, styles.timeLabelGrid, styles.timeLabelRow]}>
-                    <Text style={[styles.timeLabelText, past && styles.pastText]}>{formatTimeLabel(time)}</Text>
+                    {/* One line at any text size: the 46pt column wraps "10:30" past about 1.35x */}
+                    <Text
+                      style={[styles.timeLabelText, past && styles.pastText]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.7}
+                      maxFontSizeMultiplier={ChromeMaxFontScale}
+                    >
+                      {formatTimeLabel(time)}
+                    </Text>
                   </View>
                 );
               })}

@@ -129,9 +129,12 @@ function TabsShell() {
         },
       ],
       tabBarLabel: ({ color, children }: { color: ColorValue; children: string }) => (
+        // Six labels on a narrow phone: shrink to fit rather than show "Mes…".
         <Text
           style={[styles.tabLabel, { color }]}
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
           maxFontSizeMultiplier={ChromeMaxFontScale}
         >
           {children}
@@ -258,6 +261,7 @@ const styles = StyleSheet.create({
     lineHeight: TAB_LABEL_LINE_HEIGHT,
     fontFamily: FontFamily.medium,
     textAlign: 'center',
+    alignSelf: 'stretch',
   },
   tabIconWrap: {
     minWidth: 28,

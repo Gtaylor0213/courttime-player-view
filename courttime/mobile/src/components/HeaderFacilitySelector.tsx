@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { Colors, Spacing, FontSize, BorderRadius, FontFamily, Shadows } from '../constants/theme';
+import { ChromeMaxFontScale, Colors, Spacing, FontSize, BorderRadius, FontFamily, Shadows } from '../constants/theme';
 import { CachedImage } from './CachedImage';
 
 interface Props {
@@ -56,6 +56,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
           style={[styles.titleStatic, n > 42 && styles.titleStaticSm, n > 58 && styles.titleStaticXs]}
           numberOfLines={1}
           ellipsizeMode="tail"
+          maxFontSizeMultiplier={ChromeMaxFontScale}
         >
           {name}
         </Text>
@@ -66,7 +67,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
   if (facilities.length === 0) {
     return (
       <View style={styles.titleStaticWrap}>
-        <Text style={styles.titleStatic} numberOfLines={1} ellipsizeMode="tail">
+        <Text style={styles.titleStatic} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={ChromeMaxFontScale}>
           {fallbackTitle}
         </Text>
       </View>
@@ -98,7 +99,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
           )}
         </View>
         <View style={styles.titleFlex}>
-          <Text style={textStyles} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={textStyles} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={ChromeMaxFontScale}>
             {facilityName}
           </Text>
         </View>

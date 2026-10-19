@@ -4,13 +4,22 @@
  */
 
 import React, { useEffect, useMemo } from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { type ColorValue, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs, useNavigation, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontFamily, FontSize, Gradients, Shadows, Spacing, TouchTarget } from '../../src/constants/theme';
+import {
+  ChromeMaxFontScale,
+  Colors,
+  FontFamily,
+  FontSize,
+  Gradients,
+  Shadows,
+  Spacing,
+  TouchTarget,
+} from '../../src/constants/theme';
 import { HeaderFacilitySelector } from '../../src/components/HeaderFacilitySelector';
 import { NotificationBell } from '../../src/components/NotificationBell';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
@@ -20,6 +29,21 @@ import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
 import { shouldShowMoreTab } from '../../src/utils/moreMenu';
 
 export const ErrorBoundary = createRouteErrorBoundary('Tabs');
+
+const TAB_BAR_PADDING_TOP = 10;
+const TAB_LABEL_LINE_HEIGHT = 15;
+
+/**
+ * The tab navigator fixes the bar's height at 49 + the bottom inset unless a height is
+ * given, and our padding comes out of that. Without an explicit height the labels were
+ * pushed into the Android navigation bar, under its translucent scrim.
+ */
+function tabBarHeight(insetBottom: number, fontScale: number): number {
+  const labelHeight = Math.ceil(TAB_LABEL_LINE_HEIGHT * Math.min(fontScale, ChromeMaxFontScale));
+  // The navigator's tab item: 5pt padding above and below a 28pt icon slot.
+  const content = 5 + 28 + labelHeight + 5;
+  return TAB_BAR_PADDING_TOP + content + Math.max(insetBottom, 12);
+}
 
 /** iOS stack back label for screens pushed above the tab group (e.g. Payments). */
 const TAB_BACK_TITLES: Record<string, string> = {
@@ -70,6 +94,7 @@ function renderNavTabButton(props: Record<string, unknown>) {
 function TabsShell() {
   useTabsStackBackTitle();
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
   const { user, facilityId } = useAuth();
   const { hasUnreadMessages } = useMessageUnread();
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
@@ -93,16 +118,25 @@ function TabsShell() {
           />
         </View>
       ),
-      // Do not set a fixed tabBar height — it can clip touch targets vs. safe area / font scale.
+      // Height follows the safe area and the (capped) font scale; see tabBarHeight.
       tabBarStyle: [
         styles.tabBar,
         {
+          height: tabBarHeight(insets.bottom, fontScale),
           paddingBottom: Math.max(insets.bottom, 12),
-          paddingTop: 10,
+          paddingTop: TAB_BAR_PADDING_TOP,
           backgroundColor: 'transparent',
         },
       ],
-      tabBarLabelStyle: styles.tabLabel,
+      tabBarLabel: ({ color, children }: { color: ColorValue; children: string }) => (
+        <Text
+          style={[styles.tabLabel, { color }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={ChromeMaxFontScale}
+        >
+          {children}
+        </Text>
+      ),
       headerBackground: () => (
         <LinearGradient
           colors={[...Gradients.chrome]}
@@ -124,7 +158,7 @@ function TabsShell() {
       headerRight: () => <NotificationBell />,
       tabBarButton: renderNavTabButton,
     }),
-    [insets.bottom]
+    [insets.bottom, fontScale]
   );
 
   return (
@@ -221,7 +255,9 @@ const styles = StyleSheet.create({
   // 11px: one step under the web's smallest text so six tab labels still fit a small phone.
   tabLabel: {
     fontSize: 11,
+    lineHeight: TAB_LABEL_LINE_HEIGHT,
     fontFamily: FontFamily.medium,
+    textAlign: 'center',
   },
   tabIconWrap: {
     minWidth: 28,

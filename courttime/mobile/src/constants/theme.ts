@@ -123,6 +123,13 @@ export const TouchTarget = {
   min: 48,
 };
 
+/**
+ * Header and tab-bar text follows the system font size up to this factor. Past it the
+ * six tab labels and the club name no longer fit a phone, and Android clips the first
+ * glyph of centred text it has to ellipsize.
+ */
+export const ChromeMaxFontScale = 1.3;
+
 /** The web `shadow-sm` / `shadow-md` / `shadow-lg`, as React Native style props. */
 export const Shadows = {
   sm: {

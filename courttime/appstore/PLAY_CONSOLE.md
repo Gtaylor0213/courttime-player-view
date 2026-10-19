@@ -2,7 +2,7 @@
 
 Every answer to give in **Play Console → Policy and programs → App content**, plus the store listing. Work down the page in this order; each section is one task card in the console.
 
-**Verified on 14 Oct 2026** against the Oct 14 preview APK (commit `71abb39`): its merged manifest has **no** `AD_ID` permission and **no** `READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO`, sign-in is email and password only, and no Sentry DSN is set in any EAS environment. Re-check these three if dependencies change before you submit.
+**Submitted in Play Console on 8 Oct 2026; this file matches what was entered.** Verified on 14 Oct 2026 against the Oct 14 preview APK (commit `71abb39`): its merged manifest has **no** `AD_ID` permission and **no** `READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO`, sign-in is email and password only, and no Sentry DSN is set in any EAS environment. Re-check these three if dependencies change before you submit.
 
 The reasoning behind each data answer is in [`PRIVACY_DECLARATIONS.md`](./PRIVACY_DECLARATIONS.md). If the two ever disagree, fix both in the same commit.
 
@@ -78,7 +78,7 @@ If you would rather avoid the extra teen-audience scrutiny, tick **18 and over**
 | Is all of the user data collected by your app encrypted in transit? | **Yes** |
 | Which methods of account creation does your app support? | **Username and password** only |
 | Delete account URL | `https://courttimeapp.com/delete-account` |
-| Do you provide a way for users to request that some or all of their data is deleted, without requiring them to delete their account? | **Yes**: members can delete their own messages and posts and clear optional profile fields |
+| Do you provide a way for users to request that some or all of their data is deleted, without requiring them to delete their account? | **No** (optional question; this is what was submitted on 8 Oct 2026) |
 
 ### Data types to tick
 
@@ -107,9 +107,9 @@ Play asks the same four questions for every ticked type. Answer like this:
 | Name | Collected, **not shared** | No | Required | App functionality · Account management |
 | Email address | Collected, not shared | No | Required | App functionality · Account management |
 | User IDs | Collected, not shared | No | Required | App functionality · Account management |
-| Address | Collected, not shared | No | **Optional** | App functionality |
-| Phone number | Collected, not shared | No | **Optional** | App functionality |
-| Other info (gender, skill level) | Collected, not shared | No | **Optional** | App functionality · Personalization |
+| Address | Collected, not shared | No | **Optional** | App functionality · Account management |
+| Phone number | Collected, not shared | No | **Optional** | App functionality · Account management |
+| Other info (gender, skill level) | Collected, not shared | No | **Optional** | App functionality |
 | Purchase history | Collected, not shared | No | **Optional** (only clubs that charge) | App functionality |
 | Other in-app messages | Collected, not shared | No | **Optional** | App functionality |
 | Photos | Collected, not shared | No | **Optional** | App functionality |

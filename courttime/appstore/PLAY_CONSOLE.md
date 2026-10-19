@@ -146,7 +146,7 @@ Play asks the same four questions for every ticked type. Answer like this:
 | Full description | The block under "Full description" in [`LISTING.md`](./LISTING.md) |
 | App icon | `marketing/play-icon-512.png` |
 | Feature graphic | `marketing/play-feature-graphic-1024x500.png` |
-| Phone screenshots | `screenshots/android/`: 2 minimum, 5 planned. **Not taken yet.** |
+| Phone screenshots | `screenshots/android/01-home.png` … `05-messages.png`, in that order (945 × 1837, taken on a Samsung on 19 Oct 2026) |
 
 **Store settings** (Store presence → Store settings):
 

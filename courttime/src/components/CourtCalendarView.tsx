@@ -23,7 +23,7 @@ import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { parseLocalDate } from '../utils/dateUtils';
 import { blackoutsToBlockedRanges } from '../../shared/utils/blackoutSlots';
 import { toast } from 'sonner';
-import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Grid3X3, Info, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2 } from 'lucide-react';
+import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Grid3X3, Info, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2, Type } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
 import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../../shared/constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
@@ -33,6 +33,12 @@ import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { courtTypeLabel } from '../../shared/constants/courtTypes';
 import { useCourtTypeFilter } from './useCourtTypeFilter';
 import { useBookingWindow } from './useBookingWindow';
+import {
+  RESERVATION_TEXT_SCALE_MAX,
+  RESERVATION_TEXT_SCALE_MIN,
+  RESERVATION_TEXT_SCALE_STEP,
+  useReservationTextScale,
+} from './useReservationTextScale';
 import { fetchBookingCalendarDetails, offerAddBookingToCalendar } from '../utils/bookingCalendar';
 import {
   BULLETIN_ACTIVITY_BOOKING_TYPES,
@@ -321,6 +327,9 @@ export function CourtCalendarView() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [mobileControlsExpanded, setMobileControlsExpanded] = useState(false);
   const [scrollTrigger, setScrollTrigger] = useState(0); // forces auto-scroll on mount
+
+  // Size of the name/details text on reservation blocks (slider in the controls header)
+  const { textScale: reservationTextScale, setTextScale: setReservationTextScale } = useReservationTextScale();
 
   // Computed court column width based on zoom
   const effectiveCourtWidth = Math.round(COURT_COL_WIDTH * zoomLevel / 100);
@@ -2864,15 +2873,15 @@ export function CourtCalendarView() {
           ? booking.reason || null
           : !isBlocked && booking.bookingType ? getBookingTypeLabel(booking.bookingType) : null;
         const contentWidth = Math.max(width - 12, 0);
-        const nameCharsPerLine = Math.max(1, Math.floor(contentWidth / 6.4));
-        const typeCharsPerLine = Math.max(1, Math.floor(contentWidth / 5.6));
+        const nameCharsPerLine = Math.max(1, Math.floor(contentWidth / (6.4 * reservationTextScale)));
+        const typeCharsPerLine = Math.max(1, Math.floor(contentWidth / (5.6 * reservationTextScale)));
         const nameNeedsSecondLine = (booking.player?.length || 0) > nameCharsPerLine;
         const typeNeedsSecondLine = typeLabel ? typeLabel.length > typeCharsPerLine : false;
 
-        const NAME_LINE_HEIGHT = 14;
-        const TYPE_LINE_HEIGHT = 13;
-        const DURATION_ROW_HEIGHT = 15;
-        const NOTES_ROW_HEIGHT = 15;
+        const NAME_LINE_HEIGHT = 14 * reservationTextScale;
+        const TYPE_LINE_HEIGHT = 13 * reservationTextScale;
+        const DURATION_ROW_HEIGHT = 15 * reservationTextScale;
+        const NOTES_ROW_HEIGHT = 15 * reservationTextScale;
         const CONTENT_PADDING = 4; // px-1.5 py-0.5 vertical padding
 
         let remaining = Math.max(height - CONTENT_PADDING, 0);
@@ -2917,26 +2926,32 @@ export function CourtCalendarView() {
             onPointerDown={isDraggable ? (e) => handleReservationPointerDown(booking, e) : undefined}
           >
             <div className={`px-1.5 py-0.5 h-full flex flex-col overflow-hidden ${isCompact ? 'justify-center' : ''}`}>
-              <div className={`text-[11px] font-semibold leading-tight break-words ${nameLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}>
+              <div
+                className={`font-semibold leading-tight break-words ${nameLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}
+                style={{ fontSize: 11 * reservationTextScale }}
+              >
                 {booking.player}
               </div>
               {showTypeFull && (
-                <div className={`text-[10px] leading-tight opacity-80 mt-0.5 break-words ${typeLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}>
+                <div
+                  className={`leading-tight opacity-80 mt-0.5 break-words ${typeLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}
+                  style={{ fontSize: 10 * reservationTextScale }}
+                >
                   {typeLabel}
                 </div>
               )}
               {showDurationRow && (
                 <div className="flex items-center gap-1 min-w-0 mt-0.5">
-                  <span className="text-[9px] opacity-75 shrink-0 truncate">{isBlackout ? blackoutTimeRange : booking.duration}</span>
+                  <span className="opacity-75 shrink-0 truncate" style={{ fontSize: 9 * reservationTextScale }}>{isBlackout ? blackoutTimeRange : booking.duration}</span>
                   {showCategoryBadge && (
-                    <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-white/50 truncate min-w-0">
+                    <span className="px-1 py-0.5 rounded font-medium bg-white/50 truncate min-w-0" style={{ fontSize: 9 * reservationTextScale }}>
                       {typeLabel}
                     </span>
                   )}
                 </div>
               )}
               {showNotes && (
-                <div className="text-[9px] mt-1 truncate italic opacity-70">
+                <div className="mt-1 truncate italic opacity-70" style={{ fontSize: 9 * reservationTextScale }}>
                   {booking.notes.length > 30 ? `${booking.notes.substring(0, 30)}...` : booking.notes}
                 </div>
               )}
@@ -2973,7 +2988,7 @@ export function CourtCalendarView() {
         }`}
         style={{ top, left, width, height, zIndex: 6 }}
       >
-        <span className="text-[11px] font-semibold leading-tight line-clamp-2 break-words">
+        <span className="font-semibold leading-tight line-clamp-2 break-words" style={{ fontSize: 11 * reservationTextScale }}>
           {booking.walkInName || booking.userName || 'Reservation'}
         </span>
       </div>
@@ -3046,6 +3061,33 @@ export function CourtCalendarView() {
       </div>
     );
   };
+
+  const renderReservationTextSlider = (className: string) => (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <Type className="h-3 w-3 shrink-0 text-gray-500" aria-hidden />
+      <input
+        type="range"
+        min={RESERVATION_TEXT_SCALE_MIN}
+        max={RESERVATION_TEXT_SCALE_MAX}
+        step={RESERVATION_TEXT_SCALE_STEP}
+        value={reservationTextScale}
+        onChange={(e) => setReservationTextScale(parseFloat(e.target.value))}
+        aria-label="Reservation text size"
+        aria-valuetext={`${Math.round(reservationTextScale * 100)}%`}
+        className="min-w-0 flex-1 cursor-pointer accent-green-600"
+      />
+      <Type className="h-5 w-5 shrink-0 text-gray-500" aria-hidden />
+      <button
+        type="button"
+        onClick={() => setReservationTextScale(1)}
+        disabled={reservationTextScale === 1}
+        title="Reset text size"
+        className="w-11 shrink-0 rounded px-1 text-center text-xs font-medium text-gray-700 tabular-nums hover:bg-white/70 disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        {Math.round(reservationTextScale * 100)}%
+      </button>
+    </div>
+  );
 
   const renderMobileCurrentTimeLine = () => {
     if (currentTimeLinePosition === null) return null;
@@ -3275,6 +3317,11 @@ export function CourtCalendarView() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Reservation Text</p>
+                    {renderReservationTextSlider('w-full')}
+                  </div>
                 </div>
               )}
             </div>
@@ -3343,6 +3390,11 @@ export function CourtCalendarView() {
                     >
                       <ZoomIn className="h-3.5 w-3.5" />
                     </Button>
+                  </div>
+
+                  <div className="hidden md:flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-gray-600">Text:</span>
+                    {renderReservationTextSlider('w-48')}
                   </div>
 
                   {/* Peak-Hours Legend */}

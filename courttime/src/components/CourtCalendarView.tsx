@@ -54,6 +54,29 @@ const HEADER_HEIGHT = 38;
 const MOBILE_DRAG_ARM_DELAY_MS = 180;
 const MOBILE_MOVEMENT_THRESHOLD_PX = 8;
 
+/** Rough line count for `text` greedy-wrapped at `charsPerLine` (long words break mid-word). */
+function estimateWrappedLines(text: string, charsPerLine: number): number {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 1;
+  let lines = 1;
+  let lineLength = 0;
+  for (const word of words) {
+    if (lineLength > 0 && lineLength + 1 + word.length <= charsPerLine) {
+      lineLength += 1 + word.length;
+      continue;
+    }
+    if (lineLength > 0) lines += 1;
+    lines += Math.ceil(word.length / charsPerLine) - 1;
+    lineLength = word.length % charsPerLine || charsPerLine;
+  }
+  return lines;
+}
+
+/** Inline equivalent of Tailwind's line-clamp-N for a computed N. */
+function lineClampStyle(lines: number): React.CSSProperties {
+  return { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: lines };
+}
+
 /** Normalize client coordinates for mouse, pointer, or touch events. */
 function getEventCoords(e: { clientX?: number; clientY?: number; touches?: TouchList; changedTouches?: TouchList }): {
   clientX: number;
@@ -2867,16 +2890,16 @@ export function CourtCalendarView() {
 
         // Vertical-space budget: name gets priority, then the full service/type line, then the
         // duration+category row, then notes — each only rendered if the remaining height allows it.
-        // A row is only granted a 2nd line when the text is actually estimated to need it, so short
-        // names/types don't waste budget that lower-priority rows could otherwise use.
+        // Name and type wrap onto as many lines as they're estimated to need (up to what the block
+        // can hold), so short text doesn't waste budget that lower-priority rows could use.
         const typeLabel = isBlackout
           ? booking.reason || null
           : !isBlocked && booking.bookingType ? getBookingTypeLabel(booking.bookingType) : null;
         const contentWidth = Math.max(width - 12, 0);
         const nameCharsPerLine = Math.max(1, Math.floor(contentWidth / (6.4 * reservationTextScale)));
         const typeCharsPerLine = Math.max(1, Math.floor(contentWidth / (5.6 * reservationTextScale)));
-        const nameNeedsSecondLine = (booking.player?.length || 0) > nameCharsPerLine;
-        const typeNeedsSecondLine = typeLabel ? typeLabel.length > typeCharsPerLine : false;
+        const nameLinesNeeded = estimateWrappedLines(booking.player || '', nameCharsPerLine);
+        const typeLinesNeeded = typeLabel ? estimateWrappedLines(typeLabel, typeCharsPerLine) : 0;
 
         const NAME_LINE_HEIGHT = 14 * reservationTextScale;
         const TYPE_LINE_HEIGHT = 13 * reservationTextScale;
@@ -2885,12 +2908,13 @@ export function CourtCalendarView() {
         const CONTENT_PADDING = 4; // px-1.5 py-0.5 vertical padding
 
         let remaining = Math.max(height - CONTENT_PADDING, 0);
-        const nameLines = nameNeedsSecondLine && remaining >= NAME_LINE_HEIGHT * 2 ? 2 : 1;
-        remaining -= NAME_LINE_HEIGHT * nameLines;
+        // The name may use every line the block has; the estimate only decides what's left below it.
+        const nameMaxLines = Math.max(1, Math.floor(remaining / NAME_LINE_HEIGHT));
+        remaining -= NAME_LINE_HEIGHT * Math.min(nameLinesNeeded, nameMaxLines);
 
         const showTypeFull = !!typeLabel && remaining >= TYPE_LINE_HEIGHT;
-        const typeLines = showTypeFull && typeNeedsSecondLine && remaining >= TYPE_LINE_HEIGHT * 2 ? 2 : 1;
-        if (showTypeFull) remaining -= TYPE_LINE_HEIGHT * typeLines;
+        const typeMaxLines = Math.max(1, Math.floor(remaining / TYPE_LINE_HEIGHT));
+        if (showTypeFull) remaining -= TYPE_LINE_HEIGHT * Math.min(typeLinesNeeded, typeMaxLines);
 
         const showDurationRow = remaining >= DURATION_ROW_HEIGHT;
         if (showDurationRow) remaining -= DURATION_ROW_HEIGHT;
@@ -2927,15 +2951,15 @@ export function CourtCalendarView() {
           >
             <div className={`px-1.5 py-0.5 h-full flex flex-col overflow-hidden ${isCompact ? 'justify-center' : ''}`}>
               <div
-                className={`font-semibold leading-tight break-words ${nameLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}
-                style={{ fontSize: 11 * reservationTextScale }}
+                className="shrink-0 font-semibold leading-tight break-words overflow-hidden"
+                style={{ fontSize: 11 * reservationTextScale, ...lineClampStyle(nameMaxLines) }}
               >
                 {booking.player}
               </div>
               {showTypeFull && (
                 <div
-                  className={`leading-tight opacity-80 mt-0.5 break-words ${typeLines === 2 ? 'line-clamp-2' : 'line-clamp-1'}`}
-                  style={{ fontSize: 10 * reservationTextScale }}
+                  className="shrink-0 leading-tight opacity-80 mt-0.5 break-words overflow-hidden"
+                  style={{ fontSize: 10 * reservationTextScale, ...lineClampStyle(typeMaxLines) }}
                 >
                   {typeLabel}
                 </div>

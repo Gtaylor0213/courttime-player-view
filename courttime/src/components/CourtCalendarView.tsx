@@ -50,8 +50,8 @@ const SUB_SLOT_HEIGHT = 25;       // 30-min row height (desktop)
 const TIME_COL_WIDTH = 72;
 const COURT_COL_WIDTH = 180;
 const HEADER_HEIGHT = 38;
-/** Match native app: short hold before drag arms so scroll/swipe stay natural. */
-const MOBILE_DRAG_ARM_DELAY_MS = 180;
+/** Hold this long before a phone touch arms drag-to-book, so a slow-starting swipe still scrolls. */
+const MOBILE_DRAG_ARM_DELAY_MS = 400;
 const MOBILE_MOVEMENT_THRESHOLD_PX = 8;
 
 /** Rough line count for `text` greedy-wrapped at `charsPerLine` (long words break mid-word). */
@@ -2276,10 +2276,15 @@ export function CourtCalendarView() {
         const absX = Math.abs(deltaX);
         const absY = Math.abs(deltaY);
 
-        if (absX > 10 && absX > absY + 2) {
+        // Before the drag commits, any mostly-sideways move is a swipe; once it commits, only a clear one.
+        const sidewaysSwipe = gesture.moved
+          ? absX > 10 && absX > absY + 2
+          : absX > MOBILE_MOVEMENT_THRESHOLD_PX && absX >= absY;
+        if (sidewaysSwipe) {
           gesture.horizontalSwipe = true;
           clearMobileDragState();
           releaseMobileTouchLocks();
+          detachDragTouchMove();
           return;
         }
 
@@ -2326,7 +2331,8 @@ export function CourtCalendarView() {
       };
     };
 
-    root.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+    // Phones never preventDefault on touchstart; a passive listener lets scrolling start without waiting on JS.
+    root.addEventListener('touchstart', onTouchStart, { capture: true, passive: isMobile });
     return () => {
       root.removeEventListener('touchstart', onTouchStart, true);
       mobileTouchCleanupRef.current?.();
@@ -2401,6 +2407,9 @@ export function CourtCalendarView() {
         };
         reservationDragStateRef.current = next;
         setReservationDragState(next);
+        // Only block native scrolling once the drag is armed.
+        window.removeEventListener('touchmove', onTouchMove, true);
+        window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
       }, MOBILE_DRAG_ARM_DELAY_MS);
 
       const onTouchMove = (ev: TouchEvent) => {
@@ -2489,12 +2498,12 @@ export function CourtCalendarView() {
         setReservationDragState(emptyReservationDragState);
       };
 
-      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+      window.addEventListener('touchmove', onTouchMove, { capture: true, passive: true });
       window.addEventListener('touchend', onTouchEnd, true);
       window.addEventListener('touchcancel', onTouchEnd, true);
     };
 
-    root.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+    root.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
     return () => {
       root.removeEventListener('touchstart', onTouchStart, true);
       if (reservationDragArmTimerRef.current) {

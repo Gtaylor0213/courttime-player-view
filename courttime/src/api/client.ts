@@ -15,6 +15,7 @@ import {
 } from '../../shared/api/core';
 import { isSessionAuthError } from '../../shared/utils/sessionAuth';
 import type { BookingWindowInfo } from '../../shared/utils/bookingWindow';
+import type { EmailBlastJob } from '../../shared/types';
 
 export {
   unwrapApiPayload,
@@ -1408,11 +1409,28 @@ export const adminApi = {
   },
 
   // Email Blast
-  sendEmailBlast: async (facilityId: string, data: { subject: string; message: string; recipientFilter: string }) => {
-    return apiRequest(`/api/admin/email-blast/${facilityId}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  // Starts a background send; poll getEmailBlastJob for progress. `duplicate` means the
+  // same message went out recently and nothing new was sent (pass allowDuplicate to resend).
+  sendEmailBlast: async (
+    facilityId: string,
+    data: { subject: string; message: string; recipientFilter: string; allowDuplicate?: boolean }
+  ) => {
+    return apiRequest<{ success: boolean; data: { job: EmailBlastJob; duplicate: boolean } }>(
+      `/api/admin/email-blast/${facilityId}`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  },
+
+  getEmailBlastJob: async (facilityId: string, jobId: string) => {
+    return apiRequest<{ success: boolean; data: { job: EmailBlastJob } }>(
+      `/api/admin/email-blast/${facilityId}/jobs/${jobId}`
+    );
+  },
+
+  getLatestEmailBlast: async (facilityId: string) => {
+    return apiRequest<{ success: boolean; data: { job: EmailBlastJob | null } }>(
+      `/api/admin/email-blast/${facilityId}/latest`
+    );
   },
 
   // Email Templates

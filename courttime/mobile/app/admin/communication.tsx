@@ -1,11 +1,16 @@
 /**
  * Admin Communication: email blast to members, plus the existing bulletin-board announcement post.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/api/client';
-import { sendEmailBlast } from '../../src/api/admin';
+import {
+  sendEmailBlast,
+  getEmailBlastJob,
+  getLatestEmailBlast,
+  type EmailBlastJob,
+} from '../../src/api/admin';
 import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
@@ -22,6 +27,21 @@ const RECIPIENT_FILTERS = [
   { value: 'suspended', label: 'Suspended' },
 ];
 
+const POLL_INTERVAL_MS = 2000;
+/** A finished blast stays on screen (and counts as "just sent") for this long. */
+const RECENT_MS = 30 * 60 * 1000;
+
+function isRecent(job: EmailBlastJob) {
+  return Date.now() - Date.parse(job.startedAt) < RECENT_MS;
+}
+
+function blastStatusText(job: EmailBlastJob) {
+  if (job.status === 'sending') {
+    return `Sending "${job.subject}"… ${job.sent + job.failed} of ${job.total}. You can leave this screen — sending continues on the server.`;
+  }
+  return `"${job.subject}" delivered to ${job.sent} of ${job.total} recipients${job.failed ? ` (${job.failed} failed)` : ''}.`;
+}
+
 export default function AdminCommunicationScreen() {
   const { user, facilityId } = useAuth();
 
@@ -30,35 +50,79 @@ export default function AdminCommunicationScreen() {
   const [message, setMessage] = useState('');
   const [recipientFilter, setRecipientFilter] = useState('all');
   const [sendingBlast, setSendingBlast] = useState(false);
+  const [blastJob, setBlastJob] = useState<EmailBlastJob | null>(null);
+  const blastInProgress = blastJob?.status === 'sending';
 
   // Bulletin announcement
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementBody, setAnnouncementBody] = useState('');
   const [postingAnnouncement, setPostingAnnouncement] = useState(false);
 
-  async function sendBlast() {
+  // Show a blast that is still going (or just finished) when the screen opens.
+  useEffect(() => {
+    if (!facilityId) return;
+    setBlastJob(null);
+    getLatestEmailBlast(facilityId).then((res) => {
+      const latest = res.success ? res.data?.data?.job : null;
+      if (latest && (latest.status === 'sending' || isRecent(latest))) setBlastJob(latest);
+    });
+  }, [facilityId]);
+
+  // Poll while sending; a failed poll just retries on the next tick.
+  useEffect(() => {
+    if (!blastJob || blastJob.status !== 'sending') return;
+    const timer = setInterval(async () => {
+      const res = await getEmailBlastJob(blastJob.facilityId, blastJob.jobId);
+      const next = res.success ? res.data?.data?.job : null;
+      if (!next) return;
+      setBlastJob(next);
+      if (next.status === 'done') showAlert('Sent', blastStatusText(next));
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [blastJob?.jobId, blastJob?.status]);
+
+  async function startBlast(allowDuplicate: boolean) {
+    if (!facilityId) return;
+    setSendingBlast(true);
+    const res = await sendEmailBlast(facilityId, subject.trim(), message.trim(), recipientFilter, allowDuplicate);
+    const result = res.success ? res.data?.data : null;
+
+    if (!result?.job) {
+      // The request may have reached the server before the connection dropped,
+      // so look for the blast before suggesting a resend.
+      const latest = await getLatestEmailBlast(facilityId);
+      const latestJob = latest.success ? latest.data?.data?.job : null;
+      setSendingBlast(false);
+      if (latestJob && latestJob.subject === subject.trim() && isRecent(latestJob)) {
+        setBlastJob(latestJob);
+      } else {
+        showApiErrorAlert(res, 'Could not send email blast');
+      }
+      return;
+    }
+
+    setSendingBlast(false);
+    setBlastJob(result.job);
+    if (result.duplicate) {
+      if (result.job.status === 'sending') return;
+      showAlert('Already sent', `${blastStatusText(result.job)}\n\nSend it to everyone again?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send again', style: 'destructive', onPress: () => startBlast(true) },
+      ]);
+      return;
+    }
+    setSubject('');
+    setMessage('');
+  }
+
+  function sendBlast() {
     if (!facilityId || !subject.trim() || !message.trim()) return;
     showAlert(
       'Send email blast?',
       `This will email every ${recipientFilter === 'all' ? '' : recipientFilter + ' '}member. This can't be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send',
-          onPress: async () => {
-            setSendingBlast(true);
-            const res = await sendEmailBlast(facilityId, subject.trim(), message.trim(), recipientFilter);
-            setSendingBlast(false);
-            if (res.success && res.data?.data) {
-              const { sent, failed, total } = res.data.data;
-              showAlert('Sent', `Delivered to ${sent} of ${total} recipients${failed ? ` (${failed} failed)` : ''}.`);
-              setSubject('');
-              setMessage('');
-            } else {
-              showApiErrorAlert(res, 'Could not send email blast');
-            }
-          },
-        },
+        { text: 'Send', onPress: () => startBlast(false) },
       ]
     );
   }
@@ -113,11 +177,12 @@ export default function AdminCommunicationScreen() {
           multiline
           style={styles.multiline}
         />
+        {blastJob && <Text style={styles.blastStatus}>{blastStatusText(blastJob)}</Text>}
         <Button
-          title="Send Email Blast"
+          title={blastInProgress ? 'Sending…' : 'Send Email Blast'}
           onPress={sendBlast}
-          loading={sendingBlast}
-          disabled={!subject.trim() || !message.trim() || sendingBlast}
+          loading={sendingBlast || blastInProgress}
+          disabled={!subject.trim() || !message.trim() || sendingBlast || blastInProgress}
         />
       </Card>
 
@@ -151,6 +216,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.text, marginBottom: 4 },
   cardSubtitle: { fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: Spacing.sm },
   label: { fontSize: FontSize.xs, color: Colors.textSecondary, fontFamily: FontFamily.medium, marginBottom: 6, marginTop: Spacing.xs },
+  blastStatus: { fontSize: FontSize.sm, color: Colors.text, marginBottom: Spacing.sm },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.sm },
   chip: {
     borderWidth: 1,

@@ -7,6 +7,7 @@ import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Send, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { adminApi, membersApi, facilitiesApi } from '../../api/client';
+import type { EmailBlastJob } from '../../../shared/types';
 import { toast } from 'sonner';
 import { useAppContext } from '../../contexts/AppContext';
 
@@ -16,6 +17,70 @@ interface Member {
   fullName: string;
   status: string;
   membershipType: string;
+}
+
+const POLL_INTERVAL_MS = 2000;
+/** A finished blast stays on screen (and is offered on reload) for this long. */
+const RECENT_MS = 30 * 60 * 1000;
+
+function isRecent(job: EmailBlastJob) {
+  return Date.now() - Date.parse(job.startedAt) < RECENT_MS;
+}
+
+function minutesAgo(iso: string) {
+  const minutes = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  return minutes < 1 ? 'just now' : `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+}
+
+function announceResult(job: EmailBlastJob) {
+  if (job.sent === 0) {
+    toast.error('All emails failed to send.');
+  } else if (job.failed === 0) {
+    toast.success(`${job.sent} of ${job.total} emails sent successfully`);
+  } else {
+    toast.warning(`${job.sent} of ${job.total} emails sent. ${job.failed} failed.`);
+  }
+}
+
+function EmailBlastStatusPanel({ job }: { job: EmailBlastJob }) {
+  const done = job.status === 'done';
+  const processed = job.sent + job.failed;
+  const tone = !done
+    ? 'bg-blue-50 border-blue-200'
+    : job.sent === 0
+      ? 'bg-red-50 border-red-200'
+      : job.failed > 0
+        ? 'bg-yellow-50 border-yellow-200'
+        : 'bg-green-50 border-green-200';
+
+  return (
+    <div className={`rounded-lg p-4 border ${tone}`}>
+      <div className="flex items-center gap-2 mb-1">
+        {!done ? (
+          <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+        ) : job.sent > 0 && job.failed === 0 ? (
+          <CheckCircle className="h-5 w-5 text-green-600" />
+        ) : (
+          <AlertCircle className={`h-5 w-5 ${job.sent === 0 ? 'text-red-600' : 'text-yellow-600'}`} />
+        )}
+        <span className="font-medium">
+          {!done
+            ? `Sending "${job.subject}"… ${processed} of ${job.total}`
+            : job.sent === 0
+              ? `"${job.subject}" failed to send`
+              : `"${job.subject}" sent to ${job.sent} of ${job.total} recipients`}
+        </span>
+      </div>
+      <p className="text-sm text-gray-600 ml-7">
+        {!done
+          ? 'You can leave or lock your phone — sending continues on the server.'
+          : `Started ${minutesAgo(job.startedAt)}${job.failed > 0 ? `. ${job.failed} failed.` : '.'}`}
+      </p>
+      {job.errorMessage && (
+        <p className="text-sm text-gray-700 ml-7 mt-1">{job.errorMessage}</p>
+      )}
+    </div>
+  );
 }
 
 export function AdminEmailBlast() {
@@ -29,19 +94,40 @@ export function AdminEmailBlast() {
   const [recipientFilter, setRecipientFilter] = useState('all');
   const [sending, setSending] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [sendAttempted, setSendAttempted] = useState(false);
-  const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number; errorMessage?: string } | null>(null);
+  const [job, setJob] = useState<EmailBlastJob | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const jobInProgress = job?.status === 'sending';
 
   useEffect(() => {
     if (selectedFacilityId) {
       loadMembers();
       loadFacilityName();
-      setSendAttempted(false);
-      setSendResult(null);
+      setJob(null);
       setSendError(null);
+      loadLatestJob();
     }
   }, [selectedFacilityId]);
+
+  // Poll while a blast is sending. A failed poll (phone asleep, network blip) just
+  // tries again on the next tick — the send itself carries on server-side.
+  useEffect(() => {
+    if (!job || job.status !== 'sending') return;
+    const timer = setInterval(async () => {
+      const response = await adminApi.getEmailBlastJob(job.facilityId, job.jobId);
+      const next = response.success ? response.data?.data?.job : null;
+      if (!next) return;
+      setJob(next);
+      if (next.status === 'done') announceResult(next);
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [job?.jobId, job?.status]);
+
+  // Show a blast that is still going (or just finished) when the page is reopened.
+  const loadLatestJob = async () => {
+    const response = await adminApi.getLatestEmailBlast(selectedFacilityId);
+    const latest = response.success ? response.data?.data?.job : null;
+    if (latest && (latest.status === 'sending' || isRecent(latest))) setJob(latest);
+  };
 
   const loadFacilityName = async () => {
     try {
@@ -103,47 +189,52 @@ export function AdminEmailBlast() {
     );
     if (!confirmed) return;
 
+    await startSend(false);
+  };
+
+  const startSend = async (allowDuplicate: boolean) => {
     try {
-      setSendAttempted(true);
       setSending(true);
-      setSendResult(null);
       setSendError(null);
       const response = await adminApi.sendEmailBlast(selectedFacilityId, {
         subject,
         message,
         recipientFilter,
+        allowDuplicate,
       });
 
-      if (response.success && response.data) {
-        // apiRequest wraps the backend payload in `data`, so the counts are in response.data.data.
-        const payload: any = response.data;
-        const result = payload?.data || payload;
-
-        if (
-          typeof result?.sent !== 'number' ||
-          typeof result?.failed !== 'number' ||
-          typeof result?.total !== 'number'
-        ) {
-          throw new Error('Email send response is missing counts');
+      // apiRequest wraps the backend payload in `data`, so the job is in response.data.data.
+      const result = response.success ? response.data?.data : null;
+      if (!result?.job) {
+        // The request may have reached the server before the connection dropped,
+        // so look for the blast before suggesting a resend.
+        const latest = await adminApi.getLatestEmailBlast(selectedFacilityId);
+        const latestJob = latest.success ? latest.data?.data?.job : null;
+        if (latestJob && latestJob.subject === subject && isRecent(latestJob)) {
+          setJob(latestJob);
+          if (latestJob.status === 'done') announceResult(latestJob);
+          return;
         }
-
-        setSendResult(result);
-        if (result.sent === 0) {
-          toast.error('All emails failed to send. Please try again.');
-        } else if (result.failed === 0) {
-          toast.success(`${result.sent} of ${result.total} emails sent successfully`);
-        } else {
-          toast.warning(`${result.sent} of ${result.total} emails sent. ${result.failed} failed.`);
-        }
-      } else {
         const errorMessage = response.error || 'Failed to send email blast';
         setSendError(errorMessage);
         toast.error(errorMessage);
+        return;
       }
-    } catch (error: any) {
-      const errorMessage = error?.message || 'An error occurred while sending';
-      setSendError(errorMessage);
-      toast.error(errorMessage);
+
+      setJob(result.job);
+      if (result.duplicate) {
+        if (result.job.status === 'sending') {
+          toast.info('This email is already being sent.');
+          return;
+        }
+        const resend = window.confirm(
+          `This email already went out ${minutesAgo(result.job.startedAt)} ` +
+            `(${result.job.sent} of ${result.job.total} delivered).\n\nSend it to everyone again?`
+        );
+        if (resend) await startSend(true);
+        return;
+      }
+      if (result.job.status === 'done') announceResult(result.job);
     } finally {
       setSending(false);
     }
@@ -153,8 +244,7 @@ export function AdminEmailBlast() {
     setSubject('');
     setMessage('');
     setRecipientFilter('all');
-    setSendAttempted(false);
-    setSendResult(null);
+    setJob(null);
     setSendError(null);
     setShowPreview(false);
   };
@@ -259,66 +349,34 @@ export function AdminEmailBlast() {
             </Card>
           )}
 
-          {/* Send Result */}
-          {sendAttempted && (sendResult || sendError) && (
-            <div className={`rounded-lg p-4 ${
-              sendError || (sendResult && sendResult.sent === 0)
-                ? 'bg-red-50 border border-red-200'
-                : sendResult && sendResult.failed > 0
-                  ? 'bg-yellow-50 border border-yellow-200'
-                  : 'bg-green-50 border border-green-200'
-            }`}>
-              <div className="flex items-center gap-2 mb-1">
-                {!sendError && sendResult && sendResult.failed === 0 && sendResult.sent > 0 ? (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                ) : (
-                  <AlertCircle className={`h-5 w-5 ${
-                    sendError || (sendResult && sendResult.sent === 0) ? 'text-red-600' : 'text-yellow-600'
-                  }`} />
-                )}
-                <span className="font-medium">
-                  {sendError
-                    ? sendError
-                    : sendResult && sendResult.sent === 0
-                      ? 'All emails failed to send. Please try again.'
-                      : sendResult && sendResult.failed > 0
-                        ? `${sendResult.sent} of ${sendResult.total} emails sent. ${sendResult.failed} failed.`
-                        : sendResult
-                          ? `${sendResult.sent} of ${sendResult.total} emails sent successfully`
-                          : 'Send failed'}
-                </span>
+          {/* Send Progress / Result */}
+          {sendError && !job && (
+            <div className="rounded-lg p-4 bg-red-50 border border-red-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <span className="font-medium">{sendError}</span>
               </div>
-              {sendResult && (
-                <p className="text-sm text-gray-600 ml-7">
-                  {sendResult.sent} of {sendResult.total} emails sent
-                  {sendResult.failed > 0 && `. ${sendResult.failed} failed.`}
-                </p>
-              )}
-              {!sendError && sendResult?.errorMessage && (
-                <p className="text-sm text-gray-700 ml-7 mt-1">
-                  {sendResult.errorMessage}
-                </p>
-              )}
             </div>
           )}
+          {job && <EmailBlastStatusPanel job={job} />}
 
           {/* Actions */}
           <div className="flex items-center gap-3 pt-2">
             <Button
               onClick={handleSend}
-              disabled={sending || !subject.trim() || !message.trim() || filteredRecipients.length === 0}
+              disabled={sending || jobInProgress || !subject.trim() || !message.trim() || filteredRecipients.length === 0}
               className="gap-2 bg-green-600 hover:bg-green-700"
             >
-              {sending ? (
+              {sending || jobInProgress ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
-              {sending
+              {sending || jobInProgress
                 ? 'Sending...'
                 : `Send to ${filteredRecipients.length} Recipient${filteredRecipients.length !== 1 ? 's' : ''}`}
             </Button>
-            <Button variant="outline" onClick={handleReset} disabled={sending}>
+            <Button variant="outline" onClick={handleReset} disabled={sending || jobInProgress}>
               Reset
             </Button>
           </div>

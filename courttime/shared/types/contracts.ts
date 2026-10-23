@@ -130,3 +130,17 @@ export interface AuthResponseShape {
   token: string;
   user: AuthUserShape;
 }
+
+/** An admin email blast, sent in the background (server/routes/admin.ts email-blast routes). */
+export interface EmailBlastJob {
+  jobId: Id;
+  facilityId: Id;
+  subject: string;
+  status: "sending" | "done";
+  sent: number;
+  failed: number;
+  total: number;
+  errorMessage?: string;
+  startedAt: string;
+  finishedAt?: string;
+}

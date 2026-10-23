@@ -5,6 +5,9 @@
  * members.ts, strikes.ts, courtConfig.ts) — no extra normalization layer.
  */
 import { api } from './client';
+import type { EmailBlastJob } from '../../../shared/types';
+
+export type { EmailBlastJob };
 
 // ── Dashboard / Analytics ──
 
@@ -428,11 +431,34 @@ export function deleteBlackout(blackoutId: string) {
 
 // ── Communication ──
 
-export function sendEmailBlast(facilityId: string, subject: string, message: string, recipientFilter: string) {
-  return api.post<{
-    success: boolean;
-    data: { sent: number; failed: number; total: number; errorMessage?: string };
-  }>(`/api/admin/email-blast/${facilityId}`, { subject, message, recipientFilter });
+/**
+ * Starts a background send and returns right away; poll getEmailBlastJob for progress.
+ * `duplicate` means the same message went out recently and nothing new was sent —
+ * pass allowDuplicate to resend anyway.
+ */
+export function sendEmailBlast(
+  facilityId: string,
+  subject: string,
+  message: string,
+  recipientFilter: string,
+  allowDuplicate = false
+) {
+  return api.post<{ success: boolean; data: { job: EmailBlastJob; duplicate: boolean } }>(
+    `/api/admin/email-blast/${facilityId}`,
+    { subject, message, recipientFilter, allowDuplicate }
+  );
+}
+
+export function getEmailBlastJob(facilityId: string, jobId: string) {
+  return api.get<{ success: boolean; data: { job: EmailBlastJob } }>(
+    `/api/admin/email-blast/${facilityId}/jobs/${jobId}`
+  );
+}
+
+export function getLatestEmailBlast(facilityId: string) {
+  return api.get<{ success: boolean; data: { job: EmailBlastJob | null } }>(
+    `/api/admin/email-blast/${facilityId}/latest`
+  );
 }
 
 // ── Member Payments admin (web's AdminMemberPayments: PaymentsTab + BillingTab) ──

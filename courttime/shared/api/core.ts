@@ -217,8 +217,12 @@ export function buildApiRequest<TCategory extends string = string>(config: Reque
       let fallbackMessage =
         error instanceof Error ? error.message : "Unable to reach CourtTime right now. Please try again.";
       if (error instanceof Error && /failed to fetch/i.test(error.message)) {
-        fallbackMessage =
-          "Could not reach the server. Locally: run the API (`npm run dev:server` or `npm run dev`) so port 3001 is up — Vite proxies /api there. Production: confirm the host is up and set VITE_API_BASE_URL if the API is not same-origin.";
+        // The setup hint only helps developers; admins on a phone just need to know the connection dropped.
+        const isLocalDev =
+          typeof location !== "undefined" && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+        fallbackMessage = isLocalDev
+          ? "Could not reach the server. Run the API (`npm run dev:server` or `npm run dev`) so port 3001 is up — Vite proxies /api there."
+          : "Could not reach CourtTime. Check your connection and try again.";
       }
       const errorMessage = categoryMessage || fallbackMessage;
       return {

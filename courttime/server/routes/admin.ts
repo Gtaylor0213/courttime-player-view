@@ -12,8 +12,12 @@ import {
   cancelBookingSeries,
   parseCourtChanges,
 } from '../../src/services/bookingSeriesService';
-import { sendAnnouncementEmail } from '../../src/services/emailService';
-import { notificationService } from '../../src/services/notificationService';
+import {
+  findDuplicateEmailBlast,
+  getEmailBlastJob,
+  getLatestEmailBlastJob,
+  startEmailBlast,
+} from '../../src/services/emailBlastService';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
 import { buildSetupInviteCtaHtml } from '../../src/services/memberSetupInviteService';
 import {
@@ -67,7 +71,6 @@ import {
   facilityIdForSeries,
   facilityIdForAdminRecord,
 } from '../middleware/facilityAdmin';
-import { delay } from '../../shared/utils/delay';
 
 const router = express.Router();
 
@@ -2080,7 +2083,7 @@ router.get('/analytics/:facilityId', async (req, res) => {
 router.post('/email-blast/:facilityId', async (req, res) => {
   try {
     const { facilityId } = req.params;
-    const { subject, message, recipientFilter } = req.body;
+    const { subject, message, recipientFilter, allowDuplicate } = req.body;
 
     if (!subject || !message) {
       return res.status(400).json({
@@ -2141,60 +2144,19 @@ router.post('/email-blast/:facilityId', async (req, res) => {
       });
     }
 
-    // Send emails sequentially with a delay to stay under provider rate limits.
-    const normalizedResults: Array<{ email: string; success: boolean; error?: string }> = [];
-    for (let i = 0; i < recipients.length; i++) {
-      const member = recipients[i];
-
-      try {
-        const result = await sendAnnouncementEmail(
-          member.email,
-          member.fullName,
-          subject,
-          message,
-          facilityName,
-          member.userId
-        );
-
-        normalizedResults.push({
-          email: member.email,
-          success: result.success,
-          error: result.error,
-        });
-      } catch (error) {
-        normalizedResults.push({
-          email: member.email,
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown email send error',
-        });
-      }
-
-      if (i < recipients.length - 1) {
-        await delay(250);
+    // Unless the admin confirmed a resend, hand back the earlier blast instead of
+    // emailing everyone twice (e.g. after a phone dropped the first request).
+    if (!allowDuplicate) {
+      const existing = findDuplicateEmailBlast(facilityId, subject, message);
+      if (existing) {
+        return res.json({ success: true, data: { job: existing, duplicate: true } });
       }
     }
 
-    // Create in-app notifications for all recipients
-    const userIds = recipients.map((m: any) => m.userId);
-    try {
-      await notificationService.notifyFacilityAnnouncement(userIds, subject, message);
-    } catch (notifError) {
-      console.error('Error creating in-app notifications:', notifError);
-    }
-
-    const sent = normalizedResults.filter(r => r.success).length;
-    const failed = recipients.length - sent;
-    const firstErrorMessage = normalizedResults.find(r => !r.success)?.error;
-
-    res.json({
-      success: true,
-      data: {
-        sent,
-        failed,
-        total: recipients.length,
-        errorMessage: firstErrorMessage
-      }
-    });
+    // Sending takes minutes for a big club, so it runs in the background and
+    // the client polls GET /email-blast/:facilityId/jobs/:jobId for progress.
+    const job = startEmailBlast({ facilityId, facilityName, subject, message, recipients });
+    res.status(202).json({ success: true, data: { job, duplicate: false } });
   } catch (error: any) {
     console.error('Error sending email blast:', error);
     res.status(500).json({
@@ -2202,6 +2164,26 @@ router.post('/email-blast/:facilityId', async (req, res) => {
       error: error.message
     });
   }
+});
+
+/**
+ * GET /api/admin/email-blast/:facilityId/latest
+ * The facility's most recent email blast (sending or finished), or null
+ */
+router.get('/email-blast/:facilityId/latest', (req, res) => {
+  res.json({ success: true, data: { job: getLatestEmailBlastJob(req.params.facilityId) } });
+});
+
+/**
+ * GET /api/admin/email-blast/:facilityId/jobs/:jobId
+ * Progress of one email blast
+ */
+router.get('/email-blast/:facilityId/jobs/:jobId', (req, res) => {
+  const job = getEmailBlastJob(req.params.facilityId, req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ success: false, error: 'Email blast not found' });
+  }
+  res.json({ success: true, data: { job } });
 });
 
 // =====================================================

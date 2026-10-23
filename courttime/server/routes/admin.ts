@@ -18,6 +18,7 @@ import {
   getLatestEmailBlastJob,
   startEmailBlast,
 } from '../../src/services/emailBlastService';
+import { FacilityLogoError, normalizeFacilityLogo } from '../../src/services/facilityLogo';
 import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
 import { buildSetupInviteCtaHtml } from '../../src/services/memberSetupInviteService';
 import {
@@ -511,11 +512,20 @@ router.patch('/facilities/:facilityId', async (req, res) => {
       description,
       operatingHours,
       timezone,
-      logoUrl,
       primaryContact,
       secondaryContacts,
       bookingRules
     } = req.body;
+
+    let logoUrl: string | null | undefined;
+    try {
+      logoUrl = await normalizeFacilityLogo(req.body.logoUrl);
+    } catch (error) {
+      if (error instanceof FacilityLogoError) {
+        return res.status(400).json({ success: false, error: error.message });
+      }
+      throw error;
+    }
 
     let priorOperatingHoursFingerprint: string | undefined;
     if (operatingHours !== undefined) {

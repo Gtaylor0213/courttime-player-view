@@ -13,6 +13,7 @@ import {
 import { normalizeCourtOperatingScheduleRows } from '../../shared/utils/operatingHours';
 import type { CourtScheduleRowInput } from '../../shared/utils/operatingHours';
 import { DEFAULT_ON_FEATURE_FLAGS } from '../../shared/constants/featureFlags';
+import { FacilityLogoError, normalizeFacilityLogo } from './facilityLogo';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const ALLOWED_BOOKING_RULE_CODES = new Set([
@@ -942,6 +943,15 @@ export async function registerFacility(
   const bcrypt = await import('bcrypt');
   const SALT_ROUNDS = 10;
 
+  // An unreadable logo shouldn't block signing up; the club can upload one later.
+  let facilityLogo: string | null = null;
+  try {
+    facilityLogo = (await normalizeFacilityLogo(data.facilityImage)) || null;
+  } catch (error) {
+    if (!(error instanceof FacilityLogoError)) throw error;
+    console.warn('Dropping unreadable logo during facility registration:', error.message);
+  }
+
   return transaction(async (client: PoolClient) => {
     let superAdminUserId = existingUserId;
     let userResult: any = null;
@@ -1048,7 +1058,7 @@ export async function registerFacility(
         data.timezone || 'America/New_York',
         data.generalRules,
         data.bookingRules || null,
-        data.facilityImage || null,
+        facilityLogo,
       ]
     );
 

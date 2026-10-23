@@ -1808,6 +1808,9 @@ export function CourtCalendarView() {
   }, []);
 
   const clearMobileDragState = useCallback(() => {
+    // Already clear: skip the setState so a plain swipe doesn't re-render the grid mid-scroll.
+    const current = dragStateRef.current;
+    if (!current.isDragging && current.selectedCells.size === 0) return;
     const cleared = {
       isDragging: false,
       startCell: null as { court: string; time: string } | null,
@@ -2579,6 +2582,9 @@ export function CourtCalendarView() {
     const headerEl = courtHeaderScrollRef.current;
     if (!bodyEl || !headerEl) return;
 
+    // Skip near-equal writes: the other pane's echoed scroll event would otherwise set
+    // scrollLeft mid-fling, which kills momentum on iOS.
+    if (Math.abs(headerEl.scrollLeft - bodyEl.scrollLeft) < 1) return;
     scrollSyncLockRef.current = true;
     headerEl.scrollLeft = bodyEl.scrollLeft;
     scrollSyncLockRef.current = false;
@@ -2590,6 +2596,7 @@ export function CourtCalendarView() {
     const headerEl = courtHeaderScrollRef.current;
     if (!bodyEl || !headerEl) return;
 
+    if (Math.abs(bodyEl.scrollLeft - headerEl.scrollLeft) < 1) return;
     scrollSyncLockRef.current = true;
     bodyEl.scrollLeft = headerEl.scrollLeft;
     scrollSyncLockRef.current = false;

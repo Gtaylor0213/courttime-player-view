@@ -19,8 +19,7 @@ import { PaymentLockoutProvider } from '../src/contexts/PaymentLockoutContext';
 import { FeatureFlagProvider } from '../src/contexts/FeatureFlagContext';
 import { NotificationUnreadProvider } from '../src/contexts/NotificationUnreadContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, FontFamily, FontSize, Gradients } from '../src/constants/theme';
+import { Colors, FontFamily, FontSize } from '../src/constants/theme';
 import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
 import { GeneralRulesAcceptanceGate } from '../src/components/GeneralRulesAcceptanceGate';
 import { MemberNumberGate } from '../src/components/MemberNumberGate';
@@ -140,16 +139,10 @@ function RootLayoutNav() {
         screenOptions={{
           animation: 'fade',
           contentStyle: { backgroundColor: Colors.background },
-          // Same green header as the tabs (web: `from-green-700 to-green-800`).
-          headerBackground: () => (
-            <LinearGradient
-              colors={[...Gradients.chrome]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          ),
-          headerTintColor: Colors.chromeText,
+          // Same white header as the tabs.
+          headerStyle: { backgroundColor: Colors.headerBackground },
+          headerShadowVisible: true,
+          headerTintColor: Colors.headerText,
           headerTitleStyle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
         }}
       >

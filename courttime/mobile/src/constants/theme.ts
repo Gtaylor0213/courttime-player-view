@@ -22,7 +22,17 @@ import {
  */
 export const Palette = palette;
 
-/** Top header + bottom tab bar: matches the web sidebar header's `from-green-700 to-green-800` gradient. */
+/** Top header: white, with the club name and icons in the site's dark green. */
+const Header = {
+  headerBackground: '#FFFFFF',
+  headerBorder: palette.gray200,
+  headerText: palette.green800,
+  headerTextMuted: palette.gray500,
+  headerChipBg: palette.green50,
+  headerChipBorder: palette.green200,
+};
+
+/** Bottom tab bar: matches the web sidebar header's `from-green-700 to-green-800` gradient. */
 const Chrome = {
   chromeBackground: palette.green800,
   chromeBorder: 'rgba(255,255,255,0.12)',
@@ -38,6 +48,7 @@ const Chrome = {
  */
 export const Colors = {
   ...Chrome,
+  ...Header,
   // green-700, not the web `--primary` (#00910f): that one is 4.15:1 on white
   // and fails WCAG AA for button labels and links. green-700 is 4.95:1.
   primary: palette.green700,

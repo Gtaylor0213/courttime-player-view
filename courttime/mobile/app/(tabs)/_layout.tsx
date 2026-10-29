@@ -140,16 +140,8 @@ function TabsShell() {
           {children}
         </Text>
       ),
-      headerBackground: () => (
-        <LinearGradient
-          colors={[...Gradients.chrome]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-      ),
       headerStyle: styles.header,
-      headerTintColor: Colors.chromeText,
+      headerTintColor: Colors.headerText,
       headerTitleStyle: styles.headerTitle,
       /** Centered club-name chip; the tab headers have no side buttons, so the title slot still spans nearly the full bar */
       headerTitleAlign: 'center' as const,
@@ -166,7 +158,7 @@ function TabsShell() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Tabs initialRouteName="index" detachInactiveScreens={false} screenOptions={screenOptions}>
       <Tabs.Screen
         name="book"
@@ -281,13 +273,14 @@ const styles = StyleSheet.create({
     borderColor: Colors.chromeBackground,
   },
   header: {
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.headerBackground,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.chromeBorder,
-    ...Shadows.md, // web header: shadow-md
+    borderBottomColor: Colors.headerBorder,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   headerTitle: {
-    color: Colors.chromeText,
+    color: Colors.headerText,
     fontFamily: FontFamily.semiBold,
     fontSize: FontSize.md,
   },

@@ -94,7 +94,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
             <CachedImage uri={currentFacility.logoUrl} style={styles.logo} />
           ) : (
             <View style={styles.logoFallback}>
-              <Ionicons name="business-outline" size={14} color={Colors.chromeAccent} />
+              <Ionicons name="business-outline" size={14} color={Colors.headerText} />
             </View>
           )}
         </View>
@@ -103,7 +103,7 @@ export function HeaderFacilitySelector({ fallbackTitle }: Props) {
             {facilityName}
           </Text>
         </View>
-        <Ionicons name="chevron-down" size={14} color={Colors.chromeTextMuted} />
+        <Ionicons name="chevron-down" size={14} color={Colors.headerTextMuted} />
       </TouchableOpacity>
 
       <Modal
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   titleStatic: {
-    color: Colors.chromeText,
+    color: Colors.headerText,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
     lineHeight: 17,
@@ -191,9 +191,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.chromeChipBg,
+    backgroundColor: Colors.headerChipBg,
     borderWidth: 1,
-    borderColor: Colors.chromeChipBorder,
+    borderColor: Colors.headerChipBorder,
     minHeight: 36,
   },
   logoSlot: {
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.chromeChipBg,
+    backgroundColor: Colors.headerChipBg,
   },
   titleFlex: {
     // Content-sized (no flexGrow) so the name measures to its text width inside the centered chip,
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonText: {
-    color: Colors.chromeText,
+    color: Colors.headerText,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
     flexShrink: 1,

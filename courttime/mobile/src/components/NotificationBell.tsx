@@ -20,7 +20,7 @@ export function NotificationBell() {
       accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
     >
-      <Ionicons name={unreadCount > 0 ? 'notifications' : 'notifications-outline'} size={22} color={Colors.chromeText} />
+      <Ionicons name={unreadCount > 0 ? 'notifications' : 'notifications-outline'} size={22} color={Colors.headerText} />
       {unreadCount > 0 ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: Colors.chromeBackground,
+    borderColor: Colors.headerBackground,
   },
   badgeText: { color: Colors.textInverse, fontSize: 9, fontFamily: FontFamily.bold },
 });

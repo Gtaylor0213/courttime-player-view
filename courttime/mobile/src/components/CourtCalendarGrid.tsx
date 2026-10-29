@@ -34,9 +34,23 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TIME_LABEL_WIDTH = 46;
 const ROW_HEIGHT = 48;
-/** Blackout block text (web: text-red-900). */
-const BLACKOUT_TEXT = Palette.red900;
-import { DEFAULT_BOOKING_DURATION_MINUTES, getBookingTypeLabel, getBookingTypeRNColors } from '../../../shared/constants/bookingTypes';
+/** Gap between a booking block and its cell edges (web: 4px each side, 2px top and bottom). */
+const BOOKING_BLOCK_INSET_X = 4;
+const BOOKING_BLOCK_INSET_Y = 2;
+import {
+  DEFAULT_BOOKING_DURATION_MINUTES,
+  RESERVATION_BLOCK_COLORS,
+  getBookingTypeLabel,
+  getBookingTypeRNColors,
+} from '../../../shared/constants/bookingTypes';
+import {
+  RESERVATION_BLOCK_TEXT,
+  blackoutBlockTimeRange,
+  layoutReservationBlock,
+  reservationBlockDuration,
+  reservationBlockName,
+  reservationBlockNotes,
+} from '../../../shared/utils/reservationBlock';
 import { blackoutsToBlockedRanges } from '../../../shared/utils/blackoutSlots';
 import { isPeakSlot } from '../../../shared/utils/courtTypeFilter';
 
@@ -77,6 +91,9 @@ interface Booking {
   startTime: string;
   endTime: string;
   userName?: string;
+  walkInName?: string;
+  notes?: string;
+  durationMinutes?: number;
   bookingType?: string;
   /** Shown instead of "Blocked" for a maintenance blackout (its name). */
   blockedLabel?: string;
@@ -232,6 +249,116 @@ function toGridLoadError(res: ApiFailureShape, title: string): GridLoadError {
     title,
     description: userFacingApiMessage(res),
   };
+}
+
+/** `underBlackout`: a reservation on a blacked-out court, greyed out and inset so the blackout shows around it. */
+type BookingBlockKind = 'reservation' | 'blocked' | 'blackout' | 'underBlackout';
+
+/**
+ * A booking block drawn like the web calendar's: same colors, same words in the same order,
+ * and the same rules for which lines fit (shared/utils/reservationBlock).
+ */
+function BookingBlock({
+  booking,
+  kind,
+  width,
+  height,
+}: {
+  booking: Booking;
+  kind: BookingBlockKind;
+  width: number;
+  height: number;
+}) {
+  const startMinutes = parseTimeToMinutesSafe(booking.startTime);
+  const endMinutes = parseTimeToMinutesSafe(booking.endTime);
+  const isBlocked = kind === 'blocked' || kind === 'blackout';
+  const colors =
+    kind === 'blackout'
+      ? RESERVATION_BLOCK_COLORS.blackout.rn
+      : kind !== 'reservation'
+        ? RESERVATION_BLOCK_COLORS.blocked.rn
+        : booking.bookingType
+          ? getBookingTypeRNColors(booking.bookingType)
+          : RESERVATION_BLOCK_COLORS.untyped.rn;
+  const name =
+    kind === 'blackout'
+      ? booking.blockedLabel || 'Blackout'
+      : kind === 'blocked'
+        ? booking.userName || 'Blocked'
+        : reservationBlockName(booking);
+  const typeLabel =
+    kind === 'blackout'
+      ? booking.blackoutReason || null
+      : !isBlocked && booking.bookingType
+        ? getBookingTypeLabel(booking.bookingType)
+        : null;
+  const durationText =
+    kind === 'blackout'
+      ? startMinutes !== null && endMinutes !== null
+        ? blackoutBlockTimeRange(startMinutes, endMinutes)
+        : ''
+      : reservationBlockDuration(
+          booking.durationMinutes ??
+            (startMinutes !== null && endMinutes !== null ? endMinutes - startMinutes : undefined)
+        );
+  const layout = layoutReservationBlock({
+    name,
+    typeLabel,
+    isBlocked,
+    hasBookingType: !!booking.bookingType && !isBlocked,
+    hasNotes: !!booking.notes,
+    width,
+    height,
+  });
+  const textColor = { color: colors.text };
+
+  return (
+    <View
+      style={[
+        styles.bookingBlock,
+        { height, backgroundColor: colors.bg, borderColor: colors.border },
+        kind === 'reservation' && styles.bookingBlockRaised,
+        kind === 'blocked' && styles.bookingBlockBlocked,
+        kind === 'underBlackout' && styles.bookingBlockUnderBlackout,
+        layout.isCompact && styles.bookingBlockCompact,
+      ]}
+      accessible={false}
+    >
+      <Text
+        style={[styles.bookingBlockName, textColor]}
+        numberOfLines={layout.nameMaxLines}
+        maxFontSizeMultiplier={1}
+      >
+        {name}
+      </Text>
+      {layout.showTypeFull && (
+        <Text
+          style={[styles.bookingBlockType, textColor]}
+          numberOfLines={layout.typeMaxLines}
+          maxFontSizeMultiplier={1}
+        >
+          {typeLabel}
+        </Text>
+      )}
+      {layout.showDurationRow && (
+        <View style={styles.bookingBlockDurationRow}>
+          <Text style={[styles.bookingBlockDuration, textColor]} numberOfLines={1} maxFontSizeMultiplier={1}>
+            {durationText}
+          </Text>
+          {layout.showCategoryBadge && (
+            <Text style={[styles.bookingBlockBadge, textColor]} numberOfLines={1} maxFontSizeMultiplier={1}>
+              {typeLabel}
+            </Text>
+          )}
+        </View>
+      )}
+      {layout.showNotes && (
+        <Text style={[styles.bookingBlockNotes, textColor]} numberOfLines={1} maxFontSizeMultiplier={1}>
+          {reservationBlockNotes(booking.notes || '')}
+        </Text>
+      )}
+    </View>
+  );
 }
 
 export function CourtCalendarGrid({
@@ -502,6 +629,9 @@ export function CourtCalendarGrid({
         startTime: b.startTime || b.start_time || '',
         endTime: b.endTime || b.end_time || '',
         userName: b.userName || b.user_name || '',
+        walkInName: b.walkInName || b.walk_in_name || '',
+        notes: b.notes || '',
+        durationMinutes: b.durationMinutes ?? b.duration_minutes,
         bookingType: b.bookingType || b.booking_type || '',
       };
       const existing = bookingsByCourtId.get(sourceCourtId) || [];
@@ -536,6 +666,7 @@ export function CourtCalendarGrid({
           startTime: normalized.startTime,
           endTime: normalized.endTime,
           userName: `Blocked (${sourceCourt?.name || 'Related court'})`,
+          durationMinutes: normalized.durationMinutes,
           bookingType: 'blocked',
         });
         bookingsByCourtId.set(relatedCourtId, existingRelated);
@@ -1381,72 +1512,27 @@ export function CourtCalendarGrid({
                             }}
                             onTouchCancel={() => handleTouchEnd(false)}
                           >
-                            {bookingStart && (() => {
-                              const isBlockedBooking = bookingStart.bookingType === 'blocked';
-                              const isBlackoutBooking = !!bookingStart.isBlackout;
-                              const typeColors = getBookingTypeRNColors(bookingStart.bookingType);
-                              const mutedColor = isBlackoutBooking ? BLACKOUT_TEXT : Colors.textMuted;
-                              return (
-                                <View
-                                  style={[
-                                    styles.bookingBlock,
-                                    isBlackoutBooking
-                                      ? styles.bookingBlockBlackout
-                                      : isBlockedBooking
-                                      ? styles.bookingBlockBlocked
-                                      : {
-                                          backgroundColor: typeColors.bg,
-                                          borderColor: typeColors.border,
-                                        },
-                                    { height: span * ROW_HEIGHT - 2 },
-                                  ]}
-                                  accessible={false}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.bookingBlockText,
-                                      { color: isBlockedBooking ? mutedColor : typeColors.text },
-                                    ]}
-                                    numberOfLines={1}
-                                  >
-                                    {isBlockedBooking ? bookingStart.blockedLabel || 'Blocked' : getBookingTypeLabel(bookingStart.bookingType)}
-                                  </Text>
-                                  {isBlackoutBooking && !!bookingStart.blackoutReason && (
-                                    <Text
-                                      style={[styles.bookingBlockTime, { color: mutedColor }]}
-                                      numberOfLines={span > 2 ? 2 : 1}
-                                    >
-                                      {bookingStart.blackoutReason}
-                                    </Text>
-                                  )}
-                                  <Text
-                                    style={[
-                                      styles.bookingBlockTime,
-                                      { color: isBlockedBooking ? mutedColor : typeColors.text },
-                                    ]}
-                                    numberOfLines={1}
-                                  >
-                                    {formatFullTime(bookingStart.startTime)} - {formatFullTime(bookingStart.endTime)}
-                                  </Text>
-                                </View>
-                              );
-                            })()}
+                            {bookingStart && (
+                              <BookingBlock
+                                booking={bookingStart}
+                                kind={
+                                  bookingStart.isBlackout
+                                    ? 'blackout'
+                                    : bookingStart.bookingType === 'blocked'
+                                      ? 'blocked'
+                                      : 'reservation'
+                                }
+                                width={courtColumnWidth - 2 * BOOKING_BLOCK_INSET_X}
+                                height={span * ROW_HEIGHT - 2 * BOOKING_BLOCK_INSET_Y}
+                              />
+                            )}
                             {coveredStart && (
-                              <View
-                                style={[
-                                  styles.bookingBlock,
-                                  styles.bookingBlockUnderBlackout,
-                                  { height: coveredSpan * ROW_HEIGHT - 2 },
-                                ]}
-                                accessible={false}
-                              >
-                                <Text style={[styles.bookingBlockText, { color: Colors.textMuted }]} numberOfLines={1}>
-                                  {getBookingTypeLabel(coveredStart.bookingType)}
-                                </Text>
-                                <Text style={[styles.bookingBlockTime, { color: Colors.textMuted }]} numberOfLines={1}>
-                                  {formatFullTime(coveredStart.startTime)} - {formatFullTime(coveredStart.endTime)}
-                                </Text>
-                              </View>
+                              <BookingBlock
+                                booking={coveredStart}
+                                kind="underBlackout"
+                                width={courtColumnWidth - 4 * BOOKING_BLOCK_INSET_X}
+                                height={coveredSpan * ROW_HEIGHT - 2 * BOOKING_BLOCK_INSET_Y}
+                              />
                             )}
                           </View>
                         );
@@ -1660,46 +1746,79 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.error + '20',
   },
 
-  // Booking blocks — same look as the web calendar block: type bg fill, 1px type border all
-  // round, rounded corners, semibold label. Colors per type come from getBookingTypeRNColors.
+  // Booking blocks — the web calendar block: rounded-lg, 1px type border, px-1.5 py-0.5,
+  // text left-aligned from the top. Colors per type come from the shared booking type table.
   bookingBlock: {
     position: 'absolute',
-    top: 1,
-    left: 2,
-    right: 2,
-    borderRadius: BorderRadius.sm, // web: rounded-lg (8px)
+    top: BOOKING_BLOCK_INSET_Y,
+    left: BOOKING_BLOCK_INSET_X,
+    right: BOOKING_BLOCK_INSET_X,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
+    paddingHorizontal: RESERVATION_BLOCK_TEXT.paddingX,
+    paddingVertical: RESERVATION_BLOCK_TEXT.paddingY,
     overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  // Blackouts read like a booking (full opacity, name + reason) in a red "closed" tint (web: bg-red-50 / border-red-300).
-  bookingBlockBlackout: {
-    backgroundColor: Palette.red50,
-    borderColor: Palette.red300,
+  /** Only the name fits: center it vertically. */
+  bookingBlockCompact: {
+    justifyContent: 'center',
+  },
+  /** Web: shadow on reservations only, not blocked courts or blackouts. */
+  bookingBlockRaised: {
+    boxShadow: '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
   },
   bookingBlockBlocked: {
-    backgroundColor: Palette.gray200,
-    borderColor: Palette.gray300,
     opacity: 0.7,
   },
-  // A reservation on a blacked-out court: greyed out, inset so the blackout shows around it.
   bookingBlockUnderBlackout: {
-    left: 6,
-    right: 6,
-    backgroundColor: Palette.gray200,
-    borderColor: Palette.gray300,
+    left: 2 * BOOKING_BLOCK_INSET_X,
+    right: 2 * BOOKING_BLOCK_INSET_X,
   },
-  bookingBlockText: {
-    fontSize: 11,
+  // Line heights are the web's leading-tight (1.25×) for name and type, and the body's 1.5× below.
+  bookingBlockName: {
+    fontSize: RESERVATION_BLOCK_TEXT.name.fontSize,
+    lineHeight: RESERVATION_BLOCK_TEXT.name.fontSize * 1.25,
     fontFamily: FontFamily.semiBold,
-    textAlign: 'center',
   },
-  bookingBlockTime: {
-    fontSize: 9,
-    textAlign: 'center',
+  bookingBlockType: {
+    fontSize: RESERVATION_BLOCK_TEXT.type.fontSize,
+    lineHeight: RESERVATION_BLOCK_TEXT.type.fontSize * 1.25,
+    fontFamily: FontFamily.regular,
+    opacity: RESERVATION_BLOCK_TEXT.type.opacity,
+    marginTop: 2,
+  },
+  bookingBlockDurationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    minWidth: 0,
+  },
+  bookingBlockDuration: {
+    fontSize: RESERVATION_BLOCK_TEXT.duration.fontSize,
+    lineHeight: RESERVATION_BLOCK_TEXT.duration.fontSize * 1.5,
+    fontFamily: FontFamily.regular,
+    opacity: RESERVATION_BLOCK_TEXT.duration.opacity,
+    flexShrink: 0,
+  },
+  bookingBlockBadge: {
+    fontSize: RESERVATION_BLOCK_TEXT.duration.fontSize,
+    lineHeight: RESERVATION_BLOCK_TEXT.duration.fontSize * 1.5,
+    fontFamily: FontFamily.medium,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    flexShrink: 1,
+  },
+  bookingBlockNotes: {
+    fontSize: RESERVATION_BLOCK_TEXT.notes.fontSize,
+    lineHeight: RESERVATION_BLOCK_TEXT.notes.fontSize * 1.5,
+    fontFamily: FontFamily.regular,
+    fontStyle: 'italic',
+    opacity: RESERVATION_BLOCK_TEXT.notes.opacity,
+    marginTop: 4,
   },
 
   // Hint

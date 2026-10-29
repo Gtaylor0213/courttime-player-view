@@ -25,7 +25,7 @@ import { blackoutsToBlockedRanges } from '../../shared/utils/blackoutSlots';
 import { toast } from 'sonner';
 import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Grid3X3, Info, ChevronDown, ZoomIn, ZoomOut, AlertTriangle, Loader2, Type } from 'lucide-react';
 import { Calendar as CalendarPicker } from './ui/calendar';
-import { getBookingTypeBadgeColor, getBookingTypeLabel } from '../../shared/constants/bookingTypes';
+import { RESERVATION_BLOCK_COLORS, getBookingTypeBadgeColor, getBookingTypeLabel } from '../../shared/constants/bookingTypes';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { formatCourtCalendarSubtitle } from '../../shared/utils/courtNaming';
 import { sortFacilitiesByName } from '../../shared/utils/facilitySort';
@@ -40,10 +40,15 @@ import {
   useReservationTextScale,
 } from './useReservationTextScale';
 import { fetchBookingCalendarDetails, offerAddBookingToCalendar } from '../utils/bookingCalendar';
+import { isBulletinActivityBooking } from '../../shared/utils/bulletinPostDisplay';
 import {
-  BULLETIN_ACTIVITY_BOOKING_TYPES,
-  isBulletinActivityBooking,
-} from '../../shared/utils/bulletinPostDisplay';
+  RESERVATION_BLOCK_TEXT,
+  blackoutBlockTimeRange,
+  layoutReservationBlock,
+  reservationBlockDuration,
+  reservationBlockName,
+  reservationBlockNotes,
+} from '../../shared/utils/reservationBlock';
 
 // Layout constants
 const SUB_SLOT_HEIGHT = 25;       // 30-min row height (desktop)
@@ -55,24 +60,6 @@ const MOBILE_DRAG_ARM_DELAY_MS = 400;
 const MOBILE_MOVEMENT_THRESHOLD_PX = 8;
 /** A phone touch landing this soon after the grid moved is stopping a scroll, not a tap. */
 const MOBILE_SCROLL_SETTLE_MS = 150;
-
-/** Rough line count for `text` greedy-wrapped at `charsPerLine` (long words break mid-word). */
-function estimateWrappedLines(text: string, charsPerLine: number): number {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return 1;
-  let lines = 1;
-  let lineLength = 0;
-  for (const word of words) {
-    if (lineLength > 0 && lineLength + 1 + word.length <= charsPerLine) {
-      lineLength += 1 + word.length;
-      continue;
-    }
-    if (lineLength > 0) lines += 1;
-    lines += Math.ceil(word.length / charsPerLine) - 1;
-    lineLength = word.length % charsPerLine || charsPerLine;
-  }
-  return lines;
-}
 
 /** Inline equivalent of Tailwind's line-clamp-N for a computed N. */
 function lineClampStyle(lines: number): React.CSSProperties {
@@ -123,15 +110,6 @@ function minutesToApiTime(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
-}
-
-/** "9:30 AM" from minutes-since-midnight (1440 reads as midnight). */
-function formatMinutesAs12h(totalMinutes: number): string {
-  const hours24 = Math.floor(totalMinutes / 60) % 24;
-  const minutes = totalMinutes % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
-  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
-  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
 // Helper to get current time components in a given timezone
@@ -652,7 +630,7 @@ export function CourtCalendarView() {
           if (isBlocked) {
             transformedBookings[targetCourtId][slotTime] = {
               player: `Blocked (${blockedBy})`,
-              duration: `${booking.durationMinutes}min`,
+              duration: reservationBlockDuration(booking.durationMinutes),
               type: 'blocked',
               startTime: booking.startTime,
               endTime: booking.endTime,
@@ -661,14 +639,9 @@ export function CourtCalendarView() {
               bookingType: 'blocked',
             };
           } else {
-            const activityLabel =
-              BULLETIN_ACTIVITY_BOOKING_TYPES.has(String(booking.bookingType || '').toLowerCase()) &&
-              booking.notes
-                ? String(booking.notes)
-                : booking.walkInName || booking.userName || 'Reserved';
             const reservationSlot = {
-              player: activityLabel,
-              duration: `${booking.durationMinutes}min`,
+              player: reservationBlockName(booking),
+              duration: reservationBlockDuration(booking.durationMinutes),
               type: 'reservation',
               underBlackout,
               bookingId: booking.id,
@@ -2905,15 +2878,15 @@ export function CourtCalendarView() {
         // Guarantee a legible minimum so very short (e.g. 30-min) bookings don't render illegibly small.
         const height = Math.max(rawHeight, effectiveSubSlotHeight * 0.85);
         const colorClass = isBlackout
-          ? 'bg-red-50 text-red-900 border-red-300'
+          ? RESERVATION_BLOCK_COLORS.blackout.color
           : isBlocked || isUnderBlackout
-          ? 'bg-gray-200 text-gray-500 border-gray-300'
+          ? RESERVATION_BLOCK_COLORS.blocked.color
           : booking.bookingType
             ? getBookingTypeBadgeColor(booking.bookingType)
-            : 'bg-blue-50 text-blue-900 border-blue-200';
+            : RESERVATION_BLOCK_COLORS.untyped.color;
 
         const blackoutTimeRange = isBlackout && rawStartMinutes !== null && rawEndMinutes !== null
-          ? `${formatMinutesAs12h(rawStartMinutes)} – ${formatMinutesAs12h(rawEndMinutes)}`
+          ? blackoutBlockTimeRange(rawStartMinutes, rawEndMinutes)
           : '';
         const tooltipText = isBlackout
           ? ['Blackout', booking.player, booking.reason, blackoutTimeRange].filter(Boolean).join(' · ')
@@ -2927,41 +2900,20 @@ export function CourtCalendarView() {
               isUnderBlackout ? 'Court blacked out' : '',
             ].filter(Boolean).join(' · ');
 
-        // Vertical-space budget: name gets priority, then the full service/type line, then the
-        // duration+category row, then notes — each only rendered if the remaining height allows it.
-        // Name and type wrap onto as many lines as they're estimated to need (up to what the block
-        // can hold), so short text doesn't waste budget that lower-priority rows could use.
         const typeLabel = isBlackout
           ? booking.reason || null
           : !isBlocked && booking.bookingType ? getBookingTypeLabel(booking.bookingType) : null;
-        const contentWidth = Math.max(width - 12, 0);
-        const nameCharsPerLine = Math.max(1, Math.floor(contentWidth / (6.4 * reservationTextScale)));
-        const typeCharsPerLine = Math.max(1, Math.floor(contentWidth / (5.6 * reservationTextScale)));
-        const nameLinesNeeded = estimateWrappedLines(booking.player || '', nameCharsPerLine);
-        const typeLinesNeeded = typeLabel ? estimateWrappedLines(typeLabel, typeCharsPerLine) : 0;
-
-        const NAME_LINE_HEIGHT = 14 * reservationTextScale;
-        const TYPE_LINE_HEIGHT = 13 * reservationTextScale;
-        const DURATION_ROW_HEIGHT = 15 * reservationTextScale;
-        const NOTES_ROW_HEIGHT = 15 * reservationTextScale;
-        const CONTENT_PADDING = 4; // px-1.5 py-0.5 vertical padding
-
-        let remaining = Math.max(height - CONTENT_PADDING, 0);
-        // The name may use every line the block has; the estimate only decides what's left below it.
-        const nameMaxLines = Math.max(1, Math.floor(remaining / NAME_LINE_HEIGHT));
-        remaining -= NAME_LINE_HEIGHT * Math.min(nameLinesNeeded, nameMaxLines);
-
-        const showTypeFull = !!typeLabel && remaining >= TYPE_LINE_HEIGHT;
-        const typeMaxLines = Math.max(1, Math.floor(remaining / TYPE_LINE_HEIGHT));
-        if (showTypeFull) remaining -= TYPE_LINE_HEIGHT * Math.min(typeLinesNeeded, typeMaxLines);
-
-        const showDurationRow = remaining >= DURATION_ROW_HEIGHT;
-        if (showDurationRow) remaining -= DURATION_ROW_HEIGHT;
-        // Fall back to a compact category badge only when the full type line above didn't fit.
-        const showCategoryBadge = showDurationRow && !isBlocked && !showTypeFull && !!booking.bookingType && width >= 70;
-
-        const showNotes = !isBlocked && !!booking.notes && remaining >= NOTES_ROW_HEIGHT;
-        const isCompact = !showDurationRow;
+        const { nameMaxLines, showTypeFull, typeMaxLines, showDurationRow, showCategoryBadge, showNotes, isCompact } =
+          layoutReservationBlock({
+            name: booking.player || '',
+            typeLabel,
+            isBlocked,
+            hasBookingType: !!booking.bookingType,
+            hasNotes: !!booking.notes,
+            width,
+            height,
+            textScale: reservationTextScale,
+          });
 
         const isDraggable = dragReassignEnabled && !isBlocked;
         const isBeingDragged =
@@ -2991,31 +2943,31 @@ export function CourtCalendarView() {
             <div className={`px-1.5 py-0.5 h-full flex flex-col overflow-hidden ${isCompact ? 'justify-center' : ''}`}>
               <div
                 className="shrink-0 font-semibold leading-tight break-words overflow-hidden"
-                style={{ fontSize: 11 * reservationTextScale, ...lineClampStyle(nameMaxLines) }}
+                style={{ fontSize: RESERVATION_BLOCK_TEXT.name.fontSize * reservationTextScale, ...lineClampStyle(nameMaxLines) }}
               >
                 {booking.player}
               </div>
               {showTypeFull && (
                 <div
                   className="shrink-0 leading-tight opacity-80 mt-0.5 break-words overflow-hidden"
-                  style={{ fontSize: 10 * reservationTextScale, ...lineClampStyle(typeMaxLines) }}
+                  style={{ fontSize: RESERVATION_BLOCK_TEXT.type.fontSize * reservationTextScale, ...lineClampStyle(typeMaxLines) }}
                 >
                   {typeLabel}
                 </div>
               )}
               {showDurationRow && (
                 <div className="flex items-center gap-1 min-w-0 mt-0.5">
-                  <span className="opacity-75 shrink-0 truncate" style={{ fontSize: 9 * reservationTextScale }}>{isBlackout ? blackoutTimeRange : booking.duration}</span>
+                  <span className="opacity-75 shrink-0 truncate" style={{ fontSize: RESERVATION_BLOCK_TEXT.duration.fontSize * reservationTextScale }}>{isBlackout ? blackoutTimeRange : booking.duration}</span>
                   {showCategoryBadge && (
-                    <span className="px-1 py-0.5 rounded font-medium bg-white/50 truncate min-w-0" style={{ fontSize: 9 * reservationTextScale }}>
+                    <span className="px-1 py-0.5 rounded font-medium bg-white/50 truncate min-w-0" style={{ fontSize: RESERVATION_BLOCK_TEXT.duration.fontSize * reservationTextScale }}>
                       {typeLabel}
                     </span>
                   )}
                 </div>
               )}
               {showNotes && (
-                <div className="mt-1 truncate italic opacity-70" style={{ fontSize: 9 * reservationTextScale }}>
-                  {booking.notes.length > 30 ? `${booking.notes.substring(0, 30)}...` : booking.notes}
+                <div className="mt-1 truncate italic opacity-70" style={{ fontSize: RESERVATION_BLOCK_TEXT.notes.fontSize * reservationTextScale }}>
+                  {reservationBlockNotes(booking.notes)}
                 </div>
               )}
             </div>

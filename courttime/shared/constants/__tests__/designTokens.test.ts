@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { motion, palette, radius, webTokens } from '../designTokens';
+import { BOOKING_TYPES, RESERVATION_BLOCK_COLORS } from '../bookingTypes';
 
 /**
  * Drift guard: designTokens.ts is a copy of the website's values, so re-read
@@ -69,6 +70,19 @@ describe('designTokens', () => {
     const base = parseFloat(cssVar(siteRoot, 'radius')) * 16;
     expect(radius).toEqual({ sm: base - 4, md: base - 2, lg: base, xl: base + 4 });
   });
+
+  // The app paints calendar blocks with `rn`; the site with the Tailwind classes in `color`.
+  it.each([...Object.entries(BOOKING_TYPES), ...Object.entries(RESERVATION_BLOCK_COLORS)])(
+    'calendar block colors for %s match its Tailwind classes',
+    (_name, { color, rn }) => {
+      const [, bg, text, border] = color.match(/^bg-(\S+) text-(\S+) border-(\S+)$/)!;
+      expect({
+        bg: toHex(cssVar(tailwindCss, `color-${bg}`)),
+        border: toHex(cssVar(tailwindCss, `color-${border}`)),
+        text: toHex(cssVar(tailwindCss, `color-${text}`)),
+      }).toEqual(rn);
+    },
+  );
 
   it('motion matches the site durations and easing', () => {
     expect(`${motion.fastMs}ms`).toBe(cssVar(siteRoot, 'motion-fast'));

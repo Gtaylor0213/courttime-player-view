@@ -183,6 +183,24 @@ export const BOOKING_TYPES = {
 
 export type BookingTypeKey = keyof typeof BOOKING_TYPES;
 
+/** Court calendar block colors for blocks that aren't a typed reservation. */
+export const RESERVATION_BLOCK_COLORS = {
+  /** A reservation with no booking type. */
+  untyped: {
+    color: 'bg-blue-50 text-blue-900 border-blue-200',
+    rn: { bg: '#eff6ff', border: '#bedbff', text: '#1c398e' },
+  },
+  /** A court blocked by a booking on a related (split) court, or a reservation under a blackout. */
+  blocked: {
+    color: 'bg-gray-200 text-gray-500 border-gray-300',
+    rn: { bg: '#e5e7eb', border: '#d1d5dc', text: '#6a7282' },
+  },
+  blackout: {
+    color: 'bg-red-50 text-red-900 border-red-300',
+    rn: { bg: '#fef2f2', border: '#ffa2a2', text: '#82181a' },
+  },
+} as const;
+
 /**
  * Default length for a new booking, in minutes.
  *

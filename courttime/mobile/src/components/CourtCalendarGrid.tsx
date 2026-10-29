@@ -960,6 +960,8 @@ export function CourtCalendarGrid({
     scrollY = Math.min(Math.max(0, scrollY), maxOffset);
 
     const applyScroll = () => {
+      // The retries below land up to a second later; by then the user may have started scrolling.
+      if (!options?.fromUserTap && userScrolledRef.current) return;
       scrollRef.current?.scrollTo({ x: 0, y: scrollY, animated: Boolean(options?.fromUserTap) });
     };
 

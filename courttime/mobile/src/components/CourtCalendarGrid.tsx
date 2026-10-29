@@ -383,8 +383,6 @@ export function CourtCalendarGrid({
   /** Must match facility slot duration so row times align with booking modal / API. */
   const [slotStepMinutes, setSlotStepMinutes] = useState(DEFAULT_SLOT_MINUTES);
   const [loading, setLoading] = useState(true);
-  /** Index of the left-most court column on screen, for the "Courts 1-4 of 8" label. */
-  const [firstVisibleCourt, setFirstVisibleCourt] = useState(0);
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
   /** Where the hour rows start below the court counter and headers. */
   const [gridViewportTop, setGridViewportTop] = useState<number | null>(null);
@@ -507,7 +505,6 @@ export function CourtCalendarGrid({
   const courtIdsKey = useMemo(() => courts.map((c) => c.id).join(','), [courts]);
   useEffect(() => {
     scrollX.setValue(0);
-    setFirstVisibleCourt(0);
     courtScrollRef.current?.scrollTo?.({ x: 0, animated: false });
   }, [loading, courtIdsKey, scrollX]);
 
@@ -1287,36 +1284,22 @@ export function CourtCalendarGrid({
     );
   }
 
-  const lastVisibleCourt = Math.min(firstVisibleCourt + COURTS_VISIBLE, courts.length);
-  const syncFirstVisibleCourt = (offsetX: number) => {
-    const maxFirst = Math.max(0, courts.length - COURTS_VISIBLE);
-    setFirstVisibleCourt(Math.max(0, Math.min(maxFirst, Math.round(offsetX / courtColumnWidth))));
-  };
-
   return (
     <View style={styles.container}>
-      {/* Which courts are on screen */}
-      <View style={styles.pageIndicator}>
-        <Text style={styles.pageText}>
-          Courts {firstVisibleCourt + 1}-{lastVisibleCourt} of {courts.length}
-          {canScrollCourts ? '  ·  swipe for more' : ''}
-        </Text>
-        <View style={styles.pageIndicatorRight}>
+      {/* Court headers: pinned above the grid, slid sideways in step with the court strip */}
+      <View style={styles.headerRow}>
+        {/* "Now" sits in the corner above the time column */}
+        <View style={[styles.timeLabel, styles.timeLabelHeaderSpacer, styles.nowCorner]}>
           <TouchableOpacity
             style={styles.nowButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             onPress={handleNowPress}
             accessibilityRole="button"
             accessibilityLabel="Scroll to current time"
           >
-            <Text style={styles.nowButtonText}>Now</Text>
+            <Text style={styles.nowButtonText} numberOfLines={1} maxFontSizeMultiplier={1}>Now</Text>
           </TouchableOpacity>
         </View>
-      </View>
-
-      {/* Court headers: pinned above the grid, slid sideways in step with the court strip */}
-      <View style={styles.headerRow}>
-        <View style={[styles.timeLabel, styles.timeLabelHeaderSpacer]} />
         <View style={styles.headerClip}>
           <Animated.View
             style={[styles.headerStrip, { width: courtStripWidth, transform: [{ translateX: headerTranslateX }] }]}
@@ -1418,8 +1401,6 @@ export function CourtCalendarGrid({
                 userScrolledRef.current = true;
               }}
               scrollEventThrottle={16}
-              onMomentumScrollEnd={(e: any) => syncFirstVisibleCourt(e.nativeEvent.contentOffset.x)}
-              onScrollEndDrag={(e: any) => syncFirstVisibleCourt(e.nativeEvent.contentOffset.x)}
               nestedScrollEnabled
               scrollEnabled={!touchCaptureActive && canScrollCourts}
             >
@@ -1628,26 +1609,12 @@ const styles = StyleSheet.create({
   },
 
   // Page indicator
-  pageIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 2,
-    backgroundColor: Colors.card,
-  },
-  pageText: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontFamily: FontFamily.semiBold,
-  },
-  pageIndicatorRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+  /** The time column is narrow; drop its side padding so "Now" fits on one line. */
+  nowCorner: {
+    paddingHorizontal: 0,
   },
   nowButton: {
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: BorderRadius.full,
     borderWidth: 1,

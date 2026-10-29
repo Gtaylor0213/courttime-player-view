@@ -41,6 +41,8 @@ const BOOKING_BLOCK_INSET_Y = 2;
 /** Hour rows never shrink below this on short phones; the Book page scrolls instead. */
 const MIN_GRID_VIEWPORT_HEIGHT = 240;
 const BOOKING_HINT_SEEN_KEY = 'courtCalendar.bookingHintSeen';
+/** How long after a day loads the grid may still move itself to the now line (covers the retries in scrollToCurrentTime). */
+const AUTO_POSITION_WINDOW_MS = 2500;
 import {
   DEFAULT_BOOKING_DURATION_MINUTES,
   RESERVATION_BLOCK_COLORS,
@@ -421,11 +423,15 @@ export function CourtCalendarGrid({
   const dragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollLockedRef = useRef(false);
   const lastScrollAtRef = useRef(0);
-  /** Set once the user drags the grid either way; automatic scroll-to-now then leaves them alone until the date changes or they tap Now. */
-  const userScrolledRef = useRef(false);
-  useEffect(() => {
-    userScrolledRef.current = false;
-  }, [selectedDate]);
+  /**
+   * The grid moves to the now line on its own only while a day is first being positioned: from when
+   * it loads until the user touches the grid or AUTO_POSITION_WINDOW_MS passes. After that only "Now"
+   * moves it, so redraws (polling, the line creeping forward, a sideways swipe) never pull anyone back.
+   */
+  const autoPositionOpenRef = useRef(false);
+  const closeAutoPosition = useCallback(() => {
+    autoPositionOpenRef.current = false;
+  }, []);
   const scrollRef = useRef<ScrollView>(null);
   const courtScrollRef = useRef<ScrollView>(null);
   /** Horizontal offset of the court strip; drives the pinned header row natively so it never lags. */
@@ -918,9 +924,7 @@ export function CourtCalendarGrid({
       dragSelectionRef.current = null;
       setDragSelection(null);
       setScrollLocked(false);
-    } else if (userScrolledRef.current) {
-      // Re-renders (e.g. the court counter updating after a sideways swipe) fire onContentSizeChange;
-      // without this they snap the grid back to the top / now line.
+    } else if (!autoPositionOpenRef.current) {
       return;
     }
 
@@ -958,7 +962,7 @@ export function CourtCalendarGrid({
 
     const applyScroll = () => {
       // The retries below land up to a second later; by then the user may have started scrolling.
-      if (!options?.fromUserTap && userScrolledRef.current) return;
+      if (!options?.fromUserTap && !autoPositionOpenRef.current) return;
       scrollRef.current?.scrollTo({ x: 0, y: scrollY, animated: Boolean(options?.fromUserTap) });
     };
 
@@ -1000,6 +1004,15 @@ export function CourtCalendarGrid({
     }
     scrollToCurrentTime({ fromUserTap: true });
   }, [selectedYmd, onRequestToday, scrollToCurrentTime]);
+
+  // Open the positioning window when a day finishes loading. Declared before the effect below so the
+  // window is open by the time it runs.
+  useEffect(() => {
+    if (loading) return;
+    autoPositionOpenRef.current = true;
+    const timer = setTimeout(closeAutoPosition, AUTO_POSITION_WINDOW_MS);
+    return () => clearTimeout(timer);
+  }, [loading, selectedYmd, closeAutoPosition]);
 
   useEffect(() => {
     if (loading) return;
@@ -1352,9 +1365,8 @@ export function CourtCalendarGrid({
           onScroll={() => {
             lastScrollAtRef.current = Date.now();
           }}
-          onScrollBeginDrag={() => {
-            userScrolledRef.current = true;
-          }}
+          onTouchStart={closeAutoPosition}
+          onScrollBeginDrag={closeAutoPosition}
           scrollEventThrottle={16}
           onTouchEnd={() => handleTouchEnd()}
           onTouchCancel={() => handleTouchEnd(false)}
@@ -1397,9 +1409,7 @@ export function CourtCalendarGrid({
               snapToAlignment="start"
               decelerationRate="fast"
               onScroll={onCourtStripScroll}
-              onScrollBeginDrag={() => {
-                userScrolledRef.current = true;
-              }}
+              onScrollBeginDrag={closeAutoPosition}
               scrollEventThrottle={16}
               nestedScrollEnabled
               scrollEnabled={!touchCaptureActive && canScrollCourts}

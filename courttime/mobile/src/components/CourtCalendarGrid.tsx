@@ -280,6 +280,11 @@ export function CourtCalendarGrid({
   const dragArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollLockedRef = useRef(false);
   const lastScrollAtRef = useRef(0);
+  /** Set once the user drags the grid either way; automatic scroll-to-now then leaves them alone until the date changes or they tap Now. */
+  const userScrolledRef = useRef(false);
+  useEffect(() => {
+    userScrolledRef.current = false;
+  }, [selectedDate]);
   const scrollRef = useRef<ScrollView>(null);
   const courtScrollRef = useRef<ScrollView>(null);
   /** Horizontal offset of the court strip; drives the pinned header row natively so it never lags. */
@@ -766,6 +771,10 @@ export function CourtCalendarGrid({
       dragSelectionRef.current = null;
       setDragSelection(null);
       setScrollLocked(false);
+    } else if (userScrolledRef.current) {
+      // Re-renders (e.g. the court counter updating after a sideways swipe) fire onContentSizeChange;
+      // without this they snap the grid back to the top / now line.
+      return;
     }
 
     const rowIsPast = (rowIndex: number): boolean => {
@@ -1200,6 +1209,9 @@ export function CourtCalendarGrid({
           onScroll={() => {
             lastScrollAtRef.current = Date.now();
           }}
+          onScrollBeginDrag={() => {
+            userScrolledRef.current = true;
+          }}
           scrollEventThrottle={16}
           onTouchEnd={() => handleTouchEnd()}
           onTouchCancel={() => handleTouchEnd(false)}
@@ -1242,6 +1254,9 @@ export function CourtCalendarGrid({
               snapToAlignment="start"
               decelerationRate="fast"
               onScroll={onCourtStripScroll}
+              onScrollBeginDrag={() => {
+                userScrolledRef.current = true;
+              }}
               scrollEventThrottle={16}
               onMomentumScrollEnd={(e: any) => syncFirstVisibleCourt(e.nativeEvent.contentOffset.x)}
               onScrollEndDrag={(e: any) => syncFirstVisibleCourt(e.nativeEvent.contentOffset.x)}

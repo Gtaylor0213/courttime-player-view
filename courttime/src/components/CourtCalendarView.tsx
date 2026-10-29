@@ -53,6 +53,8 @@ const HEADER_HEIGHT = 38;
 /** Hold this long before a phone touch arms drag-to-book, so a slow-starting swipe still scrolls. */
 const MOBILE_DRAG_ARM_DELAY_MS = 400;
 const MOBILE_MOVEMENT_THRESHOLD_PX = 8;
+/** A phone touch landing this soon after the grid moved is stopping a scroll, not a tap. */
+const MOBILE_SCROLL_SETTLE_MS = 150;
 
 /** Rough line count for `text` greedy-wrapped at `charsPerLine` (long words break mid-word). */
 function estimateWrappedLines(text: string, charsPerLine: number): number {
@@ -225,7 +227,11 @@ export function CourtCalendarView() {
   /** Mobile: court headers / body horizontal scroll (synced). */
   const courtHeaderScrollRef = useRef<HTMLDivElement>(null);
   const courtHorizontalScrollRef = useRef<HTMLDivElement>(null);
-  const scrollSyncLockRef = useRef(false);
+  /** Pane the finger is on: only it writes scrollLeft, so a fling is never pulled back by the other pane's stale echo. */
+  const scrollDriverRef = useRef<'body' | 'header'>('body');
+  /** Last time either phone grid pane scrolled; touches that stop or ride a scroll never book. */
+  const lastGridScrollAtRef = useRef(0);
+  const lastGridTouchRef = useRef({ startedAt: 0, stoppedScroll: false });
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState<number>(HEADER_HEIGHT);
   const [bookingWizard, setBookingWizard] = useState({
     isOpen: false,
@@ -1803,6 +1809,13 @@ export function CourtCalendarView() {
     }
   }, []);
 
+  /** Phone tap that stopped a moving grid, or that the grid scrolled under: not a booking tap. */
+  const isScrollTouch = () => {
+    if (!isMobile) return false;
+    const touch = lastGridTouchRef.current;
+    return touch.stoppedScroll || lastGridScrollAtRef.current > touch.startedAt;
+  };
+
   const releaseMobileTouchLocks = useCallback(() => {
     setCalendarTouchLocked(false);
   }, []);
@@ -2174,6 +2187,9 @@ export function CourtCalendarView() {
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
+      const touchStartedAt = Date.now();
+      const stoppedScroll = touchStartedAt - lastGridScrollAtRef.current < MOBILE_SCROLL_SETTLE_MS;
+      lastGridTouchRef.current = { startedAt: touchStartedAt, stoppedScroll };
       const slot = (e.target as HTMLElement | null)?.closest?.('[data-slot-court][data-slot-time]');
       if (!slot || !root.contains(slot)) return;
 
@@ -2214,6 +2230,8 @@ export function CourtCalendarView() {
 
       const startSlotIndex = allTimeSlots.indexOf(time);
       if (startSlotIndex < 0) return;
+      // This touch only stops the scroll; it can't arm drag-to-book.
+      if (stoppedScroll) return;
 
       mobileTouchGestureRef.current = {
         startClientX: touch.clientX,
@@ -2229,6 +2247,8 @@ export function CourtCalendarView() {
       mobileDragArmTimerRef.current = setTimeout(() => {
         const gesture = mobileTouchGestureRef.current;
         if (!gesture || gesture.court !== courtId) return;
+        // The grid moved under the finger (a slow swipe or a fling still settling): not a hold.
+        if (lastGridScrollAtRef.current > touchStartedAt) return;
         gesture.armed = true;
         setMobileVerticalSelection(courtId, gesture.startSlotIndex, gesture.startSlotIndex);
         attachDragTouchMove();
@@ -2577,29 +2597,26 @@ export function CourtCalendarView() {
 
 
   const handleCourtHorizontalScroll = useCallback(() => {
-    if (!isMobile || scrollSyncLockRef.current) return;
+    if (!isMobile) return;
+    lastGridScrollAtRef.current = Date.now();
+    // The header's echo arrives after the grid has moved on; writing it back would yank the fling.
+    if (scrollDriverRef.current !== 'body') return;
     const bodyEl = courtHorizontalScrollRef.current;
     const headerEl = courtHeaderScrollRef.current;
     if (!bodyEl || !headerEl) return;
-
-    // Skip near-equal writes: the other pane's echoed scroll event would otherwise set
-    // scrollLeft mid-fling, which kills momentum on iOS.
     if (Math.abs(headerEl.scrollLeft - bodyEl.scrollLeft) < 1) return;
-    scrollSyncLockRef.current = true;
     headerEl.scrollLeft = bodyEl.scrollLeft;
-    scrollSyncLockRef.current = false;
   }, [isMobile]);
 
   const handleCourtHeaderScroll = useCallback(() => {
-    if (!isMobile || scrollSyncLockRef.current) return;
+    if (!isMobile) return;
+    lastGridScrollAtRef.current = Date.now();
+    if (scrollDriverRef.current !== 'header') return;
     const bodyEl = courtHorizontalScrollRef.current;
     const headerEl = courtHeaderScrollRef.current;
     if (!bodyEl || !headerEl) return;
-
     if (Math.abs(bodyEl.scrollLeft - headerEl.scrollLeft) < 1) return;
-    scrollSyncLockRef.current = true;
     bodyEl.scrollLeft = headerEl.scrollLeft;
-    scrollSyncLockRef.current = false;
   }, [isMobile]);
 
   // Function to scroll to current time
@@ -2656,10 +2673,16 @@ export function CourtCalendarView() {
     }
   }, [courts.length]);
 
-  // Auto-scroll to current time when viewing today, or top on other dates
+  // Auto-scroll to current time when viewing today, or top on other dates.
+  // The now-line moves every minute; that alone must not yank someone who has scrolled away.
+  const autoScrollKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!calendarScrollRef.current) return;
+    const nowLineReady = !isToday(selectedDate, facilityTimezone) || currentTimeLinePosition !== null;
+    const scrollKey = [selectedDate.toDateString(), scrollTrigger, isMobile, dayStartMinutes, effectiveSubSlotHeight, measuredHeaderHeight, nowLineReady].join('|');
+    if (autoScrollKeyRef.current === scrollKey) return;
     const timer = setTimeout(() => {
+      autoScrollKeyRef.current = scrollKey;
       if (isToday(selectedDate, facilityTimezone) && currentTimeLinePosition !== null) {
         scrollToCurrentTime({ reliable: isMobile });
         if (isMobile) {
@@ -2670,7 +2693,7 @@ export function CourtCalendarView() {
       }
     }, isMobile ? 300 : 150);
     return () => clearTimeout(timer);
-  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger, isMobile, facilityTimezone]);
+  }, [selectedDate, isToday, currentTimeLinePosition, scrollToCurrentTime, scrollTrigger, isMobile, facilityTimezone, dayStartMinutes, effectiveSubSlotHeight, measuredHeaderHeight]);
 
   const courtGridWidth = courts.length * effectiveCourtWidth;
   const calendarGridHeight = measuredHeaderHeight + visibleTimeSlots.length * effectiveSubSlotHeight;
@@ -2768,7 +2791,7 @@ export function CourtCalendarView() {
               ${topSelected ? 'bg-green-100 ring-1 ring-inset ring-green-400' : ''}
             `}
             onClick={() => {
-              if (dragJustFinishedRef.current) return;
+              if (dragJustFinishedRef.current || isScrollTouch()) return;
               if (isWalkUpCourt) return toast.info('This is a walk-up only court and cannot be booked online.');
               if (court.id && isCourtSlotOutsideOperatingHours(court.id, topTime)) return;
               if (topCutoffLocked && bookingWindowCutoffMessage) return toast.error(bookingWindowCutoffMessage);
@@ -2962,7 +2985,7 @@ export function CourtCalendarView() {
                 ? 'none'
                 : '0 10px 20px -10px rgba(15, 23, 42, 0.28)',
             }}
-            onClick={() => !isBlocked && !reservationDragJustFinishedRef.current && handleBookingClick(booking)}
+            onClick={() => !isBlocked && !reservationDragJustFinishedRef.current && !isScrollTouch() && handleBookingClick(booking)}
             onPointerDown={isDraggable ? (e) => handleReservationPointerDown(booking, e) : undefined}
           >
             <div className={`px-1.5 py-0.5 h-full flex flex-col overflow-hidden ${isCompact ? 'justify-center' : ''}`}>
@@ -3591,6 +3614,9 @@ export function CourtCalendarView() {
                 ref={courtHeaderScrollRef}
                 className="flex-1 overflow-x-auto overflow-y-hidden calendar-court-header-sync"
                 onScroll={handleCourtHeaderScroll}
+                onTouchStart={() => { scrollDriverRef.current = 'header'; }}
+                onPointerDown={() => { scrollDriverRef.current = 'header'; }}
+                onWheel={() => { scrollDriverRef.current = 'header'; }}
               >
                 <div ref={headerRowRef} className="flex" style={{ width: courtGridWidth }}>
                   {renderMobileCourtHeaderCells()}
@@ -3601,6 +3627,7 @@ export function CourtCalendarView() {
             <div
               ref={calendarScrollRef}
               className={`calendar-scroll calendar-scroll-mobile-y flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain${calendarTouchLocked ? ' calendar-scroll--touch-locked' : ''}`}
+              onScroll={() => { lastGridScrollAtRef.current = Date.now(); }}
             >
               <div
                 className="flex min-w-0"
@@ -3617,6 +3644,9 @@ export function CourtCalendarView() {
                   ref={courtHorizontalScrollRef}
                   className="calendar-court-body-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden relative"
                   onScroll={handleCourtHorizontalScroll}
+                  onTouchStart={() => { scrollDriverRef.current = 'body'; }}
+                  onPointerDown={() => { scrollDriverRef.current = 'body'; }}
+                  onWheel={() => { scrollDriverRef.current = 'body'; }}
                 >
                   <table
                     ref={calendarGridRef}

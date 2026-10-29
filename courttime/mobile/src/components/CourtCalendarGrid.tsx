@@ -16,8 +16,9 @@ import {
   Dimensions,
   InteractionManager,
   TouchableOpacity,
+  AppState,
 } from 'react-native';
-import type { GestureResponderEvent } from 'react-native';
+import type { AppStateStatus, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api/client';
@@ -25,7 +26,7 @@ import { ChromeMaxFontScale, Colors, Spacing, FontSize, BorderRadius, FontFamily
 import type { Court } from '../types/database';
 import { BookingSkeleton } from './LoadingSkeleton';
 import { EmptyState } from './EmptyState';
-import { createPollingTransport } from '../../../shared/api/sync';
+import { useFocusEffect } from 'expo-router';
 import { getOperatingHoursForDay, isTruthyClosed } from '../../../shared/utils/operatingHours';
 import { userFacingApiMessage, type ApiFailureShape } from '../utils/apiUserMessages';
 import { formatCourtCalendarSubtitle } from '../../../shared/utils/courtNaming';
@@ -63,7 +64,6 @@ import { isPeakSlot } from '../../../shared/utils/courtTypeFilter';
 const DEFAULT_SLOT_MINUTES = 30;
 /** Court columns that fit across the screen; more courts scroll sideways. */
 const COURTS_VISIBLE = 4;
-const ACTIVE_DAY_POLL_MS = 5000;
 /** Hold this long without moving and the touch becomes a drag-select instead of a scroll. */
 const DRAG_ARM_DELAY_MS = 180;
 /** Finger travel that turns a touch into a scroll (before the hold arms) rather than a tap. */
@@ -778,7 +778,7 @@ export function CourtCalendarGrid({
     void fetchAvailability();
   }, [fetchAvailability]);
 
-  // Parent just made, changed or cancelled a booking: show it without waiting for the next poll.
+  // Parent just made, changed or cancelled a booking: show it right away.
   useEffect(() => {
     if (refreshKey === 0) return;
     void fetchAvailability({ background: true });
@@ -791,17 +791,32 @@ export function CourtCalendarGrid({
     };
   }, [onInteractionLockChange]);
 
+  // No timed refresh (the website has none either): a full redraw mid-scroll stutters on slower
+  // Android phones. Reload in place when the member comes back to the app or to this tab instead;
+  // the server still rejects a slot someone else took in the meantime.
+  const fetchAvailabilityRef = useRef(fetchAvailability);
+  fetchAvailabilityRef.current = fetchAvailability;
   useEffect(() => {
-    if (selectedYmd !== localTodayYmd()) {
-      return;
-    }
-
-    const stopPolling = createPollingTransport(ACTIVE_DAY_POLL_MS).subscribe(() => {
-      void fetchAvailability({ background: true });
+    let lastState: AppStateStatus = AppState.currentState;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (lastState.match(/inactive|background/) && next === 'active') {
+        void fetchAvailabilityRef.current({ background: true });
+      }
+      lastState = next;
     });
-
-    return stopPolling;
-  }, [fetchAvailability, selectedYmd]);
+    return () => sub.remove();
+  }, []);
+  const focusedOnceRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      // The first focus is the mount, which already loads the day.
+      if (!focusedOnceRef.current) {
+        focusedOnceRef.current = true;
+        return;
+      }
+      void fetchAvailabilityRef.current({ background: true });
+    }, [])
+  );
 
   /**
    * Vertical size of the time column (one row per slot). Used for scroll math and iOS content height.

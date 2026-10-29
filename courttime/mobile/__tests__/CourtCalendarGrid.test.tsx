@@ -5,6 +5,12 @@ import { Text } from 'react-native';
 import { CourtCalendarGrid } from '../src/components/CourtCalendarGrid';
 import { api } from '../src/api/client';
 
+jest.mock('expo-router', () => {
+  const actual = jest.requireActual('expo-router') as Record<string, unknown>;
+  const { useEffect } = require('react');
+  return { ...actual, useFocusEffect: (effect: () => void) => useEffect(effect, [effect]) };
+});
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {

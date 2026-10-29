@@ -1420,6 +1420,9 @@ export default function BookCourtScreen() {
         style={styles.container}
         scrollEnabled={!calendarScrollLocked}
         nestedScrollEnabled
+        // The day grid fills the screen; Android's stretch at the page edge would shift the whole calendar
+        // when a scroll inside it reaches the first or last row. Pull-to-refresh is unaffected.
+        overScrollMode={showingDayGrid ? 'never' : 'auto'}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
       >
       <OfflineBanner state={bannerState} cachedAt={lastCachedAt} onRetry={retryConnectivity} />

@@ -5,6 +5,15 @@ import { Text } from 'react-native';
 import { CourtCalendarGrid } from '../src/components/CourtCalendarGrid';
 import { api } from '../src/api/client';
 
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(() => Promise.resolve(null)),
+    setItem: jest.fn(() => Promise.resolve()),
+    removeItem: jest.fn(() => Promise.resolve()),
+  },
+}));
+
 describe('CourtCalendarGrid', () => {
   it('renders court columns when facility has courts', async () => {
     const getSpy = jest.spyOn(api, 'get').mockImplementation((endpoint: string) => {

@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api/client';
 import { ChromeMaxFontScale, Colors, Spacing, FontSize, BorderRadius, FontFamily, Palette } from '../constants/theme';
 import type { Court } from '../types/database';
@@ -37,6 +38,9 @@ const ROW_HEIGHT = 48;
 /** Gap between a booking block and its cell edges (web: 4px each side, 2px top and bottom). */
 const BOOKING_BLOCK_INSET_X = 4;
 const BOOKING_BLOCK_INSET_Y = 2;
+/** Hour rows never shrink below this on short phones; the Book page scrolls instead. */
+const MIN_GRID_VIEWPORT_HEIGHT = 240;
+const BOOKING_HINT_SEEN_KEY = 'courtCalendar.bookingHintSeen';
 import {
   DEFAULT_BOOKING_DURATION_MINUTES,
   RESERVATION_BLOCK_COLORS,
@@ -235,6 +239,8 @@ interface Props {
   lockedFromTime?: string | null;
   /** Change this to reload the day's bookings in place (no skeleton, scroll position kept). */
   refreshKey?: number;
+  /** Height the whole grid (court counter and headers included) may fill; the hour rows take what's left. */
+  availableHeight?: number | null;
 }
 
 interface GridLoadError {
@@ -371,6 +377,7 @@ export function CourtCalendarGrid({
   onRequestToday,
   lockedFromTime = null,
   refreshKey = 0,
+  availableHeight = null,
 }: Props) {
   const [courtData, setCourtData] = useState<CourtAvailability[]>([]);
   /** Must match facility slot duration so row times align with booking modal / API. */
@@ -379,6 +386,15 @@ export function CourtCalendarGrid({
   /** Index of the left-most court column on screen, for the "Courts 1-4 of 8" label. */
   const [firstVisibleCourt, setFirstVisibleCourt] = useState(0);
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
+  /** Where the hour rows start below the court counter and headers. */
+  const [gridViewportTop, setGridViewportTop] = useState<number | null>(null);
+  /** The "Tap a time to book" hint shows until the member first picks a time; starts hidden so it can't flash. */
+  const [bookingHintSeen, setBookingHintSeen] = useState(true);
+  useEffect(() => {
+    AsyncStorage.getItem(BOOKING_HINT_SEEN_KEY)
+      .then((value) => setBookingHintSeen(value === '1'))
+      .catch(() => {});
+  }, []);
   /** Disables inner + parent scroll while a cell gesture is active (refs alone do not re-render scrollEnabled). */
   const [touchCaptureActive, setTouchCaptureActive] = useState(false);
   const [facilityDayHours, setFacilityDayHours] = useState<FacilityDayHours | null>(null);
@@ -793,12 +809,15 @@ export function CourtCalendarGrid({
    * Fixed viewport for the day grid. On iOS, a nested vertical ScrollView with only minHeight often
    * expands to full content height inside Book's outer ScrollView — then there is nothing to scroll
    * internally and scrollTo is a no-op. Hard-cap height so the grid always scrolls inside this box.
+   * The cap is whatever room is left down to the bottom of the screen, so the most hours show.
    */
   const gridViewportHeight = useMemo(() => {
-    const cap = SCREEN_HEIGHT * 0.52;
-    const h = gridContentHeight;
-    return Math.min(cap, Math.max(280, Math.min(h, cap)));
-  }, [gridContentHeight]);
+    const cap =
+      availableHeight != null && gridViewportTop != null
+        ? Math.max(MIN_GRID_VIEWPORT_HEIGHT, availableHeight - gridViewportTop)
+        : SCREEN_HEIGHT * 0.52;
+    return Math.min(gridContentHeight, cap);
+  }, [availableHeight, gridContentHeight, gridViewportTop]);
 
   const formatTimeLabel = (time: string) => {
     const [h, m] = time.split(':').map(Number);
@@ -1211,9 +1230,13 @@ export function CourtCalendarGrid({
         }
       }
 
+      if (!bookingHintSeen) {
+        setBookingHintSeen(true);
+        AsyncStorage.setItem(BOOKING_HINT_SEEN_KEY, '1').catch(() => {});
+      }
       void onBookingSelected(court, startTime, endHHMM + ':00');
     },
-    [courts, getRowEndTime, onBookingSelected, timeRows]
+    [bookingHintSeen, courts, getRowEndTime, onBookingSelected, timeRows]
   );
 
   const openBookedSlotDetails = useCallback(
@@ -1279,6 +1302,7 @@ export function CourtCalendarGrid({
         <View style={styles.pageIndicatorRight}>
           <TouchableOpacity
             style={styles.nowButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={handleNowPress}
             accessibilityRole="button"
             accessibilityLabel="Scroll to current time"
@@ -1329,7 +1353,10 @@ export function CourtCalendarGrid({
       </View>
 
       {/* Fixed-height wrapper: iOS nested ScrollView must not grow to full content or scrollTo does nothing */}
-      <View style={[styles.gridScrollViewport, { height: gridViewportHeight }]}>
+      <View
+        style={[styles.gridScrollViewport, { height: gridViewportHeight }]}
+        onLayout={(e) => setGridViewportTop(e.nativeEvent.layout.y)}
+      >
         <ScrollView
           ref={scrollRef}
           style={styles.gridScrollFill}
@@ -1564,23 +1591,22 @@ export function CourtCalendarGrid({
             </Animated.ScrollView>
           </View>
         </ScrollView>
+        {/* Hint and drag preview float over the last rows instead of taking a row of their own. */}
+        {!dragSelection && !bookingHintSeen && (
+          <View style={styles.hint} pointerEvents="none">
+            <Text style={styles.hintText}>Tap a time to book, or press and hold then drag for a longer slot</Text>
+          </View>
+        )}
+
+        {/* Selection preview */}
+        {dragSelection && !selectionHasConflict(dragSelection) && (
+          <View style={styles.selectionPreview} pointerEvents="none">
+            <Text style={styles.selectionPreviewText}>
+              {courts[dragSelection.courtIndex]?.name} · {formatFullTime(timeRows[Math.min(dragSelection.startRow, dragSelection.endRow)] + ':00')} – {formatFullTime(getRowEndTime(Math.max(dragSelection.startRow, dragSelection.endRow)) + ':00')}
+            </Text>
+          </View>
+        )}
       </View>
-
-      {/* Drag hint */}
-      {!dragSelection && (
-        <View style={styles.hint}>
-          <Text style={styles.hintText}>Tap a time to book, or press and hold then drag for a longer slot</Text>
-        </View>
-      )}
-
-      {/* Selection preview */}
-      {dragSelection && !selectionHasConflict(dragSelection) && (
-        <View style={styles.selectionPreview}>
-          <Text style={styles.selectionPreviewText}>
-            {courts[dragSelection.courtIndex]?.name} · {formatFullTime(timeRows[Math.min(dragSelection.startRow, dragSelection.endRow)] + ':00')} – {formatFullTime(getRowEndTime(Math.max(dragSelection.startRow, dragSelection.endRow)) + ':00')}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -1605,7 +1631,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
+    paddingVertical: 2,
     backgroundColor: Colors.card,
   },
   pageText: {
@@ -1620,7 +1646,7 @@ const styles = StyleSheet.create({
   },
   nowButton: {
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: 2,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
     borderColor: Palette.red600,
@@ -1647,7 +1673,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   courtHeader: {
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.xs,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: BorderRadius.sm,
@@ -1823,6 +1849,10 @@ const styles = StyleSheet.create({
 
   // Hint
   hint: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     padding: Spacing.sm,
     backgroundColor: Colors.card,
     borderTopWidth: 1,
@@ -1837,6 +1867,10 @@ const styles = StyleSheet.create({
 
   // Selection preview
   selectionPreview: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     padding: Spacing.sm,
     backgroundColor: Colors.primary + '15',
     borderTopWidth: 1,

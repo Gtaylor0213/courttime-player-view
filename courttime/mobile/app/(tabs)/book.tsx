@@ -19,6 +19,7 @@ import {
   useWindowDimensions,
   Switch,
 } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -171,13 +172,19 @@ function bookingTypeLabel(typeKey: string): string {
 const BOOKING_MODAL_OVERLAY_TOP = 24;
 /** Minimum sheet height so time pickers + confirm button remain usable on small phones */
 const BOOKING_MODAL_MIN_HEIGHT = 360;
+/** Gap left under the day grid, which otherwise runs to the bottom of the screen. */
+const DAY_GRID_TRAILING_SPACE = Spacing.xs;
 
 export default function BookCourtScreen() {
   const { height: windowHeight } = useWindowDimensions();
   /** Bottom edge of the Book scroll area in window coords, so the month overview can stretch down to it. */
   const screenRootRef = useRef<View>(null);
   const [scrollAreaBottomY, setScrollAreaBottomY] = useState<number | null>(null);
-  const onScreenRootLayout = useCallback(() => {
+  /** Book scroll area height, and where the day grid starts inside it: the grid fills the space between. */
+  const [screenRootHeight, setScreenRootHeight] = useState<number | null>(null);
+  const [gridTopY, setGridTopY] = useState<number | null>(null);
+  const onScreenRootLayout = useCallback((e: LayoutChangeEvent) => {
+    setScreenRootHeight(e.nativeEvent.layout.height);
     screenRootRef.current?.measureInWindow((_x, y, _w, h) => {
       if (Number.isFinite(y) && Number.isFinite(h) && h > 0) setScrollAreaBottomY(y + h);
     });
@@ -342,6 +349,7 @@ export default function BookCourtScreen() {
   }, [reservationTypeKeys, bookingType]);
   const [selectedCalendarBooking, setSelectedCalendarBooking] = useState<BookingWithDetails | null>(null);
   const [courtLoadError, setCourtLoadError] = useState<ApiFailureShape | null>(null);
+  const showingDayGrid = !!facilityId && !courtLoadError && !(weekMonthViewEnabled && calendarViewMode === 'overview');
 
   function getTodayString() {
     const d = new Date();
@@ -1327,11 +1335,13 @@ export default function BookCourtScreen() {
     );
   };
 
-  const selectedDateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
+  // The year only shows when it isn't this one, so the date fits on one line above the grid.
+  const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+  const selectedDateLabel = selectedDateObj.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
-    year: 'numeric',
+    ...(selectedDateObj.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }),
   });
 
   const generateRecurringDates = (): string[] => {
@@ -1465,16 +1475,6 @@ export default function BookCourtScreen() {
           >
             <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.compactToolsRow}>
-          <Text
-            style={styles.compactToolsText}
-            numberOfLines={1}
-            accessibilityRole="text"
-          >
-            {facilityId && currentFacilityName ? `Booking at ${currentFacilityName}` : 'Choose a club to book'}
-          </Text>
           <TouchableOpacity
             style={styles.compactToolsToggle}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1600,7 +1600,13 @@ export default function BookCourtScreen() {
               }}
             />
           ) : (
+            <View onLayout={(e) => setGridTopY(e.nativeEvent.layout.y)}>
             <CourtCalendarGrid
+              availableHeight={
+                screenRootHeight != null && gridTopY != null
+                  ? screenRootHeight - gridTopY - DAY_GRID_TRAILING_SPACE
+                  : null
+              }
               courts={visibleCourts}
               selectedDate={selectedDate}
               facilityId={facilityId}
@@ -1611,11 +1617,12 @@ export default function BookCourtScreen() {
               lockedFromTime={gridLockedFromTime}
               refreshKey={gridRefreshKey}
             />
+            </View>
           )}
         </>
       ) : null}
 
-      <View style={{ height: Spacing.xl }} />
+      <View style={{ height: showingDayGrid ? DAY_GRID_TRAILING_SPACE : Spacing.xl }} />
       </ScrollView>
 
       {/* ── Booking Details Modal (sibling of main ScrollView — avoids scroll gesture capture) ── */}
@@ -2187,7 +2194,7 @@ const styles = StyleSheet.create({
   calendarSection: {
     marginHorizontal: Spacing.md,
     marginTop: Spacing.xs,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
     borderWidth: 1,
@@ -2198,7 +2205,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.xs,
+    paddingVertical: Spacing.xs,
     gap: Spacing.xs,
   },
   dayArrow: {
@@ -2240,21 +2247,6 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     minHeight: 36,
     paddingVertical: 5,
-  },
-  compactToolsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingTop: 2,
-    paddingBottom: Spacing.xs,
-  },
-  compactToolsText: {
-    flex: 1,
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.medium,
-    color: Colors.textSecondary,
   },
   compactToolsToggle: {
     flexDirection: 'row',

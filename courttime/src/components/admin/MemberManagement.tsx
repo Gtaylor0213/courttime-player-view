@@ -416,6 +416,9 @@ export function MemberManagement() {
     }
   };
 
+  // Pending requests get their own section at the top, so the main list leaves
+  // them out unless the admin explicitly filters to Pending.
+  const pendingMembers = members.filter(m => m.status === 'pending');
   const filteredMembers = filterAndSortMembers(members, {
     search: searchTerm,
     status: filterStatus,
@@ -424,7 +427,13 @@ export function MemberManagement() {
     joinedFrom: filterJoinedFrom,
     joinedTo: filterJoinedTo,
     sort: sortBy,
-  });
+  }).filter(m => filterStatus === 'pending' || m.status !== 'pending');
+
+  const openMemberDetails = (member: Member) => {
+    setSelectedMember(member);
+    setEditingMemberNumber(false);
+    setMemberNumberDraft(member.memberNumber || '');
+  };
 
   const hasActiveFilters =
     !!searchTerm || filterStatus !== 'all' || !!filterLastName || !!filterAddress ||
@@ -489,6 +498,62 @@ export function MemberManagement() {
                 Refresh
               </Button>
           </div>
+
+          {/* Pending Requests */}
+          {!loading && pendingMembers.length > 0 && (
+            <Card className="border-yellow-300 bg-yellow-50/40">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-yellow-600" />
+                  Pending Requests ({pendingMembers.length})
+                </CardTitle>
+                <CardDescription>These people have asked to join and are waiting for approval.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {pendingMembers.map((member) => (
+                    <div
+                      key={member.userId}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2 border rounded-lg bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => openMemberDetails(member)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar className="h-8 w-8 flex-shrink-0 hidden md:flex">
+                          <AvatarFallback className="text-xs">{getInitials(member.fullName)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm truncate">{member.fullName}</div>
+                          <div className="text-xs text-gray-500 truncate">
+                            {member.email}
+                            {memberAddressText(member) && ` · ${memberAddressText(member)}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          onClick={() => handleUpdateStatus(member.userId, 'active')}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRemoveMember(member.userId, member.fullName)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Deny
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Filters */}
           <Card className="mb-6">
@@ -590,12 +655,7 @@ export function MemberManagement() {
           {/* Members List - Compact Design */}
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg">All Members ({filteredMembers.length})</CardTitle>
-                <span className="text-sm text-gray-500">
-                  {filteredMembers.filter(m => m.status === 'pending').length} pending approval
-                </span>
-              </div>
+              <CardTitle className="text-lg">All Members ({filteredMembers.length})</CardTitle>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -613,7 +673,7 @@ export function MemberManagement() {
                       <div
                         key={member.userId}
                         className="flex items-center justify-between px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => { setSelectedMember(member); setEditingMemberNumber(false); setMemberNumberDraft(member.memberNumber || ''); }}
+                        onClick={() => openMemberDetails(member)}
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <Avatar className="h-8 w-8 flex-shrink-0 hidden md:flex">

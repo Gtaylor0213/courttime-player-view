@@ -51,6 +51,7 @@
     "@types/react": "^18.3.29",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^3.10.2",
+    "remark-gfm": "^4.0.1",
     "typescript": "~5.9.2",
     "vite": "^6.4.2",
     "vitest": "^3.2.4"
@@ -62,7 +63,9 @@
     "dev:server": "tsx watch server/index.ts",
     "server": "node scripts/start-server.js",
     "server:direct": "tsx server/index.ts",
-    "build": "vite build",
+    "build": "vite build && npm run blog:build",
+    "blog:build": "tsx scripts/build-blog.tsx",
+    "blog:preview": "vite build && BLOG_DRAFTS=1 tsx scripts/build-blog.tsx && vite preview --port 4173",
     "start": "node scripts/run-migration.js --on-deploy && NODE_ENV=production tsx server/index.ts",
     "db:setup": "node scripts/setup-database.js",
     "db:check": "node scripts/check-database.js",

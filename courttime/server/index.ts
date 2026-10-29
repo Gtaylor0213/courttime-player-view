@@ -260,10 +260,24 @@ if (process.env.NODE_ENV === 'production') {
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
   }));
 
+  // Blog pages are pre-rendered HTML (scripts/build-blog.tsx) so crawlers and link previews
+  // see real content. express.static above serves assets and 301s /blog/x to /blog/x/.
+  const blogPath = path.join(buildPath, 'blog');
+  app.get(['/blog', '/blog/{*slug}'], (req, res) => {
+    const rel = req.path.replace(/^\/blog\/?/, '').replace(/\/$/, '');
+    const page = /^[a-z0-9-]*$/.test(rel) ? path.join(blogPath, rel, 'index.html') : null;
+    if (page && fs.existsSync(page)) {
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.sendFile(page);
+      return;
+    }
+    res.status(404).sendFile(path.join(blogPath, '404.html'));
+  });
+
   // Handle React routing - return index.html for unknown routes (not static assets)
   // Express 5 requires {*path} syntax instead of *
   app.get('/{*path}', (req, res) => {
-    if (/\.(?:png|jpe?g|gif|ico|svg|webp|webmanifest|json|txt|woff2?)$/i.test(req.path)) {
+    if (/\.(?:png|jpe?g|gif|ico|svg|webp|webmanifest|json|txt|xml|woff2?)$/i.test(req.path)) {
       res.status(404).end();
       return;
     }

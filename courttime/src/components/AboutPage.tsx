@@ -4,7 +4,6 @@ import { Card, CardContent } from './ui/card';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import logoImage from '../assets/courttime-logo.png';
 import {
-  ArrowLeft,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -41,9 +40,12 @@ export function AboutPage() {
             <img src={logoImage} alt="CourtTime" className="h-10 sm:h-11 w-auto max-w-[180px] sm:max-w-none brightness-0 invert flex-shrink-0" />
           </div>
           <div className="flex w-full sm:w-auto items-center justify-center sm:justify-end gap-2 sm:gap-3">
+            <Button variant="ghost" className="text-white hover:bg-white/20 px-3 sm:px-4" asChild>
+              {/* Full page load: /blog is pre-rendered HTML served by Express, not a SPA route. */}
+              <a href="/blog/">Blog</a>
+            </Button>
             <Button variant="ghost" className="text-white hover:bg-white/20 px-3 sm:px-4" onClick={() => navigate('/login')}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Login
+              Sign In
             </Button>
             <Button className="bg-white text-green-800 hover:bg-green-50 px-3 sm:px-4" onClick={() => navigate('/register/facility')}>
               Register Your Facility
@@ -312,6 +314,7 @@ export function AboutPage() {
             <span>&copy; {new Date().getFullYear()} CourtTime. All rights reserved.</span>
           </div>
           <div className="flex gap-4">
+            <a href="/blog/" className="transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm">Blog</a>
             <button onClick={() => navigate('/login')} className="transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm">Sign In</button>
             <button onClick={() => navigate('/register')} className="transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm">Create Account</button>
             <button onClick={() => navigate('/register/facility')} className="transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm">Register Facility</button>

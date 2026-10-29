@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { AppProvider } from './contexts/AppContext';
 import { Toaster } from './components/ui/sonner';
@@ -58,6 +58,13 @@ import { PrivacyPolicyPage } from './components/legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from './components/legal/TermsOfServicePage';
 import { AccountDeletionPage } from './components/legal/AccountDeletionPage';
 import { SupportPage } from './components/legal/SupportPage';
+
+/** Logged-out visitors (and search engines) land on the marketing page; members go straight to the calendar. */
+function HomeRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  return user ? <Navigate to="/calendar" replace /> : <AboutPage />;
+}
 
 export default function App() {
   return (
@@ -124,7 +131,7 @@ export default function App() {
             </Route>
 
             {/* Default redirect */}
-            <Route path="/" element={<Navigate to="/calendar" replace />} />
+            <Route path="/" element={<HomeRoute />} />
             <Route path="*" element={<Navigate to="/calendar" replace />} />
           </Routes>
           <Toaster />

@@ -42,8 +42,6 @@ const BOOKING_BLOCK_INSET_Y = 2;
 /** Hour rows never shrink below this on short phones; the Book page scrolls instead. */
 const MIN_GRID_VIEWPORT_HEIGHT = 240;
 const BOOKING_HINT_SEEN_KEY = 'courtCalendar.bookingHintSeen';
-/** How long after a day loads the grid may still move itself to the now line (covers the retries in scrollToCurrentTime). */
-const AUTO_POSITION_WINDOW_MS = 2500;
 import {
   DEFAULT_BOOKING_DURATION_MINUTES,
   RESERVATION_BLOCK_COLORS,
@@ -424,9 +422,10 @@ export function CourtCalendarGrid({
   const scrollLockedRef = useRef(false);
   const lastScrollAtRef = useRef(0);
   /**
-   * The grid moves to the now line on its own only while a day is first being positioned: from when
-   * it loads until the user touches the grid or AUTO_POSITION_WINDOW_MS passes. After that only "Now"
-   * moves it, so redraws (polling, the line creeping forward, a sideways swipe) never pull anyone back.
+   * The grid moves to the now line on its own only while a day is being positioned: from when it
+   * loads (or the app comes back to the front) until the user first touches the grid. No time limit,
+   * so a slow phone still lands on the line. After the first touch only "Now" moves it, so redraws
+   * (a reload, the line creeping forward, a sideways swipe) never pull anyone back.
    */
   const autoPositionOpenRef = useRef(false);
   const closeAutoPosition = useCallback(() => {
@@ -796,11 +795,20 @@ export function CourtCalendarGrid({
   // the server still rejects a slot someone else took in the meantime.
   const fetchAvailabilityRef = useRef(fetchAvailability);
   fetchAvailabilityRef.current = fetchAvailability;
+  const selectedYmdRef = useRef(selectedYmd);
+  selectedYmdRef.current = selectedYmd;
+  /** Assigned once scrollToCurrentTime is defined below. */
+  const scrollToCurrentTimeRef = useRef<((options?: { reliable?: boolean }) => void) | null>(null);
   useEffect(() => {
     let lastState: AppStateStatus = AppState.currentState;
     const sub = AppState.addEventListener('change', (next) => {
       if (lastState.match(/inactive|background/) && next === 'active') {
         void fetchAvailabilityRef.current({ background: true });
+        // Opening the app on today's calendar goes back to the now line, like a fresh start.
+        if (selectedYmdRef.current === localTodayYmd()) {
+          autoPositionOpenRef.current = true;
+          scrollToCurrentTimeRef.current?.({ reliable: true });
+        }
       }
       lastState = next;
     });
@@ -1011,6 +1019,8 @@ export function CourtCalendarGrid({
     setScrollLocked,
   ]);
 
+  scrollToCurrentTimeRef.current = scrollToCurrentTime;
+
   const handleNowPress = useCallback(() => {
     const today = localTodayYmd();
     if (selectedYmd !== today && onRequestToday) {
@@ -1025,9 +1035,7 @@ export function CourtCalendarGrid({
   useEffect(() => {
     if (loading) return;
     autoPositionOpenRef.current = true;
-    const timer = setTimeout(closeAutoPosition, AUTO_POSITION_WINDOW_MS);
-    return () => clearTimeout(timer);
-  }, [loading, selectedYmd, closeAutoPosition]);
+  }, [loading, selectedYmd]);
 
   useEffect(() => {
     if (loading) return;

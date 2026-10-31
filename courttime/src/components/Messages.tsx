@@ -12,6 +12,7 @@ import { Checkbox } from './ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Textarea } from './ui/textarea';
+import { AutoGrowTextarea } from './ui/auto-grow-textarea';
 import { toast } from 'sonner';
 
 /** Groups are capped at 30 members, including the creator. */
@@ -633,7 +634,8 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // isComposing: don't send while an IME (e.g. Japanese, emoji picker) is mid-word.
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       sendMessage();
     }
@@ -953,14 +955,16 @@ export function Messages({ facilityId, facilityName, selectedRecipientId, select
 
             {/* Message Input - Fixed at bottom */}
             <div className="flex-shrink-0 p-4 border-t bg-white">
-              <div className="flex gap-2">
-                <Input
+              <div className="flex items-end gap-2">
+                <AutoGrowTextarea
                   placeholder="Type a message..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onKeyDown={handleKeyPress}
                   disabled={sending}
-                  className="flex-1"
+                  rows={1}
+                  maxHeight={160}
+                  className="flex-1 min-w-0 rounded-md border border-input bg-input-background px-3 py-[7px] text-base md:text-sm leading-5 shadow-sm outline-none placeholder:text-muted-foreground transition-[color,box-shadow,border-color] duration-200 ease-out focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <Button
                   onClick={sendMessage}

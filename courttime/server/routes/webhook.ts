@@ -18,6 +18,37 @@ function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
 }
 
 /**
+ * The billing period an invoice pays for. Invoice-level period_start/period_end
+ * describe the *previous* usage window, so on a subscription's first invoice
+ * (billing_reason = subscription_create) both equal the signup moment. The real
+ * paid-for period lives on the subscription line item. Never return a
+ * zero-length period — callers COALESCE nulls and keep what they already have.
+ */
+export function invoiceBillingPeriod(invoice: Stripe.Invoice): {
+  start: Date | null;
+  end: Date | null;
+} {
+  let startSec: number | null = null;
+  let endSec: number | null = null;
+  for (const line of invoice.lines?.data ?? []) {
+    const p = line.period;
+    if (p?.start && p?.end && p.end > p.start && (endSec === null || p.end > endSec)) {
+      startSec = p.start;
+      endSec = p.end;
+    }
+  }
+  if (endSec === null && invoice.period_start && invoice.period_end
+      && invoice.period_end > invoice.period_start) {
+    startSec = invoice.period_start;
+    endSec = invoice.period_end;
+  }
+  return {
+    start: startSec ? new Date(startSec * 1000) : null,
+    end: endSec ? new Date(endSec * 1000) : null,
+  };
+}
+
+/**
  * POST /api/webhooks/stripe
  * Stripe webhook endpoint — must receive raw body for signature verification.
  * This route is mounted BEFORE express.json() in server/index.ts.
@@ -151,8 +182,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   const subscriptionId = getInvoiceSubscriptionId(invoice);
   if (!subscriptionId) return;
 
-  const periodStart = invoice.period_start ? new Date(invoice.period_start * 1000) : null;
-  const periodEnd = invoice.period_end ? new Date(invoice.period_end * 1000) : null;
+  const { start: periodStart, end: periodEnd } = invoiceBillingPeriod(invoice);
   const amountPaid = invoice.amount_paid || 0;
 
   console.log(`[WEBHOOK] invoice.payment_succeeded — sub ${subscriptionId}, amount ${amountPaid}`);

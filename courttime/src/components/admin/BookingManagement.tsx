@@ -13,7 +13,8 @@ import { useAppContext } from '../../contexts/AppContext';
 import { adminApi, bookingApi, facilitiesApi } from '../../api/client';
 import { toast } from 'sonner';
 import { SeriesEditDialog } from '../SeriesEditDialog';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS } from '../../../shared/constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../../../shared/constants/bookingTypes';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import { AdminBooking } from './AdminBooking';
 import { parseLocalDate } from '../../utils/dateUtils';
 
@@ -63,7 +64,14 @@ interface BookingSeriesGroup {
 type SeriesEditMode = 'all' | 'selected';
 
 export function BookingManagement() {
-  const { selectedFacilityId: currentFacilityId } = useAppContext();
+  const { selectedFacilityId: currentFacilityId, enabledFeatures } = useAppContext();
+  // Same precedence as BookingWizard / ReservationManagementModal: Deer Lake's
+  // list replaces the standard one, BHR appends "Party".
+  const reservationTypeKeys = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES)
+    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : enabledFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES)
+    ? BHR_RESERVATION_TYPE_KEYS
+    : RESERVATION_LABEL_TYPE_KEYS;
   const [activeTab, setActiveTab] = useState('bookings');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -905,7 +913,7 @@ export function BookingManagement() {
           focusBookingId={seriesEditSeed.id}
           focusBookingIds={seriesEditMode === 'selected' ? seriesEditBookingIds : undefined}
           facilityId={seriesEditSeed.facilityId || currentFacilityId || ''}
-          reservationTypes={RESERVATION_LABEL_TYPE_KEYS.map((key) => ({
+          reservationTypes={reservationTypeKeys.map((key) => ({
             value: key,
             label: BOOKING_TYPES[key]?.label ?? key,
           }))}

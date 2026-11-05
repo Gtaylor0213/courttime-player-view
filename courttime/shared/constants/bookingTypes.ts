@@ -101,6 +101,12 @@ export const BOOKING_TYPES = {
     bgColor: 'bg-pink-300',
     rn: { bg: '#fda5d5', border: '#f6339a', text: '#861043' },
   },
+  group_tennis_lesson: {
+    label: 'Group Tennis Lesson',
+    color: 'bg-blue-600 text-blue-50 border-blue-700',
+    bgColor: 'bg-blue-600',
+    rn: { bg: '#155dfc', border: '#1447e6', text: '#eff6ff' },
+  },
   private_tennis_lesson: {
     label: 'Private Tennis Lesson',
     color: 'bg-amber-300 text-amber-900 border-amber-500',
@@ -149,6 +155,12 @@ export const BOOKING_TYPES = {
     bgColor: 'bg-rose-300',
     rn: { bg: '#ffa1ad', border: '#ff2056', text: '#8b0836' },
   },
+  group_pickleball_lesson: {
+    label: 'Group Pickleball Lesson',
+    color: 'bg-violet-600 text-violet-50 border-violet-700',
+    bgColor: 'bg-violet-600',
+    rn: { bg: '#7f22fe', border: '#7008e7', text: '#f5f3ff' },
+  },
   private_pickleball_lesson: {
     label: 'Private Pickleball Lesson',
     color: 'bg-yellow-300 text-yellow-900 border-yellow-500',
@@ -156,7 +168,7 @@ export const BOOKING_TYPES = {
     rn: { bg: '#ffdf20', border: '#f0b100', text: '#733e0a' },
   },
   open_play: {
-    label: 'Beginner Clinic',
+    label: 'Beginner Tennis Clinic',
     color: 'bg-emerald-700 text-emerald-50 border-emerald-800',
     bgColor: 'bg-emerald-700',
     rn: { bg: '#007a55', border: '#006045', text: '#ecfdf5' },
@@ -227,6 +239,7 @@ export const DEER_LAKE_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
   'usta_tennis',
   'flex_tennis',
   'team_tennis_lesson',
+  'group_tennis_lesson',
   'private_tennis_lesson',
   'junior_tennis_lesson',
   'after_school_tennis_lesson',
@@ -235,6 +248,7 @@ export const DEER_LAKE_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
   'usta_pickleball',
   'flex_pickleball',
   'team_pickleball_lesson',
+  'group_pickleball_lesson',
   'private_pickleball_lesson',
   'open_play',
   'cardio_tennis',

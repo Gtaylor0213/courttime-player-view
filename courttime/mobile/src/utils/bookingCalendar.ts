@@ -58,7 +58,7 @@ function reportCalendarAddFailure(
 
 export async function addBookingToCalendarWithFeedback(
   details: BookingCalendarDetails,
-  options?: { successTitle?: string; bookingConfirmed?: boolean }
+  options?: { successTitle?: string; bookingConfirmed?: boolean; onClosed?: () => void }
 ): Promise<boolean> {
   if (Platform.OS === 'web') {
     showAlert(
@@ -76,7 +76,8 @@ export async function addBookingToCalendarWithFeedback(
   if (result.success) {
     showAlert(
       options?.successTitle || 'Added to Calendar',
-      'This booking was added to your device calendar.'
+      'This booking was added to your device calendar.',
+      options?.onClosed ? [{ text: 'OK', onPress: options.onClosed }] : undefined
     );
     return true;
   }
@@ -88,21 +89,24 @@ export async function addBookingToCalendarWithFeedback(
 export function offerAddBookingToCalendar(
   message: string,
   details: BookingCalendarDetails | null,
-  options?: { alertTitle?: string }
+  options?: { alertTitle?: string; onClosed?: () => void }
 ): void {
   const alertTitle = options?.alertTitle || 'Booked!';
+  const onClosed = options?.onClosed;
 
   if (!details || Platform.OS === 'web') {
-    showAlert(alertTitle, message);
+    showAlert(alertTitle, message, onClosed ? [{ text: 'OK', onPress: onClosed }] : undefined);
     return;
   }
 
+  // onClosed runs once the member has finished with the confirmation (not
+  // after a failed calendar add, which shows its own help).
   showAlert(alertTitle, `${message}\n\nAdd it to your device calendar?`, [
-    { text: 'Not now', style: 'cancel' },
+    { text: 'Not now', style: 'cancel', onPress: onClosed },
     {
       text: 'Add to Calendar',
       onPress: () => {
-        void addBookingToCalendarWithFeedback(details, { bookingConfirmed: true });
+        void addBookingToCalendarWithFeedback(details, { bookingConfirmed: true, onClosed });
       },
     },
   ]);

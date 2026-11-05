@@ -24,6 +24,7 @@ import { TermsAcceptanceGate } from '../src/components/TermsAcceptanceGate';
 import { GeneralRulesAcceptanceGate } from '../src/components/GeneralRulesAcceptanceGate';
 import { MemberNumberGate } from '../src/components/MemberNumberGate';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
+import { recordFirstAppUse } from '../src/utils/reviewPrompt';
 import {
   getNotificationData,
   isStartupNotificationResponseFresh,
@@ -94,6 +95,11 @@ function RootLayoutNav() {
       router.replace('/(tabs)');
     }
   }, [isAuthenticated, isLoading, isRegisterFacilityRoute, rootSegment, router]);
+
+  // Starts the 14-day clock for the review request (only the first launch counts).
+  useEffect(() => {
+    void recordFirstAppUse();
+  }, []);
 
   // Handle notification tap — navigate to relevant screen (native only, not web)
   useEffect(() => {

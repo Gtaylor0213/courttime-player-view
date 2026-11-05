@@ -33,6 +33,7 @@ import { fetchStrikeLockout, type StrikeLockoutStatus } from '../../../shared/ut
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { htmlToDisplayText } from '../../src/utils/htmlToText';
 import { openLegalLink, PLATFORM_BILLING_IN_APP } from '../../src/utils/legalLinks';
+import { openStoreReviewPage } from '../../src/utils/reviewPrompt';
 
 export const ErrorBoundary = createRouteErrorBoundary('Profile');
 
@@ -1125,6 +1126,25 @@ export default function ProfileScreen() {
           </View>
           <Ionicons name="open-outline" size={18} color={Colors.textMuted} />
         </TouchableOpacity>
+        {Platform.OS !== 'web' && (
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => void openStoreReviewPage()}
+            accessibilityRole="link"
+            accessibilityLabel="Rate CourtTime"
+          >
+            <View style={styles.settingsIconBox}>
+              <Ionicons name="star-outline" size={20} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowTitle}>Rate CourtTime</Text>
+              <Text style={styles.settingsRowDescription}>
+                {Platform.OS === 'ios' ? 'Leave a review on the App Store' : 'Leave a review on Google Play'}
+              </Text>
+            </View>
+            <Ionicons name="open-outline" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Logout */}

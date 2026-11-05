@@ -62,6 +62,7 @@ import {
   addBookingToCalendarWithFeedback,
   bookingWithDetailsToCalendarDetails,
 } from '../../src/utils/bookingCalendar';
+import { maybeAskForReview } from '../../src/utils/reviewPrompt';
 import { userFacingApiMessage, type ApiFailureShape } from '../../src/utils/apiUserMessages';
 import {
   BHR_RESERVATION_TYPE_KEYS,
@@ -1246,7 +1247,8 @@ export default function BookCourtScreen() {
                 .filter(Boolean)
                 .join('\n'),
             }
-          : null
+          : null,
+        { onClosed: () => void maybeAskForReview() }
       );
       refreshBookedSlots();
     } else if (firstViolations) {

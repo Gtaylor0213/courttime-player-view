@@ -2,7 +2,7 @@
   "expo": {
     "name": "CourtTime",
     "slug": "courttime",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -78,7 +78,9 @@
     },
     "owner": "reidbissell23s-team",
     "updates": {
-      "url": "https://u.expo.dev/7ca94b1b-5354-470a-9275-e6ab67c1de01"
+      "url": "https://u.expo.dev/7ca94b1b-5354-470a-9275-e6ab67c1de01",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 3000
     }
   }
 }

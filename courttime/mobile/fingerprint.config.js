@@ -6,9 +6,12 @@
  * on the machine that started the build, and the build fails.
  *
  * package.json scripts are skipped for the same reason: prebuild on the
- * builder rewrites the `ios` / `android` scripts to `expo run:*`.
+ * builder rewrites the `ios` / `android` scripts to `expo run:*`. *
+ * Version numbers (version, buildNumber, versionCode) are skipped too: every
+ * store release must bump them, and counting them would cut every installed
+ * build off from over-the-air updates on each release.
  */
 /** @type {import('@expo/fingerprint').Config} */
 module.exports = {
-  sourceSkips: ['ExpoConfigExtraSection', 'PackageJsonScriptsAll'],
+  sourceSkips: ['ExpoConfigExtraSection', 'PackageJsonScriptsAll', 'ExpoConfigVersions'],
 };

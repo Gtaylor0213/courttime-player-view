@@ -40,6 +40,7 @@ import {
   useReservationTextScale,
 } from './useReservationTextScale';
 import { fetchBookingCalendarDetails, offerAddBookingToCalendar } from '../utils/bookingCalendar';
+import { startCalendarAutoRefresh, type CalendarAutoRefreshHandle } from '../utils/calendarAutoRefresh';
 import { isBulletinActivityBooking } from '../../shared/utils/bulletinPostDisplay';
 import {
   RESERVATION_BLOCK_TEXT,
@@ -511,9 +512,25 @@ export function CourtCalendarView() {
     void refreshTermsStatus();
   }, [user?.id, selectedFacility, refreshTermsStatus]);
 
-  // Function to fetch bookings (can be called directly)
-  const fetchBookings = React.useCallback(async (dateOverride?: Date | string) => {
+  // Every fetch takes a number; a background refresh only applies its answer if no
+  // newer fetch (date/facility change, booking action) has started since.
+  const bookingsFetchSeqRef = useRef(0);
+  const lastBookingsJsonRef = useRef<string | null>(null);
+  const lastDayOperatingJsonRef = useRef<string | null>(null);
+
+  // Function to fetch bookings (can be called directly). `background` is the
+  // auto-refresh: it keeps what's on screen if the request fails and skips the
+  // redraw when nothing changed.
+  const fetchBookings = React.useCallback(async (
+    dateOverride?: Date | string,
+    options?: { background?: boolean },
+  ) => {
+    const background = options?.background === true;
+    const fetchSeq = ++bookingsFetchSeqRef.current;
+    const isStaleBackground = () => background && fetchSeq !== bookingsFetchSeqRef.current;
+
     if (!selectedFacility) {
+      if (background) return;
       setCourtDayOperatingByCourtId({});
       return;
     }
@@ -542,6 +559,18 @@ export function CourtCalendarView() {
         courtConfigApi.getFacilityDayOperating(selectedFacility, dateStr),
       ]);
 
+      // A background refresh never swaps a good screen for a half-failed answer
+      // (a network blip or a post-deploy 520) or for a day the user has left.
+      if (background && (
+        isStaleBackground() ||
+        !response?.success ||
+        !blackoutResponse?.success ||
+        !facilityDayResponse?.success
+      )) {
+        return;
+      }
+
+      let nextDayOperating: Record<string, CourtDayOperatingBounds> = {};
       if (facilityDayResponse?.success && Array.isArray(facilityDayResponse.data?.courtConfigs)) {
         const nextBounds: Record<string, CourtDayOperatingBounds> = {};
         (facilityDayResponse.data.courtConfigs as any[]).forEach((row: any) => {
@@ -554,9 +583,7 @@ export function CourtCalendarView() {
             closeMin,
           };
         });
-        setCourtDayOperatingByCourtId(nextBounds);
-      } else {
-        setCourtDayOperatingByCourtId({});
+        nextDayOperating = nextBounds;
       }
 
       // Transform API bookings to match the format expected by the UI.
@@ -746,12 +773,27 @@ export function CourtCalendarView() {
         });
       }
 
+      if (isStaleBackground()) return;
+      const bookingsJson = JSON.stringify(transformedBookings);
+      const dayOperatingJson = JSON.stringify(nextDayOperating);
+      if (
+        background &&
+        bookingsJson === lastBookingsJsonRef.current &&
+        dayOperatingJson === lastDayOperatingJsonRef.current
+      ) {
+        return; // nothing changed — don't redraw the grid
+      }
+      lastBookingsJsonRef.current = bookingsJson;
+      lastDayOperatingJsonRef.current = dayOperatingJson;
+      setCourtDayOperatingByCourtId(nextDayOperating);
       setBookingsData(transformedBookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
+      if (background) return;
+      lastBookingsJsonRef.current = null;
+      lastDayOperatingJsonRef.current = null;
       setBookingsData({});
       setCourtDayOperatingByCourtId({});
-    } finally {
     }
   }, [selectedFacility, selectedDate, memberFacilities]);
 
@@ -759,6 +801,39 @@ export function CourtCalendarView() {
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
+
+  // Auto-refresh (website only) so a calendar left open on a screen shows
+  // reservations made elsewhere — every 5 minutes while visible, plus on return
+  // to the tab. Held while someone is mid-booking, in a modal or dragging.
+  const calendarBusy =
+    bookingWizard.isOpen ||
+    showQuickReserve ||
+    !!ballMachineCodeBooking ||
+    reservationDetailsModal.isOpen ||
+    bulletinActivityModal.isOpen ||
+    !!seriesDragPrompt ||
+    datePickerOpen ||
+    dragState.isDragging ||
+    reservationDragState.isDragging;
+  const calendarBusyRef = useRef(calendarBusy);
+  calendarBusyRef.current = calendarBusy;
+  const fetchBookingsRef = useRef(fetchBookings);
+  fetchBookingsRef.current = fetchBookings;
+  const autoRefreshRef = useRef<CalendarAutoRefreshHandle | null>(null);
+  useEffect(() => {
+    const handle = startCalendarAutoRefresh({
+      refresh: () => { void fetchBookingsRef.current(undefined, { background: true }); },
+      isBusy: () => calendarBusyRef.current,
+    });
+    autoRefreshRef.current = handle;
+    return () => {
+      handle.stop();
+      autoRefreshRef.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    if (!calendarBusy) autoRefreshRef.current?.flushPending();
+  }, [calendarBusy]);
 
   // Recover paid court checkouts that never created a booking (e.g. Stripe returned to wrong host)
   useEffect(() => {

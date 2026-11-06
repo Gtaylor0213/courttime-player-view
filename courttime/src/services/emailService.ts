@@ -11,10 +11,11 @@ import {
   renderTemplate,
   wrapInEmailLayout,
 } from './emailTemplateDefaults';
+import { APP_LAUNCH_EMAIL_SUBJECT, buildAppLaunchEmailHtml } from './appLaunchEmailTemplate';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
-interface EmailSendResult {
+export interface EmailSendResult {
   success: boolean;
   status: number | null;
   error?: string;
@@ -386,6 +387,19 @@ export async function sendAnnouncementEmail(
   const fullHtml = wrapInEmailLayout(bodyContent, facilityName);
 
   return sendEmail(email, `${subject} - ${facilityName}`, fullHtml, userId, 'general');
+}
+
+/**
+ * The one-time app launch announcement. Follows the member's general email
+ * switch: when it's off this resolves with success and a null status (skipped).
+ * Without a userId (a test send to an address) nothing is checked.
+ */
+export async function sendAppLaunchEmail(
+  email: string,
+  fullName: string | null,
+  userId?: string
+): Promise<EmailSendResult> {
+  return sendEmail(email, APP_LAUNCH_EMAIL_SUBJECT, buildAppLaunchEmailHtml(fullName), userId, 'general');
 }
 
 function escapeHtml(text: string): string {

@@ -465,3 +465,35 @@ export async function resolveContentReport(reportId: string, action: 'remove' | 
     return { success: false, error: 'Failed to update content report' };
   }
 }
+
+// ── App launch email ───────────────────────────────────────
+
+export async function getAppLaunchEmail() {
+  try {
+    return await supportFetch('/app-launch-email');
+  } catch {
+    return { success: false, error: 'Failed to load the app launch email' };
+  }
+}
+
+export async function sendAppLaunchTestEmail(email: string, name?: string) {
+  try {
+    return await supportFetch('/app-launch-email/test', {
+      method: 'POST',
+      body: JSON.stringify({ email, name }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to reach the server' };
+  }
+}
+
+export async function startAppLaunchEmailSend(expectedCount: number) {
+  try {
+    return await supportFetch('/app-launch-email/send', {
+      method: 'POST',
+      body: JSON.stringify({ expectedCount }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to reach the server' };
+  }
+}

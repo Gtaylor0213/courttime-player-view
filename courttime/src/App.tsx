@@ -9,11 +9,13 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Auth pages (public)
 import { LoginPage } from './components/LoginPage';
+import { AppDownloadPromptPreview } from './components/AppDownloadPromptPreview';
 import { UserRegistration } from './components/UserRegistration';
 import { FacilityRegistration } from './components/FacilityRegistration';
 import { ForgotPassword } from './components/ForgotPassword';
 import { ResetPassword } from './components/ResetPassword';
 import { AboutPage } from './components/AboutPage';
+import { GetAppPage } from './components/GetAppPage';
 
 // Player pages
 import { CourtCalendarView } from './components/CourtCalendarView';
@@ -86,6 +88,8 @@ export default function App() {
             <Route path="/terms" element={<TermsOfServicePage />} />
             <Route path="/delete-account" element={<AccountDeletionPage />} />
             <Route path="/support" element={<SupportPage />} />
+            <Route path="/get-app" element={<GetAppPage />} />
+            {import.meta.env.DEV && <Route path="/dev/app-prompt" element={<AppDownloadPromptPreview />} />}
 
             {/* Support Console route - bypasses auth */}
             <Route path="/developer/*" element={<SupportConsole />} />

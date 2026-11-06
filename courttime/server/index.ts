@@ -14,6 +14,7 @@ import { processBulletinMinParticipantCancellations } from '../src/services/bull
 import { expireSplitCourtReservations } from '../src/services/splitCourtPaymentService';
 import { sweepPadelDropIns } from '../src/services/padelSocialService';
 import { sendDueBookingReminders } from '../src/services/bookingReminderService';
+import { GET_APP_PATH, detectDevicePlatform, storeUrlFor } from '../shared/utils/appDownload';
 
 /** Load `.env`, then fill gaps from `.env.development`, then override with `.env.local`. */
 function loadProjectEnv() {
@@ -193,6 +194,16 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     ...deployFingerprint(),
   });
+});
+
+// Smart download link for emails and flyers: phones go straight to their store;
+// desktops (and iPads posing as Macs) fall through to the React /get-app page.
+app.get(GET_APP_PATH, (req, res, next) => {
+  const storeUrl = storeUrlFor(detectDevicePlatform(req.get('user-agent') || ''));
+  if (!storeUrl) return next();
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Vary', 'User-Agent');
+  res.redirect(302, storeUrl);
 });
 
 // API Routes — public (no auth required)

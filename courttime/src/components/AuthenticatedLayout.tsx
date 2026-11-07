@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { UnifiedSidebar } from './UnifiedSidebar';
+import { AppDownloadPrompt } from './AppDownloadPrompt';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { Menu, AlertTriangle } from 'lucide-react';
@@ -95,6 +96,7 @@ export function AuthenticatedLayout() {
         )}
         <Outlet />
       </div>
+      <AppDownloadPrompt />
     </div>
   );
 }

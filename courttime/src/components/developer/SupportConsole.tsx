@@ -12,6 +12,7 @@ import { SupportSubscriptionManagement } from './SupportSubscriptionManagement';
 import { SupportPromoCodes } from './SupportPromoCodes';
 import { DeveloperMessaging } from './DeveloperMessaging';
 import { SupportContentReports } from './SupportContentReports';
+import { SupportAppLaunchEmail } from './SupportAppLaunchEmail';
 
 export type SupportView =
   | 'dashboard'
@@ -23,7 +24,8 @@ export type SupportView =
   | 'subscriptions'
   | 'promos'
   | 'messages'
-  | 'content-reports';
+  | 'content-reports'
+  | 'app-launch';
 
 export function SupportConsole() {
   const [authenticated, setAuthenticated] = useState(isSupportAuthenticated());
@@ -99,6 +101,8 @@ export function SupportConsole() {
         return <SupportPromoCodes />;
       case 'messages':
         return <DeveloperMessaging />;
+      case 'app-launch':
+        return <SupportAppLaunchEmail />;
       default:
         return <SupportDashboard onNavigate={navigateTo} />;
     }

@@ -38,6 +38,13 @@ import {
   BroadcastFilters,
 } from '../../src/services/developerMessagingService';
 import { ModerationError, listContentReports, resolveContentReport } from '../../src/services/moderationService';
+import {
+  AppLaunchEmailBusyError,
+  getAppLaunchEmailSummary,
+  startAppLaunchEmail,
+} from '../../src/services/appLaunchEmailService';
+import { APP_LAUNCH_EMAIL_SUBJECT, buildAppLaunchEmailHtml } from '../../src/services/appLaunchEmailTemplate';
+import { sendAppLaunchEmail } from '../../src/services/emailService';
 
 const router = express.Router();
 
@@ -481,6 +488,51 @@ router.get('/facilities/:id/violations', async (req, res) => {
   } catch (error: any) {
     console.error('[Support] Violations error:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── App launch email (one-time, every account) ─────────────
+
+router.get('/app-launch-email', async (_req, res) => {
+  try {
+    const summary = await getAppLaunchEmailSummary();
+    res.json({
+      success: true,
+      data: { ...summary, subject: APP_LAUNCH_EMAIL_SUBJECT, previewHtml: buildAppLaunchEmailHtml('Alex Morgan') },
+    });
+  } catch (error: any) {
+    console.error('[Support] App launch email summary error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// A copy to one address, outside the tracking table (doesn't count as sent).
+router.post('/app-launch-email/test', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, error: 'Enter a valid email address' });
+    }
+    const result = await sendAppLaunchEmail(email, String(req.body?.name || '').trim() || null);
+    if (!result.success) return res.status(502).json({ success: false, error: result.error || 'Send failed' });
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[Support] App launch test email error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/app-launch-email/send', async (req, res) => {
+  try {
+    const expectedCount = Number(req.body?.expectedCount);
+    if (!Number.isInteger(expectedCount) || expectedCount <= 0) {
+      return res.status(400).json({ success: false, error: 'expectedCount is required' });
+    }
+    const job = await startAppLaunchEmail(expectedCount);
+    res.status(202).json({ success: true, data: { job } });
+  } catch (error: any) {
+    const status = error instanceof AppLaunchEmailBusyError ? 409 : 400;
+    res.status(status).json({ success: false, error: error.message });
   }
 });
 

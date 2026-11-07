@@ -25,6 +25,7 @@ export const FEATURE_FLAGS = {
   COURT_TYPE_MAX_DURATION: 'court_type_max_duration',
   GENERAL_RULES: 'general_rules',
   EDIT_PAST_RESERVATIONS: 'edit_past_reservations',
+  APP_DOWNLOAD_PROMPT: 'app_download_prompt',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -65,4 +66,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   court_type_max_duration: 'Max Duration by Court Type (set a different max reservation duration for tennis vs. pickleball courts)',
   general_rules: 'General Rules (require members to accept facility rules, re-accept when updated)',
   edit_past_reservations: 'Edit/Delete Past Reservations (let players and admins modify or cancel a reservation after it has ended)',
+  app_download_prompt: 'App Download Prompt (pop-up on the website asking members to get the iPhone / Android app)',
 };

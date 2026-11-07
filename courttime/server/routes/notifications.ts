@@ -67,6 +67,20 @@ router.post('/unregister-device', async (req, res) => {
   }
 });
 
+// Whether the current user has signed in to the mobile app (any registered push
+// token), so the web stops asking them to download it. Must stay above /:userId.
+router.get('/app-installed', async (req, res) => {
+  try {
+    const userId = requireCurrentUser(req, res);
+    if (!userId) return;
+    const result = await query(`SELECT 1 FROM user_push_tokens WHERE user_id = $1 LIMIT 1`, [userId]);
+    res.json({ success: true, installed: result.rows.length > 0 });
+  } catch (error: any) {
+    console.error('Error checking app install:', error);
+    res.status(500).json({ success: false, error: 'Failed to check app install' });
+  }
+});
+
 // Get all notifications for a user
 router.get('/:userId', async (req, res) => {
   try {

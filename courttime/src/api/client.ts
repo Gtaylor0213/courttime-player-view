@@ -2035,6 +2035,11 @@ export const notificationsApi = {
     return apiRequest(`/api/notifications/${userId}`);
   },
 
+  // Whether the current user has signed in to the mobile app on any device
+  getAppInstalled: async () => {
+    return apiRequest<{ installed: boolean }>('/api/notifications/app-installed');
+  },
+
   // Get unread count for a user
   getUnreadCount: async (userId: string) => {
     return apiRequest(`/api/notifications/${userId}/unread-count`);

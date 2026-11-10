@@ -67,6 +67,7 @@ import { userFacingApiMessage, type ApiFailureShape } from '../../src/utils/apiU
 import {
   BHR_RESERVATION_TYPE_KEYS,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
+  reservationTypeKeysForCourts,
   RESERVATION_LABEL_TYPE_KEYS,
   getBookingTypeLabel,
   type BookingTypeKey,
@@ -335,11 +336,20 @@ export default function BookCourtScreen() {
   const postPlaySettlementEnabled = isFeatureEnabled(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
-  const reservationTypeKeys = deerLakeReservationTypes
+  const baseReservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
     : bhrReservationTypes
       ? BHR_RESERVATION_TYPE_KEYS
       : RESERVATION_LABEL_TYPE_KEYS;
+  // Deer Lake: tennis courts only offer tennis types, pickleball courts only
+  // pickleball types; a mixed selection keeps the types that fit both.
+  const reservationTypeKeys = useMemo(() => {
+    const ids = selectedCourt ? [selectedCourt.id, ...additionalCourtIds.filter((id) => id !== selectedCourt.id)] : [];
+    return reservationTypeKeysForCourts(
+      baseReservationTypeKeys,
+      ids.map((id) => courts.find((c) => c.id === id)?.courtType ?? (id === selectedCourt?.id ? selectedCourt?.courtType : undefined)),
+    );
+  }, [baseReservationTypeKeys, selectedCourt, additionalCourtIds, courts]);
   // The 'match' default is not in Deer Lake's list. Without this the chip row
   // would show nothing selected while still sending a type the facility does
   // not use — and the required-type check below would wave it through.

@@ -497,3 +497,112 @@ export async function startAppLaunchEmailSend(expectedCount: number) {
     return { success: false, error: 'Failed to reach the server' };
   }
 }
+
+// ── Newsletters ────────────────────────────────────────────
+
+export type NewsletterAudience =
+  | 'all_admins'
+  | 'selected_admins'
+  | 'all_players'
+  | 'selected_players'
+  | 'all_clubs'
+  | 'selected_clubs';
+
+export interface NewsletterDraft {
+  subject: string;
+  preheader?: string | null;
+  body: string;
+  audience: NewsletterAudience;
+  /** User ids (selected admins/players) or facility ids (selected clubs). */
+  targetIds: string[];
+}
+
+export interface NewsletterTarget {
+  id: string;
+  label: string;
+  detail: string | null;
+}
+
+export async function searchNewsletterPeople(role: 'admins' | 'players', q: string) {
+  try {
+    return await supportFetch(`/newsletters/people?role=${role}&q=${encodeURIComponent(q)}`);
+  } catch {
+    return { success: false, error: 'Search failed' };
+  }
+}
+
+export async function listNewsletterClubs() {
+  try {
+    return await supportFetch('/newsletters/clubs');
+  } catch {
+    return { success: false, error: 'Failed to load clubs' };
+  }
+}
+
+export async function countNewsletterAudience(audience: NewsletterAudience, targetIds: string[]) {
+  try {
+    return await supportFetch('/newsletters/count', {
+      method: 'POST',
+      body: JSON.stringify({ audience, targetIds }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to count recipients' };
+  }
+}
+
+export async function listNewsletters() {
+  try {
+    return await supportFetch('/newsletters');
+  } catch {
+    return { success: false, error: 'Failed to load newsletters' };
+  }
+}
+
+export async function getNewsletterSummary(id: string) {
+  try {
+    return await supportFetch(`/newsletters/${id}`);
+  } catch {
+    return { success: false, error: 'Failed to load the newsletter' };
+  }
+}
+
+export async function saveNewsletter(draft: NewsletterDraft, id?: string | null) {
+  try {
+    return await supportFetch(id ? `/newsletters/${id}` : '/newsletters', {
+      method: id ? 'PUT' : 'POST',
+      body: JSON.stringify(draft),
+    });
+  } catch {
+    return { success: false, error: 'Failed to reach the server' };
+  }
+}
+
+export async function deleteNewsletterDraft(id: string) {
+  try {
+    return await supportFetch(`/newsletters/${id}`, { method: 'DELETE' });
+  } catch {
+    return { success: false, error: 'Failed to reach the server' };
+  }
+}
+
+export async function sendNewsletterTestEmail(email: string, draft: Omit<NewsletterDraft, 'audience' | 'targetIds'>) {
+  try {
+    return await supportFetch('/newsletters/test', {
+      method: 'POST',
+      body: JSON.stringify({ ...draft, email }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to reach the server' };
+  }
+}
+
+export async function startNewsletterSend(id: string, expectedCount: number) {
+  try {
+    return await supportFetch(`/newsletters/${id}/send`, {
+      method: 'POST',
+      body: JSON.stringify({ expectedCount }),
+    });
+  } catch {
+    return { success: false, error: 'Failed to reach the server' };
+  }
+}

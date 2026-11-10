@@ -44,7 +44,20 @@ import {
   startAppLaunchEmail,
 } from '../../src/services/appLaunchEmailService';
 import { APP_LAUNCH_EMAIL_SUBJECT, buildAppLaunchEmailHtml } from '../../src/services/appLaunchEmailTemplate';
-import { sendAppLaunchEmail } from '../../src/services/emailService';
+import { sendAppLaunchEmail, sendNewsletterEmail } from '../../src/services/emailService';
+import {
+  NewsletterError,
+  countNewsletterAudience,
+  createNewsletter,
+  deleteNewsletter,
+  getNewsletterSummary,
+  listNewsletterClubs,
+  listNewsletters,
+  searchNewsletterPeople,
+  startNewsletterSend,
+  updateNewsletter,
+  validateNewsletterInput,
+} from '../../src/services/newsletterService';
 
 const router = express.Router();
 
@@ -533,6 +546,113 @@ router.post('/app-launch-email/send', async (req, res) => {
   } catch (error: any) {
     const status = error instanceof AppLaunchEmailBusyError ? 409 : 400;
     res.status(status).json({ success: false, error: error.message });
+  }
+});
+
+// ── Newsletters (branded emails to club admins or every account) ──
+
+function sendNewsletterError(res: express.Response, error: any, label: string) {
+  if (error instanceof NewsletterError) {
+    return res.status(error.status).json({ success: false, error: error.message });
+  }
+  console.error(`[Support] ${label} error:`, error);
+  res.status(500).json({ success: false, error: error.message });
+}
+
+router.get('/newsletters', async (_req, res) => {
+  try {
+    res.json({ success: true, data: await listNewsletters() });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'List newsletters');
+  }
+});
+
+router.post('/newsletters', async (req, res) => {
+  try {
+    res.status(201).json({ success: true, data: await createNewsletter(req.body) });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Create newsletter');
+  }
+});
+
+// A copy of what's in the editor to one address; doesn't need saving and doesn't count as sent.
+router.post('/newsletters/test', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, error: 'Enter a valid email address' });
+    }
+    const content = validateNewsletterInput({ ...req.body, audience: 'all_admins', targetIds: [] });
+    const result = await sendNewsletterEmail(email, content);
+    if (!result.success) return res.status(502).json({ success: false, error: result.error || 'Send failed' });
+    res.json({ success: true });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Newsletter test email');
+  }
+});
+
+// Picker search: club admins or players the matching "all" audience would reach.
+router.get('/newsletters/people', async (req, res) => {
+  try {
+    const role = req.query.role === 'admins' ? 'admins' : 'players';
+    res.json({ success: true, data: await searchNewsletterPeople(role, String(req.query.q || '')) });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Newsletter people search');
+  }
+});
+
+router.get('/newsletters/clubs', async (_req, res) => {
+  try {
+    res.json({ success: true, data: await listNewsletterClubs() });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Newsletter clubs');
+  }
+});
+
+// How many addresses the editor's current audience would reach (saved or not).
+router.post('/newsletters/count', async (req, res) => {
+  try {
+    res.json({ success: true, data: { count: await countNewsletterAudience(req.body) } });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Newsletter audience count');
+  }
+});
+
+router.get('/newsletters/:id', async (req, res) => {
+  try {
+    res.json({ success: true, data: await getNewsletterSummary(req.params.id) });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Newsletter summary');
+  }
+});
+
+router.put('/newsletters/:id', async (req, res) => {
+  try {
+    res.json({ success: true, data: await updateNewsletter(req.params.id, req.body) });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Update newsletter');
+  }
+});
+
+router.delete('/newsletters/:id', async (req, res) => {
+  try {
+    await deleteNewsletter(req.params.id);
+    res.json({ success: true });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Delete newsletter');
+  }
+});
+
+router.post('/newsletters/:id/send', async (req, res) => {
+  try {
+    const expectedCount = Number(req.body?.expectedCount);
+    if (!Number.isInteger(expectedCount) || expectedCount <= 0) {
+      return res.status(400).json({ success: false, error: 'expectedCount is required' });
+    }
+    const job = await startNewsletterSend(req.params.id, expectedCount);
+    res.status(202).json({ success: true, data: { job } });
+  } catch (error: any) {
+    sendNewsletterError(res, error, 'Start newsletter send');
   }
 });
 

@@ -12,6 +12,7 @@ import {
   wrapInEmailLayout,
 } from './emailTemplateDefaults';
 import { APP_LAUNCH_EMAIL_SUBJECT, buildAppLaunchEmailHtml } from './appLaunchEmailTemplate';
+import { buildNewsletterEmailHtml, type NewsletterContent } from '../../shared/utils/newsletterEmail';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -400,6 +401,15 @@ export async function sendAppLaunchEmail(
   userId?: string
 ): Promise<EmailSendResult> {
   return sendEmail(email, APP_LAUNCH_EMAIL_SUBJECT, buildAppLaunchEmailHtml(fullName), userId, 'general');
+}
+
+/** A support-console newsletter; skipped (status null) when the member has email notifications off. */
+export async function sendNewsletterEmail(
+  email: string,
+  content: NewsletterContent,
+  userId?: string
+): Promise<EmailSendResult> {
+  return sendEmail(email, content.subject.trim(), buildNewsletterEmailHtml(content), userId, 'general');
 }
 
 function escapeHtml(text: string): string {

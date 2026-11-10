@@ -30,6 +30,14 @@ import { Button } from '../../src/components/Button';
 import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../../src/constants/theme';
 import { createRouteErrorBoundary } from '../../src/components/RouteErrorBoundary';
 import { showAlert, showApiErrorAlert } from '../../src/utils/alert';
+import { useFeatureFlags } from '../../src/contexts/FeatureFlagContext';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
+import {
+  DEER_LAKE_RESERVATION_TYPE_KEYS,
+  getBookingTypeLabel,
+  reservationTypeKeysForCourts,
+  type BookingTypeKey,
+} from '../../../shared/constants/bookingTypes';
 
 export const ErrorBoundary = createRouteErrorBoundary('Admin Bookings');
 
@@ -563,6 +571,25 @@ function CreateTab({
   const [bookingType, setBookingType] = useState('match');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Deer Lake uses its own reservation types, required and matched to the
+  // courts' sport; the server rejects anything else. Other clubs keep 'match'.
+  const { isFeatureEnabled } = useFeatureFlags();
+  const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const deerLakeTypeKeys = useMemo(
+    () =>
+      reservationTypeKeysForCourts(
+        DEER_LAKE_RESERVATION_TYPE_KEYS,
+        selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.courtType),
+      ),
+    [selectedCourtIds, courts],
+  );
+  useEffect(() => {
+    if (deerLakeReservationTypes && bookingType && !deerLakeTypeKeys.includes(bookingType as BookingTypeKey)) {
+      setBookingType('');
+    } else if (!deerLakeReservationTypes && !bookingType) {
+      setBookingType('match');
+    }
+  }, [deerLakeReservationTypes, deerLakeTypeKeys, bookingType]);
   // Recurring (web AdminBooking): weekly on chosen days until an end date; members only.
   const [recurring, setRecurring] = useState(false);
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
@@ -623,6 +650,7 @@ function CreateTab({
     selectedCourtIds.length > 0 &&
     !!startTime &&
     (isWalkIn ? walkInName.trim().length > 0 : !!memberId) &&
+    (!deerLakeReservationTypes || !!bookingType) &&
     (!recurringActive || (recurringDays.length > 0 && !!recurringEndDate));
 
   async function submit() {
@@ -845,6 +873,26 @@ function CreateTab({
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Details</Text>
+        {deerLakeReservationTypes ? (
+          <>
+            <Text style={styles.label}>Reservation type</Text>
+            <View style={styles.chipsWrap}>
+              {deerLakeTypeKeys.map((key) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.chip, bookingType === key && styles.chipSelected]}
+                  onPress={() => setBookingType(key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: bookingType === key }}
+                >
+                  <Text style={[styles.chipText, bookingType === key && styles.chipTextSelected]}>
+                    {getBookingTypeLabel(key)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : null}
         <Text style={styles.label}>Notes (optional)</Text>
         <Input value={notes} onChangeText={setNotes} placeholder="Notes for this booking" multiline style={styles.multiline} />
         <Button title="Create Booking" onPress={submit} loading={submitting} disabled={!canSubmit || submitting} />

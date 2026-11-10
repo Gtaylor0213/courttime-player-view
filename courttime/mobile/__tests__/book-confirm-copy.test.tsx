@@ -85,13 +85,18 @@ let mockCourtOverrides: Record<string, unknown> | null = null;
 /** Named ball machines the facility has configured. */
 let mockBallMachines: Array<{ id: string; name: string; isActive: boolean }> = [];
 
+/** Lets a test simulate club settings that failed to load. */
+let mockFlagsUnknown = false;
+const mockRefreshFlags = jest.fn(() => Promise.resolve());
+
 jest.mock('../src/contexts/FeatureFlagContext', () => ({
   useFeatureFlags: jest.fn(() => ({
     enabledFeatures: [...mockEnabledFeatures],
     isFeatureEnabled: (key: string) => mockEnabledFeatures.has(key),
     flagsLoaded: true,
     flagsFromCache: false,
-    refreshFlags: jest.fn(() => Promise.resolve()),
+    flagsUnknown: mockFlagsUnknown,
+    refreshFlags: mockRefreshFlags,
   })),
 }));
 
@@ -234,6 +239,8 @@ describe('BookCourtScreen booking modal confirm copy', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockEnabledFeatures.clear();
+    mockFlagsUnknown = false;
+    mockRefreshFlags.mockClear();
     mockCourtOverrides = null;
     mockBallMachines = [];
     tree = undefined;
@@ -713,6 +720,23 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       expect(texts).toContain('Party');
       expect(texts).toContain('Fun');
       expect(texts).toContain('Booking Type (Optional)');
+    });
+
+    it("does not book while the club's settings are unknown, and reloads them first", async () => {
+      // A failed settings fetch with nothing cached shows the standard list with
+      // "Fun" preselected even at Deer Lake. Booking then would save "Fun".
+      const { showAlert } = require('../src/utils/alert');
+      mockFlagsUnknown = true;
+      await renderAsMember();
+
+      await act(async () => {
+        pressTouchableContainingText(tree!, 'Confirm Booking');
+      });
+      await flushMicrotasks();
+
+      expect(mockRefreshFlags).toHaveBeenCalled();
+      expect(showAlert).toHaveBeenCalledWith('One moment', expect.stringContaining('booking options'));
+      expect(createBookingSpy).not.toHaveBeenCalled();
     });
 
     it('clears the default type when the active list does not offer it', async () => {

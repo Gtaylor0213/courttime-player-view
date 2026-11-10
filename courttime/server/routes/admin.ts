@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { checkReservationType, sameCourtSet } from '../../src/services/reservationTypeGuard';
 import { query } from '../../src/database/connection';
 import { validateBooking } from '../../src/services/bookingService';
 import {
@@ -1812,6 +1813,19 @@ router.patch('/booking-series/:seriesId', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Series not found or empty' });
     }
 
+    const nextType = bookingType ?? series.rule.bookingType;
+    const nextCourtIds: string[] = Array.isArray(courtIds) ? courtIds.map(String) : series.rule.courtIds;
+    if ((nextType || '') !== (series.rule.bookingType || '') || !sameCourtSet(nextCourtIds, series.rule.courtIds)) {
+      const reservationTypeError = await checkReservationType({
+        facilityId: series.facilityId,
+        bookingType: nextType,
+        courtIds: nextCourtIds,
+      });
+      if (reservationTypeError) {
+        return res.status(400).json({ success: false, error: reservationTypeError });
+      }
+    }
+
     // Only the time and courts change here; the rest of the rule is carried through as-is.
     const result = await updateBookingSeries({
       seriesId,
@@ -1875,6 +1889,19 @@ router.patch('/booking-series/:seriesId/instances', async (req, res) => {
     const series = await getBookingSeries(seriesId);
     if (!series) {
       return res.status(404).json({ success: false, error: 'Series not found or empty' });
+    }
+
+    const nextType = bookingType ?? series.rule.bookingType;
+    const addedCourtIds = parseCourtChanges(courtChanges)?.add ?? [];
+    if ((nextType || '') !== (series.rule.bookingType || '') || addedCourtIds.length > 0) {
+      const reservationTypeError = await checkReservationType({
+        facilityId: series.facilityId,
+        bookingType: nextType,
+        courtIds: [...series.rule.courtIds, ...addedCourtIds],
+      });
+      if (reservationTypeError) {
+        return res.status(400).json({ success: false, error: reservationTypeError });
+      }
     }
 
     const result = await updateBookingSeries({

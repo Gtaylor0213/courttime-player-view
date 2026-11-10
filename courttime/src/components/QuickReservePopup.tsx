@@ -18,7 +18,7 @@ import {
   parseHHMMToMinutes,
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../../shared/constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, type BookingTypeKey } from '../../shared/constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
@@ -228,7 +228,7 @@ export function QuickReservePopup({
   const canBookForOthers = isAdmin && facilityFeatures.includes(FEATURE_FLAGS.ADMIN_BOOK_FOR_OTHERS);
   const deerLakeReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
-  const reservationTypeKeys = deerLakeReservationTypes
+  const baseReservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
     : bhrReservationTypes
     ? BHR_RESERVATION_TYPE_KEYS
@@ -530,6 +530,28 @@ export function QuickReservePopup({
     }
     return courts;
   }, [selectedCourtId, selectedCourt, additionalCourtIds, availableCourts]);
+
+  // Deer Lake: tennis courts only offer tennis types, pickleball courts only
+  // pickleball types. Before a court is picked, the chosen court type decides.
+  const reservationTypeKeys = React.useMemo(
+    () =>
+      reservationTypeKeysForCourts(
+        baseReservationTypeKeys,
+        allSelectedCourts.length > 0
+          ? allSelectedCourts.map((c) => availableCourts.find((court) => court.id === c.id)?.type)
+          : [selectedCourtType],
+      ),
+    [baseReservationTypeKeys, allSelectedCourts, availableCourts, selectedCourtType],
+  );
+  useEffect(() => {
+    if (
+      bookingType &&
+      baseReservationTypeKeys.includes(bookingType as BookingTypeKey) &&
+      !reservationTypeKeys.includes(bookingType as BookingTypeKey)
+    ) {
+      setBookingType('');
+    }
+  }, [baseReservationTypeKeys, reservationTypeKeys, bookingType]);
 
   // The split picker is hidden once a second court or a repeat is added, but
   // hiding it left the state set, so the booking still went out as a split.

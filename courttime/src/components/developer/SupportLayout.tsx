@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   LayoutDashboard, Users, Building2, UserCheck, CalendarDays, Columns3, LogOut, Menu, X,
-  CreditCard, Tag, Search, Command, MessageSquare, Flag, Smartphone,
+  CreditCard, Tag, Search, Command, MessageSquare, Flag, Smartphone, Newspaper,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -23,6 +23,7 @@ const navItems: { view: SupportView; label: string; icon: React.ElementType; sec
   { view: 'messages', label: 'Messages', icon: MessageSquare, section: 'customers' },
   { view: 'content-reports', label: 'Content Reports', icon: Flag, section: 'customers' },
   { view: 'app-launch', label: 'App Launch Email', icon: Smartphone, section: 'customers' },
+  { view: 'newsletter', label: 'Newsletter', icon: Newspaper, section: 'customers' },
   { view: 'subscriptions', label: 'Subscriptions', icon: CreditCard, section: 'billing' },
   { view: 'promos', label: 'Promo Codes', icon: Tag, section: 'billing' },
   { view: 'facilities', label: 'Facilities', icon: Building2, section: 'operations' },

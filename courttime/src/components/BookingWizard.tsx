@@ -24,7 +24,7 @@ import {
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
 import { toast } from 'sonner';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../../shared/constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, type BookingTypeKey } from '../../shared/constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { useBookingWindow } from './useBookingWindow';
@@ -211,7 +211,7 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const splitCourtPaymentsEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const deerLakeReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
-  const reservationTypeKeys = deerLakeReservationTypes
+  const baseReservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
     : bhrReservationTypes
     ? BHR_RESERVATION_TYPE_KEYS
@@ -367,6 +367,26 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
     }
     return Array.from(merged.entries()).map(([id, name]) => ({ court: name, courtId: id }));
   }, [dragSelectedCourts, additionalCourtIds, facilityCourts]);
+
+  // Deer Lake: tennis courts only offer tennis types, pickleball courts only
+  // pickleball types; a mixed selection keeps the types that fit both.
+  const reservationTypeKeys = useMemo(
+    () =>
+      reservationTypeKeysForCourts(
+        baseReservationTypeKeys,
+        selectedCourts.map((c) => facilityCourts.find((fc) => fc.id === c.courtId)?.courtType),
+      ),
+    [baseReservationTypeKeys, selectedCourts, facilityCourts],
+  );
+  useEffect(() => {
+    if (
+      bookingType &&
+      baseReservationTypeKeys.includes(bookingType as BookingTypeKey) &&
+      !reservationTypeKeys.includes(bookingType as BookingTypeKey)
+    ) {
+      setBookingType('');
+    }
+  }, [baseReservationTypeKeys, reservationTypeKeys, bookingType]);
 
   // Open/close window every selected court is open for on this day — the intersection,
   // since one Start/End Time applies to all selected courts at once. Falls back to a

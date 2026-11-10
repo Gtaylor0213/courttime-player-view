@@ -36,6 +36,7 @@ import {
 } from '../../shared/utils/recurrence';
 import { describeRecurringConflict } from '../utils/recurringConflicts';
 import { courtTypeLabel } from '../../shared/constants/courtTypes';
+import { reservationTypeKeysForCourts, type BookingTypeKey } from '../../shared/constants/bookingTypes';
 
 interface SeriesEditDialogProps {
   isOpen: boolean;
@@ -153,6 +154,29 @@ export function SeriesEditDialog({
   const [excludedDates, setExcludedDates] = useState<string[]>([]);
   const [includePast, setIncludePast] = useState(false);
 
+  // Deer Lake: only offer types that fit every ticked court's sport.
+  const courtReservationTypes = useMemo(() => {
+    const allowed = new Set<string>(
+      reservationTypeKeysForCourts(
+        reservationTypes.map((t) => t.value as BookingTypeKey),
+        courtIds.map((id) => courts.find((c) => c.id === id)?.type),
+      ),
+    );
+    return reservationTypes.filter((t) => allowed.has(t.value));
+  }, [reservationTypes, courtIds, courts]);
+  useEffect(() => {
+    // Only clear a type the court filter removed; a type that was never in the
+    // list (older bookings, other clubs) is left as it is.
+    if (
+      bookingType &&
+      courts.length > 0 &&
+      reservationTypes.some((t) => t.value === bookingType) &&
+      !courtReservationTypes.some((t) => t.value === bookingType)
+    ) {
+      setBookingType('');
+    }
+  }, [bookingType, courts.length, reservationTypes, courtReservationTypes]);
+
   const resetFromSeries = useCallback((detail: BookingSeriesDetail) => {
     const { rule } = detail;
     setCourtIds(rule.courtIds);
@@ -193,7 +217,7 @@ export function SeriesEditDialog({
         resetFromSeries(seriesRes.series);
         const list = (courtsRes as any)?.data?.courts || (courtsRes as any)?.courts || [];
         setCourts(
-          Array.isArray(list) ? list.map((c: any) => ({ id: c.id, name: c.name, type: c.type })) : []
+          Array.isArray(list) ? list.map((c: any) => ({ id: c.id, name: c.name, type: c.courtType ?? c.type })) : []
         );
       } catch {
         if (!cancelled) {
@@ -719,7 +743,7 @@ export function SeriesEditDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No type</SelectItem>
-                  {reservationTypes.map((type) => (
+                  {courtReservationTypes.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
                     </SelectItem>

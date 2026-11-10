@@ -16,6 +16,13 @@ import { confirmSkipRecurringConflicts } from '../../utils/recurringConflicts';
 import { expandWeeklyDates, normalizeWeekdays, singleDateRule, WEEKDAY_NAMES } from '../../../shared/utils/recurrence';
 import { useCourtTypeFilter } from '../useCourtTypeFilter';
 import { courtTypeLabel, isPadelCourtType } from '../../../shared/constants/courtTypes';
+import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
+import {
+  BOOKING_TYPES,
+  DEER_LAKE_RESERVATION_TYPE_KEYS,
+  reservationTypeKeysForCourts,
+  type BookingTypeKey,
+} from '../../../shared/constants/bookingTypes';
 
 interface Member {
   userId: string;
@@ -85,6 +92,10 @@ export function AdminBooking() {
   const [isMatch, setIsMatch] = useState(false);
   const [isLesson, setIsLesson] = useState(false);
   const [isBallMachine, setIsBallMachine] = useState(false);
+  // Deer Lake replaces the Match/Lesson/Ball Machine checkboxes with its own
+  // required list, matched to the courts' sport (the server enforces it too).
+  const [facilityFeatures, setFacilityFeatures] = useState<string[]>([]);
+  const [deerLakeType, setDeerLakeType] = useState('');
 
   // Multi-court selection
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
@@ -585,6 +596,32 @@ export function AdminBooking() {
     return courts.filter(c => availabilityById.get(c.id) !== false);
   }, [selectedCourtId, selectedCourt, additionalCourtIds, availableCourts, courtsWithAvailability]);
 
+  useEffect(() => {
+    if (!selectedFacility) { setFacilityFeatures([]); return; }
+    let cancelled = false;
+    fetch(`/api/facilities/${selectedFacility}/feature-flags`)
+      .then(r => r.json())
+      .then(res => { if (!cancelled && res.success) setFacilityFeatures(res.data); })
+      .catch(() => { if (!cancelled) setFacilityFeatures([]); });
+    return () => { cancelled = true; };
+  }, [selectedFacility]);
+  const deerLakeReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  const deerLakeTypeKeys = React.useMemo(
+    () =>
+      reservationTypeKeysForCourts(
+        DEER_LAKE_RESERVATION_TYPE_KEYS,
+        allSelectedCourts.length > 0
+          ? allSelectedCourts.map((c) => availableCourts.find((court) => court.id === c.id)?.type)
+          : [selectedCourtType],
+      ),
+    [allSelectedCourts, availableCourts, selectedCourtType],
+  );
+  useEffect(() => {
+    if (deerLakeType && !deerLakeTypeKeys.includes(deerLakeType as BookingTypeKey)) {
+      setDeerLakeType('');
+    }
+  }, [deerLakeType, deerLakeTypeKeys]);
+
   const generateRecurringDates = (): string[] => {
     if (!advancedBooking || recurringDays.length === 0 || !recurringEndDate) {
       return [selectedDate];
@@ -682,6 +719,11 @@ export function AdminBooking() {
       return;
     }
 
+    if (deerLakeReservationTypes && !deerLakeType) {
+      toast.error('Please select a reservation type.');
+      return;
+    }
+
     if (allSelectedCourts.length === 0) {
       toast.error('The selected court(s) are no longer available. Please choose an available court.');
       return;
@@ -740,7 +782,9 @@ export function AdminBooking() {
       if (isMatch) bookingTypes.push('Match');
       if (isLesson) bookingTypes.push('Lesson');
       if (isBallMachine) bookingTypes.push('Ball Machine');
-      const bookingType = bookingTypes.length > 0 ? bookingTypes.join(', ') : undefined;
+      const bookingType = deerLakeReservationTypes
+        ? deerLakeType
+        : bookingTypes.length > 0 ? bookingTypes.join(', ') : undefined;
 
       // Walk-ins have no user account, so the booking is still owned by the admin's
       // id (a real FK is required) but the guest's actual name travels separately
@@ -891,6 +935,7 @@ export function AdminBooking() {
         setIsMatch(false);
         setIsLesson(false);
         setIsBallMachine(false);
+        setDeerLakeType('');
         setAdvancedBooking(false);
         setRecurringDays([]);
         setRecurringEndDate('');
@@ -1100,7 +1145,22 @@ export function AdminBooking() {
                   )}
                 </div>
 
-                {/* Booking Type Checkboxes */}
+                {deerLakeReservationTypes ? (
+                <div className="flex items-center gap-3">
+                  <Label className="min-w-[100px]">Type</Label>
+                  <Select value={deerLakeType || undefined} onValueChange={setDeerLakeType}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select type..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {deerLakeTypeKeys.map((key) => (
+                        <SelectItem key={key} value={key}>{BOOKING_TYPES[key].label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                ) : (
+                /* Booking Type Checkboxes */
                 <div className="flex items-center gap-3">
                   <Label className="min-w-[100px]">Type</Label>
                   <div className="flex gap-4 flex-1">
@@ -1136,6 +1196,7 @@ export function AdminBooking() {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Notes */}
                 <div className="space-y-2">

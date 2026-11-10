@@ -255,6 +255,56 @@ export const DEER_LAKE_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
   'maintenance',
 ] as const;
 
+// Deer Lake types that belong to one sport. A tennis court only offers the
+// tennis ones, a pickleball court only the pickleball ones; anything in
+// neither set (Maintenance) fits every court.
+const TENNIS_ONLY_TYPE_KEYS = new Set<BookingTypeKey>([
+  'general_tennis',
+  'alta_tennis',
+  'usta_tennis',
+  'flex_tennis',
+  'team_tennis_lesson',
+  'group_tennis_lesson',
+  'private_tennis_lesson',
+  'junior_tennis_lesson',
+  'after_school_tennis_lesson',
+  'open_play', // label: Beginner Tennis Clinic
+  'cardio_tennis',
+]);
+
+const PICKLEBALL_ONLY_TYPE_KEYS = new Set<BookingTypeKey>([
+  'general_pickleball',
+  'alta_pickleball',
+  'usta_pickleball',
+  'flex_pickleball',
+  'team_pickleball_lesson',
+  'group_pickleball_lesson',
+  'private_pickleball_lesson',
+]);
+
+/**
+ * Narrow a reservation type list to the types that fit every selected court.
+ * Tennis courts drop pickleball-only types and pickleball courts drop
+ * tennis-only types, so a booking that mixes both sports keeps only types
+ * that fit either (Maintenance). Courts of any other type (Dual Purpose,
+ * Padel, custom, unknown) filter nothing, and lists without sport-specific
+ * types (standard, BHR) come back unchanged.
+ */
+export function reservationTypeKeysForCourts(
+  keys: readonly BookingTypeKey[],
+  courtTypes: ReadonlyArray<string | null | undefined>,
+): readonly BookingTypeKey[] {
+  const types = courtTypes.map((t) => String(t ?? '').trim().toLowerCase());
+  const hasTennis = types.includes('tennis');
+  const hasPickleball = types.includes('pickleball');
+  if (!hasTennis && !hasPickleball) return keys;
+  return keys.filter(
+    (key) =>
+      !(hasTennis && PICKLEBALL_ONLY_TYPE_KEYS.has(key)) &&
+      !(hasPickleball && TENNIS_ONLY_TYPE_KEYS.has(key)),
+  );
+}
+
 // Standard reservation type list plus "Party" — used when the "BHR Reservation
 // Types" facility feature flag is enabled. Keeps the standard types intact.
 export const BHR_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [

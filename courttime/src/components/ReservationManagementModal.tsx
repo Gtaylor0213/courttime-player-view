@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { bookingApi, facilitiesApi, openSpotApi } from '../api/client';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS } from '../../shared/constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, type BookingTypeKey } from '../../shared/constants/bookingTypes';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 import { SeriesEditDialog } from './SeriesEditDialog';
 import { isSingleDateRule } from '../../shared/utils/recurrence';
@@ -181,6 +181,24 @@ export function ReservationManagementModal({
     : bhrReservationTypes
     ? BHR_RESERVATION_TYPE_KEYS
     : RESERVATION_LABEL_TYPE_KEYS;
+  // Deer Lake: the edit picker only offers types that fit the chosen court's
+  // sport. The series editor gets the full list and narrows it by its own courts.
+  const editReservationTypeKeys = useMemo(
+    () => reservationTypeKeysForCourts(reservationTypeKeys, [courts.find((c) => c.id === editCourt)?.courtType]),
+    [reservationTypeKeys, courts, editCourt],
+  );
+  useEffect(() => {
+    // Only clear a type the court filter removed; a type that was never in the
+    // list (older bookings) is left as it is.
+    if (
+      isEditing &&
+      editBookingType &&
+      reservationTypeKeys.includes(editBookingType as BookingTypeKey) &&
+      !editReservationTypeKeys.includes(editBookingType as BookingTypeKey)
+    ) {
+      setEditBookingType('');
+    }
+  }, [isEditing, reservationTypeKeys, editReservationTypeKeys, editBookingType]);
   const isPostPlayBooking =
     settlementStatus === 'unsettled' ||
     settlementStatus === 'settling' ||
@@ -1343,7 +1361,7 @@ export function ReservationManagementModal({
                     <SelectValue placeholder="Select booking type..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {reservationTypeKeys.map((key) => (
+                    {editReservationTypeKeys.map((key) => (
                       <SelectItem key={key} value={key}>{BOOKING_TYPES[key].label}</SelectItem>
                     ))}
                   </SelectContent>

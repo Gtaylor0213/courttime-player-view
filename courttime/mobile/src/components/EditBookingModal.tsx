@@ -8,7 +8,7 @@
  * If payment is required for the new slot, keep the original booking and surface an error.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import {
   BHR_RESERVATION_TYPE_KEYS,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
+  reservationTypeKeysForCourts,
   RESERVATION_LABEL_TYPE_KEYS,
   getBookingTypeLabel,
   type BookingTypeKey,
@@ -58,7 +59,7 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
   // Same precedence as the Book tab: Deer Lake replaces the standard list,
   // BHR appends "Party".
   const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
-  const reservationTypeKeys = deerLakeReservationTypes
+  const baseReservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
     : isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES)
       ? BHR_RESERVATION_TYPE_KEYS
@@ -67,6 +68,22 @@ export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) 
   const [courts, setCourts] = useState<Court[]>([]);
   const [date, setDate] = useState('');
   const [courtId, setCourtId] = useState('');
+  // Deer Lake: only offer types that fit the chosen court's sport.
+  const reservationTypeKeys = useMemo(
+    () => reservationTypeKeysForCourts(baseReservationTypeKeys, [courts.find((c) => c.id === courtId)?.courtType]),
+    [baseReservationTypeKeys, courts, courtId],
+  );
+  // Only clear a type the court filter removed; a type that was never in the
+  // list (older bookings) is left as it is.
+  useEffect(() => {
+    if (
+      editBookingType &&
+      baseReservationTypeKeys.includes(editBookingType as BookingTypeKey) &&
+      !reservationTypeKeys.includes(editBookingType as BookingTypeKey)
+    ) {
+      setEditBookingType('');
+    }
+  }, [baseReservationTypeKeys, reservationTypeKeys, editBookingType]);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [showCalendar, setShowCalendar] = useState(false);

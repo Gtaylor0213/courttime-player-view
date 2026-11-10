@@ -67,6 +67,7 @@ import { userFacingApiMessage, type ApiFailureShape } from '../../src/utils/apiU
 import {
   BHR_RESERVATION_TYPE_KEYS,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
+  reservationTypeKeysForCourts,
   RESERVATION_LABEL_TYPE_KEYS,
   getBookingTypeLabel,
   type BookingTypeKey,
@@ -203,7 +204,7 @@ export default function BookCourtScreen() {
   }>();
   const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate, refreshTermsStatus } = useAuth();
   const { bannerState, lastCachedAt, retryConnectivity } = useOfflineApi();
-  const { isFeatureEnabled } = useFeatureFlags();
+  const { isFeatureEnabled, flagsLoaded, flagsUnknown, refreshFlags } = useFeatureFlags();
   const waiverGate = useCourtWaiverGate();
   const facilityList = facilities ?? [];
   const currentFacilityName = facilityList.find(f => f.id === facilityId)?.name;
@@ -335,11 +336,20 @@ export default function BookCourtScreen() {
   const postPlaySettlementEnabled = isFeatureEnabled(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
-  const reservationTypeKeys = deerLakeReservationTypes
+  const baseReservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
     : bhrReservationTypes
       ? BHR_RESERVATION_TYPE_KEYS
       : RESERVATION_LABEL_TYPE_KEYS;
+  // Deer Lake: tennis courts only offer tennis types, pickleball courts only
+  // pickleball types; a mixed selection keeps the types that fit both.
+  const reservationTypeKeys = useMemo(() => {
+    const ids = selectedCourt ? [selectedCourt.id, ...additionalCourtIds.filter((id) => id !== selectedCourt.id)] : [];
+    return reservationTypeKeysForCourts(
+      baseReservationTypeKeys,
+      ids.map((id) => courts.find((c) => c.id === id)?.courtType ?? (id === selectedCourt?.id ? selectedCourt?.courtType : undefined)),
+    );
+  }, [baseReservationTypeKeys, selectedCourt, additionalCourtIds, courts]);
   // The 'match' default is not in Deer Lake's list. Without this the chip row
   // would show nothing selected while still sending a type the facility does
   // not use — and the required-type check below would wave it through.
@@ -889,6 +899,18 @@ export default function BookCourtScreen() {
     if (guestCount > 0 && guestNames.slice(0, guestCount).some((n) => !n.trim())) {
       showAlert('Booking failed', 'Please enter a name for each guest.');
       hapticError();
+      return;
+    }
+
+    // Until the club's settings have loaded, the screen shows the standard
+    // reservation types (with "Fun" preselected) even at clubs that use their
+    // own list. Load them first and let the member check the type again.
+    if (!flagsLoaded || flagsUnknown) {
+      await refreshFlags();
+      showAlert(
+        'One moment',
+        "We just loaded your club's booking options. Please check the reservation type and tap Confirm again."
+      );
       return;
     }
 

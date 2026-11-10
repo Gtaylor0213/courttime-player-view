@@ -722,6 +722,25 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       expect(texts).toContain('Booking Type (Optional)');
     });
 
+    it('offers only the pickleball types on a Deer Lake pickleball court', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+      mockCourtOverrides = { id: 'court-1', name: 'Court 1A', status: 'available', isWalkUp: false, courtType: 'Pickleball' };
+      const texts = (await renderAsMember()).join(' ');
+      expect(texts).toContain('General Pickleball');
+      expect(texts).toContain('Maintenance');
+      expect(texts).not.toContain('General Tennis');
+      expect(texts).not.toContain('Cardio Tennis');
+    });
+
+    it('offers only the tennis types on a Deer Lake tennis court', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+      mockCourtOverrides = { id: 'court-1', name: 'Court 1', status: 'available', isWalkUp: false, courtType: 'Tennis' };
+      const texts = (await renderAsMember()).join(' ');
+      expect(texts).toContain('General Tennis');
+      expect(texts).toContain('Beginner Tennis Clinic');
+      expect(texts).not.toContain('General Pickleball');
+    });
+
     it("does not book while the club's settings are unknown, and reloads them first", async () => {
       // A failed settings fetch with nothing cached shows the standard list with
       // "Fun" preselected even at Deer Lake. Booking then would save "Fun".

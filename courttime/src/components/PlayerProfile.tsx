@@ -9,7 +9,7 @@ import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { ReservationManagementModal } from './ReservationManagementModal';
-import { Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, LogOut, Mail } from 'lucide-react';
+import { Save, User, Building2, Plus, CheckCircle, Clock, XCircle, Camera, Calendar, MapPin, AlertTriangle, ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, LogOut, Mail, Bell, Smartphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationBell } from './NotificationBell';
 import { BlockedMembersCard } from './BlockedMembersCard';
@@ -17,6 +17,34 @@ import { useAuth } from '../contexts/AuthContext';
 import { playerProfileApi, facilitiesApi, strikesApi, membersApi, usersApi, userPreferencesApi } from '../api/client';
 import { parseStrikeLockoutStatus } from '../../shared/utils/strikeLockout';
 import { toast } from 'sonner';
+
+/** How many upcoming bookings show before the "Show N more" toggle. */
+const BOOKINGS_PREVIEW_COUNT = 3;
+
+/** Compact label + switch row used in the Notifications card. `null` value = still loading. */
+function PrefRow({ id, title, description, value, onChange }: {
+  id: string;
+  title: string;
+  description: string;
+  value: boolean | null;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <div className="min-w-0">
+        <Label htmlFor={id} className="text-sm font-medium text-gray-900">{title}</Label>
+        <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+      </div>
+      <Switch
+        id={id}
+        className="shrink-0"
+        checked={value ?? true}
+        onCheckedChange={onChange}
+        disabled={value === null}
+      />
+    </div>
+  );
+}
 
 export function PlayerProfile() {
   const navigate = useNavigate();
@@ -50,6 +78,7 @@ export function PlayerProfile() {
   const [strikes, setStrikes] = useState<any[]>([]);
   const [lockoutStatuses, setLockoutStatuses] = useState<Record<string, any>>({});
   const [showStrikeHistory, setShowStrikeHistory] = useState(false);
+  const [showAllBookings, setShowAllBookings] = useState(false);
 
   // Account deletion
   const [isDeleting, setIsDeleting] = useState(false);
@@ -623,7 +652,7 @@ export function PlayerProfile() {
 
   return (
     <>
-        <div className="max-w-4xl mx-auto p-4 md:p-8">
+        <div className="max-w-7xl mx-auto p-4 md:p-8">
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-semibold text-foreground">Player Profile</h1>
@@ -648,131 +677,7 @@ export function PlayerProfile() {
             </div>
           </div>
 
-          {/* Full width: on small screens the grid stacks the photo/facilities column first, which hides this if it only lives in column 2 */}
-          <Card className="mb-8 border-green-200/80 shadow-sm" id="notification-preferences">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-green-700" />
-                Notification preferences
-              </CardTitle>
-              <CardDescription>
-                Control which emails we send to your account address. In-app alerts are unchanged.
-                {canManageMembershipRequestEmailAlerts
-                  ? ' Booking confirmations and new member request alerts (facility admins) can be toggled separately.'
-                  : ' Booking confirmations can be toggled separately.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
-                <div className="space-y-0.5 min-w-0">
-                  <Label htmlFor="email-general" className="text-base font-medium text-gray-900">
-                    General transactional email
-                  </Label>
-                  <p className="text-sm text-gray-600">
-                    {emailNotificationsEnabled === null
-                      ? 'Loading…'
-                      : emailNotificationsEnabled
-                        ? 'On — facility announcements to members and similar messages. Strike and lockout emails are always sent.'
-                        : 'Off — we skip optional transactional emails. Strike and lockout emails are still sent.'}
-                  </p>
-                </div>
-                <Switch
-                  id="email-general"
-                  className="shrink-0"
-                  checked={emailNotificationsEnabled ?? true}
-                  onCheckedChange={handleEmailNotificationsChange}
-                  disabled={emailNotificationsEnabled === null}
-                />
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
-                <div className="space-y-0.5 min-w-0">
-                  <Label htmlFor="email-booking" className="text-base font-medium text-gray-900">
-                    Court booking emails
-                  </Label>
-                  <p className="text-sm text-gray-600">
-                    {emailBookingConfirmations === null
-                      ? 'Loading…'
-                      : emailBookingConfirmations
-                        ? 'On — confirmations and cancellations when you book a court.'
-                        : 'Off — no booking confirmation or cancellation emails.'}
-                  </p>
-                </div>
-                <Switch
-                  id="email-booking"
-                  className="shrink-0"
-                  checked={emailBookingConfirmations ?? true}
-                  onCheckedChange={handleEmailBookingConfirmationsChange}
-                  disabled={emailBookingConfirmations === null}
-                />
-              </div>
-
-              {canManageMembershipRequestEmailAlerts && (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3">
-                  <div className="space-y-0.5 min-w-0">
-                    <Label htmlFor="email-membership-requests" className="text-base font-medium text-gray-900">
-                      New member requests (admins)
-                    </Label>
-                    <p className="text-sm text-gray-600">
-                      {emailMembershipRequestAlerts === null
-                        ? 'Loading…'
-                        : emailMembershipRequestAlerts
-                          ? 'On — when you are a facility admin, we email you if someone asks to join.'
-                          : 'Off — no email for new join requests (in-app alert may still appear).'}
-                    </p>
-                  </div>
-                  <Switch
-                    id="email-membership-requests"
-                    className="shrink-0"
-                    checked={emailMembershipRequestAlerts ?? true}
-                    onCheckedChange={handleEmailMembershipRequestAlertsChange}
-                    disabled={emailMembershipRequestAlerts === null}
-                  />
-                </div>
-              )}
-
-              <p className="text-sm font-medium text-gray-900 pt-2 border-t border-gray-200">
-                Mobile push notifications
-              </p>
-              <p className="text-sm text-gray-600 -mt-1">
-                These settings apply to push notifications on the CourtTime mobile app.
-              </p>
-
-              {(
-                [
-                  ['push-master', 'pushEnabled', 'All push notifications', 'Master switch for mobile push alerts.', pushEnabled, setPushEnabled],
-                  ['push-booking', 'pushBookingUpdates', 'Booking updates', 'Confirmations, cancellations, and court changes.', pushBookingUpdates, setPushBookingUpdates],
-                  ['push-reminders', 'pushBookingReminders', 'Booking reminders', 'Heads-up before your court time starts.', pushBookingReminders, setPushBookingReminders],
-                  ['push-strikes', 'pushStrikes', 'Strikes & lockouts', 'Important account enforcement alerts.', pushStrikes, setPushStrikes],
-                  ['push-announcements', 'pushAnnouncements', 'Facility announcements', 'News, events, and admin posts.', pushAnnouncements, setPushAnnouncements],
-                  ['push-weather', 'pushWeather', 'Weather alerts', 'Court closures or warnings due to weather.', pushWeather, setPushWeather],
-                ] as const
-              ).map(([id, key, title, desc, value, setter]) => (
-                <div
-                  key={id}
-                  className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-3"
-                >
-                  <div className="space-y-0.5 min-w-0">
-                    <Label htmlFor={id} className="text-base font-medium text-gray-900">
-                      {title}
-                    </Label>
-                    <p className="text-sm text-gray-600">{desc}</p>
-                  </div>
-                  <Switch
-                    id={id}
-                    className="shrink-0"
-                    checked={value ?? true}
-                    onCheckedChange={(enabled) =>
-                      handlePushPrefChange(key, enabled, () => value, setter)
-                    }
-                    disabled={value === null}
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             {/* Profile Picture & Basic Info */}
             <div className="lg:col-span-1">
               <Card>
@@ -937,10 +842,84 @@ export function PlayerProfile() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Notifications */}
+              <Card className="mt-6" id="notification-preferences">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5" />
+                    Notifications
+                  </CardTitle>
+                  <CardDescription>Choose what we email and push to you.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div>
+                    <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      <Mail className="h-3.5 w-3.5" />
+                      Email
+                    </h4>
+                    <div className="divide-y divide-gray-100">
+                      <PrefRow
+                        id="email-general"
+                        title="General email"
+                        description="Facility announcements and other optional emails."
+                        value={emailNotificationsEnabled}
+                        onChange={handleEmailNotificationsChange}
+                      />
+                      <PrefRow
+                        id="email-booking"
+                        title="Court bookings"
+                        description="Confirmations and cancellations."
+                        value={emailBookingConfirmations}
+                        onChange={handleEmailBookingConfirmationsChange}
+                      />
+                      {canManageMembershipRequestEmailAlerts && (
+                        <PrefRow
+                          id="email-membership-requests"
+                          title="New member requests"
+                          description="When someone asks to join a club you manage."
+                          value={emailMembershipRequestAlerts}
+                          onChange={handleEmailMembershipRequestAlertsChange}
+                        />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Strike and lockout emails are always sent.</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-200">
+                    <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      <Smartphone className="h-3.5 w-3.5" />
+                      Mobile app push
+                    </h4>
+                    <div className="divide-y divide-gray-100">
+                      {(
+                        [
+                          ['push-master', 'pushEnabled', 'All push notifications', 'Master switch for app alerts.', pushEnabled, setPushEnabled],
+                          ['push-booking', 'pushBookingUpdates', 'Booking updates', 'Confirmations, cancellations, court changes.', pushBookingUpdates, setPushBookingUpdates],
+                          ['push-reminders', 'pushBookingReminders', 'Booking reminders', 'Before your court time starts.', pushBookingReminders, setPushBookingReminders],
+                          ['push-strikes', 'pushStrikes', 'Strikes & lockouts', 'Account enforcement alerts.', pushStrikes, setPushStrikes],
+                          ['push-announcements', 'pushAnnouncements', 'Announcements', 'News, events, and admin posts.', pushAnnouncements, setPushAnnouncements],
+                          ['push-weather', 'pushWeather', 'Weather alerts', 'Closures or weather warnings.', pushWeather, setPushWeather],
+                        ] as const
+                      ).map(([id, key, title, desc, value, setter]) => (
+                        <PrefRow
+                          key={id}
+                          id={id}
+                          title={title}
+                          description={desc}
+                          value={value}
+                          onChange={(enabled) => handlePushPrefChange(key, enabled, () => value, setter)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Profile Details */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+            <div className="space-y-6">
               {/* Upcoming Reservations */}
               <Card>
                 <CardHeader>
@@ -978,7 +957,7 @@ export function PlayerProfile() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {upcomingBookings.map((booking) => (
+                      {(showAllBookings ? upcomingBookings : upcomingBookings.slice(0, BOOKINGS_PREVIEW_COUNT)).map((booking) => (
                         <div
                           key={booking.id}
                           onClick={() => handleReservationClick(booking)}
@@ -1005,6 +984,17 @@ export function PlayerProfile() {
                           </div>
                         </div>
                       ))}
+                      {upcomingBookings.length > BOOKINGS_PREVIEW_COUNT && (
+                        <button
+                          onClick={() => setShowAllBookings(!showAllBookings)}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-gray-50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                        >
+                          {showAllBookings ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          {showAllBookings
+                            ? 'Show less'
+                            : `Show ${upcomingBookings.length - BOOKINGS_PREVIEW_COUNT} more`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -1141,6 +1131,9 @@ export function PlayerProfile() {
                 </CardContent>
               </Card>
 
+            </div>
+
+            <div className="space-y-6">
               {/* Personal Information */}
               <Card>
                 <CardHeader>
@@ -1338,6 +1331,7 @@ export function PlayerProfile() {
                   </Button>
                 </CardContent>
               </Card>
+            </div>
 
             </div>
           </div>

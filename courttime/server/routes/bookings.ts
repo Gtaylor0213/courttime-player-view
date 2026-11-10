@@ -40,6 +40,7 @@ import {
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
 import { isFeatureEnabled } from '../../src/services/featureFlagService';
+import { checkReservationType, sameCourtSet } from '../../src/services/reservationTypeGuard';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { createSplitCourtReservation, checkoutSplitPayment, getSplitPaymentSummary, declineSplitPayment, updateSplitPaymentParticipants } from '../../src/services/splitCourtPaymentService';
 import { query as dbQuery, getPool } from '../../src/database/connection';
@@ -442,6 +443,11 @@ router.post('/', async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'Authentication required' });
     }
 
+    const reservationTypeError = await checkReservationType({ facilityId, bookingType, courtIds: [courtId] });
+    if (reservationTypeError) {
+      return res.status(400).json({ success: false, error: reservationTypeError });
+    }
+
     const isAdminCaller = req.user?.userType === 'admin';
     // Admins may book on behalf of another user; regular users always book as themselves
     const effectiveUserId = isAdminCaller ? (userId || callerUserId) : callerUserId;
@@ -749,6 +755,15 @@ router.post('/recurring-series', async (req, res, next) => {
       });
     }
 
+    const reservationTypeError = await checkReservationType({
+      facilityId,
+      bookingType,
+      courtIds: instances.map((i: any) => i.courtId),
+    });
+    if (reservationTypeError) {
+      return res.status(400).json({ success: false, error: reservationTypeError });
+    }
+
     const result = await createRecurringBookingSeries({
       userId: effectiveUserId,
       bookedByStaffId: isAdminCaller ? callerUserId : null,
@@ -822,6 +837,31 @@ router.patch('/series/:seriesId', async (req, res, next) => {
     }
     if (!rule || typeof rule !== 'object') {
       return res.status(400).json({ success: false, error: 'rule is required' });
+    }
+
+    // Only re-check the type when this edit changes the type or the courts, so
+    // a time change on an older series is not blocked by its existing type.
+    const existingSeries = await getBookingSeries(req.params.seriesId);
+    if (existingSeries) {
+      const nextType = rule.bookingType ?? existingSeries.rule.bookingType;
+      const changes = parseCourtChanges(courtChanges);
+      const nextCourtIds = [
+        ...(Array.isArray(rule.courtIds) ? rule.courtIds.map(String) : existingSeries.rule.courtIds),
+        ...(changes?.add ?? []),
+      ];
+      if (
+        (nextType || '') !== (existingSeries.rule.bookingType || '') ||
+        !sameCourtSet(nextCourtIds, existingSeries.rule.courtIds)
+      ) {
+        const reservationTypeError = await checkReservationType({
+          facilityId: existingSeries.facilityId,
+          bookingType: nextType,
+          courtIds: nextCourtIds,
+        });
+        if (reservationTypeError) {
+          return res.status(400).json({ success: false, error: reservationTypeError });
+        }
+      }
     }
 
     const result = await updateBookingSeries({
@@ -1044,6 +1084,11 @@ router.post('/admin-override', async (req, res, next) => {
         success: false,
         error: 'Missing required fields'
       });
+    }
+
+    const reservationTypeError = await checkReservationType({ facilityId, bookingType, courtIds: [courtId] });
+    if (reservationTypeError) {
+      return res.status(400).json({ success: false, error: reservationTypeError });
     }
 
     if (!overrideReason) {
@@ -1417,6 +1462,26 @@ router.patch('/:bookingId', async (req, res, next) => {
         success: false,
         error: 'courtId, bookingDate, startTime, endTime, and durationMinutes are required',
       });
+    }
+    // Only re-check the type when this edit changes the type or the court, so
+    // moving an older booking is not blocked by its existing type.
+    const existing = await dbQuery(
+      `SELECT facility_id, court_id, booking_type FROM bookings WHERE id::text = $1`,
+      [req.params.bookingId]
+    );
+    const current = existing.rows[0];
+    if (current) {
+      const nextType = bookingType ?? current.booking_type;
+      if ((nextType || '') !== (current.booking_type || '') || String(courtId) !== String(current.court_id)) {
+        const reservationTypeError = await checkReservationType({
+          facilityId: current.facility_id,
+          bookingType: nextType,
+          courtIds: [courtId],
+        });
+        if (reservationTypeError) {
+          return res.status(400).json({ success: false, error: reservationTypeError });
+        }
+      }
     }
     const result = await updateUnsettledBooking({
       bookingId: req.params.bookingId,

@@ -204,7 +204,7 @@ export default function BookCourtScreen() {
   }>();
   const { user, facilityId, facilities, setFacilityId, selectedBookDate, setSelectedBookDate, refreshTermsStatus } = useAuth();
   const { bannerState, lastCachedAt, retryConnectivity } = useOfflineApi();
-  const { isFeatureEnabled } = useFeatureFlags();
+  const { isFeatureEnabled, flagsLoaded, flagsUnknown, refreshFlags } = useFeatureFlags();
   const waiverGate = useCourtWaiverGate();
   const facilityList = facilities ?? [];
   const currentFacilityName = facilityList.find(f => f.id === facilityId)?.name;
@@ -899,6 +899,18 @@ export default function BookCourtScreen() {
     if (guestCount > 0 && guestNames.slice(0, guestCount).some((n) => !n.trim())) {
       showAlert('Booking failed', 'Please enter a name for each guest.');
       hapticError();
+      return;
+    }
+
+    // Until the club's settings have loaded, the screen shows the standard
+    // reservation types (with "Fun" preselected) even at clubs that use their
+    // own list. Load them first and let the member check the type again.
+    if (!flagsLoaded || flagsUnknown) {
+      await refreshFlags();
+      showAlert(
+        'One moment',
+        "We just loaded your club's booking options. Please check the reservation type and tap Confirm again."
+      );
       return;
     }
 

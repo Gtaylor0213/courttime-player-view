@@ -47,6 +47,12 @@ interface FeatureFlagContextValue {
   flagsLoaded: boolean;
   /** True when the current set came from cache rather than a live fetch. */
   flagsFromCache: boolean;
+  /**
+   * True when the last fetch failed and there was no cached set, so the empty
+   * list means "unknown", not "no features". Booking flows refresh before
+   * submitting in that case, so they never book against the wrong club rules.
+   */
+  flagsUnknown: boolean;
   refreshFlags: () => Promise<void>;
 }
 
@@ -68,6 +74,7 @@ export function FeatureFlagProvider({ children }: { children: React.ReactNode })
   const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
   const [flagsLoaded, setFlagsLoaded] = useState(false);
   const [flagsFromCache, setFlagsFromCache] = useState(false);
+  const [flagsUnknown, setFlagsUnknown] = useState(false);
 
   /**
    * The facility a resolution was started for. A slow response for the
@@ -108,6 +115,7 @@ export function FeatureFlagProvider({ children }: { children: React.ReactNode })
       if (parsed) {
         setEnabledFeatures(parsed);
         setFlagsFromCache(false);
+        setFlagsUnknown(false);
         setFlagsLoaded(true);
         await setCachedData(cacheKey, parsed);
         return;
@@ -119,6 +127,7 @@ export function FeatureFlagProvider({ children }: { children: React.ReactNode })
       if (!isStillCurrent()) return;
       setEnabledFeatures(cached ?? []);
       setFlagsFromCache(cached != null);
+      setFlagsUnknown(cached == null);
       setFlagsLoaded(true);
     },
     []
@@ -134,6 +143,7 @@ export function FeatureFlagProvider({ children }: { children: React.ReactNode })
       resolvingFacilityRef.current = null;
       setEnabledFeatures([]);
       setFlagsFromCache(false);
+      setFlagsUnknown(false);
       setFlagsLoaded(false);
       return;
     }
@@ -160,6 +170,7 @@ export function FeatureFlagProvider({ children }: { children: React.ReactNode })
     isFeatureEnabled,
     flagsLoaded,
     flagsFromCache,
+    flagsUnknown,
     refreshFlags,
   };
 

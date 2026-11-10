@@ -66,6 +66,7 @@ import { maybeAskForReview } from '../../src/utils/reviewPrompt';
 import { userFacingApiMessage, type ApiFailureShape } from '../../src/utils/apiUserMessages';
 import {
   BHR_RESERVATION_TYPE_KEYS,
+  MEDLOCK_RESERVATION_TYPE_KEYS,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
   reservationTypeKeysForCourts,
   RESERVATION_LABEL_TYPE_KEYS,
@@ -338,9 +339,11 @@ export default function BookCourtScreen() {
   const bhrReservationTypes = isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
   const baseReservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
-    : bhrReservationTypes
-      ? BHR_RESERVATION_TYPE_KEYS
-      : RESERVATION_LABEL_TYPE_KEYS;
+    : isFeatureEnabled(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES)
+      ? MEDLOCK_RESERVATION_TYPE_KEYS
+      : bhrReservationTypes
+        ? BHR_RESERVATION_TYPE_KEYS
+        : RESERVATION_LABEL_TYPE_KEYS;
   // Deer Lake: tennis courts only offer tennis types, pickleball courts only
   // pickleball types; a mixed selection keeps the types that fit both.
   const reservationTypeKeys = useMemo(() => {

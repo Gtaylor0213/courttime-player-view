@@ -29,6 +29,12 @@ export const BOOKING_TYPES = {
     bgColor: 'bg-cyan-100',
     rn: { bg: '#cefafe', border: '#53eafd', text: '#005f78' },
   },
+  team_practice: {
+    label: 'Team Practice',
+    color: 'bg-red-100 text-red-800 border-red-300',
+    bgColor: 'bg-red-100',
+    rn: { bg: '#ffe2e2', border: '#ffa2a2', text: '#9f0712' },
+  },
   ball_machine: {
     label: 'Ball Machine',
     color: 'bg-orange-100 text-orange-800 border-orange-300',
@@ -311,6 +317,13 @@ export const BHR_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
   ...RESERVATION_LABEL_TYPE_KEYS,
   'party',
 ] as const;
+
+// Standard reservation type list with "Team Practice" in place of "Group
+// Lesson" — used when the "Medlock Reservation Types" facility feature flag is
+// enabled. Every other standard type stays the same.
+export const MEDLOCK_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = RESERVATION_LABEL_TYPE_KEYS.map(
+  (key): BookingTypeKey => (key === 'group_lesson' ? 'team_practice' : key),
+);
 
 export const getBookingTypeColor = (type: string | undefined): string => {
   if (!type) return BOOKING_TYPES.other.bgColor;

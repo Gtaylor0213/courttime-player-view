@@ -4,6 +4,7 @@ import {
   RESERVATION_LABEL_TYPE_KEYS,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
   BHR_RESERVATION_TYPE_KEYS,
+  MEDLOCK_RESERVATION_TYPE_KEYS,
   getBookingTypeLabel,
   reservationTypeKeysForCourts,
 } from '../bookingTypes';
@@ -79,5 +80,18 @@ describe('reservationTypeKeysForCourts', () => {
   it('does not change the standard or BHR lists', () => {
     expect(reservationTypeKeysForCourts(RESERVATION_LABEL_TYPE_KEYS, ['Pickleball'])).toEqual(RESERVATION_LABEL_TYPE_KEYS);
     expect(reservationTypeKeysForCourts(BHR_RESERVATION_TYPE_KEYS, ['Tennis'])).toEqual(BHR_RESERVATION_TYPE_KEYS);
+  });
+
+  it('Medlock keeps the standard list but swaps Group Lesson for Team Practice', () => {
+    expect(MEDLOCK_RESERVATION_TYPE_KEYS).toEqual([
+      'match',
+      'league_match',
+      't2_match',
+      'lesson',
+      'team_practice',
+      'ball_machine',
+    ]);
+    expect(getBookingTypeLabel('team_practice')).toBe('Team Practice');
+    expect(reservationTypeKeysForCourts(MEDLOCK_RESERVATION_TYPE_KEYS, ['Tennis'])).toEqual(MEDLOCK_RESERVATION_TYPE_KEYS);
   });
 });

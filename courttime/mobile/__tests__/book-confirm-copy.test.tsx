@@ -722,6 +722,21 @@ describe('BookCourtScreen booking modal confirm copy', () => {
       expect(texts).toContain('Booking Type (Optional)');
     });
 
+    it('swaps Group Lesson for Team Practice for Medlock', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES);
+      const texts = (await renderAsMember()).join(' ');
+      expect(texts).toContain('Team Practice');
+      expect(texts).not.toContain('Group Lesson');
+      expect(texts).toContain('Fun');
+      expect(texts).toContain('Ball Machine');
+    });
+
+    it('shows Group Lesson and not Team Practice without the Medlock flag', async () => {
+      const texts = (await renderAsMember()).join(' ');
+      expect(texts).toContain('Group Lesson');
+      expect(texts).not.toContain('Team Practice');
+    });
+
     it('offers only the pickleball types on a Deer Lake pickleball court', async () => {
       mockEnabledFeatures.add(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
       mockCourtOverrides = { id: 'court-1', name: 'Court 1A', status: 'available', isWalkUp: false, courtType: 'Pickleball' };

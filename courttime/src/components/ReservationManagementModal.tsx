@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
 import { bookingApi, facilitiesApi, openSpotApi } from '../api/client';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, type BookingTypeKey } from '../../shared/constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, MEDLOCK_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, type BookingTypeKey } from '../../shared/constants/bookingTypes';
 import { BallMachineAccessDialog } from './BallMachineAccessDialog';
 import { SeriesEditDialog } from './SeriesEditDialog';
 import { isSingleDateRule } from '../../shared/utils/recurrence';
@@ -178,6 +178,8 @@ export function ReservationManagementModal({
   const bhrReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
   const reservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    : enabledFeatures.includes(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES)
+    ? MEDLOCK_RESERVATION_TYPE_KEYS
     : bhrReservationTypes
     ? BHR_RESERVATION_TYPE_KEYS
     : RESERVATION_LABEL_TYPE_KEYS;

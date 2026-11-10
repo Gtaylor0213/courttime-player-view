@@ -32,6 +32,7 @@ import { useFeatureFlags } from '../contexts/FeatureFlagContext';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import {
   BHR_RESERVATION_TYPE_KEYS,
+  MEDLOCK_RESERVATION_TYPE_KEYS,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
   reservationTypeKeysForCourts,
   RESERVATION_LABEL_TYPE_KEYS,
@@ -57,13 +58,15 @@ interface Props {
 export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) {
   const { isFeatureEnabled } = useFeatureFlags();
   // Same precedence as the Book tab: Deer Lake replaces the standard list,
-  // BHR appends "Party".
+  // BHR appends "Party"; Medlock swaps Group Lesson for Team Practice.
   const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const baseReservationTypeKeys = deerLakeReservationTypes
     ? DEER_LAKE_RESERVATION_TYPE_KEYS
-    : isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES)
-      ? BHR_RESERVATION_TYPE_KEYS
-      : RESERVATION_LABEL_TYPE_KEYS;
+    : isFeatureEnabled(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES)
+      ? MEDLOCK_RESERVATION_TYPE_KEYS
+      : isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES)
+        ? BHR_RESERVATION_TYPE_KEYS
+        : RESERVATION_LABEL_TYPE_KEYS;
   const [editBookingType, setEditBookingType] = useState('');
   const [courts, setCourts] = useState<Court[]>([]);
   const [date, setDate] = useState('');

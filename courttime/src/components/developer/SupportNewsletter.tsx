@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Mail, Send, RefreshCw, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '../ui/card';
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn } from '../ui/utils';
 import { buildNewsletterEmailHtml } from '../../../shared/utils/newsletterEmail';
 import { NewsletterAudiencePicker, audiencePeople } from './NewsletterAudiencePicker';
+import { NewsletterInsertBar } from './NewsletterInsertBar';
 import {
   deleteNewsletterDraft,
   getNewsletterSummary,
@@ -170,6 +171,43 @@ export function SupportNewsletter() {
     setSummary(null);
     setDraft(STARTER);
     setSaved(STARTER);
+  };
+
+  // Where the cursor/selection was last in the email box, so inserts land there.
+  const cursor = useRef<{ start: number; end: number } | null>(null);
+  const trackCursor = (el: HTMLTextAreaElement) => {
+    cursor.current = { start: el.selectionStart, end: el.selectionEnd };
+  };
+
+  const insertIntoBody = (markup: string, block: boolean, link?: { text: string; href: string }) => {
+    const body = draft.body;
+    const start = Math.min(cursor.current?.start ?? body.length, body.length);
+    const end = Math.min(Math.max(cursor.current?.end ?? start, start), body.length);
+    const before = body.slice(0, start);
+    const after = body.slice(end);
+    let text = markup;
+    let pre = '';
+    let post = '';
+    if (block) {
+      // Buttons and badges sit on their own line, with a blank line around them.
+      pre = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+      post = after === '' || after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+    } else {
+      const selected = body.slice(start, end).replace(/[[\]\n]+/g, ' ').trim();
+      if (link && selected) text = `[${selected}](${link.href})`;
+      if (before && !/\s$/.test(before)) pre = ' ';
+      if (after && !/^[\s.,;:!?)]/.test(after)) post = ' ';
+    }
+    const next = before + pre + text + post + after;
+    const caret = before.length + pre.length + text.length + (block ? 0 : post.length);
+    setDraft((d) => ({ ...d, body: next }));
+    cursor.current = { start: caret, end: caret };
+    requestAnimationFrame(() => {
+      const el = document.getElementById('nl-body') as HTMLTextAreaElement | null;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
   };
 
   const set = <K extends keyof NewsletterDraft>(key: K, value: NewsletterDraft[K]) =>
@@ -386,12 +424,18 @@ export function SupportNewsletter() {
 
                 <div className="space-y-1">
                   <Label htmlFor="nl-body">Email</Label>
+                  {!locked && <NewsletterInsertBar disabled={locked} onInsert={insertIntoBody} />}
                   <AutoGrowTextarea id="nl-body" value={draft.body} disabled={locked} maxHeight={720}
                     className="w-full min-h-[320px] rounded-md border border-gray-300 px-3 py-2 text-sm font-mono leading-relaxed disabled:bg-gray-50"
-                    onChange={(e) => set('body', e.target.value)} />
+                    onSelect={(e) => trackCursor(e.currentTarget)}
+                    onChange={(e) => {
+                      trackCursor(e.currentTarget);
+                      set('body', e.target.value);
+                    }} />
                   <p className="text-xs text-gray-500">
                     Blank line = new paragraph · <code>## Heading</code> · <code>- bullet</code> · <code>**bold**</code> ·{' '}
-                    <code>[link text](https://…)</code> · pasted https:// links work too
+                    <code>[link text](https://…)</code> · <code>[button: Text](https://…)</code> on its own line ·{' '}
+                    <code>{'{{app-badges}}'}</code> for the store badges
                   </p>
                 </div>
 

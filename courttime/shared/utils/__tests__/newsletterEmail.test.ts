@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APP_BADGES_MARKUP,
+  NEWSLETTER_LINK_GROUPS,
   buildNewsletterEmailHtml,
+  newsletterLinkMarkup,
   parseNewsletterBody,
   renderInline,
   renderNewsletterBodyHtml,
 } from '../newsletterEmail';
 import { buildAppLaunchEmailHtml } from '../../../src/services/appLaunchEmailTemplate';
+import { APP_STORE_URL, PLAY_STORE_URL } from '../appDownload';
 
 describe('newsletter body parsing', () => {
   it('splits paragraphs, headings and bullets', () => {
@@ -90,5 +94,43 @@ describe('newsletter email', () => {
 
   it('leaves out the preview line when there is none', () => {
     expect(buildNewsletterEmailHtml({ subject: 'S', body: 'B' })).not.toContain('display: none');
+  });
+});
+
+describe('newsletter buttons, badges and insert links', () => {
+  it('turns a lone button line into a centered green button', () => {
+    const html = renderNewsletterBodyHtml('Intro\n[button: Book a court](https://www.courttimeapp.com/calendar)\nAfter');
+    expect(html).toContain('href="https://www.courttimeapp.com/calendar" style="display: inline-block; background-color: #1a5f2a');
+    expect(html).toContain('>Book a court</a></p>');
+    expect(html).toContain('>Intro</p>');
+    expect(html).toContain('>After</p>');
+  });
+
+  it('makes a mid-sentence button a plain link and refuses unsafe button links', () => {
+    expect(renderInline('Go [button: here](https://x.com) now')).toContain('>here</a> now');
+    expect(renderNewsletterBodyHtml('[button: x](javascript:alert(1))')).not.toContain('<a');
+  });
+
+  it('renders the store badges block exactly like the app launch email', () => {
+    const html = renderNewsletterBodyHtml(`Get it:\n\n${APP_BADGES_MARKUP}\n\nThanks`);
+    expect(html).toContain(`href="${APP_STORE_URL}"`);
+    expect(html).toContain(`href="${PLAY_STORE_URL}"`);
+    const badges = (h: string) => h.slice(h.indexOf('<div style="text-align: center'), h.indexOf('</div>', h.indexOf('<div style="text-align: center')));
+    expect(badges(html)).toBe(badges(buildAppLaunchEmailHtml('Ann')));
+  });
+
+  it('leaves text without the new markup rendering as before', () => {
+    expect(renderNewsletterBodyHtml('[Visit](https://www.courttimeapp.com)')).not.toContain('background-color');
+    expect(renderNewsletterBodyHtml('{{something-else}}')).toContain('>{{something-else}}</p>');
+  });
+
+  it('every insert link is a safe, renderable link in both forms', () => {
+    const links = NEWSLETTER_LINK_GROUPS.flatMap((g) => g.links);
+    expect(new Set(links.map((l) => l.href)).size).toBe(links.length);
+    for (const link of links) {
+      expect(link.href).toMatch(/^(https:\/\/|mailto:)/);
+      expect(renderNewsletterBodyHtml(newsletterLinkMarkup(link, false))).toContain(`href="${link.href.replace(/&/g, '&amp;')}"`);
+      expect(renderNewsletterBodyHtml(newsletterLinkMarkup(link, true))).toContain('background-color: #1a5f2a');
+    }
   });
 });

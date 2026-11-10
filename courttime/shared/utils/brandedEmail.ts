@@ -3,12 +3,13 @@
  * the email-preferences link and mailing address) shared by the app launch
  * email and the support-console newsletter, so every announcement looks the same.
  *
- * Dependency-free so the support console can render a live preview in the
+ * No server-only imports, so the support console can render a live preview in the
  * browser from the exact code the server sends with.
  *
  * Links and images use the live site on purpose: emails are read in inboxes,
  * so localhost URLs would break even for a test send from a dev server.
  */
+import { APP_STORE_URL, PLAY_STORE_URL } from './appDownload';
 
 export const EMAIL_SITE_URL = 'https://www.courttimeapp.com';
 export const COMPANY_MAILING_ADDRESS =
@@ -60,4 +61,27 @@ ${bodyHtml}
   </div>
 </body>
 </html>`;
+}
+
+const BADGE_HEIGHT = 48;
+
+function storeBadge(href: string, src: string, alt: string, width: number): string {
+  return `
+    <a href="${href}" style="display: inline-block; margin: 6px;" target="_blank">
+      <img src="${EMAIL_SITE_URL}/badges/${src}" alt="${alt}" height="${BADGE_HEIGHT}" width="${width}"
+        style="display: block; height: ${BADGE_HEIGHT}px; width: ${width}px; border: 0;" />
+    </a>`;
+}
+
+/** The centered App Store + Google Play badges (images load from the live site). */
+export function storeBadgesHtml(): string {
+  return `      <div style="text-align: center; margin: 24px 0 20px;">
+        ${storeBadge(APP_STORE_URL, 'app-store.png', 'Download on the App Store', 144)}
+        ${storeBadge(PLAY_STORE_URL, 'google-play.png', 'Get it on Google Play', 161)}
+      </div>`;
+}
+
+/** A centered green call-to-action button. `href` and `label` must already be safe. */
+export function emailButtonHtml(href: string, label: string): string {
+  return `      <p style="margin: 24px 0; text-align: center;"><a href="${href}" style="display: inline-block; background-color: ${BRAND_GREEN}; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; font-size: 16px;" target="_blank">${label}</a></p>`;
 }

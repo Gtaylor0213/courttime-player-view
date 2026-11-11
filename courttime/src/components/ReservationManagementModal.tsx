@@ -180,7 +180,7 @@ export function ReservationManagementModal({
   const reservationTypeKeys = deerLakeReservationTypes
     ? reservationTypeKeysForRole(
         DEER_LAKE_RESERVATION_TYPE_KEYS,
-        user?.userType === 'admin' || !!user?.adminFacilities?.includes(reservation.facilityId),
+        user?.userType === 'admin' || !!user?.adminFacilities?.includes(reservation?.facilityId ?? ''),
       )
     : enabledFeatures.includes(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES)
     ? MEDLOCK_RESERVATION_TYPE_KEYS

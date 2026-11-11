@@ -24,7 +24,7 @@ import {
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
 import { toast } from 'sonner';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, MEDLOCK_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, type BookingTypeKey } from '../../shared/constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, MEDLOCK_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, reservationTypeKeysForRole, type BookingTypeKey } from '../../shared/constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { useBookingWindow } from './useBookingWindow';
@@ -211,8 +211,9 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
   const splitCourtPaymentsEnabled = enabledFeatures.includes(FEATURE_FLAGS.SPLIT_COURT_PAYMENTS);
   const deerLakeReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = enabledFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
+  // Deer Lake: members only see the types open to everyone; admins get them all.
   const baseReservationTypeKeys = deerLakeReservationTypes
-    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    ? reservationTypeKeysForRole(DEER_LAKE_RESERVATION_TYPE_KEYS, isAdmin)
     : enabledFeatures.includes(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES)
     ? MEDLOCK_RESERVATION_TYPE_KEYS
     : bhrReservationTypes

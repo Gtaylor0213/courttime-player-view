@@ -7,6 +7,8 @@ import {
   MEDLOCK_RESERVATION_TYPE_KEYS,
   getBookingTypeLabel,
   reservationTypeKeysForCourts,
+  reservationTypeKeysForRole,
+  isAdminOnlyReservationType,
 } from '../bookingTypes';
 
 describe('bookingTypes', () => {
@@ -37,6 +39,7 @@ describe('reservationTypeKeysForCourts', () => {
   it('offers only tennis types (plus Maintenance) on a Deer Lake tennis court', () => {
     expect(reservationTypeKeysForCourts(DEER_LAKE_RESERVATION_TYPE_KEYS, ['Tennis'])).toEqual([
       'general_tennis',
+      'team_tennis_practice',
       'alta_tennis',
       'usta_tennis',
       'flex_tennis',
@@ -54,6 +57,7 @@ describe('reservationTypeKeysForCourts', () => {
   it('offers only pickleball types (plus Maintenance) on a Deer Lake pickleball court', () => {
     expect(reservationTypeKeysForCourts(DEER_LAKE_RESERVATION_TYPE_KEYS, ['Pickleball'])).toEqual([
       'general_pickleball',
+      'team_pickleball_practice',
       'alta_pickleball',
       'usta_pickleball',
       'flex_pickleball',
@@ -93,5 +97,37 @@ describe('reservationTypeKeysForCourts', () => {
     ]);
     expect(getBookingTypeLabel('team_practice')).toBe('Team Practice');
     expect(reservationTypeKeysForCourts(MEDLOCK_RESERVATION_TYPE_KEYS, ['Tennis'])).toEqual(MEDLOCK_RESERVATION_TYPE_KEYS);
+  });
+});
+
+describe('reservationTypeKeysForRole', () => {
+  it('shows members only the Deer Lake types open to everyone', () => {
+    expect(reservationTypeKeysForRole(DEER_LAKE_RESERVATION_TYPE_KEYS, false)).toEqual([
+      'general_tennis',
+      'team_tennis_practice',
+      'alta_tennis',
+      'usta_tennis',
+      'flex_tennis',
+      'general_pickleball',
+      'team_pickleball_practice',
+      'alta_pickleball',
+      'usta_pickleball',
+      'flex_pickleball',
+    ]);
+    expect(getBookingTypeLabel('team_tennis_practice')).toBe('Team Tennis Practice');
+    expect(getBookingTypeLabel('team_pickleball_practice')).toBe('Team Pickleball Practice');
+  });
+
+  it('gives admins the full Deer Lake list', () => {
+    expect(reservationTypeKeysForRole(DEER_LAKE_RESERVATION_TYPE_KEYS, true)).toBe(DEER_LAKE_RESERVATION_TYPE_KEYS);
+    expect(isAdminOnlyReservationType('private_tennis_lesson')).toBe(true);
+    expect(isAdminOnlyReservationType('maintenance')).toBe(true);
+    expect(isAdminOnlyReservationType('general_tennis')).toBe(false);
+  });
+
+  it('does not change the standard, BHR, or Medlock lists for members', () => {
+    expect(reservationTypeKeysForRole(RESERVATION_LABEL_TYPE_KEYS, false)).toBe(RESERVATION_LABEL_TYPE_KEYS);
+    expect(reservationTypeKeysForRole(BHR_RESERVATION_TYPE_KEYS, false)).toBe(BHR_RESERVATION_TYPE_KEYS);
+    expect(reservationTypeKeysForRole(MEDLOCK_RESERVATION_TYPE_KEYS, false)).toBe(MEDLOCK_RESERVATION_TYPE_KEYS);
   });
 });

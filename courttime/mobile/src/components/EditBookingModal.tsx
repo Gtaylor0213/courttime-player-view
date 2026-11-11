@@ -29,12 +29,14 @@ import { MiniCalendar } from './MiniCalendar';
 import { TimePicker } from './TimePicker';
 import { Colors, Spacing, FontSize, BorderRadius, FontFamily } from '../constants/theme';
 import { useFeatureFlags } from '../contexts/FeatureFlagContext';
+import { useAuth } from '../contexts/AuthContext';
 import { FEATURE_FLAGS } from '../../../shared/constants/featureFlags';
 import {
   BHR_RESERVATION_TYPE_KEYS,
   MEDLOCK_RESERVATION_TYPE_KEYS,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
   reservationTypeKeysForCourts,
+  reservationTypeKeysForRole,
   RESERVATION_LABEL_TYPE_KEYS,
   getBookingTypeLabel,
   type BookingTypeKey,
@@ -57,11 +59,14 @@ interface Props {
 
 export function EditBookingModal({ booking, visible, onClose, onSaved }: Props) {
   const { isFeatureEnabled } = useFeatureFlags();
+  const { user } = useAuth();
+  const isAdmin = !!booking && !!user?.adminFacilities?.includes(booking.facilityId);
   // Same precedence as the Book tab: Deer Lake replaces the standard list,
   // BHR appends "Party"; Medlock swaps Group Lesson for Team Practice.
   const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+  // Deer Lake: members only see the types open to everyone; admins get them all.
   const baseReservationTypeKeys = deerLakeReservationTypes
-    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    ? reservationTypeKeysForRole(DEER_LAKE_RESERVATION_TYPE_KEYS, isAdmin)
     : isFeatureEnabled(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES)
       ? MEDLOCK_RESERVATION_TYPE_KEYS
       : isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES)

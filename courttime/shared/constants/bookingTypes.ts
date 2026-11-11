@@ -131,11 +131,23 @@ export const BOOKING_TYPES = {
     bgColor: 'bg-orange-300',
     rn: { bg: '#ffb86a', border: '#ff6900', text: '#7e2a0c' },
   },
+  team_tennis_practice: {
+    label: 'Team Tennis Practice',
+    color: 'bg-red-300 text-red-900 border-red-500',
+    bgColor: 'bg-red-300',
+    rn: { bg: '#ffa2a2', border: '#fb2c36', text: '#82181a' },
+  },
   general_pickleball: {
     label: 'General Pickleball',
     color: 'bg-teal-300 text-teal-900 border-teal-500',
     bgColor: 'bg-teal-300',
     rn: { bg: '#46ecd5', border: '#00bba7', text: '#0b4f4a' },
+  },
+  team_pickleball_practice: {
+    label: 'Team Pickleball Practice',
+    color: 'bg-emerald-300 text-emerald-900 border-emerald-500',
+    bgColor: 'bg-emerald-300',
+    rn: { bg: '#5ee9b5', border: '#00bc7d', text: '#004f3b' },
   },
   alta_pickleball: {
     label: 'ALTA Pickleball',
@@ -239,8 +251,10 @@ export const RESERVATION_LABEL_TYPE_KEYS: readonly BookingTypeKey[] = [
 
 // Alternate reservation type list used when the "Deer Lake Reservation Types"
 // facility feature flag is enabled — swaps out the standard type list above.
+// Order is the club's: member types first, then admin-only ones, per sport.
 export const DEER_LAKE_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
   'general_tennis',
+  'team_tennis_practice',
   'alta_tennis',
   'usta_tennis',
   'flex_tennis',
@@ -249,23 +263,58 @@ export const DEER_LAKE_RESERVATION_TYPE_KEYS: readonly BookingTypeKey[] = [
   'private_tennis_lesson',
   'junior_tennis_lesson',
   'after_school_tennis_lesson',
+  'open_play', // label: Beginner Tennis Clinic
+  'cardio_tennis',
   'general_pickleball',
+  'team_pickleball_practice',
   'alta_pickleball',
   'usta_pickleball',
   'flex_pickleball',
   'team_pickleball_lesson',
   'group_pickleball_lesson',
   'private_pickleball_lesson',
-  'open_play',
-  'cardio_tennis',
   'maintenance',
 ] as const;
+
+// Deer Lake types only club admins may book. Members never see them in the
+// picker, and the server rejects them from non-admins.
+const ADMIN_ONLY_TYPE_KEYS = new Set<BookingTypeKey>([
+  'team_tennis_lesson',
+  'group_tennis_lesson',
+  'private_tennis_lesson',
+  'junior_tennis_lesson',
+  'after_school_tennis_lesson',
+  'open_play', // label: Beginner Tennis Clinic
+  'cardio_tennis',
+  'team_pickleball_lesson',
+  'group_pickleball_lesson',
+  'private_pickleball_lesson',
+  'maintenance',
+]);
+
+/** True for a Deer Lake type only admins may book. */
+export function isAdminOnlyReservationType(key: string | null | undefined): boolean {
+  return !!key && ADMIN_ONLY_TYPE_KEYS.has(key as BookingTypeKey);
+}
+
+/**
+ * Drop admin-only types for non-admins. Admins get the list unchanged, and
+ * lists without admin-only types (standard, BHR, Medlock) come back as-is.
+ */
+export function reservationTypeKeysForRole(
+  keys: readonly BookingTypeKey[],
+  isAdmin: boolean,
+): readonly BookingTypeKey[] {
+  if (isAdmin || !keys.some((k) => ADMIN_ONLY_TYPE_KEYS.has(k))) return keys;
+  return keys.filter((k) => !ADMIN_ONLY_TYPE_KEYS.has(k));
+}
 
 // Deer Lake types that belong to one sport. A tennis court only offers the
 // tennis ones, a pickleball court only the pickleball ones; anything in
 // neither set (Maintenance) fits every court.
 const TENNIS_ONLY_TYPE_KEYS = new Set<BookingTypeKey>([
   'general_tennis',
+  'team_tennis_practice',
   'alta_tennis',
   'usta_tennis',
   'flex_tennis',
@@ -280,6 +329,7 @@ const TENNIS_ONLY_TYPE_KEYS = new Set<BookingTypeKey>([
 
 const PICKLEBALL_ONLY_TYPE_KEYS = new Set<BookingTypeKey>([
   'general_pickleball',
+  'team_pickleball_practice',
   'alta_pickleball',
   'usta_pickleball',
   'flex_pickleball',

@@ -1820,6 +1820,8 @@ router.patch('/booking-series/:seriesId', async (req, res) => {
         facilityId: series.facilityId,
         bookingType: nextType,
         courtIds: nextCourtIds,
+        isAdmin: req.user?.userType === 'admin' || (nextType || '') === (series.rule.bookingType || ''),
+        userId: req.user?.userId,
       });
       if (reservationTypeError) {
         return res.status(400).json({ success: false, error: reservationTypeError });
@@ -1898,6 +1900,8 @@ router.patch('/booking-series/:seriesId/instances', async (req, res) => {
         facilityId: series.facilityId,
         bookingType: nextType,
         courtIds: [...series.rule.courtIds, ...addedCourtIds],
+        isAdmin: req.user?.userType === 'admin' || (nextType || '') === (series.rule.bookingType || ''),
+        userId: req.user?.userId,
       });
       if (reservationTypeError) {
         return res.status(400).json({ success: false, error: reservationTypeError });

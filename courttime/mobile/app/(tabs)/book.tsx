@@ -69,6 +69,7 @@ import {
   MEDLOCK_RESERVATION_TYPE_KEYS,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
   reservationTypeKeysForCourts,
+  reservationTypeKeysForRole,
   RESERVATION_LABEL_TYPE_KEYS,
   getBookingTypeLabel,
   type BookingTypeKey,
@@ -337,8 +338,9 @@ export default function BookCourtScreen() {
   const postPlaySettlementEnabled = isFeatureEnabled(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
   const deerLakeReservationTypes = isFeatureEnabled(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = isFeatureEnabled(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
+  // Deer Lake: members only see the types open to everyone; admins get them all.
   const baseReservationTypeKeys = deerLakeReservationTypes
-    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    ? reservationTypeKeysForRole(DEER_LAKE_RESERVATION_TYPE_KEYS, isAdmin)
     : isFeatureEnabled(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES)
       ? MEDLOCK_RESERVATION_TYPE_KEYS
       : bhrReservationTypes

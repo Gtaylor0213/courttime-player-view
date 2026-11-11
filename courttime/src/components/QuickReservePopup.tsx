@@ -18,7 +18,7 @@ import {
   parseHHMMToMinutes,
   type CourtAvailabilityData,
 } from '../../shared/utils/courtAvailability';
-import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, MEDLOCK_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, type BookingTypeKey } from '../../shared/constants/bookingTypes';
+import { BOOKING_TYPES, RESERVATION_LABEL_TYPE_KEYS, DEER_LAKE_RESERVATION_TYPE_KEYS, BHR_RESERVATION_TYPE_KEYS, MEDLOCK_RESERVATION_TYPE_KEYS, reservationTypeKeysForCourts, reservationTypeKeysForRole, type BookingTypeKey } from '../../shared/constants/bookingTypes';
 import { parseLocalDate } from '../utils/dateUtils';
 import { checkBookingPeakHours } from '../utils/bookingPeakHours';
 import { confirmSkipRecurringConflicts } from '../utils/recurringConflicts';
@@ -228,8 +228,9 @@ export function QuickReservePopup({
   const canBookForOthers = isAdmin && facilityFeatures.includes(FEATURE_FLAGS.ADMIN_BOOK_FOR_OTHERS);
   const deerLakeReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
   const bhrReservationTypes = facilityFeatures.includes(FEATURE_FLAGS.BHR_RESERVATION_TYPES);
+  // Deer Lake: members only see the types open to everyone; admins get them all.
   const baseReservationTypeKeys = deerLakeReservationTypes
-    ? DEER_LAKE_RESERVATION_TYPE_KEYS
+    ? reservationTypeKeysForRole(DEER_LAKE_RESERVATION_TYPE_KEYS, isAdmin)
     : facilityFeatures.includes(FEATURE_FLAGS.MEDLOCK_RESERVATION_TYPES)
     ? MEDLOCK_RESERVATION_TYPE_KEYS
     : bhrReservationTypes

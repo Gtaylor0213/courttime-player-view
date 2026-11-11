@@ -4,6 +4,7 @@ import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import {
   BOOKING_TYPES,
   DEER_LAKE_RESERVATION_TYPE_KEYS,
+  isAdminOnlyReservationType,
   reservationTypeKeysForCourts,
   type BookingTypeKey,
 } from '../../shared/constants/bookingTypes';
@@ -17,6 +18,11 @@ import {
  * with the flag on, a booking must carry a Deer Lake type that fits the sport
  * of every court it is on.
  *
+ * Admin-only types (lessons, clinics, Maintenance) are rejected unless the
+ * caller is an admin: `isAdmin` true, or an active admin of this facility.
+ * Leave `userId` out (and `isAdmin` false) only for routes that are already
+ * admin-gated; pass `isAdmin: true` there.
+ *
  * Returns an error message to show the user, or null when the type is fine
  * (including whenever the facility does not use the Deer Lake list).
  */
@@ -24,6 +30,10 @@ export async function checkReservationType(params: {
   facilityId: string | null | undefined;
   bookingType: unknown;
   courtIds: ReadonlyArray<unknown>;
+  /** Caller is a club admin (skips the admin-only check). */
+  isAdmin?: boolean;
+  /** Caller, used to look up facility admin rights when `isAdmin` is false. */
+  userId?: string | null;
 }): Promise<string | null> {
   const { facilityId } = params;
   if (!facilityId) return null;
@@ -33,6 +43,19 @@ export async function checkReservationType(params: {
   if (!type) return 'Please select a reservation type.';
   if (!DEER_LAKE_RESERVATION_TYPE_KEYS.includes(type as BookingTypeKey)) {
     return "Please select one of this club's reservation types.";
+  }
+
+  if (isAdminOnlyReservationType(type) && !params.isAdmin) {
+    const admin = params.userId
+      ? await query(
+          `SELECT 1 FROM facility_admins WHERE user_id = $1 AND facility_id = $2 AND status = 'active'`,
+          [params.userId, facilityId],
+        )
+      : { rows: [] };
+    if (admin.rows.length === 0) {
+      const label = BOOKING_TYPES[type as BookingTypeKey]?.label ?? type;
+      return `${label} can only be booked by a club admin. Please choose a different reservation type.`;
+    }
   }
 
   const courtIds = [...new Set(params.courtIds.filter((id): id is string => typeof id === 'string' && !!id))];

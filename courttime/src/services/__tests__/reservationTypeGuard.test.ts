@@ -53,7 +53,7 @@ describe('checkReservationType', () => {
     expect(await checkReservationType({ facilityId: 'deerlake', bookingType: 'general_tennis', courtIds: ['c1'] })).toBeNull();
     courtsOf('Pickleball');
     expect(
-      await checkReservationType({ facilityId: 'deerlake', bookingType: 'group_pickleball_lesson', courtIds: ['c2'] }),
+      await checkReservationType({ facilityId: 'deerlake', bookingType: 'group_pickleball_lesson', courtIds: ['c2'], isAdmin: true }),
     ).toBeNull();
   });
 
@@ -63,7 +63,7 @@ describe('checkReservationType', () => {
       await checkReservationType({ facilityId: 'deerlake', bookingType: 'general_pickleball', courtIds: ['c1'] }),
     ).toBe("General Pickleball isn't available on tennis courts. Please choose a different reservation type.");
     courtsOf('Pickleball');
-    expect(await checkReservationType({ facilityId: 'deerlake', bookingType: 'cardio_tennis', courtIds: ['c2'] })).toBe(
+    expect(await checkReservationType({ facilityId: 'deerlake', bookingType: 'cardio_tennis', courtIds: ['c2'], isAdmin: true })).toBe(
       "Cardio Tennis isn't available on pickleball courts. Please choose a different reservation type.",
     );
   });
@@ -77,7 +77,7 @@ describe('checkReservationType', () => {
     );
     courtsOf('Tennis', 'Pickleball');
     expect(
-      await checkReservationType({ facilityId: 'deerlake', bookingType: 'maintenance', courtIds: ['c1', 'c2'] }),
+      await checkReservationType({ facilityId: 'deerlake', bookingType: 'maintenance', courtIds: ['c1', 'c2'], isAdmin: true }),
     ).toBeNull();
   });
 });
@@ -86,5 +86,46 @@ describe('sameCourtSet', () => {
   it('ignores order and duplicates', () => {
     expect(sameCourtSet(['a', 'b'], ['b', 'a', 'a'])).toBe(true);
     expect(sameCourtSet(['a'], ['a', 'b'])).toBe(false);
+  });
+});
+
+describe('checkReservationType admin-only types', () => {
+  beforeEach(() => {
+    queryMock.mockReset();
+    isFeatureEnabledMock.mockReset();
+    isFeatureEnabledMock.mockResolvedValue(true);
+  });
+
+  it('lets members book the types open to everyone, including the new practice types', async () => {
+    courtsOf('Tennis');
+    expect(
+      await checkReservationType({ facilityId: 'deerlake', bookingType: 'team_tennis_practice', courtIds: ['c1'], userId: 'u1' }),
+    ).toBeNull();
+    courtsOf('Pickleball');
+    expect(
+      await checkReservationType({ facilityId: 'deerlake', bookingType: 'team_pickleball_practice', courtIds: ['c2'], userId: 'u1' }),
+    ).toBeNull();
+  });
+
+  it('rejects an admin-only type from a member who is not a facility admin', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] }); // facility_admins lookup
+    expect(
+      await checkReservationType({ facilityId: 'deerlake', bookingType: 'private_tennis_lesson', courtIds: ['c1'], userId: 'u1' }),
+    ).toBe('Private Tennis Lesson can only be booked by a club admin. Please choose a different reservation type.');
+    expect(
+      await checkReservationType({ facilityId: 'deerlake', bookingType: 'maintenance', courtIds: ['c1'] }),
+    ).toBe('Maintenance can only be booked by a club admin. Please choose a different reservation type.');
+  });
+
+  it('allows admin-only types for admins and facility admins', async () => {
+    courtsOf('Tennis');
+    expect(
+      await checkReservationType({ facilityId: 'deerlake', bookingType: 'cardio_tennis', courtIds: ['c1'], isAdmin: true }),
+    ).toBeNull();
+    queryMock.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // facility_admins lookup
+    courtsOf('Tennis');
+    expect(
+      await checkReservationType({ facilityId: 'deerlake', bookingType: 'cardio_tennis', courtIds: ['c1'], userId: 'fa1' }),
+    ).toBeNull();
   });
 });

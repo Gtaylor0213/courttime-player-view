@@ -452,11 +452,14 @@ describe('BookCourtScreen booking modal confirm copy', () => {
    * gates them on `isAdmin || flag`. A facility that switched the flag on gave
    * its members the feature on web and not in the app.
    */
-  /** Renders as a plain member (no admin facilities) with the booking modal open. */
-  async function renderAsMember() {
+  /**
+   * Renders as a plain member (no admin facilities) with the booking modal
+   * open. Pass `['facility-1']` to render as this club's admin instead.
+   */
+  async function renderAsMember(adminFacilities: string[] = []) {
     const { useAuth } = require('../src/contexts/AuthContext');
     (useAuth as jest.Mock).mockImplementation(() =>
-      mockAuth({ user: { id: 'user-1', adminFacilities: [] } })
+      mockAuth({ user: { id: 'user-1', adminFacilities } })
     );
     await act(async () => {
       tree = renderer.create(<BookCourtScreen />);
@@ -740,8 +743,9 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     it('offers only the pickleball types on a Deer Lake pickleball court', async () => {
       mockEnabledFeatures.add(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
       mockCourtOverrides = { id: 'court-1', name: 'Court 1A', status: 'available', isWalkUp: false, courtType: 'Pickleball' };
-      const texts = (await renderAsMember()).join(' ');
+      const texts = (await renderAsMember(['facility-1'])).join(' ');
       expect(texts).toContain('General Pickleball');
+      expect(texts).toContain('Team Pickleball Practice');
       expect(texts).toContain('Maintenance');
       expect(texts).not.toContain('General Tennis');
       expect(texts).not.toContain('Cardio Tennis');
@@ -750,10 +754,24 @@ describe('BookCourtScreen booking modal confirm copy', () => {
     it('offers only the tennis types on a Deer Lake tennis court', async () => {
       mockEnabledFeatures.add(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
       mockCourtOverrides = { id: 'court-1', name: 'Court 1', status: 'available', isWalkUp: false, courtType: 'Tennis' };
-      const texts = (await renderAsMember()).join(' ');
+      const texts = (await renderAsMember(['facility-1'])).join(' ');
       expect(texts).toContain('General Tennis');
+      expect(texts).toContain('Team Tennis Practice');
       expect(texts).toContain('Beginner Tennis Clinic');
       expect(texts).not.toContain('General Pickleball');
+    });
+
+    it('hides the admin-only Deer Lake types from members', async () => {
+      mockEnabledFeatures.add(FEATURE_FLAGS.DEER_LAKE_RESERVATION_TYPES);
+      mockCourtOverrides = { id: 'court-1', name: 'Court 1', status: 'available', isWalkUp: false, courtType: 'Tennis' };
+      const texts = (await renderAsMember()).join(' ');
+      expect(texts).toContain('General Tennis');
+      expect(texts).toContain('Team Tennis Practice');
+      expect(texts).toContain('Flex Tennis');
+      expect(texts).not.toContain('Private Tennis Lesson');
+      expect(texts).not.toContain('Beginner Tennis Clinic');
+      expect(texts).not.toContain('Cardio Tennis');
+      expect(texts).not.toContain('Maintenance');
     });
 
     it("does not book while the club's settings are unknown, and reloads them first", async () => {

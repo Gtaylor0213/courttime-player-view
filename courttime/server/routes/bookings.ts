@@ -443,7 +443,12 @@ router.post('/', async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'Authentication required' });
     }
 
-    const reservationTypeError = await checkReservationType({ facilityId, bookingType, courtIds: [courtId] });
+    const reservationTypeError = await checkReservationType({
+      facilityId,
+      bookingType,
+      courtIds: [courtId],
+      isAdmin: req.user?.userType === 'admin', userId: req.user?.userId,
+    });
     if (reservationTypeError) {
       return res.status(400).json({ success: false, error: reservationTypeError });
     }
@@ -759,6 +764,7 @@ router.post('/recurring-series', async (req, res, next) => {
       facilityId,
       bookingType,
       courtIds: instances.map((i: any) => i.courtId),
+      isAdmin: req.user?.userType === 'admin', userId: req.user?.userId,
     });
     if (reservationTypeError) {
       return res.status(400).json({ success: false, error: reservationTypeError });
@@ -857,6 +863,10 @@ router.patch('/series/:seriesId', async (req, res, next) => {
           facilityId: existingSeries.facilityId,
           bookingType: nextType,
           courtIds: nextCourtIds,
+          // An unchanged type was already allowed (an admin may have set it),
+          // so moving courts doesn't trip the admin-only check.
+          isAdmin: req.user?.userType === 'admin' || (nextType || '') === (existingSeries.rule.bookingType || ''),
+          userId: req.user?.userId,
         });
         if (reservationTypeError) {
           return res.status(400).json({ success: false, error: reservationTypeError });
@@ -1086,7 +1096,12 @@ router.post('/admin-override', async (req, res, next) => {
       });
     }
 
-    const reservationTypeError = await checkReservationType({ facilityId, bookingType, courtIds: [courtId] });
+    const reservationTypeError = await checkReservationType({
+      facilityId,
+      bookingType,
+      courtIds: [courtId],
+      isAdmin: req.user?.userType === 'admin', userId: req.user?.userId,
+    });
     if (reservationTypeError) {
       return res.status(400).json({ success: false, error: reservationTypeError });
     }
@@ -1477,6 +1492,10 @@ router.patch('/:bookingId', async (req, res, next) => {
           facilityId: current.facility_id,
           bookingType: nextType,
           courtIds: [courtId],
+          // An unchanged type was already allowed (an admin may have set it),
+          // so moving courts doesn't trip the admin-only check.
+          isAdmin: req.user?.userType === 'admin' || (nextType || '') === (current.booking_type || ''),
+          userId: req.user?.userId,
         });
         if (reservationTypeError) {
           return res.status(400).json({ success: false, error: reservationTypeError });

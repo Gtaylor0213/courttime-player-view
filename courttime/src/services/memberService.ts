@@ -1,4 +1,5 @@
 import { query } from '../database/connection';
+import { syncAdminUserType } from './adminUserType';
 
 /**
  * Member Management Service
@@ -389,6 +390,7 @@ export async function setMemberAsAdmin(
         [userId, facilityId]
       );
     }
+    await syncAdminUserType(userId);
 
     return true;
   } catch (error) {

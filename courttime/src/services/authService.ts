@@ -1,4 +1,5 @@
 import { query, transaction } from '../database/connection';
+import { syncAdminUserType } from './adminUserType';
 import { deleteUserAccount, SoleFacilityAdminError } from './accountDeletionService';
 import { User } from '../types/database';
 import * as bcrypt from 'bcrypt';
@@ -67,6 +68,7 @@ async function acceptPendingInvitations(userId: string, email: string): Promise<
 
       accepted.push(invitation.facilityId);
     }
+    if (accepted.length > 0) await syncAdminUserType(userId);
 
     return accepted;
   } catch (error) {

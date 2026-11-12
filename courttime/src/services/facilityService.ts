@@ -1,4 +1,5 @@
 import { query, transaction } from '../database/connection';
+import { syncAdminUserType } from './adminUserType';
 import { sortCourtsForDisplay } from '../../shared/utils/courtDisplayOrder';
 import { parseOperatingHoursInput } from '../../shared/utils/operatingHours';
 import { Facility, Court } from '../types/database';
@@ -469,6 +470,7 @@ export async function createFacilityWithAdmin(
        ON CONFLICT (user_id, facility_id) DO UPDATE SET is_facility_admin = true, membership_type = 'admin'`,
       [superAdminUserId, facilityId]
     );
+    await syncAdminUserType(superAdminUserId, client);
 
     return {
       facility,
@@ -1110,6 +1112,7 @@ export async function registerFacility(
        VALUES ($1, $2, 'admin', true, 'active', CURRENT_DATE)`,
       [superAdminUserId, facilityId]
     );
+    await syncAdminUserType(superAdminUserId, client);
 
     // 5b. Upsert player profile fields if provided
     if (data.adminProfilePicture || data.adminSkillLevel || data.adminUstaRating || data.adminBio) {

@@ -74,30 +74,36 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   // revocation, so without this check a deleted member's existing session
   // would keep working for up to a week. The cost is one primary-key lookup
   // per authenticated request.
-  if (await isDeletedAccount(payload.userId)) {
+  const account = await lookupAccount(payload.userId);
+  if (account.deleted) {
     res.status(401).json({ success: false, error: 'This account has been deleted' });
     return;
   }
 
-  req.user = payload;
+  // The token's userType is a snapshot from login. Use the current one so a
+  // member made a club admin (or an admin removed) takes effect right away
+  // instead of after their next login.
+  req.user = account.userType ? { ...payload, userType: account.userType } : payload;
   next();
 }
 
 /**
- * Whether this account has been deleted.
+ * Whether this account has been deleted, and its current user type.
  *
- * Fails open: if the database is unreachable we let the request through rather
- * than locking every member out of the app over a transient error. The worst
- * case is a deleted account working slightly longer, which the login block and
- * token expiry still bound.
+ * Fails open: if the database is unreachable we let the request through with
+ * the token's user type rather than locking every member out of the app over a
+ * transient error. The worst case is a deleted account working slightly
+ * longer, which the login block and token expiry still bound.
  */
-async function isDeletedAccount(userId: string): Promise<boolean> {
+async function lookupAccount(userId: string): Promise<{ deleted: boolean; userType: JwtPayload['userType'] | null }> {
   try {
     const { query } = await import('../../src/database/connection');
-    const result = await query('SELECT deleted_at FROM users WHERE id = $1', [userId]);
-    return Boolean(result.rows[0]?.deleted_at);
+    const result = await query('SELECT deleted_at, user_type FROM users WHERE id = $1', [userId]);
+    const row = result.rows[0];
+    const userType = row?.user_type === 'admin' || row?.user_type === 'player' ? row.user_type : null;
+    return { deleted: Boolean(row?.deleted_at), userType };
   } catch {
-    return false;
+    return { deleted: false, userType: null };
   }
 }
 

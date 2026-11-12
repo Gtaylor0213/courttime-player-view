@@ -4,6 +4,7 @@
  */
 
 import { query, transaction } from '../database/connection';
+import { syncAdminUserType } from './adminUserType';
 import type { PoolClient } from 'pg';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
@@ -124,6 +125,7 @@ export async function addAdminToFacility(
        status = 'active'`,
     [userId, facilityId]
   );
+  await syncAdminUserType(userId);
 
   return result.rows[0];
 }
@@ -225,6 +227,7 @@ export async function acceptAdminInvitation(
          status = 'active'`,
       [userId, admin.facilityId]
     );
+    await syncAdminUserType(userId, client);
 
     return admin;
   });
@@ -371,6 +374,7 @@ export async function removeAdmin(
        WHERE user_id = $1 AND facility_id = $2`,
       [admin.user_id, admin.facility_id]
     );
+    await syncAdminUserType(admin.user_id, client);
   });
 }
 
@@ -401,18 +405,20 @@ export async function updateAdminPermissions(
  * Suspend admin (temporarily revoke access)
  */
 export async function suspendAdmin(adminId: string): Promise<void> {
-  await query(
-    `UPDATE facility_admins SET status = 'suspended' WHERE id = $1`,
+  const result = await query(
+    `UPDATE facility_admins SET status = 'suspended' WHERE id = $1 RETURNING user_id`,
     [adminId]
   );
+  await syncAdminUserType(result.rows[0]?.user_id);
 }
 
 /**
  * Reactivate suspended admin
  */
 export async function reactivateAdmin(adminId: string): Promise<void> {
-  await query(
-    `UPDATE facility_admins SET status = 'active' WHERE id = $1 AND status = 'suspended'`,
+  const result = await query(
+    `UPDATE facility_admins SET status = 'active' WHERE id = $1 AND status = 'suspended' RETURNING user_id`,
     [adminId]
   );
+  await syncAdminUserType(result.rows[0]?.user_id);
 }

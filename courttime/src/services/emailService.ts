@@ -52,7 +52,8 @@ async function sendEmail(
   subject: string,
   html: string,
   userId?: string,
-  category: TransactionalEmailCategory = 'general'
+  category: TransactionalEmailCategory = 'general',
+  from?: string
 ): Promise<EmailSendResult> {
   if (!(await shouldSendTransactionalEmail(userId, category))) {
     return { success: true, status: null };
@@ -68,7 +69,7 @@ async function sendEmail(
     };
   }
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'CourtTime <onboarding@resend.dev>';
+  const fromEmail = from || process.env.RESEND_FROM_EMAIL || 'CourtTime <onboarding@resend.dev>';
 
   try {
     const response = await fetch(RESEND_API_URL, {
@@ -409,7 +410,17 @@ export async function sendNewsletterEmail(
   content: NewsletterContent,
   userId?: string
 ): Promise<EmailSendResult> {
-  return sendEmail(email, content.subject.trim(), buildNewsletterEmailHtml(content), userId, 'general');
+  // Newsletters can go out from their own subdomain (NEWSLETTER_FROM_EMAIL, e.g.
+  // news.courttimeapp.com), which has Resend open/click tracking on, so
+  // transactional email on the main domain stays untracked.
+  return sendEmail(
+    email,
+    content.subject.trim(),
+    buildNewsletterEmailHtml(content),
+    userId,
+    'general',
+    process.env.NEWSLETTER_FROM_EMAIL || undefined
+  );
 }
 
 function escapeHtml(text: string): string {

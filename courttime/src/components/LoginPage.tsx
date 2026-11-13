@@ -36,7 +36,11 @@ export function LoginPage() {
     try {
       const success = await login(email, password, setupToken);
       if (success) {
-        const from = (location.state as any)?.from?.pathname || '/calendar';
+        // Keep the query string too: email deep links carry ?facilityId= to open the right club.
+        const fromLoc = (location.state as any)?.from;
+        const from = fromLoc?.pathname
+          ? `${fromLoc.pathname}${fromLoc.search || ''}${fromLoc.hash || ''}`
+          : '/calendar';
         navigate(from, { replace: true });
       }
     } catch (error) {

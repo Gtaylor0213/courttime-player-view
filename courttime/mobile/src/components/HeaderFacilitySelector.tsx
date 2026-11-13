@@ -6,7 +6,7 @@
  * 2+ facilities: tappable chip with logo, name, and facility picker modal.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,11 +24,17 @@ import { CachedImage } from './CachedImage';
 
 interface Props {
   fallbackTitle: string;
+  /** Limit the picker to these clubs (e.g. the Admin tab only lists clubs the user admins). */
+  facilityIds?: readonly string[];
 }
 
-export function HeaderFacilitySelector({ fallbackTitle }: Props) {
+export function HeaderFacilitySelector({ fallbackTitle, facilityIds }: Props) {
   const { width: windowWidth } = useWindowDimensions();
-  const { facilityId, facilities, setFacilityId } = useAuth();
+  const { facilityId, facilities: allFacilities, setFacilityId } = useAuth();
+  const facilities = useMemo(
+    () => (facilityIds ? allFacilities.filter(f => facilityIds.includes(f.id)) : allFacilities),
+    [allFacilities, facilityIds]
+  );
   const [open, setOpen] = useState(false);
 
   const currentFacility = facilities.find(f => f.id === facilityId);

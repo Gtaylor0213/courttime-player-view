@@ -14,7 +14,7 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { useNotificationUnread } from '../src/contexts/NotificationUnreadContext';
 import { EmptyState } from '../src/components/EmptyState';
 import { createRouteErrorBoundary } from '../src/components/RouteErrorBoundary';
-import { getNotificationHref } from '../src/utils/notificationNavigation';
+import { getNotificationRowHref } from '../src/utils/notificationNavigation';
 import { Colors, Spacing, FontSize, BorderRadius, FontFamily, TouchTarget } from '../src/constants/theme';
 
 export const ErrorBoundary = createRouteErrorBoundary('Notifications');
@@ -153,7 +153,7 @@ export default function NotificationsScreen() {
       setUnreadCount(Math.max(0, unread - 1));
       void api.patch(`/api/notifications/${n.id}/read`, {}).then(() => refreshUnread());
     }
-    router.push(getNotificationHref({ type: n.type }));
+    router.push(getNotificationRowHref(n));
   };
 
   return (

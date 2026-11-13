@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import {
   getFacilityMembers,
@@ -70,7 +71,11 @@ export default function AdminMembersScreen() {
   const [members, setMembers] = useState<AdminMemberRow[]>([]);
   const [stripeConnected, setStripeConnected] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'suspended' | 'expired'>('all');
+  // Membership-request pushes open this screen with ?status=pending.
+  const { status: statusParam } = useLocalSearchParams<{ status?: string }>();
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'suspended' | 'expired'>(
+    statusParam === 'pending' ? 'pending' : 'all'
+  );
   const [lastNameFilter, setLastNameFilter] = useState('');
   const [addressFilter, setAddressFilter] = useState('');
   const [joinedFrom, setJoinedFrom] = useState('');

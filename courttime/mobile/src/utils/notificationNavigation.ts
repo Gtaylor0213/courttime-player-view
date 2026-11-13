@@ -51,6 +51,25 @@ function asNonEmptyString(value: unknown): string | undefined {
   return next.length > 0 ? next : undefined;
 }
 
+/**
+ * In-app notification rows carry a web-style actionUrl (e.g. "/admin/members?facilityId=x&status=pending")
+ * and a coarse display type, so derive the push-style data (type + facilityId etc.) from the URL.
+ */
+export function getNotificationRowHref(row: { type?: string | null; actionUrl?: string | null }): Href {
+  const data: Record<string, unknown> = { type: row.type ?? undefined };
+  const actionUrl = asNonEmptyString(row.actionUrl);
+  if (actionUrl) {
+    const [path, query = ''] = actionUrl.split('?');
+    const search = new URLSearchParams(query.split('#')[0]);
+    for (const key of ['facilityId', 'bookingDate', 'bookingId', 'conversationId']) {
+      const value = asNonEmptyString(search.get(key));
+      if (value) data[key] = value;
+    }
+    if (path.startsWith('/admin/members')) data.type = 'membership_request';
+  }
+  return getNotificationHref(data);
+}
+
 export function getNotificationHref(raw: NotificationData): Href {
   if (!raw || typeof raw !== 'object') {
     return '/(tabs)/community';

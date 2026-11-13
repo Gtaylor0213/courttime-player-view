@@ -24,6 +24,7 @@ jest.mock('@react-native-async-storage/async-storage', () => {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getNotificationHref,
+  getNotificationRowHref,
   getNotificationResponseKey,
   isStartupNotificationResponseFresh,
   markNotificationResponseHandled,
@@ -190,5 +191,23 @@ describe('notification navigation', () => {
 
     expect(isStartupNotificationResponseFresh(freshResponse, now)).toBe(true);
     expect(isStartupNotificationResponseFresh(staleResponse, now)).toBe(false);
+  });
+});
+
+describe('getNotificationRowHref', () => {
+  it('opens the admin tab for the right club from a membership-request row', () => {
+    expect(
+      getNotificationRowHref({
+        type: 'facility_announcement',
+        actionUrl: '/admin/members?facilityId=deer-lake&status=pending',
+      })
+    ).toEqual({ pathname: '/(tabs)/admin', params: { facilityId: 'deer-lake', status: 'pending' } });
+  });
+
+  it('falls back to the type when there is no actionUrl', () => {
+    expect(getNotificationRowHref({ type: 'membership_request' })).toEqual({
+      pathname: '/(tabs)/admin',
+      params: { status: 'pending' },
+    });
   });
 });

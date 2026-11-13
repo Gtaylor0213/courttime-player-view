@@ -1,7 +1,8 @@
 /**
  * Admin hub: a menu of dedicated admin screens (mirrors the More tab's pattern).
  */
-import { useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -127,8 +128,35 @@ const ADMIN_MENU_ITEMS = [
 
 export default function AdminScreen() {
   const router = useRouter();
-  const { user, facilityId } = useAuth();
+  const { user, facilityId, facilities, setFacilityId } = useAuth();
   const isAdmin = user?.adminFacilities?.includes(facilityId || '') || false;
+  const params = useLocalSearchParams<{ facilityId?: string; status?: string }>();
+  const handledParamsRef = useRef<string | null>(null);
+
+  // Membership-request pushes land here with ?facilityId=&status=pending:
+  // switch to that club, then open its Members list filtered to pending.
+  useEffect(() => {
+    const routeFacilityId = typeof params.facilityId === 'string' ? params.facilityId : undefined;
+    const status = typeof params.status === 'string' ? params.status : undefined;
+    if (!routeFacilityId && !status) return;
+    const key = `${routeFacilityId ?? ''}|${status ?? ''}`;
+    if (handledParamsRef.current === key) return;
+
+    if (routeFacilityId) {
+      if (!user?.adminFacilities?.includes(routeFacilityId)) return;
+      if (!facilities.some(f => f.id === routeFacilityId)) return; // wait for facilities to load
+      if (facilityId !== routeFacilityId) {
+        setFacilityId(routeFacilityId);
+        return; // re-run once the switch lands
+      }
+    }
+
+    handledParamsRef.current = key;
+    router.setParams({ facilityId: undefined, status: undefined } as never);
+    if (status === 'pending') {
+      router.push({ pathname: '/admin/members', params: { status: 'pending' } } as never);
+    }
+  }, [params.facilityId, params.status, user?.adminFacilities, facilities, facilityId, setFacilityId, router]);
 
   if (!isAdmin) {
     return (

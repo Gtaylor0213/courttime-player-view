@@ -91,6 +91,8 @@ function renderNavTabButton(props: Record<string, unknown>) {
   );
 }
 
+const EMPTY_IDS: readonly string[] = [];
+
 function TabsShell() {
   useTabsStackBackTitle();
   const insets = useSafeAreaInsets();
@@ -220,7 +222,10 @@ function TabsShell() {
           title: 'Admin',
           href: isAdmin ? undefined : null,
           tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark-outline" size={size} color={color} />,
-          headerTitle: 'Admin',
+          // Club switcher limited to clubs this user admins, so switching never strands them on a non-admin club.
+          headerTitle: () => (
+            <HeaderFacilitySelector fallbackTitle="Admin" facilityIds={user?.adminFacilities ?? EMPTY_IDS} />
+          ),
         }}
       />
     </Tabs>

@@ -186,6 +186,26 @@ describe('updateBookingSeries', () => {
     }
   });
 
+  it('a notes-only edit writes the new notes onto every unchanged booking', async () => {
+    mockSeriesLoad();
+    mockTransaction();
+    const result = await updateBookingSeries({
+      seriesId: SERIES_ID,
+      actorUserId: OWNER,
+      scope: 'all',
+      rule: { ...baseRule, notes: 'bring new balls' },
+    });
+
+    expect(result.success).toBe(true);
+    const keepUpdate = clientQueryMock.mock.calls.find(
+      ([sql]) => typeof sql === 'string' && sql.includes('IS DISTINCT FROM')
+    );
+    expect(keepUpdate).toBeDefined();
+    const [, params] = keepUpdate!;
+    expect(params[0]).toHaveLength(5);
+    expect(params[2]).toBe('bring new balls');
+  });
+
   it('moving the time reshapes every instance and writes the rule back', async () => {
     mockSeriesLoad();
     mockTransaction();

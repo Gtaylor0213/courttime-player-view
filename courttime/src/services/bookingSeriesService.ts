@@ -547,6 +547,29 @@ export async function updateBookingSeries(
         );
       }
 
+      // Bookings whose court/date/time already match the rule are "kept", but
+      // the edit may still have changed their details (notes, type, walk-in
+      // name, max players). Without this, a notes-only edit on a recurring or
+      // multi-court reservation saved to the series row and never reached the
+      // bookings the calendar shows.
+      if (plan.keep.length > 0) {
+        await client.query(
+          `UPDATE bookings
+           SET booking_type = $2, notes = $3, max_players = $4, walk_in_name = $5,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ANY($1::uuid[])
+             AND (booking_type IS DISTINCT FROM $2 OR notes IS DISTINCT FROM $3
+                  OR max_players IS DISTINCT FROM $4 OR walk_in_name IS DISTINCT FROM $5)`,
+          [
+            plan.keep.map((k) => k.id),
+            rule.bookingType || null,
+            rule.notes || null,
+            rule.maxPlayers ?? null,
+            rule.walkInName || null,
+          ]
+        );
+      }
+
       // 'following' splits the series so the earlier dates keep their own rule.
       let targetSeriesId = series.id;
       let newSeriesId: string | undefined;

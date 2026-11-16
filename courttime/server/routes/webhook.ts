@@ -172,6 +172,36 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       [subResult.rows[0].facility_id]
     );
   }
+
+  // Stripe doesn't order checkout.session.completed vs invoice.payment_succeeded.
+  // If the invoice event landed first, our row had no stripe_subscription_id yet and
+  // its UPDATE matched nothing (no billing dates, no payment record). Replay the
+  // subscription's first paid invoice now that the row is linked; it's idempotent.
+  const stripe = getStripe();
+  if (stripe) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+        expand: ['latest_invoice'],
+      });
+      const { start, end } = subscriptionPeriodBounds(subscription);
+      await query(
+        `UPDATE facility_subscriptions
+         SET current_period_start = COALESCE($2, current_period_start),
+             current_period_end = COALESCE($3, current_period_end),
+             billing_period_start = COALESCE($2, billing_period_start),
+             billing_period_end = COALESCE($3, billing_period_end),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE stripe_subscription_id = $1`,
+        [subscriptionId, start, end]
+      );
+      const latest = subscription.latest_invoice;
+      if (latest && typeof latest === 'object' && latest.status === 'paid') {
+        await handleInvoicePaymentSucceeded(latest);
+      }
+    } catch (err) {
+      console.error('[WEBHOOK] Post-checkout subscription sync failed (non-critical):', err);
+    }
+  }
 }
 
 /**
@@ -208,6 +238,13 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
   if (subResult.rows.length > 0) {
     const { id: subDbId, facility_id: facilityId } = subResult.rows[0];
+
+    // Already recorded (this invoice can be replayed from checkout.session.completed).
+    const seen = await query(
+      `SELECT 1 FROM payment_history WHERE stripe_invoice_id = $1 LIMIT 1`,
+      [invoice.id]
+    );
+    if (seen.rows.length > 0) return;
 
     // Record payment history
     await query(

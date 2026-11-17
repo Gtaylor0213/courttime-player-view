@@ -16,6 +16,8 @@ import type { CourtScheduleRowInput } from '../../shared/utils/operatingHours';
 import { DEFAULT_ON_FEATURE_FLAGS } from '../../shared/constants/featureFlags';
 import { FacilityLogoError, normalizeFacilityLogo } from './facilityLogo';
 
+import { getTheAppSectionHtml } from '../../shared/utils/brandedEmail';
+
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const ALLOWED_BOOKING_RULE_CODES = new Set([
   'ACC-002',
@@ -71,6 +73,7 @@ async function sendAdminInviteEmail(
             </div>
             <p style="color: #666; font-size: 14px;">If you already have an account, simply log in and you'll see the facility in your dashboard.</p>
             <p style="color: #666; font-size: 14px;">If you didn't expect this invitation, you can safely ignore this email.</p>
+${getTheAppSectionHtml()}
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
             <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
           </div>

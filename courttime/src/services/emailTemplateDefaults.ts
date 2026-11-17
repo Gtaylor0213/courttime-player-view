@@ -4,6 +4,8 @@
  * a template rendering engine that replaces {{placeholders}} with values.
  */
 
+import { withGetTheAppSection } from '../../shared/utils/brandedEmail';
+
 export interface TemplateVariable {
   key: string;
   description: string;
@@ -212,7 +214,7 @@ export function wrapInEmailLayout(bodyContent: string, facilityName: string): st
         <h2 style="color: white; margin: 0; font-size: 20px;">${facilityName}</h2>
       </div>
       <div style="border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; padding: 24px;">
-        ${bodyContent}
+        ${withGetTheAppSection(bodyContent)}
       </div>
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
       <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>

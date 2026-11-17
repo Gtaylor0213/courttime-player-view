@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { query } from '../database/connection';
 import * as bcrypt from 'bcrypt';
+import { getTheAppSectionHtml } from '../../shared/utils/brandedEmail';
 
 const SALT_ROUNDS = 10;
 const TOKEN_EXPIRY_HOURS = 1;
@@ -51,6 +52,7 @@ async function sendResetEmail(email: string, token: string, fullName: string): P
             </div>
             <p style="color: #666; font-size: 14px;">This link will expire in ${TOKEN_EXPIRY_HOURS} hour.</p>
             <p style="color: #666; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+${getTheAppSectionHtml()}
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
             <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
           </div>

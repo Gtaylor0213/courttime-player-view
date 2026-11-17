@@ -52,7 +52,7 @@ export function wrapInBrandedEmail({ title, preheader, bodyHtml }: BrandedEmailO
       <p style="color: #ffffff; margin: 0; font-size: 22px; font-weight: bold;">CourtTime</p>
     </div>
     <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px; padding: 28px 24px; color: #374151; font-size: 16px; line-height: 1.55;">
-${bodyHtml}
+${withGetTheAppSection(bodyHtml)}
     </div>
     <div style="padding: 16px 8px; color: #9ca3af; font-size: 12px; line-height: 1.5; text-align: center;">
       <p style="margin: 0 0 6px;">You're receiving this because you have a CourtTime account. To stop CourtTime emails, turn off email notifications on your <a href="${profileUrl}" style="color: #6b7280;">profile</a>.</p>
@@ -79,6 +79,28 @@ export function storeBadgesHtml(): string {
         ${storeBadge(APP_STORE_URL, 'app-store.png', 'Download on the App Store', 144)}
         ${storeBadge(PLAY_STORE_URL, 'google-play.png', 'Get it on Google Play', 161)}
       </div>`;
+}
+
+/**
+ * "Get the CourtTime app" heading plus the store badges, appended to every
+ * invite email so new members and admins can grab the app straight away.
+ */
+export function getTheAppSectionHtml(): string {
+  return `      <div style="border-top: 1px solid #e5e7eb; margin-top: 28px; padding-top: 20px; text-align: center;">
+        <p style="margin: 0; font-weight: bold; color: #111827; font-size: 16px;">Get the CourtTime app</p>
+        <p style="margin: 4px 0 0; color: #6b7280; font-size: 14px;">Book courts from your phone on iPhone or Android.</p>
+${storeBadgesHtml()}
+      </div>`;
+}
+
+/**
+ * Every CourtTime email ends with the "Get the app" section. Bodies that
+ * already show the store badges (the app launch email, a newsletter with a
+ * badges block) are left alone so the buttons never appear twice.
+ */
+export function withGetTheAppSection(bodyHtml: string): string {
+  if (bodyHtml.includes('/badges/app-store.png')) return bodyHtml;
+  return `${bodyHtml}\n${getTheAppSectionHtml()}`;
 }
 
 /** A centered green call-to-action button. `href` and `label` must already be safe. */

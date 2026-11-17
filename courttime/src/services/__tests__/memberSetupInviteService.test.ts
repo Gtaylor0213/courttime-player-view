@@ -64,6 +64,9 @@ describe('memberSetupInviteService', () => {
       expect(html).toContain('Log in with an existing account');
       expect(html).toContain('https://app.courttime.test/register?setupToken=abc');
       expect(html).toContain('https://app.courttime.test/login?setupToken=abc');
+      expect(html).toContain('Get the CourtTime app');
+      expect(html).toContain('https://apps.apple.com/app/id6826902090');
+      expect(html).toContain('https://play.google.com/store/apps/details?id=com.courttime.player');
     });
 
     it('renders a facility custom plain-text message, preserving line breaks, with the CTA buttons still appended', async () => {
@@ -90,6 +93,9 @@ describe('memberSetupInviteService', () => {
       expect(html).toContain('Log in with an existing account');
       expect(html).toContain('https://app.courttime.test/register?setupToken=abc');
       expect(html).toContain('https://app.courttime.test/login?setupToken=abc');
+      expect(html).toContain('Get the CourtTime app');
+      expect(html).toContain('https://apps.apple.com/app/id6826902090');
+      expect(html).toContain('https://play.google.com/store/apps/details?id=com.courttime.player');
     });
   });
 

@@ -287,9 +287,8 @@ export async function getFacilityIdForSetupToken(token: string): Promise<string 
 
 export function buildSetupInviteCtaHtml(setupLink: string, loginLink: string, appLink?: string): string {
   const core = buildSetupInviteCtaCoreHtml(setupLink, loginLink);
-  if (!appLink) return core;
-  return (
-    core +
-    `<p style="color: #6b7280; font-size: 13px; margin-top: 16px;">Have the CourtTime app? <a href="${appLink}" style="color: #2563eb;">Open this invitation in the app</a>.</p>`
-  );
+  const openInApp = appLink
+    ? `<p style="color: #6b7280; font-size: 13px; margin-top: 16px;">Have the CourtTime app? <a href="${appLink}" style="color: #2563eb;">Open this invitation in the app</a>.</p>`
+    : '';
+  return core + openInApp;
 }

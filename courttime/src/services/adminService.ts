@@ -7,6 +7,8 @@ import { query, transaction } from '../database/connection';
 import { syncAdminUserType } from './adminUserType';
 import type { PoolClient } from 'pg';
 
+import { getTheAppSectionHtml } from '../../shared/utils/brandedEmail';
+
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
 /**
@@ -52,6 +54,7 @@ async function sendAdminInviteEmail(
             </div>
             <p style="color: #666; font-size: 14px;">If you already have an account, simply log in and you'll see the facility in your dashboard.</p>
             <p style="color: #666; font-size: 14px;">If you didn't expect this invitation, you can safely ignore this email.</p>
+${getTheAppSectionHtml()}
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
             <p style="color: #999; font-size: 12px;">CourtTime - Court Booking Made Simple</p>
           </div>

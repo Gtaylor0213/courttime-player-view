@@ -33,8 +33,11 @@ export async function setGateCode(facilityId: string, raw: unknown): Promise<str
   return gateCode;
 }
 
-/** The code to print in a confirmation email, or null when the flag is off / no code is set. */
-export async function getGateCodeForEmail(facilityId: string): Promise<string | null> {
+/**
+ * The code to hand members (confirmation email, post-booking pop-up, calendar
+ * notes, push), or null when the flag is off / no code is set.
+ */
+export async function getActiveGateCode(facilityId: string): Promise<string | null> {
   try {
     const { enabled, gateCode } = await getGateCodeSettings(facilityId);
     return enabled && gateCode ? gateCode : null;
@@ -43,3 +46,6 @@ export async function getGateCodeForEmail(facilityId: string): Promise<string | 
     return null;
   }
 }
+
+/** @deprecated alias — use getActiveGateCode. */
+export const getGateCodeForEmail = getActiveGateCode;

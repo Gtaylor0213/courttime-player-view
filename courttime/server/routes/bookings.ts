@@ -39,6 +39,7 @@ import {
 } from '../../src/services/bookingSettlementService';
 import { notificationService } from '../../src/services/notificationService';
 import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from '../../src/services/emailService';
+import { getActiveGateCode } from '../../src/services/gateCodeService';
 import { isFeatureEnabled } from '../../src/services/featureFlagService';
 import { checkReservationType, sameCourtSet } from '../../src/services/reservationTypeGuard';
 import { FEATURE_FLAGS } from '../../shared/constants/featureFlags';
@@ -390,9 +391,17 @@ router.get('/:bookingId', async (req, res, next) => {
       });
     }
 
+    // Glen Abbey Pickleball Gate Code: only the member the booking belongs to gets
+    // the code (the paid flow fetches the booking here after Stripe checkout).
+    const gateCode =
+      booking.userId === req.user?.userId && booking.status === 'confirmed'
+        ? await getActiveGateCode(booking.facilityId)
+        : null;
+
     res.json({
       success: true,
-      booking
+      booking,
+      ...(gateCode ? { gateCode } : {}),
     });
   } catch (error) {
     next(error);
@@ -542,8 +551,13 @@ router.post('/', async (req, res, next) => {
       });
     }
 
+    // Glen Abbey Pickleball Gate Code: returned so the web/app can pop it up
+    // (and put it in calendar notes) right after booking.
+    let gateCode: string | null = null;
+
     // A split reservation is only a held slot until every member pays.
     if (result.booking?.status !== 'pending') {
+      gateCode = await getActiveGateCode(facilityId);
       try {
       // Get booking details for notification
       const facilityQuery = await pool.query('SELECT name FROM facilities WHERE id = $1', [facilityId]);
@@ -573,6 +587,19 @@ router.post('/', async (req, res, next) => {
           : undefined
       );
 
+      if (gateCode) {
+        // Separate notification so the code shows on the member's phone (push)
+        // and in their notification list.
+        await notificationService.notifyGateCode(
+          effectiveUserId,
+          facilityName,
+          courtName,
+          startDateTime,
+          gateCode,
+          created?.id ? { bookingId: created.id, facilityId, bookingDate, courtId } : undefined
+        );
+      }
+
       // Send confirmation email (fire-and-forget)
       const userQuery = await pool.query(
         'SELECT email, full_name as "fullName" FROM users WHERE id = $1',
@@ -595,7 +622,7 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    res.status(201).json(result);
+    res.status(201).json(gateCode ? { ...result, gateCode } : result);
   } catch (error) {
     next(error);
   }

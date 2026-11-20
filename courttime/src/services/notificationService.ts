@@ -422,6 +422,31 @@ export const notificationService = {
     );
   },
 
+  /** Glen Abbey Pickleball Gate Code flag: the club's gate code for a new booking. */
+  async notifyGateCode(
+    userId: string,
+    facilityName: string,
+    courtName: string,
+    startTime: Date,
+    gateCode: string,
+    pushContext?: BookingPushContext
+  ): Promise<string> {
+    const title = `Gate Code: ${gateCode}`;
+    const message = `Use gate code ${gateCode} for your ${courtName} booking at ${facilityName} on ${this.formatDate(startTime)}.`;
+
+    return this.createNotification(
+      userId,
+      title,
+      message,
+      'booking_confirmed',
+      {
+        actionUrl: buildBookingActionUrl(pushContext),
+        priority: 'high',
+        pushData: buildBookingPushData(pushContext, { includeCourtId: true }),
+      }
+    );
+  },
+
   async notifyBookingCancelled(
     userId: string,
     facilityName: string,

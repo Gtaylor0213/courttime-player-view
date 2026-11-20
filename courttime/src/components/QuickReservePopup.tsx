@@ -851,7 +851,11 @@ export function QuickReservePopup({
         };
         const createdBookingId = firstSuccess?.booking?.id ?? firstSuccess?.bookings?.[0]?.id;
 
-        offerAddBookingToCalendar(msg, calendarDetails, { bookingId: createdBookingId });
+        const gateCode = successfulBookings
+          .map((r) => (r as { gateCode?: string }).gateCode)
+          .find(Boolean);
+
+        offerAddBookingToCalendar(msg, calendarDetails, { bookingId: createdBookingId, gateCode });
 
         if (failedBookings.length > 0) {
           // Collect rule violations from failed bookings

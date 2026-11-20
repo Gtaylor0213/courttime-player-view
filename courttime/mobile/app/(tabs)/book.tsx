@@ -1162,6 +1162,7 @@ export default function BookCourtScreen() {
     }
 
     let allSuccess = true;
+    let gateCode: string | undefined;
     let firstError: string | null = null;
     let firstViolations: RuleViolation[] | null = null;
     let firstWarnings: RuleViolation[] = [];
@@ -1239,6 +1240,8 @@ export default function BookCourtScreen() {
         break;
       }
 
+      gateCode = gateCode || (res as { gateCode?: string }).gateCode;
+
       priorInThisRequest.push({
         bookingDate: selectedDate,
         courtId,
@@ -1275,7 +1278,7 @@ export default function BookCourtScreen() {
                 .join('\n'),
             }
           : null,
-        { onClosed: () => void maybeAskForReview() }
+        { onClosed: () => void maybeAskForReview(), gateCode }
       );
       refreshBookedSlots();
     } else if (firstViolations) {

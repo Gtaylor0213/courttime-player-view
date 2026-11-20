@@ -42,3 +42,24 @@ describe('normalizeGateCode', () => {
     expect(normalizeGateCode('x'.repeat(100))).toHaveLength(64);
   });
 });
+
+import { bookingWithDetailsToCalendarDetails, buildIcsEventContent, withGateCode } from '../../../shared/utils/bookingCalendar';
+
+describe('gate code in calendar notes', () => {
+  const base = { courtName: '11A', facilityName: 'Glen Abbey PB', bookingDate: '2026-11-21', startTime: '09:00', endTime: '10:00' };
+
+  it('puts the gate code first in the event notes and on the details', () => {
+    const d = bookingWithDetailsToCalendarDetails({ ...base, gateCode: '4821' });
+    expect(d.notes?.split('\n')[0]).toBe('Gate code: 4821');
+    expect(d.gateCode).toBe('4821');
+    expect(buildIcsEventContent(d)).toContain('Gate code: 4821');
+  });
+
+  it('leaves notes alone without a code and does not duplicate the line', () => {
+    const d = bookingWithDetailsToCalendarDetails(base);
+    expect(d.notes).not.toContain('Gate code');
+    expect(d.gateCode).toBeUndefined();
+    const once = withGateCode(d, '1');
+    expect(withGateCode(once, '1').notes).toBe(once.notes);
+  });
+});

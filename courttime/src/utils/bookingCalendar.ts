@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { toast } from 'sonner';
 import { bookingApi } from '../api/client';
 import { BookingCalendarToast } from '../components/BookingCalendarToast';
+import { showGateCodeDialog } from '../components/GateCodeDialog';
 import {
   type BookingCalendarDetails,
   bookingWithDetailsToCalendarDetails,
@@ -10,6 +11,7 @@ import {
   buildIcsFilename,
   formatBookingDateYmd,
   isAppleCalendarDevice,
+  withGateCode,
 } from '../../shared/utils/bookingCalendar';
 
 export type { BookingCalendarDetails };
@@ -114,6 +116,24 @@ export function addBookingToCalendarWithFeedback(
 export function offerAddBookingToCalendar(
   message: string,
   details: BookingCalendarDetails | null,
+  options?: { alertTitle?: string; bookingId?: string; gateCode?: string | null }
+): void {
+  // Glen Abbey Pickleball Gate Code flag: pop the code up first, then offer the
+  // calendar (with the code in the event notes).
+  const gateCode = options?.gateCode || details?.gateCode;
+  if (gateCode) {
+    const withCode = details ? withGateCode(details, gateCode) : null;
+    showGateCodeDialog(gateCode, () =>
+      showCalendarOffer(message, withCode, options)
+    );
+    return;
+  }
+  showCalendarOffer(message, details, options);
+}
+
+function showCalendarOffer(
+  message: string,
+  details: BookingCalendarDetails | null,
   options?: { alertTitle?: string; bookingId?: string }
 ): void {
   const title = options?.alertTitle || 'Booked!';
@@ -175,6 +195,7 @@ export async function fetchBookingCalendarDetails(
       endTime,
       bookingType: (row.bookingType || row.booking_type) as string | undefined,
       notes: (row.notes as string | undefined) || undefined,
+      gateCode: (response.data as { gateCode?: string } | undefined)?.gateCode,
     },
     { facilityName }
   );

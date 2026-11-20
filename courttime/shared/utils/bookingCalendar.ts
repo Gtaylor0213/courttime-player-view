@@ -9,7 +9,21 @@ export type BookingCalendarDetails = {
   endTime: string;
   location?: string;
   notes?: string;
+  /**
+   * Glen Abbey Pickleball Gate Code flag: the club's gate code. Already written
+   * into `notes`; kept here so the post-booking prompt can pop it up first.
+   */
+  gateCode?: string;
 };
+
+/** Add the gate code to an event's notes (no-op when there is no code or it is already there). */
+export function withGateCode<T extends BookingCalendarDetails>(details: T, gateCode?: string | null): T {
+  const code = gateCode?.trim();
+  if (!code) return details;
+  const line = `Gate code: ${code}`;
+  const notes = details.notes?.includes(line) ? details.notes : [line, details.notes].filter(Boolean).join('\n');
+  return { ...details, notes, gateCode: code };
+}
 
 const DEFAULT_ALARM_MINUTES = 30;
 
@@ -37,12 +51,13 @@ export function bookingWithDetailsToCalendarDetails(
     bookingType?: string;
     notes?: string;
     facilityName?: string;
+    gateCode?: string | null;
   },
   options?: { facilityName?: string }
 ): BookingCalendarDetails {
   const facilityName = options?.facilityName || booking.facilityName;
   const courtName = booking.courtName || 'Court';
-  return {
+  return withGateCode({
     title: facilityName ? `${facilityName} - ${courtName}` : `Court booking - ${courtName}`,
     bookingDate: formatBookingDateYmd(booking.bookingDate),
     startTime: booking.startTime,
@@ -55,7 +70,7 @@ export function bookingWithDetailsToCalendarDetails(
     ]
       .filter(Boolean)
       .join('\n'),
-  };
+  }, booking.gateCode);
 }
 
 function normalizeTimeForIcs(time: string): string {

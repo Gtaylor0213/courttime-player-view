@@ -931,9 +931,14 @@ export function BookingWizard({ isOpen, onClose, court, courtId, date, time, fac
         };
         const createdBookingId = firstSuccess?.booking?.id ?? firstSuccess?.bookings?.[0]?.id;
 
+        const gateCode = successfulBookings
+          .map((r) => (r as { gateCode?: string }).gateCode)
+          .find(Boolean);
+
         offerAddBookingToCalendar(msg, calendarDetails, {
           alertTitle: 'Court Reservation Confirmed',
           bookingId: createdBookingId,
+          gateCode,
         });
 
         // Booked inline (free court, or a pass covered the machine) — the member never

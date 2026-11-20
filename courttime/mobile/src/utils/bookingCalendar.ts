@@ -9,12 +9,13 @@ import { api } from '../api/client';
 import {
   bookingWithDetailsToCalendarDetails,
   formatBookingDateYmd,
+  withGateCode,
   type BookingCalendarDetails as SharedBookingCalendarDetails,
 } from '../../../shared/utils/bookingCalendar';
 
 export type BookingCalendarDetails = DeviceCalendarEventInput & SharedBookingCalendarDetails;
 
-export { bookingWithDetailsToCalendarDetails, formatBookingDateYmd };
+export { bookingWithDetailsToCalendarDetails, formatBookingDateYmd, withGateCode };
 
 const DEFAULT_ALARM_MINUTES = 30;
 
@@ -89,6 +90,24 @@ export async function addBookingToCalendarWithFeedback(
 export function offerAddBookingToCalendar(
   message: string,
   details: BookingCalendarDetails | null,
+  options?: { alertTitle?: string; onClosed?: () => void; gateCode?: string | null }
+): void {
+  // Glen Abbey Pickleball Gate Code flag: show the code first, then the usual
+  // confirmation / add-to-calendar prompt (with the code in the event notes).
+  const gateCode = options?.gateCode || details?.gateCode;
+  if (gateCode) {
+    const withCode = details ? withGateCode(details, gateCode) : null;
+    showAlert('Your Gate Code', `Use gate code ${gateCode} to open the gate to the courts.\n\nIt's also in your confirmation email.`, [
+      { text: 'Got it', onPress: () => showCalendarOffer(message, withCode, options) },
+    ]);
+    return;
+  }
+  showCalendarOffer(message, details, options);
+}
+
+function showCalendarOffer(
+  message: string,
+  details: BookingCalendarDetails | null,
   options?: { alertTitle?: string; onClosed?: () => void }
 ): void {
   const alertTitle = options?.alertTitle || 'Booked!';
@@ -138,6 +157,7 @@ export async function fetchBookingCalendarDetails(
       endTime,
       bookingType: (row.bookingType || row.booking_type) as string | undefined,
       notes: (row.notes as string | undefined) || undefined,
+      gateCode: (res.data as { gateCode?: string } | undefined)?.gateCode,
     },
     { facilityName }
   );

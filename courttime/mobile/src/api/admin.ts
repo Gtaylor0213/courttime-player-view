@@ -787,4 +787,6 @@ export const policiesAdmin = {
   emailTemplates: (f: string) => api.get(`/api/admin/email-templates/${f}`),
   saveEmailTemplate: (f: string, templateType: string, body: { subject: string; bodyHtml: string }) => api.put(`/api/admin/email-templates/${f}/${templateType}`, body),
   resetEmailTemplate: (f: string, templateType: string) => api.delete(`/api/admin/email-templates/${f}/${templateType}`),
+  pickleballGateCode: (f: string) => api.get(`/api/admin/pickleball-gate-code/${f}`),
+  savePickleballGateCode: (f: string, gateCode: string | null) => api.put(`/api/admin/pickleball-gate-code/${f}`, { gateCode }),
 };

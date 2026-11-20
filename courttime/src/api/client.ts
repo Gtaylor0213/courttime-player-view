@@ -1464,6 +1464,18 @@ export const adminApi = {
     });
   },
 
+  // Glen Abbey Pickleball Gate Code (shown under Court in booking confirmation emails)
+  getPickleballGateCode: async (facilityId: string) => {
+    return apiRequest(`/api/admin/pickleball-gate-code/${facilityId}`);
+  },
+
+  updatePickleballGateCode: async (facilityId: string, gateCode: string | null) => {
+    return apiRequest(`/api/admin/pickleball-gate-code/${facilityId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ gateCode }),
+    });
+  },
+
   // Terms & Conditions
   getTerms: async (facilityId: string) => {
     return apiRequest(`/api/admin/terms/${facilityId}`);

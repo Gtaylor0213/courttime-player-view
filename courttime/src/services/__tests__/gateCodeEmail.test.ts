@@ -1,0 +1,44 @@
+import { describe, it, expect } from 'vitest';
+import { EMAIL_TEMPLATE_TYPES, insertGateCodeLine, renderTemplate } from '../emailTemplateDefaults';
+import { normalizeGateCode } from '../gateCodeService';
+
+const defaultBody = EMAIL_TEMPLATE_TYPES.booking_confirmation.defaultBody;
+
+describe('insertGateCodeLine', () => {
+  it('leaves the template untouched when there is no code', () => {
+    expect(insertGateCodeLine(defaultBody, null)).toBe(defaultBody);
+    expect(insertGateCodeLine(defaultBody, '')).toBe(defaultBody);
+  });
+
+  it('puts the Gate Code line between Court and Date in the default template', () => {
+    const out = renderTemplate(insertGateCodeLine(defaultBody, '4821'), { courtName: '11A', date: 'Nov 20, 2026' });
+    const court = out.indexOf('<strong>Court:</strong> 11A');
+    const gate = out.indexOf('<strong>Gate Code:</strong> 4821');
+    const date = out.indexOf('<strong>Date:</strong>');
+    expect(court).toBeGreaterThan(-1);
+    expect(gate).toBeGreaterThan(court);
+    expect(date).toBeGreaterThan(gate);
+  });
+
+  it('falls back to before the Date line when a custom template has no court', () => {
+    const tpl = '<p>Hi</p><p>When: {{date}}</p>';
+    expect(insertGateCodeLine(tpl, '99')).toMatch(/<p>Hi<\/p><p[^>]*><strong>Gate Code:<\/strong> 99<\/p>\s*<p>When/);
+  });
+
+  it('appends when neither court nor date is present', () => {
+    expect(insertGateCodeLine('<p>Hi</p>', '7')).toMatch(/<p>Hi<\/p>\n<p[^>]*><strong>Gate Code:<\/strong> 7<\/p>$/);
+  });
+
+  it('escapes HTML in the code', () => {
+    expect(insertGateCodeLine(defaultBody, '<b>1</b>')).toContain('&lt;b&gt;1&lt;/b&gt;');
+  });
+});
+
+describe('normalizeGateCode', () => {
+  it('trims, blanks to null, and caps length', () => {
+    expect(normalizeGateCode('  12#34 ')).toBe('12#34');
+    expect(normalizeGateCode('   ')).toBeNull();
+    expect(normalizeGateCode(undefined)).toBeNull();
+    expect(normalizeGateCode('x'.repeat(100))).toHaveLength(64);
+  });
+});

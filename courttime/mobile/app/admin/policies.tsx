@@ -65,13 +65,18 @@ export default function AdminPoliciesScreen() {
   const [templates, setTemplates] = useState<EmailTemplateRow[]>([]);
   const [editing, setEditing] = useState<{ templateType: string; subject: string; bodyHtml: string } | null>(null);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
+  // Glen Abbey Pickleball Gate Code flag (line under Court in booking confirmations)
+  const [gateCodeEnabled, setGateCodeEnabled] = useState(false);
+  const [gateCode, setGateCode] = useState('');
+  const [savedGateCode, setSavedGateCode] = useState('');
 
   const load = useCallback(async () => {
     if (!facilityId) return;
-    const [r, ra, t, ta, w, e] = await Promise.all([
+    const [r, ra, t, ta, w, e, g] = await Promise.all([
       policiesAdmin.generalRules(facilityId), policiesAdmin.generalRulesAcceptance(facilityId),
       policiesAdmin.terms(facilityId), policiesAdmin.termsAcceptance(facilityId),
       policiesAdmin.whitelist(facilityId), policiesAdmin.emailTemplates(facilityId),
+      policiesAdmin.pickleballGateCode(facilityId),
     ]);
     const rd = r.success ? unwrapApiPayload<PolicyDoc>(r.data) : null;
     setRules(rd ?? null);
@@ -84,6 +89,10 @@ export default function AdminPoliciesScreen() {
     setTermsAcc(ta.success ? (unwrapApiPayload<PolicyAcceptance>(ta.data) ?? null) : null);
     setWhitelist(w.success ? (((w.data as any)?.addresses ?? unwrapApiPayload<WhitelistRow[]>(w.data)) ?? []) : []);
     setTemplates(e.success ? (((e.data as any)?.templates ?? []) as EmailTemplateRow[]) : []);
+    const gd = g.success ? unwrapApiPayload<{ enabled: boolean; gateCode: string | null }>(g.data) : null;
+    setGateCodeEnabled(!!gd?.enabled);
+    setGateCode(gd?.gateCode ?? '');
+    setSavedGateCode(gd?.gateCode ?? '');
   }, [facilityId]);
 
   useEffect(() => {
@@ -188,6 +197,19 @@ export default function AdminPoliciesScreen() {
     const res = await policiesAdmin.saveEmailTemplate(facilityId, editing.templateType, { subject: editing.subject.trim(), bodyHtml: editing.bodyHtml });
     setBusy(null);
     if (res.success) { setEditing(null); await load(); } else showApiErrorAlert(res, 'Could not save template');
+  }
+
+  async function saveGateCode() {
+    if (!facilityId) return;
+    setBusy('gate');
+    const res = await policiesAdmin.savePickleballGateCode(facilityId, gateCode.trim() || null);
+    setBusy(null);
+    if (res.success) {
+      const saved = unwrapApiPayload<{ gateCode: string | null }>(res.data)?.gateCode ?? '';
+      setGateCode(saved);
+      setSavedGateCode(saved);
+      showAlert('Gate code', saved ? 'Gate code saved.' : 'Gate code cleared.');
+    } else showApiErrorAlert(res, 'Could not save gate code');
   }
 
   function confirmResetTemplate(t: EmailTemplateRow) {
@@ -317,6 +339,16 @@ export default function AdminPoliciesScreen() {
                   </View>
                   {t.description ? <Text style={styles.muted}>{t.description}</Text> : null}
                 </TouchableOpacity>
+                {expandedTemplate === t.templateType && t.templateType === 'booking_confirmation' && gateCodeEnabled ? (
+                  <View style={{ marginTop: Spacing.sm }}>
+                    <Text style={styles.label}>Pickleball Gate Code</Text>
+                    <Input value={gateCode} onChangeText={setGateCode} placeholder="e.g. 1234" maxLength={64} autoCapitalize="none" accessibilityLabel="Pickleball gate code" />
+                    <Text style={styles.muted}>Shown as a "Gate Code" line under the court in every booking confirmation email. Leave blank to hide it.</Text>
+                    <View style={[styles.row, { marginTop: Spacing.sm }]}>
+                      <Button title="Save code" onPress={() => void saveGateCode()} loading={busy === 'gate'} disabled={gateCode.trim() === savedGateCode} style={{ flex: 1 }} />
+                    </View>
+                  </View>
+                ) : null}
                 {expandedTemplate === t.templateType ? (
                   editing?.templateType === t.templateType ? (
                     <View style={{ marginTop: Spacing.sm }}>

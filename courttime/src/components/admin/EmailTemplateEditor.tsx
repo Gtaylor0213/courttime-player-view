@@ -9,6 +9,7 @@ import { Loader2, Save, RotateCcw, Eye, EyeOff, ChevronDown, ChevronUp } from 'l
 import { adminApi } from '../../api/client';
 import { toast } from 'sonner';
 import { useAppContext } from '../../contexts/AppContext';
+import { unwrapApiPayload } from '../../../shared/api/core';
 
 interface TemplateVariable {
   key: string;
@@ -41,12 +42,52 @@ export function EmailTemplateEditor() {
   const [previewSubject, setPreviewSubject] = useState('');
   const [loadingPreview, setLoadingPreview] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // Glen Abbey Pickleball Gate Code flag
+  const [gateCodeEnabled, setGateCodeEnabled] = useState(false);
+  const [gateCode, setGateCode] = useState('');
+  const [savedGateCode, setSavedGateCode] = useState('');
+  const [savingGateCode, setSavingGateCode] = useState(false);
 
   useEffect(() => {
     if (selectedFacilityId) {
       loadTemplates();
+      loadGateCode();
     }
   }, [selectedFacilityId]);
+
+  const loadGateCode = async () => {
+    try {
+      const response = await adminApi.getPickleballGateCode(selectedFacilityId);
+      const data = response.success
+        ? unwrapApiPayload<{ enabled: boolean; gateCode: string | null }>(response.data)
+        : undefined;
+      setGateCodeEnabled(!!data?.enabled);
+      setGateCode(data?.gateCode ?? '');
+      setSavedGateCode(data?.gateCode ?? '');
+    } catch {
+      setGateCodeEnabled(false);
+    }
+  };
+
+  const handleSaveGateCode = async () => {
+    try {
+      setSavingGateCode(true);
+      const response = await adminApi.updatePickleballGateCode(selectedFacilityId, gateCode.trim() || null);
+      if (response.success) {
+        const data = unwrapApiPayload<{ gateCode: string | null }>(response.data);
+        setGateCode(data?.gateCode ?? '');
+        setSavedGateCode(data?.gateCode ?? '');
+        toast.success(data?.gateCode ? 'Gate code saved' : 'Gate code cleared');
+        if (showPreview) handlePreview();
+      } else {
+        toast.error('Failed to save gate code');
+      }
+    } catch {
+      toast.error('Error saving gate code');
+    } finally {
+      setSavingGateCode(false);
+    }
+  };
 
   const loadTemplates = async () => {
     try {
@@ -221,6 +262,34 @@ export function EmailTemplateEditor() {
 
           {expandedType === template.templateType && (
             <CardContent className="border-t pt-4 space-y-4">
+              {template.templateType === 'booking_confirmation' && gateCodeEnabled && (
+                <div className="space-y-2 rounded-md border border-green-200 bg-green-50 p-3">
+                  <Label htmlFor="pickleball-gate-code">Pickleball Gate Code</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="pickleball-gate-code"
+                      value={gateCode}
+                      onChange={e => setGateCode(e.target.value)}
+                      placeholder="e.g. 1234"
+                      maxLength={64}
+                      className="max-w-xs bg-white"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleSaveGateCode}
+                      disabled={savingGateCode || gateCode.trim() === savedGateCode}
+                      className="gap-2 bg-green-600 hover:bg-green-700"
+                    >
+                      {savingGateCode ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      Save Code
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Shown as a "Gate Code" line under the court in every booking confirmation email. Leave blank to hide it.
+                  </p>
+                </div>
+              )}
+
               {/* Subject */}
               <div className="space-y-2">
                 <Label htmlFor="template-subject">Subject Line</Label>

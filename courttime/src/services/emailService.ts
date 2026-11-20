@@ -10,7 +10,9 @@ import {
   EMAIL_TEMPLATE_TYPES,
   renderTemplate,
   wrapInEmailLayout,
+  insertGateCodeLine,
 } from './emailTemplateDefaults';
+import { getGateCodeForEmail } from './gateCodeService';
 import { APP_LAUNCH_EMAIL_SUBJECT, buildAppLaunchEmailHtml } from './appLaunchEmailTemplate';
 import { buildNewsletterEmailHtml, type NewsletterContent } from '../../shared/utils/newsletterEmail';
 
@@ -165,7 +167,8 @@ async function sendTemplatedEmail(
   templateType: string,
   variables: Record<string, string>,
   userId?: string,
-  category: TransactionalEmailCategory = 'general'
+  category: TransactionalEmailCategory = 'general',
+  transformBodyTemplate?: (bodyTemplate: string) => string
 ): Promise<boolean> {
   if (!(await shouldSendTransactionalEmail(userId, category))) {
     return true;
@@ -181,7 +184,8 @@ async function sendTemplatedEmail(
   const custom = await getTemplateForFacility(facilityId, templateType);
 
   const subjectTemplate = custom?.subject || defaults.defaultSubject;
-  const bodyTemplate = custom?.bodyHtml || defaults.defaultBody;
+  const baseBodyTemplate = custom?.bodyHtml || defaults.defaultBody;
+  const bodyTemplate = transformBodyTemplate ? transformBodyTemplate(baseBodyTemplate) : baseBodyTemplate;
 
   const renderedSubject = renderTemplate(subjectTemplate, variables);
   const renderedBody = renderTemplate(bodyTemplate, variables);
@@ -210,6 +214,8 @@ export async function sendBookingConfirmationEmail(
   bookingType: string,
   userId?: string
 ): Promise<boolean> {
+  // Glen Abbey Pickleball Gate Code flag: adds a "Gate Code:" line under Court.
+  const gateCode = await getGateCodeForEmail(facilityId);
   return sendTemplatedEmail(
     email,
     facilityId,
@@ -225,7 +231,8 @@ export async function sendBookingConfirmationEmail(
       bookingType,
     },
     userId,
-    'booking'
+    'booking',
+    gateCode ? (tpl) => insertGateCodeLine(tpl, gateCode) : undefined
   );
 }
 

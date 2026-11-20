@@ -183,6 +183,45 @@ If you didn't expect this email, you can safely ignore it.`,
   },
 };
 
+function escapeGateCodeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Insert a "Gate Code:" line into a booking confirmation template (before
+ * placeholders are rendered). It goes right after the paragraph holding
+ * {{courtName}}; failing that, right before the paragraph holding {{date}};
+ * failing that, at the end of the body — so custom templates get it too.
+ */
+export function insertGateCodeLine(template: string, gateCode: string | null | undefined): string {
+  if (!gateCode) return template;
+  const line = `<p style="margin: 4px 0; color: #374151;"><strong>Gate Code:</strong> ${escapeGateCodeHtml(gateCode)}</p>`;
+
+  const courtIdx = template.indexOf('{{courtName}}');
+  if (courtIdx !== -1) {
+    const closeIdx = template.indexOf('</p>', courtIdx);
+    if (closeIdx !== -1) {
+      const at = closeIdx + '</p>'.length;
+      return `${template.slice(0, at)}\n  ${line}${template.slice(at)}`;
+    }
+  }
+
+  const dateIdx = template.indexOf('{{date}}');
+  if (dateIdx !== -1) {
+    const openIdx = template.lastIndexOf('<p', dateIdx);
+    if (openIdx !== -1) {
+      return `${template.slice(0, openIdx)}${line}\n  ${template.slice(openIdx)}`;
+    }
+  }
+
+  return `${template}\n${line}`;
+}
+
 /**
  * Replace all {{placeholder}} variables in a template with actual values
  */

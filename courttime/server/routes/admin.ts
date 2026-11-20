@@ -20,7 +20,8 @@ import {
   startEmailBlast,
 } from '../../src/services/emailBlastService';
 import { FacilityLogoError, normalizeFacilityLogo } from '../../src/services/facilityLogo';
-import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout, getSampleVariables } from '../../src/services/emailTemplateDefaults';
+import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout, getSampleVariables, insertGateCodeLine } from '../../src/services/emailTemplateDefaults';
+import { getGateCodeSettings, getGateCodeForEmail, setGateCode } from '../../src/services/gateCodeService';
 import { buildSetupInviteCtaHtml } from '../../src/services/memberSetupInviteService';
 import {
   createSplitCourt,
@@ -2358,7 +2359,11 @@ router.post('/email-templates/:facilityId/:templateType/preview', async (req, re
         );
       }
     } else {
-      renderedBody = renderTemplate(bodyHtml || config.defaultBody, sampleVars);
+      let bodyTemplate = bodyHtml || config.defaultBody;
+      if (templateType === 'booking_confirmation') {
+        bodyTemplate = insertGateCodeLine(bodyTemplate, await getGateCodeForEmail(req.params.facilityId));
+      }
+      renderedBody = renderTemplate(bodyTemplate, sampleVars);
     }
 
     const renderedHtml = wrapInEmailLayout(renderedBody, sampleVars.facilityName || 'Your Facility');
@@ -2366,6 +2371,39 @@ router.post('/email-templates/:facilityId/:templateType/preview', async (req, re
     res.json({ success: true, renderedSubject, renderedHtml });
   } catch (error: any) {
     console.error('Error previewing email template:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/pickleball-gate-code/:facilityId
+ * Glen Abbey Pickleball Gate Code flag state + the current code.
+ */
+router.get('/pickleball-gate-code/:facilityId', async (req, res) => {
+  try {
+    const data = await getGateCodeSettings(req.params.facilityId);
+    res.json({ success: true, data });
+  } catch (error: any) {
+    console.error('Error fetching pickleball gate code:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/pickleball-gate-code/:facilityId
+ * Body: { gateCode: string | null } — blank clears it (no line in the email).
+ */
+router.put('/pickleball-gate-code/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { enabled } = await getGateCodeSettings(facilityId);
+    if (!enabled) {
+      return res.status(403).json({ success: false, error: 'Pickleball gate code is not enabled for this facility' });
+    }
+    const gateCode = await setGateCode(facilityId, req.body?.gateCode);
+    res.json({ success: true, data: { enabled, gateCode } });
+  } catch (error: any) {
+    console.error('Error saving pickleball gate code:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

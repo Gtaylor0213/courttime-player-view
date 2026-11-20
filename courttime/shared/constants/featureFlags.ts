@@ -27,6 +27,7 @@ export const FEATURE_FLAGS = {
   GENERAL_RULES: 'general_rules',
   EDIT_PAST_RESERVATIONS: 'edit_past_reservations',
   APP_DOWNLOAD_PROMPT: 'app_download_prompt',
+  GLEN_ABBEY_PICKLEBALL_GATE_CODE: 'glen_abbey_pickleball_gate_code',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -69,4 +70,5 @@ export const FEATURE_FLAG_LABELS: Record<string, string> = {
   general_rules: 'General Rules (require members to accept facility rules, re-accept when updated)',
   edit_past_reservations: 'Edit/Delete Past Reservations (let players and admins modify or cancel a reservation after it has ended)',
   app_download_prompt: 'App Download Prompt (pop-up on the website asking members to get the iPhone / Android app)',
+  glen_abbey_pickleball_gate_code: 'Glen Abbey Pickleball Gate Code (admin-editable gate code shown under the court in booking confirmation emails)',
 };

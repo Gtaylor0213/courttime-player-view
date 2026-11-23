@@ -8,6 +8,8 @@
 
 import { query } from '../database/connection';
 import { notificationService } from './notificationService';
+import { sendBookingReminderEmail } from './emailService';
+import { getActiveGateCode } from './gateCodeService';
 
 /** Remind once the start is this close. */
 export const REMINDER_LEAD_MINUTES = 60;
@@ -71,10 +73,11 @@ const CLAIM_DUE_BOOKINGS = `
   )
   UPDATE bookings b
      SET reminder_sent_at = CURRENT_TIMESTAMP
-    FROM due, courts c, facilities f
+    FROM due, courts c, facilities f, users u
    WHERE b.id = due.id
      AND c.id = b.court_id
      AND f.id = b.facility_id
+     AND u.id = b.user_id
   RETURNING
     b.id AS "bookingId",
     b.user_id AS "userId",
@@ -82,8 +85,12 @@ const CLAIM_DUE_BOOKINGS = `
     b.court_id AS "courtId",
     to_char(b.booking_date, 'YYYY-MM-DD') AS "bookingDate",
     to_char(b.start_time, 'FMHH12:MI AM') AS "startTimeLabel",
+    to_char(b.booking_date, 'FMMonth FMDD, YYYY') AS "dateLabel",
+    to_char(b.end_time, 'FMHH12:MI AM') AS "endTimeLabel",
     c.name AS "courtName",
-    f.name AS "facilityName"`;
+    f.name AS "facilityName",
+    u.email AS "email",
+    u.full_name AS "fullName"`;
 
 interface DueBooking {
   bookingId: string;
@@ -92,8 +99,12 @@ interface DueBooking {
   courtId: string;
   bookingDate: string;
   startTimeLabel: string;
+  dateLabel: string;
+  endTimeLabel: string;
   courtName: string;
   facilityName: string;
+  email: string;
+  fullName: string;
 }
 
 /**
@@ -120,6 +131,7 @@ export async function sendDueBookingReminders(): Promise<number> {
     else groups.set(key, [booking]);
   }
 
+  const gateCodes = new Map<string, string | null>();
   let sent = 0;
   for (const group of groups.values()) {
     const first = group[0]!;
@@ -142,6 +154,30 @@ export async function sendDueBookingReminders(): Promise<number> {
       // The booking stays marked as reminded: a retry a minute later could
       // double-notify, and a missed reminder is the smaller harm.
       console.error('[BookingReminder] Failed to notify for booking', first.bookingId, error);
+    }
+
+    // Gate code clubs also get a reminder email carrying the code.
+    try {
+      if (!gateCodes.has(first.facilityId)) {
+        gateCodes.set(first.facilityId, await getActiveGateCode(first.facilityId));
+      }
+      const gateCode = gateCodes.get(first.facilityId);
+      if (gateCode && first.email) {
+        await sendBookingReminderEmail(
+          first.email,
+          first.fullName,
+          first.facilityId,
+          first.facilityName,
+          group.map((b) => b.courtName).join(', '),
+          first.dateLabel,
+          first.startTimeLabel,
+          first.endTimeLabel,
+          gateCode,
+          first.userId
+        );
+      }
+    } catch (error) {
+      console.error('[BookingReminder] Failed to email reminder for booking', first.bookingId, error);
     }
   }
   return sent;

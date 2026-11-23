@@ -123,6 +123,7 @@ Everything else in the admin console (bookings and series, members, courts, faci
 |------|--------------|
 | `/api/facilities` | Web `AdminBooking` lists all facilities then filters to the admin's; mobile uses the header facility selector |
 | `/api/payments/create-checkout-session`, `/api/payments/validate-promo`, `/api/payments/verify-session`, `/api/payments/sync-setup-session`, `/api/payments/court-add/confirm` | Facility registration wizard, platform-billing promo codes and Stripe browser-return handlers. Mobile opens these flows on the web, and Stripe returns to the app via deep links instead |
+| `/api/booking-calendar/:id/:id/calendar.ics` | Signed add-to-calendar link opened from booking emails; built on the server, not called by either client |
 | `/api/admin/email-templates/:id/:id/preview` | Rendered HTML preview; mobile edits subject/body and shows the body as text |
 | `/api/notifications` | Web `NotificationContext` persists client-generated toasts; mobile notifications are created server-side |
 | `/api/player-profile/:id/bookings` | Web profile lists bookings from the profile endpoint; mobile uses `/api/bookings/upcoming/:id` and My Reservations |

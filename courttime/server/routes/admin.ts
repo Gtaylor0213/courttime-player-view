@@ -20,8 +20,8 @@ import {
   startEmailBlast,
 } from '../../src/services/emailBlastService';
 import { FacilityLogoError, normalizeFacilityLogo } from '../../src/services/facilityLogo';
-import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout, getSampleVariables, insertGateCodeLine } from '../../src/services/emailTemplateDefaults';
-import { getGateCodeSettings, getGateCodeForEmail, setGateCode } from '../../src/services/gateCodeService';
+import { EMAIL_TEMPLATE_TYPES, renderTemplate, renderPlainTextBody, wrapInEmailLayout, getSampleVariables, insertGateCodeLine, buildCalendarButtonsHtml } from '../../src/services/emailTemplateDefaults';
+import { getGateCodeSettings, getActiveGateCode, setGateCode } from '../../src/services/gateCodeService';
 import { buildSetupInviteCtaHtml } from '../../src/services/memberSetupInviteService';
 import {
   createSplitCourt,
@@ -2361,7 +2361,11 @@ router.post('/email-templates/:facilityId/:templateType/preview', async (req, re
     } else {
       let bodyTemplate = bodyHtml || config.defaultBody;
       if (templateType === 'booking_confirmation') {
-        bodyTemplate = insertGateCodeLine(bodyTemplate, await getGateCodeForEmail(req.params.facilityId));
+        const gateCode = await getActiveGateCode(req.params.facilityId);
+        bodyTemplate = insertGateCodeLine(bodyTemplate, gateCode);
+        if (gateCode) bodyTemplate += `\n${buildCalendarButtonsHtml('#', '#')}`;
+      } else if (templateType === 'booking_reminder') {
+        bodyTemplate = insertGateCodeLine(bodyTemplate, await getActiveGateCode(req.params.facilityId));
       }
       renderedBody = renderTemplate(bodyTemplate, sampleVars);
     }

@@ -42,6 +42,7 @@ import bulletinBoardRoutes from './routes/bulletinBoard';
 import lessonsRoutes from './routes/lessons';
 import padelRoutes from './routes/padel';
 import bookingRoutes from './routes/bookings';
+import bookingCalendarLinkRoutes from './routes/bookingCalendarLinks';
 import adminRoutes from './routes/admin';
 import addressWhitelistRoutes from './routes/addressWhitelist';
 import messagesRoutes from './routes/messages';
@@ -219,6 +220,9 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/payments', connectPaymentsRoutes);
 app.use('/api/stripe', stripeConnectRoutes);
 app.use('/api/payment-items', paymentItemsRoutes);
+
+// Signed add-to-calendar links from booking emails (the token replaces a login).
+app.use('/api/booking-calendar', bookingCalendarLinkRoutes);
 
 // API Routes — protected (require valid JWT)
 // Admin routes are NOT subject to payment lockout so admins can manage locked accounts.

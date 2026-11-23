@@ -63,3 +63,32 @@ describe('gate code in calendar notes', () => {
     expect(withGateCode(once, '1').notes).toBe(once.notes);
   });
 });
+
+import { buildGoogleCalendarUrl } from '../../../shared/utils/bookingCalendar';
+import { buildCalendarButtonsHtml } from '../emailTemplateDefaults';
+import { signBookingCalendarToken, verifyBookingCalendarToken } from '../bookingCalendarLinkService';
+
+describe('calendar links in booking emails', () => {
+  it('keeps club wall-clock time in the Google link', () => {
+    const url = new URL(buildGoogleCalendarUrl(
+      bookingWithDetailsToCalendarDetails({ courtName: '11A', bookingDate: '2026-11-21', startTime: '09:00:00', endTime: '10:00:00', gateCode: '4821' }),
+      { timeZone: 'America/Chicago' }
+    ));
+    expect(url.searchParams.get('dates')).toBe('20261121T090000/20261121T100000');
+    expect(url.searchParams.get('ctz')).toBe('America/Chicago');
+    expect(url.searchParams.get('details')).toContain('Gate code: 4821');
+  });
+
+  it('escapes ampersands in button links', () => {
+    expect(buildCalendarButtonsHtml('https://x.test/?a=1&b=2', '#')).toContain('a=1&amp;b=2');
+  });
+
+  it('accepts a signed token only for the same booking and member', () => {
+    process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+    const token = signBookingCalendarToken('b1', 'u1');
+    expect(verifyBookingCalendarToken('b1', 'u1', token)).toBe(true);
+    expect(verifyBookingCalendarToken('b2', 'u1', token)).toBe(false);
+    expect(verifyBookingCalendarToken('b1', 'u2', token)).toBe(false);
+    expect(verifyBookingCalendarToken('b1', 'u1', 'short')).toBe(false);
+  });
+});

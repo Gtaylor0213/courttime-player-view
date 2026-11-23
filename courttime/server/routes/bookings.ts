@@ -296,6 +296,11 @@ router.get('/:bookingId/calendar.ics', async (req, res, next) => {
       facilityName = facilityRow.rows[0]?.name || '';
     }
 
+    const gateCode =
+      booking.userId === callerUserId && booking.status === 'confirmed' && booking.facilityId
+        ? await getActiveGateCode(booking.facilityId)
+        : null;
+
     const details = bookingWithDetailsToCalendarDetails(
       {
         courtName: booking.courtName,
@@ -305,6 +310,7 @@ router.get('/:bookingId/calendar.ics', async (req, res, next) => {
         endTime: booking.endTime,
         bookingType: booking.bookingType,
         notes: booking.notes,
+        gateCode,
       },
       { facilityName }
     );
@@ -584,7 +590,8 @@ router.post('/', async (req, res, next) => {
               bookingDate,
               courtId,
             }
-          : undefined
+          : undefined,
+        gateCode
       );
 
       if (gateCode) {
@@ -613,7 +620,7 @@ router.post('/', async (req, res, next) => {
         sendBookingConfirmationEmail(
           userInfo.email, userInfo.fullName, facilityId, facilityName,
           courtName, dateFormatted, startFormatted, endFormatted, bookingType || 'General',
-          effectiveUserId
+          effectiveUserId, created?.id
         ).catch(err => console.error('Error sending booking confirmation email:', err));
       }
       } catch (notificationError) {

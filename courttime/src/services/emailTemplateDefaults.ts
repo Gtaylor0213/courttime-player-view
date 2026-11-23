@@ -222,6 +222,16 @@ export function insertGateCodeLine(template: string, gateCode: string | null | u
   return `${template}\n${line}`;
 }
 
+/** Add-to-calendar buttons for a booking email. */
+export function buildCalendarButtonsHtml(googleUrl: string, appleUrl: string): string {
+  const button = (href: string, label: string) =>
+    `<a href="${escapeGateCodeHtml(href)}" style="display: inline-block; margin: 4px; padding: 10px 16px; background-color: #16a34a; color: #ffffff; border-radius: 6px; font-size: 14px; font-weight: bold; text-decoration: none;">${label}</a>`;
+  return `<div style="margin: 20px 0; text-align: center;">
+  <p style="margin: 0 0 8px; font-weight: bold; color: #374151;">Add to your calendar</p>
+  ${button(googleUrl, 'Google Calendar')}${button(appleUrl, 'Apple / Outlook')}
+</div>`;
+}
+
 /**
  * Replace all {{placeholder}} variables in a template with actual values
  */

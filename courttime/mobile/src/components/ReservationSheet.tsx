@@ -119,6 +119,8 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
   const postPlayEnabled = isFeatureEnabled(FEATURE_FLAGS.POST_PLAY_SETTLEMENT);
 
   const [detail, setDetail] = useState<ReservationDetail | null>(null);
+  // Glen Abbey Pickleball Gate Code flag: only returned for the member's own booking.
+  const [gateCode, setGateCode] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [split, setSplit] = useState<SplitPaymentSummary | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -213,6 +215,7 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
     const full = detailRes.success
       ? ((detailRes.data as any)?.booking ?? (detailRes.data as any)?.data?.booking)
       : null;
+    setGateCode(detailRes.success ? ((detailRes.data as any)?.gateCode ?? null) : null);
     if (full) {
       setDetail({
         ...base,
@@ -525,6 +528,7 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
             {/* Summary */}
             <Text style={styles.courtName}>{d.courtName}</Text>
+            {gateCode ? <Text style={styles.gateCode}>Gate Code: {gateCode}</Text> : null}
             <Text style={styles.line}>{formatLongDate(d.bookingDate)}</Text>
             <Text style={styles.line}>
               {formatTimeLabel(d.startTime)} – {formatTimeLabel(d.endTime)}
@@ -763,7 +767,7 @@ export function ReservationSheet({ booking, visible, onClose, onChanged, onEdit 
                     variant="secondary"
                     onPress={() => {
                       void addBookingToCalendarWithFeedback(
-                        bookingWithDetailsToCalendarDetails(d, { facilityName: d.facilityName }),
+                        bookingWithDetailsToCalendarDetails({ ...d, gateCode }, { facilityName: d.facilityName }),
                         { bookingConfirmed: false }
                       );
                     }}
@@ -816,6 +820,7 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, gap: 2 },
   courtName: { fontSize: FontSize.lg, fontFamily: FontFamily.bold, color: Colors.text },
   line: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+  gateCode: { fontSize: FontSize.md, fontFamily: FontFamily.bold, color: Colors.primaryDark, marginTop: 4 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.sm },
   badgeLabel: { fontSize: FontSize.sm, fontFamily: FontFamily.semiBold, color: Colors.textSecondary },
   badge: { borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },

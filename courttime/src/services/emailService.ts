@@ -12,7 +12,8 @@ import {
   wrapInEmailLayout,
   insertGateCodeLine,
 } from './emailTemplateDefaults';
-import { getGateCodeForEmail } from './gateCodeService';
+import { getActiveGateCode } from './gateCodeService';
+import { buildBookingCalendarButtons } from './bookingCalendarLinkService';
 import { APP_LAUNCH_EMAIL_SUBJECT, buildAppLaunchEmailHtml } from './appLaunchEmailTemplate';
 import { buildNewsletterEmailHtml, type NewsletterContent } from '../../shared/utils/newsletterEmail';
 
@@ -212,10 +213,13 @@ export async function sendBookingConfirmationEmail(
   startTime: string,
   endTime: string,
   bookingType: string,
-  userId?: string
+  userId?: string,
+  bookingId?: string
 ): Promise<boolean> {
-  // Glen Abbey Pickleball Gate Code flag: adds a "Gate Code:" line under Court.
-  const gateCode = await getGateCodeForEmail(facilityId);
+  // Glen Abbey Pickleball Gate Code flag: adds a "Gate Code:" line under Court
+  // and add-to-calendar buttons (the event notes carry the code).
+  const gateCode = await getActiveGateCode(facilityId);
+  const calendarButtons = gateCode && bookingId ? await buildBookingCalendarButtons(bookingId) : '';
   return sendTemplatedEmail(
     email,
     facilityId,
@@ -232,7 +236,36 @@ export async function sendBookingConfirmationEmail(
     },
     userId,
     'booking',
-    gateCode ? (tpl) => insertGateCodeLine(tpl, gateCode) : undefined
+    gateCode ? (tpl) => `${insertGateCodeLine(tpl, gateCode)}${calendarButtons ? `\n${calendarButtons}` : ''}` : undefined
+  );
+}
+
+/**
+ * Reminder email for a club using the gate code flag, so the code is at hand
+ * shortly before play. Other clubs get the push / in-app reminder only.
+ */
+export async function sendBookingReminderEmail(
+  email: string,
+  fullName: string,
+  facilityId: string,
+  facilityName: string,
+  courtName: string,
+  bookingDate: string,
+  startTime: string,
+  endTime: string,
+  gateCode: string,
+  userId?: string
+): Promise<boolean> {
+  return sendTemplatedEmail(
+    email,
+    facilityId,
+    facilityName,
+    'booking_reminder',
+    { playerName: fullName, facilityName, courtName, date: bookingDate, startTime, endTime, hoursUntil: '1' },
+    userId,
+    'booking',
+    // The default wording reads "in 1 hours"; the exact start time is clearer.
+    (tpl) => insertGateCodeLine(tpl.replace('in {{hoursUntil}} hours', 'at {{startTime}}'), gateCode)
   );
 }
 

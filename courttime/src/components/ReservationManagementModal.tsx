@@ -123,6 +123,8 @@ export function ReservationManagementModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [settlementStatus, setSettlementStatus] = useState<string | undefined>();
+  // Glen Abbey Pickleball Gate Code flag: only returned for the member's own booking.
+  const [gateCode, setGateCode] = useState<string | null>(null);
   const [frontDeskFee, setFrontDeskFee] = useState<{
     paymentMode?: string;
     amountDueCents: number | null;
@@ -214,10 +216,12 @@ export function ReservationManagementModal({
   useEffect(() => {
     if (!isOpen || !reservation) return;
     let cancelled = false;
+    setGateCode(null);
     (async () => {
       try {
         const detail = await bookingApi.getById(reservation.id);
         const booking = (detail as any)?.booking || (detail as any)?.data?.booking;
+        if (!cancelled) setGateCode((detail as any)?.data?.gateCode ?? null);
         if (!cancelled && booking?.settlementStatus) {
           setSettlementStatus(booking.settlementStatus);
         } else if (!cancelled) {
@@ -434,7 +438,7 @@ export function ReservationManagementModal({
     reservation.status === 'confirmed' &&
     !isPastReservation();
 
-  const calendarDetails = bookingWithDetailsToCalendarDetails(reservation);
+  const calendarDetails = bookingWithDetailsToCalendarDetails({ ...reservation, gateCode });
 
   const handleCancel = async () => {
     if (!reservation?.id) return;
@@ -992,6 +996,16 @@ export function ReservationManagementModal({
                   )}
                 </div>
               </div>
+
+              {gateCode && (
+                <div className="flex items-start gap-2">
+                  <KeyRound className="h-4 w-4 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600">Gate Code</p>
+                    <p className="font-mono text-lg font-bold text-green-900 break-all">{gateCode}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Date & Time */}
               <div className="flex items-start gap-2">

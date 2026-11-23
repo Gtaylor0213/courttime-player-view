@@ -154,12 +154,21 @@ function bookingDateTimeToGoogleUtc(dateYmd: string, time: string): string {
   return local.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 }
 
-export function buildGoogleCalendarUrl(details: BookingCalendarDetails): string {
+/**
+ * Pass `timeZone` when building on the server: booking times are club wall-clock
+ * values, and the server's own zone (UTC) would shift them.
+ */
+export function buildGoogleCalendarUrl(
+  details: BookingCalendarDetails,
+  options?: { timeZone?: string }
+): string {
+  const toDate = options?.timeZone ? bookingDateTimeToIcs : bookingDateTimeToGoogleUtc;
   const params = new URLSearchParams({
     action: 'TEMPLATE',
     text: details.title,
-    dates: `${bookingDateTimeToGoogleUtc(details.bookingDate, details.startTime)}/${bookingDateTimeToGoogleUtc(details.bookingDate, details.endTime)}`,
+    dates: `${toDate(details.bookingDate, details.startTime)}/${toDate(details.bookingDate, details.endTime)}`,
   });
+  if (options?.timeZone) params.set('ctz', options.timeZone);
   if (details.location) params.set('location', details.location);
   if (details.notes) params.set('details', details.notes);
   return `https://calendar.google.com/calendar/render?${params.toString()}`;

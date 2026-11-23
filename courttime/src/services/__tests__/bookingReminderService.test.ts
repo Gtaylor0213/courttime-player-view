@@ -12,6 +12,15 @@ vi.mock('../notificationService', () => ({
   },
 }));
 
+const sendReminderEmailMock = vi.fn();
+const getActiveGateCodeMock = vi.fn();
+vi.mock('../emailService', () => ({
+  sendBookingReminderEmail: (...args: unknown[]) => sendReminderEmailMock(...args),
+}));
+vi.mock('../gateCodeService', () => ({
+  getActiveGateCode: (...args: unknown[]) => getActiveGateCodeMock(...args),
+}));
+
 import { REMINDER_LEAD_MINUTES, sendDueBookingReminders } from '../bookingReminderService';
 
 function booking(overrides: Record<string, unknown> = {}) {
@@ -32,6 +41,26 @@ beforeEach(() => {
   queryMock.mockReset();
   notifyBookingReminderMock.mockReset();
   notifyBookingReminderMock.mockResolvedValue('n1');
+  sendReminderEmailMock.mockReset();
+  getActiveGateCodeMock.mockReset();
+  getActiveGateCodeMock.mockResolvedValue(null);
+});
+
+describe('gate code reminder email', () => {
+  it('emails the code only for clubs with an active gate code', async () => {
+    getActiveGateCodeMock.mockImplementation(async (id: string) => (id === 'gated' ? '4821' : null));
+    queryMock.mockResolvedValue({
+      rows: [
+        booking({ facilityId: 'gated', email: 'a@example.com', fullName: 'A', dateLabel: 'October 9, 2026', endTimeLabel: '7:00 PM' }),
+        booking({ bookingId: 'b2', userId: 'u2', email: 'b@example.com' }),
+      ],
+    });
+    expect(await sendDueBookingReminders()).toBe(2);
+    expect(sendReminderEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendReminderEmailMock.mock.calls[0]).toEqual([
+      'a@example.com', 'A', 'gated', 'Club One', 'Court 1', 'October 9, 2026', '6:00 PM', '7:00 PM', '4821', 'u1',
+    ]);
+  });
 });
 
 describe('sendDueBookingReminders', () => {

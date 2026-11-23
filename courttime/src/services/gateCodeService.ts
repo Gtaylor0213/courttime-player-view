@@ -46,6 +46,3 @@ export async function getActiveGateCode(facilityId: string): Promise<string | nu
     return null;
   }
 }
-
-/** @deprecated alias — use getActiveGateCode. */
-export const getGateCodeForEmail = getActiveGateCode;

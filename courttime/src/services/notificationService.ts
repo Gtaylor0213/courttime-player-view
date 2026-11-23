@@ -404,10 +404,11 @@ export const notificationService = {
     courtName: string,
     startTime: Date,
     endTime: Date,
-    pushContext?: BookingPushContext
+    pushContext?: BookingPushContext,
+    gateCode?: string | null
   ): Promise<string> {
     const title = 'Court Reservation Confirmed';
-    const message = `Your ${courtName} booking at ${facilityName} has been confirmed for ${this.formatDate(startTime)} at ${this.formatTimeRange(startTime, endTime)}.`;
+    const message = `Your ${courtName} booking at ${facilityName} has been confirmed for ${this.formatDate(startTime)} at ${this.formatTimeRange(startTime, endTime)}.${gateCode ? ` Gate code: ${gateCode}` : ''}`;
 
     return this.createNotification(
       userId,

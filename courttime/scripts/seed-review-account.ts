@@ -137,10 +137,13 @@ async function seed() {
       `INSERT INTO facility_memberships (user_id, facility_id, membership_type, status, start_date)
        VALUES ($1, $2, 'Full', 'active', CURRENT_DATE)
        ON CONFLICT (user_id, facility_id) DO UPDATE
-         SET status = 'active', end_date = NULL`,
+         SET status = 'active', end_date = NULL, is_facility_admin = false, is_sub_admin = false`,
       [userId, FACILITY_ID]
     );
   }
+  // The member login stays a plain member: admin screens belong to the admin
+  // login, and member screenshots should not show admin controls.
+  await query(`DELETE FROM facility_admins WHERE user_id = $1 AND facility_id = $2`, [reviewerId, FACILITY_ID]);
   await query(
     `INSERT INTO player_profiles (user_id, skill_level, bio)
      VALUES ($1, '3.5', 'Reviewing the CourtTime app.')

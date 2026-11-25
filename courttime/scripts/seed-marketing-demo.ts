@@ -495,6 +495,40 @@ function planGeneratedBookings() {
 
 const GUESTS = ['Lauren Pike', 'Omar Siddiqui', 'Jess Moreau', 'Nate Kowalski', 'Ines Duarte', 'Paul Lindqvist'];
 
+// ── Club rules (Booking Rules screen) ───────────────────────────────────────
+
+const GENERAL_RULES = [
+  'Courts are for members and their guests. Members must be present with any guest.',
+  'Non-marking court shoes only. No glass, pets or bikes on the courts.',
+  'Please clear the court on time so the next group can start.',
+  'Cancel at least 4 hours ahead so someone else can use the court.',
+  'Lights switch off at 10pm. Last bookings end at 9:30pm.',
+].join('\n');
+
+const BOOKING_RULES = {
+  restrictionType: 'account',
+  daysInAdvance: { limit: 7, enabled: true },
+  daysInAdvanceEnabled: true,
+  advanceBookingDays: '7',
+  advanceBookingDaysUnlimited: false,
+  maxReservationDuration: { limit: 120, enabled: true },
+  maxReservationDurationEnabled: true,
+  maxReservationDurationMinutes: '120',
+  maxBookingDurationHours: '2',
+  maxBookingDurationUnlimited: false,
+  householdMaxMembersEnabled: true,
+  householdMaxMembers: '6',
+  householdMaxActiveEnabled: true,
+  householdMaxActive: '3',
+  strikeSystemEnabled: true,
+  strikeThreshold: '3',
+  strikeWindowDays: '30',
+  strikeLockoutDays: '7',
+  hasPeakHours: false,
+  peakHoursSlots: [],
+  restrictionsApplyToAdmins: false,
+};
+
 // ── Conversations ───────────────────────────────────────────────────────────
 
 interface PlannedConversation {
@@ -702,8 +736,12 @@ async function seed() {
     const users: Row[] = MARKETING_MEMBERS.map((m) => ({
       id: id(m.key), email: m.email, full_name: m.name,
       first_name: m.name.split(' ')[0], last_name: m.name.split(' ').slice(1).join(' '),
-      city: 'Norcross', state: 'GA',
+      street_address: m.street, city: 'Norcross', state: 'GA', zip_code: '30092',
     }));
+    /** Addresses for accounts the reviewer seed owns (address only, nothing else). */
+    const otherStreets: Record<string, string> = {
+      alex: '27 Laurel Ridge Dr', casey: '9 Juniper Way', jordan: '133 Quail Run', sam: '18 Hawthorn Pl', riley: '240 Mossy Oak Dr',
+    };
     const profiles: Row[] = MARKETING_MEMBERS.map((m) => ({ user_id: id(m.key), skill_level: m.skill, bio: m.bio }));
     const memberships: Row[] = MARKETING_MEMBERS.map((m) => ({
       user_id: id(m.key), facility_id: FACILITY_ID, membership_type: 'Full',
@@ -929,7 +967,8 @@ async function seed() {
     console.log('\n  Updated:');
     console.log(`    ~ courts                       ${courtUpdates.length}  (lights on, renumbered so Pickleball sorts after Court 4)`);
     console.log('    ~ bulletin_posts.booking_id    ' + postBookingLinks.length + '  (link events to their court holds)');
-    console.log('    ~ facilities                   1  (operating hours 7am–10pm daily)');
+    console.log('    ~ facilities                   1  (operating hours 7am–10pm daily, general rules, booking-rules form)');
+    console.log(`    ~ users                        ${Object.keys(otherStreets).length}  (street address on reviewer-seed accounts)`);
     console.log(`    ~ users                        2  (reviewer display names → ${REVIEWER_NAME} / ${ADMIN_NAME})`);
     console.log(`\n  Upcoming fill rate: weekday evenings 5–9pm ${fillRate(evening, t(17), CLOSE, weekdays)}%, ` +
       `weekends ${fillRate(() => true, OPEN, CLOSE, weekends)}%, weekday daytime ${fillRate(() => true, OPEN, t(17), weekdays)}%`);
@@ -944,7 +983,12 @@ async function seed() {
     // ── Write (same transaction) ──
     for (const d of deletes) await client.query(`DELETE FROM ${d.table} WHERE ${d.where}`, d.params);
 
-    await client.query(`UPDATE facilities SET operating_hours = $2 WHERE id = $1`, [FACILITY_ID, JSON.stringify(hours)]);
+    // What the admin Booking Rules screen shows (it reads these columns, not
+    // facility_rule_configs); values match the rule configs seeded below.
+    await client.query(
+      `UPDATE facilities SET operating_hours = $2, general_rules = $3, booking_rules = $4 WHERE id = $1`,
+      [FACILITY_ID, JSON.stringify(hours), GENERAL_RULES, JSON.stringify(BOOKING_RULES)]
+    );
     await client.query(
       `INSERT INTO facility_features (facility_id, feature_key, is_enabled, updated_at)
        VALUES ($1, 'lessons_tab', true, NOW())
@@ -963,8 +1007,15 @@ async function seed() {
       'users',
       users.map((u) => ({ ...u, password_hash: unusable, user_type: 'player' })),
       `ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, first_name = EXCLUDED.first_name,
-         last_name = EXCLUDED.last_name, city = EXCLUDED.city, state = EXCLUDED.state, deleted_at = NULL`
+         last_name = EXCLUDED.last_name, street_address = EXCLUDED.street_address, city = EXCLUDED.city,
+         state = EXCLUDED.state, zip_code = EXCLUDED.zip_code, deleted_at = NULL`
     );
+    for (const [key, street] of Object.entries(otherStreets)) {
+      await client.query(
+        `UPDATE users SET street_address = $2, city = 'Norcross', state = 'GA', zip_code = '30092' WHERE id = $1`,
+        [id(key), street]
+      );
+    }
     {
       for (const key of ['alex', 'casey']) {
         const name = person(key).name;

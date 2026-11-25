@@ -176,6 +176,13 @@ export async function getAllFacilities(): Promise<Facility[]> {
 }
 
 /**
+ * Clubs that exist for app review and marketing, not for real members. They
+ * stay reachable by id (the demo logins already belong to them) but never
+ * appear in the public club search used by signup and join-a-club.
+ */
+export const HIDDEN_FROM_SEARCH_FACILITY_IDS = ['courttime-demo-club'];
+
+/**
  * Search facilities by query
  */
 export async function searchFacilities(searchQuery: string): Promise<any[]> {
@@ -198,15 +205,17 @@ export async function searchFacilities(searchQuery: string): Promise<any[]> {
       LEFT JOIN courts c ON f.id = c.facility_id
       LEFT JOIN facility_memberships fm ON f.id = fm.facility_id AND fm.status = 'active'
       WHERE
-        LOWER(f.name) LIKE LOWER($1) OR
-        LOWER(f.type) LIKE LOWER($1) OR
-        LOWER(f.address) LIKE LOWER($1) OR
-        LOWER(f.street_address) LIKE LOWER($1) OR
-        LOWER(f.city) LIKE LOWER($1) OR
-        LOWER(f.description) LIKE LOWER($1)
+        f.id <> ALL($2::text[]) AND (
+          LOWER(f.name) LIKE LOWER($1) OR
+          LOWER(f.type) LIKE LOWER($1) OR
+          LOWER(f.address) LIKE LOWER($1) OR
+          LOWER(f.street_address) LIKE LOWER($1) OR
+          LOWER(f.city) LIKE LOWER($1) OR
+          LOWER(f.description) LIKE LOWER($1)
+        )
       GROUP BY f.id, f.name, f.type, f.address, f.street_address, f.city, f.state, f.zip_code, f.description, f.logo_url
       ORDER BY f.name
-    `, [`%${searchQuery}%`]);
+    `, [`%${searchQuery}%`, HIDDEN_FROM_SEARCH_FACILITY_IDS]);
 
     return result.rows.map(row => ({
       id: row.id,

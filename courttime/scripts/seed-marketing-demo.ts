@@ -512,7 +512,7 @@ function planConversations(): PlannedConversation[] {
       id: randomUUID(),
       members: ['alex', 'priya'],
       messages: [
-        { from: 'priya', text: 'Hey Alex! Still on for doubles tonight at 6? Marcus and Jordan are in.', minutesAgo: 60 * 13 },
+        { from: 'priya', text: 'Hey Alex! Still on for doubles tomorrow at 6? Marcus and Jordan are in.', minutesAgo: 60 * 13 },
         { from: 'alex', text: "Yes! I've got Court 2 from 6 to 7:30. Lights are on, so we can play late if we need to.", minutesAgo: 60 * 13 - 6 },
         { from: 'priya', text: "Perfect. I'll bring a fresh can of balls 🎾", minutesAgo: 60 * 13 - 8 },
         { from: 'alex', text: 'Thank you. The last ones were dead by the second set 😂', minutesAgo: 60 * 12 - 40 },
@@ -972,6 +972,12 @@ async function seed() {
           [id(key), name, name.split(' ')[0], name.split(' ').slice(1).join(' ')]);
       }
     }
+    // The demo member's profile appears in screenshots; the reviewer seed's bio says "Reviewing the app".
+    await client.query(
+      `INSERT INTO player_profiles (user_id, skill_level, bio) VALUES ($1, '3.5', $2)
+       ON CONFLICT (user_id) DO UPDATE SET bio = EXCLUDED.bio`,
+      [id('alex'), 'Weeknight doubles and Saturday singles. Always up for a hit.']
+    );
     await insertRows(client, 'player_profiles', profiles,
       `ON CONFLICT (user_id) DO UPDATE SET skill_level = EXCLUDED.skill_level, bio = EXCLUDED.bio`);
     await insertRows(client, 'facility_memberships', memberships,

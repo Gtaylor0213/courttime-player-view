@@ -22,71 +22,33 @@
  */
 
 import dotenv from 'dotenv';
-import * as bcrypt from 'bcrypt';
 import { query } from '../src/database/connection';
 import { DEFAULT_ON_FEATURE_FLAGS } from '../shared/constants/featureFlags';
+import {
+  ADMIN_EMAIL,
+  ADMIN_NAME,
+  EXTRAS,
+  FACILITY_ID,
+  FACILITY_NAME,
+  REVIEWER_EMAIL,
+  REVIEWER_NAME,
+  removeDemoClub,
+  upsertUser,
+  ymd,
+} from './lib/demoClub';
+import { MARKETING_MEMBERS } from './lib/marketingRoster';
 
 dotenv.config();
 
-const FACILITY_ID = 'courttime-demo-club';
-const FACILITY_NAME = 'CourtTime Demo Club';
-
 /** Credentials to paste into App Review notes. Password is intentionally simple. */
-const REVIEWER_EMAIL = 'appreview@courttimeapp.com';
 const REVIEWER_PASSWORD = 'CourtTimeReview1!';
-const REVIEWER_NAME = 'Alex Reviewer';
 
 /**
  * A second reviewer login that administers the demo club, so store reviewers
  * can reach the club-admin screens too. Google Play asks for sign-in details
  * that give "full access to all the features" of the app.
  */
-const ADMIN_EMAIL = 'appreview-admin@courttimeapp.com';
 const ADMIN_PASSWORD = 'CourtTimeAdmin1!';
-const ADMIN_NAME = 'Casey Manager';
-
-/** Fictional club-mates, so the reviewer sees a populated club. */
-const EXTRAS = [
-  { email: 'demo.jordan@courttimeapp.com', name: 'Jordan Ellis', skill: '4.0' },
-  { email: 'demo.sam@courttimeapp.com', name: 'Sam Whitfield', skill: '3.5' },
-  { email: 'demo.riley@courttimeapp.com', name: 'Riley Nakamura', skill: '3.0' },
-];
-
-const SALT_ROUNDS = 10;
-
-function ymd(daysFromToday: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + daysFromToday);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-async function upsertUser(
-  email: string,
-  fullName: string,
-  password: string,
-  userType: 'player' | 'admin' = 'player'
-): Promise<string> {
-  const hash = await bcrypt.hash(password, SALT_ROUNDS);
-  const result = await query(
-    `INSERT INTO users (email, password_hash, full_name, first_name, last_name, user_type)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (email) DO UPDATE
-       SET password_hash = EXCLUDED.password_hash,
-           full_name = EXCLUDED.full_name,
-           user_type = EXCLUDED.user_type,
-           deleted_at = NULL
-     RETURNING id`,
-    [
-      email.toLowerCase(),
-      hash,
-      fullName,
-      fullName.split(' ')[0] ?? fullName,
-      fullName.split(' ').slice(1).join(' ') || null,
-      userType,
-    ]
-  );
-  return result.rows[0].id as string;
-}
 
 async function seed() {
   console.log(`\n🎾 Seeding the reviewer demo club (${FACILITY_ID})\n`);
@@ -266,10 +228,12 @@ async function seed() {
     const [sh, sm] = b.start.split(':').map(Number);
     const [eh, em] = b.end.split(':').map(Number);
     const duration = (eh! * 60 + em!) - (sh! * 60 + sm!);
+    // reminder_sent_at is stamped so the server's reminder sweep never emails
+    // or pushes the demo accounts about these made-up bookings.
     await query(
       `INSERT INTO bookings (court_id, user_id, facility_id, booking_date, start_time, end_time,
-                             duration_minutes, status, booking_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                             duration_minutes, status, booking_type, reminder_sent_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)`,
       [
         courtIds[b.court],
         b.userId,
@@ -385,11 +349,15 @@ async function seed() {
 async function remove() {
   console.log(`\n🧹 Removing the reviewer demo club (${FACILITY_ID})\n`);
   // Facility-scoped rows cascade from facilities; the demo users do not, so
-  // they are removed by email.
-  await query(`DELETE FROM facilities WHERE id = $1`, [FACILITY_ID]);
-  const emails = [REVIEWER_EMAIL, ADMIN_EMAIL, ...EXTRAS.map((e) => e.email)];
-  const result = await query(`DELETE FROM users WHERE email = ANY($1::text[]) RETURNING id`, [emails]);
-  console.log(`  ✓ facility removed, ${result.rowCount} demo accounts removed\n`);
+  // they are removed by email (including the members seed:marketing adds).
+  const emails = [
+    REVIEWER_EMAIL,
+    ADMIN_EMAIL,
+    ...EXTRAS.map((e) => e.email),
+    ...MARKETING_MEMBERS.map((m) => m.email),
+  ];
+  const removed = await removeDemoClub(emails);
+  console.log(`  ✓ facility removed, ${removed} demo accounts removed\n`);
 }
 
 async function main() {

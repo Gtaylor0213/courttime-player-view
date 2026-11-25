@@ -78,7 +78,8 @@
     "parity:check": "node scripts/check-api-parity.mjs",
     "expo:start": "npm --prefix mobile start",
     "mobile:install": "npm --prefix mobile install",
-    "seed:review": "tsx scripts/seed-review-account.ts"
+    "seed:review": "tsx scripts/seed-review-account.ts",
+    "seed:marketing": "tsx scripts/seed-marketing-demo.ts"
   },
   "description": "This is a code bundle for CourtTime Player View. The original project is available at https://www.figma.com/design/UQjuGWTemayM81rKCsqEHl/CourtTime-Player-View.",
   "keywords": [],

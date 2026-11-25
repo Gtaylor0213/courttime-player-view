@@ -398,7 +398,7 @@ router.get('/dashboard/:facilityId', async (req, res) => {
         AND b.booking_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
         AND b.status != 'cancelled'
       WHERE c.facility_id = $1
-        AND c.status = 'active'
+        AND c.status = 'available'
     `, [facilityId]);
 
     // Get recent activity (last 10 bookings)
@@ -432,10 +432,10 @@ router.get('/dashboard/:facilityId', async (req, res) => {
     const lastMonthMembers = parseInt(lastMonthMembersResult.rows[0]?.active_members || 0);
     const newMembers = Math.max(0, activeMembers - lastMonthMembers);
 
-    const totalCourts = parseInt(utilizationResult.rows[0]?.total_courts || 1);
+    const totalCourts = parseInt(utilizationResult.rows[0]?.total_courts || 0);
     const totalSlots = totalCourts * 30 * 12; // Approximate: courts * days * hours per day
     const bookedSlots = parseInt(utilizationResult.rows[0]?.total_bookings || 0);
-    const utilization = Math.round((bookedSlots / totalSlots) * 100);
+    const utilization = totalSlots > 0 ? Math.round((bookedSlots / totalSlots) * 100) : 0;
 
     res.json({
       success: true,
